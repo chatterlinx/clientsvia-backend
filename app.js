@@ -10,6 +10,7 @@ const employeeRoutes = require("./routes/employee");
 const uploadRoutes = require("./routes/uploads");
 const authRoutes = require('./routes/auth');
 const companyRoutes = require('./routes/company');
+const RedisStore = require('connect-redis').default;
 
 const app = express();
 
@@ -25,7 +26,6 @@ app.use(rateLimit({
 (async () => {
   const redisClient = redis.createClient({ url: process.env.REDIS_URL });
   await redisClient.connect();
-  const RedisStore = require('connect-redis').default;
   const store = new RedisStore({
     client: redisClient,
     prefix: "sess:",
@@ -43,7 +43,7 @@ app.use(rateLimit({
     }
   }));
 
-  mongoose.connect(process.env.MONGODB_URI, {
+  await mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   });
@@ -54,6 +54,6 @@ app.use(rateLimit({
   app.use('/api/company', companyRoutes);
 
   app.get('/healthz', (req, res) => res.json({ ok: true }));
-
-  module.exports = app;
 })();
+
+module.exports = app;
