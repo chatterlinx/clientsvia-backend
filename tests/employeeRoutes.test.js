@@ -1,0 +1,57 @@
+const request = require('supertest');
+const express = require('express');
+
+const employeeRoutes = require('../routes/employee');
+const Employee = require('../models/Employee');
+
+jest.mock('../models/Employee');
+
+jest.mock('../middleware/auth', () => ({
+  verifyToken: (req, res, next) => {
+    req.user = { id: 'emp1', role: 'admin', companyId: 'comp1' };
+    next();
+  },
+  requireRole: () => (req, res, next) => next()
+}));
+
+describe('Employee Routes', () => {
+  const app = express();
+  app.use(express.json());
+  app.use('/api/employee', employeeRoutes);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('POST /api/employee creates employee', async () => {
+    Employee.prototype.save = jest.fn().mockResolvedValue({ _id: 'emp1' });
+    const res = await request(app)
+      .post('/api/employee')
+      .send({ name: 'John', email: 'john@test.com' });
+    expect(res.status).toBe(201);
+    expect(Employee.prototype.save).toHaveBeenCalled();
+  });
+
+  test('GET /api/employee returns employees', async () => {
+    Employee.find.mockResolvedValue([{ _id: 'emp1' }]);
+    const res = await request(app).get('/api/employee');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  test('PATCH /api/employee/:id updates employee', async () => {
+    Employee.findOneAndUpdate.mockResolvedValue({ _id: 'emp1', name: 'Jane' });
+    const res = await request(app)
+      .patch('/api/employee/emp1')
+      .send({ name: 'Jane' });
+    expect(res.status).toBe(200);
+    expect(Employee.findOneAndUpdate).toHaveBeenCalled();
+  });
+
+  test('DELETE /api/employee/:id deletes employee', async () => {
+    Employee.findOneAndDelete.mockResolvedValue({ _id: 'emp1' });
+    const res = await request(app).delete('/api/employee/emp1');
+    expect(res.status).toBe(200);
+    expect(Employee.findOneAndDelete).toHaveBeenCalled();
+  });
+});

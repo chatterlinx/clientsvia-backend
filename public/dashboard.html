@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Malfunction Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .table-header-custom {
+            background-color: #1f2937; /* dark-gray-800 */
+            color: white;
+        }
+        .alert-row:hover {
+            background-color: #f3f4f6; /* gray-100 */
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #09f;
+            animation: spin 1s ease infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            font-size: 14px;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .toast-success {
+            background-color: #34D399; /* green-400 */
+            color: white;
+        }
+        .toast-error {
+            background-color: #F87171; /* red-400 */
+            color: white;
+        }
+        .form-select {
+            @apply mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <header class="bg-white shadow-md">
+        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center">
+                <i class="fas fa-shield-alt text-blue-600 text-2xl mr-3"></i>
+                <h1 class="text-xl font-semibold text-gray-700">AI Agent Monitoring</h1>
+            </div>
+            <nav>
+                <a href="/index.html" class="text-blue-600 hover:text-blue-800 font-medium px-3 py-2 rounded-md text-sm">
+                    <i class="fas fa-arrow-left mr-1"></i>Back to Main
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-6 py-8">
+        <div class="mb-6 flex justify-between items-center">
+            <h2 class="text-2xl font-bold text-gray-800">Malfunction Alerts</h2>
+            <button id="refresh-alerts-button" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow focus:outline-none focus:ring-2 focus:ring-blue-300 transition duration-150 ease-in-out">
+                <i class="fas fa-sync-alt mr-2"></i>Refresh Alerts
+            </button>
+        </div>
+
+        <div class="bg-white shadow-xl rounded-lg overflow-hidden">
+            <div id="loading-indicator" class="py-8 text-center">
+                <div class="spinner"></div>
+                <p class="text-gray-600">Loading alerts, please wait...</p>
+            </div>
+            <div id="error-message-div" class="hidden p-4 bg-red-100 text-red-700 border border-red-300 rounded-md"></div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="table-header-custom">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Timestamp</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Company ID</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Error Details</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Test</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alerts-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+            <div id="no-alerts-message" class="hidden p-6 text-center text-gray-500">
+                <i class="fas fa-info-circle text-2xl mb-2"></i>
+                <p>No malfunction alerts recorded at this time.</p>
+            </div>
+        </div>
+
+        <div class="mt-8 p-6 bg-gray-50 border border-gray-200 rounded-lg shadow">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4"><i class="fas fa-exclamation-triangle mr-2 text-red-600"></i>Test Malfunction Reporting</h3>
+            <p class="text-sm text-gray-500 mb-4">Send a test alert to verify the malfunction reporting system for a specific company.</p>
+            <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <select id="test-company-id" class="form-select w-full sm:w-64">
+                    <option value="">Select a Company</option>
+                </select>
+                <button id="test-malfunction-btn" class="bg-red-500 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>Send Test Alert
+                </button>
+                <button id="clear-test-alerts" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                    <i class="fas fa-trash-alt mr-2"></i>Clear Test Alerts
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="text-center py-6 mt-10 text-sm text-gray-500">
+        © <span id="current-year"></span> Your AI Agent Platform. All rights reserved.
+    </footer>
+
+    <div id="toastNotification" class="toast"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const alertsTableBody = document.getElementById('alerts-table-body');
+            const loadingIndicator = document.getElementById('loading-indicator');
+            const errorMessageDiv = document.getElementById('error-message-div');
+            const noAlertsMessageDiv = document.getElementById('no-alerts-message');
+            const refreshButton = document.getElementById('refresh-alerts-button');
+            const toastNotification = document.getElementById('toastNotification');
+            const testCompanySelect = document.getElementById('test-company-id');
+            const testMalfunctionBtn = document.getElementById('test-malfunction-btn');
+            const clearTestAlertsBtn = document.getElementById('clear-test-alerts');
+
+            let lastTestTime = 0;
+            const TEST_THROTTLE_MS = 10000; // 10 seconds
+
+            function showToast(message, type = 'success') {
+                if (!toastNotification) return;
+                toastNotification.textContent = message;
+                toastNotification.className = `toast ${type === 'success' ? 'toast-success' : 'toast-error'}`;
+                toastNotification.classList.add('show');
+                setTimeout(() => {
+                    toastNotification.classList.remove('show');
+                }, 3000);
+            }
+
+            async function fetchAlerts() {
+                if (loadingIndicator) loadingIndicator.style.display = 'block';
+                if (alertsTableBody) alertsTableBody.innerHTML = '';
+                if (errorMessageDiv) errorMessageDiv.classList.add('hidden');
+                if (noAlertsMessageDiv) noAlertsMessageDiv.classList.add('hidden');
+
+                try {
+                    const response = await fetch('/api/alerts');
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: `HTTP error! Status: ${response.status}` }));
+                        console.error('Server error while fetching alerts:', errorData.message || `Status: ${response.status}`);
+                        throw new Error('Server error while fetching alerts.'); 
+                    }
+                    const alerts = await response.json();
+                    displayAlerts(alerts);
+                } catch (error) {
+                    console.error('Error fetching alerts:', error);
+                    if (alertsTableBody) alertsTableBody.innerHTML = '';
+                    if (errorMessageDiv) {
+                        errorMessageDiv.textContent = `Failed to load alerts: ${error.message}. Please try again or check the console for more details.`;
+                        errorMessageDiv.classList.remove('hidden');
+                    }
+                    showToast(`Error fetching alerts: ${error.message}`, 'error');
+                } finally {
+                    if (loadingIndicator) loadingIndicator.style.display = 'none';
+                }
+            }
+
+            function displayAlerts(alerts) {
+                if (!alertsTableBody) {
+                    console.error('Alerts table body not found in the DOM.');
+                    return;
+                }
+
+                alertsTableBody.innerHTML = '';
+
+                if (!alerts || alerts.length === 0) {
+                    if (noAlertsMessageDiv) noAlertsMessageDiv.classList.remove('hidden');
+                    if (errorMessageDiv) errorMessageDiv.classList.add('hidden');
+                    return;
+                }
+
+                if (noAlertsMessageDiv) noAlertsMessageDiv.classList.add('hidden');
+                if (errorMessageDiv) errorMessageDiv.classList.add('hidden');
+
+                alerts.forEach(alert => {
+                    const row = alertsTableBody.insertRow();
+                    row.className = 'alert-row';
+
+                    const statusCell = row.insertCell();
+                    statusCell.className = 'px-6 py-4 whitespace-nowrap text-sm';
+                    if (alert.test === false) { 
+                        statusCell.innerHTML = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                    <i class="fas fa-exclamation-circle mr-1.5"></i>Error
+                                                </span>`;
+                        row.classList.add('bg-red-50'); 
+                    } else { 
+                        statusCell.innerHTML = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                    <i class="fas fa-check-circle mr-1.5"></i>Test
+                                                </span>`;
+                    }
+
+                    const timestampCell = row.insertCell();
+                    timestampCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                    timestampCell.textContent = new Date(alert.timestamp).toLocaleString();
+
+                    const companyIdCell = row.insertCell();
+                    companyIdCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900';
+                    companyIdCell.textContent = alert.companyId;
+
+                    const errorCell = row.insertCell();
+                    errorCell.className = 'px-6 py-4 whitespace-pre-wrap text-sm text-gray-500';
+                    errorCell.textContent = alert.error;
+
+                    const testCell = row.insertCell();
+                    testCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                    testCell.textContent = alert.test ? 'Yes' : 'No';
+                });
+            }
+
+            async function populateCompanyDropdown() {
+                if (!testCompanySelect) return;
+                try {
+                    const response = await fetch('/api/companies'); 
+                    if (!response.ok) throw new Error(`Failed to fetch companies: ${response.status}`);
+                    const companies = await response.json();
+                    testCompanySelect.innerHTML = '<option value="">Select a Company</option>';
+                    if (companies.length === 0) {
+                        testCompanySelect.innerHTML += '<option value="" disabled>No companies found</option>';
+                        showToast('No companies available for testing.', 'error');
+                        return;
+                    }
+                    companies.forEach(company => {
+                        const option = document.createElement('option');
+                        option.value = company._id; 
+                        option.textContent = company.companyName || company._id; 
+                        testCompanySelect.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error('Error populating company dropdown:', error);
+                    testCompanySelect.innerHTML = '<option value="">Error loading companies</option>';
+                    showToast('Failed to load companies for testing.', 'error');
+                }
+            }
+
+            async function sendTestAlert() {
+                if (!testCompanySelect || !testMalfunctionBtn) return;
+
+                const companyId = testCompanySelect.value;
+                if (!companyId) {
+                    showToast('Please select a company.', 'error');
+                    return;
+                }
+
+                const now = Date.now();
+                if (now - lastTestTime < TEST_THROTTLE_MS) {
+                    showToast('Please wait before sending another test alert.', 'error');
+                    return;
+                }
+
+                const companyName = testCompanySelect.options[testCompanySelect.selectedIndex].text;
+                if (!confirm(`Send a test malfunction alert for ${companyName}? This will log an alert in the dashboard.`)) {
+                    return;
+                }
+
+                testMalfunctionBtn.disabled = true;
+                testMalfunctionBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending...';
+
+                try {
+                    const errorMessage = `Test malfunction for company ${companyId} at ${new Date().toLocaleTimeString()}.`;
+                    const response = await fetch('/api/alerts', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            companyId,
+                            error: errorMessage,
+                            timestamp: new Date().toISOString(),
+                            test: true
+                        })
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: `HTTP error! Status: ${response.status}` }));
+                        throw new Error(errorData.message || `Failed to send test alert: ${response.status}`);
+                    }
+                    lastTestTime = now;
+                    showToast('Test alert sent successfully.', 'success');
+                    fetchAlerts();
+                } catch (error) {
+                    console.error('Error sending test alert:', error);
+                    showToast(`Failed to send test alert: ${error.message}`, 'error');
+                } finally {
+                    testMalfunctionBtn.disabled = false;
+                    testMalfunctionBtn.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Send Test Alert';
+                }
+            }
+
+            async function clearTestAlerts() {
+                if (!clearTestAlertsBtn) return;
+                if (!confirm('Delete all test alerts? This cannot be undone.')) return;
+
+                clearTestAlertsBtn.disabled = true;
+                clearTestAlertsBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Clearing...';
+
+                try {
+                    const response = await fetch('/api/alerts/test', { method: 'DELETE' });
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: `HTTP error! Status: ${response.status}` }));
+                        throw new Error(errorData.message || 'Failed to clear test alerts');
+                    }
+                    showToast('Test alerts cleared successfully.', 'success');
+                    fetchAlerts();
+                } catch (error) {
+                    console.error('Error clearing test alerts:', error);
+                    showToast(`Failed to clear test alerts: ${error.message}`, 'error');
+                } finally {
+                    clearTestAlertsBtn.disabled = false;
+                    clearTestAlertsBtn.innerHTML = '<i class="fas fa-trash-alt mr-2"></i>Clear Test Alerts';
+                }
+            }
+
+            if (refreshButton) {
+                refreshButton.addEventListener('click', fetchAlerts);
+            }
+
+            if (testMalfunctionBtn) {
+                testMalfunctionBtn.addEventListener('click', sendTestAlert);
+            }
+
+            if (clearTestAlertsBtn) {
+                clearTestAlertsBtn.addEventListener('click', clearTestAlerts);
+            }
+
+            const currentYearSpan = document.getElementById('current-year');
+            if (currentYearSpan) {
+                currentYearSpan.textContent = new Date().getFullYear();
+            }
+
+            fetchAlerts();
+            populateCompanyDropdown(); 
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Company Profile</title>
+    <link rel="icon" href="/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+        .nav-link.active-tab { border-bottom-width: 2px; border-color: #4F46E5; color: #4F46E5; font-weight: 600; background-color: #EEF2FF; }
+        .nav-link { @apply px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900; }
+        .profile-section-title { @apply text-xl font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200; }
+        .detail-item { @apply flex flex-col sm:flex-row py-2; }
+        .detail-label { @apply sm:w-1/3 font-medium text-gray-600 mb-1 sm:mb-0; }
+        .detail-value { @apply sm:w-2/3 text-gray-800; }
+        .config-block { @apply mt-3 p-4 border border-gray-200 rounded-md bg-gray-50; }
+        .form-input, .form-select, .form-textarea, .form-checkbox { @apply mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out; }
+        .form-checkbox { @apply w-auto h-4 text-indigo-600; } 
+        .form-label { @apply block text-sm font-medium text-gray-700; }
+        .form-check-label { @apply ml-2 text-sm text-gray-700; }
+        .tab-button { padding: 0.5rem 1rem; font-weight: 500; font-size: 0.875rem; line-height: 1.25rem; border-top-left-radius: 0.5rem; border-top-right-radius: 0.5rem; transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; cursor: pointer; }
+        .tab-button:focus { outline: 2px solid transparent; outline-offset: 2px; }
+        .tab-button-active { background-color: #4F46E5; color: white; }
+        .tab-button-inactive { background-color: #E5E7EB; color: #374151; }
+        .tab-button-inactive:hover { background-color: #D1D5DB; }
+        .tab-content-item { @apply p-0 pt-6; } 
+        .tab-content-item.hidden { display: none; }
+        .notes-textarea { @apply w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out; min-height: 150px; }
+        .wider-textbox { max-width: 800px; width: 100%; }
+        .note-card { @apply bg-white p-4 rounded-lg shadow border border-gray-200 mb-4; }
+        .note-card.pinned { @apply bg-yellow-50 border-yellow-300; }
+        .note-content { @apply text-gray-800 whitespace-pre-wrap; }
+        .note-timestamps { @apply text-xs text-gray-500 mt-2; }
+        .note-actions { @apply mt-3 flex items-center space-x-3; }
+        .note-action-button { @apply text-xs text-indigo-600 hover:text-indigo-800 font-medium; }
+        .note-action-button .fa-thumbtack.pinned-icon { color: #F59E0B; }
+        .status-badge { @apply px-2.5 py-0.5 rounded-full text-xs font-medium; }
+        .status-active { @apply bg-green-100 text-green-800; }
+        .status-inactive { @apply bg-red-100 text-red-800; }
+        #agent-setup-content .form-input, #agent-setup-content .form-select, #agent-setup-content .form-textarea { @apply rounded-xl border-gray-200 shadow-sm focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 transition-all duration-200 wider-textbox; }
+        #agent-setup-content .form-input:focus, #agent-setup-content .form-select:focus, #agent-setup-content .form-textarea:focus { box-shadow: 0 0 10px rgba(99, 102, 241, 0.5); }
+        #agent-setup-content .form-button-agent-setup { @apply px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-indigo-600 text-white hover:from-indigo-600 hover:to-indigo-700 transition-all duration-200; }
+        #agent-setup-content .remove-button-agent-setup { @apply bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700; }
+        #agent-setup-content .agent-setup-section-container { transition: max-height 0.4s ease-in-out, opacity 0.3s ease-in-out .1s, padding 0.3s ease-in-out, margin 0.3s ease-in-out; overflow: hidden; border: 1px solid #e5e7eb; border-radius: 0.75rem; background-color: #f9fafb; margin-bottom: 1.5rem; }
+        #agent-setup-content .agent-setup-section-container.hidden-by-mode { max-height: 0 !important; opacity: 0 !important; padding: 0 !important; margin: 0 !important; border: none !important; overflow: hidden; }
+        #agent-setup-content .agent-setup-section-header { @apply text-lg font-semibold text-gray-700 p-4 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors duration-200 rounded-t-xl; }
+        #agent-setup-content .agent-setup-section-header i.fa-chevron-down, #agent-setup-content .agent-setup-section-header i.fa-chevron-up { transition: transform 0.3s ease-in-out; }
+        #agent-setup-content .agent-setup-section-header i.fa-chevron-up { transform: rotate(180deg); }
+        #agent-setup-content .section-content { @apply p-4 pt-0 transition-all duration-300 ease-in-out; max-height: 2000px; opacity: 1; overflow-y: auto; }
+        #agent-setup-content .section-content.collapsed { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-top: 0; }
+        #agent-setup-content .protocol-section { transition: max-height 0.3s ease-in-out, opacity 0.2s ease-in-out, padding-top 0.3s ease-in-out, padding-bottom 0.3s ease-in-out; overflow: hidden; max-height: 500px; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+        #agent-setup-content .protocol-section.collapsed { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-top:0; }
+        #agent-setup-content .disabled-input { @apply opacity-50 cursor-not-allowed bg-gray-200; }
+        .contact-block-view { @apply mt-3 pt-3 border-t border-gray-200; }
+        .contact-block-view .detail-item:last-child { padding-bottom: 0; }
+        .scheduling-rule-daily-hours-header { @apply grid grid-cols-4 gap-x-3 mb-1 px-2 text-xs font-medium text-gray-500; }
+        .scheduling-rule-daily-hours-row { @apply grid grid-cols-4 gap-x-3 items-center p-2 hover:bg-gray-100 rounded-md; }
+        #toast-notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: #333; color: white; padding: 10px 20px; border-radius: 5px; z-index: 1000; opacity: 0; transition: opacity 0.5s ease-in-out; }
+        #toast-notification.show { opacity: 1; }
+        #toast-notification.success { background-color: #4CAF50; }
+        #toast-notification.error { background-color: #f44336; }
+        @media (min-width: 768px) { .wider-textbox { max-width: 800px; } }
+        @media (max-width: 767px) { .wider-textbox { max-width: 100%; } }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="app" class="flex flex-col min-h-screen">
+        <header class="bg-white shadow-md sticky top-0 z-40">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex-shrink-0">
+                        <a href="/index.html" class="text-2xl font-bold text-indigo-600">
+                            <i class="fas fa-tachometer-alt mr-2"></i>Admin Dashboard
+                        </a>
+                    </div>
+                    <nav class="hidden md:flex space-x-4 items-center">
+                        <a href="/index.html" class="nav-link" id="nav-home">Home</a>
+                        <a href="/directory.html" class="nav-link" id="nav-directory">Directory</a>
+                        <a href="/add-company.html" class="nav-link" id="nav-add-company">Add Company</a>
+                        <a href="/trade-category-management.html" class="nav-link" id="nav-trade-categories">Trade Categories</a>
+                        <a href="/company-profile.html" class="nav-link" id="nav-company-profile">Company Profile</a>
+                    </nav>
+                    <div class="md:hidden flex items-center">
+                        <button id="mobile-menu-button" class="text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
+                            <span class="sr-only">Open main menu</span>
+                            <i class="fas fa-bars text-2xl"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="mobile-menu" class="md:hidden hidden">
+                <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                    <a href="/index.html" class="block nav-link text-base">Home</a>
+                    <a href="/directory.html" class="block nav-link text-base">Directory</a>
+                    <a href="/add-company.html" class="block nav-link text-base">Add Company</a>
+                    <a href="/trade-category-management.html" class="block nav-link text-base">Trade Categories</a>
+                    <a href="/company-profile.html" class="block nav-link text-base">Company Profile</a>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-1">
+                    <div> 
+                        <h1 class="text-3xl font-semibold text-gray-800" id="company-name-header">Loading...</h1>
+                        <p id="company-id-subheader" class="text-xs text-gray-500 mt-1">ID: Loading...</p> 
+                    </div>
+                    <div class="flex items-center gap-x-3 mt-3 md:mt-0">
+                         <span id="company-status-badge" class="status-badge mr-3">Status</span> 
+                        <button id="edit-profile-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                            <i class="fas fa-edit mr-2"></i>Edit Profile
+                        </button>
+                    </div>
+                </div>
+                <hr class="mb-6 mt-3">
+
+                <div class="mb-6">
+                    <div class="border-b border-gray-300">
+                        <nav class="-mb-px flex flex-wrap space-x-1" aria-label="Tabs">
+                            <button class="tab-button tab-button-active" id="tab-overview" data-tab="overview">
+                                <i class="fas fa-info-circle mr-1"></i>Overview
+                            </button>
+                            <button class="tab-button tab-button-inactive" id="tab-config" data-tab="config">
+                                <i class="fas fa-cogs mr-1"></i>Configuration
+                            </button>
+                            <button class="tab-button tab-button-inactive" id="tab-notes" data-tab="notes">
+                                <i class="fas fa-sticky-note mr-1"></i>Notes
+                            </button>
+                             <button class="tab-button tab-button-inactive" id="tab-calendar-settings" data-tab="calendar-settings">
+                                <i class="fas fa-calendar-alt mr-1"></i>Calendar Settings
+                            </button>
+                            <button class="tab-button tab-button-inactive" id="tab-ai-settings" data-tab="ai-settings">
+                                <i class="fas fa-robot mr-1"></i>AI Settings
+                            </button>
+                            <button class="tab-button tab-button-inactive" id="tab-ai-voice" data-tab="ai-voice">
+                                <i class="fas fa-microphone-alt mr-1"></i>AI Voice Settings
+                            </button>
+                            <button class="tab-button tab-button-inactive" id="tab-personality-responses" data-tab="personality-responses">
+                                <i class="fas fa-comment-dots mr-1"></i>Agent Personality Responses
+                            </button>
+                            <button class="tab-button tab-button-inactive" id="tab-agent-setup" data-tab="agent-setup">
+                                <i class="fas fa-user-cog mr-1"></i>Agent Setup
+                            </button>
+                        </nav>
+                    </div>
+                </div>
+
+                <div id="tab-content-area">
+                    <div id="overview-content" class="tab-content-item">
+                        <section class="profile-section bg-transparent shadow-none p-0">
+                            <div class="flex justify-between items-center mb-2">
+                                <h2 class="profile-section-title !mb-0"><i class="fas fa-building mr-2 text-indigo-600"></i>Company Information</h2>
+                                </div>
+                            <div id="company-details-view">
+                                <div class="detail-item"><span class="detail-label">Company Name:</span><span class="detail-value" id="company-name-view">Loading...</span></div> 
+                                <div class="detail-item"><span class="detail-label">Owner:</span><span class="detail-value" id="company-owner-view">Loading...</span></div>
+                                <div class="detail-item"><span class="detail-label">Owner Email:</span><span class="detail-value" id="company-owner-email-view">Loading...</span></div>
+                                <div class="detail-item"><span class="detail-label">Owner Phone:</span><span class="detail-value" id="company-owner-phone-view">Loading...</span></div>
+                                <div class="detail-item"><span class="detail-label">Primary Contact:</span><span class="detail-value" id="company-contact-name-view">Loading...</span></div>
+                                <div class="detail-item"><span class="detail-label">Contact Email:</span><span class="detail-value" id="company-contact-email-view">Loading...</span></div>
+                                <div class="detail-item"><span class="detail-label">Contact Phone:</span><span class="detail-value" id="company-contact-phone-view">Loading...</span></div>
+                                <div class="detail-item"><span class="detail-label">Address:</span><span class="detail-value" id="company-address-view">Loading...</span></div>
+                                <div id="additional-contacts-view-container" class="mt-4"></div>
+                            </div>
+                            <div id="company-details-edit-form" class="hidden mt-4">
+                                <p class="text-gray-500"><em>Loading edit form...</em></p>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div id="config-content" class="tab-content-item hidden">
+                        <section class="profile-section bg-transparent shadow-none p-0">
+                            <h2 class="profile-section-title"><i class="fas fa-cogs mr-2 text-indigo-600"></i>Service Configuration</h2>
+                            <form id="config-settings-form">
+                                <div class="config-block">
+                                    <h3 class="font-semibold text-gray-700 mb-2">Twilio Integration Credentials</h3>
+                                    <p class="text-sm text-gray-500 mb-3">Enter the Twilio credentials that this company's AI agent will use.</p>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label for="twilioAccountSid" class="form-label">Account SID</label>
+                                            <input type="text" id="twilioAccountSid" name="twilioAccountSid" class="form-input wider-textbox" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                                        </div>
+                                        <div>
+                                            <label for="twilioAuthToken" class="form-label">Auth Token</label>
+                                            <input type="password" id="twilioAuthToken" name="twilioAuthToken" class="form-input wider-textbox" placeholder="Enter Auth Token">
+                                        </div>
+                                        <div>
+                                            <label for="twilioPhoneNumber" class="form-label">Primary Twilio Phone Number (E.164 format)</label>
+                                            <input type="tel" id="twilioPhoneNumber" name="twilioPhoneNumber" class="form-input wider-textbox" placeholder="+12395551212">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="config-block mt-6">
+                                    <h3 class="font-semibold text-gray-700 mb-3">SMS Notification Settings</h3>
+                                    <div class="space-y-2">
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="smsJobAlerts" name="smsJobAlerts" class="form-checkbox h-5 w-5 text-indigo-600 rounded">
+                                            <span class="form-check-label">Enable SMS for new job alerts</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="smsCustomerReplies" name="smsCustomerReplies" class="form-checkbox h-5 w-5 text-indigo-600 rounded">
+                                            <span class="form-check-label">Enable SMS for customer replies</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="smsAppointmentReminders" name="smsAppointmentReminders" class="form-checkbox h-5 w-5 text-indigo-600 rounded">
+                                            <span class="form-check-label">Enable SMS for appointment reminders</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-8 pt-5 border-t border-gray-200">
+                                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
+                                        <i class="fas fa-save mr-2"></i>Save Configuration
+                                    </button>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+
+                    <div id="notes-content" class="tab-content-item hidden">
+                        <section class="profile-section bg-transparent shadow-none p-0"> 
+                            <h2 class="profile-section-title"><i class="fas fa-sticky-note mr-2 text-indigo-600"></i>Company Notes</h2>
+                            <div id="add-note-area" class="mb-6">
+                                <textarea id="new-note-textarea" class="notes-textarea wider-textbox" placeholder="Type your new note here..."></textarea>
+                                <button id="add-new-note-button" class="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out">
+                                    <i class="fas fa-plus-circle mr-2"></i>Add Note
+                                </button>
+                            </div>
+                            <div id="notes-display-area">
+                                <p class="text-gray-500 italic text-center py-4">Notes will appear here.</p>
+                            </div>
+                        </section>
+                    </div>
+                    
+                    <div id="calendar-settings-content" class="tab-content-item hidden">
+                         <section class="profile-section bg-transparent shadow-none p-0">
+                            <h2 class="profile-section-title"><i class="fas fa-calendar-alt mr-2 text-indigo-600"></i>Google Calendar Integration</h2>
+                            <div id="gcal-status-container" class="p-4 rounded-lg border bg-gray-50 mb-6">
+                                 <!-- Status content will be dynamically inserted here -->
+                                 <p class="text-gray-500">Checking connection status...</p>
+                            </div>
+
+                            <div id="gcal-calendars-list-container" class="hidden">
+                                <h3 class="text-lg font-semibold text-gray-700 mb-2">Available Calendars</h3>
+                                <p class="text-sm text-gray-500 mb-4">These calendars can be selected within the 'Service Scheduling Rules' in the Agent Setup tab. Only calendars you have 'write' access to are shown.</p>
+                                <div id="gcal-calendars-list" class="space-y-3 border rounded-lg p-4 bg-white max-h-96 overflow-y-auto">
+                                    <!-- Calendar list will be dynamically inserted here -->
+                                    <p class="text-gray-500">Loading calendars...</p>
+                                </div>
+                            </div>
+                         </section>
+                    </div>
+
+                    <div id="ai-settings-content" class="tab-content-item hidden">
+                        <section class="profile-section bg-transparent shadow-none p-0">
+                            <h2 class="profile-section-title"><i class="fas fa-robot mr-2 text-indigo-600"></i>AI Core Parameters</h2>
+                            <p class="text-sm text-gray-500 mb-4">High-level AI settings. More detailed scripting is in "Agent Setup".</p>
+                            <form id="ai-settings-form">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                    <div>
+                                        <label for="aiModel" class="form-label">AI Model Engine</label>
+                                        <select id="aiModel" name="aiModel" class="form-select">
+                                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (High Speed)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="aiCorePersonality" class="form-label">AI Base Personality</label>
+                                        <select id="aiCorePersonality" name="aiCorePersonality" class="form-select">
+                                            <option value="friendly">Friendly & Empathetic</option>
+                                            <option value="formal">Formal & Professional</option>
+                                            <option value="efficient">Quick & Efficient</option>
+                                            <option value="witty">Witty & Engaging</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <label for="knowledgeBaseSource" class="form-label">External Knowledge Base URL/ID (Optional)</label>
+                                    <input type="text" id="knowledgeBaseSource" name="knowledgeBaseSource" class="form-input wider-textbox" placeholder="e.g., FAQ page URL, Document ID">
+                                </div>
+                                <div class="mt-4">
+                                    <label class="flex items-center">
+                                        <input type="checkbox" id="llmFallbackEnabled" name="llmFallbackEnabled" class="form-checkbox">
+                                        <span class="form-check-label">Enable AI Model Fallback (Gemini)</span>
+                                    </label>
+                                </div>
+                                <div class="mt-4" id="escalationMessageContainer">
+                                    <label for="customEscalationMessage" class="form-label">Custom Escalation Message</label>
+                                    <textarea id="customEscalationMessage" name="customEscalationMessage" class="form-textarea wider-textbox" rows="3" placeholder="I’m unable to answer that, let me connect you to a team member who can help."></textarea>
+                                </div>
+                                <div class="mt-6 border-t border-gray-200 pt-6">
+                                    <h3 class="text-md font-medium text-gray-700 mb-3">Advanced Options</h3>
+                                    <div class="space-y-2">
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="sentimentAnalysis" name="sentimentAnalysis" class="form-checkbox">
+                                            <span class="form-check-label">Enable Sentiment Analysis</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="dataLogging" name="dataLogging" class="form-checkbox" checked>
+                                            <span class="form-check-label">Enable Interaction Logging (for improvements)</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="mt-8 pt-5 border-t border-gray-200">
+                                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
+                                        <i class="fas fa-save mr-2"></i>Save AI Core Settings
+                                    </button>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+
+                    <div id="ai-voice-content" class="tab-content-item hidden">
+                        <section class="profile-section bg-transparent shadow-none p-0">
+                            <h2 class="profile-section-title"><i class="fas fa-microphone-alt mr-2 text-indigo-600"></i>AI Voice Settings</h2>
+                            <form id="elevenlabs-settings-form" class="mb-6">
+                                <div class="mb-4">
+                                    <label for="elevenlabsApiKey" class="form-label">ElevenLabs API Key</label>
+                                    <input type="text" id="elevenlabsApiKey" name="elevenlabsApiKey" class="form-input wider-textbox" placeholder="Enter your ElevenLabs API Key">
+                                </div>
+                                <div class="mb-4">
+                                    <label for="elevenlabsVoice" class="form-label">Voice Selection</label>
+                                    <select id="elevenlabsVoice" name="elevenlabsVoice" class="form-select wider-textbox">
+                                        <option value="">Select a voice</option>
+                                        <option value="Rachel">Rachel</option>
+                                        <option value="Domi">Domi</option>
+                                        <option value="Bella">Bella</option>
+                                        <option value="Antoni">Antoni</option>
+                                        <option value="Elli">Elli</option>
+                                        <option value="Josh">Josh</option>
+                                        <option value="Arnold">Arnold</option>
+                                        <option value="Adam">Adam</option>
+                                        <option value="Sam">Sam</option>
+                                    </select>
+                                </div>
+                                <div class="mb-4">
+                                    <label for="elevenlabsTestPhrase" class="form-label">Test Phrase</label>
+                                    <input type="text" id="elevenlabsTestPhrase" name="elevenlabsTestPhrase" class="form-input wider-textbox" placeholder="Type a phrase to test voice playback" value="Hello, this is a test from ElevenLabs!">
+                                </div>
+                                <button type="button" id="testElevenLabsVoiceBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">Listen to Test Phrase</button>
+                            <button type="submit" class="ml-4 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">Save ElevenLabs Settings</button>
+                        </form>
+                    </section>
+                    </div>
+
+                    <div id="personality-responses-content" class="tab-content-item hidden">
+                        <section class="profile-section bg-transparent shadow-none p-0">
+                            <h2 class="profile-section-title"><i class="fas fa-comment-dots mr-2 text-indigo-600"></i>Agent Personality Responses</h2>
+                            <form id="personality-responses-form">
+                                <div id="personality-responses-list" class="space-y-4"></div>
+                                <div class="mt-8 pt-5 border-t border-gray-200">
+                                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
+                                        <i class="fas fa-save mr-2"></i>Save Responses
+                                    </button>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+
+                    <div id="agent-setup-content" class="tab-content-item hidden">
+                        <div class="bg-white py-6 md:py-8 rounded-xl"> 
+                            <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center px-6 md:px-8"> 
+                                <i class="fas fa-user-cog mr-3 text-indigo-600 text-2xl"></i>AI Agent Detailed Configuration
+                            </h2>
+                            <div id="agent-setup-form" class="space-y-0">
+                                <div class="px-6 md:px-8 mb-6"> 
+                                    <div class="p-4 border border-indigo-200 rounded-xl bg-indigo-50 shadow-sm">
+                                        <label for="agentModeSelect" class="form-label text-base font-semibold text-indigo-800">Agent Operating Mode</label>
+                                        <p class="text-xs text-indigo-700 mb-2">Choose how the AI agent should primarily function.</p>
+                                        <select id="agentModeSelect" name="agentMode" class="form-select">
+                                            <option value="full">Full Knowledge & Booking Agent</option>
+                                            <option value="receptionist">Simple Receptionist (Greet & Route Calls Only)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="px-6 md:px-8"> 
+                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="categories">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-list mr-2"></i>Business Categories</span>
+                                            <i class="fas fa-chevron-up transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content">
+                                            <label class="form-label mb-1">Category Selection</label>
+                                            <p class="text-xs text-gray-500 mb-3">Select one or more categories this company operates in.</p>
+                                            <div id="agentSetupCategoriesContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-48 overflow-y-auto border border-gray-200 rounded-xl p-4 bg-white">
+                                                <p class="text-gray-500 italic" id="categories-loading">Loading categories...</p>
+                                            </div>
+                                            <div class="mt-3">
+                                                <label class="form-label mb-1">Selected Categories:</label>
+                                                <ul id="selectedCategoriesList" class="list-disc list-inside text-sm text-gray-800 space-y-1 pl-1">
+                                                    <li class="text-gray-500 italic">No categories selected yet.</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="specialties">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-star mr-2"></i>Company Specialties</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed">
+                                            <label for="companySpecialties" class="form-label">Specialties (comma-separated)</label>
+                                            <input type="text" id="companySpecialties" name="companySpecialties" class="form-input wider-textbox" placeholder="e.g., Emergency HVAC repairs, eco-friendly plumbing solutions">
+                                        </div>
+                                    </div>
+                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="company-qna">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-question-circle mr-2"></i>Company Q&amp;A</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed">
+                                            <p class="text-xs text-gray-500 mb-3">Add company-specific questions and answers.</p>
+                                            <form id="companyQnaForm" class="space-y-3 mb-4">
+                                                <input type="hidden" id="editingQnaId">
+                                                <div>
+                                                    <label for="companyQnaQuestion" class="form-label">Question</label>
+                                                    <textarea id="companyQnaQuestion" class="form-textarea wider-textbox" rows="2" required></textarea>
+                                                </div>
+                                                <div>
+                                                    <label for="companyQnaAnswer" class="form-label">Answer</label>
+                                                    <div class="flex items-center gap-2 mb-1">
+                                                        <select id="placeholderSelect" class="form-select text-xs flex-none"></select>
+                                                        <button type="button" id="insertPlaceholderBtn" class="text-blue-600 text-xs">Insert</button>
+                                                    </div>
+                                                    <textarea id="companyQnaAnswer" class="form-textarea wider-textbox" rows="4" required></textarea>
+                                                    <p id="companyQnaPreview" class="text-xs text-gray-600 mt-1"></p>
+                                                </div>
+                                                <div>
+                                                    <label for="companyQnaKeywords" class="form-label">Keywords</label>
+                                                    <input type="text" id="companyQnaKeywords" class="form-input wider-textbox" placeholder="Comma-separated keywords (e.g. thermostat, reset)">
+                                                </div>
+                                                <div class="flex gap-2 justify-end">
+                                                    <button type="submit" id="companyQnaSaveBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition">Add</button>
+                                                    <button type="button" id="companyQnaCancelBtn" class="form-button-agent-setup remove-button-agent-setup hidden">Cancel</button>
+                                                </div>
+                                                <p id="companyQnaFormError" class="text-red-600 text-sm hidden"></p>
+                                            </form>
+                                            <div id="companyQnaList" class="space-y-3"></div>
+                                        </div>
+                                    </div>
+                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="placeholders">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-code mr-2"></i>Placeholders</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed space-y-2">
+                                            <p class="text-xs text-gray-500">Define tokens you can use in responses.</p>
+                                            <div id="placeholders-list" class="space-y-2"></div>
+                                            <button type="button" id="add-placeholder-btn" class="form-button-agent-setup text-xs">Add Placeholder</button>
+                                        </div>
+                                    </div>
+                                    <div class="agent-setup-section-container" data-section-type="full receptionist" data-section-name="time-zone">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-clock mr-2"></i>Time Settings</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed">
+                                            <label for="agentSetupTimezoneSelect" class="form-label">Company Time Zone (for Agent)</label>
+                                            <select id="agentSetupTimezoneSelect" name="agentSetupTimezone" class="form-select"></select>
+                                            <p id="agentSetupCurrentTimeDisplay" class="text-sm text-indigo-700 font-semibold mt-2 p-2 bg-indigo-50 rounded-md">Loading current time...</p>
+                                        </div>
+                                    </div>
+                                    <div class="agent-setup-section-container" data-section-type="full receptionist" data-section-name="operating-hours">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-calendar mr-2"></i>Operating Hours</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed">
+                                            <div class="flex items-center justify-between mb-4">
+                                                <label class="form-label">Company Operating Hours</label>
+                                                <label class="flex items-center cursor-pointer">
+                                                    <span class="text-sm text-gray-600 mr-2">
+                                                        Use 24/7 Routing
+                                                        <i class="fas fa-info-circle ml-1 text-gray-500" title="When checked, ignores the schedule and routes calls 24/7 using Call Routing Options."></i>
+                                                    </span>
+                                                    <input type="checkbox" id="toggle24Hours" name="use247Routing" class="form-checkbox">
+                                                </label>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mb-4">These are the hours when the company is open. Times are based on the Company Time Zone selected above.</p>
+                                            <div id="operating-hours-list" class="space-y-3">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="agent-setup-section-container" data-section-type="full receptionist" data-section-name="agent-script">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-comment-dots mr-2"></i>Agent Core Scripting</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed space-y-4">
+                                            <div>
+                                                <label class="form-label">Greeting Type</label>
+                                                <div class="flex items-center space-x-4">
+                                                    <label class="flex items-center"><input type="radio" name="greetingType" id="greetingTypeTTS" value="tts" class="form-radio" checked><span class="ml-1">Text-to-Speech</span></label>
+                                                    <label class="flex items-center"><input type="radio" name="greetingType" id="greetingTypeAudio" value="audio" class="form-radio"><span class="ml-1">Audio File</span></label>
+                                                </div>
+                                            </div>
+                                            <div id="greetingAudioUploadContainer" class="hidden">
+                                                <label for="greetingAudioFile" class="form-label">Greeting Audio (MP3)</label>
+                                                <input type="file" id="greetingAudioFile" accept="audio/mpeg" class="form-input">
+                                                <audio id="greetingAudioPreview" controls class="mt-2 hidden"></audio>
+                                            </div>
+                                            <div id="greetingTextContainer">
+                                                <label for="agentGreeting" class="form-label">Agent Greeting</label>
+                                                <textarea id="agentGreeting" name="agentGreeting" rows="3" class="form-textarea wider-textbox" placeholder="e.g., Thank you for calling {CompanyName}, this is {AgentName}, how can I help you today?"></textarea>
+                                            </div>
+                                            <div data-section-type="full"> 
+                                                <label for="mainAgentScript" class="form-label">Main Conversational Script / Knowledge</label>
+                                                <p class="text-xs text-gray-500 mb-2">Define the AI agent's main conversational script for common inquiries, service details, etc. (Used by "Full Knowledge Agent" mode).</p>
+                                                <textarea id="mainAgentScript" name="mainAgentScript" rows="10" class="form-textarea wider-textbox" placeholder="e.g., &#10;- Service Area: We serve the greater Springfield area...&#10;- Payment Methods: We accept all major credit cards...&#10;- Refer to Category-Specific Q&As below for common questions."></textarea>
+                                            </div>
+                                            <div>
+                                                <label for="categoryQAs" class="form-label">Category-Specific Q&As</label>
+                                                <p class="text-xs text-gray-500 mb-2">Q&As for selected business categories, used by the AI agent to answer common questions.</p>
+                                                <textarea id="categoryQAs" name="categoryQAs" rows="8" class="form-textarea wider-textbox" readonly placeholder="Q&As will appear here based on selected categories..."></textarea>
+                                            </div>
+                                            <div>
+                                                <label for="agentClosing" class="form-label">Agent Closing</label>
+                                                <textarea id="agentClosing" name="agentClosing" rows="3" class="form-textarea wider-textbox" placeholder="e.g., Thank you for calling! Have a great day!"></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="protocols">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-book mr-2"></i>Specific Scenario Protocols</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed space-y-4">
+                                            <div>
+                                                <button type="button" data-protocol-target="system-delay-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                                    <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>System Delay/Reboot Protocol
+                                                </button>
+                                                <div id="system-delay-protocol" class="protocol-section collapsed pl-5">
+                                                    <textarea name="protocolSystemDelay" rows="5" class="form-textarea wider-textbox" placeholder="Default system delay protocol..."></textarea>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <button type="button" data-protocol-target="message-taking-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                                     <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Message Taking Protocol</button>
+                                                <div id="message-taking-protocol" class="protocol-section collapsed pl-5">
+                                                    <textarea name="protocolMessageTaking" rows="5" class="form-textarea wider-textbox" placeholder="Default message taking protocol..."></textarea>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <button type="button" data-protocol-target="caller-reconnect-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                                    <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Caller Reconnect – Apology Protocol</button>
+                                                <div id="caller-reconnect-protocol" class="protocol-section collapsed pl-5">
+                                                     <textarea name="protocolCallerReconnect" rows="3" class="form-textarea wider-textbox"></textarea>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <button type="button" data-protocol-target="when-in-doubt-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                                    <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>When in Doubt (General Escalation)</button>
+                                                <div id="when-in-doubt-protocol" class="protocol-section collapsed pl-5">
+                                                    <textarea name="protocolWhenInDoubt" rows="4" class="form-textarea wider-textbox"></textarea>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <button type="button" data-protocol-target="caller-frustration-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                                    <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Caller Frustration / "Are You a Robot?"</button>
+                                                <div id="caller-frustration-protocol" class="protocol-section collapsed pl-5">
+                                                    <textarea name="protocolCallerFrustration" rows="4" class="form-textarea wider-textbox"></textarea>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <button type="button" data-protocol-target="telemarketer-filter-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                                    <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Telemarketer Filter</button>
+                                                <div id="telemarketer-filter-protocol" class="protocol-section collapsed pl-5">
+                                                    <textarea name="protocolTelemarketerFilter" rows="4" class="form-textarea wider-textbox"></textarea>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <button type="button" data-protocol-target="behavior-guidelines-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                                    <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Behavior Guidelines</button>
+                                                <div id="behavior-guidelines-protocol" class="protocol-section collapsed pl-5">
+                                                    <textarea name="protocolBehaviorGuidelines" rows="5" class="form-textarea wider-textbox"></textarea>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <button type="button" data-protocol-target="booking-confirmation-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                                    <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Booking Confirmation Script</button>
+                                                <div id="booking-confirmation-protocol" class="protocol-section collapsed pl-5">
+                                                    <textarea name="protocolBookingConfirmation" rows="3" class="form-textarea wider-textbox"></textarea>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <button type="button" data-protocol-target="text-to-pay-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                                    <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Text-to-Pay Request Script</button>
+                                                <div id="text-to-pay-protocol" class="protocol-section collapsed pl-5">
+                                                    <textarea name="protocolTextToPay" rows="3" class="form-textarea wider-textbox"></textarea>
+                                                    <div class="mt-2">
+                                                        <label class="form-label mb-1">Phone Number Source for Text-to-Pay</label>
+                                                        <select name="textToPayPhoneSource" class="form-select sm:w-auto">
+                                                            <option value="callerID">Use caller ID if confirmed</option>
+                                                            <option value="askCustomer">Ask customer to provide number</option>
+                                                            <option value="both">Ask to confirm caller ID or provide new number</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="scheduling-rules">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-calendar-check mr-2"></i>Service Scheduling Rules</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed">
+                                            <p class="text-xs text-gray-500 mb-3">Define how the AI determines appointment availability for different services.</p>
+                                            <div id="serviceSchedulingRulesContainer" class="space-y-6"></div>
+                                            <button type="button" id="add-new-scheduling-rule-btn" class="form-button-agent-setup mt-6 flex items-center">
+                                                <i class="fas fa-plus mr-2"></i>Add Scheduling Rule
+                                            </button>
+                                            <div id="scheduling-interpreter-container" class="mt-6 p-4 border border-blue-300 bg-blue-50 rounded-lg shadow">
+                                                <h5 class="text-md font-semibold text-blue-700 mb-2">Live Scheduling Helper</h5>
+                                                <div id="current-time-display" class="text-sm text-blue-600 mb-3">
+                                                    Current Time: <span class="font-medium">Loading...</span>
+                                                </div>
+                                                <div id="scheduling-interpreter-output" class="text-sm text-gray-700 space-y-1">
+                                                    <p class="italic">Configure or add a scheduling rule above to see its live interpretation here.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="agent-setup-section-container" data-section-type="full receptionist" data-section-name="routing-notifications">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-route mr-2"></i>Call Routing & Notifications</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed space-y-6">
+                                             <div>
+                                                <label class="form-label mb-1">General Call Routing (During Business Hours)</label>
+                                                <p class="text-xs text-gray-500 mb-2">Define primary numbers for AI transfers.</p>
+                                                <div id="call-routing-list" class="space-y-3"></div>
+                                                <button type="button" id="add-call-routing-option" class="form-button-agent-setup mt-2 text-xs">Add Routing Option</button>
+                                            </div>
+                                            <div>
+                                                <label class="form-label mb-1">After-Hours Call Routing</label>
+                                                <p class="text-xs text-gray-500 mb-2">If "After-Hours Protocol" in Business Hours is set to forward.</p>
+                                                <div id="after-hours-routing-list" class="space-y-3"></div>
+                                                <button type="button" id="add-after-hours-routing-option" class="form-button-agent-setup mt-2 text-xs">Add After-Hours Option</button>
+                                            </div>
+                                            <div>
+                                                <label class="form-label mb-1">Call Summary Notification Recipients</label>
+                                                <p class="text-xs text-gray-500 mb-2">Who gets call summaries via text/email.</p>
+                                                <div id="call-summaries-list" class="space-y-3"></div>
+                                                <button type="button" id="add-call-summary-recipient" class="form-button-agent-setup mt-2 text-xs">Add Recipient</button>
+                                            </div>
+                                            <div>
+                                                <label class="form-label mb-1">After-Hours Notification Recipients</label>
+                                                <p class="text-xs text-gray-500 mb-2">Who gets notified of after-hours calls/messages.</p>
+                                                <div id="after-hours-notifications-list" class="space-y-3"></div>
+                                                <button type="button" id="add-after-hours-notification-recipient" class="form-button-agent-setup mt-2 text-xs">Add Recipient</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="agent-setup-section-container" data-section-type="full receptionist" data-section-name="malfunction-handling">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-exclamation-triangle mr-2"></i>AI Malfunction Handling</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed space-y-6">
+                                             <div>
+                                                <label class="form-label mb-1">Call Forwarding on Malfunction</label>
+                                                <p class="text-xs text-gray-500 mb-2">Forward calls if AI skips or drops. Add multiple for round-robin or failover.</p>
+                                                <div id="malfunction-forwarding-list" class="space-y-3"></div>
+                                                <button type="button" id="add-malfunction-forwarding-number" class="form-button-agent-setup mt-2 text-xs">Add Forwarding Number</button>
+                                            </div>
+                                            <div>
+                                                <label class="form-label mb-1">Text Notifications on Malfunction</label>
+                                                <p class="text-xs text-gray-500 mb-2">Send SMS alerts when calls are forwarded due to malfunction.</p>
+                                                <div id="malfunction-notifications-list" class="space-y-3"></div>
+                                                <button type="button" id="add-malfunction-notification-recipient" class="form-button-agent-setup mt-2 text-xs">Add Notification Recipient</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-10 pt-6 border-t border-gray-300 flex justify-end">
+                                        <button type="submit" id="save-agent-setup-button" class="form-button-agent-setup text-base py-3 px-6 inline-flex items-center">
+                                            <i class="fas fa-save mr-2"></i>Save Agent Setup
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="bg-white border-t border-gray-200 mt-auto">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-gray-500 text-sm">
+                © 2025 Chatterlinx.com All rights reserved.
+            </div>
+        </footer>
+    </div>
+    <div id="toast-notification" class="hidden"></div>
+
+    <script>
+        // Basic mobile menu toggle
+        document.getElementById('mobile-menu-button')?.addEventListener('click', () => {
+            document.getElementById('mobile-menu')?.classList.toggle('hidden');
+        });
+
+        // Active Nav Link Highlighting & Main Page Tab Logic
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- Navigation Link Highlighting ---
+            let currentPath = window.location.pathname.replace(/\/$/, "") || "/index.html";
+            document.querySelectorAll('header nav a.nav-link, #mobile-menu a.nav-link').forEach(link => {
+                let linkPath = new URL(link.href).pathname.replace(/\/$/, "") || "/index.html";
+                link.classList.remove('active-tab', 'text-gray-700');
+                if (linkPath === currentPath || (link.href.includes("company-profile.html") && window.location.href.includes("company-profile.html"))) {
+                    link.classList.add('active-tab');
+                } else {
+                    link.classList.add('text-gray-700');
+                }
+            });
+
+            // --- Company Profile Tab Switching ---
+            const tabContainer = document.querySelector('nav[aria-label="Tabs"]');
+            const contentContainer = document.getElementById('tab-content-area');
+            if (tabContainer && contentContainer) {
+                const tabButtons = tabContainer.querySelectorAll('.tab-button');
+                const tabContents = contentContainer.querySelectorAll('.tab-content-item');
+
+                const activateTab = (targetTabId) => {
+                    tabButtons.forEach(button => {
+                        const isTarget = button.dataset.tab === targetTabId;
+                        button.classList.toggle('tab-button-active', isTarget);
+                        button.classList.toggle('tab-button-inactive', !isTarget);
+                    });
+                    tabContents.forEach(content => {
+                        const contentTabId = content.id.replace('-content', '');
+                        content.classList.toggle('hidden', contentTabId !== targetTabId);
+                    });
+                    localStorage.setItem('activeCompanyProfileTab', targetTabId);
+                };
+
+                tabButtons.forEach(clickedButton => {
+                    clickedButton.addEventListener('click', () => {
+                        activateTab(clickedButton.dataset.tab);
+                    });
+                });
+
+                // Restore active tab from localStorage or default to 'overview'
+                const savedTab = localStorage.getItem('activeCompanyProfileTab');
+                const initialTab = document.getElementById(`tab-${savedTab}`) ? savedTab : 'overview';
+                activateTab(initialTab);
+            }
+        });
+    </script>
+    <script src="/js/company-profile.js"></script>
+</body>
+</html>

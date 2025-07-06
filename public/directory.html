@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Company Directory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .nav-link.active-tab {
+            border-bottom-width: 2px;
+            border-color: #4F46E5; /* Indigo-600 */
+            color: #4F46E5;
+            font-weight: 600;
+            background-color: #EEF2FF; /* bg-indigo-50 */
+        }
+        .nav-link {
+            @apply px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900;
+        }
+        .form-checkbox { /* For the new checkbox */
+            @apply h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="app" class="flex flex-col min-h-screen">
+        <header class="bg-white shadow-md sticky top-0 z-50">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex-shrink-0">
+                        <a href="/index.html" class="text-2xl font-bold text-indigo-600">
+                           <i class="fas fa-tachometer-alt mr-2"></i>Admin Dashboard
+                        </a>
+                    </div>
+                    <nav class="hidden md:flex space-x-4 items-center">
+                        <a href="/index.html" class="nav-link" id="nav-home">Home</a>
+                        <a href="/directory.html" class="nav-link" id="nav-directory">Directory</a>
+                        <a href="/add-company.html" class="nav-link" id="nav-add-company">Add Company</a>
+                        <a href="/trade-category-management.html" class="nav-link" id="nav-trade-categories">Trade Categories</a>
+                    </nav>
+                    <div class="md:hidden flex items-center">
+                        <button id="mobile-menu-button" class="text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
+                            <span class="sr-only">Open main menu</span>
+                            <i class="fas fa-bars text-2xl"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="mobile-menu" class="md:hidden hidden">
+                <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                    <a href="/index.html" class="block nav-link text-base">Home</a>
+                    <a href="/directory.html" class="block nav-link text-base">Directory</a>
+                    <a href="/add-company.html" class="block nav-link text-base">Add Company</a>
+                    <a href="/trade-category-management.html" class="block nav-link text-base">Trade Categories</a>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-3xl font-semibold text-gray-800">Company Directory</h1>
+                    <a href="/add-company.html" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                        <i class="fas fa-plus mr-2"></i>Add New Company
+                    </a>
+                </div>
+                
+                <div class="mb-6 flex flex-col sm:flex-row gap-4 items-center">
+                    <input type="text" placeholder="Search companies..." class="flex-grow p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out" id="search-company-input">
+                    <select id="filter-trade-type" class="p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out sm:w-auto w-full">
+                        <option value="">All Trade Types</option>
+                        {/* Options will be populated by JS */}
+                    </select>
+                    <div class="flex items-center sm:ml-4"> 
+                        <input type="checkbox" id="show-inactive-checkbox" name="showInactive" class="form-checkbox">
+                        <label for="show-inactive-checkbox" class="ml-2 text-sm text-gray-700">Show Inactive Companies</label>
+                    </div>
+                </div>
+
+                <div id="company-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* JavaScript will populate this area. */}
+                </div>
+                
+                <div id="no-companies-message" class="hidden text-center py-10">
+                    <i class="fas fa-folder-open fa-3x text-gray-400 mb-4"></i>
+                    <p class="text-xl text-gray-600">No companies found.</p>
+                    <p class="text-gray-500">Try adjusting your search or filters, or <a href="/add-company.html" class="text-indigo-600 hover:underline">add a new company</a>.</p>
+                </div>
+            </div>
+        </main>
+
+        <footer class="bg-white border-t border-gray-200 mt-auto">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-gray-500 text-sm">
+                © 2025 Chatterlinx.com All rights reserved.
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // JavaScript for Mobile Menu Toggle
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+        if (mobileMenuButton && mobileMenu) {
+            mobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+        }
+
+        // JavaScript for Active Tab Highlighting based on current page
+        document.addEventListener('DOMContentLoaded', function() {
+            let currentPath = window.location.pathname.replace(/\/$/, ""); 
+            if (currentPath === "") currentPath = "/index.html"; 
+
+            const navLinks = document.querySelectorAll('header nav a.nav-link, #mobile-menu a.nav-link');
+           
+            navLinks.forEach(link => {
+                let linkPath = link.pathname.replace(/\/$/, "");
+                if (linkPath === "") linkPath = "/index.html"; 
+
+                link.classList.remove('active-tab');
+                link.classList.add('text-gray-700'); 
+
+                if (linkPath === currentPath) { 
+                   link.classList.add('active-tab');
+                   link.classList.remove('text-gray-700');
+                }
+            });
+
+            // const yearSpan = document.getElementById('current-year');
+            // if (yearSpan) {
+            //     yearSpan.textContent = new Date().getFullYear();
+            // }
+        });
+    </script>
+    <script src="/js/directory.js"></script>
+</body>
+</html>

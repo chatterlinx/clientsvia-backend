@@ -1,0 +1,22 @@
+module.exports.SEED_EXAMPLES = [
+  {q: "Do you service heat pumps?", a: "Yes, Penguin\u202FAir services all major heat\u2011pump brands for installation, maintenance, and repair."},
+  {q: "What areas do you cover?", a: "We serve the entire Phoenix metro including Mesa, Chandler, Gilbert, Tempe, and Scottsdale."},
+  {q: "Are you open on weekends?", a: "Technicians are available 8\u2009am\u2009\u2013\u20094\u2009pm on Saturdays. Sunday service is reserved for emergencies."},
+  {q: "How much is a standard A/C tune\u2011up?", a: "Our 21\u2011point precision tune\u2011up is $89 and includes filter replacement, refrigerant check, and full system inspection."},
+  {q: "Do you offer duct cleaning?", a: "Absolutely. Duct cleaning is scheduled like a new\u2011system estimate; we\u2019ll send a comfort advisor to assess and quote."},
+  {q: "What financing options are available?", a: "0\u2009% APR for 18\u2009months on qualifying systems, plus low\u2011interest terms up to 10\u2009years."},
+  {q: "Can I request technician Dustin?", a: "Yes. Just mention Dustin when booking and we\u2019ll set the appointment on his next available slot."},
+  {q: "Do you install smart thermostats?", a: "Yes, including Nest, Ecobee, and Honeywell. Installation starts at $149."},
+  {q: "Is there a warranty on repairs?", a: "All repairs carry a 1\u2011year parts and labor warranty."},
+  {q: "Do you replace refrigerant R\u201122 systems?", a: "Yes, we specialize in converting legacy R\u201122 units to new R\u2011410a or R\u2011454b compliant systems."},
+  {q: "What\u2019s the price for an HVAC inspection when buying a house?", a: "A pre\u2011purchase inspection is $129 and includes a written report with photos."},
+  {q: "Do you sell maintenance plans?", a: "Our Comfort Club is $14.95/month and includes two tune\u2011ups, priority service, and 10\u2009% off repairs."},
+  {q: "Can the tech text me when they\u2019re on the way?", a: "Definitely. We prefer a mobile number so we can send real\u2011time arrival alerts."},
+  {q: "Do you handle commercial HVAC?", a: "Yes, light commercial up to 20\u2011ton packaged units."},
+  {q: "What filters do you recommend?", a: "MERV\u20118 pleated filters changed every 60\u2009days for most homes."},
+  {q: "Do you offer rebates?", a: "SRP and APS rebates are handled in\u2011house; we file the paperwork for you."},
+  {q: "How long does a duct cleaning appointment take?", a: "Usually 3\u20134 hours depending on home size."},
+  {q: "Is there a trip fee?", a: "No trip fee inside our standard service area."},
+  {q: "Do you install mini\u2011split systems?", a: "Yes, single and multi\u2011zone Daikin and Mitsubishi systems."},
+  {q: "How soon can I schedule?", a: "In most cases we have next\u2011day openings; peak season may extend to 48\u2009hours."}
+];
