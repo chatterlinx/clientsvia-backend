@@ -14,15 +14,4 @@ function validateBody(schema) {
   };
 }
 
-// Company validation schema
-const companySchema = Joi.object({
-  companyName: Joi.string().required(),
-  ownerName: Joi.string().required(),
-  ownerEmail: Joi.string().email().required(),
-  ownerPhone: Joi.string().optional(),
-  tradeType: Joi.string().optional()
-});
-
-const validateCompany = validateBody(companySchema);
-
-module.exports = { validateBody, validateCompany };
+module.exports = { validateBody };

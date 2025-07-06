@@ -1,185 +1,127 @@
-# ClientsVia Backend
+# Admin Dashboard
 
-The backend API server for the ClientsVia admin dashboard application.
+This project provides an Express server for managing companies and related data.
 
-## 🚀 Features
+## Environment variables
 
-- **Node.js/Express REST API** - Fast, scalable backend server
-- **MongoDB with Mongoose** - Document database with ODM
-- **Google OAuth Authentication** - Secure user authentication
-- **JWT Token Management** - Stateless authentication
-- **AI/ML Integration** - Google Cloud Vertex AI, Pinecone vector database
-- **Text-to-Speech Services** - Google Cloud TTS, ElevenLabs
-- **SMS Integration** - Twilio messaging
-- **Redis Caching** - High-performance caching
-- **Rate Limiting & Security** - Helmet, CORS, Express rate limiting
-- **Comprehensive Test Suite** - Jest testing framework
+All configuration is loaded from environment variables. Copy
+[`\.env.example`](./\.env.example) to `\.env` and update the values for your
+environment. The main variables are:
 
-## 🛠 Tech Stack
+- `MONGODB_URI` – MongoDB connection string.
+- `PORT` and `NODE_ENV` – server port and Node environment.
+- `DEVELOPER_ALERT_PHONE_NUMBER` and `DEVELOPER_ALERT_EMAIL` – where alert
+  notifications are sent.
+- Optional alert integrations: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+  `TWILIO_PHONE_NUMBER`, `GMAIL_USER` and `GMAIL_APP_PASSWORD`.
+- Google integrations: `GOOGLE_APPLICATION_CREDENTIALS` for Text‑to‑Speech and
+  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` and
+  `APP_BASE_URL` for Calendar OAuth.
 
-- **Runtime**: Node.js 18+
-- **Framework**: Express.js
-- **Database**: MongoDB with Mongoose ODM
-- **Authentication**: Passport.js (Google OAuth), JWT
-- **Caching**: Redis
-- **AI/ML**: Google Cloud Vertex AI, Pinecone
-- **SMS**: Twilio
-- **Testing**: Jest, Supertest
-- **Security**: Helmet, CORS, Rate limiting
+Ensure MongoDB is reachable at the URI you provide and that any Google
+credentials exist before starting the server.
 
-## 📦 Installation
+## Running the server
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd clientsvia-backend
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
-
-4. **Start the development server**
-   ```bash
-   npm run dev
-   ```
-
-## 🔧 Environment Variables
-
-Create a `.env` file in the root directory:
-
-```env
-# Database
-MONGODB_URI=mongodb://localhost:27017/clientsvia
-
-# Authentication
-JWT_SECRET=your-jwt-secret-here
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# Google Cloud
-GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
-GOOGLE_PROJECT_ID=your-project-id
-
-# Twilio
-TWILIO_ACCOUNT_SID=your-twilio-sid
-TWILIO_AUTH_TOKEN=your-twilio-token
-TWILIO_PHONE_NUMBER=your-twilio-phone
-
-# Pinecone
-PINECONE_API_KEY=your-pinecone-api-key
-PINECONE_ENVIRONMENT=your-pinecone-environment
-
-# ElevenLabs
-ELEVENLABS_API_KEY=your-elevenlabs-api-key
-
-# Server
-PORT=3001
-NODE_ENV=development
+```bash
+npm start
 ```
 
-## 🚦 Scripts
+The server expects a running MongoDB instance configured via `MONGODB_URI`.
+Google and alert integrations also rely on the credentials described above.
 
-- `npm start` - Start production server
-- `npm run dev` - Start development server with nodemon
-- `npm test` - Run test suite
-- `npm run test:watch` - Run tests in watch mode
+### Running the daily cron job
 
-## 📁 Project Structure
+The cron task defined in `scripts/dailyLearning.js` parses conversation logs and
+updates the shared Q&A. Start it in a separate process with:
 
-```
-clientsvia-backend/
-├── config/          # Configuration files (passport, etc.)
-├── docs/            # Documentation
-├── lib/             # Utility libraries
-├── middleware/      # Express middleware
-├── models/          # Mongoose models
-├── routes/          # API route handlers
-├── scripts/         # Utility scripts
-├── services/        # Business logic services
-├── tests/           # Test files
-├── utils/           # Utility functions
-├── app.js           # Express app configuration
-├── server.js        # Server entry point
-├── db.js            # Database connection
-├── index.js         # Main application file
-├── clients.js       # Client management
-└── package.json     # Dependencies and scripts
+```bash
+npm install
+node scripts/dailyLearning.js
 ```
 
-## 🔗 API Endpoints
+### Seeding default agent prompts
 
-### Authentication
-- `POST /auth/login` - User login
-- `POST /auth/logout` - User logout
-- `GET /auth/google` - Google OAuth login
-- `GET /auth/google/callback` - Google OAuth callback
+Run the `scripts/seedAgentPrompts.js` script once to populate the default
+prompt variants used by the voice agent:
 
-### Companies
-- `GET /api/companies` - Get all companies
-- `POST /api/companies` - Create new company
-- `GET /api/companies/:id` - Get company by ID
-- `PUT /api/companies/:id` - Update company
-- `DELETE /api/companies/:id` - Delete company
+```bash
+node scripts/seedAgentPrompts.js
+```
 
-### AI Agent
-- `POST /api/ai/chat` - Chat with AI agent
-- `GET /api/ai/knowledge` - Get knowledge base entries
-- `POST /api/ai/knowledge` - Add knowledge entry
+## Running tests
 
-### Integrations
-- `POST /api/twilio/sms` - Send SMS
-- `POST /api/tts/generate` - Generate text-to-speech
+Tests use Jest. Run all tests with:
 
-## 🧪 Testing
-
-Run the test suite:
 ```bash
 npm test
 ```
 
-Run tests in watch mode:
+The test suite is self contained and mocks external services such as MongoDB and
+Google APIs.
+
+`npm test` executes the test suite located in the `tests` directory.
+
+## Testing authenticated endpoints
+
+Some API routes require a valid JWT which is stored in a secure `httpOnly`
+cookie. Obtain this cookie by registering or logging in first and then include
+the cookie with subsequent requests.
+
+Register a new user:
+
 ```bash
-npm run test:watch
+curl -X POST https://clientsvia-backend.onrender.com/api/auth/register \
+  -H "Content-Type: application/json" \
+  -c cookie.txt \
+  -d '{"email":"admin@yourdomain.com","password":"YourStrongPassword"}'
 ```
 
-## 🔒 Security
+Login if the user already exists:
 
-- ✅ CORS enabled for cross-origin requests
-- ✅ Helmet for security headers
-- ✅ Rate limiting on API endpoints
-- ✅ JWT authentication
-- ✅ Input validation with Joi
-- ✅ Environment variable protection
-- ✅ Password hashing with bcrypt
-- ✅ Session management with Redis
+```bash
+curl -X POST https://clientsvia-backend.onrender.com/api/auth/login \
+  -H "Content-Type: application/json" \
+  -c cookie.txt \
+  -d '{"email":"admin@yourdomain.com","password":"YourStrongPassword"}'
+```
 
-## 🚀 Deployment
+Use the stored cookie to access protected routes:
 
-1. **Set production environment variables**
-2. **Install dependencies**
-   ```bash
-   npm install --production
-   ```
-3. **Start the application**
-   ```bash
-   npm start
-   ```
+```bash
+curl -b cookie.txt https://clientsvia-backend.onrender.com/api/company/685fbe32f2dd80e7e46ba663
+```
 
-## 📄 License
+## Company Q&A API
 
-MIT
+Use `/api/company/:companyId/qna` to manage a company's custom Q&A.
 
----
+- `GET /api/company/:companyId/qna` – list entries for the company.
+- `POST /api/company/:companyId/qna` – add a new `{ question, answer }`.
+- `PUT /api/company/:companyId/qna/:id` – update an entry.
+- `DELETE /api/company/:companyId/qna/:id` – remove an entry.
 
-**⚠️ Security Notice**: This backend contains sensitive API keys and credentials. Never commit `.env` files or expose secrets in code. Always use environment variables for configuration.
+### Suggestions API
+
+Call `/api/suggestions` to review conversation snippets detected by the daily
+learning job.
+
+- `POST /api/suggestions` – create a suggestion (used by automated scripts).
+- `GET /api/suggestions` – list all suggestions.
+- `PATCH /api/suggestions/:id` – update status to `approved` or `rejected`.
+
+Approving a `best-practice` suggestion automatically creates a matching
+knowledge entry.
+
+
+## Database Indexes
+
+A compound index on `category` and `question` improves performance when querying knowledge entries. On existing deployments run:
+
+```bash
+node scripts/createKnowledgeIndex.js
+# or from a Mongo shell
+# db.collection('knowledgeentries').createIndex({ category: 1, question: 1 })
+```
+
+<!-- Force redeploy - 2025-06-29 16:00 EDT -->\nSee docs/scheduling_keywords.md for troubleshooting scheduling questions.

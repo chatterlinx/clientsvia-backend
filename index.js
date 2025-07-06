@@ -28,10 +28,6 @@ const aiRoutes = require('./routes/ai'); // New AI routes
 const testRoutes = require('./routes/test'); // New test routes
 const elevenLabsRoutes = require('./routes/elevenLabs'); // New ElevenLabs routes
 const uploadRoutes = require('./routes/upload');
-const authRoutes = require('./routes/auth'); // Auth routes
-const employeeRoutes = require('./routes/employee'); // Employee routes
-const settingsRoutes = require('./routes/settings'); // Settings routes
-const uploadsRoutes = require('./routes/uploads'); // Uploads routes
 
 // Initialize Express app
 const app = express();
@@ -54,10 +50,6 @@ app.use('/api/ai', aiRoutes); // Registering the new /api/ai route
 app.use('/api/test', testRoutes); // Registering the new /api/test route
 app.use('/api/elevenlabs', elevenLabsRoutes); // Registering the new /api/elevenlabs route
 app.use('/api/upload', uploadRoutes);
-app.use('/api/auth', authRoutes); // Auth routes
-app.use('/api/employee', employeeRoutes); // Employee routes
-app.use('/api/settings', settingsRoutes); // Settings routes
-app.use('/api/uploads', uploadsRoutes); // Uploads routes
 /*
 --- TWILIO SMOKE TEST ROUTE (COMMENTED OUT) ---
 app.post('/api/twilio/voice', (req, res) => {
@@ -74,53 +66,16 @@ app.post('/api/twilio/voice', (req, res) => {
 
 // This line will now correctly handle all /api/twilio requests
 app.use('/api/twilio', twilioRoutes);
-
-// Root route - serve admin dashboard
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Serve specific HTML pages
 app.get('/:pageName.html', (req, res, next) => {
     const pageName = req.params.pageName;
     const filePath = path.join(__dirname, 'public', `${pageName}.html`);
     res.sendFile(filePath, (err) => {
         if (err) {
             if (!res.headersSent) {
-                res.status(404).send('Page not found');
+                // Optional: res.status(404).send('Page not found');
             }
         }
     });
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'OK', 
-        timestamp: new Date().toISOString(),
-        service: 'ClientsVia Backend'
-    });
-});
-
-// 404 handler for API routes
-app.use('/api/*', (req, res) => {
-    res.status(404).json({
-        success: false,
-        error: 'API endpoint not found'
-    });
-});
-
-// Catch-all handler for non-API routes
-app.use('*', (req, res) => {
-    // For SPA routing, serve index.html for non-API routes
-    if (!req.originalUrl.startsWith('/api/')) {
-        res.sendFile(path.join(__dirname, 'public', 'index.html'));
-    } else {
-        res.status(404).json({
-            success: false,
-            error: 'Route not found'
-        });
-    }
 });
 
 // --- Database Connection and Server Start ---
@@ -143,8 +98,6 @@ if (require.main === module) {
     // If this file is executed directly, start the server
     startServer();
 }
-
-module.exports = { app, startServer };
 
 app.use((err, req, res, next) => {
     console.error('Unhandled error:', err.stack);

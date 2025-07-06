@@ -2,22 +2,16 @@ const request = require('supertest');
 const express = require('express');
 jest.mock('../clients', () => ({ redisClient: {}, pinecone: {}, getPineconeIndex: jest.fn() }));
 const companyRoutes = require('../routes/company');
-const { getDB } = require('../db');
+const Company = require('../models/Company');
 
-jest.mock('../db');
+jest.mock('../models/Company');
 
 describe('GET /api/companies', () => {
   it('responds with a list of companies', async () => {
-    const mockDB = {
-      collection: jest.fn().mockReturnValue({
-        find: jest.fn().mockReturnValue({
-          sort: jest.fn().mockReturnValue({
-            toArray: jest.fn().mockResolvedValue([{ companyName: 'Mock Co' }])
-          })
-        })
-      })
-    };
-    getDB.mockReturnValue(mockDB);
+    const mockCompanies = [{ companyName: 'Mock Co' }];
+    Company.find.mockReturnValue({
+      sort: jest.fn().mockResolvedValue(mockCompanies)
+    });
 
     const app = express();
     app.use(express.json());
