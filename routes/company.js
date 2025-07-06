@@ -253,14 +253,11 @@ router.patch('/company/:companyId/configuration', async (req, res) => {
 router.patch('/company/:companyId/integrations', async (req, res) => {
     const { companyId } = req.params;
     const { integrations } = req.body; // Assuming this only sends highlevel data
-    const db = getDB();
-    if (!db) return res.status(500).json({ message: 'Database not connected' });
     if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID format' });
     if (!integrations || typeof integrations !== 'object') {
         return res.status(400).json({ message: 'Integrations data is required and must be an object.' });
     }
 
-    const companiesCollection = db.collection('companiesCollection');
     try {
         const updateFields = {
             'integrations.highlevelApiKey': integrations.highlevelApiKey || null,
@@ -268,10 +265,13 @@ router.patch('/company/:companyId/integrations', async (req, res) => {
             updatedAt: new Date()
         };
 
-        const result = await companiesCollection.updateOne({ _id: new ObjectId(companyId) }, { $set: updateFields });
-        if (result.matchedCount === 0) return res.status(404).json({ message: 'Company not found' });
-
-        const updatedCompany = await companiesCollection.findOne({ _id: new ObjectId(companyId) });
+        const updatedCompany = await Company.findByIdAndUpdate(
+            companyId,
+            updateFields,
+            { new: true, runValidators: true }
+        );
+        
+        if (!updatedCompany) return res.status(404).json({ message: 'Company not found' });
 
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
@@ -288,16 +288,13 @@ router.patch('/company/:companyId/integrations', async (req, res) => {
 router.patch('/company/:companyId/aisettings', async (req, res) => {
     const { companyId } = req.params;
     const { aiSettings } = req.body;
-    const db = getDB();
-    if (!db) return res.status(500).json({ message: 'Database not connected' });
     if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID format' });
     if (!aiSettings || typeof aiSettings !== 'object' || Object.keys(aiSettings).length === 0) {
         return res.status(400).json({ message: 'Invalid or missing aiSettings data' });
     }
 
-    const companiesCollection = db.collection('companiesCollection');
     try {
-        const currentCompany = await companiesCollection.findOne({ _id: new ObjectId(companyId) });
+        const currentCompany = await Company.findById(companyId);
         if (!currentCompany) return res.status(404).json({ message: 'Company not found' });
         const currentAISettings = currentCompany.aiSettings || {};
 
@@ -329,15 +326,17 @@ router.patch('/company/:companyId/aisettings', async (req, res) => {
         updatePayload.updatedAt = new Date();
 
         if (Object.keys(updatePayload).length <= 1) { // Only updatedAt
-             const company = await companiesCollection.findOne({ _id: new ObjectId(companyId) });
+            const company = await Company.findById(companyId);
             return res.json(company || { message: 'Company found, no AI settings updates applied.'});
         }
 
-        const result = await companiesCollection.updateOne({ _id: new ObjectId(companyId) }, { $set: updatePayload });
+        const updatedCompany = await Company.findByIdAndUpdate(
+            companyId,
+            updatePayload,
+            { new: true, runValidators: true }
+        );
 
-        if (result.matchedCount === 0) return res.status(404).json({ message: 'Company not found (during update)' });
-
-        const updatedCompany = await companiesCollection.findOne({ _id: new ObjectId(companyId) });
+        if (!updatedCompany) return res.status(404).json({ message: 'Company not found (during update)' });
 
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
