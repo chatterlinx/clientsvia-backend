@@ -360,113 +360,93 @@
                         </form>
 
                         <!-- Agent Performance Controls Section -->
-                        <div class="mt-8 pt-6 border-t border-gray-200">
+                        <section class="profile-section bg-gray-50 border border-gray-200 rounded-lg p-6 mt-8">
                             <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
                                 <i class="fas fa-tachometer-alt mr-2 text-indigo-600"></i>Agent Performance Controls
+                                <span class="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Advanced</span>
                             </h3>
-                            <form id="performance-settings-form">
-                                <!-- Agent Response Delay -->
-                                <div class="mb-6">
-                                    <label for="agentResponseDelay" class="form-label">Agent Response Delay (ms)</label>
-                                    <div class="flex items-center space-x-4">
-                                        <input type="range" id="agentResponseDelay" name="responseDelayMs" min="0" max="3000" value="0" step="100" class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                                        <span id="agentResponseDelayValue" class="text-sm font-mono bg-gray-100 px-2 py-1 rounded">0 ms</span>
+                            <p class="text-sm text-gray-600 mb-6">Fine-tune agent response timing and behavior for optimal call experience.</p>
+                            
+                            <form id="agent-performance-form" class="space-y-6">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <!-- Response Delay -->
+                                    <div>
+                                        <label for="responseDelayMs" class="form-label">Response Delay (ms)</label>
+                                        <input type="number" id="responseDelayMs" name="responseDelayMs" class="form-input" 
+                                               value="0" min="0" max="2000" step="100">
+                                        <p class="text-xs text-gray-500 mt-1">Delay before agent responds (0ms = instant, 200ms = natural)</p>
                                     </div>
-                                    <div class="mt-2 text-xs text-gray-600">
-                                        <p><strong>Agent Response Delay:</strong> This controls how quickly the AI responds after the caller finishes speaking (in milliseconds).</p>
-                                        <p>• <strong>Lower values (0-500ms):</strong> Makes the agent answer faster, feels snappier but might sound robotic.</p>
-                                        <p>• <strong>Higher values (1000-3000ms):</strong> Adds a human-like pause before responding, making it feel more natural.</p>
-                                        <p><em>Default is 0ms. Adjust if you want a faster or more conversational feel.</em></p>
-                                    </div>
-                                </div>
 
-                                <!-- Twilio Speech Confidence Threshold -->
-                                <div class="mb-6">
-                                    <label for="speechConfidenceThreshold" class="form-label">Twilio Speech Confidence Threshold</label>
-                                    <div class="flex items-center space-x-4">
-                                        <input type="range" id="speechConfidenceThreshold" name="twilioSpeechConfidenceThreshold" min="0.1" max="1.0" value="0.4" step="0.05" class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                                        <span id="speechConfidenceThresholdValue" class="text-sm font-mono bg-gray-100 px-2 py-1 rounded">0.4</span>
+                                    <!-- Silence Timeout -->
+                                    <div>
+                                        <label for="silenceTimeout" class="form-label">Silence Timeout (seconds)</label>
+                                        <input type="number" id="silenceTimeout" name="silenceTimeout" class="form-input" 
+                                               value="8" min="3" max="15" step="1">
+                                        <p class="text-xs text-gray-500 mt-1">How long to wait for caller response before prompting</p>
                                     </div>
-                                    <div class="mt-2 text-xs text-gray-600">
-                                        <p>Higher values will reject more poor-quality speech, but may require customers to repeat themselves more often.</p>
-                                    </div>
-                                </div>
 
-                                <!-- Fuzzy Match Threshold -->
-                                <div class="mb-6">
-                                    <label for="fuzzyMatchThreshold" class="form-label">Fuzzy Match Threshold</label>
-                                    <div class="flex items-center space-x-4">
-                                        <input type="range" id="fuzzyMatchThreshold" name="fuzzyMatchThreshold" min="0.1" max="1.0" value="0.3" step="0.05" class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                                        <span id="fuzzyMatchThresholdValue" class="text-sm font-mono bg-gray-100 px-2 py-1 rounded">0.3</span>
-                                    </div>
-                                    <div class="mt-2 text-xs text-gray-600">
-                                        <p><strong>Fuzzy Match Threshold:</strong> This controls how closely the AI will match a caller's words to your Q&A entries.</p>
-                                        <p>• <strong>Lower values (0.2-0.5):</strong> More lenient, matches even if caller's words are a little different. Use if your customers are not precise or speak in many ways.</p>
-                                        <p>• <strong>Higher values (0.7-0.9):</strong> More strict, only matches very close to your Q&A wording. Use if you want to avoid false matches.</p>
-                                        <p><em>Ideal range: Start at 0.5 and adjust up/down based on how accurately the AI answers your callers. Lower if too many "no match" responses, higher if it's answering the wrong thing.</em></p>
-                                    </div>
-                                </div>
-
-                                <!-- Enable Call Logging -->
-                                <div class="mb-6">
-                                    <label class="flex items-start">
-                                        <input type="checkbox" id="enableCallLogging" name="logCalls" class="form-checkbox mt-1">
-                                        <div class="ml-2">
-                                            <span class="form-check-label font-medium">Enable Call Logging</span>
-                                            <p class="text-xs text-gray-500 mt-1">
-                                                When checked, caller and agent speech are recorded to the <code>callLogs</code> database collection.<br>
-                                                • Useful for troubleshooting, QA, and reviewing agent performance.<br>
-                                                • <strong class="text-red-600">Do not enable in production unless you need to audit or debug</strong> — may capture sensitive info.
-                                            </p>
-                                            <p class="text-xs text-gray-500 mt-1">Logs can be viewed in the "Logs" tab of the dashboard.</p>
+                                    <!-- Speech Confidence Threshold -->
+                                    <div>
+                                        <label for="speechConfidenceThreshold" class="form-label">Speech Recognition Sensitivity</label>
+                                        <input type="range" id="speechConfidenceThreshold" name="speechConfidenceThreshold" 
+                                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
+                                               value="0.4" min="0.1" max="0.9" step="0.1">
+                                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                            <span>Low (0.1)</span>
+                                            <span id="speechConfidenceValue">0.4</span>
+                                            <span>High (0.9)</span>
                                         </div>
-                                    </label>
-                                </div>
+                                        <p class="text-xs text-gray-500 mt-1">Lower = more sensitive, Higher = more accurate</p>
+                                    </div>
 
-                                <!-- Enable Speech Confirmation -->
-                                <div class="mb-6">
-                                    <label class="flex items-start">
-                                        <input type="checkbox" id="enableSpeechConfirmation" name="speechConfirmationEnabled" class="form-checkbox mt-1">
-                                        <div class="ml-2">
-                                            <span class="form-check-label font-medium">Enable Speech Confirmation</span>
-                                            <p class="text-xs text-gray-500 mt-1">
-                                                The agent will repeat what it heard and require approval before acting.<br>
-                                                Example prompt: "I heard: '{transcript}'. Press 5 or say yes to confirm. If not, say no or repeat."<br>
-                                                Setting is stored with the company profile and used on all calls when enabled.
-                                            </p>
+                                    <!-- Fuzzy Match Threshold -->
+                                    <div>
+                                        <label for="fuzzyMatchThreshold" class="form-label">Q&A Matching Sensitivity</label>
+                                        <input type="range" id="fuzzyMatchThreshold" name="fuzzyMatchThreshold" 
+                                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
+                                               value="0.3" min="0.1" max="0.8" step="0.1">
+                                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                            <span>Strict (0.1)</span>
+                                            <span id="fuzzyMatchValue">0.3</span>
+                                            <span>Flexible (0.8)</span>
                                         </div>
-                                    </label>
+                                        <p class="text-xs text-gray-500 mt-1">How closely caller words must match Q&A keywords</p>
+                                    </div>
+
+                                    <!-- Max Repeats -->
+                                    <div>
+                                        <label for="maxRepeats" class="form-label">Max Retry Attempts</label>
+                                        <select id="maxRepeats" name="maxRepeats" class="form-select">
+                                            <option value="1">1 time</option>
+                                            <option value="2">2 times</option>
+                                            <option value="3" selected>3 times</option>
+                                            <option value="4">4 times</option>
+                                            <option value="5">5 times</option>
+                                        </select>
+                                        <p class="text-xs text-gray-500 mt-1">Times to retry before escalating unclear speech</p>
+                                    </div>
+
+                                    <!-- TTS Provider -->
+                                    <div>
+                                        <label for="ttsProvider" class="form-label">TTS Provider</label>
+                                        <select id="ttsProvider" name="ttsProvider" class="form-select">
+                                            <option value="elevenlabs" selected>ElevenLabs (Premium)</option>
+                                            <option value="google">Google TTS (Standard)</option>
+                                        </select>
+                                        <p class="text-xs text-gray-500 mt-1">Voice synthesis provider for agent responses</p>
+                                    </div>
                                 </div>
 
-                                <!-- Confirmation Settings (only shown when speech confirmation is enabled) -->
-                                <div id="confirmationSettings" class="mb-6 ml-6 space-y-4 hidden">
-                                    <div>
-                                        <label for="confirmationKey" class="form-label">Confirmation Key</label>
-                                        <input type="number" id="confirmationKey" name="confirmationKey" min="1" max="9" value="5" class="form-input w-20">
-                                        <p class="text-xs text-gray-500 mt-1">DTMF key for confirmation (default: 5)</p>
-                                    </div>
-                                    <div>
-                                        <label for="confirmationPhrases" class="form-label">Confirmation Phrases</label>
-                                        <textarea id="confirmationPhrases" name="confirmationPhrases" class="form-textarea" rows="3" placeholder="I heard: '{transcript}'. Press 5 or say yes to confirm. If not, say no or repeat."></textarea>
-                                        <p class="text-xs text-gray-500 mt-1">Use {transcript} as placeholder for what was heard</p>
-                                    </div>
-                                    <div>
-                                        <label for="maxRecognitionAttempts" class="form-label">Max Recognition Attempts</label>
-                                        <input type="number" id="maxRecognitionAttempts" name="maxRecognitionAttempts" min="1" max="5" value="2" class="form-input w-20">
-                                        <p class="text-xs text-gray-500 mt-1">Maximum attempts before escalation</p>
-                                    </div>
-                                </div>
-
-                                <div class="flex items-center space-x-4 pt-4 border-t border-gray-200">
-                                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
+                                <div class="border-t border-gray-200 pt-6">
+                                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
                                         <i class="fas fa-save mr-2"></i>Save Performance Settings
                                     </button>
-                                    <button type="button" id="resetPerformanceDefaults" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
+                                    <button type="button" id="resetPerformanceDefaults" class="ml-4 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out">
                                         <i class="fas fa-undo mr-2"></i>Reset to Defaults
                                     </button>
                                 </div>
                             </form>
-                        </div>
+                        </section>
                     </section>
                     </div>
 

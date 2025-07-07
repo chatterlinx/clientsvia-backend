@@ -314,6 +314,13 @@ router.patch('/company/:companyId/aisettings', async (req, res) => {
         if (typeof aiSettings.proactiveOutreach === 'boolean') updatePayload['aiSettings.proactiveOutreach'] = aiSettings.proactiveOutreach;
         if (typeof aiSettings.llmFallbackEnabled === 'boolean') updatePayload['aiSettings.llmFallbackEnabled'] = aiSettings.llmFallbackEnabled;
         if (aiSettings.customEscalationMessage !== undefined) updatePayload['aiSettings.customEscalationMessage'] = aiSettings.customEscalationMessage;
+        
+        // Agent Performance Controls
+        if (aiSettings.silenceTimeout !== undefined) updatePayload['aiSettings.silenceTimeout'] = Number(aiSettings.silenceTimeout);
+        if (aiSettings.responseDelayMs !== undefined) updatePayload['aiSettings.responseDelayMs'] = Number(aiSettings.responseDelayMs);
+        if (aiSettings.fuzzyMatchThreshold !== undefined) updatePayload['aiSettings.fuzzyMatchThreshold'] = Number(aiSettings.fuzzyMatchThreshold);
+        if (aiSettings.twilioSpeechConfidenceThreshold !== undefined) updatePayload['aiSettings.twilioSpeechConfidenceThreshold'] = Number(aiSettings.twilioSpeechConfidenceThreshold);
+        if (aiSettings.maxRepeats !== undefined) updatePayload['aiSettings.maxRepeats'] = Number(aiSettings.maxRepeats);
 
         // *** MODIFICATION FOR GOOGLE CALENDAR SWITCH ***
         if (typeof aiSettings.enableGoogleCalendarIntegration === 'boolean') {
