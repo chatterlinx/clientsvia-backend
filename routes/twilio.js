@@ -3,7 +3,10 @@ const express = require('express');
 const twilio = require('twilio');
 const Company = require('../models/Company');
 const { answerQuestion, loadCompanyQAs } = require('../services/agent');
-const { findCachedAnswer } = require('../utils/aiAgent');
+const { findCachedAnswer } = require('../utils/aiAgen        responseDelayMs: company.aiSettings?.responseDelayMs || 0,
+        logCalls: company.aiSettings?.logCalls || false,
+        bargeIn: company.aiSettings?.bargeIn ?? false, // Let agent finish speaking,
+        silenceTimeout: company.aiSettings?.silenceTimeout ?? 3, // Faster timeout
 const KnowledgeEntry = require('../models/KnowledgeEntry');
 const fs = require('fs');
 const path = require('path');
@@ -106,7 +109,7 @@ router.post('/voice', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false, // Let agent finish greeting for natural flow
-        timeout: company.aiSettings?.silenceTimeout ?? 5
+        timeout: 3
       });
 
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
@@ -204,7 +207,7 @@ router.post('/handle-speech', async (req, res) => {
           action: `https://${req.get('host')}/api/twilio/handle-speech`,
           method: 'POST',
           bargeIn: company.aiSettings?.bargeIn ?? false, // Let agent finish speaking
-          timeout: company.aiSettings?.silenceTimeout ?? 5
+          timeout: 3
         });
         const retryMsg = await getRandomPersonalityResponse(company._id.toString(), 'cantUnderstand');
         gather.say({ voice }, escapeTwiML(retryMsg));
@@ -233,7 +236,7 @@ router.post('/handle-speech', async (req, res) => {
           action: `https://${req.get('host')}/api/twilio/handle-speech`,
           method: 'POST',
           bargeIn: company.aiSettings?.bargeIn ?? false, // Let agent finish speaking
-          timeout: company.aiSettings?.silenceTimeout ?? 5
+          timeout: 3
         });
         gather.say({ voice }, escapeTwiML(cachedAnswer));
         res.type('text/xml');
@@ -273,7 +276,7 @@ router.post('/handle-speech', async (req, res) => {
         responseDelayMs: company.aiSettings?.responseDelayMs || 0,
         logCalls: company.aiSettings?.logCalls || false,
         bargeIn: company.aiSettings?.bargeIn ?? false, // Let agent finish speaking
-        silenceTimeout: company.aiSettings?.silenceTimeout ?? 5,
+        silenceTimeout: company.aiSettings?.silenceTimeout ?? 3, // Faster timeout
         fillersEnabled: company.aiSettings?.humanLikeFillers || false,
         fillerPhrases: company.aiSettings?.fillerPhrases || []
       };
@@ -370,7 +373,7 @@ router.post('/process-ai-response', async (req, res) => {
           action: '/api/twilio/handle-speech',
           method: 'POST',
           bargeIn: context?.bargeIn ?? false, // Let agent finish speaking
-          timeout: context?.silenceTimeout ?? 5
+          timeout: 3
         });
         const cleanedText = cleanTextForTTS(stripMarkdown(answerObj.text));
         gather.say(
@@ -383,7 +386,7 @@ router.post('/process-ai-response', async (req, res) => {
           action: '/api/twilio/handle-speech',
           method: 'POST',
           bargeIn: context?.bargeIn ?? false, // Let agent finish speaking
-          timeout: context?.silenceTimeout ?? 5
+          timeout: 3
         });
         const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
         console.log(`[Twilio Process AI] Cleaned Answer: ${strippedAnswer}`);
@@ -440,7 +443,7 @@ router.post('/process-ai-response', async (req, res) => {
           action: '/api/twilio/handle-speech',
           method: 'POST',
           bargeIn: context?.bargeIn ?? false, // Let agent finish speaking
-          timeout: context?.silenceTimeout ?? 5
+          timeout: 3
         });
         const msg = await getRandomPersonalityResponse(context?.companyId || null, 'connectionTrouble');
         gather.say({ voice }, escapeTwiML(msg));
@@ -468,7 +471,7 @@ router.post('/process-ai-response', async (req, res) => {
       action: '/api/twilio/handle-speech',
       method: 'POST',
       bargeIn: context?.bargeIn ?? false, // Let agent finish speaking
-      timeout: context?.silenceTimeout ?? 5
+      timeout: 3
     });
     const msg = await getRandomPersonalityResponse(context?.companyId || null, 'connectionTrouble');
     gather.say({ voice }, escapeTwiML(msg));

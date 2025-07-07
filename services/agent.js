@@ -78,9 +78,9 @@ async function callModel(company, prompt) {
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 1024,
+            topK: 20, // Reduced for faster responses
+            topP: 0.8, // Reduced for faster responses
+            maxOutputTokens: 150, // Much smaller for faster, more concise responses
           }
         }
       });
@@ -211,20 +211,21 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   fullPrompt += `\n\n**Current Question:** ${question}`;
 
   fullPrompt += `\n\n**Response Guidelines:**`;
-  fullPrompt += `\n- Stay in character as The Agent for ${company?.companyName}`;
-  fullPrompt += `\n- Be helpful, professional, and maintain your ${personality} personality`;
-  fullPrompt += `\n- Use the company information and specialties provided above`;
-  fullPrompt += `\n- If you don't know something specific, be honest but offer to help in other ways`;
-  fullPrompt += `\n- Keep responses conversational and natural`;
-  fullPrompt += `\n- Always try to ask a clarifying question to keep the conversation going, unless the user explicitly ends the conversation or asks for a specific action (like scheduling)`;
+  fullPrompt += `\n- You are The Agent for ${company?.companyName} - be natural and conversational`;
+  fullPrompt += `\n- Keep your ${personality} personality but don't be robotic`;
+  fullPrompt += `\n- Don't repeat everything the caller says - acknowledge and move forward`;
+  fullPrompt += `\n- Be concise but helpful - avoid overly long explanations unless asked`;
+  fullPrompt += `\n- If they ask about something you can help with, focus on solutions`;
+  fullPrompt += `\n- Ask ONE clarifying question if needed, but don't interrogate`;
+  fullPrompt += `\n- If it's clear what they need, offer to help or schedule service`;
 
   if (responseLength === 'concise') {
-    fullPrompt += '\n- Provide a very brief and concise answer, ideally one to two sentences.';
+    fullPrompt += '\n- Keep responses to 1-2 sentences maximum.';
   } else if (responseLength === 'detailed') {
-    fullPrompt += '\n- Provide a comprehensive and detailed answer.';
+    fullPrompt += '\n- Provide helpful details but stay focused on their specific need.';
   }
 
-  fullPrompt += `\n\nPlease respond naturally and helpfully to the current question.`;
+  fullPrompt += `\n\nRespond naturally to: "${question}" - Keep it conversational and move the call forward.`;
 
   if (!llmFallbackEnabled) {
     const message = applyPlaceholders((customEscalationMessage || await getRandomPersonalityResponse(companyId, 'transferToRep')).trim(), placeholders);
