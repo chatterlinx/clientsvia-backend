@@ -75,18 +75,17 @@ const aiSettingsSchema = new mongoose.Schema({
     sentimentAnalysis: { type: Boolean, default: false },
     dataLogging: { type: Boolean, default: true },
     proactiveOutreach: { type: Boolean, default: false },
-    llmFallbackEnabled: { type: Boolean, default: false },
+    llmFallbackEnabled: { type: Boolean, default: true }, // Enable LLM by default for intelligent responses
     customEscalationMessage: {
         type: String,
-        default: 'I\u2019m unable to answer that, let me connect you to a team member who can help.',
+        default: 'I understand you have a question I haven\'t been able to answer directly. Let me connect you with one of our specialists who can provide you with the exact information you need.',
         trim: true
     },
-    ttsProvider: { type: String, default: 'google', trim: true },
-    elevenLabs: { type: elevenLabsSettingsSchema, default: () => ({}) }
-    ,
-    responseDelayMs: { type: Number, default: 500 },
-    twilioSpeechConfidenceThreshold: { type: Number, default: 0.5 },
-    fuzzyMatchThreshold: { type: Number, default: 0.5 },
+    ttsProvider: { type: String, default: 'elevenlabs', trim: true }, // Default to ElevenLabs for better voice quality
+    elevenLabs: { type: elevenLabsSettingsSchema, default: () => ({}) },
+    responseDelayMs: { type: Number, default: 200 }, // Faster response time - more human-like
+    twilioSpeechConfidenceThreshold: { type: Number, default: 0.4 }, // Lower threshold for better speech recognition
+    fuzzyMatchThreshold: { type: Number, default: 0.3 }, // Better Q&A matching for all companies
     ttsPitch: { type: Number, default: 0 },
     ttsSpeed: { type: Number, default: 1 },
     speechConfirmation: {

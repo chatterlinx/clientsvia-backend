@@ -312,12 +312,14 @@ router.post('/handle-speech', async (req, res) => {
           await redisClient.setEx(`twilio-answer:${callSid}`, 60, JSON.stringify({ text: fallback, escalate: false }));
         }
       };
+      
       // Call the processing function without awaiting it directly here
       // The polling mechanism in /process-ai-response will pick up the answer
       processAiResponse();
 
-      // Respond immediately to Twilio with a redirect for polling
-      // Skip the filler phrase and go straight to processing
+      // Respond with a brief, natural thinking pause (like a human would)
+      // Then immediately redirect to get the response
+      twiml.pause({ length: 1 }); // 1 second natural thinking pause
       twiml.redirect('/api/twilio/process-ai-response');
     }
 
@@ -447,9 +449,15 @@ router.post('/process-ai-response', async (req, res) => {
         await redisClient.del(attemptsKey);
       } else {
         console.log(`[Twilio Process AI] Answer not yet ready for CallSid: ${callSid}. Polling again.`);
-        // Answer not ready, poll again
-        twiml.pause({ length: 1 }); // Pause for 1 second before redirecting
-        twiml.redirect({ method: 'POST' }, `https://${req.get('host')}/api/twilio/process-ai-response`);
+        // Answer not ready, poll again with minimal delay
+        if (attempts <= 2) {
+          // Fast polling for first 2 attempts (immediate response expected)
+          twiml.redirect({ method: 'POST' }, `https://${req.get('host')}/api/twilio/process-ai-response`);
+        } else {
+          // Slightly longer pause after 2 attempts to avoid overwhelming
+          twiml.pause({ length: 0.5 });
+          twiml.redirect({ method: 'POST' }, `https://${req.get('host')}/api/twilio/process-ai-response`);
+        }
       }
     }
 
