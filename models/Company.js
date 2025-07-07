@@ -1,7 +1,7 @@
 // models/Company.js
 const mongoose = require('mongoose');
 const { ObjectId } = mongoose.Schema.Types;
-const { defaultResponses } = require('../utils/personalityResponses');
+const { defaultResponses } = require('../utils/personalityResponses_enhanced');
 
 // --- Sub-schema for Address ---
 const addressSchema = new mongoose.Schema({
@@ -129,18 +129,12 @@ const contactRecipientSchema = new mongoose.Schema({ contact: { type: String, tr
 const phoneRecipientSchema = new mongoose.Schema({ phoneNumber: { type: String, trim: true } }, { _id: false });
 const namedPhoneRecipientSchema = new mongoose.Schema({ name: { type: String, trim: true }, phoneNumber: { type: String, trim: true } }, { _id: false });
 
-const personalityResponsesSchema = new mongoose.Schema({
-    cantUnderstand: { type: [String], default: () => defaultResponses.cantUnderstand },
-    speakClearly: { type: [String], default: () => defaultResponses.speakClearly },
-    outOfCategory: { type: [String], default: () => defaultResponses.outOfCategory },
-    transferToRep: { type: [String], default: () => defaultResponses.transferToRep },
-    calendarHesitation: { type: [String], default: () => defaultResponses.calendarHesitation },
-    businessClosed: { type: [String], default: () => defaultResponses.businessClosed },
-    frustratedCaller: { type: [String], default: () => defaultResponses.frustratedCaller },
-    businessHours: { type: [String], default: () => defaultResponses.businessHours },
-    connectionTrouble: { type: [String], default: () => defaultResponses.connectionTrouble },
-    agentNotUnderstood: { type: [String], default: () => defaultResponses.agentNotUnderstood }
-}, { _id: false });
+// Dynamic personality responses schema that allows custom categories
+const personalityResponsesSchema = new mongoose.Schema({}, { 
+    _id: false, 
+    strict: false,  // Allow dynamic fields
+    minimize: false // Don't remove empty objects
+});
 
 const agentSetupSchema = new mongoose.Schema({
     agentMode: { type: String, default: 'full', trim: true },

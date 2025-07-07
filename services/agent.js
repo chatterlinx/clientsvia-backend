@@ -7,7 +7,7 @@ const { google } = require('googleapis');
 const { VertexAI } = require('@google-cloud/vertexai');
 const { stripMarkdown } = require('../utils/textUtils');
 const { findCachedAnswer } = require('../utils/aiAgent');
-const { getRandomPersonalityResponse } = require('../utils/personalityResponses');
+const { getRandomPersonalityResponse, getPersonalityResponse } = require('../utils/personalityResponses_enhanced');
 const { applyPlaceholders } = require('../utils/placeholders');
 
 
@@ -228,7 +228,8 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   fullPrompt += `\n\nRespond naturally to: "${question}" - Keep it conversational and move the call forward.`;
 
   if (!llmFallbackEnabled) {
-    const message = applyPlaceholders((customEscalationMessage || await getRandomPersonalityResponse(companyId, 'transferToRep')).trim(), placeholders);
+    const personality = company?.aiSettings?.personality || 'friendly';
+    const message = applyPlaceholders((customEscalationMessage || await getPersonalityResponse(companyId, 'transferToRep', personality)).trim(), placeholders);
     try {
       const { logEscalationEvent } = require('../utils/escalationLogger');
       await logEscalationEvent(originalCallSid, companyId, question);
@@ -248,7 +249,8 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   // Check if the response seems to be a debug message
   if (aiResponse && aiResponse.includes('reading this from') && aiResponse.includes('LLM Message')) {
     console.log(`[LLM] DEBUG: Detected debug message from LLM, replacing with escalation message`);
-    const message = applyPlaceholders((customEscalationMessage || await getRandomPersonalityResponse(companyId, 'transferToRep')).trim(), placeholders);
+    const personality = company?.aiSettings?.personality || 'friendly';
+    const message = applyPlaceholders((customEscalationMessage || await getPersonalityResponse(companyId, 'transferToRep', personality)).trim(), placeholders);
     return { text: message, escalate: true };
   }
 

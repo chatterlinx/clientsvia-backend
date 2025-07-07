@@ -7,7 +7,7 @@ const Company = require('../models/Company'); // Add Company model import
 const { google } = require('googleapis'); // For Google Calendar
 const { normalizePhoneNumber } = require('../utils/phone');
 const { redisClient } = require('../clients');
-const { defaultResponses, clearCompanyResponsesCache } = require('../utils/personalityResponses');
+const { defaultResponses, clearCompanyResponsesCache } = require('../utils/personalityResponses_enhanced');
 
 // Google OAuth2 Client Setup
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -482,343 +482,122 @@ router.patch('/company/:companyId/personality-responses', async (req, res) => {
     }
 });
 
-
-// --- NOTES API ROUTES ---
-router.post('/company/:companyId/notes', async (req, res) => { /* ...your existing notes route... */ });
-router.patch('/company/:companyId/notes/:noteId', async (req, res) => { /* ...your existing notes route... */ });
-router.delete('/company/:companyId/notes/:noteId', async (req, res) => { /* ...your existing notes route... */ });
-router.delete('/company/:id', async (req, res) => { /* ...your existing company delete route... */ });
-
-
-// --- Google Calendar OAuth Routes --- START ---
-
-// 1. Initiate Authorization to Google
-router.get('/company/:companyId/google-calendar/authorize', async (req, res) => {
-    const { companyId } = req.params;
-    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
-        return res.status(500).send('Google Calendar integration is not configured on the server.');
-    }
-    if (!ObjectId.isValid(companyId)) {
-        return res.status(400).send('Invalid Company ID.');
-    }
-
-    const scopes = [
-        'https://www.googleapis.com/auth/calendar.events',
-        'https://www.googleapis.com/auth/calendar.readonly',
-        'openid',
-        'email',
-        'profile'
-    ];
-    const state = Buffer.from(JSON.stringify({ companyId })).toString('base64');
-
-    const authUrl = oauth2Client.generateAuthUrl({
-        access_type: 'offline',
-        scope: scopes,
-        prompt: 'consent', // Important to try and get refresh_token on subsequent authorizations too
-        state: state
-    });
-    console.log(`[Google Auth] Redirecting company ${companyId} to Google consent screen.`);
-    res.redirect(authUrl);
-});
-
-// 2. Handle OAuth Callback from Google
-router.get('/google-calendar/oauth2callback', async (req, res) => {
-    const { code, state, error: googleError } = req.query; // Renamed 'error' to 'googleError' to avoid conflict
-
-    if (!GOOGLE_CLIENT_ID) return res.status(500).send('Google Calendar integration is not configured on the server.');
-
-    let companyIdFromState; // To redirect user even if some early errors occur
-
-    if (state) {
-        try {
-            const decodedState = JSON.parse(Buffer.from(state, 'base64').toString('ascii'));
-            companyIdFromState = decodedState.companyId;
-        } catch (e) {
-            console.error('[Google Auth Callback] Invalid state parameter format:', e);
-            // Cannot determine companyId, redirect to a generic error page or home
-            return res.redirect('/directory.html?googleAuthError=' + encodeURIComponent('Invalid state parameter.'));
-        }
-    }
-
-    const redirectUrl = companyIdFromState ? `/company-profile.html?id=${companyIdFromState}` : '/directory.html';
-
-    if (googleError) {
-        console.error('[Google Auth Callback] Error from Google:', googleError);
-        return res.redirect(`${redirectUrl}&googleAuthError=` + encodeURIComponent(googleError));
-    }
-    if (!code) {
-        return res.redirect(`${redirectUrl}&googleAuthError=` + encodeURIComponent('Missing authorization code.'));
-    }
-    if (!state || !companyIdFromState) { // companyIdFromState check already done implicitly by redirectUrl logic
-        return res.redirect('/directory.html?googleAuthError=' + encodeURIComponent('Missing or invalid state parameter.'));
-    }
-     if (!ObjectId.isValid(companyIdFromState)) {
-        console.error('[Google Auth Callback] Invalid companyId in state:', companyIdFromState);
-        return res.redirect('/directory.html?googleAuthError=invalid_company_in_state');
-    }
-
-
-    const db = getDB();
-    if (!db) {
-         console.error('[Google Auth Callback] Database not connected.');
-         return res.redirect(`${redirectUrl}&googleAuthError=` + encodeURIComponent('Server database error.'));
-    }
-    const companiesCollection = db.collection('companiesCollection');
-
+// Get available default categories and their descriptions
+router.get('/company/:companyId/personality-categories', async (req, res) => {
     try {
-        const { tokens } = await oauth2Client.getToken(code);
-        // oauth2Client.setCredentials(tokens); // Set for current instance, but we primarily save to DB
-
-        const tempClientForUserInfo = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
-        tempClientForUserInfo.setCredentials(tokens);
-        const oauth2UserInfoService = google.oauth2({ version: 'v2', auth: tempClientForUserInfo });
-        const userInfo = await oauth2UserInfoService.userinfo.get();
-        const userEmail = userInfo.data.email;
-
-        const googleCalendarUpdate = {
-            'integrations.googleCalendar.isLinked': true,
-            'integrations.googleCalendar.authedUserEmail': userEmail,
-            'integrations.googleCalendar.accessToken': tokens.access_token,
-            'integrations.googleCalendar.lastAuthError': null, // Clear previous error
+        const categories = {
+            // Core response categories
+            cantUnderstand: { description: "When agent doesn't understand caller input", type: "core" },
+            speakClearly: { description: "When asking caller to speak more clearly", type: "core" },
+            outOfCategory: { description: "When request is outside company's services", type: "core" },
+            transferToRep: { description: "When transferring to live agent", type: "core" },
+            calendarHesitation: { description: "When caller hesitates about scheduling", type: "core" },
+            businessClosed: { description: "When ending calls/business is closed", type: "core" },
+            frustratedCaller: { description: "When handling frustrated callers", type: "core" },
+            businessHours: { description: "When providing business hour information", type: "core" },
+            connectionTrouble: { description: "When experiencing call quality issues", type: "core" },
+            agentNotUnderstood: { description: "When agent needs to verify information", type: "core" },
+            
+            // Personality-based categories (friendly variants)
+            greeting_friendly: { description: "Friendly greeting responses", type: "personality", personality: "friendly" },
+            greeting_professional: { description: "Professional greeting responses", type: "personality", personality: "professional" },
+            greeting_casual: { description: "Casual greeting responses", type: "personality", personality: "casual" },
+            acknowledgment_friendly: { description: "Friendly acknowledgment responses", type: "personality", personality: "friendly" },
+            acknowledgment_professional: { description: "Professional acknowledgment responses", type: "personality", personality: "professional" },
+            acknowledgment_casual: { description: "Casual acknowledgment responses", type: "personality", personality: "casual" },
+            scheduling_friendly: { description: "Friendly scheduling responses", type: "personality", personality: "friendly" },
+            scheduling_professional: { description: "Professional scheduling responses", type: "personality", personality: "professional" },
+            scheduling_casual: { description: "Casual scheduling responses", type: "personality", personality: "casual" }
         };
-        if (tokens.refresh_token) {
-            googleCalendarUpdate['integrations.googleCalendar.refreshToken'] = tokens.refresh_token;
-        }
-        if (tokens.expiry_date) { // expiry_date is a timestamp (number of milliseconds since epoch)
-            googleCalendarUpdate['integrations.googleCalendar.tokenExpiryDate'] = new Date(tokens.expiry_date);
-        }
-
-        await companiesCollection.updateOne(
-            { _id: new ObjectId(companyIdFromState) },
-            { $set: { ...googleCalendarUpdate, updatedAt: new Date() } }
-        );
-        console.log(`[Google Auth Callback] Successfully linked Google Calendar for company ${companyIdFromState}, email: ${userEmail}`);
-        res.redirect(`/company-profile.html?id=${companyIdFromState}&googleAuthSuccess=true`);
-
-    } catch (err) {
-        const errorMessage = err.response?.data?.error_description || err.response?.data?.error || err.message || 'Unknown error during Google OAuth.';
-        console.error('[Google Auth Callback] Error exchanging token or saving to DB for company ' + companyIdFromState + ':', errorMessage, err.stack ? err.stack.substring(0,500) : '');
-        try {
-            await companiesCollection.updateOne(
-                { _id: new ObjectId(companyIdFromState) },
-                { $set: {
-                    'integrations.googleCalendar.isLinked': false,
-                    'integrations.googleCalendar.accessToken': null, // Clear potentially partially stored token
-                    // Do not clear refresh token here if it existed, as it might still be valid for a new attempt.
-                    'integrations.googleCalendar.lastAuthError': errorMessage,
-                    updatedAt: new Date()
-                }}
-            );
-        } catch (dbError) {
-             console.error('[Google Auth Callback] CRITICAL: Failed to even update DB with error state for company ' + companyIdFromState + ':', dbError);
-        }
-        res.redirect(`/company-profile.html?id=${companyIdFromState}&googleAuthError=` + encodeURIComponent(errorMessage));
-    }
-});
-
-// Helper function to get an authenticated Google API client for a company
-async function getGoogleAPIClient(companyId, db) {
-    if (!GOOGLE_CLIENT_ID) throw new Error('Google Calendar integration not configured on server.');
-
-    const companiesCollection = db.collection('companiesCollection');
-    const company = await companiesCollection.findOne({ _id: new ObjectId(companyId) });
-
-    if (!company || !company.integrations || !company.integrations.googleCalendar || !company.integrations.googleCalendar.isLinked) {
-        throw new Error('Google Calendar is not linked for this company.');
-    }
-    if (!company.integrations.googleCalendar.accessToken) { // Essential token missing
-        throw new Error('Google Calendar access token is missing. Please re-authorize.');
-    }
-
-
-    const gcal = company.integrations.googleCalendar;
-    const client = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
-    client.setCredentials({
-        access_token: gcal.accessToken,
-        refresh_token: gcal.refreshToken, // This can be null if not obtained or if revoked
-        expiry_date: gcal.tokenExpiryDate ? new Date(gcal.tokenExpiryDate).getTime() : null
-    });
-
-    // Check if token is expired or about to expire (e.g., within 5 minutes)
-    if (client.isTokenExpiring()) { // isTokenExpiring() checks against current time
-        console.log(`[Google API Client] Token for company ${companyId} is expiring or expired. Attempting refresh.`);
-        if (!gcal.refreshToken) {
-            console.error(`[Google API Client] Cannot refresh token for company ${companyId}: No refresh token available.`);
-             await companiesCollection.updateOne(
-                { _id: new ObjectId(companyId) },
-                { $set: { 'integrations.googleCalendar.isLinked': false, 'integrations.googleCalendar.lastAuthError': 'Refresh token missing. Please re-authorize.' } }
-            );
-            throw new Error('Refresh token missing. Please re-authorize Google Calendar.');
-        }
-        try {
-            const { credentials } = await client.refreshAccessToken(); // This refreshes and updates client.credentials
-            // client.setCredentials(credentials); // Already done by refreshAccessToken internally
-
-            const updateData = {
-                'integrations.googleCalendar.accessToken': credentials.access_token,
-            };
-            if (credentials.expiry_date) {
-                updateData['integrations.googleCalendar.tokenExpiryDate'] = new Date(credentials.expiry_date);
-            }
-            if (credentials.refresh_token) { // A new refresh token might be issued
-                updateData['integrations.googleCalendar.refreshToken'] = credentials.refresh_token;
-            }
-            updateData['integrations.googleCalendar.lastAuthError'] = null; // Clear error on successful refresh
-
-            await companiesCollection.updateOne({ _id: new ObjectId(companyId) }, { $set: { ...updateData, updatedAt: new Date() } });
-            console.log(`[Google API Client] Token refreshed and saved for company ${companyId}.`);
-        } catch (refreshError) {
-            const errMsg = refreshError.response?.data?.error || refreshError.message;
-            console.error(`[Google API Client] Failed to refresh token for company ${companyId}:`, errMsg);
-            await companiesCollection.updateOne(
-                { _id: new ObjectId(companyId) },
-                { $set: {
-                    'integrations.googleCalendar.isLinked': false,
-                    'integrations.googleCalendar.lastAuthError': `Token refresh failed: ${errMsg}. Please re-authorize.`,
-                    updatedAt: new Date()
-                }}
-            );
-            throw new Error(`Token refresh failed: ${errMsg}. Please re-authorize Google Calendar.`);
-        }
-    }
-    return client;
-}
-
-// 3. List User's Google Calendars
-router.get('/company/:companyId/google-calendars/list', async (req, res) => {
-    const { companyId } = req.params;
-    const db = getDB();
-    if (!db) return res.status(500).json({ message: 'Database not connected' });
-    if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid Company ID.' });
-    if (!GOOGLE_CLIENT_ID) return res.status(500).json({ message: 'Google Calendar integration not configured on server.' });
-
-    try {
-        const authClient = await getGoogleAPIClient(companyId, db);
-        const calendar = google.calendar({ version: 'v3', auth: authClient });
-        const response = await calendar.calendarList.list({ minAccessRole: 'writer' });
-        const calendars = response.data.items.map(cal => ({
-            id: cal.id,
-            summary: cal.summary,
-            primary: cal.primary || false,
-            accessRole: cal.accessRole,
-            description: cal.description || null,
-            timeZone: cal.timeZone
-        }));
-        res.json(calendars);
+        
+        res.json(categories);
     } catch (error) {
-        console.error(`[API GET /company/${companyId}/google-calendars/list] Error:`, error.message);
-        res.status(500).json({ message: error.message || 'Failed to list Google Calendars.' });
+        console.error('[API GET /api/company/:companyId/personality-categories] Error:', error.message);
+        res.status(500).json({ message: `Error fetching personality categories: ${error.message}` });
     }
 });
 
-// 4. Disconnect Google Calendar
-router.post('/company/:companyId/google-calendar/disconnect', async (req, res) => {
-    const { companyId } = req.params;
+// Add or update a custom personality response category
+router.put('/company/:companyId/personality-responses/:categoryName', async (req, res) => {
+    const { companyId, categoryName } = req.params;
+    const { responses, description } = req.body;
     const db = getDB();
-    if (!db) return res.status(500).json({ message: 'Database not connected.' });
-    if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid Company ID.' });
-    if (!GOOGLE_CLIENT_ID) return res.status(500).json({ message: 'Google Calendar integration not configured on server.' });
-
-    const companiesCollection = db.collection('companiesCollection');
-    let companyDataBeforeDisconnect;
-    try {
-        companyDataBeforeDisconnect = await companiesCollection.findOne({ _id: new ObjectId(companyId) });
-        const refreshToken = companyDataBeforeDisconnect?.integrations?.googleCalendar?.refreshToken;
-
-        if (refreshToken) {
-            // It's good practice to try and revoke the token on Google's side
-            // oauth2Client.setCredentials({ refresh_token: refreshToken }); // Not strictly needed for revokeToken
-            await oauth2Client.revokeToken(refreshToken);
-            console.log(`[Google Disconnect] Token successfully revoked with Google for company ${companyId}`);
-        } else {
-            console.log(`[Google Disconnect] No refresh token found for company ${companyId} to revoke. Clearing local data only.`);
-        }
-    } catch (revokeError) {
-        // Log the error but proceed to clear local data as the token might be invalid/already revoked
-        console.warn(`[Google Disconnect] Failed to revoke token with Google for company ${companyId} (it may have already been invalid/revoked):`, revokeError.message);
-    }
-
-    // Always clear local data regardless of revocation success/failure
-    try {
-        const updateResult = await companiesCollection.updateOne(
-            { _id: new ObjectId(companyId) },
-            {
-                $set: {
-                    'integrations.googleCalendar.isLinked': false,
-                    'integrations.googleCalendar.accessToken': null,
-                    'integrations.googleCalendar.refreshToken': null,
-                    'integrations.googleCalendar.tokenExpiryDate': null,
-                    'integrations.googleCalendar.authedUserEmail': null,
-                    'integrations.googleCalendar.lastAuthError': 'Disconnected by user.',
-                    updatedAt: new Date()
-                }
-            }
-        );
-         if (updateResult.matchedCount === 0) {
-            return res.status(404).json({ message: 'Company not found for disconnect.' });
-        }
-        res.json({ message: 'Google Calendar disconnected successfully.' });
-    } catch (dbError) {
-        console.error(`[API POST /company/${companyId}/google-calendar/disconnect] DB Error during disconnect:`, dbError.message, dbError.stack);
-        res.status(500).json({ message: `Database error during Google Calendar disconnect: ${dbError.message}` });
-    }
-});
-
-// --- Google Calendar OAuth Routes --- END ---
-
-// ========================================================================
-// ====> CORRECT ROUTE TO SAVE UNIFIED VOICE SETTINGS <====
-// ========================================================================
-router.patch('/company/:companyId/voice-settings', async (req, res) => {
-    const { companyId } = req.params;
-    const voiceSettings = req.body;
-
-    if (!companyId || !voiceSettings || !ObjectId.isValid(companyId)) {
-        return res.status(400).json({ message: 'Invalid or missing company ID or settings data.' });
-    }
-
-    const db = getDB();
+    
     if (!db) return res.status(500).json({ message: 'Database not connected' });
-
+    if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID format' });
+    
+    if (!responses || !Array.isArray(responses) || responses.length === 0) {
+        return res.status(400).json({ message: 'responses array required with at least one response' });
+    }
+    
+    const companiesCollection = db.collection('companiesCollection');
     try {
-        const updatePayload = {
-            'aiSettings.googleVoice': voiceSettings.googleVoiceName,
-            'aiSettings.voicePitch': voiceSettings.googleVoicePitch,
-            'aiSettings.voiceSpeed': voiceSettings.googleVoiceSpeed,
-            'aiSettings.ttsProvider': voiceSettings.ttsProvider,
-            'aiSettings.elevenLabs.apiKey': voiceSettings.elevenlabsApiKey,
-            'aiSettings.elevenLabs.voiceId': voiceSettings.elevenlabsVoiceId,
-            'aiSettings.elevenLabs.stability': voiceSettings.elevenlabsStability,
-            'aiSettings.elevenLabs.similarityBoost': voiceSettings.elevenlabsClarity,
-            'aiSettings.elevenLabs.style': voiceSettings.elevenlabsStyle,
-            'aiSettings.elevenLabs.modelId': voiceSettings.elevenlabsModelId,
-            'aiSettings.responseDelayMs': Number(voiceSettings.responseDelayMs || 0),
-            'aiSettings.twilioSpeechConfidenceThreshold': Number(voiceSettings.twilioSpeechConfidenceThreshold || 0.5),
-            'aiSettings.fuzzyMatchThreshold': Number(voiceSettings.fuzzyMatchThreshold || 0.5),
-            'aiSettings.speechConfirmation': voiceSettings.speechConfirmation,
-            'aiSettings.logCalls': !!voiceSettings.logCalls,
-            'updatedAt': new Date()
-        };
-
-        const dbResult = await getDB().collection('companiesCollection').updateOne(
+        // Sanitize category name (no special characters, lowercase with underscores)
+        const sanitizedCategory = categoryName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+        
+        const updatePayload = {};
+        updatePayload[`personalityResponses.${sanitizedCategory}`] = responses;
+        if (description) {
+            updatePayload[`personalityResponses.${sanitizedCategory}_description`] = description;
+        }
+        updatePayload.updatedAt = new Date();
+        
+        await companiesCollection.updateOne(
             { _id: new ObjectId(companyId) },
             { $set: updatePayload }
         );
-
-        if (dbResult.matchedCount === 0) {
-            return res.status(404).json({ message: 'Company not found.' });
-        }
         
+        // Clear caches
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
-        console.log(`DELETED from cache after voice settings update: ${cacheKey}`);
-
-        res.status(200).json({ message: "Voice settings updated successfully." });
-
+        clearCompanyResponsesCache(companyId);
+        
+        res.json({ 
+            message: 'Personality response category updated successfully',
+            categoryName: sanitizedCategory,
+            responsesCount: responses.length
+        });
     } catch (error) {
-        console.error(`Error saving voice settings for company ${companyId}:`, error);
-        res.status(500).json({ message: 'Server error while saving voice settings.' });
+        console.error(`[API PUT /api/company/${companyId}/personality-responses/${categoryName}] Error:`, error.message);
+        res.status(500).json({ message: `Error updating personality response category: ${error.message}` });
     }
 });
 
-module.exports = router;
+// Delete a custom personality response category
+router.delete('/company/:companyId/personality-responses/:categoryName', async (req, res) => {
+    const { companyId, categoryName } = req.params;
+    const db = getDB();
+    
+    if (!db) return res.status(500).json({ message: 'Database not connected' });
+    if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID format' });
+    
+    const companiesCollection = db.collection('companiesCollection');
+    try {
+        const sanitizedCategory = categoryName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+        
+        const unsetPayload = {};
+        unsetPayload[`personalityResponses.${sanitizedCategory}`] = "";
+        unsetPayload[`personalityResponses.${sanitizedCategory}_description`] = "";
+        
+        await companiesCollection.updateOne(
+            { _id: new ObjectId(companyId) },
+            { 
+                $unset: unsetPayload,
+                $set: { updatedAt: new Date() }
+            }
+        );
+        
+        // Clear caches
+        const cacheKey = `company:${companyId}`;
+        await redisClient.del(cacheKey);
+        clearCompanyResponsesCache(companyId);
+        
+        res.json({ 
+            message: 'Personality response category deleted successfully',
+            categoryName: sanitizedCategory
+        });
+    } catch (error) {
+        console.error(`[API DELETE /api/company/${companyId}/personality-responses/${categoryName}] Error:`, error.message);
+        res.status(500).json({ message: `Error deleting personality response category: ${error.message}` });
+    }
+});

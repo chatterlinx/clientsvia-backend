@@ -14,7 +14,7 @@ const { synthesizeSpeech } = require('../services/elevenLabsService');
 const { redisClient } = require('../clients');
 const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils/phone');
 const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
-const { getRandomPersonalityResponse, fetchCompanyResponses } = require('../utils/personalityResponses');
+const { getRandomPersonalityResponse, getPersonalityResponse, fetchCompanyResponses } = require('../utils/personalityResponses_enhanced');
 
 const router = express.Router();
 
@@ -195,7 +195,8 @@ router.post('/handle-speech', async (req, res) => {
           await redisClient.expire(repeatKey, 600);
         }
         if (repeats > (company.aiSettings?.maxRepeats ?? 3)) {
-          const msg = company.aiSettings?.repeatEscalationMessage || await getRandomPersonalityResponse(company._id.toString(), 'transferToRep');
+          const personality = company.aiSettings?.personality || 'friendly';
+          const msg = company.aiSettings?.repeatEscalationMessage || await getPersonalityResponse(company._id.toString(), 'transferToRep', personality);
           twiml.say({ voice }, escapeTwiML(msg));
           twiml.hangup();
           await redisClient.del(repeatKey);
@@ -209,7 +210,8 @@ router.post('/handle-speech', async (req, res) => {
           bargeIn: company.aiSettings?.bargeIn ?? false, // Let agent finish speaking
           timeout: company.aiSettings?.silenceTimeout ?? 8
         });
-        const retryMsg = await getRandomPersonalityResponse(company._id.toString(), 'cantUnderstand');
+        const personality = company.aiSettings?.personality || 'friendly';
+        const retryMsg = await getPersonalityResponse(company._id.toString(), 'cantUnderstand', personality);
         gather.say({ voice }, escapeTwiML(retryMsg));
         res.type('text/xml');
         return res.send(twiml.toString());
@@ -311,7 +313,8 @@ router.post('/handle-speech', async (req, res) => {
 
         } catch (err) {
           console.error(`[AI Processing Error for CallSid: ${callSid}]`, err.message, err.stack);
-          const fallback = await getRandomPersonalityResponse(company._id.toString(), 'connectionTrouble');
+          const personality = company.aiSettings?.personality || 'friendly';
+          const fallback = await getPersonalityResponse(company._id.toString(), 'connectionTrouble', personality);
           await redisClient.setEx(`twilio-answer:${callSid}`, 60, JSON.stringify({ text: fallback, escalate: false }));
         }
       };
