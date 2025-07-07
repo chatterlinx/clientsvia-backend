@@ -388,6 +388,7 @@ router.post('/process-ai-response', async (req, res) => {
         console.log(`[Twilio Process AI] Stripped Answer: ${strippedAnswer}`);
         if (context.ttsProvider === 'elevenlabs' && context.elevenLabs?.voiceId) {
           try {
+            console.log(`[Twilio Process AI] Using ElevenLabs TTS with voice: ${context.elevenLabs.voiceId}`);
             const buffer = await synthesizeSpeech({
               text: strippedAnswer,
               voiceId: context.elevenLabs.voiceId,
@@ -404,10 +405,12 @@ router.post('/process-ai-response', async (req, res) => {
             fs.writeFileSync(filePath, buffer);
             gather.play(`https://${req.get('host')}/audio/${fileName}`);
           } catch (err) {
-            console.error('ElevenLabs synthesis failed, falling back to Google:', err.message);
+            console.error('ElevenLabs synthesis failed, falling back to basic TTS:', err.message);
+            console.log(`[Twilio Process AI] Context ttsProvider: ${context.ttsProvider}, elevenLabs voiceId: ${context.elevenLabs?.voiceId}`);
             gather.say({ voice }, escapeTwiML(strippedAnswer));
           }
         } else {
+          console.log(`[Twilio Process AI] Using basic TTS - ttsProvider: ${context.ttsProvider}, elevenLabs voiceId: ${context.elevenLabs?.voiceId}`);
           gather.say({ voice }, escapeTwiML(strippedAnswer));
         }
       }
