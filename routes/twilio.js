@@ -483,4 +483,9 @@ router.post('/process-ai-response', async (req, res) => {
   res.send(twimlString);
 });
 
+// 🎛️ AGENT PERFORMANCE CONTROLS - LIVE TUNING DASHBOARD
+// These values come from company.aiSettings - adjust via UI, not code
+// For optimization: use company profile → AI Voice Settings → Agent Performance Controls
+// NO HARDCODING - all tuning happens through the live dashboard
+
 module.exports = router;

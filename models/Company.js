@@ -210,3 +210,9 @@ companySchema.pre('findOneAndUpdate', function(next) {
 
 const Company = mongoose.model('Company', companySchema, 'companiesCollection');
 module.exports = Company;
+
+// 🎛️ AGENT PERFORMANCE CONTROLS - LIVE TUNING DASHBOARD
+// These controls MUST stay live for ongoing optimization work
+// Adjust defaults here during testing - NO RECODING required for future tuning
+// Location: AI Voice Settings → Agent Performance Controls
+// Future clients can customize without code changes
