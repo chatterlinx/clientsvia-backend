@@ -343,6 +343,11 @@ async function generateIntelligentResponse(company, question, conversationHistor
   return null; // No intelligent response found
 }
 
+// Agent Service - AI Response Generation
+// 🌍 GLOBAL MULTI-TENANT PLATFORM  
+// Serves ALL companies dynamically - no hardcoded company logic
+const { GoogleAuth } = require('google-auth-library');
+
 module.exports = {
   answerQuestion,
   FALLBACK_MODEL,
