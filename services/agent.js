@@ -155,6 +155,21 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: applyPlaceholders(entry.answer, placeholders), escalate: false };
   }
 
+  // Second, try fuzzy matching on Q&A entries
+  const fuzzyThreshold = company?.aiSettings?.fuzzyMatchThreshold || 0.5;
+  const cachedAnswer = findCachedAnswer(await KnowledgeEntry.find({ companyId }).exec(), question, fuzzyThreshold);
+  if (cachedAnswer) {
+    console.log(`[Agent] Found Q&A match via fuzzy matching for: ${question}`);
+    return { text: applyPlaceholders(cachedAnswer, placeholders), escalate: false };
+  }
+
+  // Third, try to understand the context and provide intelligent responses
+  const intelligentResponse = await generateIntelligentResponse(company, question, conversationHistory, categories, companySpecialties, categoryQAs);
+  if (intelligentResponse) {
+    console.log(`[Agent] Generated intelligent response for: ${question}`);
+    return { text: applyPlaceholders(intelligentResponse, placeholders), escalate: false };
+  }
+
 
   // If no direct answer found, construct prompt for Gemini
   const agentSetup = company?.agentSetup || {};
@@ -254,6 +269,66 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   }
 
   return { text: applyPlaceholders(aiResponse, placeholders), escalate: false };
+}
+
+// Generate intelligent responses based on context and common patterns
+async function generateIntelligentResponse(company, question, conversationHistory, categories, companySpecialties, categoryQAs) {
+  const qLower = question.toLowerCase();
+  const companyName = company?.companyName || 'our company';
+  
+  // HVAC/Thermostat related responses
+  if (qLower.includes('thermostat') || qLower.includes('temperature') || qLower.includes('heating') || qLower.includes('cooling')) {
+    if (qLower.includes('blank') || qLower.includes('not working') || qLower.includes('broken')) {
+      return `I understand you're having issues with your thermostat. This sounds like it could be a few different things - it might be a power issue, a wiring problem, or the thermostat itself might need to be replaced. I'd be happy to have one of our HVAC technicians take a look. What's the best time for you?`;
+    }
+    if (qLower.includes('program') || qLower.includes('schedule')) {
+      return `Programming issues with thermostats are pretty common. Our technicians can help you set up the perfect schedule for your home. Would you like me to schedule a visit, or do you have any specific questions about your thermostat?`;
+    }
+    return `I can help you with thermostat issues. Our HVAC specialists handle all types of thermostat problems - from simple battery changes to complete replacements. What specific issue are you experiencing?`;
+  }
+  
+  // AC/Air Conditioning related
+  if (qLower.includes('ac ') || qLower.includes('air condition') || qLower.includes('cool') || qLower.includes('cold')) {
+    if (qLower.includes('not working') || qLower.includes('broken') || qLower.includes('repair')) {
+      return `AC problems can be really frustrating, especially when you need cooling the most. Our technicians can diagnose and fix most AC issues same-day. Are you getting any airflow at all, or is it completely not working?`;
+    }
+    if (qLower.includes('service') || qLower.includes('maintenance') || qLower.includes('clean') || qLower.includes('tune')) {
+      return `Regular AC maintenance is so important for keeping your system running efficiently. We offer comprehensive AC service including cleaning, tune-ups, and preventive maintenance. Would you like to schedule a service visit?`;
+    }
+    return `I can help you with AC issues. Our HVAC team handles everything from basic maintenance to emergency repairs. What's going on with your air conditioning?`;
+  }
+  
+  // Heating related
+  if (qLower.includes('heat') || qLower.includes('furnace') || qLower.includes('warm')) {
+    return `Heating issues can make your home really uncomfortable. Our heating specialists can help with furnace repairs, maintenance, and replacements. What type of heating problem are you experiencing?`;
+  }
+  
+  // General service requests
+  if (qLower.includes('service') || qLower.includes('appointment') || qLower.includes('schedule') || qLower.includes('visit')) {
+    return `I'd be happy to help you schedule a service appointment. Our technicians are available for both routine maintenance and emergency repairs. What type of service do you need, and what's your preferred time?`;
+  }
+  
+  // Emergency/urgent situations
+  if (qLower.includes('emergency') || qLower.includes('urgent') || qLower.includes('asap') || qLower.includes('immediately')) {
+    return `I understand this is urgent. We offer emergency service for situations like this. Let me get you connected with our emergency dispatch team right away so we can get someone out to help you.`;
+  }
+  
+  // Pricing/cost related
+  if (qLower.includes('cost') || qLower.includes('price') || qLower.includes('how much') || qLower.includes('estimate')) {
+    return `I understand you'd like to know about pricing. Our costs vary depending on the specific service needed. I can have one of our technicians provide you with a free estimate. Would you like to schedule an assessment?`;
+  }
+  
+  // General confusion or unclear speech
+  if (qLower.includes('i have a') || qLower.includes('there is a') || qLower.includes('something') || qLower.includes('issue') || qLower.includes('problem')) {
+    return `I want to make sure I understand your situation correctly. It sounds like you're experiencing some kind of issue. Could you tell me a bit more about what's happening so I can better assist you?`;
+  }
+  
+  // If we can't understand or classify the request
+  if (qLower.length < 10 || qLower.includes('let you know') || qLower.includes('blank')) {
+    return `I want to make sure I understand what you need help with. Could you tell me a bit more about the issue you're experiencing? I'm here to help with any ${categories.join(', ')} needs you might have.`;
+  }
+  
+  return null; // No intelligent response found
 }
 
 module.exports = {

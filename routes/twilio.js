@@ -10,7 +10,7 @@ const path = require('path');
 const { synthesizeSpeech } = require('../services/elevenLabsService');
 const { redisClient } = require('../clients');
 const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils/phone');
-const { stripMarkdown } = require('../utils/textUtils');
+const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
 const { getRandomPersonalityResponse, fetchCompanyResponses } = require('../utils/personalityResponses');
 
 const router = express.Router();
@@ -380,9 +380,10 @@ router.post('/process-ai-response', async (req, res) => {
           bargeIn: context?.bargeIn ?? true,
           timeout: context?.silenceTimeout ?? 5
         });
+        const cleanedText = cleanTextForTTS(stripMarkdown(answerObj.text));
         gather.say(
           { voice },
-          escapeTwiML(stripMarkdown(answerObj.text))
+          escapeTwiML(cleanedText)
         );
       } else {
         const gather = twiml.gather({
@@ -392,8 +393,8 @@ router.post('/process-ai-response', async (req, res) => {
           bargeIn: context?.bargeIn ?? true,
           timeout: context?.silenceTimeout ?? 5
         });
-        const strippedAnswer = stripMarkdown(answerObj.text);
-        console.log(`[Twilio Process AI] Stripped Answer: ${strippedAnswer}`);
+        const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
+        console.log(`[Twilio Process AI] Cleaned Answer: ${strippedAnswer}`);
         if (context.ttsProvider === 'elevenlabs' && context.elevenLabs?.voiceId) {
           try {
             console.log(`[Twilio Process AI] Using ElevenLabs TTS with voice: ${context.elevenLabs.voiceId}`);
