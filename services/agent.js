@@ -145,26 +145,55 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
 
   let fullPrompt = `You are an AI assistant for ${company?.companyName}. Your name is The Agent. Your personality is ${personality}.`;
 
+  // Add company specialties and services
+  if (companySpecialties) {
+    fullPrompt += `\n\n**Company Specialties:**\n${companySpecialties}`;
+  }
+
+  // Add categories/trade types
+  if (categories && categories.length > 0) {
+    fullPrompt += `\n\n**Services We Offer:**\n${categories.join(', ')}`;
+  }
+
+  // Add main agent script if available
+  if (mainAgentScript) {
+    fullPrompt += `\n\n**Your Instructions:**\n${mainAgentScript}`;
+  }
+
+  // Add category Q&As for context
+  if (categoryQAs) {
+    fullPrompt += `\n\n**Common Questions & Answers:**\n${categoryQAs}`;
+  }
+
+  // Add conversation history
   if (conversationHistory.length > 2) {
     conversationHistory = conversationHistory.slice(-2);
   }
 
   if (conversationHistory.length > 0) {
-    fullPrompt += "\n**Conversation History**\n";
+    fullPrompt += "\n\n**Conversation History:**\n";
     conversationHistory.forEach(entry => {
       fullPrompt += `${entry.role}: ${entry.text}\n`;
     });
   }
 
-  fullPrompt += `Based on all the above context, answer the user's question: ${question}`;
+  fullPrompt += `\n\n**Current Question:** ${question}`;
+
+  fullPrompt += `\n\n**Response Guidelines:**`;
+  fullPrompt += `\n- Stay in character as The Agent for ${company?.companyName}`;
+  fullPrompt += `\n- Be helpful, professional, and maintain your ${personality} personality`;
+  fullPrompt += `\n- Use the company information and specialties provided above`;
+  fullPrompt += `\n- If you don't know something specific, be honest but offer to help in other ways`;
+  fullPrompt += `\n- Keep responses conversational and natural`;
+  fullPrompt += `\n- Always try to ask a clarifying question to keep the conversation going, unless the user explicitly ends the conversation or asks for a specific action (like scheduling)`;
 
   if (responseLength === 'concise') {
-    fullPrompt += ' Provide a very brief and concise answer, ideally one to two sentences.';
+    fullPrompt += '\n- Provide a very brief and concise answer, ideally one to two sentences.';
   } else if (responseLength === 'detailed') {
-    fullPrompt += ' Provide a comprehensive and detailed answer.';
+    fullPrompt += '\n- Provide a comprehensive and detailed answer.';
   }
 
-  fullPrompt += ' Always try to ask a clarifying question to keep the conversation going, unless the user explicitly ends the conversation or asks for a specific action (like scheduling).';
+  fullPrompt += `\n\nPlease respond naturally and helpfully to the current question.`;
 
   if (!llmFallbackEnabled) {
     const message = applyPlaceholders((customEscalationMessage || await getRandomPersonalityResponse(companyId, 'transferToRep')).trim(), placeholders);
@@ -178,8 +207,11 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   }
 
   const aiResponse = await (async () => {
+    console.log(`[LLM] Sending prompt to ${company?.companyName}:`, fullPrompt);
     return await callModel(company, fullPrompt);
   })();
+
+  console.log(`[LLM] Received response:`, aiResponse);
 
   // Logic to create a suggested knowledge entry
   if (aiResponse) {

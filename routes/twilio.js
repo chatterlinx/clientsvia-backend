@@ -18,6 +18,14 @@ const router = express.Router();
 // Helper function to escape text for TwiML Say verb
 function escapeTwiML(text) {
   if (!text) return '';
+  // First decode any existing HTML entities to prevent double encoding
+  text = text.replace(/&amp;/g, '&')
+             .replace(/&lt;/g, '<')
+             .replace(/&gt;/g, '>')
+             .replace(/&quot;/g, '"')
+             .replace(/&#39;|&apos;/g, "'");
+  
+  // Then properly encode for TwiML
   return text.replace(/&/g, '&amp;')
              .replace(/</g, '&lt;')
              .replace(/>/g, '&gt;')
