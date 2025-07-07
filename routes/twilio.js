@@ -109,7 +109,7 @@ router.post('/voice', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false, // Let agent finish greeting for natural flow
-        timeout: 8
+        timeout: company.aiSettings?.silenceTimeout ?? 8
       });
 
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
@@ -207,7 +207,7 @@ router.post('/handle-speech', async (req, res) => {
           action: `https://${req.get('host')}/api/twilio/handle-speech`,
           method: 'POST',
           bargeIn: company.aiSettings?.bargeIn ?? false, // Let agent finish speaking
-          timeout: 8
+          timeout: company.aiSettings?.silenceTimeout ?? 8
         });
         const retryMsg = await getRandomPersonalityResponse(company._id.toString(), 'cantUnderstand');
         gather.say({ voice }, escapeTwiML(retryMsg));
@@ -236,7 +236,7 @@ router.post('/handle-speech', async (req, res) => {
           action: `https://${req.get('host')}/api/twilio/handle-speech`,
           method: 'POST',
           bargeIn: company.aiSettings?.bargeIn ?? false, // Let agent finish speaking
-          timeout: 8
+          timeout: company.aiSettings?.silenceTimeout ?? 8
         });
         gather.say({ voice }, escapeTwiML(cachedAnswer));
         res.type('text/xml');
@@ -276,7 +276,7 @@ router.post('/handle-speech', async (req, res) => {
         responseDelayMs: company.aiSettings?.responseDelayMs || 0,
         logCalls: company.aiSettings?.logCalls || false,
         bargeIn: company.aiSettings?.bargeIn ?? false, // Let agent finish speaking
-        silenceTimeout: company.aiSettings?.silenceTimeout ?? 3, // Faster timeout
+        silenceTimeout: company.aiSettings?.silenceTimeout ?? 8, // Global timeout setting
         fillersEnabled: company.aiSettings?.humanLikeFillers || false,
         fillerPhrases: company.aiSettings?.fillerPhrases || []
       };
@@ -373,7 +373,7 @@ router.post('/process-ai-response', async (req, res) => {
           action: '/api/twilio/handle-speech',
           method: 'POST',
           bargeIn: context?.bargeIn ?? false, // Let agent finish speaking
-          timeout: 8
+          timeout: company.aiSettings?.silenceTimeout ?? 8
         });
         const cleanedText = cleanTextForTTS(stripMarkdown(answerObj.text));
         gather.say(
@@ -386,7 +386,7 @@ router.post('/process-ai-response', async (req, res) => {
           action: '/api/twilio/handle-speech',
           method: 'POST',
           bargeIn: context?.bargeIn ?? false, // Let agent finish speaking
-          timeout: 8
+          timeout: company.aiSettings?.silenceTimeout ?? 8
         });
         const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
         console.log(`[Twilio Process AI] Cleaned Answer: ${strippedAnswer}`);
@@ -443,7 +443,7 @@ router.post('/process-ai-response', async (req, res) => {
           action: '/api/twilio/handle-speech',
           method: 'POST',
           bargeIn: context?.bargeIn ?? false, // Let agent finish speaking
-          timeout: 8
+          timeout: company.aiSettings?.silenceTimeout ?? 8
         });
         const msg = await getRandomPersonalityResponse(context?.companyId || null, 'connectionTrouble');
         gather.say({ voice }, escapeTwiML(msg));
@@ -471,7 +471,7 @@ router.post('/process-ai-response', async (req, res) => {
       action: '/api/twilio/handle-speech',
       method: 'POST',
       bargeIn: context?.bargeIn ?? false, // Let agent finish speaking
-      timeout: 8
+      timeout: company.aiSettings?.silenceTimeout ?? 8
     });
     const msg = await getRandomPersonalityResponse(context?.companyId || null, 'connectionTrouble');
     gather.say({ voice }, escapeTwiML(msg));
