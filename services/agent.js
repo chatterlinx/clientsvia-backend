@@ -53,7 +53,7 @@ const vertex_ai = new VertexAI({
 });
 
 // Gemini Flash model
-const MODEL_ID = process.env.MODEL_ID || 'gemini-2.5-flash'; // Use env or default to latest
+const MODEL_ID = process.env.MODEL_ID || 'gemini-1.5-flash-002'; // Use env or default to stable version
 const MODEL_NAME = MODEL_ID;
 
 // Default model used when a configured one fails with a not found error
@@ -71,15 +71,28 @@ async function callModel(company, prompt) {
   const invoke = async (modelName) => {
     const model = `projects/${projectId}/locations/us-central1/publishers/google/models/${modelName}`;
     try {
-      console.log(`[VertexAI] Sending prompt to ${modelName}: ${prompt}`);
+      console.log(`[VertexAI] Sending prompt to ${modelName}:`, prompt.substring(0, 200) + '...');
       const res = await aiplatform.projects.locations.publishers.models.generateContent({
         model,
         requestBody: {
-          contents: [{ role: 'user', parts: [{ text: prompt }] }]
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 1024,
+          }
         }
       });
       const responseText = res.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      console.log(`[VertexAI] Received response from ${modelName}: ${responseText}`);
+      console.log(`[VertexAI] Received response from ${modelName}:`, responseText);
+      
+      // Check for potential issues with the response
+      if (!responseText || responseText.trim() === '') {
+        console.log(`[VertexAI] WARNING: Empty response from ${modelName}`);
+        return 'I apologize, but I\'m having trouble processing your request right now. Let me connect you with a team member who can help.';
+      }
+      
       return responseText;
     } catch (err) {
       console.error(`[VertexAI] Error invoking model ${modelName}:`, err.response?.data || err.message, err.stack);
@@ -123,6 +136,9 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   const categories = company?.agentSetup?.categories || company?.tradeTypes || [];
   const { llmFallbackEnabled, customEscalationMessage } = company?.aiSettings || {};
   const placeholders = company?.agentSetup?.placeholders || [];
+
+  console.log(`[Agent] Company ${companyId} - LLM Fallback Enabled: ${llmFallbackEnabled}`);
+  console.log(`[Agent] Company ${companyId} - Custom Escalation Message: ${customEscalationMessage}`);
 
   // keep parsed Q&A cached
   loadCompanyQAs(company);
@@ -212,6 +228,13 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   })();
 
   console.log(`[LLM] Received response:`, aiResponse);
+
+  // Check if the response seems to be a debug message
+  if (aiResponse && aiResponse.includes('reading this from') && aiResponse.includes('LLM Message')) {
+    console.log(`[LLM] DEBUG: Detected debug message from LLM, replacing with escalation message`);
+    const message = applyPlaceholders((customEscalationMessage || await getRandomPersonalityResponse(companyId, 'transferToRep')).trim(), placeholders);
+    return { text: message, escalate: true };
+  }
 
   // Logic to create a suggested knowledge entry
   if (aiResponse) {
