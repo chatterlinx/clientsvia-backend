@@ -18,19 +18,12 @@ const router = express.Router();
 // Helper function to escape text for TwiML Say verb
 function escapeTwiML(text) {
   if (!text) return '';
-  // First decode any existing HTML entities to prevent double encoding
-  text = text.replace(/&amp;/g, '&')
-             .replace(/&lt;/g, '<')
-             .replace(/&gt;/g, '>')
-             .replace(/&quot;/g, '"')
-             .replace(/&#39;|&apos;/g, "'");
   
-  // Then properly encode for TwiML
+  // For TTS, we want clean text without HTML entities
+  // Only do minimal escaping for XML structure
   return text.replace(/&/g, '&amp;')
              .replace(/</g, '&lt;')
-             .replace(/>/g, '&gt;')
-             .replace(/"/g, '&quot;')
-             .replace(/'/g, '&#39;');
+             .replace(/>/g, '&gt;');
 }
 
 
@@ -267,6 +260,7 @@ router.post('/handle-speech', async (req, res) => {
       const context = {
         speechText: speechText,
         companyId: companyId,
+        companyName: company.companyName,
         voice: voice,
         ttsProvider: company.aiSettings?.ttsProvider || 'elevenlabs',
         elevenLabs: company.aiSettings?.elevenLabs || {},
@@ -283,6 +277,9 @@ router.post('/handle-speech', async (req, res) => {
         fillersEnabled: company.aiSettings?.humanLikeFillers || false,
         fillerPhrases: company.aiSettings?.fillerPhrases || []
       };
+      
+      console.log(`[Context Debug] TTS Provider: ${context.ttsProvider}, ElevenLabs VoiceId: ${context.elevenLabs?.voiceId}`);
+      
       await redisClient.setEx(`twilio-context:${callSid}`, 60, JSON.stringify(context));
       console.log(`[Redis] Stored context for CallSid: ${callSid}`);
 
@@ -383,7 +380,7 @@ router.post('/process-ai-response', async (req, res) => {
         const cleanedText = cleanTextForTTS(stripMarkdown(answerObj.text));
         gather.say(
           { voice },
-          escapeTwiML(cleanedText)
+          cleanedText // Don't escape - already cleaned
         );
       } else {
         const gather = twiml.gather({
@@ -395,9 +392,21 @@ router.post('/process-ai-response', async (req, res) => {
         });
         const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
         console.log(`[Twilio Process AI] Cleaned Answer: ${strippedAnswer}`);
+        console.log(`[Twilio Process AI] TTS Provider: ${context.ttsProvider}, ElevenLabs VoiceId: ${context.elevenLabs?.voiceId}`);
+        
         if (context.ttsProvider === 'elevenlabs' && context.elevenLabs?.voiceId) {
           try {
             console.log(`[Twilio Process AI] Using ElevenLabs TTS with voice: ${context.elevenLabs.voiceId}`);
+            
+            // Reconstruct company object for ElevenLabs API key lookup
+            const companyObj = {
+              _id: context.companyId,
+              companyName: context.companyName,
+              aiSettings: {
+                elevenLabs: context.elevenLabs
+              }
+            };
+            
             const buffer = await synthesizeSpeech({
               text: strippedAnswer,
               voiceId: context.elevenLabs.voiceId,
@@ -405,7 +414,7 @@ router.post('/process-ai-response', async (req, res) => {
               similarity_boost: context.elevenLabs.similarityBoost,
               style: context.elevenLabs.style,
               model_id: context.elevenLabs.modelId,
-              company
+              company: companyObj
             });
             const fileName = `tts_${callSid}_${Date.now()}.mp3`;
             const audioDir = path.join(__dirname, '../public/audio');
@@ -413,14 +422,15 @@ router.post('/process-ai-response', async (req, res) => {
             const filePath = path.join(audioDir, fileName);
             fs.writeFileSync(filePath, buffer);
             gather.play(`https://${req.get('host')}/audio/${fileName}`);
+            console.log(`[Twilio Process AI] ElevenLabs TTS succeeded, playing audio file`);
           } catch (err) {
-            console.error('ElevenLabs synthesis failed, falling back to basic TTS:', err.message);
-            console.log(`[Twilio Process AI] Context ttsProvider: ${context.ttsProvider}, elevenLabs voiceId: ${context.elevenLabs?.voiceId}`);
-            gather.say({ voice }, escapeTwiML(strippedAnswer));
+            console.error('ElevenLabs synthesis failed, falling back to Google TTS:', err.message);
+            console.log(`[Twilio Process AI] Fallback - Using Google TTS`);
+            gather.say({ voice }, strippedAnswer); // Don't escape - already cleaned
           }
         } else {
-          console.log(`[Twilio Process AI] Using basic TTS - ttsProvider: ${context.ttsProvider}, elevenLabs voiceId: ${context.elevenLabs?.voiceId}`);
-          gather.say({ voice }, escapeTwiML(strippedAnswer));
+          console.log(`[Twilio Process AI] Using Google TTS - ttsProvider: ${context.ttsProvider}, elevenLabs voiceId: ${context.elevenLabs?.voiceId}`);
+          gather.say({ voice }, strippedAnswer); // Don't escape - already cleaned
         }
       }
       await redisClient.del(`twilio-context:${callSid}`); // Clean up context
