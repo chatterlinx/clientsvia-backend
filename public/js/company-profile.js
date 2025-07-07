@@ -960,7 +960,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (form.elements.knowledgeBaseSource) form.elements.knowledgeBaseSource.value = aiSettings.knowledgeBaseSource || '';
         if (form.elements.sentimentAnalysis) form.elements.sentimentAnalysis.checked = !!aiSettings.sentimentAnalysis;
         if (form.elements.dataLogging) form.elements.dataLogging.checked = typeof aiSettings.dataLogging === 'boolean' ? aiSettings.dataLogging : true;
-        if (form.elements.bargeIn) form.elements.bargeIn.checked = !!aiSettings.bargeIn;
         if (llmFallbackEnabledCheckbox) {
             llmFallbackEnabledCheckbox.checked = !!aiSettings.llmFallbackEnabled;
         }
@@ -1927,7 +1926,6 @@ document.addEventListener('DOMContentLoaded', () => {
             knowledgeBaseSource: formData.get('knowledgeBaseSource')?.trim() || '',
             sentimentAnalysis: aiSettingsForm.querySelector('#sentimentAnalysis')?.checked || false,
             dataLogging: aiSettingsForm.querySelector('#dataLogging')?.checked || true,
-            bargeIn: aiSettingsForm.querySelector('#bargeIn')?.checked || false,
             llmFallbackEnabled: llmFallbackEnabledCheckbox?.checked || false,
             customEscalationMessage: formData.get('customEscalationMessage')?.trim() || ''
         };
