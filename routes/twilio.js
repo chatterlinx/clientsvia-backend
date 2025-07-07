@@ -317,14 +317,7 @@ router.post('/handle-speech', async (req, res) => {
       processAiResponse();
 
       // Respond immediately to Twilio with a redirect for polling
-      let filler = "One moment.";
-      if (company.aiSettings?.humanLikeFillers) {
-        const options = company.aiSettings.fillerPhrases || [];
-        if (options.length > 0) {
-          filler = options[Math.floor(Math.random() * options.length)];
-        }
-      }
-      twiml.say({ voice }, filler);
+      // Skip the filler phrase and go straight to processing
       twiml.redirect('/api/twilio/process-ai-response');
     }
 

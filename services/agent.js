@@ -287,6 +287,17 @@ async function generateIntelligentResponse(company, question, conversationHistor
     return `I can help you with thermostat issues. Our HVAC specialists handle all types of thermostat problems - from simple battery changes to complete replacements. What specific issue are you experiencing?`;
   }
   
+  // Filter maintenance questions
+  if (qLower.includes('filter') || qLower.includes('air filter')) {
+    if (qLower.includes('change') || qLower.includes('replace') || qLower.includes('how often')) {
+      return `Great question! Most air filters should be changed every 1-3 months, but it depends on your specific system, filter type, and usage. Homes with pets or allergies might need more frequent changes. Our technicians can show you exactly what type of filter you need and set up a maintenance schedule that works for your home. Would you like me to schedule a visit?`;
+    }
+    if (qLower.includes('dirty') || qLower.includes('clogged') || qLower.includes('clean')) {
+      return `A dirty filter can really impact your system's efficiency and your air quality. If your filter looks gray or you can't see through it, it's definitely time for a replacement. Our team can help you choose the right filter and show you how to maintain it properly. Should I schedule a service visit?`;
+    }
+    return `I can help you with filter questions. Proper filter maintenance is crucial for your HVAC system's performance and your indoor air quality. What specifically would you like to know about your air filter?`;
+  }
+  
   // AC/Air Conditioning related
   if (qLower.includes('ac ') || qLower.includes('air condition') || qLower.includes('cool') || qLower.includes('cold')) {
     if (qLower.includes('not working') || qLower.includes('broken') || qLower.includes('repair')) {
