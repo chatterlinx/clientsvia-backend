@@ -3,10 +3,7 @@ const express = require('express');
 const twilio = require('twilio');
 const Company = require('../models/Company');
 const { answerQuestion, loadCompanyQAs } = require('../services/agent');
-const { findCachedAnswer } = require('../utils/aiAgen        responseDelayMs: company.aiSettings?.responseDelayMs || 0,
-        logCalls: company.aiSettings?.logCalls || false,
-        bargeIn: company.aiSettings?.bargeIn ?? false, // Let agent finish speaking,
-        silenceTimeout: company.aiSettings?.silenceTimeout ?? 3, // Faster timeout
+const { findCachedAnswer } = require('../utils/aiAgent');
 const KnowledgeEntry = require('../models/KnowledgeEntry');
 const fs = require('fs');
 const path = require('path');
