@@ -83,7 +83,7 @@ const aiSettingsSchema = new mongoose.Schema({
     },
     ttsProvider: { type: String, default: 'elevenlabs', trim: true }, // Default to ElevenLabs for better voice quality
     elevenLabs: { type: elevenLabsSettingsSchema, default: () => ({}) },
-    responseDelayMs: { type: Number, default: 200 }, // Faster response time - more human-like
+    responseDelayMs: { type: Number, default: 0 }, // No delay for faster responses
     twilioSpeechConfidenceThreshold: { type: Number, default: 0.4 }, // Lower threshold for better speech recognition
     fuzzyMatchThreshold: { type: Number, default: 0.3 }, // Better Q&A matching for all companies
     ttsPitch: { type: Number, default: 0 },
@@ -114,7 +114,7 @@ const aiSettingsSchema = new mongoose.Schema({
         type: String,
         default: "I'm having trouble understanding. Let me connect you to a team member."
     },
-    silenceTimeout: { type: Number, default: 5 },
+    silenceTimeout: { type: Number, default: 8 }, // Longer timeout to prevent hangups
     debugMode: { type: Boolean, default: false }
     // The enableGoogleCalendarIntegration field was moved to integrations.googleOAuth.isEnabled
 }, { _id: false });
