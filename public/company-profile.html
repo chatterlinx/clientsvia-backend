@@ -54,6 +54,35 @@
         #agent-setup-content .protocol-section { transition: max-height 0.3s ease-in-out, opacity 0.2s ease-in-out, padding-top 0.3s ease-in-out, padding-bottom 0.3s ease-in-out; overflow: hidden; max-height: 500px; padding-top: 0.5rem; padding-bottom: 0.5rem; }
         #agent-setup-content .protocol-section.collapsed { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-top:0; }
         #agent-setup-content .disabled-input { @apply opacity-50 cursor-not-allowed bg-gray-200; }
+        
+        /* Blue placeholder text for default content vs black for developer-edited content */
+        .default-placeholder-text {
+            color: #3B82F6 !important; /* Blue color for default/placeholder text */
+            font-style: italic;
+        }
+        .developer-edited-text {
+            color: #1F2937 !important; /* Black color for developer-customized text */
+            font-style: normal;
+        }
+        #agent-setup-content .form-input.has-default-content,
+        #agent-setup-content .form-textarea.has-default-content {
+            color: #3B82F6 !important;
+            font-style: italic;
+        }
+        #agent-setup-content .form-input.has-edited-content,
+        #agent-setup-content .form-textarea.has-edited-content {
+            color: #1F2937 !important;
+            font-style: normal;
+            font-weight: 500;
+        }
+        /* Placeholder text styling for inputs */
+        #agent-setup-content .form-input::placeholder,
+        #agent-setup-content .form-textarea::placeholder {
+            color: #3B82F6 !important;
+            font-style: italic;
+            opacity: 0.8;
+        }
+        
         .contact-block-view { @apply mt-3 pt-3 border-t border-gray-200; }
         .contact-block-view .detail-item:last-child { padding-bottom: 0; }
         .scheduling-rule-daily-hours-header { @apply grid grid-cols-4 gap-x-3 mb-1 px-2 text-xs font-medium text-gray-500; }
