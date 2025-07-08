@@ -163,7 +163,14 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: applyPlaceholders(cachedAnswer, placeholders), escalate: false };
   }
 
-  // Third, try to understand the context and provide intelligent responses
+  // Third, try structured conversational script processing
+  const scriptResponse = await processConversationalScriptEnhanced(company, question, conversationHistory, placeholders);
+  if (scriptResponse) {
+    console.log(`[Agent] Generated script-based response for: ${question}`);
+    return { text: scriptResponse, escalate: false };
+  }
+
+  // Fourth, try to understand the context and provide intelligent responses
   const intelligentResponse = await generateIntelligentResponse(company, question, conversationHistory, categories, companySpecialties, categoryQAs);
   if (intelligentResponse) {
     console.log(`[Agent] Generated intelligent response for: ${question}`);
@@ -343,6 +350,139 @@ async function generateIntelligentResponse(company, question, conversationHistor
   }
   
   return null; // No intelligent response found
+}
+
+// Parse and structure the main conversational script
+function parseMainScript(mainScript) {
+    if (!mainScript || mainScript.trim() === '') return null;
+    
+    const script = {
+        greeting: null,
+        serviceBooking: [],
+        transferHandling: [],
+        informationResponses: {},
+        escalationTriggers: [],
+        closing: null
+    };
+    
+    const lines = mainScript.split('\n').filter(line => line.trim() !== '');
+    let currentSection = null;
+    
+    for (const line of lines) {
+        const trimmedLine = line.trim();
+        
+        // Detect section headers
+        if (trimmedLine.toLowerCase().includes('greeting') || 
+            trimmedLine.toLowerCase().includes('identification')) {
+            currentSection = 'greeting';
+            continue;
+        }
+        
+        if (trimmedLine.toLowerCase().includes('booking') || 
+            trimmedLine.toLowerCase().includes('appointment') ||
+            trimmedLine.toLowerCase().includes('schedule')) {
+            currentSection = 'serviceBooking';
+            continue;
+        }
+        
+        if (trimmedLine.toLowerCase().includes('transfer') || 
+            trimmedLine.toLowerCase().includes('technician') ||
+            trimmedLine.toLowerCase().includes('speak')) {
+            currentSection = 'transferHandling';
+            continue;
+        }
+        
+        if (trimmedLine.toLowerCase().includes('closing') || 
+            trimmedLine.toLowerCase().includes('end call')) {
+            currentSection = 'closing';
+            continue;
+        }
+        
+        // Parse content based on current section
+        if (currentSection === 'greeting' && trimmedLine.toLowerCase().includes('agent:')) {
+            script.greeting = trimmedLine.replace(/agent:\s*/i, '');
+        }
+        
+        if (currentSection === 'serviceBooking' && trimmedLine.toLowerCase().includes('agent:')) {
+            script.serviceBooking.push(trimmedLine.replace(/agent:\s*/i, ''));
+        }
+        
+        if (currentSection === 'transferHandling' && trimmedLine.toLowerCase().includes('agent:')) {
+            script.transferHandling.push(trimmedLine.replace(/agent:\s*/i, ''));
+        }
+        
+        if (currentSection === 'closing' && trimmedLine.toLowerCase().includes('agent:')) {
+            script.closing = trimmedLine.replace(/agent:\s*/i, '');
+        }
+        
+        // Parse Q&A format for information responses
+        if (trimmedLine.includes('?') && !trimmedLine.toLowerCase().includes('agent:')) {
+            const nextLineIndex = lines.indexOf(line) + 1;
+            if (nextLineIndex < lines.length) {
+                const answerLine = lines[nextLineIndex];
+                if (answerLine && answerLine.trim() !== '') {
+                    script.informationResponses[trimmedLine] = answerLine.trim();
+                }
+            }
+        }
+    }
+    
+    return script;
+}
+
+// Enhanced conversational script handler that uses parsed script
+async function processConversationalScriptEnhanced(company, question, conversationHistory, placeholders) {
+    const agentSetup = company?.agentSetup || {};
+    const mainScript = agentSetup.mainAgentScript || '';
+    const parsedScript = parseMainScript(mainScript);
+    const personality = company?.aiSettings?.personality || 'friendly';
+    
+    if (!parsedScript) {
+        // Fall back to original conversational script processing
+        return await processConversationalScript(company, question, conversationHistory, placeholders);
+    }
+    
+    // Analyze call intent and stage
+    const callIntent = analyzeCallIntent(question, conversationHistory);
+    const callStage = determineCallStage(conversationHistory);
+    
+    console.log(`[EnhancedScript] Call Intent: ${callIntent}, Stage: ${callStage}, Has Parsed Script: true`);
+    
+    // Use parsed script content when available
+    switch (callStage) {
+        case 'greeting':
+            if (parsedScript.greeting) {
+                return applyPlaceholders(parsedScript.greeting, placeholders);
+            }
+            return handleGreeting(company, question, personality, placeholders);
+        
+        case 'intent_detection':
+            if (callIntent === 'booking' && parsedScript.serviceBooking.length > 0) {
+                return applyPlaceholders(parsedScript.serviceBooking[0], placeholders);
+            }
+            if (callIntent === 'transfer' && parsedScript.transferHandling.length > 0) {
+                return applyPlaceholders(parsedScript.transferHandling[0], placeholders);
+            }
+            return handleIntentDetection(company, question, callIntent, personality, placeholders);
+        
+        case 'closing':
+            if (parsedScript.closing) {
+                return applyPlaceholders(parsedScript.closing, placeholders);
+            }
+            return handleClosing(company, question, personality, placeholders);
+        
+        default:
+            // Check for information responses in parsed script
+            const lowerQuestion = question.toLowerCase();
+            for (const [scriptQuestion, scriptAnswer] of Object.entries(parsedScript.informationResponses)) {
+                if (lowerQuestion.includes(scriptQuestion.toLowerCase().replace(/\?/g, '').trim())) {
+                    return applyPlaceholders(scriptAnswer, placeholders);
+                }
+            }
+            
+            // Fall back to original processing
+            return await processConversationalScript(company, question, conversationHistory, placeholders);
+    }
 }
 
 // Agent Service - AI Response Generation
