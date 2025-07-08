@@ -15,8 +15,14 @@ async function getVoices(req, res) {
         const db = getDB();
         const company = await db.collection('companiesCollection').findOne({ _id: new ObjectId(companyId) });
         
-        // Check if API key is available
-        if (!apiKey && (!company || !company.aiSettings?.elevenLabs?.apiKey)) {
+        // Check for available API keys from different sources
+        const companyKey = company?.aiSettings?.elevenLabs?.apiKey;
+        const envKey = process.env.ELEVENLABS_API_KEY;
+        
+        console.log(`API Key sources - Request: ${!!apiKey}, Company: ${!!companyKey}, Env: ${!!envKey}`);
+        
+        if (!apiKey && !companyKey && !envKey) {
+            console.log('No ElevenLabs API key found from any source');
             return res.status(503).json({ 
                 message: 'ElevenLabs API key not configured. Please enter your API key to load voices.',
                 error: 'API_KEY_REQUIRED'

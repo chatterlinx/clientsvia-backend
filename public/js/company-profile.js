@@ -2364,7 +2364,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!provider) provider = 'elevenlabs'; 
         
         const companyId = new URLSearchParams(window.location.search).get('id');
-        const apiKey = (provider === 'elevenlabs') ? document.getElementById('elevenlabsApiKey').value.trim() : null;
+        
+        // Get API key only if field has a non-placeholder value
+        const apiKeyInput = document.getElementById('elevenlabsApiKey');
+        const apiKey = (provider === 'elevenlabs' && apiKeyInput && apiKeyInput.value !== '*****') 
+            ? apiKeyInput.value.trim() 
+            : null;
 
         try {
             // Always use POST for ElevenLabs

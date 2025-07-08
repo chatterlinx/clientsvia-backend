@@ -5,9 +5,19 @@ const path = require('path');
 const BASE_URL = 'https://api.elevenlabs.io/v1';
 
 function getElevenLabsApiKey(company) {
-  return (company?.aiSettings?.elevenLabs?.apiKey && company.aiSettings.elevenLabs.apiKey.trim())
-    ? company.aiSettings.elevenLabs.apiKey.trim()
-    : process.env.ELEVENLABS_API_KEY;
+  // First check company settings - but verify it's not empty after trimming
+  const companyKey = company?.aiSettings?.elevenLabs?.apiKey;
+  if (companyKey && companyKey.trim()) {
+    return companyKey.trim();
+  }
+  
+  // Fall back to environment variable
+  if (process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_API_KEY.trim()) {
+    return process.env.ELEVENLABS_API_KEY.trim();
+  }
+  
+  // No valid key found
+  return null;
 }
 
 function getApiKey({ apiKey, company } = {}) {
