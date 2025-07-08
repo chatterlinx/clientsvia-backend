@@ -596,17 +596,6 @@ function handleClosing(company, question, personality, placeholders) {
     return `Thank you for calling. Is there anything else I can assist you with today?`;
 }
 
-function applyPlaceholders(text, placeholders = {}) {
-    if (!text) return '';
-    
-    let result = text;
-    for (const [key, value] of Object.entries(placeholders)) {
-        const placeholder = `{${key}}`;
-        result = result.replace(new RegExp(placeholder, 'gi'), value);
-    }
-    return result;
-}
-
 // Agent Service - AI Response Generation
 // 🌍 GLOBAL MULTI-TENANT PLATFORM  
 // Serves ALL companies dynamically - no hardcoded company logic
