@@ -98,7 +98,19 @@ router.post('/voice', async (req, res) => {
 
     const greetingType = company.agentSetup?.greetingType || 'tts';
     const greetingAudioUrl = company.agentSetup?.greetingAudioUrl || '';
-    let greeting = company.agentSetup?.agentGreeting || "Hello, thank you for calling. How can I help you today?";
+    
+    // Get placeholders for the company
+    const placeholders = company.agentSetup?.placeholders || [];
+    
+    // Get the raw greeting
+    let rawGreeting = company.agentSetup?.agentGreeting || "Hello, thank you for calling. How can I help you today?";
+    
+    // Import the placeholders utility
+    const { applyPlaceholders } = require('../utils/placeholders');
+    
+    // Apply the placeholders to the greeting
+    let greeting = applyPlaceholders(rawGreeting, placeholders);
+    
     console.log(`[Twilio Voice] Greeting type: ${greetingType}`);
 
     const gather = twiml.gather({
