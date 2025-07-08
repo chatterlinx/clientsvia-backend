@@ -491,28 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function fetchGoogleVoices() {
-        try {
-            const res = await fetch('/api/google-tts/voices');
-            if (!res.ok) throw new Error(`Status ${res.status}`);
-            const voices = await res.json();
-            const select = aiSettingsForm?.querySelector('#googleVoiceSelection');
-            if (select) {
-                select.innerHTML = '';
-                voices.forEach(v => {
-                    const opt = document.createElement('option');
-                    opt.value = v.name;
-                    opt.textContent = v.displayName || v.name;
-                    select.appendChild(opt);
-                });
-                if (currentCompanyData?.aiSettings?.googleVoice) {
-                    select.value = currentCompanyData.aiSettings.googleVoice;
-                }
-            }
-        } catch (err) {
-            console.error('Failed to load Google voices', err);
-        }
-    }
+    // Google TTS function removed - using ElevenLabs only
     
     async function fetchCompanyData() {
         if (!companyId) {
@@ -520,7 +499,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (companyIdSubheader) companyIdSubheader.textContent = "ID: Not available";
             if (editProfileButton) editProfileButton.style.display = 'none';
             initializeAgentSetupInteractivity();
-            await fetchGoogleVoices();
             populateAgentSetupForm({}, []);
             populatePersonalityResponses({});
             return;
@@ -574,16 +552,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             renderCalendarSettings(currentCompanyData);
 
-            await fetchGoogleVoices();
             populateAiSettingsForm(currentCompanyData.aiSettings);
             populateAgentSetupForm(currentCompanyData.agentSetup, currentCompanyData.tradeTypes);
             // --- ADD THIS BLOCK TO POPULATE THE NEW VOICE TAB ---
             if (currentCompanyData) {
                 const voiceSettings = {
                     ttsProvider: currentCompanyData.aiSettings?.ttsProvider || 'elevenlabs',
-                    googleVoiceName: currentCompanyData.aiSettings?.googleVoice,
-                    googleVoicePitch: currentCompanyData.aiSettings?.voicePitch,
-                    googleVoiceSpeed: currentCompanyData.aiSettings?.voiceSpeed,
                     elevenlabsApiKey: currentCompanyData.aiSettings?.elevenLabs?.apiKey,
                     elevenlabsVoiceId: currentCompanyData.aiSettings?.elevenLabs?.voiceId,
                     elevenlabsStability: currentCompanyData.aiSettings?.elevenLabs?.stability,
@@ -954,9 +928,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const form = aiSettingsForm;
         if (form.elements.aiModel) form.elements.aiModel.value = aiSettings.model || 'gemini-2.5-flash';
         if (form.elements.aiCorePersonality) form.elements.aiCorePersonality.value = aiSettings.personality || 'friendly';
-        if (form.elements.googleVoiceSelection) form.elements.googleVoiceSelection.value = aiSettings.googleVoice || 'en-US-Standard-A';
-        if (form.elements.googleVoicePitch) form.elements.googleVoicePitch.value = aiSettings.voicePitch ?? 0;
-        if (form.elements.googleVoiceSpeed) form.elements.googleVoiceSpeed.value = aiSettings.voiceSpeed ?? 1;
         if (form.elements.knowledgeBaseSource) form.elements.knowledgeBaseSource.value = aiSettings.knowledgeBaseSource || '';
         if (form.elements.sentimentAnalysis) form.elements.sentimentAnalysis.checked = !!aiSettings.sentimentAnalysis;
         if (form.elements.dataLogging) form.elements.dataLogging.checked = typeof aiSettings.dataLogging === 'boolean' ? aiSettings.dataLogging : true;
@@ -1920,9 +1891,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const aiSettingsData = {
             model: formData.get('aiModel'),
             personality: formData.get('aiCorePersonality'),
-            googleVoice: formData.get('googleVoiceSelection'),
-            voicePitch: parseFloat(formData.get('googleVoicePitch')),
-            voiceSpeed: parseFloat(formData.get('googleVoiceSpeed')),
             knowledgeBaseSource: formData.get('knowledgeBaseSource')?.trim() || '',
             sentimentAnalysis: aiSettingsForm.querySelector('#sentimentAnalysis')?.checked || false,
             dataLogging: aiSettingsForm.querySelector('#dataLogging')?.checked || true,
