@@ -238,7 +238,7 @@ router.post('/handle-speech', async (req, res) => {
           action: `https://${req.get('host')}/api/twilio/handle-speech`,
           method: 'POST',
           bargeIn: company.aiSettings?.bargeIn ?? false, // Let agent finish speaking
-          timeout: context?.silenceTimeout ?? 8
+          timeout: company.aiSettings?.silenceTimeout ?? 8
         });
         gather.say({ voice }, escapeTwiML(cachedAnswer));
         res.type('text/xml');
