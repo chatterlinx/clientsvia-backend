@@ -430,6 +430,54 @@ function parseMainScript(mainScript) {
     return script;
 }
 
+// Basic conversational script handler
+async function processConversationalScript(company, question, conversationHistory, placeholders) {
+    const agentSetup = company?.agentSetup || {};
+    const personality = company?.aiSettings?.personality || 'friendly';
+    const companySpecialties = agentSetup.companySpecialties || '';
+    
+    // Simple text-based response generation without complex script parsing
+    if (!question || question.trim() === '') {
+        return handleGreeting(company, question, personality, placeholders);
+    }
+    
+    // Very basic intent detection
+    const lowerQuestion = question.toLowerCase();
+    
+    // Check for scheduling/booking intents
+    if (lowerQuestion.includes('schedule') || lowerQuestion.includes('appoint') || 
+        lowerQuestion.includes('book') || lowerQuestion.includes('set up') ||
+        lowerQuestion.includes('come out') || lowerQuestion.includes('come to') ||
+        lowerQuestion.includes('visit') || lowerQuestion.includes('available')) {
+        return `I'd be happy to schedule a service appointment for you. What day and time would work best for you? Our technicians are usually available Monday through Friday between 8am and 5pm.`;
+    }
+    
+    // Check for pricing/quote intents
+    if (lowerQuestion.includes('cost') || lowerQuestion.includes('price') || 
+        lowerQuestion.includes('quote') || lowerQuestion.includes('estimate') ||
+        lowerQuestion.includes('how much') || lowerQuestion.includes('fee')) {
+        return `The cost will depend on the specific service needed. For ${companySpecialties}, our service call fee starts at $89, and we can provide a more accurate quote once our technician assesses your system. Would you like to schedule a service call?`;
+    }
+    
+    // Check for service/repair intents
+    if (lowerQuestion.includes('repair') || lowerQuestion.includes('fix') || 
+        lowerQuestion.includes('broken') || lowerQuestion.includes('not working') ||
+        lowerQuestion.includes('service') || lowerQuestion.includes('maintain') ||
+        lowerQuestion.includes('problem') || lowerQuestion.includes('issue')) {
+        return `I understand you're having an issue with your system. To best help you, could you tell me a bit more about what's happening? This will help us make sure we send a technician with the right expertise and parts.`;
+    }
+    
+    // For name or contact collection
+    if (lowerQuestion.includes('name is') || lowerQuestion.includes('this is') || 
+        lowerQuestion.includes('speaking') || lowerQuestion.includes('number is') ||
+        lowerQuestion.includes('call me') || lowerQuestion.includes('reach me')) {
+        return `Thank you for sharing that information. I've got your details. Now, how can we help you today with your ${companySpecialties.split(',')[0].trim()} needs?`;
+    }
+    
+    // Default response for unclassified intents
+    return `I understand you're inquiring about our ${companySpecialties.split(',')[0].trim()} services. Could you provide a bit more detail about what specific help you're looking for today?`;
+}
+
 // Enhanced conversational script handler that uses parsed script
 async function processConversationalScriptEnhanced(company, question, conversationHistory, placeholders) {
     const agentSetup = company?.agentSetup || {};
@@ -516,6 +564,47 @@ async function processConversationalScriptEnhanced(company, question, conversati
             // Fall back to original processing
             return await processConversationalScript(company, question, conversationHistory, placeholders);
     }
+}
+
+// Helper functions for conversational script processing
+function handleGreeting(company, question, personality, placeholders) {
+    const agentSetup = company?.agentSetup || {};
+    const companyName = company?.companyName || 'our company';
+    const greeting = agentSetup.agentGreeting || `Thank you for calling ${companyName}! How can I assist you today?`;
+    return applyPlaceholders(greeting, placeholders);
+}
+
+function handleIntentDetection(company, question, callIntent, personality, placeholders) {
+    const agentSetup = company?.agentSetup || {};
+    const companySpecialties = agentSetup.companySpecialties || '';
+    
+    switch(callIntent) {
+        case 'repair':
+            return `I understand you need a repair. Could you tell me more about the issue you're experiencing with your system?`;
+        case 'maintenance':
+            return `I'd be happy to help schedule maintenance. Regular maintenance is important for optimal performance. When was your system last serviced?`;
+        case 'installation':
+            return `I understand you're interested in a new installation. Our team can definitely help with that. Could you share some details about your needs so we can provide the best solution?`;
+        case 'pricing':
+            return `I understand you're looking for pricing information. The cost will depend on several factors. Could you tell me more about what specific service you're interested in?`;
+        default:
+            return `How can we help you with your ${companySpecialties.split(',')[0].trim()} needs today?`;
+    }
+}
+
+function handleClosing(company, question, personality, placeholders) {
+    return `Thank you for calling. Is there anything else I can assist you with today?`;
+}
+
+function applyPlaceholders(text, placeholders = {}) {
+    if (!text) return '';
+    
+    let result = text;
+    for (const [key, value] of Object.entries(placeholders)) {
+        const placeholder = `{${key}}`;
+        result = result.replace(new RegExp(placeholder, 'gi'), value);
+    }
+    return result;
 }
 
 // Agent Service - AI Response Generation
