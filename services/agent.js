@@ -442,6 +442,39 @@ async function processConversationalScriptEnhanced(company, question, conversati
         return await processConversationalScript(company, question, conversationHistory, placeholders);
     }
     
+    // Simple intent analysis based on question content
+    function analyzeCallIntent(question, history) {
+        question = question.toLowerCase();
+        if (question.includes('repair') || question.includes('fix') || question.includes('broken') || 
+            question.includes('not working') || question.includes('isn\'t working') || 
+            question.includes('stopped working') || question.includes('blank')) {
+            return 'repair';
+        } else if (question.includes('maintenance') || question.includes('tune') || question.includes('check') || 
+                   question.includes('service')) {
+            return 'maintenance';
+        } else if (question.includes('install') || question.includes('new system') || question.includes('replace')) {
+            return 'installation';
+        } else if (question.includes('quote') || question.includes('cost') || question.includes('price') || 
+                   question.includes('how much')) {
+            return 'pricing';
+        } else {
+            return 'general';
+        }
+    }
+    
+    // Determine which stage of the call we're in based on conversation history
+    function determineCallStage(history) {
+        if (!history || history.length <= 1) {
+            return 'greeting';
+        } else if (history.length <= 2) {
+            return 'initial_question';
+        } else if (history.length <= 4) {
+            return 'information_gathering';
+        } else {
+            return 'scheduling';
+        }
+    }
+    
     // Analyze call intent and stage
     const callIntent = analyzeCallIntent(question, conversationHistory);
     const callStage = determineCallStage(conversationHistory);
