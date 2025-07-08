@@ -601,3 +601,5 @@ router.delete('/company/:companyId/personality-responses/:categoryName', async (
         res.status(500).json({ message: `Error deleting personality response category: ${error.message}` });
     }
 });
+
+module.exports = router;
