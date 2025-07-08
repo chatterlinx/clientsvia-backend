@@ -357,6 +357,89 @@ router.patch('/company/:companyId/aisettings', async (req, res) => {
     }
 });
 
+// Voice Settings endpoint - ElevenLabs only
+router.patch('/company/:companyId/voice-settings', async (req, res) => {
+    const { companyId } = req.params;
+    const settings = req.body;
+    
+    if (!ObjectId.isValid(companyId)) {
+        return res.status(400).json({ message: 'Invalid company ID format' });
+    }
+    
+    if (!settings || typeof settings !== 'object') {
+        return res.status(400).json({ message: 'Invalid voice settings data' });
+    }
+    
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ message: 'Company not found' });
+        }
+        
+        // Initialize aiSettings if it doesn't exist
+        if (!company.aiSettings) {
+            company.aiSettings = {};
+        }
+        
+        // Update voice-related settings (ElevenLabs only)
+        const voiceSettingsFields = [
+            'ttsProvider', 
+            'elevenlabsVoiceId', 
+            'elevenlabsApiKey', 
+            'elevenlabsStability', 
+            'elevenlabsClarity',
+            'responseDelayMs',
+            'twilioSpeechConfidenceThreshold',
+            'fuzzyMatchThreshold',
+            'logCalls',
+            'speechConfirmation'
+        ];
+        
+        voiceSettingsFields.forEach(field => {
+            if (field in settings) {
+                company.aiSettings[field] = settings[field];
+            }
+        });
+        
+        // Handle nested elevenLabs object
+        if (settings.elevenlabsApiKey) {
+            if (!company.aiSettings.elevenLabs) {
+                company.aiSettings.elevenLabs = {};
+            }
+            company.aiSettings.elevenLabs.apiKey = settings.elevenlabsApiKey;
+        }
+        
+        if (settings.elevenlabsVoiceId) {
+            if (!company.aiSettings.elevenLabs) {
+                company.aiSettings.elevenLabs = {};
+            }
+            company.aiSettings.elevenLabs.voiceId = settings.elevenlabsVoiceId;
+        }
+        
+        if (settings.elevenlabsStability !== undefined) {
+            if (!company.aiSettings.elevenLabs) {
+                company.aiSettings.elevenLabs = {};
+            }
+            company.aiSettings.elevenLabs.stability = settings.elevenlabsStability;
+        }
+        
+        if (settings.elevenlabsClarity !== undefined) {
+            if (!company.aiSettings.elevenLabs) {
+                company.aiSettings.elevenLabs = {};
+            }
+            company.aiSettings.elevenLabs.similarityBoost = settings.elevenlabsClarity;
+        }
+        
+        await company.save();
+        
+        console.log(`[API PATCH /api/company/${companyId}/voice-settings] Voice settings updated successfully`);
+        res.json({ message: 'Voice settings updated successfully', aiSettings: company.aiSettings });
+        
+    } catch (error) {
+        console.error(`[API PATCH /api/company/${companyId}/voice-settings] Error:`, error.message, error.stack);
+        res.status(500).json({ message: `Error updating voice settings: ${error.message}` });
+    }
+});
 
 router.patch('/company/:companyId/agentsetup', async (req, res) => {
     const { companyId } = req.params;
