@@ -2360,19 +2360,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to dynamically load voices
     const loadTtsVoices = async (provider) => {
+        // Default to elevenlabs if no provider specified
+        if (!provider) provider = 'elevenlabs'; 
+        
         const companyId = new URLSearchParams(window.location.search).get('id');
         const apiKey = (provider === 'elevenlabs') ? document.getElementById('elevenlabsApiKey').value.trim() : null;
 
-        let url = `/api/tts/voices?provider=${provider}&companyId=${companyId}`;
-
         try {
-            const fetchOptions = (provider === 'elevenlabs') ? {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ provider, companyId, apiKey: apiKey || undefined })
-            } : {};
-
-            const res = await fetch(url, fetchOptions);
+            // Always use POST for ElevenLabs
+            let res;
+            if (provider === 'elevenlabs') {
+                res = await fetch('/api/tts/voices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider, companyId, apiKey: apiKey || undefined })
+                });
+            } else {
+                // Use GET for other providers (though we now only support ElevenLabs)
+                res = await fetch(`/api/tts/voices?provider=${provider}&companyId=${companyId}`);
+            }
             if (!res.ok) throw new Error(`Failed to fetch voices for ${provider}`);
             const voices = await res.json();
 

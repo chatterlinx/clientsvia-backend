@@ -5,7 +5,11 @@ const { getDB } = require('../db');
 const { ObjectId } = require('mongodb');
 
 async function getVoices(req, res) {
-    const { companyId, apiKey } = req.query;
+    // Get parameters from either query params (GET) or body (POST)
+    const params = req.method === 'GET' ? req.query : req.body;
+    const { companyId, apiKey, provider = 'elevenlabs' } = params;
+    
+    console.log(`TTS Voices Request - Method: ${req.method}, Provider: ${provider}, CompanyId: ${companyId}`);
 
     try {
         const db = getDB();
@@ -38,6 +42,7 @@ async function getVoices(req, res) {
 }
 
 router.get('/voices', getVoices);
+router.post('/voices', getVoices); // Use same handler for POST requests
 
 async function postVoices(req, res) {
     const { companyId, apiKey } = req.body || {};
