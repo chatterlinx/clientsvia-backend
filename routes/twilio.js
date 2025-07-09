@@ -307,6 +307,15 @@ router.post('/handle-speech', async (req, res) => {
       });
 
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
+      
+      // EMERGENCY DEBUG: Force use of Twilio Say to eliminate any audio file delays
+      console.log(`[EMERGENCY DEBUG] Forcing Twilio Say to eliminate audio file delays`);
+      gather.say({
+        voice: 'Polly.Joanna',
+        language: 'en-US'
+      }, escapeTwiML(cachedAnswer));
+      
+      /*
       if (elevenLabsVoice) {
         try {
           const qaTtsStartTime = Date.now();
@@ -344,6 +353,7 @@ router.post('/handle-speech', async (req, res) => {
         res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
         return;
       }
+      */
 
       res.type('text/xml');
       return res.send(twiml.toString());
