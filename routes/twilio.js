@@ -306,11 +306,6 @@ router.post('/handle-speech', async (req, res) => {
         timeout: company.aiSettings?.silenceTimeout ?? 8
       });
 
-      // TEMP: Test with Twilio Say instead of ElevenLabs to isolate the issue
-      console.log(`[TEMP DEBUG] Using Twilio Say instead of ElevenLabs for faster testing`);
-      gather.say(escapeTwiML(cachedAnswer));
-      
-      /*
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
       if (elevenLabsVoice) {
         try {
@@ -352,7 +347,6 @@ router.post('/handle-speech', async (req, res) => {
         res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
         return;
       }
-      */
 
       res.type('text/xml');
       return res.send(twiml.toString());
