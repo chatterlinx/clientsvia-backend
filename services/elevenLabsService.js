@@ -37,15 +37,19 @@ async function getAvailableVoices({ apiKey, company } = {}) {
 async function synthesizeSpeech({ text, voiceId, stability, similarity_boost, style, model_id, apiKey, company } = {}) {
   const key = getApiKey({ apiKey, company });
   if (!text || !voiceId) throw new Error('text and voiceId are required');
+  
+  // Optimize for speed: use turbo model if no specific model is set
+  const optimizedModelId = model_id || 'eleven_turbo_v2_5';
+  
   const res = await axios.post(
     `${BASE_URL}/text-to-speech/${voiceId}`,
     {
       text,
-      model_id,
+      model_id: optimizedModelId,
       voice_settings: {
-        stability,
-        similarity_boost,
-        style
+        stability: stability || 0.5, // Default for speed
+        similarity_boost: similarity_boost || 0.7, // Default for speed
+        style: style || 0, // Reduce style complexity for speed
       }
     },
     {
@@ -53,7 +57,8 @@ async function synthesizeSpeech({ text, voiceId, stability, similarity_boost, st
         'xi-api-key': key,
         'Content-Type': 'application/json'
       },
-      responseType: 'arraybuffer'
+      responseType: 'arraybuffer',
+      timeout: 15000 // 15 second timeout to prevent hanging
     }
   );
   return res.data; // Buffer of MP3 audio

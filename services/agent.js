@@ -77,10 +77,10 @@ async function callModel(company, prompt) {
           requestBody: {
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: {
-              temperature: 0.7,
-              topK: 20, // Reduced for faster responses
-              topP: 0.8, // Reduced for faster responses
-              maxOutputTokens: 150, // Much smaller for faster, more concise responses
+              temperature: 0.5, // Reduced from 0.7 for faster, more consistent responses
+              topK: 10, // Reduced from 20 for faster responses
+              topP: 0.7, // Reduced from 0.8 for faster responses
+              maxOutputTokens: 100, // Reduced from 150 for faster responses
             }
           }
         });
