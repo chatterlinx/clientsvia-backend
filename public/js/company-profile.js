@@ -2659,7 +2659,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-
+        // Adding spacing to change line numbers for console output
+        
+        
+        
+        
         
         // Function to handle the form submission
         const handleSaveVoiceSettings = async (event) => {
