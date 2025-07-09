@@ -35,11 +35,16 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Optimized static file serving with caching for audio files
+// Add compression for better performance
+const compression = require('compression');
+app.use(compression());
+
+// Optimized static file serving with aggressive caching for audio files
 app.use('/audio', express.static(path.join(__dirname, 'public/audio'), {
-  maxAge: '1h', // Cache audio files for 1 hour
+  maxAge: '1d', // Cache audio files for 1 day
   etag: true,
-  lastModified: true
+  lastModified: true,
+  immutable: true // Audio files are immutable
 }));
 
 app.use(express.static(path.join(__dirname, 'public')));

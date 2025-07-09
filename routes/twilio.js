@@ -323,16 +323,13 @@ router.post('/handle-speech', async (req, res) => {
           const qaTtsEndTime = Date.now();
           console.log(`[TIMING] Q&A ElevenLabs TTS completed at: ${qaTtsEndTime}, took: ${qaTtsEndTime - qaTtsStartTime}ms`);
           
-          // Use a shorter filename and optimize URL
-          const fileName = `qa_${callSid}.mp3`;
-          const audioDir = path.join(__dirname, '../public/audio');
-          if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
-          const filePath = path.join(audioDir, fileName);
-          fs.writeFileSync(filePath, buffer);
+          // OPTIMIZATION: Store audio in Redis for instant serving
+          const audioKey = `audio:qa:${callSid}`;
+          await redisClient.setEx(audioKey, 300, buffer.toString('base64')); // 5 min cache
           
-          // Use HTTPS explicitly for better Twilio compatibility
-          const audioUrl = `https://${req.get('host')}/audio/${fileName}`;
-          console.log(`[OPTIMIZATION] Audio URL: ${audioUrl}`);
+          // Use direct audio endpoint for faster serving
+          const audioUrl = `https://${req.get('host')}/api/twilio/audio/${callSid}`;
+          console.log(`[OPTIMIZATION] Direct audio endpoint: ${audioUrl}`);
           gather.play(audioUrl);
         } catch (err) {
           console.error('ElevenLabs TTS failed:', err);
@@ -593,6 +590,36 @@ router.post('/process-ai-response', async (req, res) => {
   const twimlString = twiml.toString();
   console.log(`[Twilio Process AI] Sending TwiML: ${twimlString}`);
   res.send(twimlString);
+});
+
+// Direct audio serving endpoint for faster delivery
+router.get('/audio/:callSid', async (req, res) => {
+  try {
+    const callSid = req.params.callSid;
+    const audioKey = `audio:qa:${callSid}`;
+    
+    const audioBase64 = await redisClient.get(audioKey);
+    if (!audioBase64) {
+      return res.status(404).send('Audio not found');
+    }
+    
+    const audioBuffer = Buffer.from(audioBase64, 'base64');
+    
+    // Set optimal headers for Twilio
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': audioBuffer.length,
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'public, max-age=300',
+      'X-Robots-Tag': 'noindex'
+    });
+    
+    res.send(audioBuffer);
+    console.log(`[AUDIO ENDPOINT] Served audio for CallSid: ${callSid}`);
+  } catch (err) {
+    console.error('[AUDIO ENDPOINT] Error:', err);
+    res.status(500).send('Audio service error');
+  }
 });
 
 // 🎛️ AGENT PERFORMANCE CONTROLS - LIVE TUNING DASHBOARD
