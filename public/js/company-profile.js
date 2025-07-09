@@ -2576,6 +2576,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 3. Get references to our new UI elements
         const form = document.getElementById('ai-voice-settings-form');
+        console.log('🔍 Looking for form ai-voice-settings-form:', form);
+        if (!form) {
+            console.error('❌ Form ai-voice-settings-form not found!');
+            return;
+        }
         const providerSelect = document.getElementById('ttsProviderSelect');
         googleSettings = document.getElementById('googleTtsSettings');
         elevenlabsSettings = document.getElementById('elevenlabsTtsSettings');
@@ -2787,7 +2792,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 confirmContainer.classList.add('hidden');
             });
         }
+        console.log('📎 Attaching submit event listener to form:', form);
         form.addEventListener('submit', handleSaveVoiceSettings);
+        console.log('✅ Event listener attached successfully');
 
         // Function to test the current voice configuration
         const handleTestVoice = async () => {
