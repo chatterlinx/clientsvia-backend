@@ -575,7 +575,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 console.log('Voice Settings Debug:', {
                     rawResponseDelayMs: currentCompanyData.aiSettings?.responseDelayMs,
-                    finalResponseDelayMs: voiceSettings.responseDelayMs
+                    finalResponseDelayMs: voiceSettings.responseDelayMs,
+                    deploymentCheck: 'AGENT_RESPONSE_DELAY_FIX_DEPLOYED_v1'
                 });
                 populateAiVoiceSettings(voiceSettings);
             }
@@ -2698,14 +2699,19 @@ document.addEventListener('DOMContentLoaded', () => {
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
             
             try {
+                console.log('Attempting to save voice settings:', settings);
                 const res = await fetch(`/api/company/${companyId}/voice-settings`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(settings)
                 });
-                if (!res.ok) throw new Error('Failed to save settings.');
+                console.log('Server response status:', res.status);
+                const responseData = await res.json();
+                console.log('Server response data:', responseData);
+                if (!res.ok) throw new Error(`Server error: ${res.status} - ${responseData.message || 'Unknown error'}`);
                 showToast('Voice settings saved successfully!', 'success');
             } catch (err) {
+                console.error('Voice settings save error:', err);
                 showToast(`Error: ${err.message}`, 'error');
             } finally {
                 saveBtn.disabled = false;
