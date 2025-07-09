@@ -2658,6 +2658,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Function to handle the form submission
         const handleSaveVoiceSettings = async (event) => {
+            console.log('🚀 SAVE VOICE SETTINGS TRIGGERED!');
             event.preventDefault();
             const companyId = new URLSearchParams(window.location.search).get('id');
             if (!companyId) return showToast('Company ID is missing.', 'error');
