@@ -362,6 +362,9 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
     const { companyId } = req.params;
     const settings = req.body;
     
+    console.log('[Voice Settings Debug] Received settings:', settings);
+    console.log('[Voice Settings Debug] responseDelayMs type and value:', typeof settings.responseDelayMs, settings.responseDelayMs);
+    
     if (!ObjectId.isValid(companyId)) {
         return res.status(400).json({ message: 'Invalid company ID format' });
     }
@@ -397,6 +400,7 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
         
         voiceSettingsFields.forEach(field => {
             if (field in settings) {
+                console.log(`[Voice Settings Debug] Setting ${field} to:`, settings[field], `(type: ${typeof settings[field]})`);
                 company.aiSettings[field] = settings[field];
             }
         });
@@ -432,6 +436,7 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
         
         await company.save();
         
+        console.log(`[Voice Settings Debug] Final saved responseDelayMs:`, company.aiSettings.responseDelayMs);
         console.log(`[API PATCH /api/company/${companyId}/voice-settings] Voice settings updated successfully`);
         res.json({ message: 'Voice settings updated successfully', aiSettings: company.aiSettings });
         

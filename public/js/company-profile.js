@@ -567,12 +567,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     elevenlabsVoiceId: currentCompanyData.aiSettings?.elevenLabs?.voiceId,
                     elevenlabsStability: currentCompanyData.aiSettings?.elevenLabs?.stability,
                     elevenlabsClarity: currentCompanyData.aiSettings?.elevenLabs?.similarityBoost,
-                    responseDelayMs: currentCompanyData.aiSettings?.responseDelayMs ?? 500,
+                    responseDelayMs: currentCompanyData.aiSettings?.responseDelayMs !== undefined ? currentCompanyData.aiSettings.responseDelayMs : 500,
                     twilioSpeechConfidenceThreshold: currentCompanyData.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5,
                     fuzzyMatchThreshold: currentCompanyData.aiSettings?.fuzzyMatchThreshold ?? 0.5,
                     speechConfirmation: currentCompanyData.aiSettings?.speechConfirmation || { enabled: false, confirmKey: 5, prompts: ["I heard: '{transcript}'. Press 5 or say yes to confirm. If not, say no or repeat."], maxAttempts: 2 },
                     logCalls: currentCompanyData.aiSettings?.logCalls ?? false
                 };
+                console.log('Voice Settings Debug:', {
+                    rawResponseDelayMs: currentCompanyData.aiSettings?.responseDelayMs,
+                    finalResponseDelayMs: voiceSettings.responseDelayMs
+                });
                 populateAiVoiceSettings(voiceSettings);
             }
             // --- END OF NEW BLOCK ---
@@ -2661,6 +2665,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const settings = Object.fromEntries(formData.entries());
 
             settings.responseDelayMs = parseInt(settings.responseDelayMs || '0');
+            console.log('Form submission debug:', {
+                rawResponseDelayMs: formData.get('responseDelayMs'),
+                parsedResponseDelayMs: settings.responseDelayMs
+            });
             settings.twilioSpeechConfidenceThreshold = parseFloat(settings.twilioSpeechConfidenceThreshold || '0.5');
             settings.fuzzyMatchThreshold = parseFloat(formData.get('fuzzyMatchThreshold'));
             settings.logCalls = formData.get('logCalls') === 'on';
@@ -2863,8 +2871,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (stabilityValue) stabilityValue.textContent = Number(document.getElementById('elevenlabsStability').value).toFixed(2);
         if (clarityValue) clarityValue.textContent = Number(document.getElementById('elevenlabsClarity').value).toFixed(2);
 
-        document.getElementById('responseDelayMs').value = voiceSettings.responseDelayMs ?? 500;
-        if (delayValue) delayValue.textContent = `${voiceSettings.responseDelayMs ?? 500} ms`;
+        // Fix responseDelayMs population
+        const actualDelayValue = voiceSettings.responseDelayMs !== undefined ? voiceSettings.responseDelayMs : 500;
+        console.log('Setting responseDelayMs to:', actualDelayValue);
+        document.getElementById('responseDelayMs').value = actualDelayValue;
+        if (delayValue) delayValue.textContent = `${actualDelayValue} ms`;
         document.getElementById('logCalls').checked = !!voiceSettings.logCalls;
         document.getElementById('twilioSpeechConfidenceThreshold').value = voiceSettings.twilioSpeechConfidenceThreshold ?? 0.5;
         if (fuzzyMatchInput) fuzzyMatchInput.value = voiceSettings.fuzzyMatchThreshold ?? 0.5;
