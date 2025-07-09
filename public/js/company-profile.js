@@ -2578,7 +2578,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const testButton = document.getElementById('unifiedTestVoiceBtn');
         const confirmToggle = document.getElementById('speechConfirmEnabled');
         const confirmContainer = document.querySelector('.confirmation-settings');
-        const resetBtn = document.getElementById('resetVoiceDefaults');
         fuzzyMatchInput = document.getElementById('fuzzyMatchThreshold');
         thresholdValue = document.getElementById('fuzzyThresholdValue');
         responseDelayInput = document.getElementById('responseDelayMs');
@@ -2753,6 +2752,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+                const resetBtn = document.getElementById('resetVoiceDefaults');
                 if (resetBtn) {
             resetBtn.addEventListener('click', () => {
                 document.getElementById('responseDelayMs').value = 500;
@@ -2850,13 +2850,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (voiceSettings.elevenlabsApiKey) {
             apiInput.value = '*****';
             apiInput.dataset.hasValue = 'true';
-            keyHint.classList.add('hidden');
-            keyWarning.classList.remove('hidden');
+            if (keyHint) keyHint.classList.add('hidden');
+            if (keyWarning) keyWarning.classList.remove('hidden');
         } else {
             apiInput.value = '';
             apiInput.dataset.hasValue = 'false';
-            keyHint.classList.remove('hidden');
-            keyWarning.classList.add('hidden');
+            if (keyHint) keyHint.classList.remove('hidden');
+            if (keyWarning) keyWarning.classList.add('hidden');
         }
         document.getElementById('elevenlabsStability').value = voiceSettings.elevenlabsStability ?? 0.75;
         document.getElementById('elevenlabsClarity').value = voiceSettings.elevenlabsClarity ?? 0.75;
