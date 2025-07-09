@@ -177,6 +177,7 @@ router.post('/handle-speech', async (req, res) => {
   try {
     console.log('[POST /api/twilio/handle-speech] Incoming speech:', req.body);
     console.log(`[TIMING] handle-speech started at: ${startTime}`);
+    console.log(`[TIMING] Request received at: ${new Date().toISOString()}`);
     const speechText = req.body.SpeechResult || '';
     const twiml = new twilio.twiml.VoiceResponse();
     const callSid = req.body.CallSid;
@@ -437,6 +438,7 @@ router.post('/handle-speech', async (req, res) => {
 
     const endTime = Date.now();
     console.log(`[TIMING] handle-speech completed at: ${endTime}, total time: ${endTime - startTime}ms`);
+    console.log(`[TIMING] Response sent at: ${new Date().toISOString()}`);
 
     res.type('text/xml');
     res.send(twiml.toString());
@@ -452,7 +454,10 @@ router.post('/handle-speech', async (req, res) => {
 });
 
 router.post('/process-ai-response', async (req, res) => {
+  const startTime = Date.now();
   const twiml = new twilio.twiml.VoiceResponse();
+  console.log(`[TIMING] process-ai-response started at: ${startTime}`);
+  console.log(`[TIMING] AI response request received at: ${new Date().toISOString()}`);
 
   try {
     const callSid = req.body.CallSid;
@@ -590,6 +595,9 @@ router.post('/process-ai-response', async (req, res) => {
   res.type('text/xml');
   const twimlString = twiml.toString();
   console.log(`[Twilio Process AI] Sending TwiML: ${twimlString}`);
+  const endTime = Date.now();
+  console.log(`[TIMING] process-ai-response completed at: ${endTime}, total time: ${endTime - startTime}ms`);
+  console.log(`[TIMING] AI response sent at: ${new Date().toISOString()}`);
   res.send(twimlString);
 });
 
