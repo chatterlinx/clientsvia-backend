@@ -441,7 +441,8 @@ router.post('/handle-speech', async (req, res) => {
       
     processAiResponse();
 
-    twiml.pause({ length: 1 });
+    // TEMP: Remove pause to test if it's causing delays
+    // twiml.pause({ length: 1 });
     twiml.redirect('/api/twilio/process-ai-response');
 
     const endTime = Date.now();
