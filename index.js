@@ -34,6 +34,14 @@ const app = express();
 // --- Middleware ---
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Optimized static file serving with caching for audio files
+app.use('/audio', express.static(path.join(__dirname, 'public/audio'), {
+  maxAge: '1h', // Cache audio files for 1 hour
+  etag: true,
+  lastModified: true
+}));
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- API Routes ---

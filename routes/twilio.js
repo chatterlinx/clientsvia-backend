@@ -322,12 +322,18 @@ router.post('/handle-speech', async (req, res) => {
           });
           const qaTtsEndTime = Date.now();
           console.log(`[TIMING] Q&A ElevenLabs TTS completed at: ${qaTtsEndTime}, took: ${qaTtsEndTime - qaTtsStartTime}ms`);
-          const fileName = `qa_${Date.now()}.mp3`;
+          
+          // Use a shorter filename and optimize URL
+          const fileName = `qa_${callSid}.mp3`;
           const audioDir = path.join(__dirname, '../public/audio');
           if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
           const filePath = path.join(audioDir, fileName);
           fs.writeFileSync(filePath, buffer);
-          gather.play(`${req.protocol}://${req.get('host')}/audio/${fileName}`);
+          
+          // Use HTTPS explicitly for better Twilio compatibility
+          const audioUrl = `https://${req.get('host')}/audio/${fileName}`;
+          console.log(`[OPTIMIZATION] Audio URL: ${audioUrl}`);
+          gather.play(audioUrl);
         } catch (err) {
           console.error('ElevenLabs TTS failed:', err);
           const fallbackText = `<Say>${escapeTwiML(cachedAnswer)}</Say>`;
@@ -512,12 +518,15 @@ router.post('/process-ai-response', async (req, res) => {
           });
           const ttsEndTime = Date.now();
           console.log(`[TIMING] ElevenLabs TTS completed at: ${ttsEndTime}, took: ${ttsEndTime - ttsStartTime}ms`);
-          const fileName = `tts_${callSid}_${Date.now()}.mp3`;
+          const fileName = `tts_${callSid}.mp3`;
           const audioDir = path.join(__dirname, '../public/audio');
           if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
           const filePath = path.join(audioDir, fileName);
           fs.writeFileSync(filePath, buffer);
-          gather.play(`https://${req.get('host')}/audio/${fileName}`);
+          
+          const audioUrl = `https://${req.get('host')}/audio/${fileName}`;
+          console.log(`[OPTIMIZATION] AI Audio URL: ${audioUrl}`);
+          gather.play(audioUrl);
           console.log(`[Twilio Process AI] ElevenLabs TTS succeeded, playing audio file`);
         } catch (err) {
           console.error('ElevenLabs synthesis failed:', err.message);
