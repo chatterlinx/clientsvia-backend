@@ -2663,7 +2663,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Function to handle the form submission
         const handleSaveVoiceSettings = async (event) => {
-            console.log('🚀 SAVE VOICE SETTINGS TRIGGERED!');
+            console.log('✅ Voice settings save initiated');
             event.preventDefault();
             const companyId = new URLSearchParams(window.location.search).get('id');
             if (!companyId) return showToast('Company ID is missing.', 'error');
