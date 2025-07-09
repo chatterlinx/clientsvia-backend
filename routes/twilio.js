@@ -173,8 +173,10 @@ router.post('/voice', async (req, res) => {
 });
 
 router.post('/handle-speech', async (req, res) => {
+  const startTime = Date.now();
   try {
     console.log('[POST /api/twilio/handle-speech] Incoming speech:', req.body);
+    console.log(`[TIMING] handle-speech started at: ${startTime}`);
     const speechText = req.body.SpeechResult || '';
     const twiml = new twilio.twiml.VoiceResponse();
     const callSid = req.body.CallSid;
@@ -307,6 +309,8 @@ router.post('/handle-speech', async (req, res) => {
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
       if (elevenLabsVoice) {
         try {
+          const qaTtsStartTime = Date.now();
+          console.log(`[TIMING] Q&A ElevenLabs TTS started at: ${qaTtsStartTime}`);
           const buffer = await synthesizeSpeech({
             text: cachedAnswer,
             voiceId: elevenLabsVoice,
@@ -316,6 +320,8 @@ router.post('/handle-speech', async (req, res) => {
             model_id: company.aiSettings.elevenLabs?.modelId,
             company
           });
+          const qaTtsEndTime = Date.now();
+          console.log(`[TIMING] Q&A ElevenLabs TTS completed at: ${qaTtsEndTime}, took: ${qaTtsEndTime - qaTtsStartTime}ms`);
           const fileName = `qa_${Date.now()}.mp3`;
           const audioDir = path.join(__dirname, '../public/audio');
           if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
@@ -387,6 +393,8 @@ router.post('/handle-speech', async (req, res) => {
 
     // Process AI response
     const processAiResponse = async () => {
+      const aiStartTime = Date.now();
+      console.log(`[TIMING] AI processing started at: ${aiStartTime}`);
       try {
         const answerObj = await answerQuestion(
           companyId,
@@ -399,6 +407,8 @@ router.post('/handle-speech', async (req, res) => {
           categoryQAs,
           callSid
         );
+        const aiEndTime = Date.now();
+        console.log(`[TIMING] AI processing completed at: ${aiEndTime}, took: ${aiEndTime - aiStartTime}ms`);
         console.log(`[AI] answerQuestion result for ${callSid}:`, answerObj);
         await redisClient.setEx(`twilio-answer:${callSid}`, 60, JSON.stringify(answerObj));
         console.log(`[Redis] Stored answer for CallSid: ${callSid}`, answerObj);
@@ -420,6 +430,9 @@ router.post('/handle-speech', async (req, res) => {
 
     twiml.pause({ length: 1 });
     twiml.redirect('/api/twilio/process-ai-response');
+
+    const endTime = Date.now();
+    console.log(`[TIMING] handle-speech completed at: ${endTime}, total time: ${endTime - startTime}ms`);
 
     res.type('text/xml');
     res.send(twiml.toString());
@@ -475,6 +488,8 @@ router.post('/process-ai-response', async (req, res) => {
         
       if (context.elevenLabs?.voiceId) {
         try {
+          const ttsStartTime = Date.now();
+          console.log(`[TIMING] ElevenLabs TTS started at: ${ttsStartTime}`);
           console.log(`[Twilio Process AI] Using ElevenLabs TTS with voice: ${context.elevenLabs.voiceId}`);
             
           // Reconstruct company object for ElevenLabs API key lookup
@@ -495,6 +510,8 @@ router.post('/process-ai-response', async (req, res) => {
             model_id: context.elevenLabs.modelId,
             company: companyObj
           });
+          const ttsEndTime = Date.now();
+          console.log(`[TIMING] ElevenLabs TTS completed at: ${ttsEndTime}, took: ${ttsEndTime - ttsStartTime}ms`);
           const fileName = `tts_${callSid}_${Date.now()}.mp3`;
           const audioDir = path.join(__dirname, '../public/audio');
           if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });

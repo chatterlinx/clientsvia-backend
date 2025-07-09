@@ -66,26 +66,28 @@ async function callModel(company, prompt) {
   });
   const authClient = await auth.getClient();
   const projectId = process.env.GCLOUD_PROJECT_ID || await auth.getProjectId();
-  const aiplatform = google.aiplatform({ version: 'v1beta1', auth: authClient });
-
-  const invoke = async (modelName) => {
-    const model = `projects/${projectId}/locations/us-central1/publishers/google/models/${modelName}`;
-    try {
-      console.log(`[VertexAI] Sending prompt to ${modelName}:`, prompt.substring(0, 200) + '...');
-      const res = await aiplatform.projects.locations.publishers.models.generateContent({
-        model,
-        requestBody: {
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            topK: 20, // Reduced for faster responses
-            topP: 0.8, // Reduced for faster responses
-            maxOutputTokens: 150, // Much smaller for faster, more concise responses
+  const aiplatform = google.aiplatform({ version: 'v1beta1', auth: authClient });    const invoke = async (modelName) => {
+      const model = `projects/${projectId}/locations/us-central1/publishers/google/models/${modelName}`;
+      try {
+        const vertexStartTime = Date.now();
+        console.log(`[TIMING] VertexAI API call started at: ${vertexStartTime}`);
+        console.log(`[VertexAI] Sending prompt to ${modelName}:`, prompt.substring(0, 200) + '...');
+        const res = await aiplatform.projects.locations.publishers.models.generateContent({
+          model,
+          requestBody: {
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.7,
+              topK: 20, // Reduced for faster responses
+              topP: 0.8, // Reduced for faster responses
+              maxOutputTokens: 150, // Much smaller for faster, more concise responses
+            }
           }
-        }
-      });
-      const responseText = res.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      console.log(`[VertexAI] Received response from ${modelName}:`, responseText);
+        });
+        const vertexEndTime = Date.now();
+        console.log(`[TIMING] VertexAI API call completed at: ${vertexEndTime}, took: ${vertexEndTime - vertexStartTime}ms`);
+        const responseText = res.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        console.log(`[VertexAI] Received response from ${modelName}:`, responseText);
       
       // Check for potential issues with the response
       if (!responseText || responseText.trim() === '') {
@@ -247,8 +249,13 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   }
 
   const aiResponse = await (async () => {
+    const llmStartTime = Date.now();
+    console.log(`[TIMING] LLM call started at: ${llmStartTime}`);
     console.log(`[LLM] Sending prompt to ${company?.companyName}:`, fullPrompt);
-    return await callModel(company, fullPrompt);
+    const response = await callModel(company, fullPrompt);
+    const llmEndTime = Date.now();
+    console.log(`[TIMING] LLM call completed at: ${llmEndTime}, took: ${llmEndTime - llmStartTime}ms`);
+    return response;
   })();
 
   console.log(`[LLM] Received response:`, aiResponse);
