@@ -306,6 +306,15 @@ router.post('/handle-speech', async (req, res) => {
         timeout: company.aiSettings?.silenceTimeout ?? 8
       });
 
+      // EMERGENCY FIX: Use Twilio Say for instant response while we debug the infrastructure issue
+      console.log(`[EMERGENCY FIX] Using Twilio Say for instant response - infrastructure debugging mode`);
+      gather.say({
+        voice: 'Polly.Joanna',
+        language: 'en-US'
+      }, escapeTwiML(cachedAnswer));
+      
+      /*
+      // TEMPORARILY DISABLED ElevenLabs until infrastructure issue is resolved
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
       if (elevenLabsVoice) {
         try {
@@ -344,6 +353,7 @@ router.post('/handle-speech', async (req, res) => {
         res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
         return;
       }
+      */
 
       res.type('text/xml');
       return res.send(twiml.toString());
