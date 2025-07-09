@@ -286,6 +286,16 @@ router.post('/handle-speech', async (req, res) => {
     
     if (cachedAnswer) {
       console.log(`[AI] Q&A match for ${callSid}: ${cachedAnswer}`);
+      
+      // Apply responseDelayMs for Q&A matches too
+      const responseDelay = company.aiSettings?.responseDelayMs || 0;
+      console.log(`[DEBUG Q&A] Using responseDelayMs: ${responseDelay}ms for Q&A match`);
+      if (responseDelay > 0) {
+        console.log(`[DEBUG Q&A] Applying ${responseDelay}ms delay...`);
+        await new Promise(res => setTimeout(res, responseDelay));
+        console.log(`[DEBUG Q&A] Delay completed.`);
+      }
+      
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
