@@ -309,14 +309,6 @@ router.post('/handle-speech', async (req, res) => {
 
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
       
-      // EMERGENCY TEST: Try Twilio Say to bypass audio file delays entirely
-      console.log(`[EMERGENCY TEST] Bypassing audio files - using Twilio Say`);
-      gather.say({
-        voice: 'Polly.Joanna',
-        language: 'en-US'
-      }, escapeTwiML(cachedAnswer));
-      
-      /*
       if (elevenLabsVoice) {
         try {
           const qaTtsStartTime = Date.now();
@@ -333,15 +325,13 @@ router.post('/handle-speech', async (req, res) => {
           const qaTtsEndTime = Date.now();
           console.log(`[TIMING] Q&A ElevenLabs TTS completed at: ${qaTtsEndTime}, took: ${qaTtsEndTime - qaTtsStartTime}ms`);
           
-          // EMERGENCY: Skip Redis and use direct file serving for maximum speed
-          const fileName = `qa_${callSid}_${Date.now()}.mp3`;
-          const audioDir = path.join(__dirname, '../public/audio');
-          if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
-          const filePath = path.join(audioDir, fileName);
-          fs.writeFileSync(filePath, buffer);
+          // OPTIMIZATION: Store audio in Redis for instant serving
+          const audioKey = `audio:qa:${callSid}`;
+          await redisClient.setEx(audioKey, 300, buffer.toString('base64')); // 5 min cache
           
-          const audioUrl = `https://${req.get('host')}/audio/${fileName}`;
-          console.log(`[EMERGENCY] Direct file serving: ${audioUrl}`);
+          // Use direct audio endpoint for faster serving
+          const audioUrl = `https://${req.get('host')}/api/twilio/audio/${callSid}`;
+          console.log(`[OPTIMIZATION] Direct audio endpoint: ${audioUrl}`);
           gather.play(audioUrl);
         } catch (err) {
           console.error('ElevenLabs TTS failed:', err);
@@ -356,7 +346,6 @@ router.post('/handle-speech', async (req, res) => {
         res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
         return;
       }
-      */
 
       res.type('text/xml');
       return res.send(twiml.toString());
@@ -532,14 +521,14 @@ router.post('/process-ai-response', async (req, res) => {
           });
           const ttsEndTime = Date.now();
           console.log(`[TIMING] ElevenLabs TTS completed at: ${ttsEndTime}, took: ${ttsEndTime - ttsStartTime}ms`);
-          const fileName = `ai_${callSid}_${Date.now()}.mp3`;
+          const fileName = `tts_${callSid}.mp3`;
           const audioDir = path.join(__dirname, '../public/audio');
           if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
           const filePath = path.join(audioDir, fileName);
           fs.writeFileSync(filePath, buffer);
           
           const audioUrl = `https://${req.get('host')}/audio/${fileName}`;
-          console.log(`[AI Response] Direct file serving: ${audioUrl}`);
+          console.log(`[OPTIMIZATION] AI Audio URL: ${audioUrl}`);
           gather.play(audioUrl);
           console.log(`[Twilio Process AI] ElevenLabs TTS succeeded, playing audio file`);
         } catch (err) {
