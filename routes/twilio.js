@@ -367,6 +367,8 @@ router.post('/handle-speech', async (req, res) => {
       fillersEnabled: company.aiSettings?.humanLikeFillers || false,
       fillerPhrases: company.aiSettings?.fillerPhrases || []
     };
+    
+    console.log(`[DEBUG] Context responseDelayMs set to: ${context.responseDelayMs} from company.aiSettings.responseDelayMs: ${company.aiSettings?.responseDelayMs}`);
       
     console.log(`[Context Debug] ElevenLabs VoiceId: ${context.elevenLabs?.voiceId}`);
       
@@ -442,8 +444,11 @@ router.post('/process-ai-response', async (req, res) => {
     if (answerObj && answerObj.text) {
       console.log(`[Twilio Process AI] Answer found for CallSid: ${callSid}`);
       const delay = context?.responseDelayMs || 0;
+      console.log(`[DEBUG] Using responseDelayMs: ${delay} from context:`, context?.responseDelayMs);
       if (delay > 0) {
+        console.log(`[DEBUG] Applying ${delay}ms delay...`);
         await new Promise(res => setTimeout(res, delay));
+        console.log(`[DEBUG] Delay completed.`);
       }
 
       const gather = twiml.gather({

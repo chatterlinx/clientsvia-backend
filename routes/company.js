@@ -436,6 +436,12 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
         
         await company.save();
         
+        // Clear cache to ensure Twilio gets fresh data
+        const { redisClient } = require('../services/redisClient');
+        const cacheKey = `company:${companyId}`;
+        await redisClient.del(cacheKey);
+        console.log(`[Voice Settings] Cleared cache for key: ${cacheKey}`);
+        
         console.log(`[Voice Settings Debug] Final saved responseDelayMs:`, company.aiSettings.responseDelayMs);
         console.log(`[API PATCH /api/company/${companyId}/voice-settings] Voice settings updated successfully`);
         res.json({ message: 'Voice settings updated successfully', aiSettings: company.aiSettings });
