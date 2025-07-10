@@ -193,7 +193,9 @@ router.post('/handle-speech', async (req, res) => {
     }
 
     const calledNumber = normalizePhoneNumber(req.body.To);
+    console.log(`[TIMING] About to fetch company at: ${Date.now() - startTime}ms`);
     let company = await getCompanyByPhoneNumber(calledNumber);
+    console.log(`[TIMING] Company fetched at: ${Date.now() - startTime}ms`);
     if (!company) {
       const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
       const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
@@ -496,6 +498,8 @@ router.post('/process-ai-response', async (req, res) => {
             }
           };
             
+          console.log(`[TIMING] ElevenLabs TTS started at: ${Date.now()}`);
+          const aiTtsStartTime = Date.now();
           const buffer = await synthesizeSpeech({
             text: strippedAnswer,
             voiceId: context.elevenLabs.voiceId,
@@ -506,7 +510,7 @@ router.post('/process-ai-response', async (req, res) => {
             company: companyObj
           });
           const ttsEndTime = Date.now();
-          console.log(`[TIMING] ElevenLabs TTS completed at: ${ttsEndTime}, took: ${ttsEndTime - ttsStartTime}ms`);
+          console.log(`[TIMING] ElevenLabs TTS completed at: ${ttsEndTime}, took: ${ttsEndTime - aiTtsStartTime}ms`);
 
           // OPTIMIZATION: Store audio in Redis for instant serving
           const audioKey = `audio:ai:${callSid}`;
