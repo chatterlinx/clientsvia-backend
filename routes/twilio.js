@@ -118,10 +118,11 @@ router.post('/voice', async (req, res) => {
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: company.aiSettings?.silenceTimeout ?? 8,
+      timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced from 8 to 5 seconds for faster response
       speechTimeout: 'auto',
       enhanced: true,
-      speechModel: 'phone_call'
+      speechModel: 'phone_call',
+      partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
     });
 
     if (greetingType === 'audio' && greetingAudioUrl) {
@@ -232,7 +233,7 @@ router.post('/handle-speech', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: company.aiSettings?.silenceTimeout ?? 8,
+        timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced for faster response
         speechTimeout: 'auto',
         enhanced: true,
         speechModel: 'phone_call'
@@ -306,7 +307,7 @@ router.post('/handle-speech', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: company.aiSettings?.silenceTimeout ?? 8,
+        timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced for faster response
         speechTimeout: 'auto',
         enhanced: true,
         speechModel: 'phone_call'
@@ -402,7 +403,7 @@ router.post('/handle-speech', async (req, res) => {
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: company.aiSettings?.silenceTimeout ?? 8,
+      timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced for faster response
       speechTimeout: 'auto',
       enhanced: true,
       speechModel: 'phone_call'
@@ -454,6 +455,15 @@ router.post('/handle-speech', async (req, res) => {
     res.type('text/xml');
     res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
   }
+});
+
+// Partial speech results for faster response (experimental)
+router.post('/partial-speech', async (req, res) => {
+  console.log(`[PARTIAL SPEECH] Received at: ${new Date().toISOString()}`);
+  console.log(`[PARTIAL SPEECH] Partial result: "${req.body.SpeechResult}" (Stability: ${req.body.Stability})`);
+  
+  // Just acknowledge - we'll process the final result
+  res.status(200).send('OK');
 });
 
 // Diagnostic endpoint to measure exact Twilio speech timing

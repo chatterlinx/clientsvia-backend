@@ -5,17 +5,27 @@ async function testDiagnosticEndpoint() {
   try {
     console.log('Testing diagnostic endpoint...');
     
-    const response = await axios.post('https://backend.clientsvia.com/api/twilio/speech-timing-test', {
+    // First, try a simple GET to see if the server is responding
+    const healthCheck = await axios.get('https://clientsvia-backend.onrender.com/api/twilio/voice', {
+      timeout: 10000
+    });
+    console.log('Health check status:', healthCheck.status);
+    
+    // Now try the POST to our diagnostic endpoint
+    const postData = new URLSearchParams({
       SpeechResult: 'Test speech input',
       CallSid: 'test-call-sid',
       From: '+1234567890'
-    }, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
     });
     
-    console.log('Response status:', response.status);
+    const response = await axios.post('https://clientsvia-backend.onrender.com/api/twilio/speech-timing-test', postData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      timeout: 10000
+    });
+    
+    console.log('Diagnostic endpoint status:', response.status);
     console.log('Response data:', response.data);
     
   } catch (error) {
