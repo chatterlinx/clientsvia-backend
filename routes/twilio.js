@@ -290,13 +290,9 @@ router.post('/handle-speech', async (req, res) => {
     if (cachedAnswer) {
       console.log(`[AI] Q&A match for ${callSid}: ${cachedAnswer}`);
       
-      // Apply responseDelayMs for Q&A matches too
       const responseDelay = company.aiSettings?.responseDelayMs || 0;
-      console.log(`[DEBUG Q&A] Using responseDelayMs: ${responseDelay}ms for Q&A match`);
       if (responseDelay > 0) {
-        console.log(`[DEBUG Q&A] Applying ${responseDelay}ms delay...`);
         await new Promise(res => setTimeout(res, responseDelay));
-        console.log(`[DEBUG Q&A] Delay completed.`);
       }
       
       const gather = twiml.gather({
@@ -312,7 +308,6 @@ router.post('/handle-speech', async (req, res) => {
       if (elevenLabsVoice) {
         try {
           const qaTtsStartTime = Date.now();
-          console.log(`[TIMING] Q&A ElevenLabs TTS started at: ${qaTtsStartTime}`);
           const buffer = await synthesizeSpeech({
             text: cachedAnswer,
             voiceId: elevenLabsVoice,
@@ -325,26 +320,18 @@ router.post('/handle-speech', async (req, res) => {
           const qaTtsEndTime = Date.now();
           console.log(`[TIMING] Q&A ElevenLabs TTS completed at: ${qaTtsEndTime}, took: ${qaTtsEndTime - qaTtsStartTime}ms`);
           
-          // OPTIMIZATION: Store audio in Redis for instant serving
           const audioKey = `audio:qa:${callSid}`;
-          await redisClient.setEx(audioKey, 300, buffer.toString('base64')); // 5 min cache
+          await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
           
-          // Use direct audio endpoint for faster serving
-          const audioUrl = `https://${req.get('host')}/api/twilio/audio/${callSid}`;
+          const audioUrl = `https://${req.get('host')}/api/twilio/audio/qa/${callSid}`;
           console.log(`[OPTIMIZATION] Direct audio endpoint: ${audioUrl}`);
           gather.play(audioUrl);
         } catch (err) {
-          console.error('ElevenLabs TTS failed:', err);
-          const fallbackText = `<Say>${escapeTwiML(cachedAnswer)}</Say>`;
-          res.type('text/xml');
-          res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
-          return;
+          console.error('ElevenLabs TTS failed, falling back to <Say>:', err);
+          gather.say(escapeTwiML(cachedAnswer));
         }
       } else {
-        const fallbackText = `<Say>${escapeTwiML(cachedAnswer)}</Say>`;
-        res.type('text/xml');
-        res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
-        return;
+        gather.say(escapeTwiML(cachedAnswer));
       }
 
       res.type('text/xml');
@@ -433,7 +420,6 @@ router.post('/handle-speech', async (req, res) => {
       
     processAiResponse();
 
-    twiml.pause({ length: 1 });
     twiml.redirect('/api/twilio/process-ai-response');
 
     const endTime = Date.now();
@@ -521,16 +507,17 @@ router.post('/process-ai-response', async (req, res) => {
           });
           const ttsEndTime = Date.now();
           console.log(`[TIMING] ElevenLabs TTS completed at: ${ttsEndTime}, took: ${ttsEndTime - ttsStartTime}ms`);
-          const fileName = `tts_${callSid}.mp3`;
-          const audioDir = path.join(__dirname, '../public/audio');
-          if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
-          const filePath = path.join(audioDir, fileName);
-          fs.writeFileSync(filePath, buffer);
+
+          // OPTIMIZATION: Store audio in Redis for instant serving
+          const audioKey = `audio:ai:${callSid}`;
+          await redisClient.setEx(audioKey, 300, buffer.toString('base64')); // 5 min cache
           
-          const audioUrl = `https://${req.get('host')}/audio/${fileName}`;
-          console.log(`[OPTIMIZATION] AI Audio URL: ${audioUrl}`);
+          // Use direct audio endpoint for faster serving
+          const audioUrl = `https://${req.get('host')}/api/twilio/audio/ai/${callSid}`;
+          console.log(`[OPTIMIZATION] Direct audio endpoint for AI: ${audioUrl}`);
           gather.play(audioUrl);
-          console.log(`[Twilio Process AI] ElevenLabs TTS succeeded, playing audio file`);
+          console.log(`[Twilio Process AI] ElevenLabs TTS succeeded, playing audio from Redis`);
+
         } catch (err) {
           console.error('ElevenLabs synthesis failed:', err.message);
           console.log(`[Twilio Process AI] Using fallback TTS`);
@@ -602,10 +589,10 @@ router.post('/process-ai-response', async (req, res) => {
 });
 
 // Direct audio serving endpoint for faster delivery
-router.get('/audio/:callSid', async (req, res) => {
+router.get('/audio/:type/:callSid', async (req, res) => {
   try {
-    const callSid = req.params.callSid;
-    const audioKey = `audio:qa:${callSid}`;
+    const { type, callSid } = req.params;
+    const audioKey = `audio:${type}:${callSid}`;
     
     const audioBase64 = await redisClient.get(audioKey);
     if (!audioBase64) {
@@ -624,7 +611,7 @@ router.get('/audio/:callSid', async (req, res) => {
     });
     
     res.send(audioBuffer);
-    console.log(`[AUDIO ENDPOINT] Served audio for CallSid: ${callSid}`);
+    console.log(`[AUDIO ENDPOINT] Served audio for ${type} CallSid: ${callSid}`);
   } catch (err) {
     console.error('[AUDIO ENDPOINT] Error:', err);
     res.status(500).send('Audio service error');
