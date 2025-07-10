@@ -118,7 +118,10 @@ router.post('/voice', async (req, res) => {
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: company.aiSettings?.silenceTimeout ?? 8
+      timeout: company.aiSettings?.silenceTimeout ?? 8,
+      speechTimeout: 'auto',
+      enhanced: true,
+      speechModel: 'phone_call'
     });
 
     if (greetingType === 'audio' && greetingAudioUrl) {
@@ -173,11 +176,11 @@ router.post('/voice', async (req, res) => {
 });
 
 router.post('/handle-speech', async (req, res) => {
-  const startTime = Date.now();
+  const requestStartTime = Date.now();
   try {
+    console.log(`[TWILIO TIMING] Speech webhook received at: ${new Date().toISOString()}`);
+    console.log(`[TWILIO TIMING] Twilio sent SpeechResult: "${req.body.SpeechResult}" with confidence: ${req.body.Confidence}`);
     console.log('[POST /api/twilio/handle-speech] Incoming speech:', req.body);
-    console.log(`[TIMING] handle-speech started at: ${startTime}`);
-    console.log(`[TIMING] Request received at: ${new Date().toISOString()}`);
     const speechText = req.body.SpeechResult || '';
     const twiml = new twilio.twiml.VoiceResponse();
     const callSid = req.body.CallSid;
@@ -193,9 +196,7 @@ router.post('/handle-speech', async (req, res) => {
     }
 
     const calledNumber = normalizePhoneNumber(req.body.To);
-    console.log(`[TIMING] About to fetch company at: ${Date.now() - startTime}ms`);
     let company = await getCompanyByPhoneNumber(calledNumber);
-    console.log(`[TIMING] Company fetched at: ${Date.now() - startTime}ms`);
     if (!company) {
       const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
       const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
@@ -231,7 +232,10 @@ router.post('/handle-speech', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: company.aiSettings?.silenceTimeout ?? 8
+        timeout: company.aiSettings?.silenceTimeout ?? 8,
+        speechTimeout: 'auto',
+        enhanced: true,
+        speechModel: 'phone_call'
       });
 
       const personality = company.aiSettings?.personality || 'friendly';
@@ -302,14 +306,16 @@ router.post('/handle-speech', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: company.aiSettings?.silenceTimeout ?? 8
+        timeout: company.aiSettings?.silenceTimeout ?? 8,
+        speechTimeout: 'auto',
+        enhanced: true,
+        speechModel: 'phone_call'
       });
 
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
       
       if (elevenLabsVoice) {
         try {
-          const qaTtsStartTime = Date.now();
           const buffer = await synthesizeSpeech({
             text: cachedAnswer,
             voiceId: elevenLabsVoice,
@@ -319,14 +325,11 @@ router.post('/handle-speech', async (req, res) => {
             model_id: company.aiSettings.elevenLabs?.modelId,
             company
           });
-          const qaTtsEndTime = Date.now();
-          console.log(`[TIMING] Q&A ElevenLabs TTS completed at: ${qaTtsEndTime}, took: ${qaTtsEndTime - qaTtsStartTime}ms`);
           
           const audioKey = `audio:qa:${callSid}`;
           await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
           
           const audioUrl = `https://${req.get('host')}/api/twilio/audio/qa/${callSid}`;
-          console.log(`[OPTIMIZATION] Direct audio endpoint: ${audioUrl}`);
           gather.play(audioUrl);
         } catch (err) {
           console.error('ElevenLabs TTS failed, falling back to <Say>:', err);
@@ -358,78 +361,90 @@ router.post('/handle-speech', async (req, res) => {
     // Add current user speech to history
     conversationHistory.push({ role: 'user', text: speechText });
 
-    // Store context in Redis
-    const context = {
-      speechText: speechText,
-      companyId: companyId,
-      companyName: company.companyName,
-      elevenLabs: company.aiSettings?.elevenLabs || {},
-      calledNumber: req.body.To,
-      fromNumber: req.body.From,
-      mainAgentScript: mainAgentScript,
-      personality: personality,
-      responseLength: responseLength,
-      conversationHistory: conversationHistory,
-      responseDelayMs: company.aiSettings?.responseDelayMs || 0,
-      logCalls: company.aiSettings?.logCalls || false,
+    // No need to store context in Redis anymore - processing synchronously
+
+    // Process AI response synchronously (no polling needed)
+    let answerObj;
+    try {
+      answerObj = await answerQuestion(
+        companyId,
+        speechText,
+        responseLength,
+        conversationHistory,
+        mainAgentScript,
+        personality,
+        companySpecialties,
+        categoryQAs,
+        callSid
+      );
+      console.log(`[AI] answerQuestion result for ${callSid}:`, answerObj);
+
+      // Add AI response to history
+      conversationHistory.push({ role: 'assistant', text: answerObj.text });
+      await redisClient.setEx(historyKey, 60, JSON.stringify(conversationHistory));
+
+    } catch (err) {
+      console.error(`[AI Processing Error for CallSid: ${callSid}]`, err.message, err.stack);
+      const personality = company.aiSettings?.personality || 'friendly';
+      const fallback = await getPersonalityResponse(company._id.toString(), 'connectionTrouble', personality);
+      answerObj = { text: fallback, escalate: false };
+    }
+
+    // Apply response delay if configured
+    const delay = company.aiSettings?.responseDelayMs || 0;
+    if (delay > 0) {
+      await new Promise(res => setTimeout(res, delay));
+    }
+
+    // Generate TTS and respond immediately
+    const gather = twiml.gather({
+      input: 'speech',
+      action: `https://${req.get('host')}/api/twilio/handle-speech`,
+      method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
-      silenceTimeout: company.aiSettings?.silenceTimeout ?? 3,
-      fillersEnabled: company.aiSettings?.humanLikeFillers || false,
-      fillerPhrases: company.aiSettings?.fillerPhrases || []
-    };
-    
-    console.log(`[DEBUG] Context responseDelayMs set to: ${context.responseDelayMs} from company.aiSettings.responseDelayMs: ${company.aiSettings?.responseDelayMs}`);
-      
-    console.log(`[Context Debug] ElevenLabs VoiceId: ${context.elevenLabs?.voiceId}`);
-      
-    await redisClient.setEx(`twilio-context:${callSid}`, 60, JSON.stringify(context));
-    console.log(`[Redis] Stored context for CallSid: ${callSid}`);
+      timeout: company.aiSettings?.silenceTimeout ?? 8,
+      speechTimeout: 'auto',
+      enhanced: true,
+      speechModel: 'phone_call'
+    });
 
-    // Process AI response
-    const processAiResponse = async () => {
-      const aiStartTime = Date.now();
-      console.log(`[TIMING] AI processing started at: ${aiStartTime}`);
+    const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
+    const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
+      
+    if (elevenLabsVoice) {
       try {
-        const answerObj = await answerQuestion(
-          companyId,
-          speechText,
-          responseLength,
-          conversationHistory,
-          mainAgentScript,
-          personality,
-          companySpecialties,
-          categoryQAs,
-          callSid
-        );
-        const aiEndTime = Date.now();
-        console.log(`[TIMING] AI processing completed at: ${aiEndTime}, took: ${aiEndTime - aiStartTime}ms`);
-        console.log(`[AI] answerQuestion result for ${callSid}:`, answerObj);
-        await redisClient.setEx(`twilio-answer:${callSid}`, 60, JSON.stringify(answerObj));
-        console.log(`[Redis] Stored answer for CallSid: ${callSid}`, answerObj);
+        const buffer = await synthesizeSpeech({
+          text: strippedAnswer,
+          voiceId: elevenLabsVoice,
+          stability: company.aiSettings.elevenLabs?.stability,
+          similarity_boost: company.aiSettings.elevenLabs?.similarityBoost,
+          style: company.aiSettings.elevenLabs?.style,
+          model_id: company.aiSettings.elevenLabs?.modelId,
+          company
+        });
 
-        // Add AI response to history
-        conversationHistory.push({ role: 'assistant', text: answerObj.text });
-        await redisClient.setEx(historyKey, 60, JSON.stringify(conversationHistory));
-        console.log(`[Redis] Updated conversation history for CallSid: ${callSid}`);
+        // Store audio in Redis for fast serving
+        const audioKey = `audio:ai:${callSid}`;
+        await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
+        
+        const audioUrl = `https://${req.get('host')}/api/twilio/audio/ai/${callSid}`;
+        gather.play(audioUrl);
 
       } catch (err) {
-        console.error(`[AI Processing Error for CallSid: ${callSid}]`, err.message, err.stack);
-        const personality = company.aiSettings?.personality || 'friendly';
-        const fallback = await getPersonalityResponse(company._id.toString(), 'connectionTrouble', personality);
-        await redisClient.setEx(`twilio-answer:${callSid}`, 60, JSON.stringify({ text: fallback, escalate: false }));
+        console.error('ElevenLabs synthesis failed:', err.message);
+        gather.say(escapeTwiML(strippedAnswer));
       }
-    };
-      
-    processAiResponse();
-
-    twiml.redirect('/api/twilio/process-ai-response');
-
-    const endTime = Date.now();
-    console.log(`[TIMING] handle-speech completed at: ${endTime}, total time: ${endTime - startTime}ms`);
-    console.log(`[TIMING] Response sent at: ${new Date().toISOString()}`);
+    } else {
+      gather.say(escapeTwiML(strippedAnswer));
+    }
 
     res.type('text/xml');
-    res.send(twiml.toString());
+    const responseXML = twiml.toString();
+    const requestEndTime = Date.now();
+    console.log(`[TWILIO TIMING] Sending response at: ${new Date().toISOString()}`);
+    console.log(`[TWILIO TIMING] Total processing time: ${requestEndTime - requestStartTime}ms`);
+    console.log(`[TWILIO TIMING] Response XML length: ${responseXML.length} characters`);
+    res.send(responseXML);
   } catch (err) {
     console.error('[POST /api/twilio/handle-speech] Error:', err.message, err.stack);
     const twiml = new twilio.twiml.VoiceResponse();
@@ -441,156 +456,26 @@ router.post('/handle-speech', async (req, res) => {
   }
 });
 
-router.post('/process-ai-response', async (req, res) => {
-  const startTime = Date.now();
+// Diagnostic endpoint to measure exact Twilio speech timing
+router.post('/speech-timing-test', async (req, res) => {
+  const receiveTime = Date.now();
+  console.log(`[DIAGNOSTIC] Speech timing test received at: ${new Date().toISOString()}`);
+  console.log(`[DIAGNOSTIC] Twilio body:`, req.body);
+  
   const twiml = new twilio.twiml.VoiceResponse();
-  console.log(`[TIMING] process-ai-response started at: ${startTime}`);
-  console.log(`[TIMING] AI response request received at: ${new Date().toISOString()}`);
-
-  try {
-    const callSid = req.body.CallSid;
-    const attemptsKey = `twilio-attempts:${callSid}`;
-    const answerString = await redisClient.get(`twilio-answer:${callSid}`);
-    const answerObj = answerString ? JSON.parse(answerString) : null;
-    console.log(`[Twilio Process AI] Retrieved answerObj for ${callSid}:`, answerObj);
-    const contextString = await redisClient.get(`twilio-context:${callSid}`);
-    const context = contextString ? JSON.parse(contextString) : null;
-
-    const attempts = await redisClient.incr(attemptsKey);
-    if (attempts === 1) {
-      await redisClient.expire(attemptsKey, 60);
-    }
-
-    if (answerObj && answerObj.text) {
-      console.log(`[Twilio Process AI] Answer found for CallSid: ${callSid}`);
-      const delay = context?.responseDelayMs || 0;
-      console.log(`[DEBUG] Using responseDelayMs: ${delay} from context:`, context?.responseDelayMs);
-      if (delay > 0) {
-        console.log(`[DEBUG] Applying ${delay}ms delay...`);
-        await new Promise(res => setTimeout(res, delay));
-        console.log(`[DEBUG] Delay completed.`);
-      }
-
-      const gather = twiml.gather({
-        input: 'speech',
-        action: '/api/twilio/handle-speech',
-        method: 'POST',
-        bargeIn: context?.bargeIn ?? false,
-        timeout: context?.silenceTimeout ?? 8
-      });
-
-      const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
-      console.log(`[Twilio Process AI] Cleaned Answer: ${strippedAnswer}`);
-      console.log(`[Twilio Process AI] ElevenLabs VoiceId: ${context.elevenLabs?.voiceId}`);
-        
-      if (context.elevenLabs?.voiceId) {
-        try {
-          const ttsStartTime = Date.now();
-          console.log(`[TIMING] ElevenLabs TTS started at: ${ttsStartTime}`);
-          console.log(`[Twilio Process AI] Using ElevenLabs TTS with voice: ${context.elevenLabs.voiceId}`);
-            
-          // Reconstruct company object for ElevenLabs API key lookup
-          const companyObj = {
-            _id: context.companyId,
-            companyName: context.companyName,
-            aiSettings: {
-              elevenLabs: context.elevenLabs
-            }
-          };
-            
-          console.log(`[TIMING] ElevenLabs TTS started at: ${Date.now()}`);
-          const aiTtsStartTime = Date.now();
-          const buffer = await synthesizeSpeech({
-            text: strippedAnswer,
-            voiceId: context.elevenLabs.voiceId,
-            stability: context.elevenLabs.stability,
-            similarity_boost: context.elevenLabs.similarityBoost,
-            style: context.elevenLabs.style,
-            model_id: context.elevenLabs.modelId,
-            company: companyObj
-          });
-          const ttsEndTime = Date.now();
-          console.log(`[TIMING] ElevenLabs TTS completed at: ${ttsEndTime}, took: ${ttsEndTime - aiTtsStartTime}ms`);
-
-          // OPTIMIZATION: Store audio in Redis for instant serving
-          const audioKey = `audio:ai:${callSid}`;
-          await redisClient.setEx(audioKey, 300, buffer.toString('base64')); // 5 min cache
-          
-          // Use direct audio endpoint for faster serving
-          const audioUrl = `https://${req.get('host')}/api/twilio/audio/ai/${callSid}`;
-          console.log(`[OPTIMIZATION] Direct audio endpoint for AI: ${audioUrl}`);
-          gather.play(audioUrl);
-          console.log(`[Twilio Process AI] ElevenLabs TTS succeeded, playing audio from Redis`);
-
-        } catch (err) {
-          console.error('ElevenLabs synthesis failed:', err.message);
-          console.log(`[Twilio Process AI] Using fallback TTS`);
-          const fallbackText = `<Say>${escapeTwiML(strippedAnswer)}</Say>`;
-          res.type('text/xml');
-          res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
-          return;
-        }
-      } else {
-        console.log(`[Twilio Process AI] No ElevenLabs voice configured, using fallback TTS`);
-        const fallbackText = `<Say>${escapeTwiML(strippedAnswer)}</Say>`;
-        res.type('text/xml');
-        res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
-        return;
-      }
-
-      await redisClient.del(`twilio-context:${callSid}`);
-      await redisClient.del(`twilio-answer:${callSid}`);
-      await redisClient.del(attemptsKey);
-      console.log(`[Redis] Deleted context and answer for CallSid: ${callSid}`);
-
-    } else {
-      if (attempts > 4) {
-        console.log(`[Twilio Process AI] Exceeded polling attempts for CallSid: ${callSid}. Sending fallback.`);
-        const gather = twiml.gather({
-          input: 'speech',
-          action: '/api/twilio/handle-speech',
-          method: 'POST',
-          bargeIn: context?.bargeIn ?? false,
-          timeout: context?.silenceTimeout ?? 8
-        });
-
-        const msg = await getRandomPersonalityResponse(context?.companyId || null, 'connectionTrouble');
-        const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
-        res.type('text/xml');
-        res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
-
-        await redisClient.del(`twilio-context:${callSid}`);
-        await redisClient.del(`twilio-answer:${callSid}`);
-        await redisClient.del(attemptsKey);
-        return;
-      } else {
-        console.log(`[Twilio Process AI] Answer not yet ready for CallSid: ${callSid}. Polling again.`);
-        if (attempts <= 2) {
-          twiml.redirect({ method: 'POST' }, `https://${req.get('host')}/api/twilio/process-ai-response`);
-        } else {
-          twiml.pause({ length: 0.5 });
-          twiml.redirect({ method: 'POST' }, `https://${req.get('host')}/api/twilio/process-ai-response`);
-        }
-      }
-    }
-
-  } catch (err) {
-    console.error('[POST /api/twilio/process-ai-response] Error:', err.message, err.stack);
-    const msg = await getRandomPersonalityResponse(context?.companyId || null, 'connectionTrouble');
-    const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
-    res.type('text/xml');
-    res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
-    return;
-  }
-
+  
+  // Immediate response with timing info
+  twiml.say(`Speech received at ${new Date().toLocaleTimeString()}. Processing took ${Date.now() - receiveTime} milliseconds.`);
+  
+  const respondTime = Date.now();
+  console.log(`[DIAGNOSTIC] Responding at: ${new Date().toISOString()}`);
+  console.log(`[DIAGNOSTIC] Total processing: ${respondTime - receiveTime}ms`);
+  
   res.type('text/xml');
-  const twimlString = twiml.toString();
-  console.log(`[Twilio Process AI] Sending TwiML: ${twimlString}`);
-  const endTime = Date.now();
-  console.log(`[TIMING] process-ai-response completed at: ${endTime}, total time: ${endTime - startTime}ms`);
-  console.log(`[TIMING] AI response sent at: ${new Date().toISOString()}`);
-  res.send(twimlString);
+  res.send(twiml.toString());
 });
+
+// Polling endpoint removed - now processing synchronously
 
 // Direct audio serving endpoint for faster delivery
 router.get('/audio/:type/:callSid', async (req, res) => {
@@ -615,7 +500,6 @@ router.get('/audio/:type/:callSid', async (req, res) => {
     });
     
     res.send(audioBuffer);
-    console.log(`[AUDIO ENDPOINT] Served audio for ${type} CallSid: ${callSid}`);
   } catch (err) {
     console.error('[AUDIO ENDPOINT] Error:', err);
     res.status(500).send('Audio service error');
