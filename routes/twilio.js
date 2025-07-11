@@ -35,12 +35,15 @@ async function getCompanyByPhoneNumber(phoneNumber) {
   let company = null;
 
   try {
+    const cacheStartTime = Date.now();
     const cachedCompany = await redisClient.get(cacheKey);
     if (cachedCompany) {
-      console.log(`[Redis] Cache HIT for company-phone: ${phoneNumber}`);
+      console.log(`[CACHE HIT] ⚡ Company found in cache for ${phoneNumber} in ${Date.now() - cacheStartTime}ms`);
       company = JSON.parse(cachedCompany);
     } else {
-      console.log(`[Redis] Cache MISS for company-phone: ${phoneNumber}. Fetching from DB.`);
+      console.log(`[CACHE MISS] 🔍 Company not cached for ${phoneNumber}, querying database...`);
+      const dbStartTime = Date.now();
+      
       const digits = extractDigits(phoneNumber);
       const digitsNoCountry = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
       const searchNumbers = [phoneNumber, digits, digitsNoCountry].filter(Boolean);
@@ -52,11 +55,17 @@ async function getCompanyByPhoneNumber(phoneNumber) {
       }
 
       if (company) {
+        const dbEndTime = Date.now();
+        console.log(`[DB SUCCESS] ✅ Company found in database in ${dbEndTime - dbStartTime}ms`);
         await redisClient.setEx(cacheKey, 3600, JSON.stringify(company)); // Cache for 1 hour
-        console.log(`[Redis] Cached company for phone: ${phoneNumber}`);
+        console.log(`[CACHE SAVE] 💾 Company cached for phone: ${phoneNumber}`);
+      } else {
+        const dbEndTime = Date.now();
+        console.log(`[DB MISS] ❌ No company found in database for ${phoneNumber} (${dbEndTime - dbStartTime}ms)`);
       }
     }
   } catch (err) {
+    console.error(`[CACHE/DB ERROR] ❌ Error fetching company by phone ${phoneNumber}:`, err.message);
     console.error(`[Redis/DB] Error fetching company by phone ${phoneNumber}:`, err.message, err.stack);
     // Fallback to direct DB fetch if Redis fails
     const digits = extractDigits(phoneNumber);
@@ -80,14 +89,21 @@ async function getCompanyByPhoneNumber(phoneNumber) {
 }
 
 router.post('/voice', async (req, res) => {
+  const callStartTime = Date.now();
+  console.log(`[CALL START] 📞 New call initiated at: ${new Date().toISOString()}`);
+  console.log(`[CALL DEBUG] From: ${req.body.From} → To: ${req.body.To} | CallSid: ${req.body.CallSid}`);
+  
   try {
     console.log('[POST /api/twilio/voice] Incoming call:', req.body);
     const calledNumber = normalizePhoneNumber(req.body.To);
+    console.log(`[PHONE LOOKUP] 🔍 Searching for company with phone: ${calledNumber}`);
+    
     let company = await getCompanyByPhoneNumber(calledNumber);
 
     const twiml = new twilio.twiml.VoiceResponse();
 
     if (!company) {
+      console.log(`[ERROR] ❌ No company found for phone number: ${calledNumber}`);
       const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
       const fallbackMessage = `<Say>${escapeTwiML(msg)}</Say>`;
       twiml.hangup();
@@ -96,8 +112,13 @@ router.post('/voice', async (req, res) => {
       return;
     }
 
+    console.log(`[COMPANY FOUND] ✅ Company: ${company.companyName} (ID: ${company._id})`);
+    console.log(`[AI SETTINGS] Voice ID: ${company.aiSettings?.elevenLabs?.voiceId || 'default'} | Personality: ${company.aiSettings?.personality || 'friendly'}`);
+    console.log(`[THRESHOLDS] Confidence: ${company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5} | Timeout: ${company.aiSettings?.silenceTimeout ?? 5}s | Delay: ${company.aiSettings?.responseDelayMs ?? 0}ms`);
+
     const greetingType = company.agentSetup?.greetingType || 'tts';
     const greetingAudioUrl = company.agentSetup?.greetingAudioUrl || '';
+    console.log(`[GREETING TYPE] 🎵 Type: ${greetingType} | Audio URL: ${greetingAudioUrl || 'none'}`);
     
     // Get placeholders for the company
     const placeholders = company.agentSetup?.placeholders || [];
@@ -181,6 +202,8 @@ router.post('/handle-speech', async (req, res) => {
   let confidence = 0;
   let threshold = 0.5;
   
+  console.log(`[SPEECH START] 🎤 Speech processing started at: ${new Date().toISOString()}`);
+  
   try {
     console.log(`[TWILIO TIMING] Speech webhook received at: ${new Date().toISOString()}`);
     console.log(`[TWILIO TIMING] Twilio sent SpeechResult: "${req.body.SpeechResult}" with confidence: ${req.body.Confidence}`);
@@ -191,6 +214,7 @@ router.post('/handle-speech', async (req, res) => {
     const repeatKey = `twilio-repeats:${callSid}`;
 
     if (!speechText) {
+      console.log(`[SPEECH ERROR] ❌ Empty speech result received from Twilio`);
       const msg = await getRandomPersonalityResponse(null, 'cantUnderstand');
       const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
       twiml.hangup();
@@ -199,9 +223,13 @@ router.post('/handle-speech', async (req, res) => {
       return;
     }
 
+    console.log(`[SPEECH RECEIVED] 🎯 Processing speech: "${speechText}" (${speechText.length} chars)`);
+
     const calledNumber = normalizePhoneNumber(req.body.To);
+    console.log(`[COMPANY LOOKUP] 🔍 Looking up company for phone: ${calledNumber}`);
     let company = await getCompanyByPhoneNumber(calledNumber);
     if (!company) {
+      console.log(`[COMPANY ERROR] ❌ No company found for phone: ${calledNumber} during speech processing`);
       const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
       const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
       twiml.hangup();
@@ -209,6 +237,8 @@ router.post('/handle-speech', async (req, res) => {
       res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
       return;
     }
+
+    console.log(`[COMPANY CONFIRMED] ✅ Processing speech for: ${company.companyName}`);
 
     if (company.aiSettings?.logCalls) {
       console.log(`[Call Log] CallSid ${req.body.CallSid} Speech: ${speechText}`);
@@ -305,14 +335,17 @@ router.post('/handle-speech', async (req, res) => {
     console.log(`[Q&A DEBUG] Incoming Speech: "${speechText}"`);
     
     const fuzzyThreshold = company.aiSettings?.fuzzyMatchThreshold ?? 0.5;
+    console.log(`[Q&A MATCHING] 🔍 Searching ${qnaEntries.length} Q&A entries with fuzzy threshold: ${fuzzyThreshold}`);
+    
     const cachedAnswer = findCachedAnswer(qnaEntries, speechText, fuzzyThreshold);
     console.log(`[Q&A DEBUG] Match result:`, cachedAnswer);
     
     if (cachedAnswer) {
-      console.log(`[AI] Q&A match for ${callSid}: ${cachedAnswer}`);
+      console.log(`[Q&A MATCH FOUND] ✅ Using Q&A response for ${callSid}: ${cachedAnswer.substring(0, 100)}...`);
       
       const responseDelay = company.aiSettings?.responseDelayMs || 0;
       if (responseDelay > 0) {
+        console.log(`[RESPONSE DELAY] ⏱️ Applying ${responseDelay}ms delay before response`);
         await new Promise(res => setTimeout(res, responseDelay));
       }
       
@@ -379,6 +412,9 @@ router.post('/handle-speech', async (req, res) => {
     // No need to store context in Redis anymore - processing synchronously
 
     // Process AI response synchronously (no polling needed)
+    console.log(`[AI PROCESSING] 🤖 Starting AI response generation...`);
+    const aiStartTime = Date.now();
+    
     let answerObj;
     try {
       answerObj = await answerQuestion(
@@ -392,13 +428,18 @@ router.post('/handle-speech', async (req, res) => {
         categoryQAs,
         callSid
       );
+      
+      const aiEndTime = Date.now();
+      console.log(`[AI SUCCESS] ✅ AI response generated in ${aiEndTime - aiStartTime}ms`);
       console.log(`[AI] answerQuestion result for ${callSid}:`, answerObj);
 
       // Add AI response to history
       conversationHistory.push({ role: 'assistant', text: answerObj.text });
       await redisClient.setEx(historyKey, 60, JSON.stringify(conversationHistory));
+      console.log(`[AI HISTORY] 💾 Saved conversation history (${conversationHistory.length} messages)`);
 
     } catch (err) {
+      console.error(`[AI ERROR] ❌ AI processing failed: ${err.message}`);
       console.error(`[AI Processing Error for CallSid: ${callSid}]`, err.message, err.stack);
       const personality = company.aiSettings?.personality || 'friendly';
       const fallback = await getPersonalityResponse(company._id.toString(), 'connectionTrouble', personality);
@@ -460,8 +501,10 @@ router.post('/handle-speech', async (req, res) => {
     console.log(`[TWILIO TIMING] Total processing time: ${requestEndTime - requestStartTime}ms`);
     console.log(`[TWILIO TIMING] Response XML length: ${responseXML.length} characters`);
     console.log(`[CONFIDENCE SUMMARY] Successfully processed speech with confidence ${confidence} (threshold: ${threshold})`);
+    console.log(`[SPEECH COMPLETE] ✅ Speech processing completed in ${requestEndTime - requestStartTime}ms`);
     res.send(responseXML);
   } catch (err) {
+    console.error(`[SPEECH ERROR] ❌ Speech processing failed: ${err.message}`);
     console.error('[POST /api/twilio/handle-speech] Error:', err.message, err.stack);
     const twiml = new twilio.twiml.VoiceResponse();
     const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
