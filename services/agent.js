@@ -219,6 +219,11 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
 
   fullPrompt += `\n\n**Current Question:** ${question}`;
 
+  // Check if this appears to be unclear speech
+  const isUnclearSpeech = question.includes('[Speech unclear/low confidence:') || 
+                         question.length < 5 || 
+                         /^[a-z]{1,3}\.?$/i.test(question.trim());
+
   fullPrompt += `\n\n**Response Guidelines:**`;
   fullPrompt += `\n- You are The Agent for ${company?.companyName} - be natural and conversational`;
   fullPrompt += `\n- Keep your ${personality} personality but don't be robotic`;
@@ -227,6 +232,11 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   fullPrompt += `\n- If they ask about something you can help with, focus on solutions`;
   fullPrompt += `\n- Ask ONE clarifying question if needed, but don't interrogate`;
   fullPrompt += `\n- If it's clear what they need, offer to help or schedule service`;
+  
+  if (isUnclearSpeech) {
+    fullPrompt += `\n- IMPORTANT: The caller's speech was unclear or garbled. Ask them to clarify what they need help with in a friendly way.`;
+    fullPrompt += `\n- Example: "I'm having trouble understanding you clearly. Could you tell me what you need help with today?"`;
+  }
 
   if (responseLength === 'concise') {
     fullPrompt += '\n- Keep responses to 1-2 sentences maximum.';
@@ -234,7 +244,11 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     fullPrompt += '\n- Provide helpful details but stay focused on their specific need.';
   }
 
-  fullPrompt += `\n\nRespond naturally to: "${question}" - Keep it conversational and move the call forward.`;
+  const promptQuestion = isUnclearSpeech ? 
+    "The caller said something unclear - ask them to clarify what they need help with" : 
+    `"${question}"`;
+  
+  fullPrompt += `\n\nRespond naturally to: ${promptQuestion} - Keep it conversational and move the call forward.`;
 
   if (!llmFallbackEnabled) {
     const personality = company?.aiSettings?.personality || 'friendly';

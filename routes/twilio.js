@@ -139,11 +139,11 @@ router.post('/voice', async (req, res) => {
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced from 8 to 5 seconds for faster response
-      speechTimeout: 'auto',
+      timeout: company.aiSettings?.silenceTimeout ?? 8, // Increased back to 8 seconds to let caller finish
+      speechTimeout: 10, // Set explicit 10-second speech timeout instead of 'auto'
       enhanced: true,
-      speechModel: 'phone_call',
-      partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
+      speechModel: 'phone_call'
+      // Removed partialResultCallback to prevent interference
     });
 
     if (greetingType === 'audio' && greetingAudioUrl) {
@@ -225,6 +225,18 @@ router.post('/handle-speech', async (req, res) => {
 
     console.log(`[SPEECH RECEIVED] 🎯 Processing speech: "${speechText}" (${speechText.length} chars)`);
 
+    // Check for potentially unclear/incomplete speech
+    const isLikelyUnclear = (
+      speechText.length < 3 || 
+      /^[a-z]{1,2}\.?$/i.test(speechText.trim()) || // Single/double letters
+      speechText.toLowerCase().includes('have on') || // Common misrecognition
+      speechText.toLowerCase().includes('hello') && speechText.length < 10 // Just "hello"
+    );
+    
+    if (isLikelyUnclear) {
+      console.log(`[SPEECH QUALITY] ⚠️ Potentially unclear speech detected: "${speechText}"`);
+    }
+
     const calledNumber = normalizePhoneNumber(req.body.To);
     console.log(`[COMPANY LOOKUP] 🔍 Looking up company for phone: ${calledNumber}`);
     let company = await getCompanyByPhoneNumber(calledNumber);
@@ -270,14 +282,25 @@ router.post('/handle-speech', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced for faster response
-        speechTimeout: 'auto',
+        timeout: company.aiSettings?.silenceTimeout ?? 8, // Increased for better speech capture
+        speechTimeout: 10, // Set explicit timeout
         enhanced: true,
         speechModel: 'phone_call'
       });
 
       const personality = company.aiSettings?.personality || 'friendly';
-      const retryMsg = await getPersonalityResponse(company._id.toString(), 'cantUnderstand', personality);
+      
+      // Create a more helpful retry message based on the type of issue
+      let retryMsg;
+      if (isLikelyUnclear) {
+        retryMsg = "I didn't quite catch that. Could you please speak a little louder and clearer? What can I help you with today?";
+      } else if (confidence < threshold * 0.6) {
+        retryMsg = "I'm having trouble hearing you clearly. Could you please repeat that for me?";
+      } else {
+        retryMsg = await getPersonalityResponse(company._id.toString(), 'cantUnderstand', personality);
+      }
+      
+      console.log(`[RETRY MESSAGE] Using message: "${retryMsg}" for speech: "${speechText}" (confidence: ${confidence})`);
       
       // Apply response delay if configured
       const responseDelay = company.aiSettings?.responseDelayMs || 0;
@@ -354,8 +377,8 @@ router.post('/handle-speech', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced for faster response
-        speechTimeout: 'auto',
+        timeout: company.aiSettings?.silenceTimeout ?? 8, // Increased for better speech capture
+        speechTimeout: 10, // Set explicit timeout
         enhanced: true,
         speechModel: 'phone_call'
       });
@@ -406,8 +429,12 @@ router.post('/handle-speech', async (req, res) => {
       conversationHistory = JSON.parse(storedHistory);
     }
 
-    // Add current user speech to history
-    conversationHistory.push({ role: 'user', text: speechText });
+    // Add current user speech to history with confidence context
+    const speechContext = isLikelyUnclear || confidence < 0.7 ? 
+      `[Speech unclear/low confidence: "${speechText}"]` : 
+      speechText;
+    
+    conversationHistory.push({ role: 'user', text: speechContext });
 
     // No need to store context in Redis anymore - processing synchronously
 
@@ -458,8 +485,8 @@ router.post('/handle-speech', async (req, res) => {
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced for faster response
-      speechTimeout: 'auto',
+      timeout: company.aiSettings?.silenceTimeout ?? 8, // Increased for better speech capture
+      speechTimeout: 10, // Set explicit timeout
       enhanced: true,
       speechModel: 'phone_call'
     });
