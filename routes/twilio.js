@@ -117,7 +117,12 @@ router.post('/voice', async (req, res) => {
 
     console.log(`[COMPANY FOUND] ✅ Company: ${company.companyName} (ID: ${company._id})`);
     console.log(`[AI SETTINGS] Voice ID: ${company.aiSettings?.elevenLabs?.voiceId || 'default'} | Personality: ${company.aiSettings?.personality || 'friendly'}`);
-    console.log(`[THRESHOLDS] Confidence: ${company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5}`);
+    
+    // 🎯 COMPREHENSIVE PERFORMANCE SETTINGS REPORT
+    const speechThreshold = company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.4;
+    const fuzzyThreshold = company.aiSettings?.fuzzyMatchThreshold ?? 0.3;
+    console.log(`[PERFORMANCE SETTINGS] 🎯 Speech Confidence: ${speechThreshold} | Fuzzy Match: ${fuzzyThreshold}`);
+    console.log(`[THRESHOLDS] Confidence: ${speechThreshold}`); // Keep legacy log for compatibility
 
     const greetingType = company.agentSetup?.greetingType || 'tts';
     const greetingAudioUrl = company.agentSetup?.greetingAudioUrl || '';
@@ -273,7 +278,7 @@ router.post('/handle-speech', async (req, res) => {
     console.log(`[COMPANY CONFIRMED] ✅ Processing speech for: ${company.companyName}`);
 
     confidence = parseFloat(req.body.Confidence || '0');
-    threshold = company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5;
+    threshold = company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.4;
     
     console.log(`[CONFIDENCE CHECK] Speech: "${speechText}" | Confidence: ${confidence} | Threshold: ${threshold} | ${confidence >= threshold ? 'PASS ✅' : 'FAIL ❌'}`);
     
