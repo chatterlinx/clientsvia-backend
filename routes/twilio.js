@@ -152,6 +152,9 @@ router.post('/voice', async (req, res) => {
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
       if (elevenLabsVoice) {
         try {
+          console.log(`[TTS START] 🎵 Starting greeting TTS synthesis...`);
+          const ttsStartTime = Date.now();
+          
           const buffer = await synthesizeSpeech({
             text: greeting,
             voiceId: elevenLabsVoice,
@@ -161,6 +164,10 @@ router.post('/voice', async (req, res) => {
             model_id: company.aiSettings.elevenLabs?.modelId,
             company
           });
+          
+          const ttsTime = Date.now() - ttsStartTime;
+          console.log(`[TTS COMPLETE] ✅ Greeting TTS completed in ${ttsTime}ms`);
+          
           const fileName = `greet_${Date.now()}.mp3`;
           const audioDir = path.join(__dirname, '../public/audio');
           if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
@@ -506,10 +513,17 @@ router.post('/handle-speech', async (req, res) => {
 
     const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
     const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
+    
+    // Set a maximum TTS wait time to prevent delays
+    const maxTtsWaitTime = 1000; // 1 second max
       
     if (elevenLabsVoice) {
       try {
-        const buffer = await synthesizeSpeech({
+        console.log(`[TTS START] 🎵 Starting ElevenLabs synthesis for: "${strippedAnswer.substring(0, 50)}..."`);
+        const ttsStartTime = Date.now();
+        
+        // Use Promise.race to timeout TTS if it's too slow
+        const ttsPromise = synthesizeSpeech({
           text: strippedAnswer,
           voiceId: elevenLabsVoice,
           stability: company.aiSettings.elevenLabs?.stability,
@@ -518,6 +532,15 @@ router.post('/handle-speech', async (req, res) => {
           model_id: company.aiSettings.elevenLabs?.modelId,
           company
         });
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('TTS timeout')), maxTtsWaitTime)
+        );
+        
+        const buffer = await Promise.race([ttsPromise, timeoutPromise]);
+        
+        const ttsTime = Date.now() - ttsStartTime;
+        console.log(`[TTS COMPLETE] ✅ ElevenLabs synthesis completed in ${ttsTime}ms`);
 
         // Store audio in Redis for fast serving
         const audioKey = `audio:ai:${callSid}`;
@@ -527,7 +550,11 @@ router.post('/handle-speech', async (req, res) => {
         gather.play(audioUrl);
 
       } catch (err) {
-        console.error('ElevenLabs synthesis failed:', err.message);
+        if (err.message === 'TTS timeout') {
+          console.log(`[TTS TIMEOUT] ⚠️ ElevenLabs TTS took longer than ${maxTtsWaitTime}ms, falling back to native TTS`);
+        } else {
+          console.error('ElevenLabs synthesis failed:', err.message);
+        }
         gather.say(escapeTwiML(strippedAnswer));
       }
     } else {
