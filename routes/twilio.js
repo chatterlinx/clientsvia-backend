@@ -302,7 +302,8 @@ router.post('/handle-speech', async (req, res) => {
         timeout: company.aiSettings?.silenceTimeout ?? 6, // Balanced timeout  
         speechTimeout: 8, // Prevents rambling
         enhanced: true,
-        speechModel: 'phone_call'
+        speechModel: 'phone_call',
+        partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
       });
 
       const personality = company.aiSettings?.personality || 'friendly';
@@ -338,24 +339,19 @@ router.post('/handle-speech', async (req, res) => {
             model_id: company.aiSettings.elevenLabs?.modelId,
             company
           });
-          const fileName = `retry_${Date.now()}.mp3`;
-          const audioDir = path.join(__dirname, '../public/audio');
-          if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
-          const filePath = path.join(audioDir, fileName);
-          fs.writeFileSync(filePath, buffer);
-          gather.play(`${req.protocol}://${req.get('host')}/audio/${fileName}`);
+          
+          // Store audio in Redis for fast serving
+          const audioKey = `audio:retry:${callSid}`;
+          await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
+          
+          const audioUrl = `https://${req.get('host')}/api/twilio/audio/retry/${callSid}`;
+          gather.play(audioUrl);
         } catch (err) {
-          console.error('ElevenLabs TTS failed:', err);
-          const fallbackText = `<Say>${escapeTwiML(retryMsg)}</Say>`;
-          res.type('text/xml');
-          res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
-          return;
+          console.error('ElevenLabs TTS failed, falling back to <Say>:', err);
+          gather.say(escapeTwiML(retryMsg));
         }
       } else {
-        const fallbackText = `<Say>${escapeTwiML(retryMsg)}</Say>`;
-        res.type('text/xml');
-        res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
-        return;
+        gather.say(escapeTwiML(retryMsg));
       }
 
       res.type('text/xml');
@@ -397,7 +393,8 @@ router.post('/handle-speech', async (req, res) => {
         timeout: company.aiSettings?.silenceTimeout ?? 6, // Balanced timeout
         speechTimeout: 8, // Prevents rambling  
         enhanced: true,
-        speechModel: 'phone_call'
+        speechModel: 'phone_call',
+        partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
       });
 
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
