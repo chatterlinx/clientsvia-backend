@@ -117,7 +117,7 @@ router.post('/voice', async (req, res) => {
 
     console.log(`[COMPANY FOUND] ✅ Company: ${company.companyName} (ID: ${company._id})`);
     console.log(`[AI SETTINGS] Voice ID: ${company.aiSettings?.elevenLabs?.voiceId || 'default'} | Personality: ${company.aiSettings?.personality || 'friendly'}`);
-    console.log(`[THRESHOLDS] Confidence: ${company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5} | Timeout: ${company.aiSettings?.silenceTimeout ?? 6}s`);
+    console.log(`[THRESHOLDS] Confidence: ${company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5}`);
 
     const greetingType = company.agentSetup?.greetingType || 'tts';
     const greetingAudioUrl = company.agentSetup?.greetingAudioUrl || '';
@@ -142,7 +142,7 @@ router.post('/voice', async (req, res) => {
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced from 8 to 5 seconds for faster response
+      timeout: 5, // Globally optimized for fast response
       speechTimeout: 'auto',
       enhanced: true,
       speechModel: 'phone_call',
@@ -302,7 +302,7 @@ router.post('/handle-speech', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced for faster response
+        timeout: 5, // Globally optimized for fast response
         speechTimeout: 'auto',
         enhanced: true,
         speechModel: 'phone_call',
@@ -381,7 +381,7 @@ router.post('/handle-speech', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced for faster response
+        timeout: 5, // Globally optimized for fast response
         speechTimeout: 'auto',
         enhanced: true,
         speechModel: 'phone_call',
@@ -487,7 +487,7 @@ router.post('/handle-speech', async (req, res) => {
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced for faster response
+      timeout: 5, // Globally optimized for fast response
       speechTimeout: 'auto',
       enhanced: true,
       speechModel: 'phone_call',

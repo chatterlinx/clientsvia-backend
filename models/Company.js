@@ -113,7 +113,6 @@ const aiSettingsSchema = new mongoose.Schema({
         type: String,
         default: "I'm having trouble understanding. Let me connect you to a team member."
     },
-    silenceTimeout: { type: Number, default: 8 }, // Longer timeout to prevent hangups
     debugMode: { type: Boolean, default: false }
     // The enableGoogleCalendarIntegration field was moved to integrations.googleOAuth.isEnabled
 }, { _id: false });

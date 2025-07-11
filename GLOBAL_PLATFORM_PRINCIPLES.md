@@ -149,7 +149,7 @@ newFeature: { type: Boolean, default: true }
 #### ✅ **Dynamic Company Settings:**
 ```javascript
 // Use company-specific settings, not hardcoded values
-const timeout = company.aiSettings?.silenceTimeout ?? 8;
+const timeout = 5; // Globally optimized value
 ```
 
 #### ❌ **Company-Specific Code:**

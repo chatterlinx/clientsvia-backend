@@ -316,7 +316,6 @@ router.patch('/company/:companyId/aisettings', async (req, res) => {
         if (aiSettings.customEscalationMessage !== undefined) updatePayload['aiSettings.customEscalationMessage'] = aiSettings.customEscalationMessage;
         
         // Agent Performance Controls
-        if (aiSettings.silenceTimeout !== undefined) updatePayload['aiSettings.silenceTimeout'] = Number(aiSettings.silenceTimeout);
         if (aiSettings.fuzzyMatchThreshold !== undefined) updatePayload['aiSettings.fuzzyMatchThreshold'] = Number(aiSettings.fuzzyMatchThreshold);
         if (aiSettings.twilioSpeechConfidenceThreshold !== undefined) updatePayload['aiSettings.twilioSpeechConfidenceThreshold'] = Number(aiSettings.twilioSpeechConfidenceThreshold);
         if (aiSettings.maxRepeats !== undefined) updatePayload['aiSettings.maxRepeats'] = Number(aiSettings.maxRepeats);
