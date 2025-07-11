@@ -114,7 +114,7 @@ router.post('/voice', async (req, res) => {
 
     console.log(`[COMPANY FOUND] ✅ Company: ${company.companyName} (ID: ${company._id})`);
     console.log(`[AI SETTINGS] Voice ID: ${company.aiSettings?.elevenLabs?.voiceId || 'default'} | Personality: ${company.aiSettings?.personality || 'friendly'}`);
-    console.log(`[THRESHOLDS] Confidence: ${company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5} | Timeout: ${company.aiSettings?.silenceTimeout ?? 5}s | Delay: ${company.aiSettings?.responseDelayMs ?? 0}ms`);
+    console.log(`[THRESHOLDS] Confidence: ${company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5} | Timeout: ${company.aiSettings?.silenceTimeout ?? 6}s | Delay: ${company.aiSettings?.responseDelayMs ?? 0}ms`);
 
     const greetingType = company.agentSetup?.greetingType || 'tts';
     const greetingAudioUrl = company.agentSetup?.greetingAudioUrl || '';
@@ -139,8 +139,8 @@ router.post('/voice', async (req, res) => {
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: company.aiSettings?.silenceTimeout ?? 8, // Increased back to 8 seconds to let caller finish
-      speechTimeout: 10, // Set explicit 10-second speech timeout instead of 'auto'
+      timeout: company.aiSettings?.silenceTimeout ?? 6, // Balanced: enough time to think, not too long
+      speechTimeout: 8, // Reduced: enough for most requests, prevents rambling
       enhanced: true,
       speechModel: 'phone_call'
       // Removed partialResultCallback to prevent interference
@@ -225,7 +225,7 @@ router.post('/handle-speech', async (req, res) => {
 
     console.log(`[SPEECH RECEIVED] 🎯 Processing speech: "${speechText}" (${speechText.length} chars)`);
 
-    // Check for potentially unclear/incomplete speech
+    // Check for potentially unclear/incomplete speech OR rambling
     const isLikelyUnclear = (
       speechText.length < 3 || 
       /^[a-z]{1,2}\.?$/i.test(speechText.trim()) || // Single/double letters
@@ -233,8 +233,18 @@ router.post('/handle-speech', async (req, res) => {
       speechText.toLowerCase().includes('hello') && speechText.length < 10 // Just "hello"
     );
     
+    const isLikelyRambling = (
+      speechText.length > 300 || // Very long speech (300+ chars)
+      speechText.split(' ').length > 50 || // 50+ words
+      (speechText.match(/\b(and|then|so|but|also|actually|basically)\b/gi) || []).length > 5 // Too many filler words
+    );
+    
     if (isLikelyUnclear) {
       console.log(`[SPEECH QUALITY] ⚠️ Potentially unclear speech detected: "${speechText}"`);
+    }
+    
+    if (isLikelyRambling) {
+      console.log(`[SPEECH QUALITY] 📢 Rambling detected: ${speechText.length} chars, ${speechText.split(' ').length} words`);
     }
 
     const calledNumber = normalizePhoneNumber(req.body.To);
@@ -282,8 +292,8 @@ router.post('/handle-speech', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: company.aiSettings?.silenceTimeout ?? 8, // Increased for better speech capture
-        speechTimeout: 10, // Set explicit timeout
+        timeout: company.aiSettings?.silenceTimeout ?? 6, // Balanced timeout  
+        speechTimeout: 8, // Prevents rambling
         enhanced: true,
         speechModel: 'phone_call'
       });
@@ -377,8 +387,8 @@ router.post('/handle-speech', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: company.aiSettings?.silenceTimeout ?? 8, // Increased for better speech capture
-        speechTimeout: 10, // Set explicit timeout
+        timeout: company.aiSettings?.silenceTimeout ?? 6, // Balanced timeout
+        speechTimeout: 8, // Prevents rambling  
         enhanced: true,
         speechModel: 'phone_call'
       });
@@ -429,10 +439,13 @@ router.post('/handle-speech', async (req, res) => {
       conversationHistory = JSON.parse(storedHistory);
     }
 
-    // Add current user speech to history with confidence context
-    const speechContext = isLikelyUnclear || confidence < 0.7 ? 
-      `[Speech unclear/low confidence: "${speechText}"]` : 
-      speechText;
+    // Add current user speech to history with context flags
+    let speechContext = speechText;
+    if (isLikelyUnclear || confidence < 0.7) {
+      speechContext = `[Speech unclear/low confidence: "${speechText}"]`;
+    } else if (isLikelyRambling) {
+      speechContext = `[Long explanation: "${speechText.substring(0, 200)}..."]`;
+    }
     
     conversationHistory.push({ role: 'user', text: speechContext });
 
@@ -485,8 +498,8 @@ router.post('/handle-speech', async (req, res) => {
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: company.aiSettings?.silenceTimeout ?? 8, // Increased for better speech capture
-      speechTimeout: 10, // Set explicit timeout
+      timeout: company.aiSettings?.silenceTimeout ?? 6, // Balanced timeout
+      speechTimeout: 8, // Prevents rambling
       enhanced: true,
       speechModel: 'phone_call'
     });

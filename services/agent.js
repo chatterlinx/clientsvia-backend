@@ -219,10 +219,14 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
 
   fullPrompt += `\n\n**Current Question:** ${question}`;
 
-  // Check if this appears to be unclear speech
+  // Check if this appears to be unclear speech or rambling
   const isUnclearSpeech = question.includes('[Speech unclear/low confidence:') || 
                          question.length < 5 || 
                          /^[a-z]{1,3}\.?$/i.test(question.trim());
+                         
+  const isRambling = question.length > 300 || 
+                    question.split(' ').length > 50 ||
+                    (question.match(/\b(and|then|so|but|also|actually|basically)\b/gi) || []).length > 5;
 
   fullPrompt += `\n\n**Response Guidelines:**`;
   fullPrompt += `\n- You are The Agent for ${company?.companyName} - be natural and conversational`;
@@ -237,6 +241,12 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     fullPrompt += `\n- IMPORTANT: The caller's speech was unclear or garbled. Ask them to clarify what they need help with in a friendly way.`;
     fullPrompt += `\n- Example: "I'm having trouble understanding you clearly. Could you tell me what you need help with today?"`;
   }
+  
+  if (isRambling) {
+    fullPrompt += `\n- IMPORTANT: The caller gave a very long explanation. Politely summarize what you heard and focus on the main issue.`;
+    fullPrompt += `\n- Example: "I understand you're having an issue with [main problem]. Let me help you with that. Would you like to schedule a service call?"`;
+    fullPrompt += `\n- Don't repeat their entire story back - acknowledge the key issue and offer next steps.`;
+  }
 
   if (responseLength === 'concise') {
     fullPrompt += '\n- Keep responses to 1-2 sentences maximum.';
@@ -244,9 +254,14 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     fullPrompt += '\n- Provide helpful details but stay focused on their specific need.';
   }
 
-  const promptQuestion = isUnclearSpeech ? 
-    "The caller said something unclear - ask them to clarify what they need help with" : 
-    `"${question}"`;
+  let promptQuestion;
+  if (isUnclearSpeech) {
+    promptQuestion = "The caller said something unclear - ask them to clarify what they need help with";
+  } else if (isRambling) {
+    promptQuestion = `The caller gave a long explanation about: "${question.substring(0, 150)}..." - summarize their main issue and offer help`;
+  } else {
+    promptQuestion = `"${question}"`;
+  }
   
   fullPrompt += `\n\nRespond naturally to: ${promptQuestion} - Keep it conversational and move the call forward.`;
 
