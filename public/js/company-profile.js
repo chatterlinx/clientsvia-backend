@@ -2409,7 +2409,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                             <div>
                                 <label for="fuzzyMatchThreshold" class="form-label">Fuzzy Match Threshold</label>
-                                <input type="range" id="fuzzyMatchThreshold" name="fuzzyMatchThreshold" min="0.2" max="0.9" step="0.01" value="0.3" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                <input type="range" id="fuzzyMatchThreshold" name="fuzzyMatchThreshold" min="0.1" max="0.8" step="0.1" value="0.3" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
                                 <span id="fuzzyThresholdValue" class="ml-2">0.3</span>
                                 <p class="text-xs text-gray-500 mt-1">
                                     <strong>Fuzzy Match Threshold:</strong> This controls how closely the AI will match a caller's words to your Q&amp;A entries.

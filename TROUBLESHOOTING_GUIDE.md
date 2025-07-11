@@ -118,7 +118,7 @@
 ### **Issue: Q&A Not Matching**
 **Look for:**
 ```
-[Q&A MATCHING] 🔍 Searching 5 Q&A entries with fuzzy threshold: 0.5
+[Q&A MATCHING] 🔍 Searching 5 Q&A entries with fuzzy threshold: 0.3
 [Q&A NO MATCH] ❌ No Q&A match found, escalating to AI processing
 ```
 **Fix:** Check fuzzy threshold or add more Q&A variations
