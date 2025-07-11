@@ -114,7 +114,7 @@ router.post('/voice', async (req, res) => {
 
     console.log(`[COMPANY FOUND] ✅ Company: ${company.companyName} (ID: ${company._id})`);
     console.log(`[AI SETTINGS] Voice ID: ${company.aiSettings?.elevenLabs?.voiceId || 'default'} | Personality: ${company.aiSettings?.personality || 'friendly'}`);
-    console.log(`[THRESHOLDS] Confidence: ${company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5} | Timeout: ${company.aiSettings?.silenceTimeout ?? 6}s | Delay: ${company.aiSettings?.responseDelayMs ?? 0}ms`);
+    console.log(`[THRESHOLDS] Confidence: ${company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5} | Timeout: ${company.aiSettings?.silenceTimeout ?? 6}s`);
 
     const greetingType = company.agentSetup?.greetingType || 'tts';
     const greetingAudioUrl = company.agentSetup?.greetingAudioUrl || '';
@@ -320,12 +320,6 @@ router.post('/handle-speech', async (req, res) => {
       
       console.log(`[RETRY MESSAGE] Using message: "${retryMsg}" for speech: "${speechText}" (confidence: ${confidence})`);
       
-      // Apply response delay if configured
-      const responseDelay = company.aiSettings?.responseDelayMs || 0;
-      if (responseDelay > 0) {
-        await new Promise(res => setTimeout(res, responseDelay));
-      }
-      
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
 
       if (elevenLabsVoice) {
@@ -378,12 +372,6 @@ router.post('/handle-speech', async (req, res) => {
     
     if (cachedAnswer) {
       console.log(`[Q&A MATCH FOUND] ✅ Using Q&A response for ${callSid}: ${cachedAnswer.substring(0, 100)}...`);
-      
-      const responseDelay = company.aiSettings?.responseDelayMs || 0;
-      if (responseDelay > 0) {
-        console.log(`[RESPONSE DELAY] ⏱️ Applying ${responseDelay}ms delay before response`);
-        await new Promise(res => setTimeout(res, responseDelay));
-      }
       
       const gather = twiml.gather({
         input: 'speech',
@@ -488,12 +476,6 @@ router.post('/handle-speech', async (req, res) => {
       const personality = company.aiSettings?.personality || 'friendly';
       const fallback = await getPersonalityResponse(company._id.toString(), 'connectionTrouble', personality);
       answerObj = { text: fallback, escalate: false };
-    }
-
-    // Apply response delay if configured
-    const delay = company.aiSettings?.responseDelayMs || 0;
-    if (delay > 0) {
-      await new Promise(res => setTimeout(res, delay));
     }
 
     // Generate TTS and respond immediately

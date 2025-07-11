@@ -32,12 +32,11 @@
 
 ---
 
-## ⚙️ **THE 5 CRITICAL CONTROLS:**
+## ⚙️ **THE 4 CRITICAL CONTROLS:**
 
 ```javascript
 // Company Model Defaults (Set these during optimization)
 silenceTimeout: { type: Number, default: 8 }, // ← TUNE THIS
-responseDelayMs: { type: Number, default: 0 }, // ← TUNE THIS  
 fuzzyMatchThreshold: { type: Number, default: 0.3 }, // ← TUNE THIS
 twilioSpeechConfidenceThreshold: { type: Number, default: 0.4 }, // ← TUNE THIS
 maxRepeats: { type: Number, default: 3 }, // ← TUNE THIS

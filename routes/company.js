@@ -317,7 +317,6 @@ router.patch('/company/:companyId/aisettings', async (req, res) => {
         
         // Agent Performance Controls
         if (aiSettings.silenceTimeout !== undefined) updatePayload['aiSettings.silenceTimeout'] = Number(aiSettings.silenceTimeout);
-        if (aiSettings.responseDelayMs !== undefined) updatePayload['aiSettings.responseDelayMs'] = Number(aiSettings.responseDelayMs);
         if (aiSettings.fuzzyMatchThreshold !== undefined) updatePayload['aiSettings.fuzzyMatchThreshold'] = Number(aiSettings.fuzzyMatchThreshold);
         if (aiSettings.twilioSpeechConfidenceThreshold !== undefined) updatePayload['aiSettings.twilioSpeechConfidenceThreshold'] = Number(aiSettings.twilioSpeechConfidenceThreshold);
         if (aiSettings.maxRepeats !== undefined) updatePayload['aiSettings.maxRepeats'] = Number(aiSettings.maxRepeats);
@@ -363,7 +362,6 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
     const settings = req.body;
     
     console.log('[Voice Settings Debug] Received settings:', settings);
-    console.log('[Voice Settings Debug] responseDelayMs type and value:', typeof settings.responseDelayMs, settings.responseDelayMs);
     
     if (!ObjectId.isValid(companyId)) {
         return res.status(400).json({ message: 'Invalid company ID format' });
@@ -391,7 +389,6 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
             'elevenlabsApiKey', 
             'elevenlabsStability', 
             'elevenlabsClarity',
-            'responseDelayMs',
             'twilioSpeechConfidenceThreshold',
             'fuzzyMatchThreshold',
             'logCalls',
@@ -448,7 +445,6 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
           console.log(`[Voice Settings] Cleared phone cache for key: ${phoneCacheKey}`);
         }
         
-        console.log(`[Voice Settings Debug] Final saved responseDelayMs:`, company.aiSettings.responseDelayMs);
         console.log(`[API PATCH /api/company/${companyId}/voice-settings] Voice settings updated successfully`);
         res.json({ message: 'Voice settings updated successfully', aiSettings: company.aiSettings });
         

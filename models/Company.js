@@ -83,7 +83,6 @@ const aiSettingsSchema = new mongoose.Schema({
     },
     ttsProvider: { type: String, default: 'elevenlabs', trim: true }, // Default to ElevenLabs for better voice quality
     elevenLabs: { type: elevenLabsSettingsSchema, default: () => ({}) },
-    responseDelayMs: { type: Number, default: 0 }, // No delay for faster responses
     twilioSpeechConfidenceThreshold: { type: Number, default: 0.4 }, // Lower threshold for better speech recognition
     fuzzyMatchThreshold: { type: Number, default: 0.3 }, // Better Q&A matching for all companies
     ttsPitch: { type: Number, default: 0 },

@@ -567,17 +567,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     elevenlabsVoiceId: currentCompanyData.aiSettings?.elevenLabs?.voiceId,
                     elevenlabsStability: currentCompanyData.aiSettings?.elevenLabs?.stability,
                     elevenlabsClarity: currentCompanyData.aiSettings?.elevenLabs?.similarityBoost,
-                    responseDelayMs: currentCompanyData.aiSettings?.responseDelayMs !== undefined ? currentCompanyData.aiSettings.responseDelayMs : 500,
                     twilioSpeechConfidenceThreshold: currentCompanyData.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5,
                     fuzzyMatchThreshold: currentCompanyData.aiSettings?.fuzzyMatchThreshold ?? 0.5,
                     speechConfirmation: currentCompanyData.aiSettings?.speechConfirmation || { enabled: false, confirmKey: 5, prompts: ["I heard: '{transcript}'. Press 5 or say yes to confirm. If not, say no or repeat."], maxAttempts: 2 },
                     logCalls: currentCompanyData.aiSettings?.logCalls ?? false
                 };
-                console.log('Voice Settings Debug:', {
-                    rawResponseDelayMs: currentCompanyData.aiSettings?.responseDelayMs,
-                    finalResponseDelayMs: voiceSettings.responseDelayMs,
-                    deploymentCheck: 'AGENT_RESPONSE_DELAY_FIX_DEPLOYED_v1'
-                });
                 populateAiVoiceSettings(voiceSettings);
             }
             // --- END OF NEW BLOCK ---
@@ -2487,18 +2481,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-4">
                         <h3 class="font-semibold text-gray-700">Agent Performance Controls</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="responseDelayMs" class="form-label">Agent Response Delay (ms)</label>
-                                <input type="range" id="responseDelayMs" name="responseDelayMs" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" min="0" max="3000" step="100" value="500">
-                                <span id="responseDelayValue" class="ml-2">500 ms</span>
-                                <p class="text-xs text-gray-500 mt-1">
-                                    <strong>Agent Response Delay:</strong> This controls how quickly the AI responds after the caller finishes speaking (in milliseconds).<br>
-                                    • <strong>Lower values (100–500ms):</strong> Makes the agent answer faster, feels snappier but might sound robotic.<br>
-                                    • <strong>Higher values (1000–3000ms):</strong> Adds a human-like pause before responding, making it feel more natural.
-                                    <br>
-                                    <em>Default is <strong>500ms</strong>. Adjust if you want a faster or more conversational feel.</em>
-                                </p>
-                            </div>
                             <div class="flex items-center mt-6">
                                 <input type="checkbox" id="logCalls" name="logCalls" class="form-checkbox">
                                 <span class="ml-2">Enable Call Logging</span>
@@ -2590,15 +2572,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const confirmContainer = document.querySelector('.confirmation-settings');
         fuzzyMatchInput = document.getElementById('fuzzyMatchThreshold');
         thresholdValue = document.getElementById('fuzzyThresholdValue');
-        responseDelayInput = document.getElementById('responseDelayMs');
-        delayValue = document.getElementById('responseDelayValue');
         const stabilityInput = document.getElementById('elevenlabsStability');
         const clarityInput = document.getElementById('elevenlabsClarity');
         stabilityValue = document.getElementById('elevenlabsStabilityValue');
         clarityValue = document.getElementById('elevenlabsClarityValue');
-        if (delayValue && responseDelayInput) {
-            delayValue.textContent = `${responseDelayInput.value} ms`;
-        }
         if (stabilityValue && stabilityInput) {
             stabilityValue.textContent = Number(stabilityInput.value).toFixed(2);
         }
@@ -2675,11 +2652,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData(form);
             const settings = Object.fromEntries(formData.entries());
 
-            settings.responseDelayMs = parseInt(settings.responseDelayMs || '0');
-            console.log('Form submission debug:', {
-                rawResponseDelayMs: formData.get('responseDelayMs'),
-                parsedResponseDelayMs: settings.responseDelayMs
-            });
             settings.twilioSpeechConfidenceThreshold = parseFloat(settings.twilioSpeechConfidenceThreshold || '0.5');
             settings.fuzzyMatchThreshold = parseFloat(formData.get('fuzzyMatchThreshold'));
             settings.logCalls = formData.get('logCalls') === 'on';
@@ -2779,12 +2751,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const resetBtn = document.getElementById('resetVoiceDefaults');
                 if (resetBtn) {
             resetBtn.addEventListener('click', () => {
-                document.getElementById('responseDelayMs').value = 500;
                 document.getElementById('logCalls').checked = false;
                 document.getElementById('twilioSpeechConfidenceThreshold').value = 0.5;
                 if (fuzzyMatchInput) fuzzyMatchInput.value = 0.5;
                 if (thresholdValue) thresholdValue.textContent = '0.5';
-                if (delayValue) delayValue.textContent = '500 ms';
                 document.getElementById('elevenlabsStability').value = 0.75;
                 document.getElementById('elevenlabsClarity').value = 0.75;
                 if (stabilityValue) stabilityValue.textContent = '0.75';
@@ -2889,11 +2859,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (stabilityValue) stabilityValue.textContent = Number(document.getElementById('elevenlabsStability').value).toFixed(2);
         if (clarityValue) clarityValue.textContent = Number(document.getElementById('elevenlabsClarity').value).toFixed(2);
 
-        // Fix responseDelayMs population
-        const actualDelayValue = voiceSettings.responseDelayMs !== undefined ? voiceSettings.responseDelayMs : 500;
-        console.log('Setting responseDelayMs to:', actualDelayValue);
-        document.getElementById('responseDelayMs').value = actualDelayValue;
-        if (delayValue) delayValue.textContent = `${actualDelayValue} ms`;
         document.getElementById('logCalls').checked = !!voiceSettings.logCalls;
         document.getElementById('twilioSpeechConfidenceThreshold').value = voiceSettings.twilioSpeechConfidenceThreshold ?? 0.5;
         if (fuzzyMatchInput) fuzzyMatchInput.value = voiceSettings.fuzzyMatchThreshold ?? 0.5;
