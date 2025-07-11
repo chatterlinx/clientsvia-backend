@@ -178,6 +178,9 @@ router.post('/voice', async (req, res) => {
 
 router.post('/handle-speech', async (req, res) => {
   const requestStartTime = Date.now();
+  let confidence = 0;
+  let threshold = 0.5;
+  
   try {
     console.log(`[TWILIO TIMING] Speech webhook received at: ${new Date().toISOString()}`);
     console.log(`[TWILIO TIMING] Twilio sent SpeechResult: "${req.body.SpeechResult}" with confidence: ${req.body.Confidence}`);
@@ -211,9 +214,13 @@ router.post('/handle-speech', async (req, res) => {
       console.log(`[Call Log] CallSid ${req.body.CallSid} Speech: ${speechText}`);
     }
 
-    const confidence = parseFloat(req.body.Confidence || '0');
-    const threshold = company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5;
+    confidence = parseFloat(req.body.Confidence || '0');
+    threshold = company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5;
+    
+    console.log(`[CONFIDENCE CHECK] Speech: "${speechText}" | Confidence: ${confidence} | Threshold: ${threshold} | ${confidence >= threshold ? 'PASS ✅' : 'FAIL ❌'}`);
+    
     if (confidence < threshold) {
+      console.log(`[CONFIDENCE REJECT] Low confidence (${confidence} < ${threshold}) - asking user to repeat`);
       const repeats = await redisClient.incr(repeatKey);
       if (repeats === 1) {
         await redisClient.expire(repeatKey, 600);
@@ -452,6 +459,7 @@ router.post('/handle-speech', async (req, res) => {
     console.log(`[TWILIO TIMING] Sending response at: ${new Date().toISOString()}`);
     console.log(`[TWILIO TIMING] Total processing time: ${requestEndTime - requestStartTime}ms`);
     console.log(`[TWILIO TIMING] Response XML length: ${responseXML.length} characters`);
+    console.log(`[CONFIDENCE SUMMARY] Successfully processed speech with confidence ${confidence} (threshold: ${threshold})`);
     res.send(responseXML);
   } catch (err) {
     console.error('[POST /api/twilio/handle-speech] Error:', err.message, err.stack);
