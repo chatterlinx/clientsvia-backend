@@ -139,11 +139,11 @@ router.post('/voice', async (req, res) => {
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: company.aiSettings?.silenceTimeout ?? 6, // Balanced: enough time to think, not too long
-      speechTimeout: 8, // Reduced: enough for most requests, prevents rambling
+      timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced from 8 to 5 seconds for faster response
+      speechTimeout: 'auto',
       enhanced: true,
-      speechModel: 'phone_call'
-      // Removed partialResultCallback to prevent interference
+      speechModel: 'phone_call',
+      partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
     });
 
     if (greetingType === 'audio' && greetingAudioUrl) {
@@ -299,8 +299,8 @@ router.post('/handle-speech', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: company.aiSettings?.silenceTimeout ?? 6, // Balanced timeout  
-        speechTimeout: 8, // Prevents rambling
+        timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced for faster response
+        speechTimeout: 'auto',
         enhanced: true,
         speechModel: 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -390,8 +390,8 @@ router.post('/handle-speech', async (req, res) => {
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: company.aiSettings?.silenceTimeout ?? 6, // Balanced timeout
-        speechTimeout: 8, // Prevents rambling  
+        timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced for faster response
+        speechTimeout: 'auto',
         enhanced: true,
         speechModel: 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -502,10 +502,11 @@ router.post('/handle-speech', async (req, res) => {
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: company.aiSettings?.silenceTimeout ?? 6, // Balanced timeout
-      speechTimeout: 8, // Prevents rambling
+      timeout: company.aiSettings?.silenceTimeout ?? 5, // Reduced for faster response
+      speechTimeout: 'auto',
       enhanced: true,
-      speechModel: 'phone_call'
+      speechModel: 'phone_call',
+      partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
     });
 
     const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
