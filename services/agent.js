@@ -158,7 +158,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   }
 
   // Second, try fuzzy matching on Q&A entries
-  const fuzzyThreshold = company?.aiSettings?.fuzzyMatchThreshold || 0.5;
+  const fuzzyThreshold = company?.aiSettings?.fuzzyMatchThreshold || 0.3;
   const cachedAnswer = findCachedAnswer(await KnowledgeEntry.find({ companyId }).exec(), question, fuzzyThreshold);
   if (cachedAnswer) {
     console.log(`[Agent] Found Q&A match via fuzzy matching for: ${question}`);

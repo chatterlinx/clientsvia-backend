@@ -363,7 +363,7 @@ router.post('/handle-speech', async (req, res) => {
     })));
     console.log(`[Q&A DEBUG] Incoming Speech: "${speechText}"`);
     
-    const fuzzyThreshold = company.aiSettings?.fuzzyMatchThreshold ?? 0.5;
+    const fuzzyThreshold = company.aiSettings?.fuzzyMatchThreshold ?? 0.3;
     console.log(`[Q&A MATCHING] 🔍 Searching ${qnaEntries.length} Q&A entries with fuzzy threshold: ${fuzzyThreshold}`);
     
     const cachedAnswer = findCachedAnswer(qnaEntries, speechText, fuzzyThreshold);

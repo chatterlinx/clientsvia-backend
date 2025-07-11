@@ -568,7 +568,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     elevenlabsStability: currentCompanyData.aiSettings?.elevenLabs?.stability,
                     elevenlabsClarity: currentCompanyData.aiSettings?.elevenLabs?.similarityBoost,
                     twilioSpeechConfidenceThreshold: currentCompanyData.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5,
-                    fuzzyMatchThreshold: currentCompanyData.aiSettings?.fuzzyMatchThreshold ?? 0.5
+                    fuzzyMatchThreshold: currentCompanyData.aiSettings?.fuzzyMatchThreshold ?? 0.3
                 };
                 populateAiVoiceSettings(voiceSettings);
             }
@@ -2409,8 +2409,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                             <div>
                                 <label for="fuzzyMatchThreshold" class="form-label">Fuzzy Match Threshold</label>
-                                <input type="range" id="fuzzyMatchThreshold" name="fuzzyMatchThreshold" min="0.2" max="0.9" step="0.01" value="0.5" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                                <span id="fuzzyThresholdValue" class="ml-2">0.5</span>
+                                <input type="range" id="fuzzyMatchThreshold" name="fuzzyMatchThreshold" min="0.2" max="0.9" step="0.01" value="0.3" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                <span id="fuzzyThresholdValue" class="ml-2">0.3</span>
                                 <p class="text-xs text-gray-500 mt-1">
                                     <strong>Fuzzy Match Threshold:</strong> This controls how closely the AI will match a caller's words to your Q&amp;A entries.
                                     <br>
@@ -2611,7 +2611,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (resetBtn) {
             resetBtn.addEventListener('click', () => {
                 document.getElementById('twilioSpeechConfidenceThreshold').value = 0.5;
-                if (fuzzyMatchInput) fuzzyMatchInput.value = 0.5;
+                if (fuzzyMatchInput) fuzzyMatchInput.value = 0.3;
                 if (thresholdValue) thresholdValue.textContent = '0.5';
                 document.getElementById('elevenlabsStability').value = 0.75;
                 document.getElementById('elevenlabsClarity').value = 0.75;
@@ -2704,8 +2704,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (clarityValue) clarityValue.textContent = Number(document.getElementById('elevenlabsClarity').value).toFixed(2);
 
         document.getElementById('twilioSpeechConfidenceThreshold').value = voiceSettings.twilioSpeechConfidenceThreshold ?? 0.5;
-        if (fuzzyMatchInput) fuzzyMatchInput.value = voiceSettings.fuzzyMatchThreshold ?? 0.5;
-        if (thresholdValue) thresholdValue.textContent = voiceSettings.fuzzyMatchThreshold ?? 0.5;
+        if (fuzzyMatchInput) fuzzyMatchInput.value = voiceSettings.fuzzyMatchThreshold ?? 0.3;
+        if (thresholdValue) thresholdValue.textContent = voiceSettings.fuzzyMatchThreshold ?? 0.3;
 
         // Trigger the view toggle and load voices
         const providerSelect = document.getElementById('ttsProviderSelect');

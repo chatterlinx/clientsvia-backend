@@ -7,10 +7,10 @@ const stringSimilarity = require('string-similarity');
  *
  * @param {Array} entries - Q&A array for the company
  * @param {String} userQuestion - The incoming speech string
- * @param {Number} fuzzyThreshold - Similarity threshold (default 0.6)
+ * @param {Number} fuzzyThreshold - Similarity threshold (default 0.3)
  * @returns {String|null} Matching answer or null
  */
-function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.6) {
+function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.3) {
   if (!entries || !Array.isArray(entries) || !userQuestion) return null;
   
   const qNorm = userQuestion.trim().toLowerCase();
