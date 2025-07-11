@@ -118,11 +118,6 @@ function getAPIConfig(company = null) {
       apiKey: company?.aiSettings?.elevenLabsApiKey || process.env.ELEVENLABS_API_KEY,
       voiceId: company?.aiSettings?.elevenLabsVoiceId || process.env.ELEVENLABS_VOICE_ID,
       configured: !!(company?.aiSettings?.elevenLabsApiKey || process.env.ELEVENLABS_API_KEY)
-    },
-    googleTTS: {
-      apiKey: company?.aiSettings?.googleTTSApiKey || process.env.GOOGLE_TTS_API_KEY,
-      voice: company?.aiSettings?.googleTTSVoice || process.env.GOOGLE_TTS_VOICE || 'en-US-Standard-A',
-      configured: !!(company?.aiSettings?.googleTTSApiKey || process.env.GOOGLE_TTS_API_KEY)
     }
   };
 }

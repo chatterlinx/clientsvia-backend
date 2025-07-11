@@ -80,7 +80,7 @@ clientsvia-backend/
 ### **🤖 AI & Automation**
 - ✅ **AI Agent Service** - Google Vertex AI
 - ✅ **Knowledge Base** - Pinecone vector DB
-- ✅ **Text-to-Speech** - Google TTS + ElevenLabs
+- ✅ **Text-to-Speech** - ElevenLabs
 - ✅ **SMS Integration** - Twilio messaging
 - ✅ **Voice Calls** - Twilio voice processing
 

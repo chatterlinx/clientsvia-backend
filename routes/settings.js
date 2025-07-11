@@ -26,10 +26,6 @@ async function getAPISettings(req, res) {
         configured: !!(company.aiSettings?.elevenLabsApiKey || process.env.ELEVENLABS_API_KEY),
         voiceId: company.aiSettings?.elevenLabsVoiceId || process.env.ELEVENLABS_VOICE_ID || null
       },
-      googleTTS: {
-        configured: !!(company.aiSettings?.googleTTSApiKey || process.env.GOOGLE_TTS_API_KEY),
-        voice: company.aiSettings?.googleTTSVoice || process.env.GOOGLE_TTS_VOICE || 'en-US-Standard-A'
-      },
       baseUrl: process.env.API_BASE_URL || 'https://clientsvia-backend.onrender.com'
     };
     
@@ -49,9 +45,7 @@ async function updateAPISettings(req, res) {
     
     const { 
       elevenLabsApiKey, 
-      elevenLabsVoiceId,
-      googleTTSApiKey,
-      googleTTSVoice 
+      elevenLabsVoiceId
     } = req.body;
     
     // Initialize aiSettings if it doesn't exist
@@ -66,12 +60,6 @@ async function updateAPISettings(req, res) {
     if (elevenLabsVoiceId !== undefined) {
       company.aiSettings.elevenLabsVoiceId = elevenLabsVoiceId;
     }
-    if (googleTTSApiKey !== undefined) {
-      company.aiSettings.googleTTSApiKey = googleTTSApiKey;
-    }
-    if (googleTTSVoice !== undefined) {
-      company.aiSettings.googleTTSVoice = googleTTSVoice;
-    }
     
     company.updatedAt = new Date();
     await company.save();
@@ -83,10 +71,6 @@ async function updateAPISettings(req, res) {
       elevenLabs: {
         configured: !!(company.aiSettings.elevenLabsApiKey || process.env.ELEVENLABS_API_KEY),
         voiceId: company.aiSettings.elevenLabsVoiceId || process.env.ELEVENLABS_VOICE_ID || null
-      },
-      googleTTS: {
-        configured: !!(company.aiSettings.googleTTSApiKey || process.env.GOOGLE_TTS_API_KEY),
-        voice: company.aiSettings.googleTTSVoice || process.env.GOOGLE_TTS_VOICE || 'en-US-Standard-A'
       },
       baseUrl: process.env.API_BASE_URL || 'https://clientsvia-backend.onrender.com'
     };
@@ -144,10 +128,8 @@ async function getGlobalSettings(req, res) {
     const settings = {
       apiBaseUrl: process.env.API_BASE_URL || 'https://clientsvia-backend.onrender.com',
       elevenLabsConfigured: !!process.env.ELEVENLABS_API_KEY,
-      googleTTSConfigured: !!process.env.GOOGLE_TTS_API_KEY,
       defaultVoiceSettings: {
-        elevenLabsVoiceId: process.env.ELEVENLABS_VOICE_ID || null,
-        googleTTSVoice: process.env.GOOGLE_TTS_VOICE || 'en-US-Standard-A'
+        elevenLabsVoiceId: process.env.ELEVENLABS_VOICE_ID || null
       }
     };
     

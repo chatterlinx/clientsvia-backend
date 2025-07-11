@@ -10,7 +10,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@google-cloud/text-to-speech": "^6.1.0",
     "@google-cloud/vertexai": "^1.10.0",
     "@pinecone-database/pinecone": "^6.1.1",
     "axios": "^1.6.8",

@@ -43,7 +43,6 @@
 {
   "name": "clientsvia-backend",
   "dependencies": {
-    "@google-cloud/text-to-speech": "^6.1.0",
     "@google-cloud/vertexai": "^1.10.0",
     "@pinecone-database/pinecone": "^6.1.1",
     "express": "^4.18.2",

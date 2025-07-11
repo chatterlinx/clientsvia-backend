@@ -85,9 +85,7 @@ GET /api/company/{companyId}/settings
 PATCH /api/company/{companyId}/settings
 {
   "elevenLabsApiKey": "sk_...",
-  "elevenLabsVoiceId": "21m00Tcm4TlvDq8ikWAM",
-  "googleTTSApiKey": "your_key",
-  "googleTTSVoice": "en-US-Standard-B"
+  "elevenLabsVoiceId": "21m00Tcm4TlvDq8ikWAM"
 }
 ```
 
@@ -130,7 +128,6 @@ curl https://clientsvia-backend.onrender.com/api/company
 Set in deployment platform (Render/Heroku):
 ```bash
 ELEVENLABS_API_KEY=your_key
-GOOGLE_TTS_API_KEY=your_key
 API_BASE_URL=https://clientsvia-backend.onrender.com
 ```
 

@@ -496,7 +496,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Google TTS function removed - using ElevenLabs only
+    // Note: Google TTS functionality has been removed - using ElevenLabs only
     
     async function fetchCompanyData() {
         if (!companyId) {
@@ -2281,57 +2281,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const testMalfunctionBtn = document.getElementById('test-malfunction-btn');
     if (testMalfunctionBtn) { testMalfunctionBtn.addEventListener('click', () => { if (companyId) { const testErrorMessage = `Simulated critical failure in AI core processing for company ${companyId} at ${new Date().toLocaleTimeString()}.`; reportMalfunction(companyId, testErrorMessage); } else { console.warn('Company ID not available to test malfunction reporting.');} }); }
 
-    const testVoiceBtn = document.getElementById('testVoiceBtn');
-    if (testVoiceBtn) {
-        testVoiceBtn.addEventListener('click', async () => {
-            const phraseEl = document.getElementById('ttsTestPhrase');
-            const voiceEl = document.getElementById('googleVoiceSelection');
-            const pitchEl = document.getElementById('googleVoicePitch');
-            const speedEl = document.getElementById('googleVoiceSpeed');
-            const text = phraseEl?.value || '';
-            const voiceName = voiceEl?.value || '';
-            const pitch = parseFloat(pitchEl?.value || '0');
-            const speed = parseFloat(speedEl?.value || '1');
-            if (!text || !voiceName) return;
-            const originalLabel = testVoiceBtn.textContent;
-            testVoiceBtn.disabled = true;
-            testVoiceBtn.textContent = 'Playing...';
-            try {
-                // Call the backend test endpoint for Google TTS
-                const params = new URLSearchParams({
-                    text,
-                    voice: voiceName,
-                    pitch: pitch.toString(),
-                    speed: speed.toString()
-                });
-                const res = await fetch(`/api/test/google-tts?${params.toString()}`);
-                if (!res.ok) throw new Error('TTS failed');
-                const data = await res.json();
-                const audioContent = data.audioContent;
-                if (!audioContent) throw new Error('No audio returned');
-                const binary = atob(audioContent);
-                const bytes = new Uint8Array(binary.length);
-                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                const blob = new Blob([bytes.buffer], { type: 'audio/mp3' });
-                const url = URL.createObjectURL(blob);
-                const audio = new Audio(url);
-                audio.addEventListener('ended', () => {
-                    testVoiceBtn.disabled = false;
-                    testVoiceBtn.textContent = originalLabel;
-                    URL.revokeObjectURL(url);
-                });
-                audio.play().catch(err => {
-                    testVoiceBtn.disabled = false;
-                    testVoiceBtn.textContent = originalLabel;
-                    console.error('Playback failed', err);
-                });
-            } catch (err) {
-                alert('Playback failed: ' + err.message);
-                testVoiceBtn.disabled = false;
-                testVoiceBtn.textContent = originalLabel;
-            }
-        });
-    }
+    // Note: Google TTS test voice functionality has been removed - only ElevenLabs is supported
 
     async function loadGeminiModels() {
         try {
@@ -2358,8 +2308,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- UNIFIED AI VOICE SETTINGS TAB LOGIC (NEW & CONTAINED) ---
     // =================================================================
 
-    let googleSettings, elevenlabsSettings, fuzzyMatchInput, thresholdValue, responseDelayInput, delayValue, stabilityValue, clarityValue;
-    let unsavedGoogle = {};
+    let elevenlabsSettings, fuzzyMatchInput, thresholdValue, responseDelayInput, delayValue, stabilityValue, clarityValue;
     let unsavedElevenlabs = {};
 
     // Function to dynamically load voices
@@ -2391,7 +2340,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!res.ok) throw new Error(`Failed to fetch voices for ${provider}`);
             const voices = await res.json();
 
-            const selectId = (provider === 'google') ? 'googleVoiceSelect' : 'elevenlabsVoiceSelect';
+            const selectId = 'elevenlabsVoiceSelect'; // Only ElevenLabs is supported now
             const voiceSelect = document.getElementById(selectId);
             voiceSelect.innerHTML = ''; // Clear previous options
             voices.forEach(v => {
@@ -2425,32 +2374,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         <label for="ttsProviderSelect" class="form-label text-base font-semibold">TTS Provider</label>
                         <p class="text-xs text-gray-500 mb-2">Choose which service will generate the AI's voice.</p>
                         <select id="ttsProviderSelect" name="ttsProvider" class="form-select wider-textbox">
-                            <option value="google">Google Cloud TTS (Reliable & Diverse)</option>
                             <option value="elevenlabs">ElevenLabs (Expressive & Natural)</option>
                         </select>
                     </div>
 
-                    <div id="googleTtsSettings" class="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-4">
-                        <h3 class="font-semibold text-gray-700">Google Cloud TTS Settings</h3>
-                        <div>
-                            <label for="googleVoiceSelect" class="form-label">Google Voice</label>
-                            <select id="googleVoiceSelect" name="googleVoiceName" class="form-select">
-                                <option>Loading voices...</option>
-                            </select>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="googleVoicePitch" class="form-label">Voice Pitch (-20 to +20)</label>
-                                <input type="range" id="googleVoicePitch" name="googleVoicePitch" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" min="-20" max="20" step="0.1" value="0">
-                            </div>
-                            <div>
-                                <label for="googleVoiceSpeed" class="form-label">Speaking Speed (0.25x to 4x)</label>
-                                <input type="range" id="googleVoiceSpeed" name="googleVoiceSpeed" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" min="0.25" max="4.0" step="0.05" value="1">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="elevenlabsTtsSettings" class="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-4 hidden">
+                    <div id="elevenlabsTtsSettings" class="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-4">
                          <h3 class="font-semibold text-gray-700">ElevenLabs TTS Settings</h3>
                         <div>
                             <label for="elevenlabsApiKey" class="form-label">ElevenLabs API Key</label>
@@ -2564,7 +2492,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const providerSelect = document.getElementById('ttsProviderSelect');
-        googleSettings = document.getElementById('googleTtsSettings');
         elevenlabsSettings = document.getElementById('elevenlabsTtsSettings');
         const elevenlabsApiKeyInput = document.getElementById('elevenlabsApiKey');
         const testButton = document.getElementById('unifiedTestVoiceBtn');
@@ -2587,35 +2514,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Function to show/hide setting blocks based on provider
         const toggleProviderView = async (provider) => {
-            googleSettings.classList.toggle('hidden', provider !== 'google');
             elevenlabsSettings.classList.toggle('hidden', provider !== 'elevenlabs');
             await loadTtsVoices(provider); // Load voices for the selected provider
             applyUnsavedProviderSettings(provider);
         };
 
         const captureCurrentProviderSettings = () => {
-            if (providerSelect.value === 'google') {
-                unsavedGoogle = {
-                    voiceName: document.getElementById('googleVoiceSelect').value,
-                    voicePitch: document.getElementById('googleVoicePitch').value,
-                    voiceSpeed: document.getElementById('googleVoiceSpeed').value
-                };
-            } else {
-                unsavedElevenlabs = {
-                    apiKey: document.getElementById('elevenlabsApiKey').value,
-                    voiceId: document.getElementById('elevenlabsVoiceSelect').value,
-                    stability: document.getElementById('elevenlabsStability').value,
-                    clarity: document.getElementById('elevenlabsClarity').value
-                };
-            }
+            // Only capture ElevenLabs settings now
+            unsavedElevenlabs = {
+                apiKey: document.getElementById('elevenlabsApiKey').value,
+                voiceId: document.getElementById('elevenlabsVoiceSelect').value,
+                stability: document.getElementById('elevenlabsStability').value,
+                clarity: document.getElementById('elevenlabsClarity').value
+            };
         };
 
         const applyUnsavedProviderSettings = (provider) => {
-            if (provider === 'google' && Object.keys(unsavedGoogle).length) {
-                if (unsavedGoogle.voiceName) document.getElementById('googleVoiceSelect').value = unsavedGoogle.voiceName;
-                if (unsavedGoogle.voicePitch) document.getElementById('googleVoicePitch').value = unsavedGoogle.voicePitch;
-                if (unsavedGoogle.voiceSpeed) document.getElementById('googleVoiceSpeed').value = unsavedGoogle.voiceSpeed;
-            }
             if (provider === 'elevenlabs' && Object.keys(unsavedElevenlabs).length) {
                 const apiInput = document.getElementById('elevenlabsApiKey');
                 if (unsavedElevenlabs.apiKey !== undefined) {
@@ -2671,8 +2585,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // Ensure numeric values are numbers, not strings
-            settings.googleVoicePitch = parseFloat(settings.googleVoicePitch);
-            settings.googleVoiceSpeed = parseFloat(settings.googleVoiceSpeed);
             settings.elevenlabsStability = parseFloat(settings.elevenlabsStability);
             settings.elevenlabsClarity = parseFloat(settings.elevenlabsClarity);
 
@@ -2776,17 +2688,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const text = document.getElementById('unifiedTestPhrase').value;
             let settings = {};
 
-            if (provider === 'google') {
-                settings.voiceName = document.getElementById('googleVoiceSelect').value;
-                settings.pitch = parseFloat(document.getElementById('googleVoicePitch').value);
-                settings.speed = parseFloat(document.getElementById('googleVoiceSpeed').value);
-            } else {
-                const customApiKey = document.getElementById('elevenlabsApiKey').value.trim();
-                var apiKeyToSend = (customApiKey === '' || customApiKey === '*****') ? undefined : customApiKey;
-                settings.voiceId = document.getElementById('elevenlabsVoiceSelect').value;
-                settings.stability = parseFloat(document.getElementById('elevenlabsStability').value);
-                settings.clarity = parseFloat(document.getElementById('elevenlabsClarity').value);
-            }
+            // Only ElevenLabs is supported now
+            const customApiKey = document.getElementById('elevenlabsApiKey').value.trim();
+            var apiKeyToSend = (customApiKey === '' || customApiKey === '*****') ? undefined : customApiKey;
+            settings.voiceId = document.getElementById('elevenlabsVoiceSelect').value;
+            settings.stability = parseFloat(document.getElementById('elevenlabsStability').value);
+            settings.clarity = parseFloat(document.getElementById('elevenlabsClarity').value);
 
             const originalHtml = testButton.innerHTML;
             testButton.disabled = true;
@@ -2835,10 +2742,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('ttsProviderSelect').value = voiceSettings.ttsProvider || 'elevenlabs';
         
-        // Populate Google Fields
-        document.getElementById('googleVoicePitch').value = voiceSettings.googleVoicePitch ?? 0;
-        document.getElementById('googleVoiceSpeed').value = voiceSettings.googleVoiceSpeed ?? 1;
-        
         // Populate ElevenLabs Fields
         const apiInput = document.getElementById('elevenlabsApiKey');
         const keyHint = document.getElementById('elevenlabsKeyHint');
@@ -2873,17 +2776,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Trigger the view toggle and load voices
         const providerSelect = document.getElementById('ttsProviderSelect');
-        googleSettings.classList.toggle('hidden', providerSelect.value !== 'google');
         elevenlabsSettings.classList.toggle('hidden', providerSelect.value !== 'elevenlabs');
 
         // Load voices and then select the saved one
         const loadAndSelect = async () => {
             await loadTtsVoices(providerSelect.value);
-            if(providerSelect.value === 'google') {
-                document.getElementById('googleVoiceSelect').value = voiceSettings.googleVoiceName || '';
-            } else {
-                document.getElementById('elevenlabsVoiceSelect').value = voiceSettings.elevenlabsVoiceId || '';
-            }
+            // Only ElevenLabs is supported now
+            document.getElementById('elevenlabsVoiceSelect').value = voiceSettings.elevenlabsVoiceId || '';
         };
         loadAndSelect();
     }
