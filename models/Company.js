@@ -98,7 +98,6 @@ const aiSettingsSchema = new mongoose.Schema({
         },
         maxAttempts: { type: Number, default: 2 }
     },
-    logCalls: { type: Boolean, default: false },
     bargeIn: { type: Boolean, default: false }, // Let agent finish speaking for natural conversation flow
     humanLikeFillers: { type: Boolean, default: false },
     fillerPhrases: {

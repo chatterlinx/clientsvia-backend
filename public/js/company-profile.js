@@ -569,8 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     elevenlabsClarity: currentCompanyData.aiSettings?.elevenLabs?.similarityBoost,
                     twilioSpeechConfidenceThreshold: currentCompanyData.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5,
                     fuzzyMatchThreshold: currentCompanyData.aiSettings?.fuzzyMatchThreshold ?? 0.5,
-                    speechConfirmation: currentCompanyData.aiSettings?.speechConfirmation || { enabled: false, confirmKey: 5, prompts: ["I heard: '{transcript}'. Press 5 or say yes to confirm. If not, say no or repeat."], maxAttempts: 2 },
-                    logCalls: currentCompanyData.aiSettings?.logCalls ?? false
+                    speechConfirmation: currentCompanyData.aiSettings?.speechConfirmation || { enabled: false, confirmKey: 5, prompts: ["I heard: '{transcript}'. Press 5 or say yes to confirm. If not, say no or repeat."], maxAttempts: 2 }
                 };
                 populateAiVoiceSettings(voiceSettings);
             }
@@ -2409,17 +2408,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-4">
                         <h3 class="font-semibold text-gray-700">Agent Performance Controls</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="flex items-center mt-6">
-                                <input type="checkbox" id="logCalls" name="logCalls" class="form-checkbox">
-                                <span class="ml-2">Enable Call Logging</span>
-                                <p class="text-xs text-gray-500 mt-1">
-                                    <strong>Enable Call Logging:</strong> When checked, caller and agent speech are recorded to the <code>callLogs</code> database collection.
-                                    <br>
-                                    • Useful for troubleshooting, QA, and reviewing agent performance.<br>
-                                    • <span class="text-red-600">Do not enable in production unless you need to audit or debug — may capture sensitive info.</span><br>
-                                    Logs can be viewed in the "Logs" tab of the dashboard.
-                                </p>
-                            </div>
                             <div class="col-span-1 md:col-span-2">
                                 <label for="twilioSpeechConfidenceThreshold" class="form-label">Twilio Speech Confidence Threshold</label>
                                 <input type="range" id="twilioSpeechConfidenceThreshold" name="twilioSpeechConfidenceThreshold" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" min="0.1" max="1" step="0.05" value="0.5">
@@ -2568,7 +2556,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             settings.twilioSpeechConfidenceThreshold = parseFloat(settings.twilioSpeechConfidenceThreshold || '0.5');
             settings.fuzzyMatchThreshold = parseFloat(formData.get('fuzzyMatchThreshold'));
-            settings.logCalls = formData.get('logCalls') === 'on';
             settings.speechConfirmation = {
                 enabled: formData.get('speechConfirmEnabled') === 'on',
                 confirmKey: parseInt(formData.get('confirmKey') || '5'),
@@ -2663,7 +2650,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const resetBtn = document.getElementById('resetVoiceDefaults');
                 if (resetBtn) {
             resetBtn.addEventListener('click', () => {
-                document.getElementById('logCalls').checked = false;
                 document.getElementById('twilioSpeechConfidenceThreshold').value = 0.5;
                 if (fuzzyMatchInput) fuzzyMatchInput.value = 0.5;
                 if (thresholdValue) thresholdValue.textContent = '0.5';
@@ -2762,7 +2748,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (stabilityValue) stabilityValue.textContent = Number(document.getElementById('elevenlabsStability').value).toFixed(2);
         if (clarityValue) clarityValue.textContent = Number(document.getElementById('elevenlabsClarity').value).toFixed(2);
 
-        document.getElementById('logCalls').checked = !!voiceSettings.logCalls;
         document.getElementById('twilioSpeechConfidenceThreshold').value = voiceSettings.twilioSpeechConfidenceThreshold ?? 0.5;
         if (fuzzyMatchInput) fuzzyMatchInput.value = voiceSettings.fuzzyMatchThreshold ?? 0.5;
         if (thresholdValue) thresholdValue.textContent = voiceSettings.fuzzyMatchThreshold ?? 0.5;

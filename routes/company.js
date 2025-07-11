@@ -390,7 +390,6 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
             'elevenlabsClarity',
             'twilioSpeechConfidenceThreshold',
             'fuzzyMatchThreshold',
-            'logCalls',
             'speechConfirmation'
         ];
         

@@ -272,10 +272,6 @@ router.post('/handle-speech', async (req, res) => {
 
     console.log(`[COMPANY CONFIRMED] ✅ Processing speech for: ${company.companyName}`);
 
-    if (company.aiSettings?.logCalls) {
-      console.log(`[Call Log] CallSid ${req.body.CallSid} Speech: ${speechText}`);
-    }
-
     confidence = parseFloat(req.body.Confidence || '0');
     threshold = company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5;
     
