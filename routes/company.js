@@ -441,6 +441,13 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
         await redisClient.del(cacheKey);
         console.log(`[Voice Settings] Cleared cache for key: ${cacheKey}`);
         
+        // ALSO clear phone-based cache used by Twilio
+        if (company.twilioConfig?.phoneNumber) {
+          const phoneCacheKey = `company-phone:${company.twilioConfig.phoneNumber}`;
+          await redisClient.del(phoneCacheKey);
+          console.log(`[Voice Settings] Cleared phone cache for key: ${phoneCacheKey}`);
+        }
+        
         console.log(`[Voice Settings Debug] Final saved responseDelayMs:`, company.aiSettings.responseDelayMs);
         console.log(`[API PATCH /api/company/${companyId}/voice-settings] Voice settings updated successfully`);
         res.json({ message: 'Voice settings updated successfully', aiSettings: company.aiSettings });

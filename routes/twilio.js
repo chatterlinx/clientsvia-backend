@@ -241,6 +241,13 @@ router.post('/handle-speech', async (req, res) => {
 
       const personality = company.aiSettings?.personality || 'friendly';
       const retryMsg = await getPersonalityResponse(company._id.toString(), 'cantUnderstand', personality);
+      
+      // Apply response delay if configured
+      const responseDelay = company.aiSettings?.responseDelayMs || 0;
+      if (responseDelay > 0) {
+        await new Promise(res => setTimeout(res, responseDelay));
+      }
+      
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
 
       if (elevenLabsVoice) {
