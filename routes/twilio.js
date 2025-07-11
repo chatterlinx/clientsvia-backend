@@ -1,7 +1,10 @@
 // Twilio Webhook Router - V3
 // 🌍 GLOBAL MULTI-TENANT PLATFORM
-// All changes affect ALL companies - no company-specific hardcoding
-// Use company.aiSettings for per-company configuration
+// 🚨 CRITICAL: All changes affect ALL companies - no company-specific hardcoding
+// 📌 POST-IT REMINDER: Use company.aiSettings for per-company configuration
+// ❌ NEVER hardcode company IDs or special treatment for any single company
+// ✅ ALWAYS design for global platform scalability
+// 🎯 TEST: "Would this work for company #1000 tomorrow?" If NO, fix it!
 const express = require('express');
 const twilio = require('twilio');
 const Company = require('../models/Company');
