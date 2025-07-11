@@ -568,8 +568,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     elevenlabsStability: currentCompanyData.aiSettings?.elevenLabs?.stability,
                     elevenlabsClarity: currentCompanyData.aiSettings?.elevenLabs?.similarityBoost,
                     twilioSpeechConfidenceThreshold: currentCompanyData.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5,
-                    fuzzyMatchThreshold: currentCompanyData.aiSettings?.fuzzyMatchThreshold ?? 0.5,
-                    speechConfirmation: currentCompanyData.aiSettings?.speechConfirmation || { enabled: false, confirmKey: 5, prompts: ["I heard: '{transcript}'. Press 5 or say yes to confirm. If not, say no or repeat."], maxAttempts: 2 }
+                    fuzzyMatchThreshold: currentCompanyData.aiSettings?.fuzzyMatchThreshold ?? 0.5
                 };
                 populateAiVoiceSettings(voiceSettings);
             }
@@ -1902,11 +1901,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         const saveButton = aiSettingsForm.querySelector('button[type="submit"]');
         if (saveButton) { saveButton.disabled = true; saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...'; }
-        if (!llmFallbackEnabledCheckbox.checked && !customEscalationMessageInput.value.trim()) {
-            alert('Please provide an escalation message.');
-            if (saveButton) { saveButton.disabled = false; saveButton.innerHTML = '<i class="fas fa-save mr-2"></i>Save AI Core Settings'; }
-            return;
-        }
         try {
             const response = await fetch(`/api/company/${companyId}/aisettings`, {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ aiSettings: aiSettingsData })
@@ -2130,7 +2124,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupDynamicList('add-call-summary-recipient', 'call-summaries-list', (idx) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="summaryRecipient_${idx}" placeholder="Email or Phone Number" class="form-input flex-1"><button type="button" class="remove-summary-recipient form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-summary-recipient');
         setupDynamicList('add-after-hours-notification-recipient', 'after-hours-notifications-list', (idx) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="ahNotificationRecipient_${idx}" placeholder="Email or Phone Number" class="form-input flex-1"><button type="button" class="remove-ah-notification form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-ah-notification');
         setupDynamicList('add-malfunction-forwarding-number', 'malfunction-forwarding-list', (idx) => `<div class="flex items-end space-x-2 mt-2"><input type="tel" name="mfForwardingPhone_${idx}" placeholder="Phone Number (E.164)" class="form-input flex-1"><button type="button" class="remove-mf-forward form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-mf-forward');
-        setupDynamicList('add-malfunction-notification-recipient', 'malfunction-notifications-list', (idx) => `<div class="flex items-end space-x-2 mt-2"><input type="tel" name="mfNotificationRecipient_${idx}" placeholder="Phone Number (E.164) for SMS" class="form-input flex-1"><button type="button" class="remove-mf-notify form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-mf-notify');
+        setupDynamicList('add-malfunction-notification-recipient', 'malfunction-notifications-list', (idx) => `<div class="flex items-end space-x-2 mt-2"><input type="tel" name="mfNotificationRecipient_${idx}" placeholder="Phone Number (E.164) for SMS" class="form-input flex-1" value="${escapeHTML(item.phoneNumber || item.contact || '')}"><button type="button" class="remove-mf-notify form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-mf-notify');
         setupDynamicList('add-placeholder-btn', 'placeholders-list', (idx) => `<div class="flex items-end space-x-2 mt-1"><input type="text" name="placeholderName_${idx}" placeholder="Name" class="form-input flex-1"><input type="text" name="placeholderValue_${idx}" placeholder="Value" class="form-input flex-1"><button type="button" class="remove-placeholder form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-placeholder');
 
         if (placeholdersListContainer) {
@@ -2428,26 +2422,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
                         <div class="mt-4">
-                            <label class="flex items-center">
-                                <input type="checkbox" id="speechConfirmEnabled" name="speechConfirmEnabled" class="form-checkbox">
-                                <span class="ml-2">Enable Speech Confirmation</span>
-                            </label>
-                            <p class="text-xs text-gray-500 mt-1">
-                                <strong>Enable Speech Confirmation:</strong> The agent will repeat what it heard and require approval before acting.<br>
-                                Example prompt: “I heard: '{transcript}'. Press 5 or say yes to confirm. If not, say no or repeat.”<br>
-                                Setting is stored with the company profile and used on all calls when enabled.
-                            </p>
-                            <div class="confirmation-settings ml-6 mt-2 space-y-2 hidden">
-                                <label class="form-label">Confirmation Key
-                                    <input id="confirmKey" name="confirmKey" type="number" class="form-input ml-2 w-20" value="5">
-                                </label>
-                                <label class="form-label block">Confirmation Phrases
-                                    <textarea id="confirmationPrompts" name="confirmationPrompts" class="form-textarea wider-textbox" rows="2">I heard: '{transcript}'. Press 5 or say yes to confirm. If not, say no or repeat.</textarea>
-                                </label>
-                                <label class="form-label">Max Recognition Attempts
-                                    <input id="maxAttempts" name="maxAttempts" type="number" class="form-input ml-2 w-20" value="2">
-                                </label>
-                            </div>
                             <button type="button" id="resetVoiceDefaults" class="text-sm text-indigo-600 mt-2 underline">Reset to Defaults</button>
                         </div>
                     </div>
@@ -2483,8 +2457,6 @@ document.addEventListener('DOMContentLoaded', () => {
         elevenlabsSettings = document.getElementById('elevenlabsTtsSettings');
         const elevenlabsApiKeyInput = document.getElementById('elevenlabsApiKey');
         const testButton = document.getElementById('unifiedTestVoiceBtn');
-        const confirmToggle = document.getElementById('speechConfirmEnabled');
-        const confirmContainer = document.querySelector('.confirmation-settings');
         fuzzyMatchInput = document.getElementById('fuzzyMatchThreshold');
         thresholdValue = document.getElementById('fuzzyThresholdValue');
         const stabilityInput = document.getElementById('elevenlabsStability');
@@ -2556,12 +2528,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             settings.twilioSpeechConfidenceThreshold = parseFloat(settings.twilioSpeechConfidenceThreshold || '0.5');
             settings.fuzzyMatchThreshold = parseFloat(formData.get('fuzzyMatchThreshold'));
-            settings.speechConfirmation = {
-                enabled: formData.get('speechConfirmEnabled') === 'on',
-                confirmKey: parseInt(formData.get('confirmKey') || '5'),
-                prompts: (formData.get('confirmationPrompts') || '').split('\n').filter(t => t.trim() !== ''),
-                maxAttempts: parseInt(formData.get('maxAttempts') || '2')
-            };
 
             if (settings.elevenlabsApiKey === '*****') {
                 if (document.getElementById('elevenlabsApiKey').dataset.hasValue === 'true') {
@@ -2617,12 +2583,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        if (confirmToggle) {
-            confirmToggle.addEventListener('change', () => {
-                confirmContainer.classList.toggle('hidden', !confirmToggle.checked);
-            });
-        }
-
         if (fuzzyMatchInput) {
             fuzzyMatchInput.addEventListener('input', () => {
                 if (thresholdValue) thresholdValue.textContent = fuzzyMatchInput.value;
@@ -2657,11 +2617,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('elevenlabsClarity').value = 0.75;
                 if (stabilityValue) stabilityValue.textContent = '0.75';
                 if (clarityValue) clarityValue.textContent = '0.75';
-                document.getElementById('speechConfirmEnabled').checked = false;
-                document.getElementById('confirmKey').value = 5;
-                document.getElementById('confirmationPrompts').value = "I heard: '{transcript}'. Press 5 or say yes to confirm. If not, say no or repeat.";
-                document.getElementById('maxAttempts').value = 2;
-                confirmContainer.classList.add('hidden');
             });
         }
         console.log('📎 Attaching submit event listener to form:', form);
@@ -2684,7 +2639,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const originalHtml = testButton.innerHTML;
             testButton.disabled = true;
             testButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Playing...';
-
+            
             try {
                 const payload = { provider, text, settings };
                 if (typeof apiKeyToSend !== 'undefined') {
@@ -2752,13 +2707,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (fuzzyMatchInput) fuzzyMatchInput.value = voiceSettings.fuzzyMatchThreshold ?? 0.5;
         if (thresholdValue) thresholdValue.textContent = voiceSettings.fuzzyMatchThreshold ?? 0.5;
 
-        const confirmEnabled = voiceSettings.speechConfirmation?.enabled ?? false;
-        document.getElementById('speechConfirmEnabled').checked = confirmEnabled;
-        document.getElementById('confirmKey').value = voiceSettings.speechConfirmation?.confirmKey ?? 5;
-        document.getElementById('confirmationPrompts').value = (voiceSettings.speechConfirmation?.prompts || []).join('\n');
-        document.getElementById('maxAttempts').value = voiceSettings.speechConfirmation?.maxAttempts ?? 2;
-        document.querySelector('.confirmation-settings').classList.toggle('hidden', !confirmEnabled);
-        
         // Trigger the view toggle and load voices
         const providerSelect = document.getElementById('ttsProviderSelect');
         elevenlabsSettings.classList.toggle('hidden', providerSelect.value !== 'elevenlabs');

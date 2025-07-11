@@ -87,17 +87,6 @@ const aiSettingsSchema = new mongoose.Schema({
     fuzzyMatchThreshold: { type: Number, default: 0.3 }, // Better Q&A matching for all companies
     ttsPitch: { type: Number, default: 0 },
     ttsSpeed: { type: Number, default: 1 },
-    speechConfirmation: {
-        enabled: { type: Boolean, default: false },
-        confirmKey: { type: Number, default: 5 },
-        prompts: {
-            type: [String],
-            default: [
-                "I heard: '{transcript}'. Press 5 or say yes to confirm. If not, say no or repeat."
-            ]
-        },
-        maxAttempts: { type: Number, default: 2 }
-    },
     bargeIn: { type: Boolean, default: false }, // Let agent finish speaking for natural conversation flow
     humanLikeFillers: { type: Boolean, default: false },
     fillerPhrases: {
