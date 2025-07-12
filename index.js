@@ -27,7 +27,8 @@ const aiRoutes = require('./routes/ai'); // New AI routes
 const testRoutes = require('./routes/test'); // New test routes
 const elevenLabsRoutes = require('./routes/elevenLabs'); // New ElevenLabs routes
 const uploadRoutes = require('./routes/upload');
-const workflowRoutes = require('./routes/workflows'); // Workflow routes
+const workflowRoutes = require('./routes/workflows'); // New workflow routes
+const testWorkflowRoutes = require('./routes/test-workflows'); // Test workflow routes
 
 // Initialize Express app
 const app = express();
@@ -62,7 +63,8 @@ app.use('/api/ai', aiRoutes); // Registering the new /api/ai route
 app.use('/api/test', testRoutes); // Registering the new /api/test route
 app.use('/api/elevenlabs', elevenLabsRoutes); // Registering the new /api/elevenlabs route
 app.use('/api/upload', uploadRoutes);
-app.use('/api/workflows', workflowRoutes); // Registering the workflows route
+app.use('/api/workflows', workflowRoutes); // Registering the new /api/workflows route
+app.use('/api/test-workflows', testWorkflowRoutes); // Test workflow routes
 /*
 --- TWILIO SMOKE TEST ROUTE (COMMENTED OUT) ---
 app.post('/api/twilio/voice', (req, res) => {
