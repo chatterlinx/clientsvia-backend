@@ -1,11 +1,11 @@
 // routes/workflows.js
-// Comprehensive workflow management routes
+// Basic workflow routes - Step 2
 
 const express = require('express');
 const router = express.Router();
-const { WorkflowService } = require('../services/workflowService');
+const workflowService = require('../services/workflowService');
 
-// GET /api/workflows - List workflows for a company
+// GET /api/workflows - List workflows
 router.get('/', async (req, res) => {
     try {
         const { companyId } = req.query;
@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
             });
         }
 
-        const workflows = await WorkflowService.getWorkflowsForCompany(companyId);
+        const workflows = await workflowService.getWorkflows(companyId);
         res.json(workflows);
     } catch (error) {
         console.error('[WorkflowRoutes] Error getting workflows:', error);
@@ -26,14 +26,37 @@ router.get('/', async (req, res) => {
     }
 });
 
-// GET /api/workflows/:id - Get specific workflow
+// GET /api/workflows/company/:companyId - List workflows by company ID (alternative route)
+router.get('/company/:companyId', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        if (!companyId) {
+            return res.status(400).json({ 
+                message: 'Company ID is required' 
+            });
+        }
+
+        const workflows = await workflowService.getWorkflows(companyId);
+        res.json(workflows);
+    } catch (error) {
+        console.error('[WorkflowRoutes] Error getting workflows:', error);
+        res.status(500).json({ 
+            message: 'Error fetching workflows' 
+        });
+    }
+});
+
+// GET /api/workflows/:id - Get single workflow
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const workflow = await Workflow.findById(id).populate('steps.actionId');
+        const workflow = await workflowService.getWorkflow(id);
         
         if (!workflow) {
-            return res.status(404).json({ message: 'Workflow not found' });
+            return res.status(404).json({ 
+                message: 'Workflow not found' 
+            });
         }
         
         res.json(workflow);
@@ -45,18 +68,32 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+// DELETE /api/workflows/:id - Delete workflow
+router.delete('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await workflowService.deleteWorkflow(id);
+        res.json({ message: 'Workflow deleted successfully' });
+    } catch (error) {
+        console.error('[WorkflowRoutes] Error deleting workflow:', error);
+        res.status(500).json({ 
+            message: 'Error deleting workflow' 
+        });
+    }
+});
+
 // POST /api/workflows - Create workflow
 router.post('/', async (req, res) => {
     try {
         const workflowData = req.body;
         
-        if (!workflowData.name || !workflowData.companyId) {
+        if (!workflowData.name) {
             return res.status(400).json({ 
-                message: 'Workflow name and company ID are required' 
+                message: 'Workflow name is required' 
             });
         }
 
-        const workflow = await WorkflowService.createWorkflow(workflowData);
+        const workflow = await workflowService.createWorkflow(workflowData);
         res.status(201).json(workflow);
     } catch (error) {
         console.error('[WorkflowRoutes] Error creating workflow:', error);
@@ -70,12 +107,14 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const updateData = req.body;
+        const workflowData = req.body;
         
-        const workflow = await WorkflowService.updateWorkflow(id, updateData);
+        const workflow = await workflowService.updateWorkflow(id, workflowData);
         
         if (!workflow) {
-            return res.status(404).json({ message: 'Workflow not found' });
+            return res.status(404).json({ 
+                message: 'Workflow not found' 
+            });
         }
         
         res.json(workflow);
@@ -83,37 +122,6 @@ router.put('/:id', async (req, res) => {
         console.error('[WorkflowRoutes] Error updating workflow:', error);
         res.status(500).json({ 
             message: 'Error updating workflow' 
-        });
-    }
-});
-
-// DELETE /api/workflows/:id - Delete workflow
-router.delete('/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        await WorkflowService.deleteWorkflow(id);
-        res.json({ message: 'Workflow deleted successfully' });
-    } catch (error) {
-        console.error('[WorkflowRoutes] Error deleting workflow:', error);
-        res.status(500).json({ 
-            message: 'Error deleting workflow' 
-        });
-    }
-});
-
-// POST /api/workflows/:id/execute - Execute workflow
-router.post('/:id/execute', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const context = req.body.context || {};
-        
-        const result = await WorkflowService.executeWorkflow(id, context);
-        res.json(result);
-    } catch (error) {
-        console.error('[WorkflowRoutes] Error executing workflow:', error);
-        res.status(500).json({ 
-            message: 'Error executing workflow' 
         });
     }
 });

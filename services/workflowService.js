@@ -35,6 +35,19 @@ class WorkflowService {
         }
     }
 
+    // Get a single workflow by ID
+    async getWorkflow(workflowId) {
+        try {
+            const workflow = await Workflow.findById(workflowId)
+                .populate('steps.actionId');
+            
+            return workflow;
+        } catch (error) {
+            console.error('[WorkflowService] Error getting workflow:', error);
+            return null;
+        }
+    }
+
     // Create a new workflow
     async createWorkflow(workflowData) {
         try {
