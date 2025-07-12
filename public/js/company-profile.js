@@ -5,6 +5,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- TOP-LEVEL VARIABLES --- //
     const urlParams = new URLSearchParams(window.location.search);
     const companyId = urlParams.get('id');
+    
+    // Make companyId globally available for workflow management
+    window.currentCompanyId = companyId;
 
     // --- UNSAVED CHANGES CODE START --- //
     let hasUnsavedChanges = false;
