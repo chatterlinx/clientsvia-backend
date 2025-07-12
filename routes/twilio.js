@@ -1,10 +1,10 @@
 // Twilio Webhook Router - V3
-// 🌍 GLOBAL MULTI-TENANT PLATFORM
-// 🚨 CRITICAL: All changes affect ALL companies - no company-specific hardcoding
-// 📌 POST-IT REMINDER: Use company.aiSettings for per-company configuration
-// ❌ NEVER hardcode company IDs or special treatment for any single company
-// ✅ ALWAYS design for global platform scalability
-// 🎯 TEST: "Would this work for company #1000 tomorrow?" If NO, fix it!
+// GLOBAL MULTI-TENANT PLATFORM
+// CRITICAL: All changes affect ALL companies - no company-specific hardcoding
+// POST-IT REMINDER: Use company.aiSettings for per-company configuration
+// NEVER hardcode company IDs or special treatment for any single company
+// ALWAYS design for global platform scalability
+// TEST: "Would this work for company #1000 tomorrow?" If NO, fix it!
 const express = require('express');
 const twilio = require('twilio');
 const Company = require('../models/Company');
@@ -41,10 +41,10 @@ async function getCompanyByPhoneNumber(phoneNumber) {
     const cacheStartTime = Date.now();
     const cachedCompany = await redisClient.get(cacheKey);
     if (cachedCompany) {
-      console.log(`[CACHE HIT] ⚡ Company found in cache for ${phoneNumber} in ${Date.now() - cacheStartTime}ms`);
+      console.log(`[CACHE HIT] [FAST] Company found in cache for ${phoneNumber} in ${Date.now() - cacheStartTime}ms`);
       company = JSON.parse(cachedCompany);
     } else {
-      console.log(`[CACHE MISS] 🔍 Company not cached for ${phoneNumber}, querying database...`);
+      console.log(`[CACHE MISS] [SEARCH] Company not cached for ${phoneNumber}, querying database...`);
       const dbStartTime = Date.now();
       
       const digits = extractDigits(phoneNumber);
@@ -59,16 +59,16 @@ async function getCompanyByPhoneNumber(phoneNumber) {
 
       if (company) {
         const dbEndTime = Date.now();
-        console.log(`[DB SUCCESS] ✅ Company found in database in ${dbEndTime - dbStartTime}ms`);
+        console.log(`[DB SUCCESS] [OK] Company found in database in ${dbEndTime - dbStartTime}ms`);
         await redisClient.setEx(cacheKey, 3600, JSON.stringify(company)); // Cache for 1 hour
         console.log(`[CACHE SAVE] 💾 Company cached for phone: ${phoneNumber}`);
       } else {
         const dbEndTime = Date.now();
-        console.log(`[DB MISS] ❌ No company found in database for ${phoneNumber} (${dbEndTime - dbStartTime}ms)`);
+        console.log(`[DB MISS] [ERROR] No company found in database for ${phoneNumber} (${dbEndTime - dbStartTime}ms)`);
       }
     }
   } catch (err) {
-    console.error(`[CACHE/DB ERROR] ❌ Error fetching company by phone ${phoneNumber}:`, err.message);
+    console.error(`[CACHE/DB ERROR] [ERROR] Error fetching company by phone ${phoneNumber}:`, err.message);
     console.error(`[Redis/DB] Error fetching company by phone ${phoneNumber}:`, err.message, err.stack);
     // Fallback to direct DB fetch if Redis fails
     const digits = extractDigits(phoneNumber);
@@ -93,20 +93,20 @@ async function getCompanyByPhoneNumber(phoneNumber) {
 
 router.post('/voice', async (req, res) => {
   const callStartTime = Date.now();
-  console.log(`[CALL START] 📞 New call initiated at: ${new Date().toISOString()}`);
+  console.log(`[CALL START] [CALL] New call initiated at: ${new Date().toISOString()}`);
   console.log(`[CALL DEBUG] From: ${req.body.From} → To: ${req.body.To} | CallSid: ${req.body.CallSid}`);
   
   try {
     console.log('[POST /api/twilio/voice] Incoming call:', req.body);
     const calledNumber = normalizePhoneNumber(req.body.To);
-    console.log(`[PHONE LOOKUP] 🔍 Searching for company with phone: ${calledNumber}`);
+    console.log(`[PHONE LOOKUP] [SEARCH] Searching for company with phone: ${calledNumber}`);
     
     let company = await getCompanyByPhoneNumber(calledNumber);
 
     const twiml = new twilio.twiml.VoiceResponse();
 
     if (!company) {
-      console.log(`[ERROR] ❌ No company found for phone number: ${calledNumber}`);
+      console.log(`[ERROR] [ERROR] No company found for phone number: ${calledNumber}`);
       const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
       const fallbackMessage = `<Say>${escapeTwiML(msg)}</Say>`;
       twiml.hangup();
@@ -115,18 +115,18 @@ router.post('/voice', async (req, res) => {
       return;
     }
 
-    console.log(`[COMPANY FOUND] ✅ Company: ${company.companyName} (ID: ${company._id})`);
+    console.log(`[COMPANY FOUND] [OK] Company: ${company.companyName} (ID: ${company._id})`);
     console.log(`[AI SETTINGS] Voice ID: ${company.aiSettings?.elevenLabs?.voiceId || 'default'} | Personality: ${company.aiSettings?.personality || 'friendly'}`);
     
-    // 🎯 COMPREHENSIVE PERFORMANCE SETTINGS REPORT
+    // [TARGET] COMPREHENSIVE PERFORMANCE SETTINGS REPORT
     const speechThreshold = company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.4;
     const fuzzyThreshold = company.aiSettings?.fuzzyMatchThreshold ?? 0.3;
-    console.log(`[PERFORMANCE SETTINGS] 🎯 Speech Confidence: ${speechThreshold} | Fuzzy Match: ${fuzzyThreshold}`);
+    console.log(`[PERFORMANCE SETTINGS] [TARGET] Speech Confidence: ${speechThreshold} | Fuzzy Match: ${fuzzyThreshold}`);
     console.log(`[THRESHOLDS] Confidence: ${speechThreshold}`); // Keep legacy log for compatibility
 
     const greetingType = company.agentSetup?.greetingType || 'tts';
     const greetingAudioUrl = company.agentSetup?.greetingAudioUrl || '';
-    console.log(`[GREETING TYPE] 🎵 Type: ${greetingType} | Audio URL: ${greetingAudioUrl || 'none'}`);
+    console.log(`[GREETING TYPE] [TTS] Type: ${greetingType} | Audio URL: ${greetingAudioUrl || 'none'}`);
     
     // Get placeholders for the company
     const placeholders = company.agentSetup?.placeholders || [];
@@ -160,7 +160,7 @@ router.post('/voice', async (req, res) => {
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
       if (elevenLabsVoice) {
         try {
-          console.log(`[TTS START] 🎵 Starting greeting TTS synthesis...`);
+          console.log(`[TTS START] [TTS] Starting greeting TTS synthesis...`);
           const ttsStartTime = Date.now();
           
           const buffer = await synthesizeSpeech({
@@ -174,7 +174,7 @@ router.post('/voice', async (req, res) => {
           });
           
           const ttsTime = Date.now() - ttsStartTime;
-          console.log(`[TTS COMPLETE] ✅ Greeting TTS completed in ${ttsTime}ms`);
+          console.log(`[TTS COMPLETE] [OK] Greeting TTS completed in ${ttsTime}ms`);
           
           const fileName = `greet_${Date.now()}.mp3`;
           const audioDir = path.join(__dirname, '../public/audio');
@@ -217,7 +217,7 @@ router.post('/handle-speech', async (req, res) => {
   let confidence = 0;
   let threshold = 0.5;
   
-  console.log(`[SPEECH START] 🎤 Speech processing started at: ${new Date().toISOString()}`);
+  console.log(`[SPEECH START] [SPEECH] Speech processing started at: ${new Date().toISOString()}`);
   
   try {
     console.log(`[TWILIO TIMING] Speech webhook received at: ${new Date().toISOString()}`);
@@ -229,7 +229,7 @@ router.post('/handle-speech', async (req, res) => {
     const repeatKey = `twilio-repeats:${callSid}`;
 
     if (!speechText) {
-      console.log(`[SPEECH ERROR] ❌ Empty speech result received from Twilio`);
+      console.log(`[SPEECH ERROR] [ERROR] Empty speech result received from Twilio`);
       const msg = await getRandomPersonalityResponse(null, 'cantUnderstand');
       const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
       twiml.hangup();
@@ -238,7 +238,7 @@ router.post('/handle-speech', async (req, res) => {
       return;
     }
 
-    console.log(`[SPEECH RECEIVED] 🎯 Processing speech: "${speechText}" (${speechText.length} chars)`);
+    console.log(`[SPEECH RECEIVED] [TARGET] Processing speech: "${speechText}" (${speechText.length} chars)`);
 
     // Check for potentially unclear/incomplete speech OR rambling
     const isLikelyUnclear = (
@@ -263,10 +263,10 @@ router.post('/handle-speech', async (req, res) => {
     }
 
     const calledNumber = normalizePhoneNumber(req.body.To);
-    console.log(`[COMPANY LOOKUP] 🔍 Looking up company for phone: ${calledNumber}`);
+    console.log(`[COMPANY LOOKUP] [SEARCH] Looking up company for phone: ${calledNumber}`);
     let company = await getCompanyByPhoneNumber(calledNumber);
     if (!company) {
-      console.log(`[COMPANY ERROR] ❌ No company found for phone: ${calledNumber} during speech processing`);
+      console.log(`[COMPANY ERROR] [ERROR] No company found for phone: ${calledNumber} during speech processing`);
       const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
       const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
       twiml.hangup();
@@ -275,12 +275,12 @@ router.post('/handle-speech', async (req, res) => {
       return;
     }
 
-    console.log(`[COMPANY CONFIRMED] ✅ Processing speech for: ${company.companyName}`);
+    console.log(`[COMPANY CONFIRMED] [OK] Processing speech for: ${company.companyName}`);
 
     confidence = parseFloat(req.body.Confidence || '0');
     threshold = company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.4;
     
-    console.log(`[CONFIDENCE CHECK] Speech: "${speechText}" | Confidence: ${confidence} | Threshold: ${threshold} | ${confidence >= threshold ? 'PASS ✅' : 'FAIL ❌'}`);
+    console.log(`[CONFIDENCE CHECK] Speech: "${speechText}" | Confidence: ${confidence} | Threshold: ${threshold} | ${confidence >= threshold ? 'PASS [OK]' : 'FAIL [ERROR]'}`);
     
     if (confidence < threshold) {
       console.log(`[CONFIDENCE REJECT] Low confidence (${confidence} < ${threshold}) - asking user to repeat`);
@@ -369,13 +369,13 @@ router.post('/handle-speech', async (req, res) => {
     console.log(`[Q&A DEBUG] Incoming Speech: "${speechText}"`);
     
     const fuzzyThreshold = company.aiSettings?.fuzzyMatchThreshold ?? 0.3;
-    console.log(`[Q&A MATCHING] 🔍 Searching ${qnaEntries.length} Q&A entries with fuzzy threshold: ${fuzzyThreshold}`);
+    console.log(`[Q&A MATCHING] [SEARCH] Searching ${qnaEntries.length} Q&A entries with fuzzy threshold: ${fuzzyThreshold}`);
     
     const cachedAnswer = findCachedAnswer(qnaEntries, speechText, fuzzyThreshold);
     console.log(`[Q&A DEBUG] Match result:`, cachedAnswer);
     
     if (cachedAnswer) {
-      console.log(`[Q&A MATCH FOUND] ✅ Using Q&A response for ${callSid}: ${cachedAnswer.substring(0, 100)}...`);
+      console.log(`[Q&A MATCH FOUND] [OK] Using Q&A response for ${callSid}: ${cachedAnswer.substring(0, 100)}...`);
       
       const gather = twiml.gather({
         input: 'speech',
@@ -466,7 +466,7 @@ router.post('/handle-speech', async (req, res) => {
       );
       
       const aiEndTime = Date.now();
-      console.log(`[AI SUCCESS] ✅ AI response generated in ${aiEndTime - aiStartTime}ms`);
+      console.log(`[AI SUCCESS] [OK] AI response generated in ${aiEndTime - aiStartTime}ms`);
       console.log(`[AI] answerQuestion result for ${callSid}:`, answerObj);
 
       // Add AI response to history
@@ -475,7 +475,7 @@ router.post('/handle-speech', async (req, res) => {
       console.log(`[AI HISTORY] 💾 Saved conversation history (${conversationHistory.length} messages)`);
 
     } catch (err) {
-      console.error(`[AI ERROR] ❌ AI processing failed: ${err.message}`);
+      console.error(`[AI ERROR] [ERROR] AI processing failed: ${err.message}`);
       console.error(`[AI Processing Error for CallSid: ${callSid}]`, err.message, err.stack);
       const personality = company.aiSettings?.personality || 'friendly';
       const fallback = await getPersonalityResponse(company._id.toString(), 'connectionTrouble', personality);
@@ -503,7 +503,7 @@ router.post('/handle-speech', async (req, res) => {
       
     if (elevenLabsVoice) {
       try {
-        console.log(`[TTS START] 🎵 Starting ElevenLabs synthesis for: "${strippedAnswer.substring(0, 50)}..."`);
+        console.log(`[TTS START] [TTS] Starting ElevenLabs synthesis for: "${strippedAnswer.substring(0, 50)}..."`);
         const ttsStartTime = Date.now();
         
         // Use Promise.race to timeout TTS if it's too slow
@@ -524,7 +524,7 @@ router.post('/handle-speech', async (req, res) => {
         const buffer = await Promise.race([ttsPromise, timeoutPromise]);
         
         const ttsTime = Date.now() - ttsStartTime;
-        console.log(`[TTS COMPLETE] ✅ ElevenLabs synthesis completed in ${ttsTime}ms`);
+        console.log(`[TTS COMPLETE] [OK] ElevenLabs synthesis completed in ${ttsTime}ms`);
 
         // Store audio in Redis for fast serving
         const audioKey = `audio:ai:${callSid}`;
@@ -552,10 +552,10 @@ router.post('/handle-speech', async (req, res) => {
     console.log(`[TWILIO TIMING] Total processing time: ${requestEndTime - requestStartTime}ms`);
     console.log(`[TWILIO TIMING] Response XML length: ${responseXML.length} characters`);
     console.log(`[CONFIDENCE SUMMARY] Successfully processed speech with confidence ${confidence} (threshold: ${threshold})`);
-    console.log(`[SPEECH COMPLETE] ✅ Speech processing completed in ${requestEndTime - requestStartTime}ms`);
+    console.log(`[SPEECH COMPLETE] [OK] Speech processing completed in ${requestEndTime - requestStartTime}ms`);
     res.send(responseXML);
   } catch (err) {
-    console.error(`[SPEECH ERROR] ❌ Speech processing failed: ${err.message}`);
+    console.error(`[SPEECH ERROR] [ERROR] Speech processing failed: ${err.message}`);
     console.error('[POST /api/twilio/handle-speech] Error:', err.message, err.stack);
     const twiml = new twilio.twiml.VoiceResponse();
     const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');

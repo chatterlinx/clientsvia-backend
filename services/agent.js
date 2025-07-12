@@ -633,7 +633,7 @@ function handleClosing(company, question, personality, placeholders) {
 }
 
 // Agent Service - AI Response Generation
-// 🌍 GLOBAL MULTI-TENANT PLATFORM  
+//  GLOBAL MULTI-TENANT PLATFORM  
 // Serves ALL companies dynamically - no hardcoded company logic
 const { GoogleAuth } = require('google-auth-library');
 

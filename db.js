@@ -33,7 +33,7 @@ const connectDB = async () => {
             // serverSelectionTimeoutMS: 30000, // Optional: Increase timeout
             // socketTimeoutMS: 45000, // Optional
         });
-        console.log('[Mongoose Connection] ✅ Successfully connected to MongoDB via Mongoose!');
+        console.log('[Mongoose Connection] [OK] Successfully connected to MongoDB via Mongoose!');
 
         // Make the native 'Db' object available from Mongoose's connection
         // This dbInstance will be compatible with code expecting a native Db object.
@@ -46,13 +46,13 @@ const connectDB = async () => {
         // const client = new MongoClient(uri);
         // await client.connect();
         // const nativeDb = client.db(); // This would be a separate connection pool
-        // console.log('[Native MongoClient] ✅ Successfully connected to MongoDB!');
+        // console.log('[Native MongoClient] [OK] Successfully connected to MongoDB!');
         // dbInstance = nativeDb; // If you prefer to keep this as the source for getDB()
 
         return dbInstance; // Or just fulfill promise, Mongoose connection is global
 
     } catch (e) {
-        console.error('[Mongoose/MongoDB Connection] ❌ Failed to connect:', e.message);
+        console.error('[Mongoose/MongoDB Connection] [ERROR] Failed to connect:', e.message);
         console.error(e.stack); // Log full stack for more details
         throw e; // Re-throw the error so the caller (e.g., index.js) can be aware
     }

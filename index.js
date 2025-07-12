@@ -96,7 +96,7 @@ async function startServer() {
         await AgentPromptService.loadAll();
         const PORT = process.env.PORT || 4000;
         return app.listen(PORT, () => {
-            console.log(`🚀 Admin dashboard listening at http://localhost:${PORT}`);
+            console.log(`Admin dashboard listening at http://localhost:${PORT}`);
             console.log(`Node environment: ${process.env.NODE_ENV || 'development'}`);
         });
     } catch (err) {
