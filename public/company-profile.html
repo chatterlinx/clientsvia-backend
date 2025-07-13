@@ -316,6 +316,84 @@
                                     </div>
                                 </div>
                                 
+                                <!-- Webhook Configuration Reference -->
+                                <div class="config-block mt-6">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <h3 class="font-semibold text-gray-700">Twilio Webhook Configuration</h3>
+                                        <button type="button" id="toggleWebhookInfo" class="text-indigo-600 hover:text-indigo-800 text-sm flex items-center">
+                                            <i class="fas fa-info-circle mr-1"></i>Show Webhook URLs
+                                        </button>
+                                    </div>
+                                    <p class="text-sm text-gray-500 mb-3">Use these webhook URLs in your Twilio Console for phone number configuration.</p>
+                                    
+                                    <div id="webhookInfoPanel" class="hidden">
+                                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
+                                            <!-- Voice Webhook -->
+                                            <div class="webhook-item">
+                                                <div class="flex justify-between items-center mb-2">
+                                                    <h4 class="text-sm font-medium text-gray-900">🎤 Voice Webhook (Primary)</h4>
+                                                    <button type="button" class="copy-webhook-btn text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded" data-webhook="https://clientsvia-backend.onrender.com/api/twilio/voice">
+                                                        <i class="fas fa-copy mr-1"></i>Copy
+                                                    </button>
+                                                </div>
+                                                <div class="bg-white border rounded p-2 font-mono text-sm text-gray-800">
+                                                    https://clientsvia-backend.onrender.com/api/twilio/voice
+                                                </div>
+                                                <p class="text-xs text-gray-600 mt-1">Configure this in Twilio Console → Phone Numbers → Voice Configuration</p>
+                                            </div>
+                                            
+                                            <!-- Speech Webhook -->
+                                            <div class="webhook-item">
+                                                <div class="flex justify-between items-center mb-2">
+                                                    <h4 class="text-sm font-medium text-gray-900">🗣️ Speech Recognition</h4>
+                                                    <button type="button" class="copy-webhook-btn text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded" data-webhook="https://clientsvia-backend.onrender.com/api/twilio/handle-speech">
+                                                        <i class="fas fa-copy mr-1"></i>Copy
+                                                    </button>
+                                                </div>
+                                                <div class="bg-white border rounded p-2 font-mono text-sm text-gray-800">
+                                                    https://clientsvia-backend.onrender.com/api/twilio/handle-speech
+                                                </div>
+                                                <p class="text-xs text-gray-600 mt-1">Used internally for AI speech processing</p>
+                                            </div>
+                                            
+                                            <!-- Additional Webhooks -->
+                                            <div class="webhook-item">
+                                                <div class="flex justify-between items-center mb-2">
+                                                    <h4 class="text-sm font-medium text-gray-900">⚡ Additional Endpoints</h4>
+                                                    <span class="text-xs text-gray-500">For advanced configurations</span>
+                                                </div>
+                                                <div class="space-y-2">
+                                                    <div class="flex justify-between items-center">
+                                                        <span class="font-mono text-xs text-gray-700">../api/twilio/partial-speech</span>
+                                                        <button type="button" class="copy-webhook-btn text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded" data-webhook="https://clientsvia-backend.onrender.com/api/twilio/partial-speech">
+                                                            <i class="fas fa-copy"></i>
+                                                        </button>
+                                                    </div>
+                                                    <div class="flex justify-between items-center">
+                                                        <span class="font-mono text-xs text-gray-700">../api/twilio/speech-timing-test</span>
+                                                        <button type="button" class="copy-webhook-btn text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded" data-webhook="https://clientsvia-backend.onrender.com/api/twilio/speech-timing-test">
+                                                            <i class="fas fa-copy"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Configuration Instructions -->
+                                            <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                                                <h5 class="text-sm font-medium text-blue-900 mb-2">📋 Quick Setup Instructions:</h5>
+                                                <ol class="text-xs text-blue-800 space-y-1">
+                                                    <li>1. Go to <a href="https://console.twilio.com" target="_blank" class="underline hover:no-underline">Twilio Console</a></li>
+                                                    <li>2. Navigate to Phone Numbers → Manage → Active Numbers</li>
+                                                    <li>3. Click on your phone number</li>
+                                                    <li>4. Set Voice Configuration webhook to the Voice Webhook URL above</li>
+                                                    <li>5. Set HTTP method to POST</li>
+                                                    <li>6. Save configuration</li>
+                                                </ol>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 <div class="mt-8 pt-5 border-t border-gray-200">
                                     <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
                                         <i class="fas fa-save mr-2"></i>Save Configuration
@@ -3913,7 +3991,77 @@ Cost estimate</textarea>
         });
     });
 
-    // ...existing code...
+// ===========================================
+// WEBHOOK CONFIGURATION PANEL
+// ===========================================
+
+/**
+ * Toggle webhook information panel
+ */
+function toggleWebhookPanel() {
+    const panel = document.getElementById('webhookInfoPanel');
+    const toggleBtn = document.getElementById('toggleWebhookInfo');
+    
+    if (panel && toggleBtn) {
+        const isHidden = panel.classList.contains('hidden');
+        
+        if (isHidden) {
+            panel.classList.remove('hidden');
+            toggleBtn.innerHTML = '<i class="fas fa-eye-slash mr-1"></i>Hide Webhook URLs';
+        } else {
+            panel.classList.add('hidden');
+            toggleBtn.innerHTML = '<i class="fas fa-info-circle mr-1"></i>Show Webhook URLs';
+        }
+    }
+}
+
+/**
+ * Copy webhook URL to clipboard
+ */
+async function copyWebhookUrl(webhookUrl, button) {
+    try {
+        await navigator.clipboard.writeText(webhookUrl);
+        
+        // Visual feedback
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-check mr-1"></i>Copied!';
+        button.classList.remove('bg-blue-100', 'hover:bg-blue-200', 'text-blue-700');
+        button.classList.add('bg-green-100', 'text-green-700');
+        
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.classList.remove('bg-green-100', 'text-green-700');
+            button.classList.add('bg-blue-100', 'hover:bg-blue-200', 'text-blue-700');
+        }, 2000);
+        
+        showToast('Webhook URL copied to clipboard!', 'success');
+    } catch (error) {
+        console.error('Failed to copy webhook URL:', error);
+        showToast('Failed to copy URL. Please copy manually.', 'error');
+    }
+}
+
+// Initialize webhook configuration panel
+document.addEventListener('DOMContentLoaded', function() {
+    // Toggle webhook panel
+    const toggleBtn = document.getElementById('toggleWebhookInfo');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', toggleWebhookPanel);
+    }
+    
+    // Copy webhook buttons
+    document.addEventListener('click', function(e) {
+        if (e.target.matches('.copy-webhook-btn, .copy-webhook-btn *')) {
+            const button = e.target.closest('.copy-webhook-btn');
+            const webhookUrl = button.getAttribute('data-webhook');
+            if (webhookUrl) {
+                copyWebhookUrl(webhookUrl, button);
+            }
+        }
+    });
+});
+
+// ...existing code...
     </script>
 </body>
 </html>

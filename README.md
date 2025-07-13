@@ -114,6 +114,23 @@ Approving a `best-practice` suggestion automatically creates a matching
 knowledge entry.
 
 
+## Twilio Webhook Configuration
+
+For Twilio integration, configure these webhook URLs in your Twilio Console:
+
+### Primary Voice Webhook:
+```
+https://clientsvia-backend.onrender.com/api/twilio/voice
+```
+
+### Complete Webhook Documentation:
+See [WEBHOOKS.md](./WEBHOOKS.md) for detailed configuration instructions, all available endpoints, and troubleshooting guide.
+
+**Quick Setup:**
+1. Go to Twilio Console → Phone Numbers → Active Numbers
+2. Set Voice webhook to the URL above (POST method)
+3. Webhook URLs are also available in the Configuration tab of each company profile
+
 ## Database Indexes
 
 A compound index on `category` and `question` improves performance when querying knowledge entries. On existing deployments run:
