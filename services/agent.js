@@ -77,10 +77,10 @@ async function callModel(company, prompt) {
           requestBody: {
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: {
-              temperature: 0.5, // Reduced from 0.7 for faster, more consistent responses
-              topK: 10, // Reduced from 20 for faster responses
-              topP: 0.7, // Reduced from 0.8 for faster responses
-              maxOutputTokens: 100, // Reduced from 150 for faster responses
+              temperature: 0.3, // Further reduced for more consistent, concise responses
+              topK: 5, // Reduced for faster, more focused responses
+              topP: 0.6, // Reduced for more deterministic, shorter responses
+              maxOutputTokens: 75, // Significantly reduced for ultra-concise responses
             }
           }
         });
@@ -179,21 +179,22 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: applyPlaceholders(entry.answer, placeholders), escalate: false };
   }
 
-  // STEP 4: Try fuzzy matching on Q&A entries
-  const fuzzyThreshold = company?.aiSettings?.fuzzyMatchThreshold || 0.3;
-  const cachedAnswer = findCachedAnswer(await KnowledgeEntry.find({ companyId }).exec(), question, fuzzyThreshold);
-  if (cachedAnswer) {
-    console.log(`[Agent] Found Q&A match via fuzzy matching for: ${question}`);
-    return { text: applyPlaceholders(cachedAnswer, placeholders), escalate: false };
+  // STEP 4: Try quick Q&A reference (cheat sheet approach)
+  const quickQAAnswer = extractQuickAnswerFromQA(await KnowledgeEntry.find({ companyId }).exec(), question, fuzzyThreshold);
+  if (quickQAAnswer) {
+    console.log(`[Agent] Found quick Q&A reference for: ${question}`);
+    const conversationalAnswer = generateShortConversationalResponse(question, quickQAAnswer, company?.companyName);
+    return { text: applyPlaceholders(conversationalAnswer, placeholders), escalate: false };
   }
 
-  // STEP 5: Try company Q&A from agentSetup.categoryQAs
+  // STEP 5: Try company Q&A from agentSetup.categoryQAs (also as quick reference)
   const companyQAs = categoryQACache.get(companyId) || [];
   if (companyQAs.length > 0) {
-    const companyQAAnswer = findCachedAnswer(companyQAs, question, fuzzyThreshold);
-    if (companyQAAnswer) {
-      console.log(`[Agent] Found match in company categoryQAs for: ${question}`);
-      return { text: applyPlaceholders(companyQAAnswer, placeholders), escalate: false };
+    const quickCompanyAnswer = extractQuickAnswerFromQA(companyQAs, question, fuzzyThreshold);
+    if (quickCompanyAnswer) {
+      console.log(`[Agent] Found quick company Q&A reference for: ${question}`);
+      const conversationalAnswer = generateShortConversationalResponse(question, quickCompanyAnswer, company?.companyName);
+      return { text: applyPlaceholders(conversationalAnswer, placeholders), escalate: false };
     }
   }
 
@@ -268,13 +269,13 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
                     (question.match(/\b(and|then|so|but|also|actually|basically)\b/gi) || []).length > 5;
 
   fullPrompt += `\n\n**Response Guidelines:**`;
-  fullPrompt += `\n- You are The Agent for ${company?.companyName} - be natural and conversational`;
-  fullPrompt += `\n- Keep your ${personality} personality but don't be robotic`;
-  fullPrompt += `\n- Don't repeat everything the caller says - acknowledge and move forward`;
-  fullPrompt += `\n- Be concise but helpful - avoid overly long explanations unless asked`;
-  fullPrompt += `\n- If they ask about something you can help with, focus on solutions`;
-  fullPrompt += `\n- Ask ONE clarifying question if needed, but don't interrogate`;
-  fullPrompt += `\n- If it's clear what they need, offer to help or schedule service`;
+  fullPrompt += `\n- ULTRA-CONCISE: Maximum 1-2 sentences. Get to the point immediately.`;
+  fullPrompt += `\n- You are The Agent for ${company?.companyName} - be natural but brief`;
+  fullPrompt += `\n- Don't repeat what the caller said - acknowledge briefly and offer next steps`;
+  fullPrompt += `\n- Skip pleasantries unless they're greeting you - focus on solutions`;
+  fullPrompt += `\n- If they need service: offer to schedule. If they have questions: answer directly.`;
+  fullPrompt += `\n- NO rambling, NO lengthy explanations, NO unnecessary details`;
+  fullPrompt += `\n- Examples of good responses: "Yes, we fix that. Schedule a visit?" or "Starts at $89. Want a quote?"`;
   
   if (isUnclearSpeech) {
     fullPrompt += `\n- IMPORTANT: The caller's speech was unclear or garbled. Ask them to clarify what they need help with in a friendly way.`;
@@ -302,7 +303,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     promptQuestion = `"${question}"`;
   }
   
-  fullPrompt += `\n\nRespond naturally to: ${promptQuestion} - Keep it conversational and move the call forward.`;
+  fullPrompt += `\n\nRespond in 1-2 sentences maximum to: ${promptQuestion} - Be direct, actionable, and move the call forward.`;
 
   if (!llmFallbackEnabled) {
     const personality = company?.aiSettings?.personality || 'friendly';
@@ -328,8 +329,23 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
 
   console.log(`[LLM] Received response:`, aiResponse);
 
+  // Post-process AI response to ensure it's ultra-concise
+  let finalResponse = aiResponse;
+  if (aiResponse && aiResponse.length > 150) {
+    console.log(`[LLM] Response too long (${aiResponse.length} chars), making it concise...`);
+    finalResponse = extractConciseAnswer(aiResponse);
+    if (finalResponse.length > 100) {
+      // Even more aggressive shortening if still too long
+      const sentences = finalResponse.split(/[.!?]+/).filter(s => s.trim().length > 5);
+      if (sentences.length > 1) {
+        finalResponse = sentences[0].trim() + '.';
+      }
+    }
+    console.log(`[LLM] Shortened response: "${finalResponse}"`);
+  }
+
   // Check if the response seems to be a debug message
-  if (aiResponse && aiResponse.includes('reading this from') && aiResponse.includes('LLM Message')) {
+  if (finalResponse && finalResponse.includes('reading this from') && finalResponse.includes('LLM Message')) {
     console.log(`[LLM] DEBUG: Detected debug message from LLM, replacing with escalation message`);
     const personality = company?.aiSettings?.personality || 'friendly';
     const message = applyPlaceholders((customEscalationMessage || await getPersonalityResponse(companyId, 'transferToRep', personality)).trim(), placeholders);
@@ -337,14 +353,14 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   }
 
   // Logic to create a suggested knowledge entry
-  if (aiResponse) {
+  if (finalResponse) {
     try {
       const newSuggestedEntry = new SuggestedKnowledgeEntry({
         question: question,
-        suggestedAnswer: aiResponse,
-        category: categories.length > 0 ? categories[0] : 'General', // Assign a category, perhaps the first one or 'General'
+        suggestedAnswer: finalResponse, // Use the final concise response
+        category: categories.length > 0 ? categories[0] : 'General',
         status: 'pending',
-        originalCallSid: originalCallSid // Store the CallSid for traceability
+        originalCallSid: originalCallSid
       });
       await newSuggestedEntry.save();
       console.log(`[SuggestedKB] Created new pending suggestion for question: "${question}"`);
@@ -353,7 +369,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     }
   }
 
-  return { text: applyPlaceholders(aiResponse, placeholders), escalate: false };
+  return { text: applyPlaceholders(finalResponse, placeholders), escalate: false };
 }
 
 // Generate intelligent responses based on context and common patterns - ENHANCED VERSION
@@ -440,28 +456,28 @@ async function generateIntelligentResponse(company, question, conversationHistor
 
   // PRIORITY 2.5: Handle SPECIFIC HVAC issues with targeted responses
   
-  // Water leakage issues - CRITICAL FIX
+  // Water leakage issues - CONCISE FIX
   if (qLower.includes('water') && (qLower.includes('leak') || qLower.includes('leaking') || qLower.includes('leakage'))) {
     if (qLower.includes('regular') || qLower.includes('often') || qLower.includes('always') || qLower.includes('again')) {
-      return `Water leakage that keeps happening is definitely something we need to address right away. That usually indicates a more serious issue that won't go away on its own. Our technicians can diagnose exactly what's causing the recurring leaks and fix it properly. When would be a good time for us to come take a look?`;
+      return `Recurring water leaks need immediate attention. Usually a drain line or refrigerant issue. When can we come diagnose it?`;
     }
-    return `Water leaking from your AC system is something we definitely want to check out quickly. That could be a clogged drain line, a frozen coil, or a few other issues that our technicians can diagnose and fix. Would you like me to schedule someone to come out and take care of that for you?`;
+    return `Water leaks need quick attention. Could be drain line, frozen coil, or other issues. Want me to schedule a visit?`;
   }
   
   // Refrigerant leak issues
   if (qLower.includes('refrigerant') && (qLower.includes('leak') || qLower.includes('leaking') || qLower.includes('low'))) {
-    return `A refrigerant leak is definitely something that needs immediate attention - it can damage your system and isn't safe to leave as-is. Our certified technicians can locate the leak, repair it, and recharge your system properly. This is considered an emergency repair. Should I get someone out there today?`;
+    return `Refrigerant leaks are emergency repairs. Our certified techs can locate and fix it safely. Should I get someone out today?`;
   }
   
   // Ice/freezing issues
   if (qLower.includes('ice') || qLower.includes('frozen') || qLower.includes('freezing')) {
-    return `Ice on your AC system is a sign something's not right - could be low refrigerant, a dirty filter, or airflow issues. You'll want to turn the system off for now to let it thaw out. Our technicians can diagnose exactly what's causing the freeze-up and get it fixed. When can we get someone out there?`;
+    return `Ice on your system means something's wrong. Turn it off to let it thaw. When can we diagnose the cause?`;
   }
   
   // Strange noises
   if (qLower.includes('noise') || qLower.includes('sound') || qLower.includes('loud') || 
       qLower.includes('grinding') || qLower.includes('squealing') || qLower.includes('banging')) {
-    return `Strange noises from your AC are never a good sign - they usually mean something needs attention before it gets worse. Could be anything from a loose belt to a failing motor. Our technicians can pinpoint exactly what's making that noise and fix it. Would you like to schedule a diagnostic visit?`;
+    return `Strange noises usually mean something needs attention before it gets worse. Want me to schedule a diagnostic?`;
   }
   
   // PRIORITY 3: Handle customer closures and polite declines
@@ -648,27 +664,27 @@ function analyzeConversationContext(conversationHistory, currentQuestion) {
   return context;
 }
 
-// Handle conversation continuation intelligently
+// Handle conversation continuation intelligently - CONCISE VERSION
 function handleConversationContinuation(context, question, company, placeholders) {
   const qLower = question.toLowerCase();
   
   if (context.previousTopic) {
-    // Continue the previous topic with additional information
+    // Continue the previous topic with brief, actionable responses
     if (context.previousTopic.includes('leak') && qLower.includes('regular')) {
-      return `I see, so the water leakage happens regularly. That definitely suggests an ongoing issue that needs professional attention. Recurring leaks often mean there's an underlying problem - could be a clogged drain line, a damaged condensate pan, or even a refrigerant issue causing excessive condensation. Our technicians can do a thorough diagnostic to find the root cause and fix it permanently. Would you like me to schedule someone to come out and get this resolved once and for all?`;
+      return `Regular leaks need professional attention. Could be a drain line or refrigerant issue. Want me to schedule a diagnostic?`;
     }
     
     if (context.previousTopic.includes('noise') && (qLower.includes('loud') || qLower.includes('getting worse'))) {
-      return `So the noise is getting louder - that's definitely not a good sign. Sounds like whatever's causing it is progressively getting worse, which means we should address it sooner rather than later before it becomes a bigger problem. Our technicians can identify exactly what's making that noise and fix it before it causes any damage to other components. When would be a good time for us to take a look?`;
+      return `Getting worse means we should check it soon before it becomes a bigger problem. When works for you?`;
     }
     
     if (context.previousTopic.includes('temperature') && (qLower.includes('not') || qLower.includes('still'))) {
-      return `Ah, so the temperature issue is still ongoing. That's frustrating when you're not comfortable in your own home. There could be several factors at play - could be low refrigerant, a dirty filter restricting airflow, or even ductwork issues. Our technicians can run a comprehensive diagnostic to pinpoint exactly what's going on and get your system back to keeping you comfortable. Should I get someone scheduled to come out?`;
+      return `Still having temperature issues? Could be refrigerant, filter, or airflow. Should I schedule a diagnostic?`;
     }
   }
   
   // Generic continuation response
-  return `I understand there's more to it than that. Could you tell me a bit more about what's happening so I can make sure we address everything properly?`;
+  return `Tell me more about what's happening so I can make sure we address everything.`;
 }
 
 // Smart HVAC technical diagnosis
@@ -687,21 +703,21 @@ function diagnoseHVACIssue(question, companySpecialties, companyName) {
     frequency: words.some(w => ['regular', 'often', 'always', 'sometimes', 'intermittent', 'constant'].includes(w))
   };
   
-  // Smart diagnosis based on symptom combinations
+  // Smart diagnosis based on symptom combinations - CONCISE RESPONSES
   if (symptoms.water && symptoms.frequency) {
-    return `Regular water issues usually point to a drainage problem or a refrigerant leak causing excessive condensation. This is definitely something that needs professional attention because it can damage your system and your home over time. Our certified technicians can trace the source of the water, determine if it's a simple drain blockage or something more complex, and get it fixed properly. The sooner we address it, the better - would you like me to schedule a diagnostic visit?`;
+    return `Regular water leaks usually mean drainage or refrigerant issues. Should I schedule a diagnostic visit?`;
   }
   
   if (symptoms.noise && symptoms.frequency) {
-    return `Recurring strange noises are your system's way of telling you something needs attention. The fact that it's happening regularly suggests it's not just a one-time fluke - there's likely a component that's wearing out or something that's come loose. Our technicians can listen to the sound, identify exactly what's causing it, and fix it before it leads to a bigger problem. These issues tend to get worse over time, so catching it early is smart. When would work for you to have someone take a look?`;
+    return `Recurring noises mean something's wearing out. Better to catch it early. When can we take a look?`;
   }
   
   if (symptoms.cooling && (qLower.includes('not') || qLower.includes('poor') || qLower.includes('weak'))) {
-    return `Poor cooling performance can be really frustrating, especially when you need relief from the heat. This could be several things - low refrigerant, a dirty filter restricting airflow, ductwork issues, or even a failing compressor. The good news is our technicians can run a comprehensive diagnostic to pinpoint exactly what's going on and get your system back to keeping you comfortable. Would you like me to schedule a visit so we can get this sorted out for you?`;
+    return `Poor cooling could be refrigerant, filter, or airflow issues. Want me to schedule a diagnostic?`;
   }
   
   if (symptoms.heating && (qLower.includes('not') || qLower.includes('cold') || qLower.includes('barely'))) {
-    return `Nobody should have to be cold in their own home! Heating issues can range from simple thermostat problems to more complex furnace issues, but the good news is most are very fixable. Our heating specialists can diagnose exactly what's preventing your system from keeping you warm and get it resolved quickly. During cold weather, we prioritize heating calls because we know how important your comfort is. When can we get someone out there to help?`;
+    return `Heating issues can range from simple to complex, but most are fixable. When can we get someone out?`;
   }
   
   return null; // No specific technical diagnosis
@@ -836,3 +852,243 @@ module.exports = {
   loadCompanyQAs,
   findCachedAnswer
 };
+
+// Enhanced Q&A reference system - use as cheat sheet for concise answers
+function extractQuickAnswerFromQA(entries, userQuestion, fuzzyThreshold = 0.3) {
+  if (!entries || !Array.isArray(entries) || !userQuestion) return null;
+  
+  const qNorm = userQuestion.trim().toLowerCase();
+  const userWords = qNorm.split(/\s+/).filter(w => w.length > 2);
+  
+  console.log(`🔍 [QUICK Q&A] Looking for concise answer to: "${userQuestion}"`);
+
+  for (const entry of entries) {
+    const questionVariants = [
+      (entry.question || '').trim().toLowerCase(),
+      ...(Array.isArray(entry.keywords)
+        ? entry.keywords.map(k => k.trim().toLowerCase())
+        : [])
+    ].filter(q => q);
+    
+    for (const variant of questionVariants) {
+      // Check for topic match
+      const variantWords = variant.split(/\s+/).filter(w => w.length > 2);
+      const matchingWords = userWords.filter(userWord => 
+        variantWords.some(variantWord => {
+          if (userWord === variantWord) return true;
+          
+          // Handle word variations
+          const userRoot = userWord.replace(/(ing|age|ed|er|ly)$/i, '');
+          const variantRoot = variantWord.replace(/(ing|age|ed|er|ly)$/i, '');
+          if (userRoot.length > 3 && variantRoot.length > 3 && userRoot === variantRoot) return true;
+          
+          // Substring matching for longer words
+          if (userWord.length > 4 && variantWord.length > 4) {
+            if (userWord.includes(variantWord) || variantWord.includes(userWord)) return true;
+          }
+          
+          return false;
+        })
+      );
+      
+      // If we have topic overlap, extract concise answer
+      if (matchingWords.length > 0) {
+        const fullAnswer = entry.answer || '';
+        const conciseAnswer = extractConciseAnswer(fullAnswer);
+        
+        if (conciseAnswer) {
+          console.log(`✅ [QUICK Q&A] Found concise answer for: "${entry.question}"`);
+          return conciseAnswer;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+// Extract the most important information from a long answer - ULTRA-CONCISE VERSION
+function extractConciseAnswer(fullAnswer) {
+  if (!fullAnswer || fullAnswer.length < 20) return fullAnswer;
+  
+  // Remove common filler phrases first
+  let cleanAnswer = fullAnswer
+    .replace(/Well,?\s*/gi, '')
+    .replace(/So,?\s*/gi, '')
+    .replace(/Actually,?\s*/gi, '')
+    .replace(/Basically,?\s*/gi, '')
+    .replace(/You know,?\s*/gi, '')
+    .replace(/I mean,?\s*/gi, '')
+    .replace(/Let me tell you,?\s*/gi, '')
+    .replace(/The thing is,?\s*/gi, '')
+    .trim();
+  
+  // Split into sentences
+  const sentences = cleanAnswer.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 5);
+  
+  if (sentences.length === 0) return fullAnswer;
+  if (sentences.length === 1) {
+    // Even single sentences can be shortened
+    return shortenSentence(sentences[0]);
+  }
+  
+  // Priority keywords for most actionable/informative sentences
+  const highPriorityKeywords = [
+    'yes', 'no', 'call', 'schedule', 'visit', 'today', 'available', '$', 'cost', 'price',
+    'we do', 'we don\'t', 'we can', 'we can\'t', 'emergency', '24/7', 'same day'
+  ];
+  
+  const mediumPriorityKeywords = [
+    'technician', 'service', 'repair', 'fix', 'help', 'our', 'we', 'appointment'
+  ];
+  
+  // Score sentences by priority
+  const scoredSentences = sentences.map(sentence => {
+    const lowerSentence = sentence.toLowerCase();
+    let score = 0;
+    
+    // High priority keywords get double points
+    highPriorityKeywords.forEach(keyword => {
+      if (lowerSentence.includes(keyword)) score += 2;
+    });
+    
+    // Medium priority keywords get single points
+    mediumPriorityKeywords.forEach(keyword => {
+      if (lowerSentence.includes(keyword)) score += 1;
+    });
+    
+    // Shorter sentences get bonus points (encourage brevity)
+    if (sentence.length < 50) score += 1;
+    if (sentence.length < 30) score += 1;
+    
+    return { sentence, score, length: sentence.length };
+  });
+  
+  // Sort by score (descending) then by length (ascending)
+  scoredSentences.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.length - b.length;
+  });
+  
+  // Return the highest scoring, shortest sentence
+  const bestSentence = scoredSentences[0].sentence;
+  return shortenSentence(bestSentence) + '.';
+}
+
+// Shorten individual sentences by removing unnecessary words
+function shortenSentence(sentence) {
+  if (!sentence || sentence.length < 20) return sentence;
+  
+  return sentence
+    // Remove unnecessary articles and adjectives
+    .replace(/\b(the|a|an)\s+/gi, '')
+    .replace(/\b(very|really|quite|pretty|extremely|absolutely)\s+/gi, '')
+    .replace(/\b(definitely|certainly|obviously|clearly)\s+/gi, '')
+    
+    // Simplify common phrases
+    .replace(/would you like me to/gi, 'should I')
+    .replace(/I would be happy to/gi, 'I can')
+    .replace(/we would be glad to/gi, 'we can')
+    .replace(/feel free to/gi, '')
+    .replace(/please don\'t hesitate to/gi, '')
+    .replace(/if you have any questions/gi, '')
+    
+    // Remove redundant conjunctions
+    .replace(/\s+and\s+/gi, ', ')
+    .replace(/,\s*,/g, ',')
+    
+    // Clean up spacing
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Generate short, conversational responses using Q&A as reference - ULTRA-CONCISE VERSION
+function generateShortConversationalResponse(question, qnaAnswer, companyName) {
+  const qLower = question.toLowerCase();
+  
+  // Get the most concise answer first
+  const conciseAnswer = extractConciseAnswer(qnaAnswer);
+  
+  // For pricing questions, ultra-direct approach
+  if (qLower.includes('cost') || qLower.includes('price') || qLower.includes('how much')) {
+    const priceMatch = qnaAnswer.match(/\$\d+/);
+    if (priceMatch) {
+      return `${priceMatch[0]} service call. Want a quote?`;
+    }
+    return `Depends on the repair. Schedule a quote?`;
+  }
+  
+  // For yes/no service questions, one-word + action
+  if (qLower.includes('do you') || qLower.includes('can you')) {
+    if (qnaAnswer.toLowerCase().includes('yes') || qnaAnswer.toLowerCase().includes('we do')) {
+      return `Yes. Schedule a visit?`;
+    }
+    if (qnaAnswer.toLowerCase().includes('no') || qnaAnswer.toLowerCase().includes('don\'t')) {
+      return `No, but I can connect you with someone who can help.`;
+    }
+  }
+  
+  // For hours/availability, extract just the essentials
+  if (qLower.includes('hour') || qLower.includes('open') || qLower.includes('when')) {
+    const timeMatch = qnaAnswer.match(/\d{1,2}(:\d{2})?\s*(am|pm|AM|PM)/g);
+    if (timeMatch && timeMatch.length >= 2) {
+      return `${timeMatch[0]}-${timeMatch[timeMatch.length - 1]}, weekdays.`;
+    }
+    if (qnaAnswer.toLowerCase().includes('monday') && qnaAnswer.toLowerCase().includes('friday')) {
+      return `Monday-Friday business hours.`;
+    }
+  }
+  
+  // For emergency questions, immediate response
+  if (qLower.includes('emergency') || qLower.includes('urgent') || qLower.includes('24')) {
+    if (qnaAnswer.toLowerCase().includes('24') || qnaAnswer.toLowerCase().includes('emergency')) {
+      return `Yes, 24/7 emergency service. Need someone today?`;
+    }
+  }
+  
+  // For warranty/guarantee questions
+  if (qLower.includes('warrant') || qLower.includes('guarant')) {
+    if (qnaAnswer.toLowerCase().includes('year') || qnaAnswer.toLowerCase().includes('month')) {
+      const warrantyMatch = qnaAnswer.match(/\d+\s*(year|month)/i);
+      if (warrantyMatch) {
+        return `${warrantyMatch[0]} warranty included.`;
+      }
+    }
+    return `Yes, all work is guaranteed.`;
+  }
+  
+  // For appointment/scheduling questions
+  if (qLower.includes('appointment') || qLower.includes('schedule') || qLower.includes('available')) {
+    return `Available today. When works for you?`;
+  }
+  
+  // Extract the shortest meaningful phrase from the answer
+  if (conciseAnswer) {
+    // If the concise answer is still long, make it even shorter
+    if (conciseAnswer.length > 50) {
+      // Look for the core information
+      const sentences = conciseAnswer.split(/[.!?]/).map(s => s.trim()).filter(s => s.length > 5);
+      if (sentences.length > 0) {
+        // Find the shortest sentence with key information
+        const keyWords = ['yes', 'no', 'call', 'schedule', 'service', 'repair', 'available', '$'];
+        const keyScore = (sentence) => keyWords.filter(word => sentence.toLowerCase().includes(word)).length;
+        
+        const bestSentence = sentences.reduce((best, current) => {
+          const currentScore = keyScore(current);
+          const bestScore = keyScore(best);
+          
+          if (currentScore > bestScore) return current;
+          if (currentScore === bestScore && current.length < best.length) return current;
+          return best;
+        });
+        
+        return bestSentence + '.';
+      }
+    }
+    return conciseAnswer;
+  }
+  
+  // Fallback: extract first meaningful phrase
+  const firstSentence = qnaAnswer.split(/[.!?]/)[0].trim();
+  return firstSentence.length > 5 ? firstSentence + '.' : qnaAnswer;
+}
