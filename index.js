@@ -27,8 +27,9 @@ const aiRoutes = require('./routes/ai'); // New AI routes
 const testRoutes = require('./routes/test'); // New test routes
 const elevenLabsRoutes = require('./routes/elevenLabs'); // New ElevenLabs routes
 const uploadRoutes = require('./routes/upload');
-const workflowRoutes = require('./routes/workflows'); // New workflow routes
-const testWorkflowRoutes = require('./routes/test-workflows'); // Test workflow routes
+// Deprecated: Old workflows system - replaced by AI Agent Workflows
+// const workflowRoutes = require('./routes/workflows'); // New workflow routes
+// const testWorkflowRoutes = require('./routes/test-workflows'); // Test workflow routes
 const learningRoutes = require('./routes/learning'); // Learning management routes
 
 // Import new AI Agent routes
@@ -72,8 +73,9 @@ app.use('/api/ai', aiRoutes); // Registering the new /api/ai route
 app.use('/api/test', testRoutes); // Registering the new /api/test route
 app.use('/api/elevenlabs', elevenLabsRoutes); // Registering the new /api/elevenlabs route
 app.use('/api/upload', uploadRoutes);
-app.use('/api/workflows', workflowRoutes); // Registering the new /api/workflows route
-app.use('/api/test-workflows', testWorkflowRoutes); // Test workflow routes
+// Deprecated: Old workflows system - replaced by AI Agent Workflows
+// app.use('/api/workflows', workflowRoutes); // Registering the new /api/workflows route
+// app.use('/api/test-workflows', testWorkflowRoutes); // Test workflow routes
 app.use('/api/learning', learningRoutes); // Learning management routes
 
 // Register AI Agent routes
