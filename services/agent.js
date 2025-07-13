@@ -141,11 +141,33 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
 
   console.log(`[Agent] Company ${companyId} - LLM Fallback Enabled: ${llmFallbackEnabled}`);
   console.log(`[Agent] Company ${companyId} - Custom Escalation Message: ${customEscalationMessage}`);
+  console.log(`[Agent] Company ${companyId} - Categories: [${categories.join(', ')}]`);
+  console.log(`[Agent] Company ${companyId} - Available Protocols: [${Object.keys(company?.agentSetup?.protocols || {}).join(', ')}]`);
+  console.log(`[Agent] Company ${companyId} - Available Placeholders: [${placeholders.map(p => p.name).join(', ')}]`);
+  console.log(`[Agent] Company ${companyId} - Main Script Length: ${company?.agentSetup?.mainAgentScript?.length || 0} chars`);
+  console.log(`[Agent] Company ${companyId} - Category Q&As Length: ${company?.agentSetup?.categoryQAs?.length || 0} chars`);
 
   // keep parsed Q&A cached
   loadCompanyQAs(company);
 
-  // First, check KnowledgeEntry (existing functionality)
+  console.log(`[Agent Response Chain] Starting for company ${companyId}, question: "${question.substring(0, 100)}..."`);
+  
+  // STEP 1: Check for specific scenario protocols FIRST (highest priority)
+  const protocols = company?.agentSetup?.protocols || {};
+  const protocolResponse = checkSpecificProtocols(protocols, question, conversationHistory, placeholders);
+  if (protocolResponse) {
+    console.log(`[Agent] Using specific scenario protocol`);
+    return { text: protocolResponse, escalate: false };
+  }
+
+  // STEP 2: Check personality responses for common scenarios
+  const personalityResponse = await checkPersonalityScenarios(companyId, question.toLowerCase(), conversationHistory);
+  if (personalityResponse) {
+    console.log(`[Agent] Using personality response: ${personalityResponse.category}`);
+    return { text: applyPlaceholders(personalityResponse.text, placeholders), escalate: false };
+  }
+
+  // STEP 3: Check KnowledgeEntry (approved Q&A entries)
   const entry = await KnowledgeEntry.findOne({ companyId, 
     category: { $in: categories },
     question: { $regex: new RegExp(question, 'i') },
@@ -157,7 +179,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: applyPlaceholders(entry.answer, placeholders), escalate: false };
   }
 
-  // Second, try fuzzy matching on Q&A entries
+  // STEP 4: Try fuzzy matching on Q&A entries
   const fuzzyThreshold = company?.aiSettings?.fuzzyMatchThreshold || 0.3;
   const cachedAnswer = findCachedAnswer(await KnowledgeEntry.find({ companyId }).exec(), question, fuzzyThreshold);
   if (cachedAnswer) {
@@ -165,14 +187,24 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: applyPlaceholders(cachedAnswer, placeholders), escalate: false };
   }
 
-  // Third, try structured conversational script processing
+  // STEP 5: Try company Q&A from agentSetup.categoryQAs
+  const companyQAs = categoryQACache.get(companyId) || [];
+  if (companyQAs.length > 0) {
+    const companyQAAnswer = findCachedAnswer(companyQAs, question, fuzzyThreshold);
+    if (companyQAAnswer) {
+      console.log(`[Agent] Found match in company categoryQAs for: ${question}`);
+      return { text: applyPlaceholders(companyQAAnswer, placeholders), escalate: false };
+    }
+  }
+
+  // STEP 6: Try structured conversational script processing
   const scriptResponse = await processConversationalScriptEnhanced(company, question, conversationHistory, placeholders);
   if (scriptResponse) {
     console.log(`[Agent] Generated script-based response for: ${question}`);
     return { text: scriptResponse, escalate: false };
   }
 
-  // Fourth, try to understand the context and provide intelligent responses
+  // STEP 7: Try to understand the context and provide intelligent responses
   const intelligentResponse = await generateIntelligentResponse(company, question, conversationHistory, categories, companySpecialties, categoryQAs);
   if (intelligentResponse) {
     console.log(`[Agent] Generated intelligent response for: ${question}`);
@@ -321,8 +353,16 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
 async function generateIntelligentResponse(company, question, conversationHistory, categories, companySpecialties, categoryQAs) {
   const qLower = question.toLowerCase();
   const companyName = company?.companyName || 'our company';
+  const companyId = company?._id?.toString();
   
-  // PRIORITY 1: Handle customer frustration and repetition complaints FIRST
+  // PRIORITY 1: Use personality responses for specific scenarios
+  const personalityResponse = await checkPersonalityScenarios(companyId, qLower, conversationHistory);
+  if (personalityResponse) {
+    console.log(`[Intelligent Response] Using personality response: ${personalityResponse.category}`);
+    return personalityResponse.text;
+  }
+  
+  // PRIORITY 2: Handle customer frustration and repetition complaints FIRST
   if (qLower.includes('repeating') || qLower.includes('same thing') || qLower.includes('over and over')) {
     return `I apologize for the confusion. Let me connect you directly with one of our specialists who can give you the specific information you need right away. Please hold for just a moment.`;
   }
@@ -417,6 +457,79 @@ async function generateIntelligentResponse(company, question, conversationHistor
   return null; // No intelligent response found
 }
 
+// NEW: Check personality response scenarios
+async function checkPersonalityScenarios(companyId, qLower, conversationHistory) {
+  try {
+    // Check for unclear speech or understanding issues
+    if (qLower.includes('what') && qLower.includes('say') || qLower.includes('repeat') || 
+        qLower.includes('hear') || qLower.includes('understand') || qLower.length < 5) {
+      const response = await getPersonalityResponse(companyId, 'cantUnderstand');
+      if (response) return { category: 'cantUnderstand', text: response };
+    }
+    
+    // Check for requests to speak clearly
+    if (qLower.includes('speak up') || qLower.includes('louder') || qLower.includes('clear') || 
+        qLower.includes('can\'t hear')) {
+      const response = await getPersonalityResponse(companyId, 'speakClearly');
+      if (response) return { category: 'speakClearly', text: response };
+    }
+    
+    // Check for out-of-category requests
+    if (qLower.includes('don\'t handle') || qLower.includes('not your') || qLower.includes('wrong') || 
+        qLower.includes('different service')) {
+      const response = await getPersonalityResponse(companyId, 'outOfCategory');
+      if (response) return { category: 'outOfCategory', text: response };
+    }
+    
+    // Check for calendar/booking hesitation
+    if (qLower.includes('not sure') && (qLower.includes('book') || qLower.includes('schedule') || 
+        qLower.includes('appointment')) || qLower.includes('maybe later') || qLower.includes('think about')) {
+      const response = await getPersonalityResponse(companyId, 'calendarHesitation');
+      if (response) return { category: 'calendarHesitation', text: response };
+    }
+    
+    // Check for business closure/goodbye scenarios
+    if (qLower.includes('thank you') && (qLower.includes('bye') || qLower.includes('goodbye') || 
+        qLower.includes('have a') || qLower.includes('that\'s all'))) {
+      const response = await getPersonalityResponse(companyId, 'businessClosed');
+      if (response) return { category: 'businessClosed', text: response };
+    }
+    
+    // Check for frustrated caller scenarios
+    if (qLower.includes('frustrat') || qLower.includes('angry') || qLower.includes('upset') || 
+        qLower.includes('terrible') || qLower.includes('horrible')) {
+      const response = await getPersonalityResponse(companyId, 'frustratedCaller');
+      if (response) return { category: 'frustratedCaller', text: response };
+    }
+    
+    // Check for business hours inquiries
+    if (qLower.includes('hours') || qLower.includes('open') || qLower.includes('close') || 
+        qLower.includes('when do you')) {
+      const response = await getPersonalityResponse(companyId, 'businessHours');
+      if (response) return { category: 'businessHours', text: response };
+    }
+    
+    // Check for connection trouble
+    if (qLower.includes('breaking up') || qLower.includes('can\'t hear') || qLower.includes('static') || 
+        qLower.includes('bad connection') || qLower.includes('cutting out')) {
+      const response = await getPersonalityResponse(companyId, 'connectionTrouble');
+      if (response) return { category: 'connectionTrouble', text: response };
+    }
+    
+    // Check for agent not understood scenarios
+    if (qLower.includes('what did you say') || qLower.includes('didn\'t catch') || 
+        qLower.includes('say again') || qLower.includes('repeat that')) {
+      const response = await getPersonalityResponse(companyId, 'agentNotUnderstood');
+      if (response) return { category: 'agentNotUnderstood', text: response };
+    }
+    
+  } catch (error) {
+    console.error('[Personality Response] Error checking scenarios:', error);
+  }
+  
+  return null; // No personality response match
+}
+
 // Parse and structure the main conversational script
 function parseMainScript(mainScript) {
     if (!mainScript || mainScript.trim() === '') return null;
@@ -427,52 +540,83 @@ function parseMainScript(mainScript) {
         transferHandling: [],
         informationResponses: {},
         escalationTriggers: [],
-        closing: null
+        closing: null,
+        sections: {} // NEW: Store all structured sections
     };
     
     const lines = mainScript.split('\n').filter(line => line.trim() !== '');
     let currentSection = null;
+    let currentSectionContent = [];
     
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         const trimmedLine = line.trim();
         
-        // Detect section headers
-        if (trimmedLine.toLowerCase().includes('greeting') || 
-            trimmedLine.toLowerCase().includes('identification')) {
-            currentSection = 'greeting';
-            continue;
-        }
-        
-        if (trimmedLine.toLowerCase().includes('booking') || 
+        // Detect section headers (more comprehensive detection)
+        const sectionMatch = trimmedLine.match(/^([^:]+):\s*$/);
+        if (sectionMatch || 
+            trimmedLine.toLowerCase().includes('greeting') || 
+            trimmedLine.toLowerCase().includes('identification') ||
+            trimmedLine.toLowerCase().includes('booking') || 
             trimmedLine.toLowerCase().includes('appointment') ||
-            trimmedLine.toLowerCase().includes('schedule')) {
-            currentSection = 'serviceBooking';
-            continue;
-        }
-        
-        if (trimmedLine.toLowerCase().includes('transfer') || 
+            trimmedLine.toLowerCase().includes('schedule') ||
+            trimmedLine.toLowerCase().includes('transfer') || 
             trimmedLine.toLowerCase().includes('technician') ||
-            trimmedLine.toLowerCase().includes('speak')) {
-            currentSection = 'transferHandling';
+            trimmedLine.toLowerCase().includes('speak') ||
+            trimmedLine.toLowerCase().includes('closing') || 
+            trimmedLine.toLowerCase().includes('end call') ||
+            trimmedLine.toLowerCase().includes('information') ||
+            trimmedLine.toLowerCase().includes('responses') ||
+            trimmedLine.toLowerCase().includes('questions')) {
+            
+            // Save previous section
+            if (currentSection && currentSectionContent.length > 0) {
+                script.sections[currentSection] = currentSectionContent.join('\n');
+            }
+            
+            // Start new section
+            if (sectionMatch) {
+                currentSection = sectionMatch[1].toLowerCase().trim();
+            } else {
+                if (trimmedLine.toLowerCase().includes('greeting') || 
+                    trimmedLine.toLowerCase().includes('identification')) {
+                    currentSection = 'greeting';
+                } else if (trimmedLine.toLowerCase().includes('booking') || 
+                           trimmedLine.toLowerCase().includes('appointment') ||
+                           trimmedLine.toLowerCase().includes('schedule')) {
+                    currentSection = 'service_booking';
+                } else if (trimmedLine.toLowerCase().includes('transfer') || 
+                           trimmedLine.toLowerCase().includes('technician') ||
+                           trimmedLine.toLowerCase().includes('speak')) {
+                    currentSection = 'transfer_handling';
+                } else if (trimmedLine.toLowerCase().includes('closing') || 
+                           trimmedLine.toLowerCase().includes('end call')) {
+                    currentSection = 'closing';
+                } else if (trimmedLine.toLowerCase().includes('information') ||
+                           trimmedLine.toLowerCase().includes('responses') ||
+                           trimmedLine.toLowerCase().includes('questions')) {
+                    currentSection = 'information_responses';
+                }
+            }
+            currentSectionContent = [];
             continue;
         }
         
-        if (trimmedLine.toLowerCase().includes('closing') || 
-            trimmedLine.toLowerCase().includes('end call')) {
-            currentSection = 'closing';
-            continue;
+        // Add content to current section
+        if (currentSection) {
+            currentSectionContent.push(trimmedLine);
         }
         
-        // Parse content based on current section
+        // Legacy parsing for backwards compatibility
         if (currentSection === 'greeting' && trimmedLine.toLowerCase().includes('agent:')) {
             script.greeting = trimmedLine.replace(/agent:\s*/i, '');
         }
         
-        if (currentSection === 'serviceBooking' && trimmedLine.toLowerCase().includes('agent:')) {
+        if (currentSection === 'service_booking' && trimmedLine.toLowerCase().includes('agent:')) {
             script.serviceBooking.push(trimmedLine.replace(/agent:\s*/i, ''));
         }
         
-        if (currentSection === 'transferHandling' && trimmedLine.toLowerCase().includes('agent:')) {
+        if (currentSection === 'transfer_handling' && trimmedLine.toLowerCase().includes('agent:')) {
             script.transferHandling.push(trimmedLine.replace(/agent:\s*/i, ''));
         }
         
@@ -480,17 +624,32 @@ function parseMainScript(mainScript) {
             script.closing = trimmedLine.replace(/agent:\s*/i, '');
         }
         
-        // Parse Q&A format for information responses
+        // Enhanced Q&A parsing
         if (trimmedLine.includes('?') && !trimmedLine.toLowerCase().includes('agent:')) {
-            const nextLineIndex = lines.indexOf(line) + 1;
-            if (nextLineIndex < lines.length) {
-                const answerLine = lines[nextLineIndex];
-                if (answerLine && answerLine.trim() !== '') {
-                    script.informationResponses[trimmedLine] = answerLine.trim();
+            // Look for answer in next lines
+            let answerLines = [];
+            for (let j = i + 1; j < lines.length && j < i + 5; j++) {
+                const nextLine = lines[j].trim();
+                if (nextLine && !nextLine.includes('?') && !nextLine.toLowerCase().includes('agent:')) {
+                    answerLines.push(nextLine);
+                } else {
+                    break;
                 }
+            }
+            if (answerLines.length > 0) {
+                const questionKey = trimmedLine.toLowerCase().replace(/[^\w\s]/g, '').trim();
+                script.informationResponses[questionKey] = answerLines.join(' ');
             }
         }
     }
+    
+    // Save final section
+    if (currentSection && currentSectionContent.length > 0) {
+        script.sections[currentSection] = currentSectionContent.join('\n');
+    }
+    
+    console.log(`[Script Parser] Parsed sections:`, Object.keys(script.sections));
+    console.log(`[Script Parser] Found ${Object.keys(script.informationResponses).length} Q&A pairs`);
     
     return script;
 }
@@ -547,8 +706,18 @@ async function processConversationalScript(company, question, conversationHistor
 async function processConversationalScriptEnhanced(company, question, conversationHistory, placeholders) {
     const agentSetup = company?.agentSetup || {};
     const mainScript = agentSetup.mainAgentScript || '';
+    const protocols = agentSetup.protocols || {};
     const parsedScript = parseMainScript(mainScript);
     const personality = company?.aiSettings?.personality || 'friendly';
+    
+    console.log(`[Enhanced Script] Available protocols:`, Object.keys(protocols));
+    
+    // PRIORITY 1: Check for specific scenario protocols FIRST
+    const protocolResponse = checkSpecificProtocols(protocols, question, conversationHistory, placeholders);
+    if (protocolResponse) {
+        console.log(`[Enhanced Script] Using specific protocol response`);
+        return protocolResponse;
+    }
     
     if (!parsedScript) {
         // Fall back to original conversational script processing
@@ -629,6 +798,70 @@ async function processConversationalScriptEnhanced(company, question, conversati
             // Fall back to original processing
             return await processConversationalScript(company, question, conversationHistory, placeholders);
     }
+}
+
+// NEW: Check specific scenario protocols
+function checkSpecificProtocols(protocols, question, conversationHistory, placeholders) {
+    const qLower = question.toLowerCase();
+    
+    // System delay/reboot scenarios
+    if ((qLower.includes('wait') || qLower.includes('hold') || qLower.includes('delay') || 
+         qLower.includes('slow') || qLower.includes('loading')) && protocols.systemDelay) {
+        console.log(`[Protocol] Using systemDelay protocol`);
+        return applyPlaceholders(protocols.systemDelay, placeholders);
+    }
+    
+    // Caller frustration / "Are you a robot?" 
+    if ((qLower.includes('robot') || qLower.includes('real person') || qLower.includes('human') || 
+         qLower.includes('frustrat') || qLower.includes('annoying') || qLower.includes('repeat')) && 
+         protocols.callerFrustration) {
+        console.log(`[Protocol] Using callerFrustration protocol`);
+        return applyPlaceholders(protocols.callerFrustration, placeholders);
+    }
+    
+    // Telemarketer filter
+    if ((qLower.includes('sell') || qLower.includes('offer') || qLower.includes('deal') || 
+         qLower.includes('promotion') || qLower.includes('save money')) && protocols.telemarketerFilter) {
+        console.log(`[Protocol] Using telemarketerFilter protocol`);
+        return applyPlaceholders(protocols.telemarketerFilter, placeholders);
+    }
+    
+    // Message taking scenario
+    if ((qLower.includes('leave message') || qLower.includes('take message') || qLower.includes('call back') || 
+         qLower.includes('not available') || qLower.includes('busy')) && protocols.messageTaking) {
+        console.log(`[Protocol] Using messageTaking protocol`);
+        return applyPlaceholders(protocols.messageTaking, placeholders);
+    }
+    
+    // Caller reconnect/apology
+    if ((qLower.includes('disconnect') || qLower.includes('cut off') || qLower.includes('dropped') || 
+         qLower.includes('hung up') || qLower.includes('lost you')) && protocols.callerReconnect) {
+        console.log(`[Protocol] Using callerReconnect protocol`);
+        return applyPlaceholders(protocols.callerReconnect, placeholders);
+    }
+    
+    // When in doubt / general escalation
+    if ((qLower.includes('not sure') || qLower.includes('don\'t know') || qLower.includes('uncertain') || 
+         qLower.includes('complicated')) && protocols.whenInDoubt) {
+        console.log(`[Protocol] Using whenInDoubt protocol`);
+        return applyPlaceholders(protocols.whenInDoubt, placeholders);
+    }
+    
+    // Booking confirmation (when scheduling keywords detected)
+    if ((qLower.includes('confirm') || qLower.includes('book') || qLower.includes('schedule') || 
+         qLower.includes('appointment')) && protocols.bookingConfirmation) {
+        console.log(`[Protocol] Using bookingConfirmation protocol`);
+        return applyPlaceholders(protocols.bookingConfirmation, placeholders);
+    }
+    
+    // Text-to-pay scenarios
+    if ((qLower.includes('payment') || qLower.includes('pay') || qLower.includes('text to pay') || 
+         qLower.includes('invoice')) && protocols.textToPay) {
+        console.log(`[Protocol] Using textToPay protocol`);
+        return applyPlaceholders(protocols.textToPay, placeholders);
+    }
+    
+    return null; // No protocol match
 }
 
 // Helper functions for conversational script processing
