@@ -7,7 +7,7 @@ const Company = require('../models/Company'); // Add Company model import
 const { google } = require('googleapis'); // For Google Calendar
 const { normalizePhoneNumber } = require('../utils/phone');
 const { redisClient } = require('../clients');
-const { defaultResponses, clearCompanyResponsesCache } = require('../utils/personalityResponses_enhanced');
+const { defaultResponses, clearCompanyResponsesCache, initializeStandardPersonalityResponses, ensurePersonalityResponsesExist } = require('../utils/personalityResponses_enhanced');
 
 // Google OAuth2 Client Setup
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -692,6 +692,50 @@ router.delete('/company/:companyId/personality-responses/:categoryName', async (
     } catch (error) {
         console.error(`[API DELETE /api/company/${companyId}/personality-responses/${categoryName}] Error:`, error.message);
         res.status(500).json({ message: `Error deleting personality response category: ${error.message}` });
+    }
+});
+
+// Initialize standard personality responses for a company
+router.post('/companies/:companyId/initialize-personality', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        if (!ObjectId.isValid(companyId)) {
+            return res.status(400).json({ error: 'Invalid company ID' });
+        }
+        
+        const responseCount = await initializeStandardPersonalityResponses(companyId);
+        
+        res.json({ 
+            success: true, 
+            message: `Initialized ${responseCount} standard personality responses`,
+            responseCount 
+        });
+    } catch (error) {
+        console.error('[API Error] Error initializing personality responses:', error);
+        res.status(500).json({ error: 'Failed to initialize personality responses' });
+    }
+});
+
+// Check and ensure personality responses exist for a company
+router.get('/companies/:companyId/personality-status', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        if (!ObjectId.isValid(companyId)) {
+            return res.status(400).json({ error: 'Invalid company ID' });
+        }
+        
+        const responseCount = await ensurePersonalityResponsesExist(companyId);
+        
+        res.json({ 
+            success: true, 
+            hasResponses: responseCount > 0,
+            responseCount 
+        });
+    } catch (error) {
+        console.error('[API Error] Error checking personality status:', error);
+        res.status(500).json({ error: 'Failed to check personality status' });
     }
 });
 
