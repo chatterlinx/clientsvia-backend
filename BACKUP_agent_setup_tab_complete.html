@@ -1,0 +1,347 @@
+<!-- BACKUP: Complete Agent Setup Tab Content from company-profile.html -->
+<!-- Created: July 11, 2025 -->
+<!-- Purpose: Preserve the complete Agent Setup tab before workflow system rebuild -->
+
+<div id="agent-setup-content" class="tab-content-item hidden">
+    <div class="bg-white py-6 md:py-8 rounded-xl"> 
+        <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center px-6 md:px-8"> 
+            <i class="fas fa-user-cog mr-3 text-indigo-600 text-2xl"></i>AI Agent Detailed Configuration
+        </h2>
+        <div id="agent-setup-form" class="space-y-0">
+            <div class="px-6 md:px-8 mb-6"> 
+                <div class="p-4 border border-indigo-200 rounded-xl bg-indigo-50 shadow-sm">
+                    <label for="agentModeSelect" class="form-label text-base font-semibold text-indigo-800">Agent Operating Mode</label>
+                    <p class="text-xs text-indigo-700 mb-2">Choose how the AI agent should primarily function.</p>
+                    <select id="agentModeSelect" name="agentMode" class="form-select">
+                        <option value="full">Full Knowledge & Booking Agent</option>
+                        <option value="receptionist">Simple Receptionist (Greet & Route Calls Only)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="px-6 md:px-8"> 
+                <div class="agent-setup-section-container" data-section-type="full" data-section-name="categories">
+                    <h3 class="agent-setup-section-header">
+                        <span><i class="fas fa-list mr-2"></i>Business Categories</span>
+                        <i class="fas fa-chevron-up transition-transform duration-200"></i>
+                    </h3>
+                    <div class="section-content">
+                        <label class="form-label mb-1">Category Selection</label>
+                        <p class="text-xs text-gray-500 mb-3">Select one or more categories this company operates in.</p>
+                        <div id="agentSetupCategoriesContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-48 overflow-y-auto border border-gray-200 rounded-xl p-4 bg-white">
+                            <p class="text-gray-500 italic" id="categories-loading">Loading categories...</p>
+                        </div>
+                        <div class="mt-3">
+                            <label class="form-label mb-1">Selected Categories:</label>
+                            <ul id="selectedCategoriesList" class="list-disc list-inside text-sm text-gray-800 space-y-1 pl-1">
+                                <li class="text-gray-500 italic">No categories selected yet.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="agent-setup-section-container" data-section-type="full" data-section-name="specialties">
+                    <h3 class="agent-setup-section-header">
+                        <span><i class="fas fa-star mr-2"></i>Company Specialties</span>
+                        <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                    </h3>
+                    <div class="section-content collapsed">
+                        <label for="companySpecialties" class="form-label">Specialties (comma-separated)</label>
+                        <input type="text" id="companySpecialties" name="companySpecialties" class="form-input wider-textbox" placeholder="e.g., Emergency HVAC repairs, eco-friendly plumbing solutions">
+                    </div>
+                </div>
+                <div class="agent-setup-section-container" data-section-type="full" data-section-name="company-qna">
+                    <h3 class="agent-setup-section-header">
+                        <span><i class="fas fa-question-circle mr-2"></i>Company Q&amp;A</span>
+                        <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                    </h3>
+                    <div class="section-content collapsed">
+                        <p class="text-xs text-gray-500 mb-3">Add company-specific questions and answers.</p>
+                        <form id="companyQnaForm" class="space-y-3 mb-4">
+                            <input type="hidden" id="editingQnaId">
+                            <div>
+                                <label for="companyQnaQuestion" class="form-label">Question</label>
+                                <textarea id="companyQnaQuestion" class="form-textarea wider-textbox" rows="2" required></textarea>
+                            </div>
+                            <div>
+                                <label for="companyQnaAnswer" class="form-label">Answer</label>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <select id="placeholderSelect" class="form-select text-xs flex-none"></select>
+                                    <button type="button" id="insertPlaceholderBtn" class="text-blue-600 text-xs">Insert</button>
+                                </div>
+                                <textarea id="companyQnaAnswer" class="form-textarea wider-textbox" rows="4" required></textarea>
+                                <p id="companyQnaPreview" class="text-xs text-gray-600 mt-1"></p>
+                            </div>
+                            <div>
+                                <label for="companyQnaKeywords" class="form-label">Keywords</label>
+                                <input type="text" id="companyQnaKeywords" class="form-input wider-textbox" placeholder="Comma-separated keywords (e.g. thermostat, reset)">
+                            </div>
+                            <div class="flex gap-2 justify-end">
+                                <button type="submit" id="companyQnaSaveBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition">Add</button>
+                                <button type="button" id="companyQnaCancelBtn" class="form-button-agent-setup remove-button-agent-setup hidden">Cancel</button>
+                            </div>
+                            <p id="companyQnaFormError" class="text-red-600 text-sm hidden"></p>
+                        </form>
+                        <div id="companyQnaList" class="space-y-3"></div>
+                    </div>
+                </div>
+                <div class="agent-setup-section-container" data-section-type="full" data-section-name="placeholders">
+                    <h3 class="agent-setup-section-header">
+                        <span><i class="fas fa-code mr-2"></i>Placeholders</span>
+                        <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                    </h3>
+                    <div class="section-content collapsed space-y-2">
+                        <p class="text-xs text-gray-500">Define tokens you can use in responses.</p>
+                        <div id="placeholders-list" class="space-y-2"></div>
+                        <button type="button" id="add-placeholder-btn" class="form-button-agent-setup text-xs">Add Placeholder</button>
+                    </div>
+                </div>
+                <div class="agent-setup-section-container" data-section-type="full receptionist" data-section-name="time-zone">
+                    <h3 class="agent-setup-section-header">
+                        <span><i class="fas fa-clock mr-2"></i>Time Settings</span>
+                        <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                    </h3>
+                    <div class="section-content collapsed">
+                        <label for="agentSetupTimezoneSelect" class="form-label">Company Time Zone (for Agent)</label>
+                        <select id="agentSetupTimezoneSelect" name="agentSetupTimezone" class="form-select"></select>
+                        <p id="agentSetupCurrentTimeDisplay" class="text-sm text-indigo-700 font-semibold mt-2 p-2 bg-indigo-50 rounded-md">Loading current time...</p>
+                    </div>
+                </div>
+                <div class="agent-setup-section-container" data-section-type="full receptionist" data-section-name="operating-hours">
+                    <h3 class="agent-setup-section-header">
+                        <span><i class="fas fa-calendar mr-2"></i>Operating Hours</span>
+                        <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                    </h3>
+                    <div class="section-content collapsed">
+                        <div class="flex items-center justify-between mb-4">
+                            <label class="form-label">Company Operating Hours</label>
+                            <label class="flex items-center cursor-pointer">
+                                <span class="text-sm text-gray-600 mr-2">
+                                    Use 24/7 Routing
+                                    <i class="fas fa-info-circle ml-1 text-gray-500" title="When checked, ignores the schedule and routes calls 24/7 using Call Routing Options."></i>
+                                </span>
+                                <input type="checkbox" id="toggle24Hours" name="use247Routing" class="form-checkbox">
+                            </label>
+                        </div>
+                        <p class="text-xs text-gray-500 mb-4">These are the hours when the company is open. Times are based on the Company Time Zone selected above.</p>
+                        <div id="operating-hours-list" class="space-y-3">
+                        </div>
+                    </div>
+                </div>
+                <div class="agent-setup-section-container" data-section-type="full receptionist" data-section-name="agent-script">
+                    <h3 class="agent-setup-section-header">
+                        <span><i class="fas fa-comment-dots mr-2"></i>Agent Core Scripting</span>
+                        <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                    </h3>
+                    <div class="section-content collapsed space-y-4">
+                        <div>
+                            <label class="form-label">Greeting Type</label>
+                            <div class="flex items-center space-x-4">
+                                <label class="flex items-center"><input type="radio" name="greetingType" id="greetingTypeTTS" value="tts" class="form-radio" checked><span class="ml-1">Text-to-Speech</span></label>
+                                <label class="flex items-center"><input type="radio" name="greetingType" id="greetingTypeAudio" value="audio" class="form-radio"><span class="ml-1">Audio File</span></label>
+                            </div>
+                        </div>
+                        <div id="greetingAudioUploadContainer" class="hidden">
+                            <label for="greetingAudioFile" class="form-label">Greeting Audio (MP3)</label>
+                            <input type="file" id="greetingAudioFile" accept="audio/mpeg" class="form-input">
+                            <audio id="greetingAudioPreview" controls class="mt-2 hidden"></audio>
+                        </div>
+                        <div id="greetingTextContainer">
+                            <label for="agentGreeting" class="form-label">Agent Greeting</label>
+                            <textarea id="agentGreeting" name="agentGreeting" rows="3" class="form-textarea wider-textbox" placeholder="e.g., Thank you for calling {CompanyName}, this is {AgentName}, how can I help you today?"></textarea>
+                        </div>
+                        <div data-section-type="full"> 
+                            <label for="mainAgentScript" class="form-label">Main Conversational Script / Knowledge</label>
+                            <p class="text-xs text-gray-500 mb-2">Define the AI agent's structured conversational script. The agent will follow this script for call flow, greetings, booking procedures, and responses. Use sections like "Greeting:", "Service Booking:", "Transfer Handling:", etc.</p>
+                            <textarea id="mainAgentScript" name="mainAgentScript" rows="15" class="form-textarea wider-textbox" placeholder="Example structure:&#10;&#10;Greeting & Identification:&#10;Agent: Hi, {CompanyName}! How can I help you today?&#10;&#10;Service Booking:&#10;Agent: Of course! I can help you schedule an appointment. May I have your full name and the best phone number to reach you?&#10;Agent: What service do you need? (Options: AC repair, maintenance, duct cleaning, estimate)&#10;Agent: Which days and times work best for you? We offer morning (8-10, 10-12) and afternoon (12-2, 2-4) slots.&#10;&#10;Transfer Handling:&#10;Agent: I can take a message and have a technician call you back as soon as possible. May I have your name and phone number?&#10;&#10;Information Responses:&#10;Do you offer emergency service? Yes, we offer 24/7 emergency AC repair.&#10;What areas do you serve? We serve all of [County/City] including [specific areas].&#10;Are you licensed and insured? Yes, we are fully licensed, bonded, and insured.&#10;&#10;Closing:&#10;Agent: Thank you for calling {CompanyName}. Have a great day!"></textarea>
+                        </div>
+                        <div>
+                            <label for="categoryQAs" class="form-label">Category-Specific Q&As</label>
+                            <p class="text-xs text-gray-500 mb-2">Q&As for selected business categories, used by the AI agent to answer common questions.</p>
+                            <textarea id="categoryQAs" name="categoryQAs" rows="8" class="form-textarea wider-textbox" readonly placeholder="Q&As will appear here based on selected categories..."></textarea>
+                        </div>
+                        <div>
+                            <label for="agentClosing" class="form-label">Agent Closing</label>
+                            <textarea id="agentClosing" name="agentClosing" rows="3" class="form-textarea wider-textbox" placeholder="e.g., Thank you for calling! Have a great day!"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="agent-setup-section-container" data-section-type="full" data-section-name="protocols">
+                    <h3 class="agent-setup-section-header">
+                        <span><i class="fas fa-book mr-2"></i>Specific Scenario Protocols</span>
+                        <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                    </h3>
+                    <div class="section-content collapsed space-y-4">
+                        <div>
+                            <button type="button" data-protocol-target="system-delay-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>System Delay/Reboot Protocol
+                            </button>
+                            <div id="system-delay-protocol" class="protocol-section collapsed pl-5">
+                                <textarea name="protocolSystemDelay" rows="5" class="form-textarea wider-textbox" placeholder="Default system delay protocol..."></textarea>
+                            </div>
+                        </div>
+                        <div>
+                            <button type="button" data-protocol-target="message-taking-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                 <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Message Taking Protocol</button>
+                            <div id="message-taking-protocol" class="protocol-section collapsed pl-5">
+                                <textarea name="protocolMessageTaking" rows="5" class="form-textarea wider-textbox" placeholder="Default message taking protocol..."></textarea>
+                            </div>
+                        </div>
+                        <div>
+                            <button type="button" data-protocol-target="caller-reconnect-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Caller Reconnect – Apology Protocol</button>
+                            <div id="caller-reconnect-protocol" class="protocol-section collapsed pl-5">
+                                 <textarea name="protocolCallerReconnect" rows="3" class="form-textarea wider-textbox"></textarea>
+                            </div>
+                        </div>
+                        <div>
+                            <button type="button" data-protocol-target="when-in-doubt-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>When in Doubt (General Escalation)</button>
+                            <div id="when-in-doubt-protocol" class="protocol-section collapsed pl-5">
+                                <textarea name="protocolWhenInDoubt" rows="4" class="form-textarea wider-textbox"></textarea>
+                            </div>
+                        </div>
+                        <div>
+                            <button type="button" data-protocol-target="caller-frustration-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Caller Frustration / "Are You a Robot?"</button>
+                            <div id="caller-frustration-protocol" class="protocol-section collapsed pl-5">
+                                <textarea name="protocolCallerFrustration" rows="4" class="form-textarea wider-textbox"></textarea>
+                            </div>
+                        </div>
+                        <div>
+                            <button type="button" data-protocol-target="telemarketer-filter-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Telemarketer Filter</button>
+                            <div id="telemarketer-filter-protocol" class="protocol-section collapsed pl-5">
+                                <textarea name="protocolTelemarketerFilter" rows="4" class="form-textarea wider-textbox"></textarea>
+                            </div>
+                        </div>
+                        <div>
+                            <button type="button" data-protocol-target="behavior-guidelines-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Behavior Guidelines</button>
+                            <div id="behavior-guidelines-protocol" class="protocol-section collapsed pl-5">
+                                <textarea name="protocolBehaviorGuidelines" rows="5" class="form-textarea wider-textbox"></textarea>
+                            </div>
+                        </div>
+                        <div>
+                            <button type="button" data-protocol-target="booking-confirmation-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Booking Confirmation Script</button>
+                            <div id="booking-confirmation-protocol" class="protocol-section collapsed pl-5">
+                                <textarea name="protocolBookingConfirmation" rows="3" class="form-textarea wider-textbox"></textarea>
+                            </div>
+                        </div>
+                        <div>
+                            <button type="button" data-protocol-target="text-to-pay-protocol" class="protocol-toggle flex items-center w-full text-left text-sm font-medium text-gray-700 mb-1 hover:text-indigo-600 transition-colors duration-200">
+                                <i class="fas fa-chevron-right mr-2 text-xs transition-transform duration-200"></i>Text-to-Pay Request Script</button>
+                            <div id="text-to-pay-protocol" class="protocol-section collapsed pl-5">
+                                <textarea name="protocolTextToPay" rows="3" class="form-textarea wider-textbox"></textarea>
+                                <div class="mt-2">
+                                    <label class="form-label mb-1">Phone Number Source for Text-to-Pay</label>
+                                    <select name="textToPayPhoneSource" class="form-select sm:w-auto">
+                                        <option value="callerID">Use caller ID if confirmed</option>
+                                        <option value="askCustomer">Ask customer to provide number</option>
+                                        <option value="both">Ask to confirm caller ID or provide new number</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="agent-setup-section-container" data-section-type="full" data-section-name="scheduling-rules">
+                    <h3 class="agent-setup-section-header">
+                        <span><i class="fas fa-calendar-check mr-2"></i>Service Scheduling Rules</span>
+                        <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                    </h3>
+                    <div class="section-content collapsed">
+                        <p class="text-xs text-gray-500 mb-3">Define how the AI determines appointment availability for different services.</p>
+                        <div id="serviceSchedulingRulesContainer" class="space-y-6"></div>
+                        <button type="button" id="add-new-scheduling-rule-btn" class="form-button-agent-setup mt-6 flex items-center">
+                            <i class="fas fa-plus mr-2"></i>Add Scheduling Rule
+                        </button>
+                        <div id="scheduling-interpreter-container" class="mt-6 p-4 border border-blue-300 bg-blue-50 rounded-lg shadow">
+                            <h5 class="text-md font-semibold text-blue-700 mb-2">Live Scheduling Helper</h5>
+                            <div id="current-time-display" class="text-sm text-blue-600 mb-3">
+                                Current Time: <span class="font-medium">Loading...</span>
+                            </div>
+                            <div id="scheduling-interpreter-output" class="text-sm text-gray-700 space-y-1">
+                                <p class="italic">Configure or add a scheduling rule above to see its live interpretation here.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="agent-setup-section-container" data-section-type="full receptionist" data-section-name="routing-notifications">
+                    <h3 class="agent-setup-section-header">
+                        <span><i class="fas fa-route mr-2"></i>Call Routing & Notifications</span>
+                        <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                    </h3>
+                    <div class="section-content collapsed space-y-6">
+                         <div>
+                            <label class="form-label mb-1">General Call Routing (During Business Hours)</label>
+                            <p class="text-xs text-gray-500 mb-2">Define primary numbers for AI transfers.</p>
+                            <div id="call-routing-list" class="space-y-3"></div>
+                            <button type="button" id="add-call-routing-option" class="form-button-agent-setup mt-2 text-xs">Add Routing Option</button>
+                        </div>
+                        <div>
+                            <label class="form-label mb-1">After-Hours Call Routing</label>
+                            <p class="text-xs text-gray-500 mb-2">If "After-Hours Protocol" in Business Hours is set to forward.</p>
+                            <div id="after-hours-routing-list" class="space-y-3"></div>
+                            <button type="button" id="add-after-hours-routing-option" class="form-button-agent-setup mt-2 text-xs">Add After-Hours Option</button>
+                        </div>
+                        <div>
+                            <label class="form-label mb-1">Call Summary Notification Recipients</label>
+                            <p class="text-xs text-gray-500 mb-2">Who gets call summaries via text/email.</p>
+                            <div id="call-summaries-list" class="space-y-3"></div>
+                            <button type="button" id="add-call-summary-recipient" class="form-button-agent-setup mt-2 text-xs">Add Recipient</button>
+                        </div>
+                        <div>
+                            <label class="form-label mb-1">After-Hours Notification Recipients</label>
+                            <p class="text-xs text-gray-500 mb-2">Who gets notified of after-hours calls/messages.</p>
+                            <div id="after-hours-notifications-list" class="space-y-3"></div>
+                            <button type="button" id="add-after-hours-notification-recipient" class="form-button-agent-setup mt-2 text-xs">Add Recipient</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="agent-setup-section-container" data-section-type="full receptionist" data-section-name="malfunction-handling">
+                    <h3 class="agent-setup-section-header">
+                        <span><i class="fas fa-exclamation-triangle mr-2"></i>AI Malfunction Handling</span>
+                        <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                    </h3>
+                    <div class="section-content collapsed space-y-6">
+                         <div>
+                            <label class="form-label mb-1">Call Forwarding on Malfunction</label>
+                            <p class="text-xs text-gray-500 mb-2">Forward calls if AI skips or drops. Add multiple for round-robin or failover.</p>
+                            <div id="malfunction-forwarding-list" class="space-y-3"></div>
+                            <button type="button" id="add-malfunction-forwarding-number" class="form-button-agent-setup mt-2 text-xs">Add Forwarding Number</button>
+                        </div>
+                        <div>
+                            <label class="form-label mb-1">Text Notifications on Malfunction</label>
+                            <p class="text-xs text-gray-500 mb-2">Send SMS alerts when calls are forwarded due to malfunction.</p>
+                            <div id="malfunction-notifications-list" class="space-y-3"></div>
+                            <button type="button" id="add-malfunction-notification-recipient" class="form-button-agent-setup mt-2 text-xs">Add Notification Recipient</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-10 pt-6 border-t border-gray-300 flex justify-end">
+                    <button type="submit" id="save-agent-setup-button" class="form-button-agent-setup text-base py-3 px-6 inline-flex items-center">
+                        <i class="fas fa-save mr-2"></i>Save Agent Setup
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 
+KEY FEATURES BACKED UP:
+- Agent Operating Mode (Full Knowledge & Booking Agent vs Simple Receptionist)
+- Business Categories selection
+- Company Specialties
+- Company Q&A management
+- Placeholders system
+- Time Settings & Operating Hours
+- Agent Core Scripting (greeting, main script, closing)
+- Specific Scenario Protocols (9 different protocols)
+- Service Scheduling Rules
+- Call Routing & Notifications
+- AI Malfunction Handling
+
+This is a comprehensive agent configuration system that allows detailed customization
+of AI agent behavior, scripting, scheduling, and call routing.
+-->
