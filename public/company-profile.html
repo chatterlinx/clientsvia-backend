@@ -965,33 +965,579 @@
                             <!-- Configuration Tabs -->
                             <div id="aiAgentConfigTabs" class="px-6 md:px-8">
                                 <div class="border-b border-gray-200 mb-6">
-                                    <nav class="-mb-px flex space-x-8">
-                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="basic">
-                                            <i class="fas fa-play-circle mr-1"></i>Basic Setup
+                                    <nav class="-mb-px flex space-x-8 overflow-x-auto">
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-indigo-500 text-indigo-600 whitespace-nowrap" data-tab="agent-details">
+                                            <i class="fas fa-user-cog mr-1"></i>Agent Details
                                         </button>
-                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-indigo-500 text-indigo-600" data-tab="scheduling">
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="agent-goals">
+                                            <i class="fas fa-bullseye mr-1"></i>Agent Goals
+                                        </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="phone-availability">
+                                            <i class="fas fa-phone-alt mr-1"></i>Phone & Availability
+                                        </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="dashboard-logs">
+                                            <i class="fas fa-chart-line mr-1"></i>Dashboard & Logs
+                                        </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="scheduling">
                                             <i class="fas fa-calendar-check mr-1"></i>Smart Scheduling
                                         </button>
-                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="knowledge">
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="knowledge">
                                             <i class="fas fa-brain mr-1"></i>Knowledge Base
                                         </button>
-                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="workflows">
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="workflows">
                                             <i class="fas fa-flow-chart mr-1"></i>Call Workflows
                                         </button>
-                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="analytics">
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="analytics">
                                             <i class="fas fa-chart-bar mr-1"></i>Analytics
                                         </button>
-                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="intelligence">
-                                            <i class="fas fa-robot mr-1"></i>Intelligence
-                                            <span class="ml-1 text-xs bg-purple-100 text-purple-800 px-1 py-0.5 rounded">Super AI</span>
-                                        </button>
-                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="personality">
-                                            <i class="fas fa-comment-dots mr-1"></i>Personality
-                                        </button>
-                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="advanced">
-                                            <i class="fas fa-cogs mr-1"></i>Advanced
-                                        </button>
                                     </nav>
+                                </div>
+
+                                <!-- Agent Details Tab -->
+                                <div id="ai-agent-details-tab" class="ai-config-tab-content">
+                                    <div class="space-y-6">
+                                        <!-- Basic Agent Information -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-user-circle mr-2 text-indigo-600"></i>Agent Information
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <!-- Agent Name -->
+                                                <div>
+                                                    <label class="form-label">Agent name <span class="text-red-500">*</span></label>
+                                                    <input type="text" id="agentName" name="agentName" value="Jessica" maxlength="40" class="form-input" placeholder="Enter the name of the Agent">
+                                                    <p class="text-xs text-gray-500 mt-1"><span id="agentNameCount">7</span> / 40</p>
+                                                </div>
+
+                                                <!-- Business Name -->
+                                                <div>
+                                                    <label class="form-label">Business name <span class="text-red-500">*</span></label>
+                                                    <input type="text" id="businessName" name="businessName" value="Penguin Air Cooling & Heating, Corp." class="form-input" placeholder="Enter the name of the Business">
+                                                </div>
+
+                                                <!-- Language -->
+                                                <div>
+                                                    <label class="form-label">Language</label>
+                                                    <select id="agentLanguage" name="agentLanguage" class="form-select">
+                                                        <option value="english" selected>English</option>
+                                                        <option value="spanish">Spanish</option>
+                                                        <option value="french">French</option>
+                                                        <option value="german">German</option>
+                                                        <option value="italian">Italian</option>
+                                                        <option value="portuguese">Portuguese</option>
+                                                    </select>
+                                                    <p class="text-xs text-gray-500 mt-1">Choose a Language for the Agent</p>
+                                                </div>
+
+                                                <!-- Voice -->
+                                                <div>
+                                                    <label class="form-label">Voice</label>
+                                                    <div class="flex gap-2">
+                                                        <select id="agentVoice" name="agentVoice" class="form-select flex-1">
+                                                            <option value="bria" selected>Bria</option>
+                                                            <option value="jessica">Jessica</option>
+                                                            <option value="sarah">Sarah</option>
+                                                            <option value="michael">Michael</option>
+                                                            <option value="david">David</option>
+                                                            <option value="emma">Emma</option>
+                                                        </select>
+                                                        <button type="button" id="playVoiceBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center">
+                                                            <i class="fas fa-play mr-1"></i>Play
+                                                        </button>
+                                                    </div>
+                                                    <p class="text-xs text-gray-500 mt-1">Try different voices for your AI agent</p>
+                                                </div>
+
+                                                <!-- Timezone -->
+                                                <div>
+                                                    <label class="form-label">Timezone <span class="text-red-500">*</span></label>
+                                                    <select id="agentTimezone" name="agentTimezone" class="form-select">
+                                                        <option value="GMT-04:00 America/New_York (EDT)" selected>GMT-04:00 America/New_York (EDT)</option>
+                                                        <option value="GMT-05:00 America/Chicago (CDT)">GMT-05:00 America/Chicago (CDT)</option>
+                                                        <option value="GMT-06:00 America/Denver (MDT)">GMT-06:00 America/Denver (MDT)</option>
+                                                        <option value="GMT-07:00 America/Los_Angeles (PDT)">GMT-07:00 America/Los_Angeles (PDT)</option>
+                                                        <option value="GMT-08:00 America/Anchorage (AKDT)">GMT-08:00 America/Anchorage (AKDT)</option>
+                                                        <option value="GMT-10:00 Pacific/Honolulu (HST)">GMT-10:00 Pacific/Honolulu (HST)</option>
+                                                    </select>
+                                                    <p class="text-xs text-gray-500 mt-1">Select the timezone for your AI agent</p>
+                                                </div>
+
+                                                <!-- Direction -->
+                                                <div>
+                                                    <label class="form-label">Direction</label>
+                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                                        <label class="relative">
+                                                            <input type="radio" name="callDirection" value="inbound" checked class="sr-only peer">
+                                                            <div class="w-full p-4 border-2 border-gray-200 rounded-lg cursor-pointer peer-checked:border-indigo-500 peer-checked:bg-indigo-50 hover:bg-gray-50 transition-colors">
+                                                                <div class="flex items-center">
+                                                                    <i class="fas fa-phone-volume text-indigo-600 text-xl mr-3"></i>
+                                                                    <div>
+                                                                        <div class="font-medium text-gray-900">Inbound call</div>
+                                                                        <div class="text-xs text-gray-500">The agent picks up all Incoming Calls</div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </label>
+                                                        
+                                                        <label class="relative opacity-50">
+                                                            <input type="radio" name="callDirection" value="outbound" disabled class="sr-only peer">
+                                                            <div class="w-full p-4 border-2 border-gray-200 rounded-lg cursor-not-allowed">
+                                                                <div class="flex items-center">
+                                                                    <i class="fas fa-phone text-gray-400 text-xl mr-3"></i>
+                                                                    <div>
+                                                                        <div class="font-medium text-gray-600">Outbound call</div>
+                                                                        <div class="text-xs text-gray-400">The agent makes Outbound Calls</div>
+                                                                        <div class="text-xs text-blue-600 mt-1">Coming Soon</div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Agent's Initial Message -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-comment-dots mr-2 text-indigo-600"></i>Agent's Initial Message <span class="text-red-500">*</span>
+                                            </h4>
+                                            
+                                            <div class="space-y-4">
+                                                <textarea id="agentInitialMessage" name="agentInitialMessage" rows="4" maxlength="190" class="form-input w-full resize-none" placeholder="Hi, Penguin Air conditioning! —how can I help you today?">Hi, Penguin Air conditioning! —how can I help you today?</textarea>
+                                                <div class="flex justify-between items-center">
+                                                    <p class="text-xs text-gray-500">This is the first message your AI agent will say when answering calls</p>
+                                                    <p class="text-xs text-gray-500"><span id="initialMessageCount">56</span> / 190</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Agent Goals Tab -->
+                                <div id="ai-agent-goals-tab" class="ai-config-tab-content hidden">
+                                    <div class="space-y-6">
+                                        <!-- Agent Goals Section -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <div class="flex justify-between items-start mb-6">
+                                                <div>
+                                                    <h4 class="text-lg font-semibold text-gray-900 flex items-center">
+                                                        <i class="fas fa-bullseye mr-2 text-indigo-600"></i>Agent goals
+                                                    </h4>
+                                                    <p class="text-gray-600 mt-1">Set up Agent's personality and actions</p>
+                                                </div>
+                                                <button class="text-indigo-600 hover:text-indigo-800 text-sm">
+                                                    Switch to basic mode
+                                                </button>
+                                            </div>
+
+                                            <!-- Knowledge Base Selection -->
+                                            <div class="mb-6">
+                                                <label class="form-label">Select knowledge base</label>
+                                                <div class="flex gap-2">
+                                                    <select id="knowledgeBaseSelect" name="knowledgeBase" class="form-select flex-1">
+                                                        <option value="">Select knowledge base for this agent</option>
+                                                        <option value="penguin-air-kb">Penguin Air Knowledge Base</option>
+                                                        <option value="hvac-general-kb">HVAC General Knowledge</option>
+                                                        <option value="customer-service-kb">Customer Service Knowledge</option>
+                                                    </select>
+                                                    <button type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center whitespace-nowrap">
+                                                        <i class="fas fa-plus mr-2"></i>Create New
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Behavior Guidelines (Prompt) -->
+                                            <div>
+                                                <div class="flex justify-between items-center mb-2">
+                                                    <label class="form-label">Prompt</label>
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-xs text-gray-500"><span id="promptWordCount">183</span> words left</span>
+                                                        <button type="button" class="text-indigo-600 hover:text-indigo-800 text-sm">
+                                                            <i class="fas fa-expand-arrows-alt mr-1"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                
+                                                <textarea id="behaviorGuidelines" name="behaviorGuidelines" rows="15" class="form-input w-full resize-none font-mono text-sm" placeholder="Enter behavior guidelines for your AI agent...">Behavior Guidelines:
+Never interrupt the caller.
+Always be polite, personable, and sympathetic.
+Stay relaxed, human, and steady — avoid sounding rushed or robotic.
+If caller says "How are you?" → Reply: "Doing great, thanks! How can I help you?"
+Always acknowledge responses right away with a short line before moving on. Use "Ok" (no "Got it!").
+Never stay silent more than 2 seconds between speaking.
+If Caller Says "It's a Machine" / "Are You Real" / Sounds Frustrated Protocol:
+If the caller says "It's a machine," "Are you real?" or expresses frustration thinking they are speaking to a robot:
+Agent Response: "Please, I am here to help you! You can speak to me naturally and ask anything you need — How can I assist you today?"
+
+Always be natural, human, and conversational.
+Never mention that you are an AI, virtual assistant, or automated system.
+Use conversational fillers like "um," "let me see," "okay," and "sure thing."
+Speak in a natural flow — avoid sounding scripted.
+Be empathetic and understand customer needs.
+If a customer seems frustrated, acknowledge their concern.
+If you can't help with something, offer to transfer to a human specialist.
+
+Service Information:
+We specialize in emergency HVAC repair, maintenance, and installation.
+We provide 24/7 emergency service.
+Our technicians are licensed and insured.
+We service all major HVAC brands.
+
+Scheduling:
+When booking appointments, collect: full name, phone number, address, and preferred date/time.
+Offer morning (8am-12pm) or afternoon (12pm-5pm) time slots.
+Always confirm appointment details before ending the call.
+
+Emergency Services:
+If the caller has a heating/cooling emergency, prioritize immediate dispatch.
+Get their address first, then brief description of the problem.
+Assure them a technician will be dispatched right away.
+
+Closing:
+Always end with: "Thank you for choosing Penguin Air! Have a great day!"</textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Phone & Availability Tab -->
+                                <div id="ai-phone-availability-tab" class="ai-config-tab-content hidden">
+                                    <div class="space-y-6">
+                                        <!-- Phone Configuration -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-phone-alt mr-2 text-indigo-600"></i>Phone Configuration
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div>
+                                                    <label class="form-label">Primary Phone Number</label>
+                                                    <input type="tel" id="primaryPhoneNumber" class="form-input" placeholder="+1 (555) 123-4567">
+                                                    <p class="text-xs text-gray-500 mt-1">Main number for incoming calls</p>
+                                                </div>
+                                                
+                                                <div>
+                                                    <label class="form-label">Backup Phone Number</label>
+                                                    <input type="tel" id="backupPhoneNumber" class="form-input" placeholder="+1 (555) 123-4568">
+                                                    <p class="text-xs text-gray-500 mt-1">Fallback number for transfers</p>
+                                                </div>
+                                                
+                                                <div>
+                                                    <label class="form-label">Maximum Concurrent Calls</label>
+                                                    <select id="maxConcurrentCalls" class="form-select">
+                                                        <option value="1">1 call</option>
+                                                        <option value="2" selected>2 calls</option>
+                                                        <option value="3">3 calls</option>
+                                                        <option value="5">5 calls</option>
+                                                        <option value="10">10 calls</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <div>
+                                                    <label class="form-label">Call Recording</label>
+                                                    <select id="callRecording" class="form-select">
+                                                        <option value="enabled" selected>Enabled</option>
+                                                        <option value="disabled">Disabled</option>
+                                                        <option value="ask-permission">Ask Permission</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Business Hours -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-clock mr-2 text-indigo-600"></i>Business Hours & Availability
+                                            </h4>
+                                            
+                                            <div class="space-y-4">
+                                                <!-- 24/7 Toggle -->
+                                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                                    <div>
+                                                        <h5 class="font-medium text-gray-900">24/7 Availability</h5>
+                                                        <p class="text-sm text-gray-600">Agent answers calls 24 hours a day, 7 days a week</p>
+                                                    </div>
+                                                    <label class="relative inline-flex items-center cursor-pointer">
+                                                        <input type="checkbox" id="is24x7" class="sr-only peer">
+                                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                                    </label>
+                                                </div>
+
+                                                <!-- Business Hours Grid -->
+                                                <div id="businessHoursContainer" class="space-y-3">
+                                                    <div class="grid grid-cols-7 gap-2 text-xs font-medium text-gray-500 mb-2">
+                                                        <div>Mon</div>
+                                                        <div>Tue</div>
+                                                        <div>Wed</div>
+                                                        <div>Thu</div>
+                                                        <div>Fri</div>
+                                                        <div>Sat</div>
+                                                        <div>Sun</div>
+                                                    </div>
+                                                    <div class="grid grid-cols-7 gap-2">
+                                                        <div class="space-y-2">
+                                                            <input type="time" id="mon_open" value="08:00" class="form-input text-xs">
+                                                            <input type="time" id="mon_close" value="17:00" class="form-input text-xs">
+                                                            <label class="flex items-center text-xs">
+                                                                <input type="checkbox" id="mon_closed" class="form-checkbox mr-1">Closed
+                                                            </label>
+                                                        </div>
+                                                        <div class="space-y-2">
+                                                            <input type="time" id="tue_open" value="08:00" class="form-input text-xs">
+                                                            <input type="time" id="tue_close" value="17:00" class="form-input text-xs">
+                                                            <label class="flex items-center text-xs">
+                                                                <input type="checkbox" id="tue_closed" class="form-checkbox mr-1">Closed
+                                                            </label>
+                                                        </div>
+                                                        <div class="space-y-2">
+                                                            <input type="time" id="wed_open" value="08:00" class="form-input text-xs">
+                                                            <input type="time" id="wed_close" value="17:00" class="form-input text-xs">
+                                                            <label class="flex items-center text-xs">
+                                                                <input type="checkbox" id="wed_closed" class="form-checkbox mr-1">Closed
+                                                            </label>
+                                                        </div>
+                                                        <div class="space-y-2">
+                                                            <input type="time" id="thu_open" value="08:00" class="form-input text-xs">
+                                                            <input type="time" id="thu_close" value="17:00" class="form-input text-xs">
+                                                            <label class="flex items-center text-xs">
+                                                                <input type="checkbox" id="thu_closed" class="form-checkbox mr-1">Closed
+                                                            </label>
+                                                        </div>
+                                                        <div class="space-y-2">
+                                                            <input type="time" id="fri_open" value="08:00" class="form-input text-xs">
+                                                            <input type="time" id="fri_close" value="17:00" class="form-input text-xs">
+                                                            <label class="flex items-center text-xs">
+                                                                <input type="checkbox" id="fri_closed" class="form-checkbox mr-1">Closed
+                                                            </label>
+                                                        </div>
+                                                        <div class="space-y-2">
+                                                            <input type="time" id="sat_open" value="09:00" class="form-input text-xs">
+                                                            <input type="time" id="sat_close" value="15:00" class="form-input text-xs">
+                                                            <label class="flex items-center text-xs">
+                                                                <input type="checkbox" id="sat_closed" class="form-checkbox mr-1">Closed
+                                                            </label>
+                                                        </div>
+                                                        <div class="space-y-2">
+                                                            <input type="time" id="sun_open" value="10:00" class="form-input text-xs">
+                                                            <input type="time" id="sun_close" value="14:00" class="form-input text-xs">
+                                                            <label class="flex items-center text-xs">
+                                                                <input type="checkbox" id="sun_closed" checked class="form-checkbox mr-1">Closed
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- After Hours Handling -->
+                                                <div class="pt-4 border-t">
+                                                    <h5 class="font-medium text-gray-900 mb-3">After Hours Handling</h5>
+                                                    <div class="space-y-3">
+                                                        <label class="flex items-center">
+                                                            <input type="radio" name="afterHoursHandling" value="take-message" checked class="form-radio">
+                                                            <span class="ml-2 text-sm">Take a message</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="radio" name="afterHoursHandling" value="emergency-only" class="form-radio">
+                                                            <span class="ml-2 text-sm">Emergency calls only</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="radio" name="afterHoursHandling" value="transfer-voicemail" class="form-radio">
+                                                            <span class="ml-2 text-sm">Transfer to voicemail</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Dashboard & Logs Tab -->
+                                <div id="ai-dashboard-logs-tab" class="ai-config-tab-content hidden">
+                                    <div class="space-y-6">
+                                        <!-- Quick Stats -->
+                                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                                <div class="flex items-center justify-between">
+                                                    <div>
+                                                        <p class="text-sm font-medium text-gray-600">Today's Calls</p>
+                                                        <p class="text-2xl font-bold text-gray-900">24</p>
+                                                        <p class="text-xs text-green-600">
+                                                            <i class="fas fa-arrow-up mr-1"></i>12% vs yesterday
+                                                        </p>
+                                                    </div>
+                                                    <div class="text-blue-500">
+                                                        <i class="fas fa-phone text-xl"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                                <div class="flex items-center justify-between">
+                                                    <div>
+                                                        <p class="text-sm font-medium text-gray-600">Avg Duration</p>
+                                                        <p class="text-2xl font-bold text-gray-900">2:34</p>
+                                                        <p class="text-xs text-green-600">
+                                                            <i class="fas fa-arrow-up mr-1"></i>8% vs yesterday
+                                                        </p>
+                                                    </div>
+                                                    <div class="text-green-500">
+                                                        <i class="fas fa-clock text-xl"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                                <div class="flex items-center justify-between">
+                                                    <div>
+                                                        <p class="text-sm font-medium text-gray-600">Success Rate</p>
+                                                        <p class="text-2xl font-bold text-gray-900">89%</p>
+                                                        <p class="text-xs text-green-600">
+                                                            <i class="fas fa-arrow-up mr-1"></i>3% vs yesterday
+                                                        </p>
+                                                    </div>
+                                                    <div class="text-yellow-500">
+                                                        <i class="fas fa-check-circle text-xl"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                                <div class="flex items-center justify-between">
+                                                    <div>
+                                                        <p class="text-sm font-medium text-gray-600">Agent Status</p>
+                                                        <p class="text-lg font-bold text-green-600">Online</p>
+                                                        <p class="text-xs text-gray-500">Last active: Now</p>
+                                                    </div>
+                                                    <div class="text-green-500">
+                                                        <i class="fas fa-circle text-xl"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Recent Activity -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <div class="flex justify-between items-center mb-4">
+                                                <h4 class="text-lg font-semibold text-gray-900">Recent Call Activity</h4>
+                                                <div class="flex gap-2">
+                                                    <button class="text-indigo-600 hover:text-indigo-800 text-sm">
+                                                        <i class="fas fa-refresh mr-1"></i>Refresh
+                                                    </button>
+                                                    <button class="text-indigo-600 hover:text-indigo-800 text-sm">
+                                                        <i class="fas fa-download mr-1"></i>Export
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="overflow-x-auto">
+                                                <table class="min-w-full divide-y divide-gray-200">
+                                                    <thead class="bg-gray-50">
+                                                        <tr>
+                                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Caller</th>
+                                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Outcome</th>
+                                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody class="bg-white divide-y divide-gray-200">
+                                                        <tr>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">2:47 PM</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">+1 (555) 123-4567</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">3:21</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                                                    Appointment Scheduled
+                                                                </span>
+                                                            </td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                                <button class="text-indigo-600 hover:text-indigo-900 mr-3">View</button>
+                                                                <button class="text-green-600 hover:text-green-900">Listen</button>
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">1:23 PM</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">+1 (555) 987-6543</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">1:45</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                                                    Information Provided
+                                                                </span>
+                                                            </td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                                <button class="text-indigo-600 hover:text-indigo-900 mr-3">View</button>
+                                                                <button class="text-green-600 hover:text-green-900">Listen</button>
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">12:15 PM</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">+1 (555) 246-8135</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">4:12</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                                                                    Emergency Transferred
+                                                                </span>
+                                                            </td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                                <button class="text-indigo-600 hover:text-indigo-900 mr-3">View</button>
+                                                                <button class="text-green-600 hover:text-green-900">Listen</button>
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <!-- Agent Performance -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4">Agent Performance Metrics</h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div>
+                                                    <h5 class="font-medium text-gray-900 mb-3">Response Quality</h5>
+                                                    <div class="space-y-3">
+                                                        <div class="flex justify-between items-center">
+                                                            <span class="text-sm text-gray-600">Accuracy Score</span>
+                                                            <span class="font-medium">94%</span>
+                                                        </div>
+                                                        <div class="w-full bg-gray-200 rounded-full h-2">
+                                                            <div class="bg-green-600 h-2 rounded-full" style="width: 94%"></div>
+                                                        </div>
+                                                        
+                                                        <div class="flex justify-between items-center">
+                                                            <span class="text-sm text-gray-600">Helpfulness Rating</span>
+                                                            <span class="font-medium">4.7/5.0</span>
+                                                        </div>
+                                                        <div class="w-full bg-gray-200 rounded-full h-2">
+                                                            <div class="bg-blue-600 h-2 rounded-full" style="width: 94%"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div>
+                                                    <h5 class="font-medium text-gray-900 mb-3">Call Handling</h5>
+                                                    <div class="space-y-3">
+                                                        <div class="flex justify-between items-center">
+                                                            <span class="text-sm text-gray-600">First Call Resolution</span>
+                                                            <span class="font-medium">87%</span>
+                                                        </div>
+                                                        <div class="w-full bg-gray-200 rounded-full h-2">
+                                                            <div class="bg-purple-600 h-2 rounded-full" style="width: 87%"></div>
+                                                        </div>
+                                                        
+                                                        <div class="flex justify-between items-center">
+                                                            <span class="text-sm text-gray-600">Transfer Rate</span>
+                                                            <span class="font-medium">13%</span>
+                                                        </div>
+                                                        <div class="w-full bg-gray-200 rounded-full h-2">
+                                                            <div class="bg-yellow-600 h-2 rounded-full" style="width: 13%"></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <!-- Basic Setup Tab -->
@@ -1049,8 +1595,107 @@
                                     </div>
                                 </div>
 
-                                <!-- Smart Scheduling Tab -->
-                                <div id="ai-scheduling-tab" class="ai-config-tab-content">
+                                <!-- Call Workflows Tab -->
+                                <div id="ai-workflows-tab" class="ai-config-tab-content hidden">
+                                    <div class="space-y-6">
+                                        <!-- During Call Actions -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-phone mr-2 text-blue-600"></i>During Call Actions
+                                                <span class="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Real-time</span>
+                                            </h4>
+                                            <p class="text-gray-600 mb-4">Configure actions that the AI agent performs while actively on a call.</p>
+                                            
+                                            <div class="mb-4 flex items-center gap-3">
+                                                <select id="duringCallActionType" class="form-select">
+                                                    <option value="extract-data">Extract & Store Data</option>
+                                                    <option value="call-transfer">Call Transfer</option>
+                                                    <option value="trigger-workflow">Trigger Workflow</option>
+                                                    <option value="send-notification">Send Notification</option>
+                                                </select>
+                                                <button id="addDuringCallActionBtn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg flex items-center">
+                                                    <i class="fas fa-plus mr-2"></i>Add Action
+                                                </button>
+                                            </div>
+                                            
+                                            <div id="duringCallActionsList" class="space-y-3">
+                                                <!-- Actions will be populated here -->
+                                            </div>
+                                        </div>
+
+                                        <!-- After Call Actions -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-phone-slash mr-2 text-green-600"></i>After Call Actions
+                                                <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Post-call</span>
+                                            </h4>
+                                            <p class="text-gray-600 mb-4">Configure actions that happen automatically after the call ends.</p>
+                                            
+                                            <div class="mb-4 flex items-center gap-3">
+                                                <select id="afterCallActionType" class="form-select">
+                                                    <option value="call-transfer">Transfer to Team Member</option>
+                                                    <option value="send-sms">Send SMS</option>
+                                                    <option value="book-appointment">Book Appointment</option>
+                                                    <option value="update-contact">Update Contact Field</option>
+                                                    <option value="email-notification">Email Notification</option>
+                                                </select>
+                                                <button id="addAfterCallActionBtn" class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg flex items-center">
+                                                    <i class="fas fa-plus mr-2"></i>Add Action
+                                                </button>
+                                            </div>
+                                            
+                                            <div id="afterCallActionsList" class="space-y-3">
+                                                <!-- Actions will be populated here -->
+                                            </div>
+                                        </div>
+
+                                        <!-- Call Settings -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-cogs mr-2 text-indigo-600"></i>Call Management Settings
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div>
+                                                    <label class="form-label">Maximum Call Duration</label>
+                                                    <div class="flex items-center gap-3">
+                                                        <input type="range" id="aiCallTimeLimit" min="1" max="30" value="10" class="flex-1">
+                                                        <span id="callTimeLimitValue" class="text-sm font-medium">10 mins</span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div>
+                                                    <label class="form-label">Idle Time Before Reminder</label>
+                                                    <select id="aiIdleTime" class="form-select">
+                                                        <option value="5">5 seconds</option>
+                                                        <option value="8" selected>8 seconds</option>
+                                                        <option value="10">10 seconds</option>
+                                                        <option value="15">15 seconds</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <div class="md:col-span-2">
+                                                    <h5 class="font-medium text-gray-900 mb-3">Call Handling Options</h5>
+                                                    <div class="space-y-2">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="aiIdleTimeReminder" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Send idle time reminders</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="aiEmailNotifications" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Email notifications for important calls</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="aiCallRecording" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Record all calls</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="ai-scheduling-tab" class="ai-config-tab-content hidden">
                                     <div class="space-y-6">
                                         <!-- Service Types -->
                                         <div class="bg-white border border-gray-200 rounded-lg p-6">

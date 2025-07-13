@@ -5,7 +5,7 @@
 
 class AIAgentSetup {
     constructor() {
-        this.currentTab = 'scheduling';
+        this.currentTab = 'agent-details';
         this.selectedTemplate = null;
         this.serviceTypes = [];
         this.customQAs = [];
@@ -131,6 +131,35 @@ class AIAgentSetup {
 
         document.getElementById('analyzeKnowledgeGapsBtn')?.addEventListener('click', () => {
             this.analyzeKnowledgeGaps();
+        });
+
+        // Agent Details Tab Events
+        document.getElementById('agentName')?.addEventListener('input', (e) => {
+            this.updateCharacterCount('agentName', 40);
+        });
+
+        document.getElementById('agentInitialMessage')?.addEventListener('input', (e) => {
+            this.updateCharacterCount('agentInitialMessage', 190, 'initialMessageCount');
+        });
+
+        document.getElementById('behaviorGuidelines')?.addEventListener('input', (e) => {
+            this.updateWordCount('behaviorGuidelines', 'promptWordCount');
+        });
+
+        document.getElementById('playVoiceBtn')?.addEventListener('click', () => {
+            this.playVoiceSample();
+        });
+
+        // Phone & Availability Tab Events
+        document.getElementById('is24x7')?.addEventListener('change', (e) => {
+            this.toggle24x7Mode(e.target.checked);
+        });
+
+        // Business hours events
+        ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].forEach(day => {
+            document.getElementById(`${day}_closed`)?.addEventListener('change', (e) => {
+                this.toggleDayClosed(day, e.target.checked);
+            });
         });
     }
 
@@ -310,7 +339,7 @@ class AIAgentSetup {
 
     // Tab Management
     initializeTabs() {
-        this.switchTab('scheduling'); // Default to scheduling tab
+        this.switchTab('agent-details'); // Default to agent details tab
     }
 
     switchTab(tabName) {
@@ -676,6 +705,35 @@ class AIAgentSetup {
 
     gatherConfiguration() {
         return {
+            // Agent Details
+            agentDetails: {
+                agentName: document.getElementById('agentName')?.value,
+                businessName: document.getElementById('businessName')?.value,
+                language: document.getElementById('agentLanguage')?.value,
+                voice: document.getElementById('agentVoice')?.value,
+                timezone: document.getElementById('agentTimezone')?.value,
+                callDirection: document.querySelector('input[name="callDirection"]:checked')?.value,
+                initialMessage: document.getElementById('agentInitialMessage')?.value
+            },
+            
+            // Agent Goals
+            agentGoals: {
+                knowledgeBase: document.getElementById('knowledgeBaseSelect')?.value,
+                behaviorGuidelines: document.getElementById('behaviorGuidelines')?.value
+            },
+            
+            // Phone & Availability
+            phoneAvailability: {
+                primaryPhone: document.getElementById('primaryPhoneNumber')?.value,
+                backupPhone: document.getElementById('backupPhoneNumber')?.value,
+                maxConcurrentCalls: document.getElementById('maxConcurrentCalls')?.value,
+                callRecording: document.getElementById('callRecording')?.value,
+                is24x7: document.getElementById('is24x7')?.checked,
+                businessHours: this.gatherBusinessHours(),
+                afterHoursHandling: document.querySelector('input[name="afterHoursHandling"]:checked')?.value
+            },
+            
+            // Legacy fields for backward compatibility
             template: this.selectedTemplate,
             persona: document.getElementById('aiAgentPersona')?.value,
             timezone: document.getElementById('aiTimezone')?.value,
@@ -695,6 +753,25 @@ class AIAgentSetup {
                 callHandling: document.getElementById('aiCallHandling')?.value
             }
         };
+    }
+
+    gatherBusinessHours() {
+        const days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+        const businessHours = {};
+        
+        days.forEach(day => {
+            const openTime = document.getElementById(`${day}_open`)?.value;
+            const closeTime = document.getElementById(`${day}_close`)?.value;
+            const isClosed = document.getElementById(`${day}_closed`)?.checked;
+            
+            businessHours[day] = {
+                open: openTime,
+                close: closeTime,
+                closed: isClosed
+            };
+        });
+        
+        return businessHours;
     }
 
     async saveToBackend(config) {
@@ -1661,6 +1738,18 @@ class AIAgentSetup {
 
     loadTabData(tabName) {
         switch (tabName) {
+            case 'agent-details':
+                this.loadAgentDetailsData();
+                break;
+            case 'agent-goals':
+                this.loadAgentGoalsData();
+                break;
+            case 'phone-availability':
+                this.loadPhoneAvailabilityData();
+                break;
+            case 'dashboard-logs':
+                this.loadDashboardLogsData();
+                break;
             case 'scheduling':
                 this.loadSchedulingData();
                 break;
@@ -1680,6 +1769,116 @@ class AIAgentSetup {
                 this.loadAdvancedData();
                 break;
         }
+    }
+
+    // Agent Details Tab Functions
+    loadAgentDetailsData() {
+        // Initialize character counts
+        this.updateCharacterCount('agentName', 40);
+        this.updateCharacterCount('agentInitialMessage', 190, 'initialMessageCount');
+    }
+
+    updateCharacterCount(fieldId, maxLength, counterId = null) {
+        const field = document.getElementById(fieldId);
+        const counter = document.getElementById(counterId || fieldId + 'Count');
+        
+        if (field && counter) {
+            const currentLength = field.value.length;
+            counter.textContent = currentLength;
+            
+            // Update color based on remaining characters
+            if (currentLength > maxLength * 0.9) {
+                counter.classList.add('text-red-500');
+                counter.classList.remove('text-gray-500');
+            } else {
+                counter.classList.add('text-gray-500');
+                counter.classList.remove('text-red-500');
+            }
+        }
+    }
+
+    updateWordCount(fieldId, counterId) {
+        const field = document.getElementById(fieldId);
+        const counter = document.getElementById(counterId);
+        
+        if (field && counter) {
+            const words = field.value.trim().split(/\s+/).filter(word => word.length > 0);
+            const remainingWords = Math.max(0, 500 - words.length); // Assuming 500 word limit
+            counter.textContent = remainingWords;
+            
+            if (remainingWords < 50) {
+                counter.classList.add('text-red-500');
+                counter.classList.remove('text-gray-500');
+            } else {
+                counter.classList.add('text-gray-500');
+                counter.classList.remove('text-red-500');
+            }
+        }
+    }
+
+    playVoiceSample() {
+        const selectedVoice = document.getElementById('agentVoice').value;
+        this.showNotification(`Playing voice sample for ${selectedVoice}...`, 'info');
+        
+        // In a real implementation, this would play an actual voice sample
+        // For now, we'll just show a notification
+        setTimeout(() => {
+            this.showNotification(`Voice sample for ${selectedVoice} completed`, 'success');
+        }, 2000);
+    }
+
+    // Agent Goals Tab Functions
+    loadAgentGoalsData() {
+        this.updateWordCount('behaviorGuidelines', 'promptWordCount');
+    }
+
+    // Phone & Availability Tab Functions
+    loadPhoneAvailabilityData() {
+        // Initialize 24/7 toggle state
+        const is24x7 = document.getElementById('is24x7').checked;
+        this.toggle24x7Mode(is24x7);
+    }
+
+    toggle24x7Mode(enabled) {
+        const businessHoursContainer = document.getElementById('businessHoursContainer');
+        if (businessHoursContainer) {
+            if (enabled) {
+                businessHoursContainer.style.opacity = '0.5';
+                businessHoursContainer.style.pointerEvents = 'none';
+            } else {
+                businessHoursContainer.style.opacity = '1';
+                businessHoursContainer.style.pointerEvents = 'auto';
+            }
+        }
+    }
+
+    toggleDayClosed(day, isClosed) {
+        const openField = document.getElementById(`${day}_open`);
+        const closeField = document.getElementById(`${day}_close`);
+        
+        if (openField && closeField) {
+            openField.disabled = isClosed;
+            closeField.disabled = isClosed;
+            
+            if (isClosed) {
+                openField.style.opacity = '0.5';
+                closeField.style.opacity = '0.5';
+            } else {
+                openField.style.opacity = '1';
+                closeField.style.opacity = '1';
+            }
+        }
+    }
+
+    // Dashboard & Logs Tab Functions
+    loadDashboardLogsData() {
+        // Load real-time stats and recent activity
+        this.refreshDashboardStats();
+    }
+
+    refreshDashboardStats() {
+        // In a real implementation, this would fetch data from the API
+        this.showNotification('Dashboard data refreshed', 'success');
     }
 
     async loadAnalyticsData() {
