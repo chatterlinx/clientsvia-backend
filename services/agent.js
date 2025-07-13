@@ -138,6 +138,9 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   const categories = company?.agentSetup?.categories || company?.tradeTypes || [];
   const { llmFallbackEnabled, customEscalationMessage } = company?.aiSettings || {};
   const placeholders = company?.agentSetup?.placeholders || [];
+  
+  // Define fuzzy threshold for Q&A matching
+  const fuzzyThreshold = company?.aiSettings?.fuzzyMatchThreshold ?? 0.3;
 
   console.log(`[Agent] Company ${companyId} - LLM Fallback Enabled: ${llmFallbackEnabled}`);
   console.log(`[Agent] Company ${companyId} - Custom Escalation Message: ${customEscalationMessage}`);
