@@ -174,6 +174,9 @@
                             <button class="tab-button tab-button-inactive" id="tab-agent-setup" data-tab="agent-setup">
                                 <i class="fas fa-user-cog mr-1"></i>Agent Setup
                             </button>
+                            <button class="tab-button tab-button-inactive" id="tab-ai-agent-setup" data-tab="ai-agent-setup">
+                                <i class="fas fa-brain mr-1"></i>AI Agent Setup
+                            </button>
                             <button class="tab-button tab-button-inactive" id="tab-workflows" data-tab="workflows">
                                 <i class="fas fa-project-diagram mr-1"></i>Workflows
                             </button>
@@ -895,6 +898,483 @@
                         </div>
                     </div>
 
+                    <div id="ai-agent-setup-content" class="tab-content-item hidden">
+                        <div class="bg-white py-6 md:py-8 rounded-xl">
+                            <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center px-6 md:px-8">
+                                <i class="fas fa-robot mr-3 text-indigo-600 text-2xl"></i>AI Agent Setup
+                                <span class="ml-3 text-sm bg-green-100 text-green-800 px-3 py-1 rounded-full">HighLevel Competitive Mode</span>
+                            </h2>
+
+                            <!-- Quick Setup Section -->
+                            <div class="px-6 md:px-8 mb-8">
+                                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 shadow-sm">
+                                    <h3 class="text-lg font-semibold text-blue-900 mb-4 flex items-center">
+                                        <i class="fas fa-rocket mr-2"></i>Quick Setup (Recommended)
+                                    </h3>
+                                    <p class="text-blue-700 mb-6">Get your AI agent running in under 5 minutes with proven templates. You can customize later.</p>
+                                    
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                        <!-- Business Type Templates -->
+                                        <div>
+                                            <label class="form-label text-blue-900">Choose Your Business Type</label>
+                                            <select id="aiBusinessTypeTemplate" class="form-select">
+                                                <option value="">Select a template...</option>
+                                                <option value="restaurant">Restaurant & Food Service</option>
+                                                <option value="hvac">HVAC & Air Conditioning</option>
+                                                <option value="plumbing">Plumbing Services</option>
+                                                <option value="automotive">Auto Repair & Service</option>
+                                                <option value="medical">Medical & Healthcare</option>
+                                                <option value="legal">Legal Services</option>
+                                                <option value="beauty">Beauty & Wellness</option>
+                                                <option value="cleaning">Cleaning Services</option>
+                                                <option value="real-estate">Real Estate</option>
+                                                <option value="retail">Retail & E-commerce</option>
+                                                <option value="professional">Professional Services</option>
+                                                <option value="custom">Custom Setup</option>
+                                            </select>
+                                        </div>
+
+                                        <!-- Agent Persona -->
+                                        <div>
+                                            <label class="form-label text-blue-900">Agent Personality</label>
+                                            <select id="aiAgentPersona" class="form-select">
+                                                <option value="professional">Professional & Courteous</option>
+                                                <option value="friendly">Friendly & Conversational</option>
+                                                <option value="sales">Sales-Focused & Persuasive</option>
+                                                <option value="casual">Casual & Relaxed</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex gap-4">
+                                        <button id="quickSetupDeployBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                            <i class="fas fa-magic mr-2"></i>Deploy AI Agent (1-Click)
+                                        </button>
+                                        <button id="customSetupBtn" class="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                            <i class="fas fa-cogs mr-2"></i>Custom Configuration
+                                        </button>
+                                    </div>
+
+                                    <!-- Template Preview -->
+                                    <div id="templatePreview" class="mt-6 p-4 bg-white border border-blue-200 rounded-lg hidden">
+                                        <h4 class="font-semibold text-gray-900 mb-2">Template Preview:</h4>
+                                        <div id="templatePreviewContent" class="text-sm text-gray-700"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Configuration Tabs -->
+                            <div id="aiAgentConfigTabs" class="px-6 md:px-8">
+                                <div class="border-b border-gray-200 mb-6">
+                                    <nav class="-mb-px flex space-x-8">
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="basic">
+                                            <i class="fas fa-play-circle mr-1"></i>Basic Setup
+                                        </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-indigo-500 text-indigo-600" data-tab="scheduling">
+                                            <i class="fas fa-calendar-check mr-1"></i>Smart Scheduling
+                                        </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="knowledge">
+                                            <i class="fas fa-brain mr-1"></i>Knowledge Base
+                                        </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="personality">
+                                            <i class="fas fa-comment-dots mr-1"></i>Personality
+                                        </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="advanced">
+                                            <i class="fas fa-cogs mr-1"></i>Advanced
+                                        </button>
+                                    </nav>
+                                </div>
+
+                                <!-- Basic Setup Tab -->
+                                <div id="ai-basic-tab" class="ai-config-tab-content hidden">
+                                    <div class="space-y-6">
+                                        <!-- Business Hours -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-clock mr-2 text-indigo-600"></i>Business Hours
+                                            </h4>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="form-label">Time Zone</label>
+                                                    <select id="aiTimezone" class="form-select">
+                                                        <option value="America/New_York">Eastern Time</option>
+                                                        <option value="America/Chicago">Central Time</option>
+                                                        <option value="America/Denver">Mountain Time</option>
+                                                        <option value="America/Los_Angeles">Pacific Time</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="form-label">Operating Mode</label>
+                                                    <select id="aiOperatingMode" class="form-select">
+                                                        <option value="business-hours">Business Hours Only</option>
+                                                        <option value="24-7">24/7 Service</option>
+                                                        <option value="extended">Extended Hours</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div id="businessHoursGrid" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <!-- Business hours will be populated here -->
+                                            </div>
+                                        </div>
+
+                                        <!-- Contact Information -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-phone mr-2 text-indigo-600"></i>Contact & Routing
+                                            </h4>
+                                            <div class="space-y-4">
+                                                <div>
+                                                    <label class="form-label">Primary Transfer Number</label>
+                                                    <input type="tel" id="aiPrimaryPhone" class="form-input" placeholder="+1 (555) 123-4567">
+                                                </div>
+                                                <div>
+                                                    <label class="form-label">After-Hours Handling</label>
+                                                    <select id="aiAfterHoursMode" class="form-select">
+                                                        <option value="message">Take Message</option>
+                                                        <option value="transfer">Transfer to On-Call</option>
+                                                        <option value="voicemail">Send to Voicemail</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Smart Scheduling Tab -->
+                                <div id="ai-scheduling-tab" class="ai-config-tab-content">
+                                    <div class="space-y-6">
+                                        <!-- Service Types -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-wrench mr-2 text-indigo-600"></i>Service Types & Scheduling
+                                                <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">ClientsVia Advantage</span>
+                                            </h4>
+                                            <p class="text-gray-600 mb-4">Configure intelligent scheduling rules that understand your services and availability patterns.</p>
+                                            
+                                            <div id="aiServiceTypesList" class="space-y-4">
+                                                <!-- Service types will be populated here -->
+                                            </div>
+                                            
+                                            <button id="addServiceTypeBtn" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg flex items-center">
+                                                <i class="fas fa-plus mr-2"></i>Add Service Type
+                                            </button>
+                                        </div>
+
+                                        <!-- Scheduling Intelligence -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-brain mr-2 text-indigo-600"></i>Scheduling Intelligence
+                                            </h4>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="aiSmartScheduling" class="form-checkbox" checked>
+                                                        <span class="form-check-label">Smart availability detection</span>
+                                                    </label>
+                                                </div>
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="aiBufferTime" class="form-checkbox" checked>
+                                                        <span class="form-check-label">Automatic buffer time</span>
+                                                    </label>
+                                                </div>
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="aiDoubleBookingPrevention" class="form-checkbox" checked>
+                                                        <span class="form-check-label">Prevent double-booking</span>
+                                                    </label>
+                                                </div>
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="aiOptimalScheduling" class="form-checkbox">
+                                                        <span class="form-check-label">Suggest optimal times</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Live Scheduling Preview -->
+                                        <div id="aiSchedulingPreview" class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-blue-900 mb-4 flex items-center">
+                                                <i class="fas fa-eye mr-2"></i>Live Scheduling Preview
+                                            </h4>
+                                            <div id="schedulingPreviewContent" class="text-blue-800">
+                                                Configure your services above to see how the AI will handle scheduling requests.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Knowledge Base Tab -->
+                                <div id="ai-knowledge-tab" class="ai-config-tab-content hidden">
+                                    <div class="space-y-6">
+                                        <!-- Auto-Generated Knowledge -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-magic mr-2 text-indigo-600"></i>Auto-Generated Knowledge
+                                                <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">ClientsVia Advantage</span>
+                                            </h4>
+                                            <p class="text-gray-600 mb-4">Your business categories automatically populate relevant Q&As. Review and customize as needed.</p>
+                                            
+                                            <!-- Selected Categories Display -->
+                                            <div class="mb-4">
+                                                <label class="form-label">Selected Business Categories</label>
+                                                <div id="aiSelectedCategories" class="flex flex-wrap gap-2 mt-2">
+                                                    <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">No categories selected</span>
+                                                </div>
+                                                <button id="editCategoriesBtn" class="mt-2 text-indigo-600 hover:text-indigo-800 text-sm">
+                                                    <i class="fas fa-edit mr-1"></i>Edit Categories
+                                                </button>
+                                            </div>
+
+                                            <!-- Auto-Generated Q&As -->
+                                            <div id="aiAutoQAs" class="space-y-3 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-4">
+                                                <div class="text-center text-gray-500">
+                                                    <i class="fas fa-robot text-2xl mb-2"></i>
+                                                    <p>Select business categories to see auto-generated Q&As</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Custom Q&As -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-plus-circle mr-2 text-indigo-600"></i>Custom Q&As
+                                            </h4>
+                                            
+                                            <!-- Quick Add Form -->
+                                            <div class="mb-4 p-4 bg-gray-50 rounded-lg">
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label class="form-label text-sm">Question</label>
+                                                        <input type="text" id="aiCustomQuestion" class="form-input" placeholder="What are your hours?">
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Answer</label>
+                                                        <input type="text" id="aiCustomAnswer" class="form-input" placeholder="We're open Monday-Friday 9am-5pm">
+                                                    </div>
+                                                </div>
+                                                <button id="addCustomQABtn" class="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg text-sm">
+                                                    <i class="fas fa-plus mr-1"></i>Add Q&A
+                                                </button>
+                                            </div>
+
+                                            <!-- Custom Q&As List -->
+                                            <div id="aiCustomQAsList" class="space-y-2">
+                                                <div class="text-center text-gray-500 py-4">
+                                                    <i class="fas fa-question-circle text-2xl mb-2"></i>
+                                                    <p>No custom Q&As added yet</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Knowledge Learning -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-brain mr-2 text-indigo-600"></i>AI Learning Settings
+                                            </h4>
+                                            <div class="space-y-3">
+                                                <label class="flex items-center">
+                                                    <input type="checkbox" id="aiAutoLearning" class="form-checkbox" checked>
+                                                    <span class="form-check-label">Learn from conversations automatically</span>
+                                                </label>
+                                                <label class="flex items-center">
+                                                    <input type="checkbox" id="aiSuggestAnswers" class="form-checkbox" checked>
+                                                    <span class="form-check-label">Suggest new Q&As from call patterns</span>
+                                                </label>
+                                                <label class="flex items-center">
+                                                    <input type="checkbox" id="aiNotifyLearning" class="form-checkbox">
+                                                    <span class="form-check-label">Email me when new knowledge is learned</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Personality Tab -->
+                                <div id="ai-personality-tab" class="ai-config-tab-content hidden">
+                                    <div class="space-y-6">
+                                        <!-- Personality Quick Settings -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-user-friends mr-2 text-indigo-600"></i>Agent Personality
+                                            </h4>
+                                            
+                                            <!-- Personality Presets -->
+                                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                                <button class="personality-preset-btn p-4 border-2 border-gray-200 rounded-lg hover:border-indigo-300 transition-colors" data-preset="professional">
+                                                    <i class="fas fa-briefcase text-2xl text-gray-600 mb-2"></i>
+                                                    <div class="font-semibold">Professional</div>
+                                                    <div class="text-xs text-gray-500">Formal, courteous, business-focused</div>
+                                                </button>
+                                                <button class="personality-preset-btn p-4 border-2 border-gray-200 rounded-lg hover:border-indigo-300 transition-colors" data-preset="friendly">
+                                                    <i class="fas fa-smile text-2xl text-gray-600 mb-2"></i>
+                                                    <div class="font-semibold">Friendly</div>
+                                                    <div class="text-xs text-gray-500">Warm, conversational, approachable</div>
+                                                </button>
+                                                <button class="personality-preset-btn p-4 border-2 border-gray-200 rounded-lg hover:border-indigo-300 transition-colors" data-preset="sales">
+                                                    <i class="fas fa-chart-line text-2xl text-gray-600 mb-2"></i>
+                                                    <div class="font-semibold">Sales-Focused</div>
+                                                    <div class="text-xs text-gray-500">Persuasive, goal-oriented, engaging</div>
+                                                </button>
+                                                <button class="personality-preset-btn p-4 border-2 border-indigo-500 rounded-lg bg-indigo-50" data-preset="custom">
+                                                    <i class="fas fa-cogs text-2xl text-indigo-600 mb-2"></i>
+                                                    <div class="font-semibold text-indigo-900">Custom</div>
+                                                    <div class="text-xs text-indigo-600">Design your own personality</div>
+                                                </button>
+                                            </div>
+
+                                            <!-- Personality Settings -->
+                                            <div id="personalitySettings" class="space-y-4">
+                                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div>
+                                                        <label class="form-label text-sm">Formality Level</label>
+                                                        <select id="aiFormalityLevel" class="form-select">
+                                                            <option value="casual">Casual</option>
+                                                            <option value="professional" selected>Professional</option>
+                                                            <option value="formal">Very Formal</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Response Speed</label>
+                                                        <select id="aiResponseSpeed" class="form-select">
+                                                            <option value="thoughtful">Thoughtful</option>
+                                                            <option value="normal" selected>Normal</option>
+                                                            <option value="quick">Quick</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Empathy Level</label>
+                                                        <select id="aiEmpathyLevel" class="form-select">
+                                                            <option value="low">Direct</option>
+                                                            <option value="medium" selected>Balanced</option>
+                                                            <option value="high">Very Empathetic</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Conversation Samples -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-comments mr-2 text-indigo-600"></i>Conversation Samples
+                                            </h4>
+                                            <div id="conversationSamples" class="space-y-4">
+                                                <!-- Sample conversations will be populated here -->
+                                            </div>
+                                        </div>
+
+                                        <!-- Link to Personality Responses -->
+                                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-blue-900 mb-2 flex items-center">
+                                                <i class="fas fa-link mr-2"></i>Advanced Personality Customization
+                                            </h4>
+                                            <p class="text-blue-700 mb-4">For detailed personality response customization, use the dedicated Personality Responses tab.</p>
+                                            <button id="goToPersonalityTab" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg">
+                                                <i class="fas fa-external-link-alt mr-2"></i>Open Personality Responses
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Advanced Tab -->
+                                <div id="ai-advanced-tab" class="ai-config-tab-content hidden">
+                                    <div class="space-y-6">
+                                        <!-- Performance Settings -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-tachometer-alt mr-2 text-indigo-600"></i>Performance Settings
+                                            </h4>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div>
+                                                    <label class="form-label">Response Mode</label>
+                                                    <select id="aiResponseMode" class="form-select">
+                                                        <option value="optimal" selected>Optimal (Recommended)</option>
+                                                        <option value="fast">Fast Response</option>
+                                                        <option value="detailed">Detailed Analysis</option>
+                                                        <option value="custom">Custom Configuration</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="form-label">Call Handling</label>
+                                                    <select id="aiCallHandling" class="form-select">
+                                                        <option value="full" selected>Full Service Agent</option>
+                                                        <option value="receptionist">Receptionist Only</option>
+                                                        <option value="hybrid">Hybrid Mode</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Integration Settings -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-plug mr-2 text-indigo-600"></i>Integration Settings
+                                            </h4>
+                                            <div class="space-y-4">
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="aiCRMIntegration" class="form-checkbox">
+                                                        <span class="form-check-label">CRM Integration</span>
+                                                    </label>
+                                                </div>
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="aiCalendarSync" class="form-checkbox" checked>
+                                                        <span class="form-check-label">Calendar Synchronization</span>
+                                                    </label>
+                                                </div>
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="aiEmailNotifications" class="form-checkbox" checked>
+                                                        <span class="form-check-label">Email Notifications</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Fallback & Escalation -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-life-ring mr-2 text-indigo-600"></i>Fallback & Escalation
+                                            </h4>
+                                            <div class="space-y-4">
+                                                <div>
+                                                    <label class="form-label">When Agent is Uncertain</label>
+                                                    <select id="aiUncertaintyHandling" class="form-select">
+                                                        <option value="ask-clarification">Ask for clarification</option>
+                                                        <option value="transfer" selected>Transfer to human</option>
+                                                        <option value="take-message">Take a message</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="form-label">Escalation Phone Number</label>
+                                                    <input type="tel" id="aiEscalationPhone" class="form-input" placeholder="+1 (555) 123-4567">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Save Actions -->
+                            <div class="px-6 md:px-8 mt-8 pt-6 border-t border-gray-200">
+                                <div class="flex gap-4 justify-end">
+                                    <button id="aiPreviewAgentBtn" class="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                        <i class="fas fa-eye mr-2"></i>Preview Agent
+                                    </button>
+                                    <button id="aiTestCallBtn" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                        <i class="fas fa-phone mr-2"></i>Test Call
+                                    </button>
+                                    <button id="aiSaveConfigBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                        <i class="fas fa-save mr-2"></i>Save & Deploy
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div id="workflows-content" class="tab-content-item hidden">
                         <div class="bg-white py-6 md:py-8 rounded-xl">
                             <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center px-6 md:px-8">
@@ -1502,5 +1982,6 @@
     </div>
 
     <script src="/js/company-profile.js"></script>
+    <script src="/js/ai-agent-setup.js"></script>
 </body>
 </html>
