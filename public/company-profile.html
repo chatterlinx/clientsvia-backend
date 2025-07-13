@@ -220,11 +220,83 @@
                                             <label for="twilioAuthToken" class="form-label">Auth Token</label>
                                             <input type="password" id="twilioAuthToken" name="twilioAuthToken" class="form-input wider-textbox" placeholder="Enter Auth Token">
                                         </div>
-                                        <div>
-                                            <label for="twilioPhoneNumber" class="form-label">Primary Twilio Phone Number (E.164 format)</label>
-                                            <input type="tel" id="twilioPhoneNumber" name="twilioPhoneNumber" class="form-input wider-textbox" placeholder="+12395551212">
+                                    </div>
+                                </div>
+                                
+                                <!-- Phone Numbers Management -->
+                                <div class="config-block mt-6">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <h3 class="font-semibold text-gray-700">Twilio Phone Numbers</h3>
+                                        <button type="button" id="addPhoneNumberBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3 py-1 rounded-md flex items-center">
+                                            <i class="fas fa-plus mr-1"></i>Add Number
+                                        </button>
+                                    </div>
+                                    <p class="text-sm text-gray-500 mb-3">Manage all Twilio phone numbers available for this company's AI agents.</p>
+                                    
+                                    <!-- Phone Numbers List -->
+                                    <div id="phoneNumbersList" class="space-y-3">
+                                        <!-- Primary Phone Number (Default) -->
+                                        <div class="phone-number-item border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div>
+                                                        <label class="form-label text-sm">Phone Number (E.164 format)</label>
+                                                        <input type="tel" name="phoneNumber" class="form-input" placeholder="+12395551212" value="">
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Friendly Name</label>
+                                                        <input type="text" name="friendlyName" class="form-input" placeholder="Main Business Line" value="Primary Number">
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Status</label>
+                                                        <select name="status" class="form-select">
+                                                            <option value="active" selected>Active</option>
+                                                            <option value="inactive">Inactive</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="ml-4 flex items-center space-x-2">
+                                                    <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">Primary</span>
+                                                    <button type="button" class="text-red-600 hover:text-red-800" onclick="removePhoneNumber(this)" title="Remove">
+                                                        <i class="fas fa-trash text-sm"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
+                                    
+                                    <!-- Add Phone Number Template (Hidden) -->
+                                    <template id="phoneNumberTemplate">
+                                        <div class="phone-number-item border border-gray-200 rounded-lg p-4">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div>
+                                                        <label class="form-label text-sm">Phone Number (E.164 format)</label>
+                                                        <input type="tel" name="phoneNumber" class="form-input" placeholder="+12395551212">
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Friendly Name</label>
+                                                        <input type="text" name="friendlyName" class="form-input" placeholder="e.g., Emergency Line, Sales Line">
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Status</label>
+                                                        <select name="status" class="form-select">
+                                                            <option value="active" selected>Active</option>
+                                                            <option value="inactive">Inactive</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="ml-4 flex items-center space-x-2">
+                                                    <button type="button" class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full hover:bg-blue-200" onclick="setPrimaryNumber(this)" title="Set as Primary">
+                                                        Set Primary
+                                                    </button>
+                                                    <button type="button" class="text-red-600 hover:text-red-800" onclick="removePhoneNumber(this)" title="Remove">
+                                                        <i class="fas fa-trash text-sm"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
                                 </div>
                                 <div class="config-block mt-6">
                                     <h3 class="font-semibold text-gray-700 mb-3">SMS Notification Settings</h3>
@@ -1235,16 +1307,34 @@ If scheduling, proceed to Repair Service Call Protocol.</textarea>
                                                 <i class="fas fa-phone-alt mr-2 text-indigo-600"></i>Phone Configuration
                                             </h4>
                                             
+                                            <!-- Phone Number Selection -->
+                                            <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                                <div class="flex items-start">
+                                                    <i class="fas fa-info-circle text-blue-600 mt-1 mr-2"></i>
+                                                    <div>
+                                                        <p class="text-sm text-blue-800 font-medium">Select from configured Twilio numbers</p>
+                                                        <p class="text-xs text-blue-600 mt-1">Numbers are managed in the Configuration tab. <a href="#" onclick="switchToConfigTab()" class="underline hover:no-underline">Manage phone numbers →</a></p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div>
                                                     <label class="form-label">Primary Phone Number</label>
-                                                    <input type="tel" id="primaryPhoneNumber" class="form-input" placeholder="+1 (555) 123-4567">
+                                                    <select id="primaryPhoneNumber" class="form-select">
+                                                        <option value="">Select primary number...</option>
+                                                        <!-- Options populated by JavaScript from Configuration tab -->
+                                                    </select>
                                                     <p class="text-xs text-gray-500 mt-1">Main number for incoming calls</p>
                                                 </div>
                                                 
                                                 <div>
                                                     <label class="form-label">Backup Phone Number</label>
-                                                    <input type="tel" id="backupPhoneNumber" class="form-input" placeholder="+1 (555) 123-4568">
+                                                    <select id="backupPhoneNumber" class="form-select">
+                                                        <option value="">Select backup number...</option>
+                                                        <option value="none">No backup number</option>
+                                                        <!-- Options populated by JavaScript from Configuration tab -->
+                                                    </select>
                                                     <p class="text-xs text-gray-500 mt-1">Fallback number for transfers</p>
                                                 </div>
                                                 
@@ -1266,6 +1356,15 @@ If scheduling, proceed to Repair Service Call Protocol.</textarea>
                                                         <option value="disabled">Disabled</option>
                                                         <option value="ask-permission">Ask Permission</option>
                                                     </select>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Available Phone Numbers Display -->
+                                            <div id="availableNumbersDisplay" class="mt-6">
+                                                <h5 class="text-sm font-medium text-gray-700 mb-3">Available Configured Numbers:</h5>
+                                                <div id="configuredNumbersList" class="space-y-2">
+                                                    <!-- Populated by JavaScript -->
+                                                    <div class="text-sm text-gray-500 italic">No phone numbers configured. Please add numbers in the Configuration tab.</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -3568,5 +3667,253 @@ Cost estimate</textarea>
 
     <script src="/js/company-profile.js"></script>
     <script src="/js/ai-agent-setup.js"></script>
+    <script>
+    // ===========================================
+    // PHONE NUMBER MANAGEMENT FUNCTIONALITY
+    // ===========================================
+
+    /**
+     * Add a new phone number to the configuration
+     */
+    function addPhoneNumber() {
+        const phoneNumbersList = document.getElementById('phoneNumbersList');
+        const template = document.getElementById('phoneNumberTemplate');
+        
+        if (template && phoneNumbersList) {
+            const clone = template.content.cloneNode(true);
+            phoneNumbersList.appendChild(clone);
+            
+            // Show success message
+            showToast('New phone number slot added', 'success');
+        }
+    }
+
+    /**
+     * Remove a phone number from the configuration
+     */
+    function removePhoneNumber(button) {
+        const phoneItem = button.closest('.phone-number-item');
+        const isPrimary = phoneItem.querySelector('.bg-blue-100.text-blue-800');
+        
+        if (isPrimary && isPrimary.textContent.includes('Primary')) {
+            showToast('Cannot remove primary number. Set another number as primary first.', 'error');
+            return;
+        }
+        
+        if (confirm('Are you sure you want to remove this phone number?')) {
+            phoneItem.remove();
+            updateAIAgentPhoneOptions();
+            showToast('Phone number removed', 'success');
+        }
+    }
+
+    /**
+     * Set a phone number as the primary number
+     */
+    function setPrimaryNumber(button) {
+        const phoneItem = button.closest('.phone-number-item');
+        const phoneNumberInput = phoneItem.querySelector('input[name="phoneNumber"]');
+        
+        if (!phoneNumberInput.value.trim()) {
+            showToast('Please enter a phone number first', 'error');
+            return;
+        }
+        
+        // Remove primary badge from all items
+        document.querySelectorAll('.phone-number-item').forEach(item => {
+            const badge = item.querySelector('.bg-blue-100.text-blue-800');
+            const setPrimaryBtn = item.querySelector('button[onclick*="setPrimaryNumber"]');
+            
+            if (badge && badge.textContent.includes('Primary')) {
+                badge.textContent = 'Set Primary';
+                badge.className = 'bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full hover:bg-blue-200';
+                badge.onclick = () => setPrimaryNumber(badge);
+            }
+        });
+        
+        // Set this item as primary
+        button.textContent = 'Primary';
+        button.className = 'bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full';
+        button.onclick = null;
+        
+        // Update AI Agent Setup options
+        updateAIAgentPhoneOptions();
+        showToast('Primary number updated', 'success');
+    }
+
+    /**
+     * Update phone number options in AI Agent Setup tab
+     */
+    function updateAIAgentPhoneOptions() {
+        const phoneNumbers = getConfiguredPhoneNumbers();
+        const primarySelect = document.getElementById('primaryPhoneNumber');
+        const backupSelect = document.getElementById('backupPhoneNumber');
+        const numbersList = document.getElementById('configuredNumbersList');
+        
+        // Update primary phone number select
+        if (primarySelect) {
+            const currentValue = primarySelect.value;
+            primarySelect.innerHTML = '<option value="">Select primary number...</option>';
+            
+            phoneNumbers.forEach(phone => {
+                if (phone.status === 'active') {
+                    const option = document.createElement('option');
+                    option.value = phone.number;
+                    option.textContent = `${phone.number} (${phone.friendlyName})`;
+                    if (phone.isPrimary) {
+                        option.selected = true;
+                    }
+                    primarySelect.appendChild(option);
+                }
+            });
+            
+            // Restore previous selection if still valid
+            if (currentValue && [...primarySelect.options].some(opt => opt.value === currentValue)) {
+                primarySelect.value = currentValue;
+            }
+        }
+        
+        // Update backup phone number select
+        if (backupSelect) {
+            const currentValue = backupSelect.value;
+            backupSelect.innerHTML = '<option value="">Select backup number...</option><option value="none">No backup number</option>';
+            
+            phoneNumbers.forEach(phone => {
+                if (phone.status === 'active') {
+                    const option = document.createElement('option');
+                    option.value = phone.number;
+                    option.textContent = `${phone.number} (${phone.friendlyName})`;
+                    backupSelect.appendChild(option);
+                }
+            });
+            
+            // Restore previous selection if still valid
+            if (currentValue && [...backupSelect.options].some(opt => opt.value === currentValue)) {
+                backupSelect.value = currentValue;
+            }
+        }
+        
+        // Update available numbers display
+        if (numbersList) {
+            if (phoneNumbers.length === 0) {
+                numbersList.innerHTML = '<div class="text-sm text-gray-500 italic">No phone numbers configured. Please add numbers in the Configuration tab.</div>';
+            } else {
+                numbersList.innerHTML = phoneNumbers.map(phone => `
+                    <div class="flex items-center justify-between p-2 bg-gray-50 rounded border">
+                        <span class="text-sm">
+                            <strong>${phone.number}</strong> - ${phone.friendlyName}
+                            ${phone.isPrimary ? '<span class="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">Primary</span>' : ''}
+                        </span>
+                        <span class="text-xs px-2 py-1 rounded-full ${phone.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}">
+                            ${phone.status}
+                        </span>
+                    </div>
+                `).join('');
+            }
+        }
+    }
+
+    /**
+     * Get all configured phone numbers
+     */
+    function getConfiguredPhoneNumbers() {
+        const phoneItems = document.querySelectorAll('.phone-number-item');
+        const phoneNumbers = [];
+        
+        phoneItems.forEach(item => {
+            const numberInput = item.querySelector('input[name="phoneNumber"]');
+            const nameInput = item.querySelector('input[name="friendlyName"]');
+            const statusSelect = item.querySelector('select[name="status"]');
+            const isPrimaryBadge = item.querySelector('.bg-blue-100.text-blue-800');
+            
+            if (numberInput && numberInput.value.trim()) {
+                phoneNumbers.push({
+                    number: numberInput.value.trim(),
+                    friendlyName: nameInput ? nameInput.value.trim() || 'Unnamed' : 'Unnamed',
+                    status: statusSelect ? statusSelect.value : 'active',
+                    isPrimary: isPrimaryBadge && isPrimaryBadge.textContent.includes('Primary')
+                });
+            }
+        });
+        
+        return phoneNumbers;
+    }
+
+    /**
+     * Switch to configuration tab from AI Agent Setup
+     */
+    function switchToConfigTab() {
+        // Switch to Configuration tab
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.add('hidden');
+        });
+        
+        // Activate Configuration tab
+        const configBtn = document.querySelector('[data-tab="configuration"]');
+        const configContent = document.getElementById('configuration');
+        
+        if (configBtn) configBtn.classList.add('active');
+        if (configContent) configContent.classList.remove('hidden');
+        
+        // Scroll to phone numbers section
+        setTimeout(() => {
+            const phoneSection = document.getElementById('phoneNumbersList');
+            if (phoneSection) {
+                phoneSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Highlight the section briefly
+                phoneSection.style.background = '#FEF3C7';
+                setTimeout(() => {
+                    phoneSection.style.background = '';
+                }, 2000);
+            }
+        }, 100);
+    }
+
+    /**
+     * Toast notification function
+     */
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
+            type === 'success' ? 'bg-green-500' : 
+            type === 'error' ? 'bg-red-500' : 
+            'bg-blue-500'
+        } text-white`;
+        toast.textContent = message;
+
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+
+    // Initialize phone number management when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add event listener for add phone number button
+        const addPhoneBtn = document.getElementById('addPhoneNumberBtn');
+        if (addPhoneBtn) {
+            addPhoneBtn.addEventListener('click', addPhoneNumber);
+        }
+        
+        // Update AI Agent Setup options when page loads
+        updateAIAgentPhoneOptions();
+        
+        // Listen for changes in phone number inputs to update AI Agent Setup
+        document.addEventListener('input', function(e) {
+            if (e.target.matches('.phone-number-item input, .phone-number-item select')) {
+                // Debounce the update
+                clearTimeout(window.phoneUpdateTimeout);
+                window.phoneUpdateTimeout = setTimeout(updateAIAgentPhoneOptions, 500);
+            }
+        });
+    });
+
+    // ...existing code...
+    </script>
 </body>
 </html>

@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const configSettingsForm = document.getElementById('config-settings-form');
     const twilioAccountSidInput = document.getElementById('twilioAccountSid');
     const twilioAuthTokenInput = document.getElementById('twilioAuthToken');
-    const twilioPhoneNumberInput = document.getElementById('twilioPhoneNumber');
+    // const twilioPhoneNumberInput = document.getElementById('twilioPhoneNumber'); // Now using multiple phone numbers
     const smsJobAlertsCheckbox = document.getElementById('smsJobAlerts');
     const smsCustomerRepliesCheckbox = document.getElementById('smsCustomerReplies');
     const smsAppointmentRemindersCheckbox = document.getElementById('smsAppointmentReminders');
@@ -951,10 +951,101 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!configSettingsForm) return;
         if (twilioAccountSidInput) twilioAccountSidInput.value = twilioConfig.accountSid || '';
         if (twilioAuthTokenInput) twilioAuthTokenInput.value = twilioConfig.authToken || '';
-        if (twilioPhoneNumberInput) twilioPhoneNumberInput.value = twilioConfig.phoneNumber || '';
+        
+        // Handle backward compatibility and populate phone numbers
+        populatePhoneNumbers(twilioConfig);
+        
         if (smsJobAlertsCheckbox) smsJobAlertsCheckbox.checked = !!smsSettings.jobAlerts;
         if (smsCustomerRepliesCheckbox) smsCustomerRepliesCheckbox.checked = !!smsSettings.customerReplies;
         if (smsAppointmentRemindersCheckbox) smsAppointmentRemindersCheckbox.checked = !!smsSettings.appointmentReminders;
+    }
+
+    function populatePhoneNumbers(twilioConfig) {
+        const phoneNumbersList = document.getElementById('phoneNumbersList');
+        if (!phoneNumbersList) return;
+
+        // Clear existing phone numbers except the first (template) one
+        const phoneItems = phoneNumbersList.querySelectorAll('.phone-number-item');
+        phoneItems.forEach((item, index) => {
+            if (index > 0) item.remove(); // Keep first item as template
+        });
+
+        let phoneNumbers = [];
+        
+        // Check if we have new format (multiple phone numbers)
+        if (twilioConfig.phoneNumbers && twilioConfig.phoneNumbers.length > 0) {
+            phoneNumbers = twilioConfig.phoneNumbers;
+        } 
+        // Handle backward compatibility with single phone number
+        else if (twilioConfig.phoneNumber) {
+            phoneNumbers = [{
+                phoneNumber: twilioConfig.phoneNumber,
+                friendlyName: 'Primary Number',
+                status: 'active',
+                isPrimary: true
+            }];
+        }
+
+        // Populate the first item with primary number or first number
+        const firstItem = phoneNumbersList.querySelector('.phone-number-item');
+        if (firstItem && phoneNumbers.length > 0) {
+            const primaryNumber = phoneNumbers.find(p => p.isPrimary) || phoneNumbers[0];
+            const phoneInput = firstItem.querySelector('input[name="phoneNumber"]');
+            const nameInput = firstItem.querySelector('input[name="friendlyName"]');
+            const statusSelect = firstItem.querySelector('select[name="status"]');
+            
+            if (phoneInput) phoneInput.value = primaryNumber.phoneNumber || '';
+            if (nameInput) nameInput.value = primaryNumber.friendlyName || 'Primary Number';
+            if (statusSelect) statusSelect.value = primaryNumber.status || 'active';
+            
+            // Set primary badge
+            const badge = firstItem.querySelector('.bg-blue-100.text-blue-800');
+            if (badge && primaryNumber.isPrimary) {
+                badge.textContent = 'Primary';
+                badge.onclick = null;
+            }
+        }
+
+        // Add additional phone numbers
+        phoneNumbers.slice(1).forEach(phone => {
+            addPhoneNumberWithData(phone);
+        });
+
+        // Update AI Agent Setup options
+        setTimeout(() => {
+            if (typeof updateAIAgentPhoneOptions === 'function') {
+                updateAIAgentPhoneOptions();
+            }
+        }, 100);
+    }
+
+    function addPhoneNumberWithData(phoneData) {
+        const phoneNumbersList = document.getElementById('phoneNumbersList');
+        const template = document.getElementById('phoneNumberTemplate');
+        
+        if (template && phoneNumbersList) {
+            const clone = template.content.cloneNode(true);
+            const phoneInput = clone.querySelector('input[name="phoneNumber"]');
+            const nameInput = clone.querySelector('input[name="friendlyName"]');
+            const statusSelect = clone.querySelector('select[name="status"]');
+            
+            if (phoneInput) phoneInput.value = phoneData.phoneNumber || '';
+            if (nameInput) nameInput.value = phoneData.friendlyName || '';
+            if (statusSelect) statusSelect.value = phoneData.status || 'active';
+            
+            phoneNumbersList.appendChild(clone);
+            
+            // Set primary badge if needed
+            if (phoneData.isPrimary) {
+                const addedItem = phoneNumbersList.lastElementChild;
+                const setPrimaryBtn = addedItem.querySelector('button[onclick*="setPrimaryNumber"]');
+                if (setPrimaryBtn) {
+                    setPrimaryBtn.textContent = 'Primary';
+                    setPrimaryBtn.className = 'bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full';
+                    setPrimaryBtn.onclick = null;
+                }
+            }
+        }
     }
 
     function renderNotes() {
@@ -1865,10 +1956,21 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleSaveConfiguration(event) {
         event.preventDefault();
         if (!companyId || !configSettingsForm) return;
+        
+        // Collect multiple phone numbers
+        const phoneNumbers = [];
+        if (typeof getConfiguredPhoneNumbers === 'function') {
+            phoneNumbers.push(...getConfiguredPhoneNumbers());
+        }
+        
+        // Get primary phone number for backward compatibility
+        const primaryPhone = phoneNumbers.find(p => p.isPrimary)?.phoneNumber || phoneNumbers[0]?.phoneNumber || null;
+        
         const twilioConfigData = {
             accountSid: twilioAccountSidInput?.value.trim() || null,
             authToken: twilioAuthTokenInput?.value || null, 
-            phoneNumber: twilioPhoneNumberInput?.value.trim() || null,
+            phoneNumber: primaryPhone, // Primary phone number for backward compatibility
+            phoneNumbers: phoneNumbers // New multiple phone numbers array
         };
         const smsSettingsData = {
             jobAlerts: smsJobAlertsCheckbox?.checked || false,

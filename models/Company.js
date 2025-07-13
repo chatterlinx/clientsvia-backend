@@ -21,11 +21,20 @@ const noteSchema = new mongoose.Schema({
     updatedAt: { type: Date, default: Date.now }
 });
 
+// --- Sub-schema for Twilio Phone Number ---
+const twilioPhoneNumberSchema = new mongoose.Schema({
+    phoneNumber: { type: String, trim: true, required: true },
+    friendlyName: { type: String, trim: true, default: 'Unnamed' },
+    status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    isPrimary: { type: Boolean, default: false }
+}, { _id: false });
+
 // --- Sub-schema for Twilio Configuration ---
 const twilioConfigSchema = new mongoose.Schema({
     accountSid: { type: String, trim: true, default: null },
     authToken: { type: String, trim: true, default: null },
-    phoneNumber: { type: String, trim: true, default: null }
+    phoneNumber: { type: String, trim: true, default: null }, // Keep for backward compatibility
+    phoneNumbers: { type: [twilioPhoneNumberSchema], default: [] } // New multiple phone numbers
 }, { _id: false });
 
 // --- Sub-schema for SMS Settings ---
@@ -196,12 +205,53 @@ const companySchema = new mongoose.Schema({
 // --- Middleware ---
 companySchema.pre('save', function(next) { 
     this.updatedAt = new Date();
+    
+    // Migrate old phone number to new format if needed
+    if (this.twilioConfig && this.twilioConfig.phoneNumber && this.twilioConfig.phoneNumbers.length === 0) {
+        this.twilioConfig.phoneNumbers.push({
+            phoneNumber: this.twilioConfig.phoneNumber,
+            friendlyName: 'Primary Number',
+            status: 'active',
+            isPrimary: true
+        });
+    }
+    
     next();
 });
+
 companySchema.pre('findOneAndUpdate', function(next) {
     this.set({ updatedAt: new Date() });
     next();
 });
+
+// --- Instance Methods ---
+companySchema.methods.migrateTwilioPhoneNumbers = function() {
+    if (this.twilioConfig && this.twilioConfig.phoneNumber && this.twilioConfig.phoneNumbers.length === 0) {
+        this.twilioConfig.phoneNumbers.push({
+            phoneNumber: this.twilioConfig.phoneNumber,
+            friendlyName: 'Primary Number',
+            status: 'active',
+            isPrimary: true
+        });
+        return true; // Migration occurred
+    }
+    return false; // No migration needed
+};
+
+companySchema.methods.getPrimaryPhoneNumber = function() {
+    if (this.twilioConfig && this.twilioConfig.phoneNumbers.length > 0) {
+        const primary = this.twilioConfig.phoneNumbers.find(phone => phone.isPrimary && phone.status === 'active');
+        return primary ? primary.phoneNumber : this.twilioConfig.phoneNumbers.find(phone => phone.status === 'active')?.phoneNumber;
+    }
+    return this.twilioConfig?.phoneNumber || null;
+};
+
+companySchema.methods.getActivePhoneNumbers = function() {
+    if (this.twilioConfig && this.twilioConfig.phoneNumbers.length > 0) {
+        return this.twilioConfig.phoneNumbers.filter(phone => phone.status === 'active');
+    }
+    return this.twilioConfig?.phoneNumber ? [{ phoneNumber: this.twilioConfig.phoneNumber, friendlyName: 'Primary', isPrimary: true }] : [];
+};
 
 const Company = mongoose.model('Company', companySchema, 'companiesCollection');
 module.exports = Company;
