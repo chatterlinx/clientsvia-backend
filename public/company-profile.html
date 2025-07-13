@@ -462,7 +462,6 @@
                                 </div>
                             </form>
                         </section>
-                    </section>
                     </div>
 
                     <div id="personality-responses-content" class="tab-content-item hidden">
@@ -976,6 +975,12 @@
                                         <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="knowledge">
                                             <i class="fas fa-brain mr-1"></i>Knowledge Base
                                         </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="workflows">
+                                            <i class="fas fa-flow-chart mr-1"></i>Call Workflows
+                                        </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="analytics">
+                                            <i class="fas fa-chart-bar mr-1"></i>Analytics
+                                        </button>
                                         <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="personality">
                                             <i class="fas fa-comment-dots mr-1"></i>Personality
                                         </button>
@@ -1108,11 +1113,75 @@
                                 <!-- Knowledge Base Tab -->
                                 <div id="ai-knowledge-tab" class="ai-config-tab-content hidden">
                                     <div class="space-y-6">
+                                        <!-- Auto-Population Tools -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-magic mr-2 text-indigo-600"></i>Auto-Population Tools
+                                                <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">ClientsVia Advantage</span>
+                                            </h4>
+                                            
+                                            <!-- Website Auto-Population -->
+                                            <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                                <h5 class="text-md font-medium text-blue-900 mb-3 flex items-center">
+                                                    <i class="fas fa-globe mr-2"></i>Extract from Website
+                                                </h5>
+                                                <p class="text-blue-800 text-sm mb-3">Automatically extract Q&As from your business website.</p>
+                                                <div class="flex flex-col sm:flex-row gap-3">
+                                                    <input type="url" id="websiteUrlInput" class="form-input flex-1" placeholder="https://yourbusiness.com">
+                                                    <button id="extractFromWebsiteBtn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg text-sm whitespace-nowrap">
+                                                        <i class="fas fa-download mr-1"></i>Extract Knowledge
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Bulk Import Options -->
+                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                                <div class="p-4 border border-gray-200 rounded-lg text-center">
+                                                    <i class="fas fa-file-csv text-2xl text-green-600 mb-2"></i>
+                                                    <h6 class="font-medium text-gray-900 mb-1">CSV Import</h6>
+                                                    <p class="text-xs text-gray-600 mb-3">Import from CSV file</p>
+                                                    <input type="file" id="csvFileInput" accept=".csv" class="hidden">
+                                                    <button onclick="document.getElementById('csvFileInput').click()" class="text-green-600 hover:text-green-800 text-sm">
+                                                        <i class="fas fa-upload mr-1"></i>Upload CSV
+                                                    </button>
+                                                </div>
+                                                
+                                                <div class="p-4 border border-gray-200 rounded-lg text-center">
+                                                    <i class="fas fa-file-alt text-2xl text-blue-600 mb-2"></i>
+                                                    <h6 class="font-medium text-gray-900 mb-1">JSON Import</h6>
+                                                    <p class="text-xs text-gray-600 mb-3">Import from JSON file</p>
+                                                    <input type="file" id="jsonFileInput" accept=".json" class="hidden">
+                                                    <button onclick="document.getElementById('jsonFileInput').click()" class="text-blue-600 hover:text-blue-800 text-sm">
+                                                        <i class="fas fa-upload mr-1"></i>Upload JSON
+                                                    </button>
+                                                </div>
+                                                
+                                                <div class="p-4 border border-gray-200 rounded-lg text-center">
+                                                    <i class="fas fa-question-circle text-2xl text-purple-600 mb-2"></i>
+                                                    <h6 class="font-medium text-gray-900 mb-1">Existing FAQ</h6>
+                                                    <p class="text-xs text-gray-600 mb-3">Copy from existing FAQ</p>
+                                                    <button id="importExistingFAQBtn" class="text-purple-600 hover:text-purple-800 text-sm">
+                                                        <i class="fas fa-copy mr-1"></i>Import FAQ
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Knowledge Gap Analysis -->
+                                            <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                                <h5 class="text-md font-medium text-yellow-900 mb-2 flex items-center">
+                                                    <i class="fas fa-search mr-2"></i>Knowledge Gap Analysis
+                                                </h5>
+                                                <p class="text-yellow-800 text-sm mb-3">Analyze recent calls to find missing knowledge areas.</p>
+                                                <button id="analyzeKnowledgeGapsBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded-lg text-sm">
+                                                    <i class="fas fa-brain mr-1"></i>Analyze Gaps
+                                                </button>
+                                            </div>
+                                        </div>
+
                                         <!-- Auto-Generated Knowledge -->
                                         <div class="bg-white border border-gray-200 rounded-lg p-6">
                                             <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                                                <i class="fas fa-magic mr-2 text-indigo-600"></i>Auto-Generated Knowledge
-                                                <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">ClientsVia Advantage</span>
+                                                <i class="fas fa-robot mr-2 text-indigo-600"></i>Auto-Generated Knowledge
                                             </h4>
                                             <p class="text-gray-600 mb-4">Your business categories automatically populate relevant Q&As. Review and customize as needed.</p>
                                             
@@ -1186,6 +1255,204 @@
                                                     <input type="checkbox" id="aiNotifyLearning" class="form-checkbox">
                                                     <span class="form-check-label">Email me when new knowledge is learned</span>
                                                 </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Analytics Tab -->
+                                <div id="ai-analytics-tab" class="ai-config-tab-content hidden">
+                                    <div class="space-y-6">
+                                        <!-- Analytics Overview -->
+                                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                                <div class="flex items-center justify-between">
+                                                    <div>
+                                                        <p class="text-sm font-medium text-gray-600">Total Calls</p>
+                                                        <p id="analyticsTotalCalls" class="text-2xl font-bold text-gray-900">190</p>
+                                                        <p class="text-xs text-red-600">
+                                                            <i class="fas fa-arrow-down mr-1"></i>58% vs last month
+                                                        </p>
+                                                    </div>
+                                                    <div class="text-blue-500">
+                                                        <i class="fas fa-phone text-xl"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                                <div class="flex items-center justify-between">
+                                                    <div>
+                                                        <p class="text-sm font-medium text-gray-600">Actions Triggered</p>
+                                                        <p id="analyticsActionsTriggered" class="text-2xl font-bold text-gray-900">100</p>
+                                                        <p class="text-xs text-red-600">
+                                                            <i class="fas fa-arrow-down mr-1"></i>67% vs last month
+                                                        </p>
+                                                    </div>
+                                                    <div class="text-green-500">
+                                                        <i class="fas fa-cogs text-xl"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                                <div class="flex items-center justify-between">
+                                                    <div>
+                                                        <p class="text-sm font-medium text-gray-600">Sentiment</p>
+                                                        <p id="analyticsSentiment" class="text-2xl font-bold text-gray-900">58% Positive</p>
+                                                        <p class="text-xs text-red-600">
+                                                            <i class="fas fa-arrow-down mr-1"></i>4% vs last month
+                                                        </p>
+                                                    </div>
+                                                    <div class="text-yellow-500">
+                                                        <i class="fas fa-smile text-xl"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                                <div class="flex items-center justify-between">
+                                                    <div>
+                                                        <p class="text-sm font-medium text-gray-600">Avg Duration</p>
+                                                        <p id="analyticsAvgDuration" class="text-2xl font-bold text-gray-900">0.5 Mins</p>
+                                                        <p class="text-xs text-red-600">
+                                                            <i class="fas fa-arrow-down mr-1"></i>17% vs last month
+                                                        </p>
+                                                    </div>
+                                                    <div class="text-purple-500">
+                                                        <i class="fas fa-clock text-xl"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Charts Row -->
+                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            <!-- Call Volume Chart -->
+                                            <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                                <h4 class="text-lg font-semibold text-gray-900 mb-4">Calls Completed</h4>
+                                                <div id="callVolumeChart" class="h-64 flex items-center justify-center border border-gray-200 rounded bg-gray-50">
+                                                    <div class="text-center text-gray-500">
+                                                        <i class="fas fa-chart-line text-3xl mb-2"></i>
+                                                        <p>Call volume chart will appear here</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Performance Metrics -->
+                                            <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                                <h4 class="text-lg font-semibold text-gray-900 mb-4">Performance Metrics</h4>
+                                                <div class="space-y-4">
+                                                    <div class="flex justify-between items-center">
+                                                        <span class="text-sm text-gray-600">Response Time</span>
+                                                        <span class="font-medium">1.8s avg</span>
+                                                    </div>
+                                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                                        <div class="bg-green-600 h-2 rounded-full" style="width: 75%"></div>
+                                                    </div>
+                                                    
+                                                    <div class="flex justify-between items-center">
+                                                        <span class="text-sm text-gray-600">Completion Rate</span>
+                                                        <span class="font-medium">87%</span>
+                                                    </div>
+                                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                                        <div class="bg-blue-600 h-2 rounded-full" style="width: 87%"></div>
+                                                    </div>
+                                                    
+                                                    <div class="flex justify-between items-center">
+                                                        <span class="text-sm text-gray-600">Booking Success</span>
+                                                        <span class="font-medium">85%</span>
+                                                    </div>
+                                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                                        <div class="bg-purple-600 h-2 rounded-full" style="width: 85%"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Recent Calls Table -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <div class="flex justify-between items-center mb-4">
+                                                <h4 class="text-lg font-semibold text-gray-900">Recent Calls</h4>
+                                                <div class="flex gap-2">
+                                                    <button id="refreshAnalyticsBtn" class="text-indigo-600 hover:text-indigo-800 text-sm">
+                                                        <i class="fas fa-refresh mr-1"></i>Refresh
+                                                    </button>
+                                                    <button id="exportAnalyticsBtn" class="text-indigo-600 hover:text-indigo-800 text-sm">
+                                                        <i class="fas fa-download mr-1"></i>Export
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="overflow-x-auto">
+                                                <table class="min-w-full divide-y divide-gray-200">
+                                                    <thead class="bg-gray-50">
+                                                        <tr>
+                                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">From Number</th>
+                                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+                                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="recentCallsBody" class="bg-white divide-y divide-gray-200">
+                                                        <tr>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Loading...</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">-</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">-</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">-</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">-</td>
+                                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">-</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <!-- Insights & Recommendations -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-lightbulb mr-2 text-yellow-500"></i>AI Insights & Recommendations
+                                            </h4>
+                                            <div id="analyticsInsights" class="space-y-3">
+                                                <div class="p-3 bg-green-50 border border-green-200 rounded-lg">
+                                                    <div class="flex items-start">
+                                                        <div class="flex-shrink-0">
+                                                            <i class="fas fa-check-circle text-green-500"></i>
+                                                        </div>
+                                                        <div class="ml-3">
+                                                            <h5 class="text-sm font-medium text-green-800">High Call Completion Rate</h5>
+                                                            <p class="text-sm text-green-700">Your agent is successfully completing 87% of calls, which is above industry average.</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                                    <div class="flex items-start">
+                                                        <div class="flex-shrink-0">
+                                                            <i class="fas fa-exclamation-triangle text-yellow-500"></i>
+                                                        </div>
+                                                        <div class="ml-3">
+                                                            <h5 class="text-sm font-medium text-yellow-800">Optimize Response Time</h5>
+                                                            <p class="text-sm text-yellow-700">Average response time is 1.8s. Consider simplifying complex prompts to reach the 1.5s target.</p>
+                                                            <button class="text-yellow-800 hover:text-yellow-900 text-xs mt-1 underline">Review prompt complexity</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="p-3 bg-red-50 border border-red-200 rounded-lg">
+                                                    <div class="flex items-start">
+                                                        <div class="flex-shrink-0">
+                                                            <i class="fas fa-times-circle text-red-500"></i>
+                                                        </div>
+                                                        <div class="ml-3">
+                                                            <h5 class="text-sm font-medium text-red-800">Knowledge Gap Detected</h5>
+                                                            <p class="text-sm text-red-700">12 calls failed due to out-of-scope inquiries. Consider adding more Q&A entries.</p>
+                                                            <button class="text-red-800 hover:text-red-900 text-xs mt-1 underline">Add knowledge entries</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -1635,7 +1902,7 @@
                 }
 
                 listContainer.innerHTML = workflows.map(workflow => `
-                    <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
+                    <div class="px-6 py-4 hover:bg-gray-100 transition-colors">
                         <div class="flex items-center justify-between">
                             <div class="flex-1">
                                 <h4 class="text-lg font-semibold text-gray-900">${workflow.name}</h4>
