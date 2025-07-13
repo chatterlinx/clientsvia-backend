@@ -981,6 +981,9 @@
                                         <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="knowledge">
                                             <i class="fas fa-brain mr-1"></i>Knowledge Base
                                         </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="intelligence">
+                                            <i class="fas fa-robot mr-1"></i>AI Intelligence
+                                        </button>
                                         <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="workflows">
                                             <i class="fas fa-flow-chart mr-1"></i>Call Workflows
                                         </button>
@@ -1587,6 +1590,439 @@ Always end with: "Thank you for choosing Penguin Air! Have a great day!"</textar
                                                         <option value="voicemail">Send to Voicemail</option>
                                                     </select>
                                                 </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- AI Intelligence Tab -->
+                                <div id="ai-intelligence-tab" class="ai-config-tab-content hidden">
+                                    <div class="space-y-6">
+                                        <!-- Super-Intelligence Configuration -->
+                                        <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-brain mr-2 text-purple-600"></i>Super-Intelligence Engine
+                                                <span class="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">ADVANCED</span>
+                                            </h4>
+                                            <p class="text-gray-700 mb-6">Transform your agent into a super-intelligent system with advanced reasoning, memory, and real-time adaptation capabilities.</p>
+                                            
+                                            <!-- Intelligence Level Toggle -->
+                                            <div class="mb-6">
+                                                <label class="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                                                    <div class="flex items-center">
+                                                        <div class="mr-4">
+                                                            <h5 class="font-medium text-gray-900">Enable Super-Intelligence</h5>
+                                                            <p class="text-sm text-gray-600">Activate advanced AI capabilities for human-like interactions</p>
+                                                        </div>
+                                                    </div>
+                                                    <input type="checkbox" id="enableSuperIntelligence" class="sr-only peer">
+                                                    <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <!-- Semantic Knowledge Base -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-search mr-2 text-blue-600"></i>Semantic Knowledge Retrieval
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <!-- Vector Database Configuration -->
+                                                <div>
+                                                    <label class="form-label">Vector Database Provider</label>
+                                                    <select id="vectorDbProvider" class="form-select">
+                                                        <option value="pinecone">Pinecone (Recommended)</option>
+                                                        <option value="weaviate">Weaviate</option>
+                                                        <option value="faiss">FAISS (Local)</option>
+                                                        <option value="chroma">ChromaDB</option>
+                                                    </select>
+                                                    <p class="text-xs text-gray-500 mt-1">Choose your vector database for semantic search</p>
+                                                </div>
+                                                
+                                                <!-- Confidence Threshold -->
+                                                <div>
+                                                    <label class="form-label">Confidence Threshold</label>
+                                                    <div class="flex items-center gap-3">
+                                                        <input type="range" id="confidenceThreshold" min="0.5" max="1.0" step="0.05" value="0.85" class="flex-1">
+                                                        <span id="confidenceValue" class="text-sm font-medium text-gray-700 min-w-[3rem]">85%</span>
+                                                    </div>
+                                                    <p class="text-xs text-gray-500 mt-1">Minimum confidence to provide answer (below = escalate)</p>
+                                                </div>
+                                                
+                                                <!-- Embedding Model -->
+                                                <div>
+                                                    <label class="form-label">Embedding Model</label>
+                                                    <select id="embeddingModel" class="form-select">
+                                                        <option value="text-embedding-3-large">OpenAI Text-Embedding-3-Large</option>
+                                                        <option value="text-embedding-3-small">OpenAI Text-Embedding-3-Small</option>
+                                                        <option value="all-MiniLM-L6-v2">Sentence-Transformers MiniLM</option>
+                                                        <option value="all-mpnet-base-v2">Sentence-Transformers MPNet</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <!-- Retrieval Strategy -->
+                                                <div>
+                                                    <label class="form-label">Retrieval Strategy</label>
+                                                    <select id="retrievalStrategy" class="form-select">
+                                                        <option value="semantic">Semantic Similarity</option>
+                                                        <option value="hybrid">Hybrid (Semantic + Keyword)</option>
+                                                        <option value="mmr">Maximum Marginal Relevance</option>
+                                                        <option value="self-query">Self-Querying</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Test Semantic Search -->
+                                            <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+                                                <h5 class="font-medium text-gray-900 mb-3">Test Semantic Search</h5>
+                                                <div class="flex gap-3">
+                                                    <input type="text" id="testQuery" class="form-input flex-1" placeholder="Enter a test query...">
+                                                    <button id="testSemanticBtn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg">
+                                                        <i class="fas fa-search mr-1"></i>Test
+                                                    </button>
+                                                </div>
+                                                <div id="semanticResults" class="mt-3 hidden">
+                                                    <!-- Results will be populated here -->
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Contextual Memory System -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-memory mr-2 text-green-600"></i>Contextual Memory System
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <!-- Memory Provider -->
+                                                <div>
+                                                    <label class="form-label">Memory Provider</label>
+                                                    <select id="memoryProvider" class="form-select">
+                                                        <option value="memgpt">MemGPT (Recommended)</option>
+                                                        <option value="zep">Zep Memory</option>
+                                                        <option value="redis">Redis Cache</option>
+                                                        <option value="local">Local Memory</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <!-- Session Memory Duration -->
+                                                <div>
+                                                    <label class="form-label">Session Memory Duration</label>
+                                                    <select id="sessionDuration" class="form-select">
+                                                        <option value="24h">24 Hours</option>
+                                                        <option value="7d">7 Days</option>
+                                                        <option value="30d" selected>30 Days</option>
+                                                        <option value="90d">90 Days</option>
+                                                        <option value="persistent">Persistent</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <!-- Memory Compression -->
+                                                <div>
+                                                    <label class="form-label">Memory Compression Threshold</label>
+                                                    <div class="flex items-center gap-3">
+                                                        <input type="range" id="memoryThreshold" min="1000" max="10000" step="500" value="5000" class="flex-1">
+                                                        <span id="memoryValue" class="text-sm font-medium text-gray-700 min-w-[4rem]">5000 tokens</span>
+                                                    </div>
+                                                    <p class="text-xs text-gray-500 mt-1">Auto-compress conversation when threshold is reached</p>
+                                                </div>
+                                                
+                                                <!-- Personalization Level -->
+                                                <div>
+                                                    <label class="form-label">Personalization Level</label>
+                                                    <select id="personalizationLevel" class="form-select">
+                                                        <option value="basic">Basic (Name, Phone)</option>
+                                                        <option value="enhanced" selected>Enhanced (History, Preferences)</option>
+                                                        <option value="deep">Deep (Behavioral Patterns)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Dynamic Reasoning Engine -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-cogs mr-2 text-orange-600"></i>Dynamic Reasoning Engine (ReAct + DSPy)
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <!-- Reasoning Framework -->
+                                                <div>
+                                                    <label class="form-label">Reasoning Framework</label>
+                                                    <select id="reasoningFramework" class="form-select">
+                                                        <option value="react" selected>ReAct (Reason + Act)</option>
+                                                        <option value="cot">Chain of Thought</option>
+                                                        <option value="tot">Tree of Thoughts</option>
+                                                        <option value="reflexion">Reflexion</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <!-- DSPy Optimization -->
+                                                <div>
+                                                    <label class="form-label">DSPy Optimization</label>
+                                                    <div class="space-y-3">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="enableDspy" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Enable DSPy prompt optimization</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="fewShotLearning" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Few-shot learning from examples</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="bootstrapOptimization" class="form-checkbox">
+                                                            <span class="ml-2 text-sm text-gray-700">Bootstrap optimization (slower, better)</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Reasoning Confidence -->
+                                                <div>
+                                                    <label class="form-label">Reasoning Confidence Threshold</label>
+                                                    <div class="flex items-center gap-3">
+                                                        <input type="range" id="reasoningConfidence" min="0.6" max="1.0" step="0.05" value="0.8" class="flex-1">
+                                                        <span id="reasoningValue" class="text-sm font-medium text-gray-700 min-w-[3rem]">80%</span>
+                                                    </div>
+                                                    <p class="text-xs text-gray-500 mt-1">Minimum confidence for complex reasoning tasks</p>
+                                                </div>
+                                                
+                                                <!-- Max Reasoning Steps -->
+                                                <div>
+                                                    <label class="form-label">Max Reasoning Steps</label>
+                                                    <select id="maxReasoningSteps" class="form-select">
+                                                        <option value="3">3 Steps</option>
+                                                        <option value="5" selected>5 Steps</option>
+                                                        <option value="7">7 Steps</option>
+                                                        <option value="10">10 Steps</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Real-Time Sentiment & Escalation -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-heart mr-2 text-red-600"></i>Real-Time Sentiment & Auto-Escalation
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <!-- Sentiment Provider -->
+                                                <div>
+                                                    <label class="form-label">Sentiment Analysis Provider</label>
+                                                    <select id="sentimentProvider" class="form-select">
+                                                        <option value="hume">Hume AI (Recommended)</option>
+                                                        <option value="openai">OpenAI GPT-4</option>
+                                                        <option value="assemblyai">AssemblyAI</option>
+                                                        <option value="deepgram">Deepgram</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <!-- Escalation Sensitivity -->
+                                                <div>
+                                                    <label class="form-label">Escalation Sensitivity</label>
+                                                    <div class="flex items-center gap-3">
+                                                        <input type="range" id="escalationSensitivity" min="0.1" max="0.8" step="0.1" value="0.4" class="flex-1">
+                                                        <span id="escalationValue" class="text-sm font-medium text-gray-700 min-w-[3rem]">0.4</span>
+                                                    </div>
+                                                    <p class="text-xs text-gray-500 mt-1">Lower = more sensitive to negative emotions</p>
+                                                </div>
+                                                
+                                                <!-- Escalation Actions -->
+                                                <div>
+                                                    <label class="form-label">Auto-Escalation Actions</label>
+                                                    <div class="space-y-3">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="humanTransfer" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Transfer to human agent</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="supervisorAlert" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Alert supervisor</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="contextSummary" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Generate context summary</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Emotion Detection -->
+                                                <div>
+                                                    <label class="form-label">Emotion Detection Frequency</label>
+                                                    <select id="emotionFrequency" class="form-select">
+                                                        <option value="continuous">Continuous (Real-time)</option>
+                                                        <option value="5s" selected>Every 5 seconds</option>
+                                                        <option value="10s">Every 10 seconds</option>
+                                                        <option value="turn">Per conversation turn</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Performance Optimization -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-tachometer-alt mr-2 text-purple-600"></i>Performance Optimization
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <!-- Model Selection -->
+                                                <div>
+                                                    <label class="form-label">Primary AI Model</label>
+                                                    <select id="primaryModel" class="form-select">
+                                                        <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash (Recommended)</option>
+                                                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                                        <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+                                                        <option value="gpt-4o">GPT-4o</option>
+                                                    </select>
+                                                    <p class="text-xs text-gray-500 mt-1">Primary model for conversation and reasoning</p>
+                                                </div>
+                                                
+                                                <!-- Response Latency Target -->
+                                                <div>
+                                                    <label class="form-label">Response Latency Target</label>
+                                                    <select id="latencyTarget" class="form-select">
+                                                        <option value="300ms">Ultra-Fast (300ms)</option>
+                                                        <option value="500ms" selected>Fast (500ms)</option>
+                                                        <option value="800ms">Standard (800ms)</option>
+                                                        <option value="1200ms">Relaxed (1200ms)</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <!-- Streaming Configuration -->
+                                                <div>
+                                                    <label class="form-label">Response Streaming</label>
+                                                    <div class="space-y-3">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="enableStreaming" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Enable response streaming</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="interruptHandling" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Handle interruptions gracefully</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="websocketMode" class="form-checkbox">
+                                                            <span class="ml-2 text-sm text-gray-700">WebSocket mode (lower latency)</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Caching Strategy -->
+                                                <div>
+                                                    <label class="form-label">Response Caching</label>
+                                                    <select id="cachingStrategy" class="form-select">
+                                                        <option value="aggressive">Aggressive (Fast, less dynamic)</option>
+                                                        <option value="balanced" selected>Balanced (Good compromise)</option>
+                                                        <option value="minimal">Minimal (Slower, more dynamic)</option>
+                                                        <option value="disabled">Disabled</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Continuous Learning -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-graduation-cap mr-2 text-indigo-600"></i>Continuous Learning & Improvement
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <!-- Learning Rate -->
+                                                <div>
+                                                    <label class="form-label">Learning Aggressiveness</label>
+                                                    <div class="flex items-center gap-3">
+                                                        <input type="range" id="learningRate" min="0.1" max="1.0" step="0.1" value="0.5" class="flex-1">
+                                                        <span id="learningValue" class="text-sm font-medium text-gray-700 min-w-[3rem]">0.5</span>
+                                                    </div>
+                                                    <p class="text-xs text-gray-500 mt-1">How quickly the agent adapts from new interactions</p>
+                                                </div>
+                                                
+                                                <!-- Evaluation Framework -->
+                                                <div>
+                                                    <label class="form-label">Evaluation Framework</label>
+                                                    <select id="evaluationFramework" class="form-select">
+                                                        <option value="langsmith" selected>LangSmith</option>
+                                                        <option value="weights-biases">Weights & Biases</option>
+                                                        <option value="mlflow">MLflow</option>
+                                                        <option value="custom">Custom Analytics</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <!-- Auto-Improvement -->
+                                                <div>
+                                                    <label class="form-label">Auto-Improvement Features</label>
+                                                    <div class="space-y-3">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="autoFailureAnalysis" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Automatic failure analysis</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="promptRetraining" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Auto-retrain prompts weekly</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="abTesting" class="form-checkbox">
+                                                            <span class="ml-2 text-sm text-gray-700">A/B test new capabilities</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Performance Metrics -->
+                                                <div>
+                                                    <label class="form-label">Track Performance Metrics</label>
+                                                    <div class="space-y-3">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="trackLatency" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Response latency</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="trackAccuracy" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Answer accuracy</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="trackSentiment" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Customer satisfaction</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="trackEscalations" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm text-gray-700">Escalation rate</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Intelligence Test Suite -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-flask mr-2 text-green-600"></i>Intelligence Test Suite
+                                            </h4>
+                                            <p class="text-gray-600 mb-4">Test your agent's capabilities with simulated scenarios.</p>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <button id="testMemoryBtn" class="p-4 border border-gray-200 rounded-lg text-center hover:bg-gray-50">
+                                                    <i class="fas fa-memory text-2xl text-blue-600 mb-2"></i>
+                                                    <div class="font-medium text-gray-900">Memory Test</div>
+                                                    <div class="text-xs text-gray-600">Test context retention</div>
+                                                </button>
+                                                
+                                                <button id="testReasoningBtn" class="p-4 border border-gray-200 rounded-lg text-center hover:bg-gray-50">
+                                                    <i class="fas fa-cogs text-2xl text-orange-600 mb-2"></i>
+                                                    <div class="font-medium text-gray-900">Reasoning Test</div>
+                                                    <div class="text-xs text-gray-600">Test problem-solving</div>
+                                                </button>
+                                                
+                                                <button id="testEscalationBtn" class="p-4 border border-gray-200 rounded-lg text-center hover:bg-gray-50">
+                                                    <i class="fas fa-level-up-alt text-2xl text-red-600 mb-2"></i>
+                                                    <div class="font-medium text-gray-900">Escalation Test</div>
+                                                    <div class="text-xs text-gray-600">Test sentiment handling</div>
+                                                </button>
+                                            </div>
+                                            
+                                            <div id="testResults" class="mt-4 hidden">
+                                                <!-- Test results will be populated here -->
                                             </div>
                                         </div>
                                     </div>
