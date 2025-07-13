@@ -120,7 +120,7 @@ router.post('/voice', async (req, res) => {
     
     // [TARGET] COMPREHENSIVE PERFORMANCE SETTINGS REPORT
     const speechThreshold = company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.4;
-    const fuzzyThreshold = company.aiSettings?.fuzzyMatchThreshold ?? 0.3;
+    const fuzzyThreshold = company.aiSettings?.fuzzyMatchThreshold ?? 0.25; // Lowered for better Q&A matching
     console.log(`[PERFORMANCE SETTINGS] [TARGET] Speech Confidence: ${speechThreshold} | Fuzzy Match: ${fuzzyThreshold}`);
     console.log(`[THRESHOLDS] Confidence: ${speechThreshold}`); // Keep legacy log for compatibility
 
@@ -497,7 +497,6 @@ router.post('/handle-speech', async (req, res) => {
 
     const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
     const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
-    
     // Set a maximum TTS wait time to prevent delays
     const maxTtsWaitTime = 3000; // 3 seconds max - increased for ElevenLabs reliability
       

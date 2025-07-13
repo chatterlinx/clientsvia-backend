@@ -53,22 +53,28 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.3) {
         variantWords.some(variantWord => {
           if (userWord === variantWord) return true;
           
+          // Handle common word variations (leaking/leakage, heating/heat, etc.)
+          const userRoot = userWord.replace(/(ing|age|ed|er|ly)$/i, '');
+          const variantRoot = variantWord.replace(/(ing|age|ed|er|ly)$/i, '');
+          if (userRoot.length > 3 && variantRoot.length > 3 && userRoot === variantRoot) return true;
+          
           // For longer words, allow substring matching
           if (userWord.length > 4 && variantWord.length > 4) {
             if (userWord.includes(variantWord) || variantWord.includes(userWord)) return true;
           }
           
-          // High word-level similarity for near-matches
-          return stringSimilarity.compareTwoStrings(userWord, variantWord) > 0.7;
+          // High word-level similarity for near-matches (lowered threshold for better matching)
+          return stringSimilarity.compareTwoStrings(userWord, variantWord) > 0.6;
         })
       );
       
       // Require either:
-      // - At least 2 matching words AND 50% coverage of user input
-      // - At least 80% word coverage for shorter phrases
+      // - At least 1 matching word for short phrases (more lenient)
+      // - At least 2 matching words for longer phrases
+      // - Minimum 40% word coverage (reduced from 50%)
       const matchRatio = matchingWords.length / userWords.length;
-      const minWords = userWords.length >= 4 ? 2 : 1;
-      const minRatio = userWords.length >= 4 ? 0.5 : 0.8;
+      const minWords = userWords.length >= 6 ? 2 : 1; // More lenient threshold
+      const minRatio = userWords.length >= 6 ? 0.4 : 0.6; // Reduced from 0.8
       
       if (matchingWords.length >= minWords && matchRatio >= minRatio) {
         console.log(`✅ [Q&A CONTEXTUAL] Word-based match: "${entry.question}" | Words: ${matchingWords.length}/${userWords.length} (${(matchRatio * 100).toFixed(1)}%) | Matched: [${matchingWords.join(', ')}]`);

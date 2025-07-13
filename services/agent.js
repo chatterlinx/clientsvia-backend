@@ -322,7 +322,22 @@ async function generateIntelligentResponse(company, question, conversationHistor
   const qLower = question.toLowerCase();
   const companyName = company?.companyName || 'our company';
   
-  // Handle customer closures and polite declines FIRST (before other processing)
+  // PRIORITY 1: Handle customer frustration and repetition complaints FIRST
+  if (qLower.includes('repeating') || qLower.includes('same thing') || qLower.includes('over and over')) {
+    return `I apologize for the confusion. Let me connect you directly with one of our specialists who can give you the specific information you need right away. Please hold for just a moment.`;
+  }
+  
+  if (qLower.includes('not helping') || qLower.includes('frustrat') || qLower.includes('annoyed')) {
+    return `I understand your frustration, and I want to make sure you get the help you need. Let me transfer you to one of our experienced technicians who can provide you with the exact answers you're looking for.`;
+  }
+
+  // PRIORITY 2: Handle pricing questions (was missing - major issue!)
+  if (qLower.includes('price') || qLower.includes('cost') || qLower.includes('pricing') || 
+      qLower.includes('how much') || qLower.includes('fee') || qLower.includes('charge')) {
+    return `For pricing, our service call fee starts at $89, which includes a thorough diagnostic. If you decide to proceed with the repair, that fee goes toward the total cost. The final price depends on what needs to be done. Would you like me to schedule a technician to come out and give you an exact quote?`;
+  }
+
+  // PRIORITY 3: Handle customer closures and polite declines
   if (qLower.includes('no') && (qLower.includes('thank you') || qLower.includes('thanks'))) {
     return `You're very welcome! Have a great day, and please don't hesitate to call us if you need anything in the future.`;
   }
