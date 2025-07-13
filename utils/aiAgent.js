@@ -58,6 +58,14 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.3) {
           const variantRoot = variantWord.replace(/(ing|age|ed|er|ly)$/i, '');
           if (userRoot.length > 3 && variantRoot.length > 3 && userRoot === variantRoot) return true;
           
+          // Special handling for water-related keywords
+          const waterKeywords = ['water', 'leak', 'leaking', 'leakage', 'drip', 'dripping', 'wet', 'moisture'];
+          if (waterKeywords.includes(userWord) && waterKeywords.includes(variantWord)) return true;
+          
+          // Special handling for HVAC-related keywords  
+          const hvacKeywords = ['ac', 'air', 'conditioning', 'heat', 'heating', 'cool', 'cooling', 'repair', 'broken', 'fix'];
+          if (hvacKeywords.includes(userWord) && hvacKeywords.includes(variantWord)) return true;
+          
           // For longer words, allow substring matching
           if (userWord.length > 4 && variantWord.length > 4) {
             if (userWord.includes(variantWord) || variantWord.includes(userWord)) return true;
@@ -70,11 +78,24 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.3) {
       
       // Require either:
       // - At least 1 matching word for short phrases (more lenient)
-      // - At least 2 matching words for longer phrases
-      // - Minimum 40% word coverage (reduced from 50%)
+      // - At least 2 matching words for longer phrases, BUT more lenient for water/HVAC issues
+      // - Minimum 30% word coverage for water-related issues, 40% for others
       const matchRatio = matchingWords.length / userWords.length;
-      const minWords = userWords.length >= 6 ? 2 : 1; // More lenient threshold
-      const minRatio = userWords.length >= 6 ? 0.4 : 0.6; // Reduced from 0.8
+      
+      // Check if this is a water-related issue (more lenient matching)
+      const isWaterIssue = userWords.some(word => ['water', 'leak', 'leaking', 'leakage', 'drip', 'wet'].includes(word));
+      const isHVACIssue = userWords.some(word => ['ac', 'air', 'conditioning', 'heat', 'cool', 'repair'].includes(word));
+      
+      let minWords, minRatio;
+      if (isWaterIssue || isHVACIssue) {
+        // More lenient for HVAC/water issues
+        minWords = userWords.length >= 8 ? 2 : 1;
+        minRatio = userWords.length >= 8 ? 0.25 : 0.5; // Lower threshold for water/HVAC
+      } else {
+        // Standard matching
+        minWords = userWords.length >= 6 ? 2 : 1;
+        minRatio = userWords.length >= 6 ? 0.4 : 0.6;
+      }
       
       if (matchingWords.length >= minWords && matchRatio >= minRatio) {
         console.log(`✅ [Q&A CONTEXTUAL] Word-based match: "${entry.question}" | Words: ${matchingWords.length}/${userWords.length} (${(matchRatio * 100).toFixed(1)}%) | Matched: [${matchingWords.join(', ')}]`);
