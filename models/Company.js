@@ -53,6 +53,17 @@ const integrationsSchema = new mongoose.Schema({
     googleOAuth: { type: googleOAuthSchema, default: () => ({}) }
 }, { _id: false });
 
+// --- Sub-schema for Learning Settings ---
+const learningSettingsSchema = new mongoose.Schema({
+    autoLearning: { type: Boolean, default: true },
+    confidenceThreshold: { type: Number, default: 0.8, min: 0, max: 1 },
+    maxSuggestionsPerDay: { type: Number, default: 10, min: 1, max: 100 },
+    categories: { type: [String], default: ['general', 'pricing', 'services', 'policies'] },
+    requireApproval: { type: Boolean, default: true },
+    autoApproveHighConfidence: { type: Boolean, default: false },
+    dailySummary: { type: Boolean, default: false }
+}, { _id: false });
+
 // --- CORRECTED: Sub-schema for AI Settings ---
 const elevenLabsSettingsSchema = new mongoose.Schema({
     apiKey: { type: String, default: '' },
@@ -170,6 +181,7 @@ const companySchema = new mongoose.Schema({
     aiSettings: { type: aiSettingsSchema, default: () => ({}) },
     agentSetup: { type: agentSetupSchema, default: () => ({}) },
     personalityResponses: { type: personalityResponsesSchema, default: () => defaultResponses },
+    learningSettings: { type: learningSettingsSchema, default: () => ({}) },
     
     notes: { type: [noteSchema], default: [] },
     

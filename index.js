@@ -29,6 +29,7 @@ const elevenLabsRoutes = require('./routes/elevenLabs'); // New ElevenLabs route
 const uploadRoutes = require('./routes/upload');
 const workflowRoutes = require('./routes/workflows'); // New workflow routes
 const testWorkflowRoutes = require('./routes/test-workflows'); // Test workflow routes
+const learningRoutes = require('./routes/learning'); // Learning management routes
 
 // Initialize Express app
 const app = express();
@@ -65,6 +66,7 @@ app.use('/api/elevenlabs', elevenLabsRoutes); // Registering the new /api/eleven
 app.use('/api/upload', uploadRoutes);
 app.use('/api/workflows', workflowRoutes); // Registering the new /api/workflows route
 app.use('/api/test-workflows', testWorkflowRoutes); // Test workflow routes
+app.use('/api/learning', learningRoutes); // Learning management routes
 /*
 --- TWILIO SMOKE TEST ROUTE (COMMENTED OUT) ---
 app.post('/api/twilio/voice', (req, res) => {
