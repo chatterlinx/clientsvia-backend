@@ -671,7 +671,7 @@ function handleConversationContinuation(context, question, company, placeholders
   if (context.previousTopic) {
     // Continue the previous topic with brief, actionable responses
     if (context.previousTopic.includes('leak') && qLower.includes('regular')) {
-      return `Regular leaks need professional attention. Could be a drain line or refrigerant issue. Want me to schedule a diagnostic?`;
+      return `Regular leaks need professional attention. Could be a drain line or refrigerant issue. Want me to schedule a diagnostic visit?`;
     }
     
     if (context.previousTopic.includes('noise') && (qLower.includes('loud') || qLower.includes('getting worse'))) {
@@ -679,7 +679,7 @@ function handleConversationContinuation(context, question, company, placeholders
     }
     
     if (context.previousTopic.includes('temperature') && (qLower.includes('not') || qLower.includes('still'))) {
-      return `Still having temperature issues? Could be refrigerant, filter, or airflow. Should I schedule a diagnostic?`;
+      return `Still having temperature issues? Could be refrigerant, filter, or airflow. Should I schedule a diagnostic visit?`;
     }
   }
   
@@ -1091,4 +1091,79 @@ function generateShortConversationalResponse(question, qnaAnswer, companyName) {
   // Fallback: extract first meaningful phrase
   const firstSentence = qnaAnswer.split(/[.!?]/)[0].trim();
   return firstSentence.length > 5 ? firstSentence + '.' : qnaAnswer;
+}
+
+// Check specific scenario protocols - handles company-specific response protocols
+function checkSpecificProtocols(protocols, question, conversationHistory, placeholders) {
+  if (!protocols || typeof protocols !== 'object') return null;
+  
+  const qLower = question.toLowerCase().trim();
+  console.log(`[Protocols] Checking protocols for: "${question.substring(0, 50)}..."`);
+  
+  // System delay protocol - when system is slow or unresponsive
+  if (protocols.systemDelay && 
+      (qLower.includes('slow') || qLower.includes('delay') || qLower.includes('taking long') || 
+       qLower.includes('wait') || qLower.includes('loading'))) {
+    console.log(`[Protocols] Using systemDelay protocol`);
+    return applyPlaceholders(protocols.systemDelay, placeholders);
+  }
+  
+  // Message taking protocol - when caller wants to leave a message
+  if (protocols.messageTaking && 
+      (qLower.includes('message') || qLower.includes('voicemail') || qLower.includes('call back') || 
+       qLower.includes('leave a') || qLower.includes('tell them'))) {
+    console.log(`[Protocols] Using messageTaking protocol`);
+    return applyPlaceholders(protocols.messageTaking, placeholders);
+  }
+  
+  // Caller reconnect protocol - when connection issues
+  if (protocols.callerReconnect && 
+      (qLower.includes('can you hear') || qLower.includes('connection') || qLower.includes('breaking up') || 
+       qLower.includes('static') || qLower.includes('cutting out'))) {
+    console.log(`[Protocols] Using callerReconnect protocol`);
+    return applyPlaceholders(protocols.callerReconnect, placeholders);
+  }
+  
+  // When in doubt protocol - for unclear or confusing situations
+  if (protocols.whenInDoubt && 
+      (qLower.includes('confused') || qLower.includes('not sure') || qLower.includes('unclear') || 
+       qLower.includes('don\'t understand') || qLower.length < 10)) {
+    console.log(`[Protocols] Using whenInDoubt protocol`);
+    return applyPlaceholders(protocols.whenInDoubt, placeholders);
+  }
+  
+  // Caller frustration protocol - when customer is frustrated
+  if (protocols.callerFrustration && 
+      (qLower.includes('frustrat') || qLower.includes('angry') || qLower.includes('upset') || 
+       qLower.includes('annoyed') || qLower.includes('terrible') || qLower.includes('worst'))) {
+    console.log(`[Protocols] Using callerFrustration protocol`);
+    return applyPlaceholders(protocols.callerFrustration, placeholders);
+  }
+  
+  // Telemarketer filter protocol - detecting sales calls
+  if (protocols.telemarketerFilter && 
+      (qLower.includes('offer') || qLower.includes('deal') || qLower.includes('promotion') || 
+       qLower.includes('special') || qLower.includes('save money') || qLower.includes('limited time'))) {
+    console.log(`[Protocols] Using telemarketerFilter protocol`);
+    return applyPlaceholders(protocols.telemarketerFilter, placeholders);
+  }
+  
+  // Booking confirmation protocol - confirming appointments
+  if (protocols.bookingConfirmation && 
+      (qLower.includes('confirm') || qLower.includes('appointment') || qLower.includes('scheduled') || 
+       qLower.includes('booking') || qLower.includes('reschedule'))) {
+    console.log(`[Protocols] Using bookingConfirmation protocol`);
+    return applyPlaceholders(protocols.bookingConfirmation, placeholders);
+  }
+  
+  // Text to pay protocol - payment related
+  if (protocols.textToPay && 
+      (qLower.includes('payment') || qLower.includes('pay') || qLower.includes('bill') || 
+       qLower.includes('invoice') || qLower.includes('charge') || qLower.includes('cost'))) {
+    console.log(`[Protocols] Using textToPay protocol`);
+    return applyPlaceholders(protocols.textToPay, placeholders);
+  }
+  
+  console.log(`[Protocols] No matching protocol found`);
+  return null;
 }
