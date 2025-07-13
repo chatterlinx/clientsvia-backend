@@ -499,7 +499,7 @@ router.post('/handle-speech', async (req, res) => {
     const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
     
     // Set a maximum TTS wait time to prevent delays
-    const maxTtsWaitTime = 1000; // 1 second max
+    const maxTtsWaitTime = 3000; // 3 seconds max - increased for ElevenLabs reliability
       
     if (elevenLabsVoice) {
       try {
@@ -539,10 +539,14 @@ router.post('/handle-speech', async (req, res) => {
         } else {
           console.error('ElevenLabs synthesis failed:', err.message);
         }
-        gather.say(escapeTwiML(strippedAnswer));
+        // Use Twilio's enhanced TTS with voice settings to maintain consistency
+        const voice = company.aiSettings?.twilioVoice || 'alice';
+        gather.say({ voice: voice }, escapeTwiML(strippedAnswer));
       }
     } else {
-      gather.say(escapeTwiML(strippedAnswer));
+      // Use consistent voice even when ElevenLabs is not configured
+      const voice = company.aiSettings?.twilioVoice || 'alice';
+      gather.say({ voice: voice }, escapeTwiML(strippedAnswer));
     }
 
     res.type('text/xml');

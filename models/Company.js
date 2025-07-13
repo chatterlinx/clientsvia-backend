@@ -112,7 +112,10 @@ const aiSettingsSchema = new mongoose.Schema({
         type: String,
         default: "I'm having trouble understanding. Let me connect you to a team member."
     },
-    debugMode: { type: Boolean, default: false }
+    debugMode: { type: Boolean, default: false },
+    twilioVoice: { type: String, default: 'alice', trim: true }, // Consistent fallback voice
+    conversationContextTracking: { type: Boolean, default: true }, // Track conversation flow better
+    preventRepetitiveQuestions: { type: Boolean, default: true } // Prevent asking same questions
     // The enableGoogleCalendarIntegration field was moved to integrations.googleOAuth.isEnabled
 }, { _id: false });
 

@@ -322,6 +322,20 @@ async function generateIntelligentResponse(company, question, conversationHistor
   const qLower = question.toLowerCase();
   const companyName = company?.companyName || 'our company';
   
+  // Handle customer closures and polite declines FIRST (before other processing)
+  if (qLower.includes('no') && (qLower.includes('thank you') || qLower.includes('thanks'))) {
+    return `You're very welcome! Have a great day, and please don't hesitate to call us if you need anything in the future.`;
+  }
+  
+  if (qLower.includes('not right now') || qLower.includes('not now') || qLower.includes('maybe later')) {
+    return `No problem at all! I understand. Feel free to call us whenever you're ready, and we'll be happy to help. Have a wonderful day!`;
+  }
+  
+  if ((qLower.includes('no') || qLower.includes('nope')) && 
+      (qLower.includes('bye') || qLower.includes('goodbye') || qLower.includes('have a') || qLower.length < 10)) {
+    return `Thank you for calling ${companyName}! Have a great day and feel free to call us anytime you need assistance.`;
+  }
+  
   // HVAC/Thermostat related responses
   if (qLower.includes('thermostat') || qLower.includes('temperature') || qLower.includes('heating') || qLower.includes('cooling')) {
     if (qLower.includes('blank') || qLower.includes('not working') || qLower.includes('broken')) {
