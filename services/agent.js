@@ -1167,3 +1167,63 @@ function checkSpecificProtocols(protocols, question, conversationHistory, placeh
   console.log(`[Protocols] No matching protocol found`);
   return null;
 }
+
+// Check for specific personality scenarios based on customer input and conversation context
+async function checkPersonalityScenarios(companyId, question, conversationHistory) {
+  const qLower = question.toLowerCase().trim();
+  
+  // Handle customer frustration and repetition complaints (PRIORITY 1)
+  if (qLower.includes('repeating') || qLower.includes('same thing') || qLower.includes('over and over')) {
+    const response = await getPersonalityResponse(companyId, 'transferToRep', 'friendly');
+    return {
+      category: 'repetitionComplaint',
+      text: response || `I apologize for the confusion. Let me connect you directly with one of our specialists who can give you the specific information you need right away.`
+    };
+  }
+  
+  if (qLower.includes('not helping') || qLower.includes('frustrat') || qLower.includes('annoyed')) {
+    const response = await getPersonalityResponse(companyId, 'transferToRep', 'empathetic');
+    return {
+      category: 'customerFrustration',
+      text: response || `I understand your frustration, and I want to make sure you get the help you need. Let me transfer you to one of our experienced technicians who can provide you with the exact answers you're looking for.`
+    };
+  }
+  
+  // Handle appreciation
+  if (qLower.includes('thank you') && !qLower.includes('no')) {
+    const response = await getPersonalityResponse(companyId, 'professionalWarmth', 'friendly');
+    return {
+      category: 'gratitude',
+      text: response || `You're very welcome! I'm happy to help. What else can I do for you today?`
+    };
+  }
+  
+  // Handle urgent situations
+  if (qLower.includes('asap') || qLower.includes('urgent') || qLower.includes('emergency')) {
+    const response = await getPersonalityResponse(companyId, 'urgencyResponse', 'professional');
+    return {
+      category: 'urgency',
+      text: response || `I understand this is urgent. Let me get you connected with our emergency team right away. What's the situation?`
+    };
+  }
+  
+  // Handle pricing questions
+  if (qLower.includes('price') || qLower.includes('cost') || qLower.includes('how much')) {
+    const response = await getPersonalityResponse(companyId, 'pricingInquiry', 'professional');
+    return {
+      category: 'pricing',
+      text: response || `For pricing, our service call fee starts at $89, which includes a thorough diagnostic. Would you like me to schedule a technician to give you an exact quote?`
+    };
+  }
+  
+  // Handle scheduling
+  if (qLower.includes('schedule') || qLower.includes('appointment') || qLower.includes('when')) {
+    const response = await getPersonalityResponse(companyId, 'schedulingAssistance', 'helpful');
+    return {
+      category: 'scheduling',
+      text: response || `I'd be happy to help you schedule an appointment. What type of service do you need, and what day works best for you?`
+    };
+  }
+  
+  return null; // No specific scenario matched
+}
