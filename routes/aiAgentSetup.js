@@ -6,10 +6,10 @@
 const express = require('express');
 const router = express.Router();
 const AIAgentSetupService = require('../services/aiAgentSetup');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateJWT } = require('../middleware/auth');
 
 // Get business templates
-router.get('/templates', authenticateToken, async (req, res) => {
+router.get('/templates', authenticateJWT, async (req, res) => {
     try {
         const templates = AIAgentSetupService.getBusinessTemplates();
         res.json({
@@ -27,7 +27,7 @@ router.get('/templates', authenticateToken, async (req, res) => {
 });
 
 // Get personality presets
-router.get('/personality-presets', authenticateToken, async (req, res) => {
+router.get('/personality-presets', authenticateJWT, async (req, res) => {
     try {
         const presets = AIAgentSetupService.getPersonalityPresets();
         res.json({
@@ -45,7 +45,7 @@ router.get('/personality-presets', authenticateToken, async (req, res) => {
 });
 
 // Quick setup deployment
-router.post('/quick-setup', authenticateToken, async (req, res) => {
+router.post('/quick-setup', authenticateJWT, async (req, res) => {
     try {
         const { templateType, personality } = req.body;
         const companyId = req.user.companyId;
@@ -71,7 +71,7 @@ router.post('/quick-setup', authenticateToken, async (req, res) => {
 });
 
 // Get current AI agent configuration
-router.get('/config', authenticateToken, async (req, res) => {
+router.get('/config', authenticateJWT, async (req, res) => {
     try {
         const companyId = req.user.companyId;
         const config = await AIAgentSetupService.getAIAgentConfig(companyId);
@@ -91,7 +91,7 @@ router.get('/config', authenticateToken, async (req, res) => {
 });
 
 // Save AI agent configuration
-router.post('/config', authenticateToken, async (req, res) => {
+router.post('/config', authenticateJWT, async (req, res) => {
     try {
         const companyId = req.user.companyId;
         const config = req.body;
@@ -110,7 +110,7 @@ router.post('/config', authenticateToken, async (req, res) => {
 });
 
 // Generate scheduling preview
-router.post('/scheduling-preview', authenticateToken, async (req, res) => {
+router.post('/scheduling-preview', authenticateJWT, async (req, res) => {
     try {
         const { serviceTypes, businessType } = req.body;
         const preview = AIAgentSetupService.generateSchedulingPreview(serviceTypes, businessType);
@@ -130,7 +130,7 @@ router.post('/scheduling-preview', authenticateToken, async (req, res) => {
 });
 
 // Test call simulation
-router.post('/test-call', authenticateToken, async (req, res) => {
+router.post('/test-call', authenticateJWT, async (req, res) => {
     try {
         const companyId = req.user.companyId;
         const { scenario } = req.body;
@@ -149,7 +149,7 @@ router.post('/test-call', authenticateToken, async (req, res) => {
 });
 
 // Get template preview
-router.get('/template-preview/:templateType', authenticateToken, async (req, res) => {
+router.get('/template-preview/:templateType', authenticateJWT, async (req, res) => {
     try {
         const { templateType } = req.params;
         const templates = AIAgentSetupService.getBusinessTemplates();
@@ -177,7 +177,7 @@ router.get('/template-preview/:templateType', authenticateToken, async (req, res
 });
 
 // Validate configuration
-router.post('/validate', authenticateToken, async (req, res) => {
+router.post('/validate', authenticateJWT, async (req, res) => {
     try {
         const config = req.body;
         const validation = {
@@ -222,99 +222,8 @@ router.post('/validate', authenticateToken, async (req, res) => {
     }
 });
 
-// Auto-populate knowledge base from business data
-router.post('/auto-populate-knowledge', authenticateToken, async (req, res) => {
-    try {
-        const companyId = req.user.companyId;
-        const { sources } = req.body;
-        
-        const result = await AIAgentSetupService.autoPopulateKnowledge(companyId, sources);
-        
-        res.json(result);
-    } catch (error) {
-        console.error('Auto-populate knowledge failed:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to auto-populate knowledge base',
-            error: error.message
-        });
-    }
-});
-
-// Get call analytics with HighLevel-style metrics
-router.get('/call-analytics', authenticateToken, async (req, res) => {
-    try {
-        const companyId = req.user.companyId;
-        const { startDate, endDate } = req.query;
-
-        const analytics = await AIAgentSetupService.getCallAnalytics(companyId, startDate, endDate);
-
-        res.json({
-            success: true,
-            analytics: analytics
-        });
-    } catch (error) {
-        console.error('Call analytics fetch failed:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch call analytics',
-            error: error.message
-        });
-    }
-});
-
-// Test agent configuration
-router.post('/test-agent', authenticateToken, async (req, res) => {
-    try {
-        const companyId = req.user.companyId;
-        const { testScenario } = req.body;
-        
-        const testResult = await AIAgentSetupService.testAgentConfiguration(companyId, testScenario);
-
-        res.json({
-            success: true,
-            testResult: testResult
-        });
-    } catch (error) {
-        console.error('Agent test failed:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to test agent',
-            error: error.message
-        });
-    }
-});
-
-// Get conversation gap analysis for knowledge suggestions
-router.get('/knowledge-gaps', authenticateToken, async (req, res) => {
-    try {
-        const companyId = req.user.companyId;
-        const { days = 30 } = req.query;
-        
-        const gaps = await AIAgentSetupService.analyzeKnowledgeGaps(companyId, days);
-
-        res.json({
-            success: true,
-            gaps: gaps,
-            suggestions: gaps.map(gap => ({
-                question: gap.commonQuestion,
-                suggested_answer: gap.suggestedAnswer,
-                frequency: gap.frequency,
-                confidence: gap.confidence
-            }))
-        });
-    } catch (error) {
-        console.error('Knowledge gap analysis failed:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to analyze knowledge gaps',
-            error: error.message
-        });
-    }
-});
-
 // AI Agent Setup Analytics
-router.get('/analytics', authenticateToken, async (req, res) => {
+router.get('/analytics', authenticateJWT, async (req, res) => {
     try {
         const companyId = req.user.companyId;
         
