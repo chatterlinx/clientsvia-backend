@@ -6,10 +6,10 @@
 const express = require('express');
 const router = express.Router();
 const Company = require('../models/Company');
-const { auth } = require('../middleware/auth');
+const { authenticateJWT } = require('../middleware/auth');
 
 // Get workflow configuration
-router.get('/workflows/:companyId', auth, async (req, res) => {
+router.get('/workflows/:companyId', authenticateJWT, async (req, res) => {
     try {
         const company = await Company.findById(req.params.companyId);
         if (!company) {
@@ -36,7 +36,7 @@ router.get('/workflows/:companyId', auth, async (req, res) => {
 });
 
 // Save workflow configuration
-router.post('/workflows/:companyId', auth, async (req, res) => {
+router.post('/workflows/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { duringCallActions, afterCallActions, callSettings } = req.body;
         
@@ -78,7 +78,7 @@ router.post('/workflows/:companyId', auth, async (req, res) => {
 });
 
 // Test workflow action
-router.post('/workflows/:companyId/test', auth, async (req, res) => {
+router.post('/workflows/:companyId/test', authenticateJWT, async (req, res) => {
     try {
         const { actionId, actionType, testData } = req.body;
         
@@ -97,7 +97,7 @@ router.post('/workflows/:companyId/test', auth, async (req, res) => {
 });
 
 // Get workflow analytics
-router.get('/workflows/:companyId/analytics', auth, async (req, res) => {
+router.get('/workflows/:companyId/analytics', authenticateJWT, async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
         

@@ -6,13 +6,13 @@
 const express = require('express');
 const router = express.Router();
 const RealTimeAgentMiddleware = require('../services/realTimeAgentMiddleware');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateJWT } = require('../middleware/auth');
 
 // Initialize real-time agent middleware
 const agentMiddleware = new RealTimeAgentMiddleware();
 
 // Enhanced call handling endpoint
-router.post('/handle-call', authenticateToken, async (req, res) => {
+router.post('/handle-call', authenticateJWT, async (req, res) => {
     try {
         const { callerId, query, audioStream, metadata = {} } = req.body;
         const companyId = req.user.companyId;
@@ -56,7 +56,7 @@ router.post('/handle-call', authenticateToken, async (req, res) => {
 });
 
 // Real-time streaming endpoint (for future WebSocket implementation)
-router.post('/stream-partial', authenticateToken, async (req, res) => {
+router.post('/stream-partial', authenticateJWT, async (req, res) => {
     try {
         const { sessionId, partialQuery } = req.body;
         
@@ -78,7 +78,7 @@ router.post('/stream-partial', authenticateToken, async (req, res) => {
 });
 
 // Complete streaming response
-router.post('/stream-complete', authenticateToken, async (req, res) => {
+router.post('/stream-complete', authenticateJWT, async (req, res) => {
     try {
         const { sessionId, fullQuery } = req.body;
         
@@ -100,7 +100,7 @@ router.post('/stream-complete', authenticateToken, async (req, res) => {
 });
 
 // End call session
-router.post('/end-session', authenticateToken, async (req, res) => {
+router.post('/end-session', authenticateJWT, async (req, res) => {
     try {
         const { sessionId, outcome = 'completed' } = req.body;
         
@@ -122,7 +122,7 @@ router.post('/end-session', authenticateToken, async (req, res) => {
 });
 
 // Get real-time performance metrics
-router.get('/performance-metrics', authenticateToken, async (req, res) => {
+router.get('/performance-metrics', authenticateJWT, async (req, res) => {
     try {
         const metrics = agentMiddleware.getPerformanceMetrics();
         
@@ -142,7 +142,7 @@ router.get('/performance-metrics', authenticateToken, async (req, res) => {
 });
 
 // Test super-intelligent capabilities
-router.post('/test-intelligence', authenticateToken, async (req, res) => {
+router.post('/test-intelligence', authenticateJWT, async (req, res) => {
     try {
         const { query, scenario = 'standard' } = req.body;
         const companyId = req.user.companyId;
@@ -200,7 +200,7 @@ router.post('/test-intelligence', authenticateToken, async (req, res) => {
 });
 
 // Get intelligence analysis for a company
-router.get('/intelligence-analysis/:companyId', authenticateToken, async (req, res) => {
+router.get('/intelligence-analysis/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -260,7 +260,7 @@ router.get('/intelligence-analysis/:companyId', authenticateToken, async (req, r
 });
 
 // Configure intelligence settings
-router.post('/configure-intelligence/:companyId', authenticateToken, async (req, res) => {
+router.post('/configure-intelligence/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { 
@@ -313,7 +313,7 @@ router.post('/configure-intelligence/:companyId', authenticateToken, async (req,
 });
 
 // Get intelligence insights and recommendations
-router.get('/intelligence-insights/:companyId', authenticateToken, async (req, res) => {
+router.get('/intelligence-insights/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         

@@ -4,7 +4,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { auth } = require('../middleware/auth');
+const { authenticateJWT } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const Joi = require('joi');
 
@@ -62,7 +62,7 @@ const testActionSchema = Joi.object({
  * GET /api/actions
  * Get all actions for company
  */
-router.get('/', auth, async (req, res) => {
+router.get('/', authenticateJWT, async (req, res) => {
     try {
         const { page = 1, limit = 20, type, category, search } = req.query;
         const query = { companyId: req.user.companyId };
@@ -110,7 +110,7 @@ router.get('/', auth, async (req, res) => {
  * GET /api/actions/types
  * Get available action types and their schemas
  */
-router.get('/types', auth, async (req, res) => {
+router.get('/types', authenticateJWT, async (req, res) => {
     try {
         const actionTypes = {
             communication: {
@@ -254,7 +254,7 @@ router.get('/types', auth, async (req, res) => {
  * GET /api/actions/:id
  * Get specific action
  */
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', authenticateJWT, async (req, res) => {
     try {
         const action = await Action.findOne({
             _id: req.params.id,
@@ -277,7 +277,7 @@ router.get('/:id', auth, async (req, res) => {
  * POST /api/actions
  * Create new action
  */
-router.post('/', auth, validate(createActionSchema), async (req, res) => {
+router.post('/', authenticateJWT, validate(createActionSchema), async (req, res) => {
     try {
         const action = new Action({
             ...req.body,
@@ -299,7 +299,7 @@ router.post('/', auth, validate(createActionSchema), async (req, res) => {
  * PUT /api/actions/:id
  * Update action
  */
-router.put('/:id', auth, validate(createActionSchema), async (req, res) => {
+router.put('/:id', authenticateJWT, validate(createActionSchema), async (req, res) => {
     try {
         const action = await Action.findOneAndUpdate(
             { _id: req.params.id, companyId: req.user.companyId },
@@ -323,7 +323,7 @@ router.put('/:id', auth, validate(createActionSchema), async (req, res) => {
  * DELETE /api/actions/:id
  * Delete action
  */
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', authenticateJWT, async (req, res) => {
     try {
         const action = await Action.findOneAndDelete({
             _id: req.params.id,
@@ -346,7 +346,7 @@ router.delete('/:id', auth, async (req, res) => {
  * POST /api/actions/:id/test
  * Test action execution
  */
-router.post('/:id/test', auth, validate(testActionSchema), async (req, res) => {
+router.post('/:id/test', authenticateJWT, validate(testActionSchema), async (req, res) => {
     try {
         const action = await Action.findOne({
             _id: req.params.id,
@@ -382,7 +382,7 @@ router.post('/:id/test', auth, validate(testActionSchema), async (req, res) => {
  * POST /api/actions/:id/duplicate
  * Duplicate an action
  */
-router.post('/:id/duplicate', auth, async (req, res) => {
+router.post('/:id/duplicate', authenticateJWT, async (req, res) => {
     try {
         const originalAction = await Action.findOne({
             _id: req.params.id,
@@ -421,7 +421,7 @@ router.post('/:id/duplicate', auth, async (req, res) => {
  * GET /api/actions/:id/usage
  * Get workflows that use this action
  */
-router.get('/:id/usage', auth, async (req, res) => {
+router.get('/:id/usage', authenticateJWT, async (req, res) => {
     try {
         const action = await Action.findOne({
             _id: req.params.id,

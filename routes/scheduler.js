@@ -3,7 +3,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { auth } = require('../middleware/auth');
+const { authenticateJWT } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const Joi = require('joi');
 const { SchedulerService } = require('../services/schedulerService');
@@ -46,7 +46,7 @@ const scheduleFollowUpSchema = Joi.object({
  * POST /api/scheduler/schedule
  * Schedule a workflow to run at specific times
  */
-router.post('/schedule', auth, validate(scheduleWorkflowSchema), async (req, res) => {
+router.post('/schedule', authenticateJWT, validate(scheduleWorkflowSchema), async (req, res) => {
     try {
         const { workflowId, schedule, context } = req.body;
         
@@ -76,7 +76,7 @@ router.post('/schedule', auth, validate(scheduleWorkflowSchema), async (req, res
  * POST /api/scheduler/follow-up
  * Schedule a follow-up workflow with delay
  */
-router.post('/follow-up', auth, validate(scheduleFollowUpSchema), async (req, res) => {
+router.post('/follow-up', authenticateJWT, validate(scheduleFollowUpSchema), async (req, res) => {
     try {
         const { workflowId, delayMinutes, context } = req.body;
         
@@ -105,7 +105,7 @@ router.post('/follow-up', auth, validate(scheduleFollowUpSchema), async (req, re
  * POST /api/scheduler/recurring
  * Create recurring workflow
  */
-router.post('/recurring', auth, validate(createRecurringSchema), async (req, res) => {
+router.post('/recurring', authenticateJWT, validate(createRecurringSchema), async (req, res) => {
     try {
         const { name, workflowTemplate, schedule, targetCriteria } = req.body;
         
@@ -138,7 +138,7 @@ router.post('/recurring', auth, validate(createRecurringSchema), async (req, res
  * GET /api/scheduler/scheduled
  * Get all scheduled workflows for company
  */
-router.get('/scheduled', auth, async (req, res) => {
+router.get('/scheduled', authenticateJWT, async (req, res) => {
     try {
         const scheduledWorkflows = SchedulerService.getScheduledWorkflows();
         
@@ -158,7 +158,7 @@ router.get('/scheduled', auth, async (req, res) => {
  * DELETE /api/scheduler/cancel/:jobId
  * Cancel a scheduled workflow
  */
-router.delete('/cancel/:jobId', auth, async (req, res) => {
+router.delete('/cancel/:jobId', authenticateJWT, async (req, res) => {
     try {
         const { jobId } = req.params;
         
@@ -183,7 +183,7 @@ router.delete('/cancel/:jobId', auth, async (req, res) => {
  * GET /api/scheduler/cron-examples
  * Get cron expression examples and builder helper
  */
-router.get('/cron-examples', auth, async (req, res) => {
+router.get('/cron-examples', authenticateJWT, async (req, res) => {
     try {
         const cronExamples = {
             'Every day at 9 AM': '0 9 * * *',
@@ -227,7 +227,7 @@ router.get('/cron-examples', auth, async (req, res) => {
  * POST /api/scheduler/test-schedule
  * Test a cron expression
  */
-router.post('/test-schedule', auth, async (req, res) => {
+router.post('/test-schedule', authenticateJWT, async (req, res) => {
     try {
         const { cronExpression } = req.body;
         

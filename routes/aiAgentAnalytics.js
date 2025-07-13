@@ -6,10 +6,10 @@
 const express = require('express');
 const router = express.Router();
 const AIAgentAnalyticsService = require('../services/aiAgentAnalytics');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateJWT } = require('../middleware/auth');
 
 // Get comprehensive analytics
-router.get('/analytics/:companyId', authenticateToken, async (req, res) => {
+router.get('/analytics/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
         const dateRange = { startDate, endDate };
@@ -31,7 +31,7 @@ router.get('/analytics/:companyId', authenticateToken, async (req, res) => {
 });
 
 // Get real-time metrics
-router.get('/metrics/:companyId/realtime', authenticateToken, async (req, res) => {
+router.get('/metrics/:companyId/realtime', authenticateJWT, async (req, res) => {
     try {
         const metrics = await AIAgentAnalyticsService.getRealTimeMetrics(req.params.companyId);
         
@@ -50,7 +50,7 @@ router.get('/metrics/:companyId/realtime', authenticateToken, async (req, res) =
 });
 
 // Get insights and recommendations
-router.get('/insights/:companyId', authenticateToken, async (req, res) => {
+router.get('/insights/:companyId', authenticateJWT, async (req, res) => {
     try {
         const insights = await AIAgentAnalyticsService.getInsights(req.params.companyId);
         
@@ -69,7 +69,7 @@ router.get('/insights/:companyId', authenticateToken, async (req, res) => {
 });
 
 // Export analytics data
-router.get('/export/:companyId', authenticateToken, async (req, res) => {
+router.get('/export/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { format = 'csv', startDate, endDate } = req.query;
         const dateRange = { startDate, endDate };
@@ -101,7 +101,7 @@ router.get('/export/:companyId', authenticateToken, async (req, res) => {
 });
 
 // Get performance benchmarks
-router.get('/benchmarks', authenticateToken, async (req, res) => {
+router.get('/benchmarks', authenticateJWT, async (req, res) => {
     try {
         const benchmarks = {
             industry: {

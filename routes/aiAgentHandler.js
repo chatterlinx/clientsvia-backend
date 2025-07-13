@@ -7,7 +7,7 @@ const express = require('express');
 const router = express.Router();
 const RealTimeAgentMiddleware = require('../services/realTimeAgentMiddleware');
 const Company = require('../models/Company');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateJWT } = require('../middleware/auth');
 
 // Initialize the intelligent agent middleware
 const agentMiddleware = new RealTimeAgentMiddleware();
@@ -144,7 +144,7 @@ router.post('/call-status', async (req, res) => {
 /**
  * Test endpoint for AI agent capabilities
  */
-router.post('/test', authenticateToken, async (req, res) => {
+router.post('/test', authenticateJWT, async (req, res) => {
     try {
         const { query, companyId } = req.body;
         
