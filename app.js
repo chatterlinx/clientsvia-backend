@@ -17,7 +17,6 @@ const authRoutes = require('./routes/auth');
 const companyRoutes = require('./routes/company');
 const tradeCategoryRoutes = require('./routes/tradeCategories');
 const settingsRoutes = require('./routes/settings');
-const workflowRoutes = require('./routes/workflows');
 
 const app = express();
 
@@ -56,7 +55,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/company', tradeCategoryRoutes);
 app.use('/api/company', settingsRoutes);
-app.use('/api/workflows', workflowRoutes);
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 

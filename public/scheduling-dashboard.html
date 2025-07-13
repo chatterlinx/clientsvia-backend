@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Scheduling Dashboard - ClientsVia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-8" x-data="schedulingDashboard()">
+        
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">📅 Service Scheduling Dashboard</h1>
+                    <p class="text-gray-600 mt-2">Enhanced scheduling system with contact integration</p>
+                </div>
+                <div class="flex space-x-4">
+                    <input 
+                        type="text" 
+                        x-model="companyId" 
+                        placeholder="Company ID" 
+                        class="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                    <button 
+                        @click="loadCompanyData()" 
+                        class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                        :disabled="!companyId"
+                    >
+                        Load Company
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Company Info -->
+        <div x-show="company" class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">
+                <i class="fas fa-building mr-2 text-blue-600"></i>
+                <span x-text="company?.companyName || 'Unknown Company'"></span>
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Scheduling Rules -->
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-blue-800 mb-2">📋 Scheduling Rules</h3>
+                    <div class="text-2xl font-bold text-blue-600" x-text="schedulingRules.length"></div>
+                    <div class="text-sm text-blue-600">Service Types Configured</div>
+                </div>
+                
+                <!-- Contact Analytics -->
+                <div class="bg-green-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-green-800 mb-2">👤 Contacts</h3>
+                    <div class="text-2xl font-bold text-green-600" x-text="analytics?.totalContacts || 0"></div>
+                    <div class="text-sm text-green-600">Total Contacts</div>
+                </div>
+                
+                <!-- Appointments -->
+                <div class="bg-purple-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-purple-800 mb-2">📅 Appointments</h3>
+                    <div class="text-2xl font-bold text-purple-600" x-text="analytics?.schedulingMetrics?.scheduledAppointments || 0"></div>
+                    <div class="text-sm text-purple-600">Scheduled Appointments</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scheduling Rules -->
+        <div x-show="schedulingRules.length > 0" class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">
+                <i class="fas fa-cogs mr-2 text-gray-600"></i>
+                Scheduling Rules Configuration
+            </h2>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full table-auto">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Service Name</th>
+                            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Type</th>
+                            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Buffer Time</th>
+                            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Slot Duration</th>
+                            <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        <template x-for="rule in schedulingRules" :key="rule.serviceName">
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900" x-text="rule.serviceName"></td>
+                                <td class="px-4 py-3 text-sm text-gray-600">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                          :class="rule.schedulingType === 'immediate' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'"
+                                          x-text="rule.schedulingType === 'immediate' ? 'Immediate' : 'Future'">
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-600" x-text="rule.initialBufferMinutes + ' minutes'"></td>
+                                <td class="px-4 py-3 text-sm text-gray-600" x-text="rule.appointmentSlotIncrementMinutes + ' minutes'"></td>
+                                <td class="px-4 py-3 text-sm">
+                                    <button 
+                                        @click="testSchedulingRule(rule.serviceName)"
+                                        class="text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                        Test Availability
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Scheduling Test -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">
+                <i class="fas fa-flask mr-2 text-green-600"></i>
+                Test Scheduling Logic
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Service Type</label>
+                    <select x-model="testServiceType" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select a service type</option>
+                        <template x-for="rule in schedulingRules" :key="rule.serviceName">
+                            <option :value="rule.serviceName" x-text="rule.serviceName"></option>
+                        </template>
+                    </select>
+                </div>
+                
+                <div class="flex items-end">
+                    <button 
+                        @click="testScheduling()"
+                        class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700"
+                        :disabled="!testServiceType"
+                    >
+                        <i class="fas fa-play mr-2"></i>
+                        Test Scheduling
+                    </button>
+                </div>
+            </div>
+
+            <!-- Test Results -->
+            <div x-show="testResults" class="mt-6 p-4 bg-gray-50 rounded-lg">
+                <h3 class="font-semibold text-gray-800 mb-3">
+                    <i class="fas fa-calendar-check mr-2"></i>
+                    Scheduling Results
+                </h3>
+                
+                <div x-show="testResults?.bestAvailableSlot" class="mb-4">
+                    <h4 class="font-medium text-green-800 mb-2">✅ Best Available Slot:</h4>
+                    <div class="bg-green-100 p-3 rounded border-l-4 border-green-500">
+                        <p class="text-green-800" x-text="testResults?.bestAvailableSlot?.timeSlotDisplay"></p>
+                        <p class="text-sm text-green-600" x-text="'Duration: ' + testResults?.bestAvailableSlot?.duration + ' minutes'"></p>
+                    </div>
+                </div>
+
+                <div x-show="testResults?.availableOptions?.length > 0" class="mb-4">
+                    <h4 class="font-medium text-blue-800 mb-2">📅 Available Options:</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <template x-for="slot in testResults.availableOptions" :key="slot.startTime">
+                            <div class="bg-blue-100 p-3 rounded border border-blue-200">
+                                <p class="text-blue-800 font-medium" x-text="slot.timeSlotDisplay"></p>
+                                <p class="text-sm text-blue-600" x-text="slot.duration + ' min slot'"></p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="!testResults?.bestAvailableSlot" class="mb-4">
+                    <div class="bg-red-100 p-3 rounded border-l-4 border-red-500">
+                        <p class="text-red-800">❌ No available slots found for this service type</p>
+                        <p class="text-sm text-red-600">Check scheduling rule configuration</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Contacts -->
+        <div x-show="contacts.length > 0" class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">
+                <i class="fas fa-users mr-2 text-indigo-600"></i>
+                Recent Contacts with Service Requests
+            </h2>
+            
+            <div class="space-y-4">
+                <template x-for="contact in contacts.slice(0, 10)" :key="contact._id">
+                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-medium text-gray-900" x-text="contact.displayName || contact.primaryPhone"></h3>
+                                <p class="text-sm text-gray-600" x-text="contact.primaryPhone"></p>
+                                <p class="text-sm text-gray-500" x-text="'Status: ' + contact.status"></p>
+                            </div>
+                            <div class="text-right">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                                      x-text="contact.serviceRequests?.length || 0">
+                                </span>
+                                <p class="text-xs text-gray-500 mt-1">Service Requests</p>
+                            </div>
+                        </div>
+                        
+                        <div x-show="contact.serviceRequests?.length > 0" class="mt-3">
+                            <template x-for="request in contact.serviceRequests" :key="request._id">
+                                <div class="bg-gray-100 p-2 rounded text-sm">
+                                    <span class="font-medium" x-text="request.serviceType"></span>
+                                    <span class="ml-2 px-2 py-1 rounded text-xs"
+                                          :class="request.status === 'pending' ? 'bg-yellow-200 text-yellow-800' : 
+                                                  request.status === 'scheduled' ? 'bg-green-200 text-green-800' : 
+                                                  'bg-gray-200 text-gray-800'"
+                                          x-text="request.status">
+                                    </span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div x-show="loading" class="text-center py-8">
+            <i class="fas fa-spinner fa-spin text-3xl text-blue-600"></i>
+            <p class="text-gray-600 mt-2">Loading data...</p>
+        </div>
+
+        <!-- Error State -->
+        <div x-show="error" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <p><strong>Error:</strong> <span x-text="error"></span></p>
+        </div>
+
+    </div>
+
+    <script>
+        function schedulingDashboard() {
+            return {
+                companyId: '',
+                company: null,
+                schedulingRules: [],
+                analytics: null,
+                contacts: [],
+                testServiceType: '',
+                testResults: null,
+                loading: false,
+                error: null,
+
+                async loadCompanyData() {
+                    if (!this.companyId) return;
+                    
+                    this.loading = true;
+                    this.error = null;
+                    
+                    try {
+                        // Load company data
+                        const companyResponse = await fetch(`/api/company/${this.companyId}`);
+                        if (!companyResponse.ok) throw new Error('Company not found');
+                        this.company = await companyResponse.json();
+                        this.schedulingRules = this.company.agentSetup?.schedulingRules || [];
+                        
+                        // Load analytics
+                        const analyticsResponse = await fetch(`/api/contacts/${this.companyId}/analytics`);
+                        if (analyticsResponse.ok) {
+                            const analyticsData = await analyticsResponse.json();
+                            this.analytics = analyticsData.data;
+                        }
+                        
+                        // Load contacts
+                        const contactsResponse = await fetch(`/api/contacts/${this.companyId}?limit=20`);
+                        if (contactsResponse.ok) {
+                            const contactsData = await contactsResponse.json();
+                            this.contacts = contactsData.data.contacts;
+                        }
+                        
+                    } catch (err) {
+                        this.error = err.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async testScheduling() {
+                    if (!this.testServiceType || !this.companyId) return;
+                    
+                    this.loading = true;
+                    this.testResults = null;
+                    
+                    try {
+                        const response = await fetch(`/api/contacts/${this.companyId}/scheduling/test?serviceType=${encodeURIComponent(this.testServiceType)}`);
+                        if (!response.ok) throw new Error('Failed to test scheduling');
+                        
+                        const data = await response.json();
+                        this.testResults = data.data;
+                        
+                    } catch (err) {
+                        this.error = err.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async testSchedulingRule(serviceName) {
+                    this.testServiceType = serviceName;
+                    await this.testScheduling();
+                }
+            }
+        }
+    </script>
+</body>
+</html>

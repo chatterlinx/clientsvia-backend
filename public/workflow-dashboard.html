@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Automation Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .workflow-card {
+            transition: transform 0.2s ease-in-out;
+            border-left: 4px solid #007bff;
+        }
+        .workflow-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .workflow-card.inactive {
+            border-left-color: #6c757d;
+            opacity: 0.7;
+        }
+        .action-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        .workflow-builder {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            background-color: #f8f9fa;
+        }
+        .step-node {
+            background: white;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 0.5rem;
+            position: relative;
+        }
+        .step-connector {
+            height: 30px;
+            width: 2px;
+            background: #007bff;
+            margin: 0 auto;
+        }
+        .execution-log {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-cogs me-2"></i>
+                Workflow Automation Platform
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/dashboard.html">
+                    <i class="fas fa-home me-1"></i>Dashboard
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Analytics Overview -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-project-diagram fa-2x mb-2"></i>
+                        <h3 id="total-workflows" class="mb-1">-</h3>
+                        <p class="mb-0">Total Workflows</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-play fa-2x mb-2"></i>
+                        <h3 id="active-workflows" class="mb-1">-</h3>
+                        <p class="mb-0">Active Workflows</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-chart-line fa-2x mb-2"></i>
+                        <h3 id="total-executions" class="mb-1">-</h3>
+                        <p class="mb-0">Total Executions</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-percentage fa-2x mb-2"></i>
+                        <h3 id="success-rate" class="mb-1">-</h3>
+                        <p class="mb-0">Success Rate</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Tabs -->
+        <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="workflows-tab" data-bs-toggle="tab" data-bs-target="#workflows" type="button" role="tab">
+                    <i class="fas fa-project-diagram me-1"></i>Workflows
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="actions-tab" data-bs-toggle="tab" data-bs-target="#actions" type="button" role="tab">
+                    <i class="fas fa-bolt me-1"></i>Actions
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="executions-tab" data-bs-toggle="tab" data-bs-target="#executions" type="button" role="tab">
+                    <i class="fas fa-history me-1"></i>Executions
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="analytics-tab" data-bs-toggle="tab" data-bs-target="#analytics" type="button" role="tab">
+                    <i class="fas fa-chart-bar me-1"></i>Analytics
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="mainTabContent">
+            <!-- Workflows Tab -->
+            <div class="tab-pane fade show active" id="workflows" role="tabpanel">
+                <div class="card mt-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-project-diagram me-2"></i>Workflows
+                        </h5>
+                        <button class="btn btn-primary" onclick="showCreateWorkflow()">
+                            <i class="fas fa-plus me-1"></i>Create Workflow
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control" id="workflow-search" placeholder="Search workflows...">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="workflow-category-filter">
+                                    <option value="">All Categories</option>
+                                    <option value="lead_nurturing">Lead Nurturing</option>
+                                    <option value="appointment_booking">Appointment Booking</option>
+                                    <option value="customer_service">Customer Service</option>
+                                    <option value="emergency_response">Emergency Response</option>
+                                    <option value="follow_up">Follow Up</option>
+                                    <option value="onboarding">Onboarding</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="workflow-status-filter">
+                                    <option value="">All Status</option>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button class="btn btn-outline-primary w-100" onclick="loadWorkflows()">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="workflows-list" class="row">
+                            <!-- Workflows will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions Tab -->
+            <div class="tab-pane fade" id="actions" role="tabpanel">
+                <div class="card mt-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-bolt me-2"></i>Actions
+                        </h5>
+                        <button class="btn btn-primary" onclick="showCreateAction()">
+                            <i class="fas fa-plus me-1"></i>Create Action
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control" id="action-search" placeholder="Search actions...">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="action-type-filter">
+                                    <option value="">All Types</option>
+                                    <option value="send_sms">Send SMS</option>
+                                    <option value="send_email">Send Email</option>
+                                    <option value="make_call">Make Call</option>
+                                    <option value="book_appointment">Book Appointment</option>
+                                    <option value="create_contact">Create Contact</option>
+                                    <option value="webhook">Webhook</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="action-category-filter">
+                                    <option value="">All Categories</option>
+                                    <option value="communication">Communication</option>
+                                    <option value="scheduling">Scheduling</option>
+                                    <option value="contact_management">Contact Management</option>
+                                    <option value="integrations">Integrations</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button class="btn btn-outline-primary w-100" onclick="loadActions()">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="actions-list" class="row">
+                            <!-- Actions will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Executions Tab -->
+            <div class="tab-pane fade" id="executions" role="tabpanel">
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history me-2"></i>Recent Executions
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Workflow</th>
+                                        <th>Status</th>
+                                        <th>Started</th>
+                                        <th>Duration</th>
+                                        <th>Trigger</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="executions-table">
+                                    <!-- Executions will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div class="tab-pane fade" id="analytics" role="tabpanel">
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Execution Trends</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="execution-trends-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Workflow Performance</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="performance-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Workflow Modal -->
+    <div class="modal fade" id="createWorkflowModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Workflow</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="create-workflow-form">
+                        <div class="mb-3">
+                            <label for="workflow-name" class="form-label">Name</label>
+                            <input type="text" class="form-control" id="workflow-name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="workflow-description" class="form-label">Description</label>
+                            <textarea class="form-control" id="workflow-description" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="workflow-category" class="form-label">Category</label>
+                            <select class="form-select" id="workflow-category" required>
+                                <option value="">Select Category</option>
+                                <option value="lead_nurturing">Lead Nurturing</option>
+                                <option value="appointment_booking">Appointment Booking</option>
+                                <option value="customer_service">Customer Service</option>
+                                <option value="emergency_response">Emergency Response</option>
+                                <option value="follow_up">Follow Up</option>
+                                <option value="onboarding">Onboarding</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Trigger Event</label>
+                            <select class="form-select" id="workflow-trigger-event" required>
+                                <option value="">Select Trigger</option>
+                                <option value="call_received">Call Received</option>
+                                <option value="contact_created">Contact Created</option>
+                                <option value="appointment_booked">Appointment Booked</option>
+                                <option value="service_completed">Service Completed</option>
+                                <option value="manual">Manual Trigger</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="createWorkflow()">Create Workflow</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Action Modal -->
+    <div class="modal fade" id="createActionModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Action</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="create-action-form">
+                        <div class="mb-3">
+                            <label for="action-name" class="form-label">Name</label>
+                            <input type="text" class="form-control" id="action-name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="action-description" class="form-label">Description</label>
+                            <textarea class="form-control" id="action-description" rows="2"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="action-type" class="form-label">Type</label>
+                            <select class="form-select" id="action-type" required onchange="updateActionConfig()">
+                                <option value="">Select Type</option>
+                                <option value="send_sms">Send SMS</option>
+                                <option value="send_email">Send Email</option>
+                                <option value="make_call">Make Call</option>
+                                <option value="book_appointment">Book Appointment</option>
+                                <option value="create_contact">Create Contact</option>
+                                <option value="update_contact">Update Contact</option>
+                                <option value="webhook">Webhook</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="action-category" class="form-label">Category</label>
+                            <select class="form-select" id="action-category" required>
+                                <option value="">Select Category</option>
+                                <option value="communication">Communication</option>
+                                <option value="scheduling">Scheduling</option>
+                                <option value="contact_management">Contact Management</option>
+                                <option value="integrations">Integrations</option>
+                                <option value="workflow_control">Workflow Control</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Configuration</label>
+                            <div id="action-config-container">
+                                <textarea class="form-control" id="action-config" rows="6" placeholder="Action configuration in JSON format"></textarea>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="createAction()">Create Action</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAnalytics();
+            loadWorkflows();
+            loadActions();
+        });
+
+        // Load analytics overview
+        async function loadAnalytics() {
+            try {
+                const response = await fetch('/api/workflows/analytics/overview');
+                const data = await response.json();
+                
+                document.getElementById('total-workflows').textContent = data.workflows.totalWorkflows || 0;
+                document.getElementById('active-workflows').textContent = data.workflows.activeWorkflows || 0;
+                document.getElementById('total-executions').textContent = data.executions.totalExecutions || 0;
+                
+                const successRate = data.executions.totalExecutions > 0 
+                    ? Math.round((data.executions.successfulExecutions / data.executions.totalExecutions) * 100)
+                    : 0;
+                document.getElementById('success-rate').textContent = successRate + '%';
+                
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+            }
+        }
+
+        // Load workflows
+        async function loadWorkflows() {
+            try {
+                const params = new URLSearchParams();
+                const search = document.getElementById('workflow-search')?.value;
+                const category = document.getElementById('workflow-category-filter')?.value;
+                const status = document.getElementById('workflow-status-filter')?.value;
+                
+                if (search) params.append('search', search);
+                if (category) params.append('category', category);
+                if (status) params.append('status', status);
+                
+                const response = await fetch(`/api/workflows?${params}`);
+                const data = await response.json();
+                
+                const container = document.getElementById('workflows-list');
+                container.innerHTML = '';
+                
+                if (data.workflows.length === 0) {
+                    container.innerHTML = '<div class="col-12"><div class="text-center py-4"><p class="text-muted">No workflows found</p></div></div>';
+                    return;
+                }
+                
+                data.workflows.forEach(workflow => {
+                    const card = createWorkflowCard(workflow);
+                    container.appendChild(card);
+                });
+                
+            } catch (error) {
+                console.error('Error loading workflows:', error);
+            }
+        }
+
+        // Create workflow card
+        function createWorkflowCard(workflow) {
+            const col = document.createElement('div');
+            col.className = 'col-md-4 mb-3';
+            
+            col.innerHTML = `
+                <div class="card workflow-card ${workflow.isActive ? '' : 'inactive'}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="card-title mb-0">${workflow.name}</h6>
+                            <span class="badge ${workflow.isActive ? 'bg-success' : 'bg-secondary'}">
+                                ${workflow.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                        </div>
+                        <p class="card-text text-muted small">${workflow.description || 'No description'}</p>
+                        <div class="mb-2">
+                            <span class="badge bg-primary action-badge">${workflow.category || 'Uncategorized'}</span>
+                            <span class="badge bg-info action-badge ms-1">${workflow.steps?.length || 0} steps</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">
+                                ${workflow.stats?.executionCount || 0} executions
+                            </small>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="viewWorkflow('${workflow._id}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-outline-success" onclick="executeWorkflow('${workflow._id}')">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="toggleWorkflow('${workflow._id}', ${workflow.isActive})">
+                                    <i class="fas fa-${workflow.isActive ? 'pause' : 'play'}"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            return col;
+        }
+
+        // Load actions
+        async function loadActions() {
+            try {
+                const params = new URLSearchParams();
+                const search = document.getElementById('action-search')?.value;
+                const type = document.getElementById('action-type-filter')?.value;
+                const category = document.getElementById('action-category-filter')?.value;
+                
+                if (search) params.append('search', search);
+                if (type) params.append('type', type);
+                if (category) params.append('category', category);
+                
+                const response = await fetch(`/api/actions?${params}`);
+                const data = await response.json();
+                
+                const container = document.getElementById('actions-list');
+                container.innerHTML = '';
+                
+                if (data.actions.length === 0) {
+                    container.innerHTML = '<div class="col-12"><div class="text-center py-4"><p class="text-muted">No actions found</p></div></div>';
+                    return;
+                }
+                
+                data.actions.forEach(action => {
+                    const card = createActionCard(action);
+                    container.appendChild(card);
+                });
+                
+            } catch (error) {
+                console.error('Error loading actions:', error);
+            }
+        }
+
+        // Create action card
+        function createActionCard(action) {
+            const col = document.createElement('div');
+            col.className = 'col-md-4 mb-3';
+            
+            col.innerHTML = `
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title">${action.name}</h6>
+                        <p class="card-text text-muted small">${action.description || 'No description'}</p>
+                        <div class="mb-2">
+                            <span class="badge bg-primary action-badge">${action.type}</span>
+                            <span class="badge bg-info action-badge ms-1">${action.category}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">
+                                ${action.stats?.executionCount || 0} executions
+                            </small>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="viewAction('${action._id}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-outline-success" onclick="testAction('${action._id}')">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="duplicateAction('${action._id}')">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            return col;
+        }
+
+        // Show create workflow modal
+        function showCreateWorkflow() {
+            const modal = new bootstrap.Modal(document.getElementById('createWorkflowModal'));
+            modal.show();
+        }
+
+        // Show create action modal
+        function showCreateAction() {
+            const modal = new bootstrap.Modal(document.getElementById('createActionModal'));
+            modal.show();
+        }
+
+        // Create workflow
+        async function createWorkflow() {
+            try {
+                const formData = {
+                    name: document.getElementById('workflow-name').value,
+                    description: document.getElementById('workflow-description').value,
+                    category: document.getElementById('workflow-category').value,
+                    trigger: {
+                        event: document.getElementById('workflow-trigger-event').value,
+                        conditions: []
+                    },
+                    steps: [] // Will be added later in workflow builder
+                };
+                
+                const response = await fetch('/api/workflows', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('createWorkflowModal'));
+                    modal.hide();
+                    document.getElementById('create-workflow-form').reset();
+                    loadWorkflows();
+                    loadAnalytics();
+                } else {
+                    const error = await response.json();
+                    alert('Error creating workflow: ' + error.error);
+                }
+                
+            } catch (error) {
+                console.error('Error creating workflow:', error);
+                alert('Error creating workflow');
+            }
+        }
+
+        // Create action
+        async function createAction() {
+            try {
+                const configText = document.getElementById('action-config').value;
+                let config = {};
+                
+                if (configText.trim()) {
+                    try {
+                        config = JSON.parse(configText);
+                    } catch (e) {
+                        alert('Invalid JSON in configuration');
+                        return;
+                    }
+                }
+                
+                const formData = {
+                    name: document.getElementById('action-name').value,
+                    description: document.getElementById('action-description').value,
+                    type: document.getElementById('action-type').value,
+                    category: document.getElementById('action-category').value,
+                    config: config
+                };
+                
+                const response = await fetch('/api/actions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('createActionModal'));
+                    modal.hide();
+                    document.getElementById('create-action-form').reset();
+                    loadActions();
+                } else {
+                    const error = await response.json();
+                    alert('Error creating action: ' + error.error);
+                }
+                
+            } catch (error) {
+                console.error('Error creating action:', error);
+                alert('Error creating action');
+            }
+        }
+
+        // Update action configuration based on type
+        function updateActionConfig() {
+            const type = document.getElementById('action-type').value;
+            const configContainer = document.getElementById('action-config-container');
+            
+            const configTemplates = {
+                send_sms: {
+                    messageTemplate: "Hello {{contact.name}}, this is a message from {{company.name}}",
+                    phoneNumber: "{{contact.phone}}"
+                },
+                send_email: {
+                    subject: "Message from {{company.name}}",
+                    messageTemplate: "Hello {{contact.name}},\n\nThank you for contacting us.",
+                    emailAddress: "{{contact.email}}"
+                },
+                book_appointment: {
+                    serviceType: "consultation",
+                    duration: 60,
+                    autoConfirm: false
+                },
+                webhook: {
+                    url: "https://example.com/webhook",
+                    method: "POST",
+                    headers: {},
+                    body: {}
+                }
+            };
+            
+            if (configTemplates[type]) {
+                document.getElementById('action-config').value = JSON.stringify(configTemplates[type], null, 2);
+            }
+        }
+
+        // Workflow actions
+        function viewWorkflow(id) {
+            window.location.href = `/workflow-builder.html?id=${id}`;
+        }
+
+        async function executeWorkflow(id) {
+            try {
+                const response = await fetch(`/api/workflows/${id}/execute`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        context: { manualExecution: true }
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Workflow executed successfully!');
+                } else {
+                    alert('Workflow execution failed: ' + result.error);
+                }
+                
+            } catch (error) {
+                console.error('Error executing workflow:', error);
+                alert('Error executing workflow');
+            }
+        }
+
+        async function toggleWorkflow(id, isActive) {
+            try {
+                const response = await fetch(`/api/workflows/${id}/toggle`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    loadWorkflows();
+                    loadAnalytics();
+                } else {
+                    alert('Error toggling workflow status');
+                }
+                
+            } catch (error) {
+                console.error('Error toggling workflow:', error);
+                alert('Error toggling workflow status');
+            }
+        }
+
+        // Action actions
+        function viewAction(id) {
+            window.location.href = `/action-editor.html?id=${id}`;
+        }
+
+        async function testAction(id) {
+            try {
+                const response = await fetch(`/api/actions/${id}/test`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        context: { testMode: true }
+                    })
+                });
+                
+                const result = await response.json();
+                alert('Action test completed. Check console for details.');
+                console.log('Action test result:', result);
+                
+            } catch (error) {
+                console.error('Error testing action:', error);
+                alert('Error testing action');
+            }
+        }
+
+        async function duplicateAction(id) {
+            try {
+                const response = await fetch(`/api/actions/${id}/duplicate`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    loadActions();
+                } else {
+                    alert('Error duplicating action');
+                }
+                
+            } catch (error) {
+                console.error('Error duplicating action:', error);
+                alert('Error duplicating action');
+            }
+        }
+    </script>
+</body>
+</html>
