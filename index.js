@@ -31,6 +31,14 @@ const workflowRoutes = require('./routes/workflows'); // New workflow routes
 const testWorkflowRoutes = require('./routes/test-workflows'); // Test workflow routes
 const learningRoutes = require('./routes/learning'); // Learning management routes
 
+// Import new AI Agent routes
+const aiAgentSetupRoutes = require('./routes/aiAgentSetup');
+const aiAgentWorkflowRoutes = require('./routes/aiAgentWorkflows');
+const aiAgentAnalyticsRoutes = require('./routes/aiAgentAnalytics');
+const knowledgeAutoPopulationRoutes = require('./routes/knowledgeAutoPopulation');
+const enhancedAIAgentRoutes = require('./routes/enhancedAIAgent');
+const aiAgentHandlerRoutes = require('./routes/aiAgentHandler');
+
 // Initialize Express app
 const app = express();
 
@@ -67,6 +75,15 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/workflows', workflowRoutes); // Registering the new /api/workflows route
 app.use('/api/test-workflows', testWorkflowRoutes); // Test workflow routes
 app.use('/api/learning', learningRoutes); // Learning management routes
+
+// Register AI Agent routes
+app.use('/api/ai-agent-setup', aiAgentSetupRoutes);
+app.use('/api/ai-agent-workflows', aiAgentWorkflowRoutes);
+app.use('/api/ai-agent-analytics', aiAgentAnalyticsRoutes);
+app.use('/api/knowledge-auto-population', knowledgeAutoPopulationRoutes);
+app.use('/api/enhanced-ai-agent', enhancedAIAgentRoutes);
+app.use('/api/ai-agent', aiAgentHandlerRoutes);
+
 /*
 --- TWILIO SMOKE TEST ROUTE (COMMENTED OUT) ---
 app.post('/api/twilio/voice', (req, res) => {
@@ -83,6 +100,10 @@ app.post('/api/twilio/voice', (req, res) => {
 
 // This line will now correctly handle all /api/twilio requests
 app.use('/api/twilio', twilioRoutes);
+
+// Health check endpoint
+app.get('/healthz', (req, res) => res.json({ ok: true }));
+
 app.get('/:pageName.html', (req, res, next) => {
     const pageName = req.params.pageName;
     const filePath = path.join(__dirname, 'public', `${pageName}.html`);
