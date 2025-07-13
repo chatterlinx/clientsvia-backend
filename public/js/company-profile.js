@@ -9,10 +9,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Make companyId globally available for workflow management
     window.currentCompanyId = companyId;
 
-    // Standard personality responses cache
-    let standardPersonalityResponses = {};
-    let isLoadingStandardResponses = false;
-
     // --- UNSAVED CHANGES CODE START --- //
     let hasUnsavedChanges = false;
     window.addEventListener('beforeunload', (event) => {
@@ -34,76 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const setUnsavedChangesFlag = () => { hasUnsavedChanges = true; };
     // --- UNSAVED CHANGES CODE END --- //
-
-    // --- FETCH STANDARD PERSONALITY RESPONSES --- //
-    async function fetchStandardPersonalityResponses() {
-        if (isLoadingStandardResponses || Object.keys(standardPersonalityResponses).length > 0) {
-            return standardPersonalityResponses;
-        }
-        
-        isLoadingStandardResponses = true;
-        try {
-            const response = await fetch('/api/standard-personality-responses');
-            if (!response.ok) {
-                throw new Error(`Failed to fetch standard responses: ${response.status}`);
-            }
-            standardPersonalityResponses = await response.json();
-            return standardPersonalityResponses;
-        } catch (error) {
-            console.error('Error fetching standard personality responses:', error);
-            return {};
-        } finally {
-            isLoadingStandardResponses = false;
-        }
-    }
-
-    // --- LOAD STANDARD RESPONSES FOR NEW COMPANY --- //
-    async function loadStandardResponsesForNewCompany() {
-        if (!companyId) return;
-
-        try {
-            const standards = await fetchStandardPersonalityResponses();
-            if (Object.keys(standards).length === 0) return;
-
-            // Check if company already has personality responses
-            if (currentCompanyData && currentCompanyData.personalityResponses) {
-                const hasExistingResponses = Object.values(currentCompanyData.personalityResponses)
-                    .some(responses => Array.isArray(responses) && responses.length > 0);
-                
-                if (hasExistingResponses) {
-                    // Company already has responses, don't overwrite
-                    return;
-                }
-            }
-
-            // Load standard responses for new company
-            const confirmation = confirm(
-                'This appears to be a new company profile. Would you like to load standard personality responses that you can customize?'
-            );
-
-            if (!confirmation) return;
-
-            // Save standard responses to the company
-            const response = await fetch(`/api/company/${companyId}/personality-responses`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ personalityResponses: standards })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to save standard responses: ${response.status}`);
-            }
-
-            const updated = await response.json();
-            currentCompanyData.personalityResponses = updated.personalityResponses || {};
-            populatePersonalityResponses(currentCompanyData.personalityResponses);
-            
-            alert('Standard personality responses have been loaded! You can now edit, delete, or keep them as needed.');
-        } catch (error) {
-            console.error('Error loading standard responses:', error);
-            alert(`Error loading standard responses: ${error.message}`);
-        }
-    }
 
     // --- DOM ELEMENT REFERENCES --- //
     const companyNameHeader = document.getElementById('company-name-header');
@@ -510,7 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm('Delete entry?')) return;
         const res = await fetch(`/api/company/${companyId}/qna/${id}`, { method: 'DELETE' });
         if (res.ok) {
-            companyQnaListData = companyQnaListData.filter e => e._id !== id);
+            companyQnaListData = companyQnaListData.filter(e => e._id !== id);
             renderCompanyQnA(companyQnaListData);
         }
     }
@@ -1292,7 +1218,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(`/api/company/${companyId}/notes/${noteId}`, { method: 'DELETE' });
             if (!res.ok) { const err = await res.json().catch(() => ({message: `Failed to delete note. Status: ${res.status}`})); throw new Error(err.message); }
             currentCompanyData.notes = currentCompanyData.notes.filter(n => (n._id || n.id) !== noteId);
-                       renderNotes();
+            renderNotes();
             alert('Note deleted successfully!');
         } catch (e) {
             console.error("Error deleting note:", e); 
@@ -2003,6 +1929,76 @@ document.addEventListener('DOMContentLoaded', () => {
             if (saveButton) { saveButton.disabled = false; saveButton.innerHTML = '<i class="fas fa-save mr-2"></i>Save AI Core Settings'; }
         }
     }
+
+    async function reportMalfunction(currentCompanyId, errorMessage) {
+        if (!currentCompanyId) { console.error("Cannot report malfunction: Company ID is missing."); return; }
+        if (!errorMessage || typeof errorMessage !== 'string' || errorMessage.trim() === "") { console.error("Cannot report malfunction: Error message is invalid."); return; }
+        console.log(`Reporting malfunction for company ${currentCompanyId}: ${errorMessage}`);
+        try {
+            const response = await fetch('/api/alerts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', },
+                body: JSON.stringify({ companyId: currentCompanyId, error: errorMessage, timestamp: new Date().toISOString(), }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ message: 'HTTP error! Status: ${response.status}' }));
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            }
+            console.log('Malfunction reported successfully:', await response.json());
+        } catch (error) {
+            console.error('Failed to report malfunction:', error);
+        }
+    }
+
+    function initializeAgentSetupInteractivity() {
+        if (!agentSetupPageContainer) {
+            console.warn("initializeAgentSetupInteractivity: agentSetupPageContainer not found.");
+            return;
+        }
+        trackUnsavedChanges('agent-setup-form');
+        greetingTypeTtsRadio?.addEventListener('change', updateGreetingTypeUI);
+        greetingTypeAudioRadio?.addEventListener('change', updateGreetingTypeUI);
+        greetingAudioFileInput?.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async () => {
+                try {
+                    const res = await fetch('/api/upload/greeting', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fileName: file.name, data: reader.result })
+                    });
+                    if (!res.ok) throw new Error('Upload failed');
+                    const data = await res.json();
+                    uploadedGreetingAudioUrl = data.url;
+                    if (greetingAudioPreview) {
+                        greetingAudioPreview.src = uploadedGreetingAudioUrl;
+                        greetingAudioPreview.classList.remove('hidden');
+                    }
+                    showToast('Audio uploaded successfully');
+                } catch (err) {
+                    console.error('Audio upload error', err);
+                    alert('Failed to upload audio');
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+        const saveAgentSetupBtnLocal = agentSetupPageContainer.querySelector('#save-agent-setup-button');
+        if (saveAgentSetupBtnLocal && !saveAgentSetupBtnLocal.dataset.listenerAttached) {
+            saveAgentSetupBtnLocal.addEventListener('click', handleSaveAgentSetup);
+            saveAgentSetupBtnLocal.dataset.listenerAttached = 'true';
+        }
+        
+        const agentModeSelectElement = agentSetupPageContainer.querySelector('#agentModeSelect'); 
+        const mainAgentScriptOuterDiv = agentSetupPageContainer.querySelector('div[data-section-name="agent-script"] div[data-section-type="full"]');
+        function toggleAgentSetupSectionsVisibility(mode) {
+            agentSetupPageContainer.querySelectorAll('.agent-setup-section-container').forEach(section => {
+                const sectionType = section.getAttribute('data-section-type');
+                let shouldBeHidden = false;
+                if (mode === 'receptionist' && sectionType && sectionType.includes('full') && !sectionType.includes('receptionist')) {
+                    shouldBeHidden = true;
+                }
                 section.classList.toggle('hidden-by-mode', shouldBeHidden);
             });
             if (mainAgentScriptOuterDiv) {
