@@ -1174,7 +1174,7 @@ async function checkPersonalityScenarios(companyId, question, conversationHistor
   
   // Handle customer frustration and repetition complaints (PRIORITY 1)
   if (qLower.includes('repeating') || qLower.includes('same thing') || qLower.includes('over and over')) {
-    const response = await getPersonalityResponse(companyId, 'transferToRep', 'friendly');
+    const response = await getPersonalityResponse(companyId, 'frustratedCaller', 'empathetic');
     return {
       category: 'repetitionComplaint',
       text: response || `I apologize for the confusion. Let me connect you directly with one of our specialists who can give you the specific information you need right away.`
@@ -1182,46 +1182,46 @@ async function checkPersonalityScenarios(companyId, question, conversationHistor
   }
   
   if (qLower.includes('not helping') || qLower.includes('frustrat') || qLower.includes('annoyed')) {
-    const response = await getPersonalityResponse(companyId, 'transferToRep', 'empathetic');
+    const response = await getPersonalityResponse(companyId, 'frustratedCaller', 'empathetic');
     return {
-      category: 'customerFrustration',
-      text: response || `I understand your frustration, and I want to make sure you get the help you need. Let me transfer you to one of our experienced technicians who can provide you with the exact answers you're looking for.`
+      category: 'customerFrustration', 
+      text: response || `I understand your frustration, and I want to make sure you get the help you need. Let me transfer you to one of our experienced technicians.`
     };
   }
   
   // Handle appreciation
   if (qLower.includes('thank you') && !qLower.includes('no')) {
-    const response = await getPersonalityResponse(companyId, 'professionalWarmth', 'friendly');
+    const response = await getPersonalityResponse(companyId, 'complimentResponse', 'friendly');
     return {
       category: 'gratitude',
       text: response || `You're very welcome! I'm happy to help. What else can I do for you today?`
     };
   }
   
-  // Handle urgent situations
+  // Handle urgent situations  
   if (qLower.includes('asap') || qLower.includes('urgent') || qLower.includes('emergency')) {
-    const response = await getPersonalityResponse(companyId, 'urgencyResponse', 'professional');
+    const response = await getPersonalityResponse(companyId, 'empathyResponse', 'professional');
     return {
       category: 'urgency',
       text: response || `I understand this is urgent. Let me get you connected with our emergency team right away. What's the situation?`
     };
   }
   
-  // Handle pricing questions
-  if (qLower.includes('price') || qLower.includes('cost') || qLower.includes('how much')) {
-    const response = await getPersonalityResponse(companyId, 'pricingInquiry', 'professional');
+  // Handle connection issues
+  if (qLower.includes('can you hear') || qLower.includes('connection') || qLower.includes('breaking up')) {
+    const response = await getPersonalityResponse(companyId, 'connectionTrouble', 'professional');
     return {
-      category: 'pricing',
-      text: response || `For pricing, our service call fee starts at $89, which includes a thorough diagnostic. Would you like me to schedule a technician to give you an exact quote?`
+      category: 'connection',
+      text: response || `It sounds like the line is breaking up. Can you still hear me clearly?`
     };
   }
   
-  // Handle scheduling
-  if (qLower.includes('schedule') || qLower.includes('appointment') || qLower.includes('when')) {
-    const response = await getPersonalityResponse(companyId, 'schedulingAssistance', 'helpful');
+  // Handle confusion/unclear requests
+  if (qLower.includes('confused') || qLower.includes('not sure') || qLower.includes('unclear')) {
+    const response = await getPersonalityResponse(companyId, 'cantUnderstand', 'helpful');
     return {
-      category: 'scheduling',
-      text: response || `I'd be happy to help you schedule an appointment. What type of service do you need, and what day works best for you?`
+      category: 'confusion',
+      text: response || `I want to make sure I understand what you need help with. Could you tell me a bit more about what's going on?`
     };
   }
   
