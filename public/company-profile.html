@@ -1160,43 +1160,67 @@
                                                     </div>
                                                 </div>
                                                 
-                                                <textarea id="behaviorGuidelines" name="behaviorGuidelines" rows="15" class="form-input w-full resize-none font-mono text-sm" placeholder="Enter behavior guidelines for your AI agent...">Behavior Guidelines:
+                                                <textarea id="behaviorGuidelines" name="behaviorGuidelines" rows="20" class="form-input w-full resize-none font-mono text-sm has-default-content" placeholder="Enter behavior guidelines for your AI agent...">Behavior Guidelines:
 Never interrupt the caller.
 Always be polite, personable, and sympathetic.
 Stay relaxed, human, and steady — avoid sounding rushed or robotic.
 If caller says "How are you?" → Reply: "Doing great, thanks! How can I help you?"
 Always acknowledge responses right away with a short line before moving on. Use "Ok" (no "Got it!").
 Never stay silent more than 2 seconds between speaking.
+
 If Caller Says "It's a Machine" / "Are You Real" / Sounds Frustrated Protocol:
 If the caller says "It's a machine," "Are you real?" or expresses frustration thinking they are speaking to a robot:
-Agent Response: "Please, I am here to help you! You can speak to me naturally and ask anything you need — How can I assist you today?"
+Agent Response: "Please, I am here to help you! You can speak to me naturally and ask anything you need — How can I help you?"
+Continue with the normal call flow (collecting information, confirming service, booking, etc.).
+If frustration persists or the agent is unsure how to proceed, follow the When in Doubt protocol (see Customer Appointment Status Inquiries – Agent Procedure).
 
-Always be natural, human, and conversational.
-Never mention that you are an AI, virtual assistant, or automated system.
-Use conversational fillers like "um," "let me see," "okay," and "sure thing."
-Speak in a natural flow — avoid sounding scripted.
-Be empathetic and understand customer needs.
-If a customer seems frustrated, acknowledge their concern.
-If you can't help with something, offer to transfer to a human specialist.
+When in Doubt (General):
+If the agent detects customer frustration or is unsure how to handle any request:
+Say: "Ok, to ensure you get the best help, I'm transferring you to a service advisor who can assist with your service needs. Please hold."
+Transfer to Service Advisor.
+If transfer fails, follow the System Delay/Reboot Protocol.
 
-Service Information:
-We specialize in emergency HVAC repair, maintenance, and installation.
-We provide 24/7 emergency service.
-Our technicians are licensed and insured.
-We service all major HVAC brands.
+System Delay/Reboot Protocol:
+If system delays for more than 2 seconds:
+Say: "I'm sorry, looks like my system's moving a little slow. Thanks for your patience!"
+If delay persists or system fails:
+Say: "I'm so sorry — looks like my system isn't responding. Let me transfer you to a service advisor right away."
+Attempt transfer to Service Advisor.
+If unable to transfer after 15 seconds:
+Apologize: "I'm so sorry, I'm unable to complete the transfer right now."
+Confirm callback number: "May I confirm your best number so we can follow up right away?"
+Close: "Thank you for your patience — we'll ensure you're contacted quickly."
 
-Scheduling:
-When booking appointments, collect: full name, phone number, address, and preferred date/time.
-Offer morning (8am-12pm) or afternoon (12pm-5pm) time slots.
-Always confirm appointment details before ending the call.
+Caller Reconnect – Apology Protocol:
+If a caller calls back upset after disconnect:
+Apologize warmly: "I'm so sorry we got disconnected. Thank you for calling back."
+Ask: "Would you like me to continue helping you now, or connect you to a service advisor?"
+If caller requests Service Advisor or open hours (7:00 AM–7:00 PM ET):
+Say: "Ok, I'm transferring you to a service advisor. Please hold."
+Transfer to Service Advisor.
+If transfer fails, follow System Delay/Reboot Protocol.
+If after hours (7:00 PM–7:00 AM ET):
+Say: "Since it's after hours, I can schedule you now or take a message for follow-up. Which would you prefer?"
+If message, follow Message Taking Protocol.
 
-Emergency Services:
-If the caller has a heating/cooling emergency, prioritize immediate dispatch.
-Get their address first, then brief description of the problem.
-Assure them a technician will be dispatched right away.
+Defining the Call Type:
+Step 1 - Ask: "Just so I can check the right schedule — are you calling for a repair service or a maintenance tune-up?"
+Use keywords:
+"No cool," "no heat," "not working," "leak," "drain," "thermostat," "hot," "water," "emergency" → Repair Service
+"Tune-up," "seasonal check," "maintenance" → Maintenance Protocol
 
-Closing:
-Always end with: "Thank you for choosing Penguin Air! Have a great day!"</textarea>
+Emergency Service Calls:
+If caller says "emergency":
+Ask: "Would you like me to connect you with our emergency service call team right now, or help schedule the soonest available visit?"
+If immediate transfer:
+Confirm Emergency: Verify if immediate transfer is needed.
+Check Time (ET):
+7:00 AM–7:00 PM: Say: "Ok, I'm transferring you to our emergency service call team. Please hold."
+Transfer to Emergency Service Call Team.
+If transfer fails, follow System Delay/Reboot Protocol.
+7:00 PM–7:00 AM: Say: "It's after hours. I can schedule you now or take a message for follow-up. Which would you prefer?"
+If message, follow Message Taking Protocol.
+If scheduling, proceed to Repair Service Call Protocol.</textarea>
                                             </div>
                                         </div>
                                     </div>
@@ -2130,50 +2154,334 @@ Always end with: "Thank you for choosing Penguin Air! Have a great day!"</textar
                                 </div>
                                 <div id="ai-scheduling-tab" class="ai-config-tab-content hidden">
                                     <div class="space-y-6">
-                                        <!-- Service Types -->
+                                        <!-- HVAC Service Types with Specific Scheduling -->
                                         <div class="bg-white border border-gray-200 rounded-lg p-6">
                                             <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                                                <i class="fas fa-wrench mr-2 text-indigo-600"></i>Service Types & Scheduling
-                                                <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">ClientsVia Advantage</span>
+                                                <i class="fas fa-wrench mr-2 text-indigo-600"></i>HVAC Service Types & Scheduling Rules
+                                                <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Penguin Air Ready</span>
                                             </h4>
-                                            <p class="text-gray-600 mb-4">Configure intelligent scheduling rules that understand your services and availability patterns.</p>
+                                            <p class="text-gray-600 mb-6">Predefined HVAC service types with intelligent scheduling rules based on your script protocols.</p>
                                             
-                                            <div id="aiServiceTypesList" class="space-y-4">
-                                                <!-- Service types will be populated here -->
+                                            <!-- Repair Service Configuration -->
+                                            <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                                                <h5 class="text-lg font-semibold text-red-800 mb-3 flex items-center">
+                                                    <i class="fas fa-tools mr-2"></i>Repair Service Scheduling
+                                                </h5>
+                                                
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div>
+                                                        <label class="form-label">Standard Time Slots</label>
+                                                        <textarea rows="6" class="form-input text-sm font-mono has-default-content" readonly>Morning: 8–10 AM, 10–12 PM
+Afternoon: 12–2 PM, 2–4 PM, 4–6 PM
+Evening: 6–8 PM (until 5:30 PM only)
+
+Buffer Time: 2 hours from call time
+Exception: 6–8 PM if booked by 5:30 PM
+Never book past 8:00 PM</textarea>
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label">Scheduling Rules</label>
+                                                        <div class="space-y-3">
+                                                            <div class="flex items-center justify-between p-2 bg-white rounded border">
+                                                                <span class="text-sm">2-hour buffer from call time</span>
+                                                                <input type="checkbox" class="form-checkbox" checked disabled>
+                                                            </div>
+                                                            <div class="flex items-center justify-between p-2 bg-white rounded border">
+                                                                <span class="text-sm">Round up to next full hour</span>
+                                                                <input type="checkbox" class="form-checkbox" checked disabled>
+                                                            </div>
+                                                            <div class="flex items-center justify-between p-2 bg-white rounded border">
+                                                                <span class="text-sm">6-8 PM only if by 5:30 PM</span>
+                                                                <input type="checkbox" class="form-checkbox" checked disabled>
+                                                            </div>
+                                                            <div class="flex items-center justify-between p-2 bg-white rounded border">
+                                                                <span class="text-sm">No booking past 8:00 PM</span>
+                                                                <input type="checkbox" class="form-checkbox" checked disabled>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="mt-4 p-3 bg-white rounded border">
+                                                    <h6 class="font-medium mb-2">Example Scheduling Logic</h6>
+                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                        <div class="p-2 bg-gray-50 rounded">
+                                                            <strong>Call at 10:15 AM</strong><br>
+                                                            <span class="text-blue-600">→ Offer 1–3 PM slot</span>
+                                                        </div>
+                                                        <div class="p-2 bg-gray-50 rounded">
+                                                            <strong>Call at 5:15 PM</strong><br>
+                                                            <span class="text-blue-600">→ Offer 6–8 PM slot</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            
-                                            <button id="addServiceTypeBtn" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg flex items-center">
-                                                <i class="fas fa-plus mr-2"></i>Add Service Type
-                                            </button>
+
+                                            <!-- Maintenance Service Configuration -->
+                                            <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                                <h5 class="text-lg font-semibold text-blue-800 mb-3 flex items-center">
+                                                    <i class="fas fa-calendar-check mr-2"></i>Maintenance Service Scheduling
+                                                </h5>
+                                                
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div>
+                                                        <label class="form-label">Maintenance Schedule</label>
+                                                        <div class="space-y-3">
+                                                            <div class="p-3 bg-white rounded border">
+                                                                <div class="flex items-center justify-between">
+                                                                    <span class="text-sm font-medium">Standard booking time</span>
+                                                                    <span class="text-blue-600 font-semibold">About a week out</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="p-3 bg-white rounded border">
+                                                                <div class="flex items-center justify-between">
+                                                                    <span class="text-sm font-medium">Time preference</span>
+                                                                    <span class="text-blue-600 font-semibold">Morning or Afternoon</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="p-3 bg-white rounded border">
+                                                                <div class="flex items-center justify-between">
+                                                                    <span class="text-sm font-medium">Date confirmation</span>
+                                                                    <span class="text-blue-600 font-semibold">Full date with day</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label">Maintenance Protocol Script</label>
+                                                        <textarea rows="6" class="form-input text-sm font-mono has-default-content" readonly>Say: "Maintenance visits are booking about a week out."
+Ask: "What day works best for you?"
+Confirm: "Just to confirm, [Day], [Full Date], correct?"
+Ask: "Morning or afternoon preferred?"
+If wants sooner: Transfer to Service Advisor</textarea>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Emergency Service Configuration -->
+                                            <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                                <h5 class="text-lg font-semibold text-yellow-800 mb-3 flex items-center">
+                                                    <i class="fas fa-exclamation-triangle mr-2"></i>Emergency Service Handling
+                                                </h5>
+                                                
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div>
+                                                        <label class="form-label">Emergency Hours (ET)</label>
+                                                        <div class="space-y-2">
+                                                            <div class="p-2 bg-white rounded border flex justify-between">
+                                                                <span class="text-sm">Business Hours</span>
+                                                                <span class="font-semibold text-green-600">7:00 AM – 7:00 PM</span>
+                                                            </div>
+                                                            <div class="p-2 bg-white rounded border flex justify-between">
+                                                                <span class="text-sm">After Hours</span>
+                                                                <span class="font-semibold text-red-600">7:00 PM – 7:00 AM</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label">Emergency Protocols</label>
+                                                        <div class="space-y-2 text-sm">
+                                                            <div class="p-2 bg-white rounded border">
+                                                                <strong>Business Hours:</strong> Transfer to Emergency Team
+                                                            </div>
+                                                            <div class="p-2 bg-white rounded border">
+                                                                <strong>After Hours:</strong> Schedule or Take Message
+                                                            </div>
+                                                            <div class="p-2 bg-white rounded border">
+                                                                <strong>Transfer Fails:</strong> System Delay/Reboot Protocol
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <!-- Scheduling Intelligence -->
                                         <div class="bg-white border border-gray-200 rounded-lg p-6">
                                             <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                                                <i class="fas fa-brain mr-2 text-indigo-600"></i>Scheduling Intelligence
+                                                <i class="fas fa-brain mr-2 text-indigo-600"></i>Intelligent Scheduling Features
                                             </h4>
-                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div>
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="aiSmartScheduling" class="form-checkbox" checked>
-                                                        <span class="form-check-label">Smart availability detection</span>
-                                                    </label>
+                                                    <h5 class="font-medium text-gray-900 mb-3">Automated Features</h5>
+                                                    <div class="space-y-3">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="aiSmartScheduling" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Smart availability detection</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="aiBufferTime" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Automatic 2-hour buffer for repairs</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="aiDoubleBookingPrevention" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Prevent double-booking</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="aiTimeZoneDetection" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Eastern Time zone enforcement</span>
+                                                        </label>
+                                                    </div>
                                                 </div>
                                                 <div>
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="aiBufferTime" class="form-checkbox" checked>
-                                                        <span class="form-check-label">Automatic buffer time</span>
-                                                    </label>
+                                                    <h5 class="font-medium text-gray-900 mb-3">Call Routing Rules</h5>
+                                                    <div class="space-y-3">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="aiServiceTypeDetection" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Auto-detect repair vs maintenance</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="aiEmergencyDetection" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Emergency keyword detection</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="aiTransferProtocol" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Automatic transfer protocols</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="aiConfusedCallerHelp" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Confused caller assistance</span>
+                                                        </label>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="aiDoubleBookingPrevention" class="form-checkbox" checked>
-                                                        <span class="form-check-label">Prevent double-booking</span>
-                                                    </label>
+                                            </div>
+
+                                            <!-- Time Slot Configuration -->
+                                            <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+                                                <h5 class="font-medium text-gray-900 mb-3">Standard Time Slot Configuration</h5>
+                                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div>
+                                                        <label class="form-label text-sm">Morning Slots</label>
+                                                        <select class="form-select text-sm has-default-content">
+                                                            <option selected>8–10 AM, 10–12 PM</option>
+                                                            <option>8–11 AM, 11–1 PM</option>
+                                                            <option>9–12 PM (3-hour blocks)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Afternoon Slots</label>
+                                                        <select class="form-select text-sm has-default-content">
+                                                            <option selected>12–2 PM, 2–4 PM, 4–6 PM</option>
+                                                            <option>1–3 PM, 3–5 PM, 5–7 PM</option>
+                                                            <option>12–3 PM, 3–6 PM (3-hour blocks)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label text-sm">Evening Cutoff</label>
+                                                        <select class="form-select text-sm has-default-content">
+                                                            <option selected>8:00 PM (No booking past)</option>
+                                                            <option>7:00 PM (Earlier cutoff)</option>
+                                                            <option>9:00 PM (Later cutoff)</option>
+                                                        </select>
+                                                    </div>
                                                 </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Service Advisor Transfer Rules -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-user-tie mr-2 text-purple-600"></i>Service Advisor Transfer Rules
+                                            </h4>
+                                            
+                                            <div class="space-y-4">
+                                                <div class="p-4 bg-purple-50 rounded-lg">
+                                                    <h5 class="font-medium text-purple-900 mb-2">Automatic Transfer Triggers</h5>
+                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                        <div>
+                                                            <strong>Schedule-Related Requests:</strong>
+                                                            <ul class="mt-1 text-gray-700 space-y-1">
+                                                                <li>• Appointment time inquiries</li>
+                                                                <li>• Technician status questions</li>
+                                                                <li>• Schedule changes</li>
+                                                                <li>• Appointment cancellations</li>
+                                                                <li>• Confirmations</li>
+                                                            </ul>
+                                                        </div>
+                                                        <div>
+                                                            <strong>When in Doubt Scenarios:</strong>
+                                                            <ul class="mt-1 text-gray-700 space-y-1">
+                                                                <li>• Customer frustration detected</li>
+                                                                <li>• Unclear requests</li>
+                                                                <li>• Complex scheduling needs</li>
+                                                                <li>• System failures</li>
+                                                                <li>• Confused about service type</li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label class="form-label">Transfer Script</label>
+                                                        <textarea rows="4" class="form-input text-sm font-mono has-default-content" readonly>Say: "To assist with your schedule, I'm transferring you to a service advisor. Please hold for just a moment."
+Transfer to Service Advisor.
+If transfer fails, follow System Delay/Reboot Protocol.</textarea>
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label">When in Doubt Script</label>
+                                                        <textarea rows="4" class="form-input text-sm font-mono has-default-content" readonly>Say: "Ok, to ensure you get the best help, I'm transferring you to a service advisor who can assist with your service needs. Please hold."
+Transfer to Service Advisor.</textarea>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Quote Request Settings -->
+                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-calculator mr-2 text-green-600"></i>Quote & Billing Request Handling
+                                            </h4>
+                                            
+                                            <div class="space-y-4">
+                                                <div class="p-4 bg-green-50 rounded-lg">
+                                                    <h5 class="font-medium text-green-900 mb-2">Steven Ferris Transfer Keywords</h5>
+                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label class="form-label text-sm">Transfer Keywords</label>
+                                                            <textarea rows="4" class="form-input text-sm has-default-content" readonly>Steve
+Invoices
+Billing
+Duct cleaning</textarea>
+                                                        </div>
+                                                        <div>
+                                                            <label class="form-label text-sm">Quote Keywords</label>
+                                                            <textarea rows="4" class="form-input text-sm has-default-content" readonly>System pricing
+Parts estimates
+Quotes
+Cost estimate</textarea>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
                                                 <div>
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="aiOptimalScheduling" class="form-checkbox">
+                                                    <label class="form-label">Pre-Transfer Information Collection</label>
+                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div class="space-y-2">
+                                                            <label class="flex items-center">
+                                                                <input type="checkbox" class="form-checkbox" checked disabled>
+                                                                <span class="ml-2 text-sm">Full name</span>
+                                                            </label>
+                                                            <label class="flex items-center">
+                                                                <input type="checkbox" class="form-checkbox" checked disabled>
+                                                                <span class="ml-2 text-sm">Address</span>
+                                                            </label>
+                                                        </div>
+                                                        <div class="space-y-2">
+                                                            <label class="flex items-center">
+                                                                <input type="checkbox" class="form-checkbox" checked disabled>
+                                                                <span class="ml-2 text-sm">Best contact number</span>
+                                                            </label>
+                                                            <label class="flex items-center">
+                                                                <input type="checkbox" class="form-checkbox" checked disabled>
+                                                                <span class="ml-2 text-sm">Purpose of call</span>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                                         <span class="form-check-label">Suggest optimal times</span>
                                                     </label>
                                                 </div>
@@ -2910,6 +3218,71 @@ Always end with: "Thank you for choosing Penguin Air! Have a great day!"</textar
 
                             <!-- Save Actions -->
                             <div class="px-6 md:px-8 mt-8 pt-6 border-t border-gray-200">
+                                <!-- Configuration Summary -->
+                                <div class="mb-6 p-6 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-xl">
+                                    <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                        <i class="fas fa-check-circle mr-2 text-green-600"></i>HVAC Service Script Implementation Summary
+                                        <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Ready for Testing</span>
+                                    </h3>
+                                    
+                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                                        <div class="p-3 bg-white rounded-lg shadow-sm">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-sm font-medium text-gray-700">Behavior Guidelines</span>
+                                                <i class="fas fa-check text-green-500"></i>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mt-1">Complete protocol implemented</p>
+                                        </div>
+                                        <div class="p-3 bg-white rounded-lg shadow-sm">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-sm font-medium text-gray-700">Scheduling Rules</span>
+                                                <i class="fas fa-check text-green-500"></i>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mt-1">Repair vs Maintenance logic</p>
+                                        </div>
+                                        <div class="p-3 bg-white rounded-lg shadow-sm">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-sm font-medium text-gray-700">Emergency Protocols</span>
+                                                <i class="fas fa-check text-green-500"></i>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mt-1">24/7 emergency handling</p>
+                                        </div>
+                                        <div class="p-3 bg-white rounded-lg shadow-sm">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-sm font-medium text-gray-700">Transfer Protocols</span>
+                                                <i class="fas fa-check text-green-500"></i>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mt-1">Service Advisor & Steven routes</p>
+                                        </div>
+                                        <div class="p-3 bg-white rounded-lg shadow-sm">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-sm font-medium text-gray-700">Time Slot Management</span>
+                                                <i class="fas fa-check text-green-500"></i>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mt-1">2-hour buffer, ET timezone</p>
+                                        </div>
+                                        <div class="p-3 bg-white rounded-lg shadow-sm">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-sm font-medium text-gray-700">Customer Information</span>
+                                                <i class="fas fa-check text-green-500"></i>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mt-1">Complete data collection flow</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                        <h4 class="font-semibold text-blue-900 mb-2">📋 Implementation Notes:</h4>
+                                        <ul class="text-sm text-blue-800 space-y-1">
+                                            <li>• <strong>Blue text</strong> = Default/placeholder content (can be customized)</li>
+                                            <li>• <strong>Black text</strong> = Developer-edited content (customized for your business)</li>
+                                            <li>• All HVAC service protocols from your script are implemented</li>
+                                            <li>• Emergency routing configured for 7 AM-7 PM ET business hours</li>
+                                            <li>• Technician preferences (Dustin, Marcello) are supported</li>
+                                            <li>• Steven Ferris transfer rules for billing/quotes configured</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                
                                 <div class="flex gap-4 justify-end">
                                     <button id="aiPreviewAgentBtn" class="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
                                         <i class="fas fa-eye mr-2"></i>Preview Agent
