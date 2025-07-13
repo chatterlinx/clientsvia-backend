@@ -197,14 +197,21 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     }
   }
 
-  // STEP 6: Try structured conversational script processing
+  // STEP 6: SMART CONVERSATIONAL BRAIN - NEW INTELLIGENT PROCESSING
+  const smartResponse = await generateSmartConversationalResponse(company, question, conversationHistory, categories, companySpecialties, placeholders);
+  if (smartResponse) {
+    console.log(`[Agent] Generated smart conversational response for: ${question}`);
+    return { text: smartResponse, escalate: false };
+  }
+
+  // STEP 7: Try structured conversational script processing
   const scriptResponse = await processConversationalScriptEnhanced(company, question, conversationHistory, placeholders);
   if (scriptResponse) {
     console.log(`[Agent] Generated script-based response for: ${question}`);
     return { text: scriptResponse, escalate: false };
   }
 
-  // STEP 7: Try to understand the context and provide intelligent responses
+  // STEP 8: Try to understand the context and provide intelligent responses
   const intelligentResponse = await generateIntelligentResponse(company, question, conversationHistory, categories, companySpecialties, categoryQAs);
   if (intelligentResponse) {
     console.log(`[Agent] Generated intelligent response for: ${question}`);
@@ -349,7 +356,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   return { text: applyPlaceholders(aiResponse, placeholders), escalate: false };
 }
 
-// Generate intelligent responses based on context and common patterns
+// Generate intelligent responses based on context and common patterns - ENHANCED VERSION
 async function generateIntelligentResponse(company, question, conversationHistory, categories, companySpecialties, categoryQAs) {
   const qLower = question.toLowerCase();
   const companyName = company?.companyName || 'our company';
@@ -362,7 +369,35 @@ async function generateIntelligentResponse(company, question, conversationHistor
     return personalityResponse.text;
   }
   
-  // PRIORITY 2: Handle customer frustration and repetition complaints FIRST
+  // PRIORITY 2: Smart contextual understanding
+  
+  // Handle customer expressing satisfaction or completion
+  if ((qLower.includes('thank') || qLower.includes('perfect') || qLower.includes('great')) && 
+      (qLower.includes('that') || qLower.includes('it') || qLower.includes('you'))) {
+    return `You're very welcome! I'm so glad I could help you get that sorted out. Feel free to call us anytime if you need anything else with your system. Have a wonderful day!`;
+  }
+  
+  // Handle follow-up questions with intelligence
+  if (conversationHistory.length > 2) {
+    const lastAgentResponse = conversationHistory.filter(h => h.role === 'agent').slice(-1)[0];
+    if (lastAgentResponse && lastAgentResponse.text.includes('schedule') && 
+        (qLower.includes('yes') || qLower.includes('sure') || qLower.includes('okay'))) {
+      return `Excellent! I'm ready to get that scheduled for you. What's your address, and what day and time would work best for your schedule? We typically have availability Monday through Friday between 8am and 5pm.`;
+    }
+  }
+
+  // Enhanced conversation flow understanding
+  if (qLower.includes('also') || qLower.includes('and') || qLower.includes('plus')) {
+    return `I see there's more to it. Tell me about the additional issue you're experiencing, and I'll make sure we address everything during the visit.`;
+  }
+
+  // Smart problem escalation detection
+  if ((qLower.includes('keep') || qLower.includes('still') || qLower.includes('again')) && 
+      (qLower.includes('problem') || qLower.includes('issue') || qLower.includes('broken'))) {
+    return `It sounds like this is an ongoing issue that hasn't been properly resolved yet. That's really frustrating, and I want to make sure we get it fixed right this time. Let me schedule you with one of our senior technicians who can do a comprehensive diagnostic to find the root cause, not just treat the symptoms. When would work for you?`;
+  }
+
+  // PRIORITY 3: Handle customer frustration and repetition complaints
   if (qLower.includes('repeating') || qLower.includes('same thing') || qLower.includes('over and over')) {
     return `I apologize for the confusion. Let me connect you directly with one of our specialists who can give you the specific information you need right away. Please hold for just a moment.`;
   }
@@ -509,510 +544,285 @@ async function generateIntelligentResponse(company, question, conversationHistor
   return null; // No intelligent response found
 }
 
-// NEW: Check personality response scenarios
-async function checkPersonalityScenarios(companyId, qLower, conversationHistory) {
-  try {
-    // Check for unclear speech or understanding issues
-    if (qLower.includes('what') && qLower.includes('say') || qLower.includes('repeat') || 
-        qLower.includes('hear') || qLower.includes('understand') || qLower.length < 5) {
-      const response = await getPersonalityResponse(companyId, 'cantUnderstand');
-      if (response) return { category: 'cantUnderstand', text: response };
-    }
-    
-    // Check for requests to speak clearly
-    if (qLower.includes('speak up') || qLower.includes('louder') || qLower.includes('clear') || 
-        qLower.includes('can\'t hear')) {
-      const response = await getPersonalityResponse(companyId, 'speakClearly');
-      if (response) return { category: 'speakClearly', text: response };
-    }
-    
-    // Check for out-of-category requests
-    if (qLower.includes('don\'t handle') || qLower.includes('not your') || qLower.includes('wrong') || 
-        qLower.includes('different service')) {
-      const response = await getPersonalityResponse(companyId, 'outOfCategory');
-      if (response) return { category: 'outOfCategory', text: response };
-    }
-    
-    // Check for calendar/booking hesitation
-    if (qLower.includes('not sure') && (qLower.includes('book') || qLower.includes('schedule') || 
-        qLower.includes('appointment')) || qLower.includes('maybe later') || qLower.includes('think about')) {
-      const response = await getPersonalityResponse(companyId, 'calendarHesitation');
-      if (response) return { category: 'calendarHesitation', text: response };
-    }
-    
-    // Check for business closure/goodbye scenarios
-    if (qLower.includes('thank you') && (qLower.includes('bye') || qLower.includes('goodbye') || 
-        qLower.includes('have a') || qLower.includes('that\'s all'))) {
-      const response = await getPersonalityResponse(companyId, 'businessClosed');
-      if (response) return { category: 'businessClosed', text: response };
-    }
-    
-    // Check for frustrated caller scenarios
-    if (qLower.includes('frustrat') || qLower.includes('angry') || qLower.includes('upset') || 
-        qLower.includes('terrible') || qLower.includes('horrible')) {
-      const response = await getPersonalityResponse(companyId, 'frustratedCaller');
-      if (response) return { category: 'frustratedCaller', text: response };
-    }
-    
-    // Check for business hours inquiries
-    if (qLower.includes('hours') || qLower.includes('open') || qLower.includes('close') || 
-        qLower.includes('when do you')) {
-      const response = await getPersonalityResponse(companyId, 'businessHours');
-      if (response) return { category: 'businessHours', text: response };
-    }
-    
-    // Check for connection trouble
-    if (qLower.includes('breaking up') || qLower.includes('can\'t hear') || qLower.includes('static') || 
-        qLower.includes('bad connection') || qLower.includes('cutting out')) {
-      const response = await getPersonalityResponse(companyId, 'connectionTrouble');
-      if (response) return { category: 'connectionTrouble', text: response };
-    }
-    
-    // Check for agent not understood scenarios
-    if (qLower.includes('what did you say') || qLower.includes('didn\'t catch') || 
-        qLower.includes('say again') || qLower.includes('repeat that')) {
-      const response = await getPersonalityResponse(companyId, 'agentNotUnderstood');
-      if (response) return { category: 'agentNotUnderstood', text: response };
-    }
-    
-    // NEW: Professional Humor & Engagement Detection
-    
-    // Detect customer jokes, playfulness, or humor
-    if (qLower.includes('just kidding') || qLower.includes('joking') || qLower.includes('haha') || 
-        qLower.includes('lol') || qLower.includes('funny') || qLower.includes('joke') ||
-        (qLower.includes('you') && (qLower.includes('smart') || qLower.includes('good'))) ||
-        qLower.includes('clever')) {
-      const response = await getPersonalityResponse(companyId, 'customerJoke');
-      if (response) return { category: 'customerJoke', text: response };
-    }
-    
-    // Detect weather or casual small talk
-    if (qLower.includes('weather') || qLower.includes('hot') || qLower.includes('cold') || 
-        qLower.includes('raining') || qLower.includes('sunny') || qLower.includes('snow') ||
-        qLower.includes('nice day') || qLower.includes('beautiful day') || qLower.includes('crazy weather')) {
-      const response = await getPersonalityResponse(companyId, 'weatherSmallTalk');
-      if (response) return { category: 'weatherSmallTalk', text: response };
-    }
-    
-    // Detect compliments to the agent/company
-    if ((qLower.includes('you') || qLower.includes('service')) && 
-        (qLower.includes('great') || qLower.includes('excellent') || qLower.includes('amazing') || 
-         qLower.includes('awesome') || qLower.includes('wonderful') || qLower.includes('fantastic') ||
-         qLower.includes('helpful') || qLower.includes('good job'))) {
-      const response = await getPersonalityResponse(companyId, 'complimentResponse');
-      if (response) return { category: 'complimentResponse', text: response };
-    }
-    
-    // Detect casual, friendly greetings that deserve warm responses
-    if ((qLower.includes('hey') || qLower.includes('hi there') || qLower.includes('what\'s up') || 
-         qLower.includes('howdy') || qLower.includes('good morning') || qLower.includes('good afternoon')) &&
-         qLower.length < 20) // Keep it short and casual
-    {
-      const response = await getPersonalityResponse(companyId, 'casualGreeting');
-      if (response) return { category: 'casualGreeting', text: response };
-    }
-    
-    // Detect situations that call for empathy (customer expressing inconvenience/problems)
-    if (qLower.includes('broken') && (qLower.includes('again') || qLower.includes('always')) ||
-        qLower.includes('third time') || qLower.includes('keep') && qLower.includes('happening') ||
-        qLower.includes('so frustrating') || qLower.includes('this is ridiculous') ||
-        qLower.includes('can\'t believe') || qLower.includes('nightmare')) {
-      const response = await getPersonalityResponse(companyId, 'empathyResponse');
-      if (response) return { category: 'empathyResponse', text: response };
-    }
-    
-  } catch (error) {
-    console.error('[Personality Response] Error checking scenarios:', error);
+// SMART CONVERSATIONAL BRAIN - Advanced AI reasoning and context understanding
+async function generateSmartConversationalResponse(company, question, conversationHistory, categories, companySpecialties, placeholders) {
+  const qLower = question.toLowerCase().trim();
+  const companyName = company?.companyName || 'our company';
+  
+  // Analyze conversation context and history
+  const context = analyzeConversationContext(conversationHistory, question);
+  console.log(`[Smart Brain] Context analysis:`, context);
+  
+  // SMART REASONING: Multi-layered understanding
+  
+  // 1. CONTINUATION DETECTION - Is this continuing a previous topic?
+  if (context.isContinuation) {
+    return handleConversationContinuation(context, question, company, placeholders);
   }
   
-  return null; // No personality response match
+  // 2. TECHNICAL DIAGNOSIS - Smart problem assessment
+  const technicalResponse = diagnoseHVACIssue(question, companySpecialties, companyName);
+  if (technicalResponse) {
+    return applyPlaceholders(technicalResponse, placeholders);
+  }
+  
+  // 3. CONVERSATIONAL INTELLIGENCE - Natural dialogue management
+  const conversationalResponse = handleNaturalConversation(question, conversationHistory, companyName);
+  if (conversationalResponse) {
+    return applyPlaceholders(conversationalResponse, placeholders);
+  }
+  
+  // 4. CONTEXT-AWARE SCHEDULING - Smart appointment handling
+  const schedulingResponse = handleIntelligentScheduling(question, context, companyName);
+  if (schedulingResponse) {
+    return applyPlaceholders(schedulingResponse, placeholders);
+  }
+  
+  // 5. EMOTIONAL INTELLIGENCE - Read customer mood and respond appropriately
+  const emotionalResponse = handleEmotionalIntelligence(question, conversationHistory, companyName);
+  if (emotionalResponse) {
+    return applyPlaceholders(emotionalResponse, placeholders);
+  }
+  
+  return null; // Let other systems handle if smart brain can't process
 }
 
-// Parse and structure the main conversational script
-function parseMainScript(mainScript) {
-    if (!mainScript || mainScript.trim() === '') return null;
+// Analyze conversation context and flow
+function analyzeConversationContext(conversationHistory, currentQuestion) {
+  const context = {
+    isContinuation: false,
+    previousTopic: null,
+    customerMood: 'neutral',
+    conversationStage: 'initial',
+    hasGivenInfo: false,
+    isRepeating: false
+  };
+  
+  if (!conversationHistory || conversationHistory.length === 0) {
+    context.conversationStage = 'greeting';
+    return context;
+  }
+  
+  const lastCustomerMessage = conversationHistory
+    .filter(msg => msg.role === 'customer')
+    .slice(-1)[0];
     
-    const script = {
-        greeting: null,
-        serviceBooking: [],
-        transferHandling: [],
-        informationResponses: {},
-        escalationTriggers: [],
-        closing: null,
-        sections: {} // NEW: Store all structured sections
-    };
-    
-    const lines = mainScript.split('\n').filter(line => line.trim() !== '');
-    let currentSection = null;
-    let currentSectionContent = [];
-    
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const trimmedLine = line.trim();
-        
-        // Detect section headers (more comprehensive detection)
-        const sectionMatch = trimmedLine.match(/^([^:]+):\s*$/);
-        if (sectionMatch || 
-            trimmedLine.toLowerCase().includes('greeting') || 
-            trimmedLine.toLowerCase().includes('identification') ||
-            trimmedLine.toLowerCase().includes('booking') || 
-            trimmedLine.toLowerCase().includes('appointment') ||
-            trimmedLine.toLowerCase().includes('schedule') ||
-            trimmedLine.toLowerCase().includes('transfer') || 
-            trimmedLine.toLowerCase().includes('technician') ||
-            trimmedLine.toLowerCase().includes('speak') ||
-            trimmedLine.toLowerCase().includes('closing') || 
-            trimmedLine.toLowerCase().includes('end call') ||
-            trimmedLine.toLowerCase().includes('information') ||
-            trimmedLine.toLowerCase().includes('responses') ||
-            trimmedLine.toLowerCase().includes('questions')) {
-            
-            // Save previous section
-            if (currentSection && currentSectionContent.length > 0) {
-                script.sections[currentSection] = currentSectionContent.join('\n');
-            }
-            
-            // Start new section
-            if (sectionMatch) {
-                currentSection = sectionMatch[1].toLowerCase().trim();
-            } else {
-                if (trimmedLine.toLowerCase().includes('greeting') || 
-                    trimmedLine.toLowerCase().includes('identification')) {
-                    currentSection = 'greeting';
-                } else if (trimmedLine.toLowerCase().includes('booking') || 
-                           trimmedLine.toLowerCase().includes('appointment') ||
-                           trimmedLine.toLowerCase().includes('schedule')) {
-                    currentSection = 'service_booking';
-                } else if (trimmedLine.toLowerCase().includes('transfer') || 
-                           trimmedLine.toLowerCase().includes('technician') ||
-                           trimmedLine.toLowerCase().includes('speak')) {
-                    currentSection = 'transfer_handling';
-                } else if (trimmedLine.toLowerCase().includes('closing') || 
-                           trimmedLine.toLowerCase().includes('end call')) {
-                    currentSection = 'closing';
-                } else if (trimmedLine.toLowerCase().includes('information') ||
-                           trimmedLine.toLowerCase().includes('responses') ||
-                           trimmedLine.toLowerCase().includes('questions')) {
-                    currentSection = 'information_responses';
-                }
-            }
-            currentSectionContent = [];
-            continue;
-        }
-        
-        // Add content to current section
-        if (currentSection) {
-            currentSectionContent.push(trimmedLine);
-        }
-        
-        // Legacy parsing for backwards compatibility
-        if (currentSection === 'greeting' && trimmedLine.toLowerCase().includes('agent:')) {
-            script.greeting = trimmedLine.replace(/agent:\s*/i, '');
-        }
-        
-        if (currentSection === 'service_booking' && trimmedLine.toLowerCase().includes('agent:')) {
-            script.serviceBooking.push(trimmedLine.replace(/agent:\s*/i, ''));
-        }
-        
-        if (currentSection === 'transfer_handling' && trimmedLine.toLowerCase().includes('agent:')) {
-            script.transferHandling.push(trimmedLine.replace(/agent:\s*/i, ''));
-        }
-        
-        if (currentSection === 'closing' && trimmedLine.toLowerCase().includes('agent:')) {
-            script.closing = trimmedLine.replace(/agent:\s*/i, '');
-        }
-        
-        // Enhanced Q&A parsing
-        if (trimmedLine.includes('?') && !trimmedLine.toLowerCase().includes('agent:')) {
-            // Look for answer in next lines
-            let answerLines = [];
-            for (let j = i + 1; j < lines.length && j < i + 5; j++) {
-                const nextLine = lines[j].trim();
-                if (nextLine && !nextLine.includes('?') && !nextLine.toLowerCase().includes('agent:')) {
-                    answerLines.push(nextLine);
-                } else {
-                    break;
-                }
-            }
-            if (answerLines.length > 0) {
-                const questionKey = trimmedLine.toLowerCase().replace(/[^\w\s]/g, '').trim();
-                script.informationResponses[questionKey] = answerLines.join(' ');
-            }
-        }
+  const lastAgentMessage = conversationHistory
+    .filter(msg => msg.role === 'agent')
+    .slice(-1)[0];
+  
+  // Detect continuation patterns
+  const continuationPhrases = ['and', 'also', 'plus', 'additionally', 'furthermore', 'regular', 'often'];
+  const currentLower = currentQuestion.toLowerCase();
+  
+  if (continuationPhrases.some(phrase => currentLower.startsWith(phrase))) {
+    context.isContinuation = true;
+    if (lastCustomerMessage) {
+      context.previousTopic = extractTopicFromMessage(lastCustomerMessage.text);
     }
-    
-    // Save final section
-    if (currentSection && currentSectionContent.length > 0) {
-        script.sections[currentSection] = currentSectionContent.join('\n');
-    }
-    
-    console.log(`[Script Parser] Parsed sections:`, Object.keys(script.sections));
-    console.log(`[Script Parser] Found ${Object.keys(script.informationResponses).length} Q&A pairs`);
-    
-    return script;
+  }
+  
+  // Detect repetition
+  if (lastCustomerMessage && similarity(currentQuestion, lastCustomerMessage.text) > 0.7) {
+    context.isRepeating = true;
+  }
+  
+  // Determine conversation stage
+  if (conversationHistory.length <= 2) {
+    context.conversationStage = 'initial';
+  } else if (conversationHistory.length <= 6) {
+    context.conversationStage = 'information_gathering';
+  } else {
+    context.conversationStage = 'resolution';
+  }
+  
+  // Detect customer mood
+  if (currentLower.includes('frustrat') || currentLower.includes('angry') || currentLower.includes('terrible')) {
+    context.customerMood = 'frustrated';
+  } else if (currentLower.includes('thanks') || currentLower.includes('great') || currentLower.includes('perfect')) {
+    context.customerMood = 'satisfied';
+  } else if (currentLower.includes('urgent') || currentLower.includes('emergency') || currentLower.includes('asap')) {
+    context.customerMood = 'urgent';
+  }
+  
+  return context;
 }
 
-// Basic conversational script handler
-async function processConversationalScript(company, question, conversationHistory, placeholders) {
-    const agentSetup = company?.agentSetup || {};
-    const personality = company?.aiSettings?.personality || 'friendly';
-    const companySpecialties = agentSetup.companySpecialties || '';
-    
-    // Simple text-based response generation without complex script parsing
-    if (!question || question.trim() === '') {
-        return handleGreeting(company, question, personality, placeholders);
+// Handle conversation continuation intelligently
+function handleConversationContinuation(context, question, company, placeholders) {
+  const qLower = question.toLowerCase();
+  
+  if (context.previousTopic) {
+    // Continue the previous topic with additional information
+    if (context.previousTopic.includes('leak') && qLower.includes('regular')) {
+      return `I see, so the water leakage happens regularly. That definitely suggests an ongoing issue that needs professional attention. Recurring leaks often mean there's an underlying problem - could be a clogged drain line, a damaged condensate pan, or even a refrigerant issue causing excessive condensation. Our technicians can do a thorough diagnostic to find the root cause and fix it permanently. Would you like me to schedule someone to come out and get this resolved once and for all?`;
     }
     
-    // Very basic intent detection
-    const lowerQuestion = question.toLowerCase();
-    
-    // Check for scheduling/booking intents
-    if (lowerQuestion.includes('schedule') || lowerQuestion.includes('appoint') || 
-        lowerQuestion.includes('book') || lowerQuestion.includes('set up') ||
-        lowerQuestion.includes('come out') || lowerQuestion.includes('come to') ||
-        lowerQuestion.includes('visit') || lowerQuestion.includes('available')) {
-        return `I'd be happy to schedule a service appointment for you. What day and time would work best for you? Our technicians are usually available Monday through Friday between 8am and 5pm.`;
+    if (context.previousTopic.includes('noise') && (qLower.includes('loud') || qLower.includes('getting worse'))) {
+      return `So the noise is getting louder - that's definitely not a good sign. Sounds like whatever's causing it is progressively getting worse, which means we should address it sooner rather than later before it becomes a bigger problem. Our technicians can identify exactly what's making that noise and fix it before it causes any damage to other components. When would be a good time for us to take a look?`;
     }
     
-    // Check for pricing/quote intents
-    if (lowerQuestion.includes('cost') || lowerQuestion.includes('price') || 
-        lowerQuestion.includes('quote') || lowerQuestion.includes('estimate') ||
-        lowerQuestion.includes('how much') || lowerQuestion.includes('fee')) {
-        return `The cost will depend on the specific service needed. For ${companySpecialties}, our service call fee starts at $89, and we can provide a more accurate quote once our technician assesses your system. Would you like to schedule a service call?`;
+    if (context.previousTopic.includes('temperature') && (qLower.includes('not') || qLower.includes('still'))) {
+      return `Ah, so the temperature issue is still ongoing. That's frustrating when you're not comfortable in your own home. There could be several factors at play - could be low refrigerant, a dirty filter restricting airflow, or even ductwork issues. Our technicians can run a comprehensive diagnostic to pinpoint exactly what's going on and get your system back to keeping you comfortable. Should I get someone scheduled to come out?`;
     }
-    
-    // Check for service/repair intents
-    if (lowerQuestion.includes('repair') || lowerQuestion.includes('fix') || 
-        lowerQuestion.includes('broken') || lowerQuestion.includes('not working') ||
-        lowerQuestion.includes('service') || lowerQuestion.includes('maintain') ||
-        lowerQuestion.includes('problem') || lowerQuestion.includes('issue')) {
-        return `I understand you're having an issue with your system. To best help you, could you tell me a bit more about what's happening? This will help us make sure we send a technician with the right expertise and parts.`;
-    }
-    
-    // For name or contact collection
-    if (lowerQuestion.includes('name is') || lowerQuestion.includes('this is') || 
-        lowerQuestion.includes('speaking') || lowerQuestion.includes('number is') ||
-        lowerQuestion.includes('call me') || lowerQuestion.includes('reach me')) {
-        return `Thank you for sharing that information. I've got your details. Now, how can we help you today with your ${companySpecialties.split(',')[0].trim()} needs?`;
-    }
-    
-    // Default response for unclassified intents
-    return `I understand you're inquiring about our ${companySpecialties.split(',')[0].trim()} services. Could you provide a bit more detail about what specific help you're looking for today?`;
+  }
+  
+  // Generic continuation response
+  return `I understand there's more to it than that. Could you tell me a bit more about what's happening so I can make sure we address everything properly?`;
 }
 
-// Enhanced conversational script handler that uses parsed script
-async function processConversationalScriptEnhanced(company, question, conversationHistory, placeholders) {
-    const agentSetup = company?.agentSetup || {};
-    const mainScript = agentSetup.mainAgentScript || '';
-    const protocols = agentSetup.protocols || {};
-    const parsedScript = parseMainScript(mainScript);
-    const personality = company?.aiSettings?.personality || 'friendly';
-    
-    console.log(`[Enhanced Script] Available protocols:`, Object.keys(protocols));
-    
-    // PRIORITY 1: Check for specific scenario protocols FIRST
-    const protocolResponse = checkSpecificProtocols(protocols, question, conversationHistory, placeholders);
-    if (protocolResponse) {
-        console.log(`[Enhanced Script] Using specific protocol response`);
-        return protocolResponse;
-    }
-    
-    if (!parsedScript) {
-        // Fall back to original conversational script processing
-        return await processConversationalScript(company, question, conversationHistory, placeholders);
-    }
-    
-    // Enhanced intent analysis based on question content
-    function analyzeCallIntent(question, history) {
-        question = question.toLowerCase();
-        
-        // Specific issue detection
-        if (question.includes('water') && (question.includes('leak') || question.includes('leaking') || question.includes('leakage'))) {
-            return 'water_leak';
-        } else if (question.includes('refrigerant') && question.includes('leak')) {
-            return 'refrigerant_leak';
-        } else if (question.includes('ice') || question.includes('frozen') || question.includes('freezing')) {
-            return 'ice_freeze';
-        } else if (question.includes('noise') || question.includes('sound') || question.includes('loud')) {
-            return 'strange_noise';
-        } else if (question.includes('repair') || question.includes('fix') || question.includes('broken') || 
-            question.includes('not working') || question.includes('isn\'t working') || 
-            question.includes('stopped working') || question.includes('blank')) {
-            return 'repair';
-        } else if (question.includes('maintenance') || question.includes('tune') || question.includes('check') || 
-                   question.includes('service')) {
-            return 'maintenance';
-        } else if (question.includes('install') || question.includes('new system') || question.includes('replace')) {
-            return 'installation';
-        } else if (question.includes('quote') || question.includes('cost') || question.includes('price') || 
-                   question.includes('how much')) {
-            return 'pricing';
-        } else {
-            return 'general';
-        }
-    }
-    
-    // Determine which stage of the call we're in based on conversation history
-    function determineCallStage(history) {
-        if (!history || history.length <= 1) {
-            return 'greeting';
-        } else if (history.length <= 2) {
-            return 'initial_question';
-        } else if (history.length <= 4) {
-            return 'information_gathering';
-        } else {
-            return 'scheduling';
-        }
-    }
-    
-    // Analyze call intent and stage
-    const callIntent = analyzeCallIntent(question, conversationHistory);
-    const callStage = determineCallStage(conversationHistory);
-    
-    console.log(`[EnhancedScript] Call Intent: ${callIntent}, Stage: ${callStage}, Has Parsed Script: true`);
-    
-    // Use parsed script content when available
-    switch (callStage) {
-        case 'greeting':
-            if (parsedScript.greeting) {
-                return applyPlaceholders(parsedScript.greeting, placeholders);
-            }
-            return handleGreeting(company, question, personality, placeholders);
-        
-        case 'intent_detection':
-            // Handle specific intents with appropriate responses
-            if (callIntent === 'water_leak' && parsedScript.sections['emergency']) {
-                return applyPlaceholders(parsedScript.sections['emergency'], placeholders);
-            }
-            if (callIntent === 'booking' && parsedScript.serviceBooking.length > 0) {
-                return applyPlaceholders(parsedScript.serviceBooking[0], placeholders);
-            }
-            if (callIntent === 'transfer' && parsedScript.transferHandling.length > 0) {
-                return applyPlaceholders(parsedScript.transferHandling[0], placeholders);
-            }
-            // Don't return generic responses - let it fall through to other processing
-            break;
-        
-        case 'closing':
-            if (parsedScript.closing) {
-                return applyPlaceholders(parsedScript.closing, placeholders);
-            }
-            return handleClosing(company, question, personality, placeholders);
-        
-        default:
-            // Check for information responses in parsed script
-            const lowerQuestion = question.toLowerCase();
-            for (const [scriptQuestion, scriptAnswer] of Object.entries(parsedScript.informationResponses)) {
-                if (lowerQuestion.includes(scriptQuestion.toLowerCase().replace(/\?/g, '').trim())) {
-                    return applyPlaceholders(scriptAnswer, placeholders);
-                }
-            }
-            
-            // Don't fall back to generic processing - return null to let other systems handle it
-            return null;
-    }
+// Smart HVAC technical diagnosis
+function diagnoseHVACIssue(question, companySpecialties, companyName) {
+  const qLower = question.toLowerCase();
+  const words = qLower.split(' ');
+  
+  // Advanced multi-symptom analysis
+  const symptoms = {
+    cooling: words.some(w => ['cool', 'cold', 'cooling', 'ac', 'air'].includes(w)),
+    heating: words.some(w => ['heat', 'heating', 'warm', 'hot', 'furnace'].includes(w)),
+    water: words.some(w => ['water', 'leak', 'drip', 'wet', 'moisture'].includes(w)),
+    noise: words.some(w => ['noise', 'sound', 'loud', 'quiet', 'silent', 'grinding', 'squealing'].includes(w)),
+    electrical: words.some(w => ['power', 'electric', 'breaker', 'fuse', 'voltage', 'wiring'].includes(w)),
+    airflow: words.some(w => ['air', 'flow', 'blowing', 'circulation', 'vent', 'duct'].includes(w)),
+    frequency: words.some(w => ['regular', 'often', 'always', 'sometimes', 'intermittent', 'constant'].includes(w))
+  };
+  
+  // Smart diagnosis based on symptom combinations
+  if (symptoms.water && symptoms.frequency) {
+    return `Regular water issues usually point to a drainage problem or a refrigerant leak causing excessive condensation. This is definitely something that needs professional attention because it can damage your system and your home over time. Our certified technicians can trace the source of the water, determine if it's a simple drain blockage or something more complex, and get it fixed properly. The sooner we address it, the better - would you like me to schedule a diagnostic visit?`;
+  }
+  
+  if (symptoms.noise && symptoms.frequency) {
+    return `Recurring strange noises are your system's way of telling you something needs attention. The fact that it's happening regularly suggests it's not just a one-time fluke - there's likely a component that's wearing out or something that's come loose. Our technicians can listen to the sound, identify exactly what's causing it, and fix it before it leads to a bigger problem. These issues tend to get worse over time, so catching it early is smart. When would work for you to have someone take a look?`;
+  }
+  
+  if (symptoms.cooling && (qLower.includes('not') || qLower.includes('poor') || qLower.includes('weak'))) {
+    return `Poor cooling performance can be really frustrating, especially when you need relief from the heat. This could be several things - low refrigerant, a dirty filter restricting airflow, ductwork issues, or even a failing compressor. The good news is our technicians can run a comprehensive diagnostic to pinpoint exactly what's going on and get your system back to keeping you comfortable. Would you like me to schedule a visit so we can get this sorted out for you?`;
+  }
+  
+  if (symptoms.heating && (qLower.includes('not') || qLower.includes('cold') || qLower.includes('barely'))) {
+    return `Nobody should have to be cold in their own home! Heating issues can range from simple thermostat problems to more complex furnace issues, but the good news is most are very fixable. Our heating specialists can diagnose exactly what's preventing your system from keeping you warm and get it resolved quickly. During cold weather, we prioritize heating calls because we know how important your comfort is. When can we get someone out there to help?`;
+  }
+  
+  return null; // No specific technical diagnosis
 }
 
-// NEW: Check specific scenario protocols
-function checkSpecificProtocols(protocols, question, conversationHistory, placeholders) {
-    const qLower = question.toLowerCase();
-    
-    // System delay/reboot scenarios
-    if ((qLower.includes('wait') || qLower.includes('hold') || qLower.includes('delay') || 
-         qLower.includes('slow') || qLower.includes('loading')) && protocols.systemDelay) {
-        console.log(`[Protocol] Using systemDelay protocol`);
-        return applyPlaceholders(protocols.systemDelay, placeholders);
-    }
-    
-    // Caller frustration / "Are you a robot?" 
-    if ((qLower.includes('robot') || qLower.includes('real person') || qLower.includes('human') || 
-         qLower.includes('frustrat') || qLower.includes('annoying') || qLower.includes('repeat')) && 
-         protocols.callerFrustration) {
-        console.log(`[Protocol] Using callerFrustration protocol`);
-        return applyPlaceholders(protocols.callerFrustration, placeholders);
-    }
-    
-    // Telemarketer filter
-    if ((qLower.includes('sell') || qLower.includes('offer') || qLower.includes('deal') || 
-         qLower.includes('promotion') || qLower.includes('save money')) && protocols.telemarketerFilter) {
-        console.log(`[Protocol] Using telemarketerFilter protocol`);
-        return applyPlaceholders(protocols.telemarketerFilter, placeholders);
-    }
-    
-    // Message taking scenario
-    if ((qLower.includes('leave message') || qLower.includes('take message') || qLower.includes('call back') || 
-         qLower.includes('not available') || qLower.includes('busy')) && protocols.messageTaking) {
-        console.log(`[Protocol] Using messageTaking protocol`);
-        return applyPlaceholders(protocols.messageTaking, placeholders);
-    }
-    
-    // Caller reconnect/apology
-    if ((qLower.includes('disconnect') || qLower.includes('cut off') || qLower.includes('dropped') || 
-         qLower.includes('hung up') || qLower.includes('lost you')) && protocols.callerReconnect) {
-        console.log(`[Protocol] Using callerReconnect protocol`);
-        return applyPlaceholders(protocols.callerReconnect, placeholders);
-    }
-    
-    // When in doubt / general escalation
-    if ((qLower.includes('not sure') || qLower.includes('don\'t know') || qLower.includes('uncertain') || 
-         qLower.includes('complicated')) && protocols.whenInDoubt) {
-        console.log(`[Protocol] Using whenInDoubt protocol`);
-        return applyPlaceholders(protocols.whenInDoubt, placeholders);
-    }
-    
-    // Booking confirmation (when scheduling keywords detected)
-    if ((qLower.includes('confirm') || qLower.includes('book') || qLower.includes('schedule') || 
-         qLower.includes('appointment')) && protocols.bookingConfirmation) {
-        console.log(`[Protocol] Using bookingConfirmation protocol`);
-        return applyPlaceholders(protocols.bookingConfirmation, placeholders);
-    }
-    
-    // Text-to-pay scenarios
-    if ((qLower.includes('payment') || qLower.includes('pay') || qLower.includes('text to pay') || 
-         qLower.includes('invoice')) && protocols.textToPay) {
-        console.log(`[Protocol] Using textToPay protocol`);
-        return applyPlaceholders(protocols.textToPay, placeholders);
-    }
-    
-    return null; // No protocol match
+// Handle natural conversation patterns
+function handleNaturalConversation(question, conversationHistory, companyName) {
+  const qLower = question.toLowerCase().trim();
+  
+  // Short responses that need clarification
+  if (qLower.length < 15 && !qLower.includes('yes') && !qLower.includes('no')) {
+    return `I want to make sure I understand what you need help with. Could you tell me a bit more about what's going on with your system?`;
+  }
+  
+  // Yes/No responses
+  if (qLower === 'yes' || qLower === 'yeah' || qLower === 'yep') {
+    return `Perfect! Let me get that set up for you. What day and time would work best for your schedule?`;
+  }
+  
+  if (qLower === 'no' || qLower === 'nope' || qLower === 'not right now') {
+    return `No problem at all! I understand. Feel free to call us back whenever you're ready, and we'll be happy to help. Is there anything else I can answer for you today?`;
+  }
+  
+  // Acknowledgment responses
+  if (qLower.includes('okay') || qLower.includes('alright') || qLower.includes('i see')) {
+    return `Great! Is there anything specific you'd like me to help you with regarding your HVAC system?`;
+  }
+  
+  // Information requests
+  if (qLower.includes('tell me') || qLower.includes('explain') || qLower.includes('how does')) {
+    return `I'd be happy to explain that for you. What specifically would you like to know more about?`;
+  }
+  
+  return null;
 }
 
-// Helper functions for conversational script processing
-function handleGreeting(company, question, personality, placeholders) {
-    const agentSetup = company?.agentSetup || {};
-    const companyName = company?.companyName || 'our company';
-    const greeting = agentSetup.agentGreeting || `Thank you for calling ${companyName}! How can I assist you today?`;
-    return applyPlaceholders(greeting, placeholders);
-}
-
-function handleIntentDetection(company, question, callIntent, personality, placeholders) {
-    const agentSetup = company?.agentSetup || {};
-    const companySpecialties = agentSetup.companySpecialties || '';
-    
-    switch(callIntent) {
-        case 'water_leak':
-            return `I understand you're dealing with water leakage. That definitely needs attention right away. Could you tell me more about where the water is coming from and if this has happened before?`;
-        case 'refrigerant_leak':
-            return `A refrigerant leak is an emergency situation that needs immediate attention. Our certified technicians can locate and repair the leak safely. Should I get someone out there today?`;
-        case 'ice_freeze':
-            return `Ice buildup on your system indicates a problem that needs to be addressed. You should turn off the system for now. When can we schedule a technician to diagnose the cause?`;
-        case 'strange_noise':
-            return `Strange noises from your AC usually mean something needs attention before it gets worse. Could you describe the noise you're hearing?`;
-        case 'repair':
-            return `I understand you need a repair. Could you tell me more about the issue you're experiencing with your system?`;
-        case 'maintenance':
-            return `I'd be happy to help schedule maintenance. Regular maintenance is important for optimal performance. When was your system last serviced?`;
-        case 'installation':
-            return `I understand you're interested in a new installation. Our team can definitely help with that. Could you share some details about your needs so we can provide the best solution?`;
-        case 'pricing':
-            return `I understand you're looking for pricing information. The cost will depend on several factors. Could you tell me more about what specific service you're interested in?`;
-        default:
-            return `How can we help you with your ${companySpecialties.split(',')[0].trim()} needs today?`;
+// Smart scheduling with context awareness
+function handleIntelligentScheduling(question, context, companyName) {
+  const qLower = question.toLowerCase();
+  
+  if (context.customerMood === 'urgent' && (qLower.includes('today') || qLower.includes('now') || qLower.includes('asap'))) {
+    return `I understand this is urgent for you. Let me check our emergency service availability. We prioritize urgent calls and can often get someone out the same day. What's your address, and I'll see what we can do to get you help quickly?`;
+  }
+  
+  if (qLower.includes('schedule') || qLower.includes('appointment') || qLower.includes('when')) {
+    if (context.conversationStage === 'resolution') {
+      return `Absolutely! Based on what we've discussed, I think scheduling a technician visit is the best next step. Our technicians are typically available Monday through Friday between 8am and 5pm, and we also have Saturday availability. What works better for your schedule - a weekday or weekend appointment?`;
+    } else {
+      return `I'd be happy to help you schedule an appointment. Before I do that, could you tell me a bit more about what's going on so I can make sure we send the right technician with the right parts?`;
     }
+  }
+  
+  return null;
 }
 
-function handleClosing(company, question, personality, placeholders) {
-    return `Thank you for calling. Is there anything else I can assist you with today?`;
+// Emotional intelligence and mood-appropriate responses
+function handleEmotionalIntelligence(question, conversationHistory, companyName) {
+  const qLower = question.toLowerCase();
+  
+  // Detect frustration and respond with empathy
+  if (qLower.includes('third time') || qLower.includes('keep happening') || qLower.includes('same problem')) {
+    return `I can absolutely understand why you'd be frustrated - dealing with the same problem repeatedly is really annoying, especially when it's something that should have been fixed properly the first time. Let's make sure we get this resolved once and for all. I'm going to make a note that this is a recurring issue so our technician comes prepared to do a thorough diagnostic and find the root cause, not just treat the symptoms. When would be a good time for us to come out and get this properly fixed?`;
+  }
+  
+  // Detect appreciation and respond warmly
+  if (qLower.includes('thank you') || qLower.includes('appreciate') || qLower.includes('helpful')) {
+    return `You're very welcome! I'm really glad I could help. That's exactly why we're here - to make sure you're comfortable and your system is working properly. Is there anything else I can help you with today?`;
+  }
+  
+  // Detect uncertainty and provide reassurance
+  if (qLower.includes('not sure') || qLower.includes('don\'t know') || qLower.includes('maybe')) {
+    return `That's completely understandable - HVAC systems can be pretty complex, and it's not always obvious what's wrong. The good news is you don't need to figure it out yourself - that's what our trained technicians are for! They can do a thorough diagnostic and explain exactly what's happening and what needs to be done. No pressure at all - would you like me to schedule someone to take a look?`;
+  }
+  
+  return null;
+}
+
+// Extract topic from previous message for continuation
+function extractTopicFromMessage(text) {
+  const keywords = {
+    'leak': ['leak', 'leaking', 'water', 'drip'],
+    'noise': ['noise', 'sound', 'loud', 'grinding', 'squealing'],
+    'temperature': ['hot', 'cold', 'temp', 'heat', 'cool'],
+    'power': ['power', 'electric', 'breaker', 'won\'t turn on'],
+    'airflow': ['air', 'blow', 'circulation', 'vent']
+  };
+  
+  const textLower = text.toLowerCase();
+  
+  for (const [topic, words] of Object.entries(keywords)) {
+    if (words.some(word => textLower.includes(word))) {
+      return topic;
+    }
+  }
+  
+  return 'general';
+}
+
+// Simple string similarity function
+function similarity(str1, str2) {
+  const a = str1.toLowerCase();
+  const b = str2.toLowerCase();
+  
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+  
+  const pairs1 = [];
+  const pairs2 = [];
+  
+  for (let i = 0; i < a.length - 1; i++) {
+    pairs1.push(a.substring(i, i + 2));
+  }
+  
+  for (let i = 0; i < b.length - 1; i++) {
+    pairs2.push(b.substring(i, i + 2));
+  }
+  
+  const intersection = pairs1.filter(x => pairs2.includes(x)).length;
+  const union = pairs1.length + pairs2.length - intersection;
+  
+  return intersection / union;
 }
 
 // Agent Service - AI Response Generation
