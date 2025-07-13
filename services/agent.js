@@ -403,6 +403,32 @@ async function generateIntelligentResponse(company, question, conversationHistor
     return `For pricing, our service call fee starts at $89, which includes a thorough diagnostic. If you decide to proceed with the repair, that fee goes toward the total cost. The final price depends on what needs to be done. Would you like me to schedule a technician to come out and give you an exact quote?`;
   }
 
+  // PRIORITY 2.5: Handle SPECIFIC HVAC issues with targeted responses
+  
+  // Water leakage issues - CRITICAL FIX
+  if (qLower.includes('water') && (qLower.includes('leak') || qLower.includes('leaking') || qLower.includes('leakage'))) {
+    if (qLower.includes('regular') || qLower.includes('often') || qLower.includes('always') || qLower.includes('again')) {
+      return `Water leakage that keeps happening is definitely something we need to address right away. That usually indicates a more serious issue that won't go away on its own. Our technicians can diagnose exactly what's causing the recurring leaks and fix it properly. When would be a good time for us to come take a look?`;
+    }
+    return `Water leaking from your AC system is something we definitely want to check out quickly. That could be a clogged drain line, a frozen coil, or a few other issues that our technicians can diagnose and fix. Would you like me to schedule someone to come out and take care of that for you?`;
+  }
+  
+  // Refrigerant leak issues
+  if (qLower.includes('refrigerant') && (qLower.includes('leak') || qLower.includes('leaking') || qLower.includes('low'))) {
+    return `A refrigerant leak is definitely something that needs immediate attention - it can damage your system and isn't safe to leave as-is. Our certified technicians can locate the leak, repair it, and recharge your system properly. This is considered an emergency repair. Should I get someone out there today?`;
+  }
+  
+  // Ice/freezing issues
+  if (qLower.includes('ice') || qLower.includes('frozen') || qLower.includes('freezing')) {
+    return `Ice on your AC system is a sign something's not right - could be low refrigerant, a dirty filter, or airflow issues. You'll want to turn the system off for now to let it thaw out. Our technicians can diagnose exactly what's causing the freeze-up and get it fixed. When can we get someone out there?`;
+  }
+  
+  // Strange noises
+  if (qLower.includes('noise') || qLower.includes('sound') || qLower.includes('loud') || 
+      qLower.includes('grinding') || qLower.includes('squealing') || qLower.includes('banging')) {
+    return `Strange noises from your AC are never a good sign - they usually mean something needs attention before it gets worse. Could be anything from a loose belt to a failing motor. Our technicians can pinpoint exactly what's making that noise and fix it. Would you like to schedule a diagnostic visit?`;
+  }
+  
   // PRIORITY 3: Handle customer closures and polite declines
   if (qLower.includes('no') && (qLower.includes('thank you') || qLower.includes('thanks'))) {
     return `You're very welcome! Have a great day, and please don't hesitate to call us if you need anything in the future.`;
@@ -796,10 +822,20 @@ async function processConversationalScriptEnhanced(company, question, conversati
         return await processConversationalScript(company, question, conversationHistory, placeholders);
     }
     
-    // Simple intent analysis based on question content
+    // Enhanced intent analysis based on question content
     function analyzeCallIntent(question, history) {
         question = question.toLowerCase();
-        if (question.includes('repair') || question.includes('fix') || question.includes('broken') || 
+        
+        // Specific issue detection
+        if (question.includes('water') && (question.includes('leak') || question.includes('leaking') || question.includes('leakage'))) {
+            return 'water_leak';
+        } else if (question.includes('refrigerant') && question.includes('leak')) {
+            return 'refrigerant_leak';
+        } else if (question.includes('ice') || question.includes('frozen') || question.includes('freezing')) {
+            return 'ice_freeze';
+        } else if (question.includes('noise') || question.includes('sound') || question.includes('loud')) {
+            return 'strange_noise';
+        } else if (question.includes('repair') || question.includes('fix') || question.includes('broken') || 
             question.includes('not working') || question.includes('isn\'t working') || 
             question.includes('stopped working') || question.includes('blank')) {
             return 'repair';
@@ -844,13 +880,18 @@ async function processConversationalScriptEnhanced(company, question, conversati
             return handleGreeting(company, question, personality, placeholders);
         
         case 'intent_detection':
+            // Handle specific intents with appropriate responses
+            if (callIntent === 'water_leak' && parsedScript.sections['emergency']) {
+                return applyPlaceholders(parsedScript.sections['emergency'], placeholders);
+            }
             if (callIntent === 'booking' && parsedScript.serviceBooking.length > 0) {
                 return applyPlaceholders(parsedScript.serviceBooking[0], placeholders);
             }
             if (callIntent === 'transfer' && parsedScript.transferHandling.length > 0) {
                 return applyPlaceholders(parsedScript.transferHandling[0], placeholders);
             }
-            return handleIntentDetection(company, question, callIntent, personality, placeholders);
+            // Don't return generic responses - let it fall through to other processing
+            break;
         
         case 'closing':
             if (parsedScript.closing) {
@@ -867,8 +908,8 @@ async function processConversationalScriptEnhanced(company, question, conversati
                 }
             }
             
-            // Fall back to original processing
-            return await processConversationalScript(company, question, conversationHistory, placeholders);
+            // Don't fall back to generic processing - return null to let other systems handle it
+            return null;
     }
 }
 
@@ -949,6 +990,14 @@ function handleIntentDetection(company, question, callIntent, personality, place
     const companySpecialties = agentSetup.companySpecialties || '';
     
     switch(callIntent) {
+        case 'water_leak':
+            return `I understand you're dealing with water leakage. That definitely needs attention right away. Could you tell me more about where the water is coming from and if this has happened before?`;
+        case 'refrigerant_leak':
+            return `A refrigerant leak is an emergency situation that needs immediate attention. Our certified technicians can locate and repair the leak safely. Should I get someone out there today?`;
+        case 'ice_freeze':
+            return `Ice buildup on your system indicates a problem that needs to be addressed. You should turn off the system for now. When can we schedule a technician to diagnose the cause?`;
+        case 'strange_noise':
+            return `Strange noises from your AC usually mean something needs attention before it gets worse. Could you describe the noise you're hearing?`;
         case 'repair':
             return `I understand you need a repair. Could you tell me more about the issue you're experiencing with your system?`;
         case 'maintenance':

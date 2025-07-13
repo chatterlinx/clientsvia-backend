@@ -497,16 +497,14 @@ router.post('/handle-speech', async (req, res) => {
 
     const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
     const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
-    // Set a maximum TTS wait time to prevent delays
-    const maxTtsWaitTime = 3000; // 3 seconds max - increased for ElevenLabs reliability
-      
+    // TTS without artificial timeouts - let it complete naturally
     if (elevenLabsVoice) {
       try {
         console.log(`[TTS START] [TTS] Starting ElevenLabs synthesis for: "${strippedAnswer.substring(0, 50)}..."`);
         const ttsStartTime = Date.now();
         
-        // Use Promise.race to timeout TTS if it's too slow
-        const ttsPromise = synthesizeSpeech({
+        // Direct TTS call without timeout interference
+        const buffer = await synthesizeSpeech({
           text: strippedAnswer,
           voiceId: elevenLabsVoice,
           stability: company.aiSettings.elevenLabs?.stability,
@@ -515,12 +513,6 @@ router.post('/handle-speech', async (req, res) => {
           model_id: company.aiSettings.elevenLabs?.modelId,
           company
         });
-        
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('TTS timeout')), maxTtsWaitTime)
-        );
-        
-        const buffer = await Promise.race([ttsPromise, timeoutPromise]);
         
         const ttsTime = Date.now() - ttsStartTime;
         console.log(`[TTS COMPLETE] [OK] ElevenLabs synthesis completed in ${ttsTime}ms`);
@@ -533,11 +525,7 @@ router.post('/handle-speech', async (req, res) => {
         gather.play(audioUrl);
 
       } catch (err) {
-        if (err.message === 'TTS timeout') {
-          console.log(`[TTS TIMEOUT] ⚠️ ElevenLabs TTS took longer than ${maxTtsWaitTime}ms, falling back to native TTS`);
-        } else {
-          console.error('ElevenLabs synthesis failed:', err.message);
-        }
+        console.error('ElevenLabs synthesis failed, falling back to native TTS:', err.message);
         // Use Twilio's enhanced TTS with voice settings to maintain consistency
         const voice = company.aiSettings?.twilioVoice || 'alice';
         gather.say({ voice: voice }, escapeTwiML(strippedAnswer));
