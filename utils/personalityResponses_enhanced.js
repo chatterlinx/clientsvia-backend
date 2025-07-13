@@ -77,63 +77,53 @@ const defaultResponses = {
     "Give me a moment to verify; I'll update you."
   ],
   
-  // Personality-Based Response Categories
-  // Companies can customize these to match their brand voice
-  greeting_friendly: [
-    "Hi there! Thanks for calling. How can I help you today?",
-    "Hello! Great to hear from you. What can I do for you?",
-    "Hey! Thanks for reaching out. How can I assist you?",
-    "Hi! I'm so glad you called. What brings you here today?"
-  ],
-  greeting_professional: [
-    "Good day, thank you for calling. How may I assist you?",
-    "Hello, this is The Agent. How can I help you today?",
-    "Thank you for calling. How may I be of service?",
-    "Good afternoon, how may I assist you today?"
-  ],
-  greeting_casual: [
-    "Hey! What's up? How can I help?",
-    "Hi there! What can I do for you?",
-    "Hey! Thanks for calling. What's going on?",
-    "Hi! What brings you by today?"
+  // NEW: Professional Humor & Engagement Categories
+  lightHumor: [
+    "Ha! I hear that one a lot. Let me help you out.",
+    "You're not wrong there! How can I assist you today?",
+    "That's a good one! Now, what can I do for you?",
+    "I appreciate the humor! Let's get you taken care of.",
+    "You've got a point there! What brings you in today?"
   ],
   
-  acknowledgment_friendly: [
-    "Absolutely! I'd be happy to help with that.",
-    "Of course! Let me take care of that for you.",
-    "Sure thing! I can definitely help you out.",
-    "No problem at all! I'm here to help."
-  ],
-  acknowledgment_professional: [
-    "Certainly, I can assist you with that request.",
-    "I understand. Let me help you with that.",
-    "Yes, I can provide assistance with that matter.",
-    "I'll be happy to help you with that."
-  ],
-  acknowledgment_casual: [
-    "Yeah, totally! I can help with that.",
-    "For sure! Let me handle that for you.",
-    "Yep! I got you covered.",
-    "Definitely! I can take care of that."
+  customerJoke: [
+    "That's funny! You've got a good sense of humor.",
+    "Haha, I like that! Now let's get you what you need.",
+    "You're keeping things light - I appreciate that!",
+    "That made me chuckle! How can I help you?",
+    "Good one! What can I do for you today?"
   ],
   
-  scheduling_friendly: [
-    "I'd love to get you scheduled! When works best for you?",
-    "Perfect! Let's find a time that works great for you.",
-    "Awesome! I can definitely get you on the calendar.",
-    "Great! Let's get you all set up with an appointment."
+  weatherSmallTalk: [
+    "I hear you! Weather can definitely affect things. How can I help?",
+    "Tell me about it! Speaking of comfort, what can we do for you?",
+    "Absolutely! That's exactly why we're here. What's going on?",
+    "I know what you mean! Let's see how we can help you out.",
+    "Weather's been something else lately! What brings you in?"
   ],
-  scheduling_professional: [
-    "I can schedule an appointment for you. What time would be convenient?",
-    "Let me check our availability and find a suitable time.",
-    "I'll be happy to arrange an appointment. When would you prefer?",
-    "We can schedule a service call. What time frame works for you?"
+  
+  complimentResponse: [
+    "Well, thank you! That's very kind of you to say.",
+    "I appreciate that! Now, how can I help you today?",
+    "That's so nice to hear! What can I do for you?",
+    "Thank you! I'm here to help - what's going on?",
+    "You're too kind! Let's get you taken care of."
   ],
-  scheduling_casual: [
-    "Cool! Let's get you scheduled. When works for you?",
-    "Sweet! What day and time are you thinking?",
-    "Alright! When do you want to get this taken care of?",
-    "Perfect! What's your schedule looking like?"
+  
+  casualGreeting: [
+    "Hey there! Thanks for calling. What's up?",
+    "Hi! Great to hear from you. How's your day going?",
+    "Hello! Hope you're having a good one. What can I do for you?",
+    "Hey! Thanks for reaching out. What brings you in today?",
+    "Hi there! How can I help make your day better?"
+  ],
+  
+  empathyResponse: [
+    "I completely understand - that sounds frustrating.",
+    "Oh no, I can imagine how inconvenient that must be!",
+    "That's definitely not ideal - let's see what we can do.",
+    "I hear you - nobody wants to deal with that.",
+    "That sounds like a real headache! Let me help you out."
   ]
 };
 

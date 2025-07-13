@@ -1012,7 +1012,15 @@ document.addEventListener('DOMContentLoaded', () => {
         { key: 'frustratedCaller', description: 'Used for calming a frustrated caller.' },
         { key: 'businessHours', description: 'Explains normal business hours.' },
         { key: 'connectionTrouble', description: 'Used when call quality is poor.' },
-        { key: 'agentNotUnderstood', description: 'Agent was not understood by the caller.' }
+        { key: 'agentNotUnderstood', description: 'Agent was not understood by the caller.' },
+        
+        // NEW: Professional Humor & Engagement Categories
+        { key: 'lightHumor', description: 'Professional humor responses to keep calls engaging.' },
+        { key: 'customerJoke', description: 'Responses when customers make jokes or are playful.' },
+        { key: 'weatherSmallTalk', description: 'Engaging responses to weather or small talk comments.' },
+        { key: 'complimentResponse', description: 'Professional responses to customer compliments.' },
+        { key: 'casualGreeting', description: 'Warm, casual greeting variations for friendly tone.' },
+        { key: 'empathyResponse', description: 'Empathetic responses showing understanding of customer pain points.' }
     ];
 
     function createResponseItem(text = '') {
@@ -1933,7 +1941,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ companyId: currentCompanyId, error: errorMessage, timestamp: new Date().toISOString(), }),
             });
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ message: `HTTP error! Status: ${response.status}` }));
+                const errorData = await response.json().catch(() => ({ message: 'HTTP error! Status: ${response.status}' }));
                 throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
             }
             console.log('Malfunction reported successfully:', await response.json());

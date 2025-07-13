@@ -371,6 +371,32 @@ async function generateIntelligentResponse(company, question, conversationHistor
     return `I understand your frustration, and I want to make sure you get the help you need. Let me transfer you to one of our experienced technicians who can provide you with the exact answers you're looking for.`;
   }
 
+  // NEW: PRIORITY 1.5: Add Human Engagement and Light Humor
+  
+  // Handle customer appreciation with warmth
+  if (qLower.includes('thank you') && !qLower.includes('no')) {
+    return `You're very welcome! I'm happy to help. What else can I do for you today?`;
+  }
+  
+  // Professional humor for common HVAC situations
+  if (qLower.includes('hot') && (qLower.includes('house') || qLower.includes('inside'))) {
+    return `I bet it is! Nobody wants to be uncomfortable in their own home. Let's get your cooling system back on track. What's going on with your AC?`;
+  }
+  
+  if (qLower.includes('cold') && (qLower.includes('house') || qLower.includes('inside'))) {
+    return `Brrr! That's no fun, especially when you should be cozy at home. Let's figure out what's going on with your heating. What seems to be the issue?`;
+  }
+  
+  // Engaging responses to common customer expressions
+  if (qLower.includes('of course') || qLower.includes('figures') || qLower.includes('typical')) {
+    return `I hear you! These things always seem to happen at the worst times, don't they? Let's get this sorted out for you. What's going on?`;
+  }
+  
+  // Warm response to urgency
+  if (qLower.includes('asap') || qLower.includes('urgent') || qLower.includes('emergency')) {
+    return `I understand this is urgent - nobody wants to deal with that stress! Let me get you connected with our emergency team right away. What's the situation?`;
+  }
+
   // PRIORITY 2: Handle pricing questions (was missing - major issue!)
   if (qLower.includes('price') || qLower.includes('cost') || qLower.includes('pricing') || 
       qLower.includes('how much') || qLower.includes('fee') || qLower.includes('charge')) {
@@ -394,23 +420,23 @@ async function generateIntelligentResponse(company, question, conversationHistor
   // HVAC/Thermostat related responses
   if (qLower.includes('thermostat') || qLower.includes('temperature') || qLower.includes('heating') || qLower.includes('cooling')) {
     if (qLower.includes('blank') || qLower.includes('not working') || qLower.includes('broken')) {
-      return `I understand you're having issues with your thermostat. This sounds like it could be a few different things - it might be a power issue, a wiring problem, or the thermostat itself might need to be replaced. I'd be happy to have one of our HVAC technicians take a look. What's the best time for you?`;
+      return `Oh, that's frustrating! A blank thermostat can definitely throw off your whole day. This could be a few different things - maybe a power issue, wiring problem, or the thermostat itself might need replacing. I'd love to have one of our HVAC experts take a look and get you back to being comfortable. What works best for your schedule?`;
     }
     if (qLower.includes('program') || qLower.includes('schedule')) {
-      return `Programming issues with thermostats are pretty common. Our technicians can help you set up the perfect schedule for your home. Would you like me to schedule a visit, or do you have any specific questions about your thermostat?`;
+      return `Ah, thermostat programming - it can be tricky! You're definitely not alone in that. Our technicians are great at getting these systems set up just right for your lifestyle. Would you like me to schedule someone to come out and get that sorted for you?`;
     }
-    return `I can help you with thermostat issues. Our HVAC specialists handle all types of thermostat problems - from simple battery changes to complete replacements. What specific issue are you experiencing?`;
+    return `I can absolutely help with thermostat issues! Our HVAC specialists handle everything from simple fixes to complete replacements. What's your thermostat doing - or not doing - that's causing trouble?`;
   }
   
   // Filter maintenance questions
   if (qLower.includes('filter') || qLower.includes('air filter')) {
     if (qLower.includes('change') || qLower.includes('replace') || qLower.includes('how often')) {
-      return `Great question! Most air filters should be changed every 1-3 months, but it depends on your specific system, filter type, and usage. Homes with pets or allergies might need more frequent changes. Our technicians can show you exactly what type of filter you need and set up a maintenance schedule that works for your home. Would you like me to schedule a visit?`;
+      return `Great question! Most folks don't realize how important this is. Generally, you'll want to change your filter every 1-3 months, but it really depends on your specific system and how much it's running. If you have pets or allergies, you might need to swap it out more often. Our techs can definitely show you exactly what you need and help set up a schedule that makes sense for your home. Want me to get someone out there?`;
     }
     if (qLower.includes('dirty') || qLower.includes('clogged') || qLower.includes('clean')) {
-      return `A dirty filter can really impact your system's efficiency and your air quality. If your filter looks gray or you can't see through it, it's definitely time for a replacement. Our team can help you choose the right filter and show you how to maintain it properly. Should I schedule a service visit?`;
+      return `Oh yeah, a dirty filter can really mess with your system's efficiency - and your air quality too! If it looks gray or you can't see through it, it's definitely time for a fresh one. Our team can help you pick the right filter and show you the easiest way to stay on top of it. Should I schedule a visit?`;
     }
-    return `I can help you with filter questions. Proper filter maintenance is crucial for your HVAC system's performance and your indoor air quality. What specifically would you like to know about your air filter?`;
+    return `Filter questions are always smart! Keeping up with filter maintenance is one of the best things you can do for your system. What specifically would you like to know about your air filter?`;
   }
   
   // AC/Air Conditioning related
@@ -521,6 +547,52 @@ async function checkPersonalityScenarios(companyId, qLower, conversationHistory)
         qLower.includes('say again') || qLower.includes('repeat that')) {
       const response = await getPersonalityResponse(companyId, 'agentNotUnderstood');
       if (response) return { category: 'agentNotUnderstood', text: response };
+    }
+    
+    // NEW: Professional Humor & Engagement Detection
+    
+    // Detect customer jokes, playfulness, or humor
+    if (qLower.includes('just kidding') || qLower.includes('joking') || qLower.includes('haha') || 
+        qLower.includes('lol') || qLower.includes('funny') || qLower.includes('joke') ||
+        (qLower.includes('you') && (qLower.includes('smart') || qLower.includes('good'))) ||
+        qLower.includes('clever')) {
+      const response = await getPersonalityResponse(companyId, 'customerJoke');
+      if (response) return { category: 'customerJoke', text: response };
+    }
+    
+    // Detect weather or casual small talk
+    if (qLower.includes('weather') || qLower.includes('hot') || qLower.includes('cold') || 
+        qLower.includes('raining') || qLower.includes('sunny') || qLower.includes('snow') ||
+        qLower.includes('nice day') || qLower.includes('beautiful day') || qLower.includes('crazy weather')) {
+      const response = await getPersonalityResponse(companyId, 'weatherSmallTalk');
+      if (response) return { category: 'weatherSmallTalk', text: response };
+    }
+    
+    // Detect compliments to the agent/company
+    if ((qLower.includes('you') || qLower.includes('service')) && 
+        (qLower.includes('great') || qLower.includes('excellent') || qLower.includes('amazing') || 
+         qLower.includes('awesome') || qLower.includes('wonderful') || qLower.includes('fantastic') ||
+         qLower.includes('helpful') || qLower.includes('good job'))) {
+      const response = await getPersonalityResponse(companyId, 'complimentResponse');
+      if (response) return { category: 'complimentResponse', text: response };
+    }
+    
+    // Detect casual, friendly greetings that deserve warm responses
+    if ((qLower.includes('hey') || qLower.includes('hi there') || qLower.includes('what\'s up') || 
+         qLower.includes('howdy') || qLower.includes('good morning') || qLower.includes('good afternoon')) &&
+         qLower.length < 20) // Keep it short and casual
+    {
+      const response = await getPersonalityResponse(companyId, 'casualGreeting');
+      if (response) return { category: 'casualGreeting', text: response };
+    }
+    
+    // Detect situations that call for empathy (customer expressing inconvenience/problems)
+    if (qLower.includes('broken') && (qLower.includes('again') || qLower.includes('always')) ||
+        qLower.includes('third time') || qLower.includes('keep') && qLower.includes('happening') ||
+        qLower.includes('so frustrating') || qLower.includes('this is ridiculous') ||
+        qLower.includes('can\'t believe') || qLower.includes('nightmare')) {
+      const response = await getPersonalityResponse(companyId, 'empathyResponse');
+      if (response) return { category: 'empathyResponse', text: response };
     }
     
   } catch (error) {
