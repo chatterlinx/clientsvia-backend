@@ -115,6 +115,9 @@ class AIAgentSetup {
         document.getElementById('aiSaveAgentGoalsBtn')?.addEventListener('click', () => this.saveAgentGoals());
         document.getElementById('aiSavePhoneAvailabilityBtn')?.addEventListener('click', () => this.savePhoneAvailability());
         document.getElementById('aiSaveCallWorkflowsBtn')?.addEventListener('click', () => this.saveCallWorkflows());
+        document.getElementById('aiSaveBasicSetupBtn')?.addEventListener('click', () => this.saveBasicSetup());
+        document.getElementById('aiSavePersonalityBtn')?.addEventListener('click', () => this.savePersonality());
+        document.getElementById('aiSaveAdvancedBtn')?.addEventListener('click', () => this.saveAdvanced());
 
         // Slider event listeners for intelligence tab
         ['confidenceThreshold', 'reasoningConfidence', 'memoryThreshold'].forEach(sliderId => {
@@ -632,6 +635,60 @@ class AIAgentSetup {
                 btn.innerHTML = '<i class="fas fa-check mr-2"></i>Call Workflows Saved';
                 btn.disabled = false;
                 this.showToast('Call workflows saved successfully!', 'success');
+            }, 2000);
+        }
+    }
+
+    /**
+     * Save basic setup functionality
+     */
+    saveBasicSetup() {
+        const btn = document.getElementById('aiSaveBasicSetupBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Basic Setup...';
+            btn.disabled = true;
+
+            // Simulate save process
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-check mr-2"></i>Basic Setup Saved';
+                btn.disabled = false;
+                this.showToast('Basic setup saved successfully!', 'success');
+            }, 2000);
+        }
+    }
+
+    /**
+     * Save personality settings functionality
+     */
+    savePersonality() {
+        const btn = document.getElementById('aiSavePersonalityBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Personality...';
+            btn.disabled = true;
+
+            // Simulate save process
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-check mr-2"></i>Personality Saved';
+                btn.disabled = false;
+                this.showToast('Personality settings saved successfully!', 'success');
+            }, 2000);
+        }
+    }
+
+    /**
+     * Save advanced settings functionality
+     */
+    saveAdvanced() {
+        const btn = document.getElementById('aiSaveAdvancedBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Advanced Settings...';
+            btn.disabled = true;
+
+            // Simulate save process
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-check mr-2"></i>Advanced Settings Saved';
+                btn.disabled = false;
+                this.showToast('Advanced settings saved successfully!', 'success');
             }, 2000);
         }
     }

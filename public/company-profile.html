@@ -1120,6 +1120,15 @@
                                         <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="workflows">
                                             <i class="fas fa-flow-chart mr-1"></i>Call Workflows
                                         </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="basic">
+                                            <i class="fas fa-cogs mr-1"></i>Basic Setup
+                                        </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="personality">
+                                            <i class="fas fa-user-friends mr-1"></i>Personality
+                                        </button>
+                                        <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="advanced">
+                                            <i class="fas fa-tachometer-alt mr-1"></i>Advanced
+                                        </button>
                                         <button class="ai-config-tab-btn py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap" data-tab="analytics">
                                             <i class="fas fa-chart-bar mr-1"></i>Analytics
                                         </button>
@@ -1226,11 +1235,25 @@
                                                 </div>
                                             </div>
                                             
-                                            <!-- Preview Agent Button -->
-                                            <div class="mt-6 pt-4 border-t border-gray-200 flex justify-end">
+                                            <!-- Main Action Buttons -->
+                                            <div class="mt-6 pt-4 border-t border-gray-200 flex flex-wrap gap-3 justify-end">
                                                 <button id="aiPreviewAgentBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
                                                     <i class="fas fa-eye mr-2"></i>Preview Agent
                                                 </button>
+                                                <button id="aiTestCallBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                                    <i class="fas fa-phone mr-2"></i>Test Call
+                                                </button>
+                                                <button id="aiSaveConfigBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                                    <i class="fas fa-save mr-2"></i>Save & Deploy Configuration
+                                                </button>
+                                            </div>
+                                            
+                                            <!-- Status indicator for save operations -->
+                                            <div id="aiConfigStatus" class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg hidden">
+                                                <div class="flex items-center">
+                                                    <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+                                                    <span id="aiConfigStatusText" class="text-blue-800 text-sm">Processing...</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -1346,7 +1369,7 @@ If scheduling, proceed to Repair Service Call Protocol.</textarea>
                                             
                                             <!-- Save Agent Goals Button -->
                                             <div class="mt-6 pt-4 border-t border-gray-200 flex justify-end">
-                                                <button id="aiSaveGoalsBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                                <button id="aiSaveAgentGoalsBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
                                                     <i class="fas fa-save mr-2"></i>Save Agent Goals
                                                 </button>
                                             </div>
@@ -1777,6 +1800,13 @@ If scheduling, proceed to Repair Service Call Protocol.</textarea>
                                                     </select>
                                                 </div>
                                             </div>
+                                        </div>
+                                        
+                                        <!-- Save Basic Setup Button -->
+                                        <div class="mt-6 pt-4 border-t border-gray-200 flex justify-end">
+                                            <button id="aiSaveBasicSetupBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                                <i class="fas fa-save mr-2"></i>Save Basic Setup
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -2581,21 +2611,6 @@ Cost estimate</textarea>
                                                 </div>
                                             </div>
                                         </div>
-                                        
-                                        <!-- Save & Deploy Configuration Button -->
-                                        <div class="mt-6 pt-4 border-t border-gray-200 flex justify-end">
-                                            <button id="aiSaveConfigBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
-                                                <i class="fas fa-save mr-2"></i>Save & Deploy Configuration
-                                            </button>
-                                        </div>
-                                        
-                                        <!-- Status indicator for save operations -->
-                                        <div id="aiConfigStatus" class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg hidden">
-                                            <div class="flex items-center">
-                                                <i class="fas fa-info-circle text-blue-600 mr-2"></i>
-                                                <span id="aiConfigStatusText" class="text-blue-800 text-sm">Processing...</span>
-                                            </div>
-                                        </div>
                                     </div>
                                 </div>
 
@@ -2797,13 +2812,6 @@ Cost estimate</textarea>
                                                 </label>
                                             </div>
                                         </div>
-                                        
-                                        <!-- Test Call Button -->
-                                        <div class="mt-6 pt-4 border-t border-gray-200 flex justify-end">
-                                            <button id="aiTestCallBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
-                                                <i class="fas fa-phone mr-2"></i>Test Call
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
 
@@ -2891,6 +2899,13 @@ Cost estimate</textarea>
                                                 <i class="fas fa-external-link-alt mr-2"></i>Open Personality Responses
                                             </button>
                                         </div>
+                                        
+                                        <!-- Save Personality Button -->
+                                        <div class="mt-6 pt-4 border-t border-gray-200 flex justify-end">
+                                            <button id="aiSavePersonalityBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                                <i class="fas fa-save mr-2"></i>Save Personality Settings
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -2969,6 +2984,13 @@ Cost estimate</textarea>
                                                     <input type="tel" id="aiEscalationPhone" class="form-input" placeholder="+1 (555) 123-4567">
                                                 </div>
                                             </div>
+                                        </div>
+                                        
+                                        <!-- Save Advanced Settings Button -->
+                                        <div class="mt-6 pt-4 border-t border-gray-200 flex justify-end">
+                                            <button id="aiSaveAdvancedBtn" class="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                                <i class="fas fa-save mr-2"></i>Save Advanced Settings
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
