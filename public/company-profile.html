@@ -3355,32 +3355,29 @@ Cost estimate</textarea>
                                         </div>
                                     </div>
                                 </div>
-                                
-                                <!-- Action Buttons for AI Agent Setup -->
-                                <div class="bg-white border-t border-gray-200 p-6 mt-8">
-                                    <div class="flex flex-col md:flex-row gap-4 justify-between items-center">
-                                        <!-- Left side: Test buttons -->
-                                        <div class="flex gap-3">
-                                            <button id="aiPreviewAgentBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
-                                                <i class="fas fa-eye mr-2"></i>Preview Agent
-                                            </button>
-                                            <button id="aiTestCallBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
-                                                <i class="fas fa-phone mr-2"></i>Test Call
-                                            </button>
-                                        </div>
-                                        
-                                        <!-- Right side: Save button -->
-                                        <button id="aiSaveConfigBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-8 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
-                                            <i class="fas fa-save mr-2"></i>Save & Deploy Configuration
-                                        </button>
-                                    </div>
-                                    
-                                    <!-- Progress/Status indicator -->
-                                    <div id="aiConfigStatus" class="mt-4 text-center text-sm text-gray-600 hidden">
-                                        <i class="fas fa-info-circle mr-1"></i>
-                                        <span id="aiConfigStatusText">Ready to configure your AI agent</span>
-                                    </div>
                                 </div>
+                            </div>
+                            
+                            <!-- AI Agent Setup Action Buttons -->
+                            <div class="px-6 md:px-8 mt-8 pt-6 border-t border-gray-200">
+                                <div class="flex justify-end space-x-4">
+                                    <button id="aiPreviewAgentBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                        <i class="fas fa-eye mr-2"></i>Preview Agent
+                                    </button>
+                                    <button id="aiTestCallBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                        <i class="fas fa-phone mr-2"></i>Test Call
+                                    </button>
+                                    <button id="aiSaveConfigBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                        <i class="fas fa-save mr-2"></i>Save & Deploy Configuration
+                                    </button>
+                                </div>
+                                
+                                <!-- Status indicator for save operations -->
+                                <div id="aiConfigStatus" class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg hidden">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+                                        <span id="aiConfigStatusText" class="text-blue-800 text-sm">Processing...</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
