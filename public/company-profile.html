@@ -2385,34 +2385,54 @@ Cost estimate</textarea>
                                             </div>
                                         </div>
 
-                                        <!-- Custom Q&As -->
+                                        <!-- Company Q&As -->
                                         <div class="bg-white border border-gray-200 rounded-lg p-6">
                                             <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                                                <i class="fas fa-plus-circle mr-2 text-indigo-600"></i>Custom Q&As
+                                                <i class="fas fa-question-circle mr-2 text-indigo-600"></i>Company Q&A
                                             </h4>
+                                            <p class="text-sm text-gray-500 mb-4">Add company-specific questions and answers.</p>
                                             
-                                            <!-- Quick Add Form -->
-                                            <div class="mb-4 p-4 bg-gray-50 rounded-lg">
-                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label class="form-label text-sm">Question</label>
-                                                        <input type="text" id="aiCustomQuestion" class="form-input" placeholder="What are your hours?">
-                                                    </div>
-                                                    <div>
-                                                        <label class="form-label text-sm">Answer</label>
-                                                        <input type="text" id="aiCustomAnswer" class="form-input" placeholder="We're open Monday-Friday 9am-5pm">
-                                                    </div>
+                                            <!-- Q&A Form -->
+                                            <form id="aiCompanyQnaForm" class="space-y-4 mb-6">
+                                                <input type="hidden" id="aiEditingQnaId">
+                                                <div>
+                                                    <label for="aiCompanyQnaQuestion" class="form-label">Question</label>
+                                                    <textarea id="aiCompanyQnaQuestion" class="form-input w-full" rows="2" required placeholder="Enter the question customers might ask"></textarea>
                                                 </div>
-                                                <button id="addCustomQABtn" class="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg text-sm">
-                                                    <i class="fas fa-plus mr-1"></i>Add Q&A
-                                                </button>
-                                            </div>
-
-                                            <!-- Custom Q&As List -->
-                                            <div id="aiCustomQAsList" class="space-y-2">
-                                                <div class="text-center text-gray-500 py-4">
-                                                    <i class="fas fa-question-circle text-2xl mb-2"></i>
-                                                    <p>No custom Q&As added yet</p>
+                                                <div>
+                                                    <label for="aiCompanyQnaAnswer" class="form-label">Answer</label>
+                                                    <div class="flex items-center gap-2 mb-2">
+                                                        <select id="aiPlaceholderSelect" class="form-select text-sm flex-none">
+                                                            <option value="">Insert Placeholder</option>
+                                                            <option value="{CompanyName}">Company Name</option>
+                                                            <option value="{OwnerName}">Owner Name</option>
+                                                            <option value="{ContactPhone}">Contact Phone</option>
+                                                            <option value="{ContactEmail}">Contact Email</option>
+                                                            <option value="{Address}">Address</option>
+                                                        </select>
+                                                        <button type="button" id="aiInsertPlaceholderBtn" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">Insert</button>
+                                                    </div>
+                                                    <textarea id="aiCompanyQnaAnswer" class="form-input w-full" rows="4" required placeholder="Enter the answer that will be provided to customers"></textarea>
+                                                    <p id="aiCompanyQnaPreview" class="text-xs text-gray-600 mt-1"></p>
+                                                </div>
+                                                <div>
+                                                    <label for="aiCompanyQnaKeywords" class="form-label">Keywords</label>
+                                                    <input type="text" id="aiCompanyQnaKeywords" class="form-input w-full" placeholder="Comma-separated keywords (e.g. hours, pricing, service area)">
+                                                    <p class="text-xs text-gray-500 mt-1">Keywords help the AI identify when to use this Q&A</p>
+                                                </div>
+                                                <div class="flex gap-3 justify-end">
+                                                    <button type="submit" id="aiCompanyQnaSaveBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition">Add Q&A</button>
+                                                    <button type="button" id="aiCompanyQnaCancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-2 px-4 rounded-lg transition hidden">Cancel</button>
+                                                </div>
+                                                <p id="aiCompanyQnaFormError" class="text-red-600 text-sm hidden"></p>
+                                            </form>
+                                            
+                                            <!-- Q&As List -->
+                                            <div id="aiCompanyQnaList" class="space-y-3">
+                                                <div class="text-center text-gray-500 py-8">
+                                                    <i class="fas fa-question-circle text-3xl mb-3 text-gray-300"></i>
+                                                    <p class="text-gray-400">No company Q&As added yet</p>
+                                                    <p class="text-sm text-gray-400 mt-1">Add your first Q&A using the form above</p>
                                                 </div>
                                             </div>
                                         </div>

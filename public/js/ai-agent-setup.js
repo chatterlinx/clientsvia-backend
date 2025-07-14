@@ -30,6 +30,7 @@ class AIAgentSetup {
         this.initializePlaceholderTextStyling();
         this.populateHVACScriptDemo();
         this.handleGreetingTypeChange(); // Initialize greeting type display
+        this.renderAICompanyQnAList(); // Initialize Q&A list
     }
 
     /**
@@ -92,11 +93,6 @@ class AIAgentSetup {
             this.addServiceType();
         });
 
-        // Custom Q&A management
-        document.getElementById('addCustomQABtn')?.addEventListener('click', () => {
-            this.addCustomQA();
-        });
-
         // Call settings sliders
         document.getElementById('aiCallTimeLimit')?.addEventListener('input', (e) => {
             document.getElementById('callTimeLimitValue').textContent = e.target.value + ' mins';
@@ -135,6 +131,29 @@ class AIAgentSetup {
             radio.addEventListener('change', () => {
                 this.handleGreetingTypeChange();
             });
+        });
+
+        // Company Q&A management
+        document.getElementById('aiCompanyQnaSaveBtn')?.addEventListener('click', () => {
+            this.saveAICompanyQnA();
+        });
+
+        document.getElementById('aiCompanyQnaCancelBtn')?.addEventListener('click', () => {
+            this.cancelAICompanyQnAEdit();
+        });
+
+        document.getElementById('aiInsertPlaceholderBtn')?.addEventListener('click', () => {
+            this.insertAIPlaceholder();
+        });
+
+        document.getElementById('aiCompanyQnaAnswer')?.addEventListener('input', () => {
+            this.updateAIQnAPreview();
+        });
+
+        // Company Q&A form submission
+        document.getElementById('aiCompanyQnaForm')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveAICompanyQnA();
         });
     }
 
@@ -478,10 +497,6 @@ class AIAgentSetup {
         this.showToast('Service type functionality coming soon', 'info');
     }
 
-    addCustomQA() {
-        this.showToast('Custom Q&A functionality coming soon', 'info');
-    }
-
     /**
      * Utility methods for UI interactions
      */
@@ -671,6 +686,9 @@ class AIAgentSetup {
             agentInitialMessage: document.getElementById('agentInitialMessage')?.value || '',
             greetingAudioFile: document.getElementById('aiGreetingAudioFile')?.files[0] || null,
             
+            // Company Q&As
+            companyQAs: this.customQAs || [],
+            
             // Additional settings can be added here as needed
             timestamp: new Date().toISOString()
         };
@@ -814,11 +832,209 @@ class AIAgentSetup {
             textContainer?.classList.remove('hidden');
         }
     }
+
+    /**
+     * Save AI Company Q&A
+     */
+    saveAICompanyQnA() {
+        const form = document.getElementById('aiCompanyQnaForm');
+        const question = document.getElementById('aiCompanyQnaQuestion').value.trim();
+        const answer = document.getElementById('aiCompanyQnaAnswer').value.trim();
+        const keywords = document.getElementById('aiCompanyQnaKeywords').value.trim();
+        const editingId = document.getElementById('aiEditingQnaId').value;
+
+        if (!question || !answer) {
+            this.showAIQnAError('Question and answer are required');
+            return;
+        }
+
+        const qnaData = {
+            id: editingId || Date.now().toString(),
+            question: question,
+            answer: answer,
+            keywords: keywords.split(',').map(k => k.trim()).filter(k => k),
+            createdAt: editingId ? undefined : new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        // Add or update in customQAs array
+        const existingIndex = this.customQAs.findIndex(qa => qa.id === qnaData.id);
+        if (existingIndex >= 0) {
+            this.customQAs[existingIndex] = qnaData;
+        } else {
+            this.customQAs.push(qnaData);
+        }
+
+        this.renderAICompanyQnAList();
+        this.clearAICompanyQnAForm();
+        this.showToast(editingId ? 'Q&A updated successfully' : 'Q&A added successfully', 'success');
+    }
+
+    /**
+     * Cancel AI Company Q&A edit
+     */
+    cancelAICompanyQnAEdit() {
+        this.clearAICompanyQnAForm();
+        document.getElementById('aiCompanyQnaSaveBtn').textContent = 'Add Q&A';
+        document.getElementById('aiCompanyQnaCancelBtn').classList.add('hidden');
+    }
+
+    /**
+     * Clear AI Company Q&A form
+     */
+    clearAICompanyQnAForm() {
+        document.getElementById('aiCompanyQnaQuestion').value = '';
+        document.getElementById('aiCompanyQnaAnswer').value = '';
+        document.getElementById('aiCompanyQnaKeywords').value = '';
+        document.getElementById('aiEditingQnaId').value = '';
+        document.getElementById('aiCompanyQnaPreview').textContent = '';
+        this.hideAIQnAError();
+    }
+
+    /**
+     * Insert placeholder into AI Q&A answer
+     */
+    insertAIPlaceholder() {
+        const select = document.getElementById('aiPlaceholderSelect');
+        const textarea = document.getElementById('aiCompanyQnaAnswer');
+        const placeholder = select.value;
+
+        if (placeholder && textarea) {
+            const cursorPos = textarea.selectionStart;
+            const textBefore = textarea.value.substring(0, cursorPos);
+            const textAfter = textarea.value.substring(cursorPos);
+            textarea.value = textBefore + placeholder + textAfter;
+            textarea.setSelectionRange(cursorPos + placeholder.length, cursorPos + placeholder.length);
+            textarea.focus();
+            this.updateAIQnAPreview();
+        }
+    }
+
+    /**
+     * Update AI Q&A preview
+     */
+    updateAIQnAPreview() {
+        const answer = document.getElementById('aiCompanyQnaAnswer').value;
+        const preview = document.getElementById('aiCompanyQnaPreview');
+        
+        if (answer && preview) {
+            // Simple placeholder replacement for preview
+            let previewText = answer
+                .replace(/{CompanyName}/g, 'Penguin Air Corp')
+                .replace(/{OwnerName}/g, 'John Smith')
+                .replace(/{ContactPhone}/g, '(555) 123-4567')
+                .replace(/{ContactEmail}/g, 'contact@company.com')
+                .replace(/{Address}/g, '123 Main St, City, State');
+            
+            preview.textContent = `Preview: ${previewText}`;
+        } else if (preview) {
+            preview.textContent = '';
+        }
+    }
+
+    /**
+     * Render AI Company Q&A list
+     */
+    renderAICompanyQnAList() {
+        const container = document.getElementById('aiCompanyQnaList');
+        if (!container) return;
+
+        if (this.customQAs.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-question-circle text-3xl mb-3 text-gray-300"></i>
+                    <p class="text-gray-400">No company Q&As added yet</p>
+                    <p class="text-sm text-gray-400 mt-1">Add your first Q&A using the form above</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = this.customQAs.map(qa => `
+            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <div class="flex justify-between items-start mb-2">
+                    <h5 class="font-semibold text-gray-900">${this.escapeHtml(qa.question)}</h5>
+                    <div class="flex gap-2">
+                        <button onclick="aiAgentSetup.editAICompanyQnA('${qa.id}')" class="text-indigo-600 hover:text-indigo-800 text-sm">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button onclick="aiAgentSetup.deleteAICompanyQnA('${qa.id}')" class="text-red-600 hover:text-red-800 text-sm">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+                <p class="text-gray-700 mb-2">${this.escapeHtml(qa.answer)}</p>
+                ${qa.keywords && qa.keywords.length > 0 ? `
+                    <div class="flex flex-wrap gap-1">
+                        ${qa.keywords.map(keyword => `<span class="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded">${this.escapeHtml(keyword)}</span>`).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `).join('');
+    }
+
+    /**
+     * Edit AI Company Q&A
+     */
+    editAICompanyQnA(id) {
+        const qa = this.customQAs.find(q => q.id === id);
+        if (qa) {
+            document.getElementById('aiCompanyQnaQuestion').value = qa.question;
+            document.getElementById('aiCompanyQnaAnswer').value = qa.answer;
+            document.getElementById('aiCompanyQnaKeywords').value = qa.keywords ? qa.keywords.join(', ') : '';
+            document.getElementById('aiEditingQnaId').value = id;
+            document.getElementById('aiCompanyQnaSaveBtn').textContent = 'Update Q&A';
+            document.getElementById('aiCompanyQnaCancelBtn').classList.remove('hidden');
+            this.updateAIQnAPreview();
+        }
+    }
+
+    /**
+     * Delete AI Company Q&A
+     */
+    deleteAICompanyQnA(id) {
+        if (confirm('Are you sure you want to delete this Q&A?')) {
+            this.customQAs = this.customQAs.filter(qa => qa.id !== id);
+            this.renderAICompanyQnAList();
+            this.showToast('Q&A deleted successfully', 'success');
+        }
+    }
+
+    /**
+     * Show AI Q&A error
+     */
+    showAIQnAError(message) {
+        const errorElement = document.getElementById('aiCompanyQnaFormError');
+        if (errorElement) {
+            errorElement.textContent = message;
+            errorElement.classList.remove('hidden');
+        }
+    }
+
+    /**
+     * Hide AI Q&A error
+     */
+    hideAIQnAError() {
+        const errorElement = document.getElementById('aiCompanyQnaFormError');
+        if (errorElement) {
+            errorElement.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Escape HTML to prevent XSS
+     */
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ...existing code...
 }
 
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    // Only initialize if we're on the AI Agent Setup tab
+// Initialize AI Agent Setup when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('ai-agent-setup-content')) {
         window.aiAgentSetup = new AIAgentSetup();
     }
