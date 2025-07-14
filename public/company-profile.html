@@ -55,19 +55,6 @@
         #agent-setup-content .protocol-section.collapsed { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-top:0; }
         #agent-setup-content .disabled-input { @apply opacity-50 cursor-not-allowed bg-gray-200; }
         
-        /* Hide global buttons that appear outside of proper tab containers */
-        body > #aiPreviewAgentBtn,
-        body > div > #aiPreviewAgentBtn,
-        body > div > div > #aiPreviewAgentBtn,
-        body > #aiTestCallBtn,
-        body > div > #aiTestCallBtn,
-        body > div > div > #aiTestCallBtn,
-        body > #aiSaveConfigBtn,
-        body > div > #aiSaveConfigBtn,
-        body > div > div > #aiSaveConfigBtn {
-            display: none !important;
-        }
-        
         /* Blue placeholder text for default content vs black for developer-edited content */
         .default-placeholder-text {
             color: #3B82F6 !important; /* Blue color for default/placeholder text */
@@ -3366,6 +3353,32 @@ Cost estimate</textarea>
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Action Buttons for AI Agent Setup -->
+                                <div class="bg-white border-t border-gray-200 p-6 mt-8">
+                                    <div class="flex flex-col md:flex-row gap-4 justify-between items-center">
+                                        <!-- Left side: Test buttons -->
+                                        <div class="flex gap-3">
+                                            <button id="aiPreviewAgentBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                                <i class="fas fa-eye mr-2"></i>Preview Agent
+                                            </button>
+                                            <button id="aiTestCallBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                                <i class="fas fa-phone mr-2"></i>Test Call
+                                            </button>
+                                        </div>
+                                        
+                                        <!-- Right side: Save button -->
+                                        <button id="aiSaveConfigBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-8 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                            <i class="fas fa-save mr-2"></i>Save & Deploy Configuration
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Progress/Status indicator -->
+                                    <div id="aiConfigStatus" class="mt-4 text-center text-sm text-gray-600 hidden">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        <span id="aiConfigStatusText">Ready to configure your AI agent</span>
                                     </div>
                                 </div>
                                 </div>

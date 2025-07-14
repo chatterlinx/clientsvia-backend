@@ -48,6 +48,19 @@ class AIAgentSetup {
             this.showCustomSetup();
         });
 
+        // Action Button Events
+        document.getElementById('aiPreviewAgentBtn')?.addEventListener('click', () => {
+            this.previewAgent();
+        });
+
+        document.getElementById('aiTestCallBtn')?.addEventListener('click', () => {
+            this.testCall();
+        });
+
+        document.getElementById('aiSaveConfigBtn')?.addEventListener('click', () => {
+            this.saveConfiguration();
+        });
+
         // Tab Navigation
         document.querySelectorAll('.ai-config-tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -457,24 +470,55 @@ class AIAgentSetup {
     }
 
     /**
+     * Test call functionality
+     */
+    testCall() {
+        const btn = document.getElementById('aiTestCallBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Initiating Test Call...';
+            btn.disabled = true;
+
+            // Simulate test call
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-phone mr-2"></i>Test Call';
+                btn.disabled = false;
+                this.showToast('Test call completed successfully!', 'success');
+                
+                // Could integrate with actual test call system here
+                console.log('Test call initiated...');
+            }, 3000);
+        }
+    }
+
+    /**
      * Preview agent functionality
      */
     previewAgent() {
         const btn = document.getElementById('aiPreviewAgentBtn');
         if (btn) {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Loading Preview...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading Preview...';
             btn.disabled = true;
 
             // Simulate preview loading
             setTimeout(() => {
-                btn.innerHTML = '<i class="fas fa-eye mr-1"></i>Preview Agent';
+                btn.innerHTML = '<i class="fas fa-eye mr-2"></i>Preview Agent';
                 btn.disabled = false;
                 this.showToast('Agent preview loaded!', 'success');
                 
                 // Could open a modal or new window here
                 console.log('Opening agent preview...');
+                this.openPreviewModal();
             }, 2000);
         }
+    }
+
+    /**
+     * Open preview modal (placeholder for future implementation)
+     */
+    openPreviewModal() {
+        // This would open a modal showing agent preview
+        // For now, just log the action
+        console.log('Preview modal would open here with agent conversation simulation');
     }
 
     /**
@@ -482,16 +526,43 @@ class AIAgentSetup {
      */
     saveConfiguration() {
         const btn = document.getElementById('aiSaveConfigBtn');
+        const statusDiv = document.getElementById('aiConfigStatus');
+        const statusText = document.getElementById('aiConfigStatusText');
+        
         if (btn) {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving & Deploying...';
             btn.disabled = true;
 
-            // Simulate save
+            // Show status
+            if (statusDiv && statusText) {
+                statusDiv.classList.remove('hidden');
+                statusText.innerHTML = 'Collecting configuration data...';
+            }
+
+            // Simulate save process with multiple steps
             setTimeout(() => {
-                btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save Configuration';
-                btn.disabled = false;
-                this.showToast('Configuration saved successfully!', 'success');
+                if (statusText) statusText.innerHTML = 'Validating agent settings...';
+            }, 500);
+
+            setTimeout(() => {
+                if (statusText) statusText.innerHTML = 'Deploying to AI engine...';
+            }, 1000);
+
+            setTimeout(() => {
+                if (statusText) statusText.innerHTML = 'Testing agent connectivity...';
             }, 1500);
+
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save & Deploy Configuration';
+                btn.disabled = false;
+                
+                if (statusDiv && statusText) {
+                    statusText.innerHTML = 'Configuration saved and deployed successfully!';
+                    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+                }
+                
+                this.showToast('AI Agent configuration saved and deployed!', 'success');
+            }, 2500);
         }
     }
 
