@@ -255,4 +255,56 @@ router.get('/analytics', authenticateJWT, async (req, res) => {
     }
 });
 
+// Save AI agent setup data to company
+router.post('/company/:companyId', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const aiAgentSetupData = req.body;
+        
+        // Verify user has access to this company
+        if (req.user.companyId !== companyId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied to this company'
+            });
+        }
+        
+        // Update company with AI agent setup data
+        const Company = require('../models/Company');
+        const company = await Company.findByIdAndUpdate(
+            companyId,
+            { 
+                $set: { 
+                    aiAgentSetup: aiAgentSetupData,
+                    updatedAt: new Date()
+                }
+            },
+            { new: true }
+        );
+        
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+        
+        console.log(`[AI AGENT SETUP] Saved for company ${companyId}:`, aiAgentSetupData);
+        
+        res.json({
+            success: true,
+            message: 'AI agent setup saved successfully',
+            data: aiAgentSetupData
+        });
+        
+    } catch (error) {
+        console.error('Failed to save AI agent setup:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to save AI agent setup',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

@@ -400,7 +400,64 @@ class AIAgentSetup {
     }
 
     deployQuickSetup() {
-        this.showToast('Quick setup deployment started', 'success');
+        const businessTemplate = document.getElementById('aiBusinessTypeTemplate')?.value;
+        const agentPersona = document.getElementById('aiAgentPersona')?.value;
+        
+        if (!businessTemplate) {
+            this.showToast('Please select a business type template first', 'error');
+            return;
+        }
+        
+        const btn = document.getElementById('quickSetupDeployBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Deploying AI Agent...';
+            btn.disabled = true;
+        }
+        
+        // Prepare the AI agent setup data
+        const aiAgentSetupData = {
+            template: businessTemplate,
+            personality: agentPersona,
+            deployedAt: new Date().toISOString(),
+            isQuickSetup: true
+        };
+        
+        // Save to company's aiAgentSetup field
+        fetch(`/api/ai-agent-setup/company/${window.currentCompanyId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify(aiAgentSetupData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.showToast('AI Agent deployed successfully! Twilio calls will now use the new setup.', 'success');
+                
+                // Update button
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-check mr-2"></i>Deployed Successfully';
+                    setTimeout(() => {
+                        btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Deploy AI Agent (1-Click)';
+                        btn.disabled = false;
+                    }, 3000);
+                }
+            } else {
+                throw new Error(data.message || 'Failed to deploy AI agent');
+            }
+        })
+        .catch(error => {
+            console.error('Error deploying AI agent:', error);
+            this.showToast('Failed to deploy AI agent: ' + error.message, 'error');
+            
+            // Reset button
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Deploy AI Agent (1-Click)';
+                btn.disabled = false;
+            }
+        });
     }
 
     showCustomSetup() {
