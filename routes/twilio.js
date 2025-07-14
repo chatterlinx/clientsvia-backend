@@ -137,6 +137,21 @@ router.post('/voice', async (req, res) => {
         greetingType = company.aiAgentSetup.greetingType || 'tts';
         greetingAudioUrl = company.aiAgentSetup.greetingAudioUrl || '';
         placeholders = company.aiAgentSetup.placeholders || [];
+    } else if (company.aiAgentSetup && company.aiAgentSetup.template) {
+        // Check if there's a template with a greeting
+        console.log(`[AI AGENT SETUP] Using template greeting for template: ${company.aiAgentSetup.template}`);
+        const AIAgentSetupService = require('../services/aiAgentSetup');
+        const templates = AIAgentSetupService.getBusinessTemplates();
+        const template = templates[company.aiAgentSetup.template];
+        if (template && template.greeting) {
+            rawGreeting = template.greeting;
+            greetingType = 'tts';
+            greetingAudioUrl = '';
+            placeholders = [];
+        } else {
+            // Template doesn't have greeting, use default
+            rawGreeting = "Hello, thank you for calling. How can I help you today?";
+        }
     } else {
         console.log(`[LEGACY AGENT SETUP] Using legacy agent setup greeting`);
         greetingType = company.agentSetup?.greetingType || 'tts';
