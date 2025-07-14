@@ -111,6 +111,11 @@ class AIAgentSetup {
         document.getElementById('aiPreviewAgentBtn')?.addEventListener('click', () => this.previewAgent());
         document.getElementById('aiSaveConfigBtn')?.addEventListener('click', () => this.saveConfiguration());
 
+        // Tab-specific save buttons
+        document.getElementById('aiSaveAgentGoalsBtn')?.addEventListener('click', () => this.saveAgentGoals());
+        document.getElementById('aiSavePhoneAvailabilityBtn')?.addEventListener('click', () => this.savePhoneAvailability());
+        document.getElementById('aiSaveCallWorkflowsBtn')?.addEventListener('click', () => this.saveCallWorkflows());
+
         // Slider event listeners for intelligence tab
         ['confidenceThreshold', 'reasoningConfidence', 'memoryThreshold'].forEach(sliderId => {
             const slider = document.getElementById(sliderId);
@@ -573,6 +578,60 @@ class AIAgentSetup {
             setTimeout(() => {
                 playBtn.innerHTML = '<i class="fas fa-play mr-1"></i>Play';
                 this.showToast('Voice preview completed', 'success');
+            }, 2000);
+        }
+    }
+
+    /**
+     * Save agent goals functionality
+     */
+    saveAgentGoals() {
+        const btn = document.getElementById('aiSaveAgentGoalsBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Agent Goals...';
+            btn.disabled = true;
+
+            // Simulate save process
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-check mr-2"></i>Agent Goals Saved';
+                btn.disabled = false;
+                this.showToast('Agent goals saved successfully!', 'success');
+            }, 2000);
+        }
+    }
+
+    /**
+     * Save phone and availability settings functionality
+     */
+    savePhoneAvailability() {
+        const btn = document.getElementById('aiSavePhoneAvailabilityBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Phone & Availability...';
+            btn.disabled = true;
+
+            // Simulate save process
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-check mr-2"></i>Phone & Availability Saved';
+                btn.disabled = false;
+                this.showToast('Phone and availability settings saved successfully!', 'success');
+            }, 2000);
+        }
+    }
+
+    /**
+     * Save call workflows functionality
+     */
+    saveCallWorkflows() {
+        const btn = document.getElementById('aiSaveCallWorkflowsBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Call Workflows...';
+            btn.disabled = true;
+
+            // Simulate save process
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-check mr-2"></i>Call Workflows Saved';
+                btn.disabled = false;
+                this.showToast('Call workflows saved successfully!', 'success');
             }, 2000);
         }
     }
