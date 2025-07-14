@@ -51,10 +51,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const configSettingsForm = document.getElementById('config-settings-form');
     const twilioAccountSidInput = document.getElementById('twilioAccountSid');
     const twilioAuthTokenInput = document.getElementById('twilioAuthToken');
-    // const twilioPhoneNumberInput = document.getElementById('twilioPhoneNumber'); // Now using multiple phone numbers
-    const smsJobAlertsCheckbox = document.getElementById('smsJobAlerts');
-    const smsCustomerRepliesCheckbox = document.getElementById('smsCustomerReplies');
-    const smsAppointmentRemindersCheckbox = document.getElementById('smsAppointmentReminders');
     
     const newNoteTextarea = document.getElementById('new-note-textarea');
     const addNewNoteButton = document.getElementById('add-new-note-button');
@@ -526,7 +522,6 @@ document.addEventListener('DOMContentLoaded', () => {
             currentCompanyData.additionalContacts = currentCompanyData.additionalContacts || [];
             currentCompanyData.notes = currentCompanyData.notes || [];
             currentCompanyData.twilioConfig = currentCompanyData.twilioConfig || {};
-            currentCompanyData.smsSettings = currentCompanyData.smsSettings || {};
             currentCompanyData.aiSettings = currentCompanyData.aiSettings || {};
             currentCompanyData.agentSetup = currentCompanyData.agentSetup || {};
             currentCompanyData.integrations = currentCompanyData.integrations || {};
@@ -556,7 +551,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await fetchAvailableTradeCategories();
             populateCompanyData(currentCompanyData); 
             updateCompanyStatusDisplay(currentCompanyData.isActive);
-            populateConfigurationForm(currentCompanyData.twilioConfig, currentCompanyData.smsSettings);
+            populateConfigurationForm(currentCompanyData.twilioConfig);
             
             renderCalendarSettings(currentCompanyData);
 
@@ -947,17 +942,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function populateConfigurationForm(twilioConfig = {}, smsSettings = {}) {
+    function populateConfigurationForm(twilioConfig = {}) {
         if (!configSettingsForm) return;
         if (twilioAccountSidInput) twilioAccountSidInput.value = twilioConfig.accountSid || '';
         if (twilioAuthTokenInput) twilioAuthTokenInput.value = twilioConfig.authToken || '';
         
         // Handle backward compatibility and populate phone numbers
         populatePhoneNumbers(twilioConfig);
-        
-        if (smsJobAlertsCheckbox) smsJobAlertsCheckbox.checked = !!smsSettings.jobAlerts;
-        if (smsCustomerRepliesCheckbox) smsCustomerRepliesCheckbox.checked = !!smsSettings.customerReplies;
-        if (smsAppointmentRemindersCheckbox) smsAppointmentRemindersCheckbox.checked = !!smsSettings.appointmentReminders;
     }
 
     function populatePhoneNumbers(twilioConfig) {
@@ -1926,7 +1917,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const agentSetupToPreserve = currentCompanyData.agentSetup; 
             const aiSettingsToPreserve = currentCompanyData.aiSettings; 
             const twilioConfigToPreserve = currentCompanyData.twilioConfig; 
-            const smsSettingsToPreserve = currentCompanyData.smsSettings; 
             const notesToPreserve = currentCompanyData.notes; 
             const integrationsToPreserve = currentCompanyData.integrations;
 
@@ -1935,7 +1925,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 agentSetup: agentSetupToPreserve,
                 aiSettings: aiSettingsToPreserve,
                 twilioConfig: twilioConfigToPreserve,
-                smsSettings: smsSettingsToPreserve,
                 notes: notesToPreserve,
                 integrations: integrationsToPreserve
             };
@@ -1972,12 +1961,7 @@ document.addEventListener('DOMContentLoaded', () => {
             phoneNumber: primaryPhone, // Primary phone number for backward compatibility
             phoneNumbers: phoneNumbers // New multiple phone numbers array
         };
-        const smsSettingsData = {
-            jobAlerts: smsJobAlertsCheckbox?.checked || false,
-            customerReplies: smsCustomerRepliesCheckbox?.checked || false,
-            appointmentReminders: smsAppointmentRemindersCheckbox?.checked || false,
-        };
-        const fullConfigData = { twilioConfig: twilioConfigData, smsSettings: smsSettingsData };
+        const fullConfigData = { twilioConfig: twilioConfigData };
         const saveButton = configSettingsForm.querySelector('button[type="submit"]');
         if (saveButton) { saveButton.disabled = true; saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...'; }
         try {
@@ -1987,8 +1971,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) { const err = await response.json().catch(() => ({ message: `Failed to save configuration. Status: ${response.status}` })); throw new Error(err.message); }
             const updatedCompany = await response.json();
             currentCompanyData.twilioConfig = updatedCompany.twilioConfig || {};
-            currentCompanyData.smsSettings = updatedCompany.smsSettings || {};
-            populateConfigurationForm(currentCompanyData.twilioConfig, currentCompanyData.smsSettings);
+            populateConfigurationForm(currentCompanyData.twilioConfig);
             hasUnsavedChanges = false;
             alert('Configuration settings saved successfully!');
         } catch (error) {
