@@ -55,6 +55,19 @@
         #agent-setup-content .protocol-section.collapsed { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-top:0; }
         #agent-setup-content .disabled-input { @apply opacity-50 cursor-not-allowed bg-gray-200; }
         
+        /* Hide global buttons that appear outside of proper tab containers */
+        body > #aiPreviewAgentBtn,
+        body > div > #aiPreviewAgentBtn,
+        body > div > div > #aiPreviewAgentBtn,
+        body > #aiTestCallBtn,
+        body > div > #aiTestCallBtn,
+        body > div > div > #aiTestCallBtn,
+        body > #aiSaveConfigBtn,
+        body > div > #aiSaveConfigBtn,
+        body > div > div > #aiSaveConfigBtn {
+            display: none !important;
+        }
+        
         /* Blue placeholder text for default content vs black for developer-edited content */
         .default-placeholder-text {
             color: #3B82F6 !important; /* Blue color for default/placeholder text */
@@ -3665,7 +3678,7 @@ Cost estimate</textarea>
     </div>
 
     <script src="/js/company-profile.js"></script>
-    <!-- <script src="/js/ai-agent-setup.js"></script> -->
+    <script src="/js/ai-agent-setup.js"></script>
     <script>
     // ===========================================
     // PHONE NUMBER MANAGEMENT FUNCTIONALITY
