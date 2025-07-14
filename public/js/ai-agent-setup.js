@@ -29,6 +29,7 @@ class AIAgentSetup {
         this.loadExistingData();
         this.initializePlaceholderTextStyling();
         this.populateHVACScriptDemo();
+        this.handleGreetingTypeChange(); // Initialize greeting type display
     }
 
     /**
@@ -128,6 +129,13 @@ class AIAgentSetup {
                 });
             }
         });
+
+        // Greeting type handling
+        document.querySelectorAll('input[name="aiGreetingType"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                this.handleGreetingTypeChange();
+            });
+        });
     }
 
     /**
@@ -204,6 +212,7 @@ class AIAgentSetup {
             agentVoice: 'bria',
             agentTimezone: 'GMT-04:00 America/New_York (EDT)',
             callDirection: 'inbound',
+            greetingType: 'tts',
             agentInitialMessage: 'Hi, Penguin Air conditioning! —how can I help you today?'
         };
 
@@ -604,31 +613,69 @@ class AIAgentSetup {
                 statusText.innerHTML = 'Collecting configuration data...';
             }
 
-            // Simulate save process with multiple steps
-            setTimeout(() => {
-                if (statusText) statusText.innerHTML = 'Validating agent settings...';
-            }, 500);
-
-            setTimeout(() => {
-                if (statusText) statusText.innerHTML = 'Deploying to AI engine...';
-            }, 1000);
-
-            setTimeout(() => {
-                if (statusText) statusText.innerHTML = 'Testing agent connectivity...';
-            }, 1500);
-
-            setTimeout(() => {
+            // Collect all configuration data including greeting type
+            const configData = this.collectConfigurationData();
+            console.log('AI Agent Configuration Data:', configData);
+            
+            // Make API call to save configuration
+            fetch(`/api/ai-agent-setup/company/${window.companyId || 'current'}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
+                },
+                body: JSON.stringify(configData)
+            })
+            .then(response => response.json())
+            .then(data => {
                 btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save & Deploy Configuration';
                 btn.disabled = false;
                 
                 if (statusDiv && statusText) {
-                    statusText.innerHTML = 'Configuration saved and deployed successfully!';
+                    if (data.success) {
+                        statusText.innerHTML = 'Configuration saved and deployed successfully!';
+                        this.showToast('AI Agent configuration saved and deployed!', 'success');
+                    } else {
+                        statusText.innerHTML = 'Failed to save configuration: ' + (data.message || 'Unknown error');
+                        this.showToast('Failed to save configuration: ' + (data.message || 'Unknown error'), 'error');
+                    }
+                    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+                }
+            })
+            .catch(error => {
+                console.error('Failed to save configuration:', error);
+                btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save & Deploy Configuration';
+                btn.disabled = false;
+                
+                if (statusDiv && statusText) {
+                    statusText.innerHTML = 'Failed to save configuration';
                     setTimeout(() => statusDiv.classList.add('hidden'), 3000);
                 }
                 
-                this.showToast('AI Agent configuration saved and deployed!', 'success');
-            }, 2500);
+                this.showToast('Failed to save configuration', 'error');
+            });
         }
+    }
+
+    collectConfigurationData() {
+        const data = {
+            // Agent Details
+            agentName: document.getElementById('agentName')?.value || '',
+            businessName: document.getElementById('businessName')?.value || '',
+            agentLanguage: document.getElementById('agentLanguage')?.value || 'english',
+            agentTimezone: document.getElementById('agentTimezone')?.value || '',
+            callDirection: document.querySelector('input[name="callDirection"]:checked')?.value || 'inbound',
+            
+            // Greeting Configuration
+            greetingType: document.querySelector('input[name="aiGreetingType"]:checked')?.value || 'tts',
+            agentInitialMessage: document.getElementById('agentInitialMessage')?.value || '',
+            greetingAudioFile: document.getElementById('aiGreetingAudioFile')?.files[0] || null,
+            
+            // Additional settings can be added here as needed
+            timestamp: new Date().toISOString()
+        };
+        
+        return data;
     }
 
     playVoicePreview() {
@@ -747,6 +794,24 @@ class AIAgentSetup {
                 btn.disabled = false;
                 this.showToast('Advanced settings saved successfully!', 'success');
             }, 2000);
+        }
+    }
+
+    /**
+     * Handle greeting type change between text-to-speech and audio file
+     */
+    handleGreetingTypeChange() {
+        const greetingTypeTTS = document.getElementById('aiGreetingTypeTTS');
+        const greetingTypeAudio = document.getElementById('aiGreetingTypeAudio');
+        const audioContainer = document.getElementById('aiGreetingAudioUploadContainer');
+        const textContainer = document.getElementById('aiGreetingTextContainer');
+        
+        if (greetingTypeAudio && greetingTypeAudio.checked) {
+            audioContainer?.classList.remove('hidden');
+            textContainer?.classList.add('hidden');
+        } else {
+            audioContainer?.classList.add('hidden');
+            textContainer?.classList.remove('hidden');
         }
     }
 }

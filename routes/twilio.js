@@ -131,9 +131,9 @@ router.post('/voice', async (req, res) => {
     let placeholders = [];
     
     // Check if company has new AI Agent Setup with greeting
-    if (company.aiAgentSetup && company.aiAgentSetup.greeting) {
+    if (company.aiAgentSetup && (company.aiAgentSetup.agentInitialMessage || company.aiAgentSetup.greeting)) {
         console.log(`[AI AGENT SETUP] Using new AI agent greeting`);
-        rawGreeting = company.aiAgentSetup.greeting;
+        rawGreeting = company.aiAgentSetup.agentInitialMessage || company.aiAgentSetup.greeting;
         greetingType = company.aiAgentSetup.greetingType || 'tts';
         greetingAudioUrl = company.aiAgentSetup.greetingAudioUrl || '';
         placeholders = company.aiAgentSetup.placeholders || [];

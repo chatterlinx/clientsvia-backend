@@ -1218,21 +1218,46 @@
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-
-                                        <!-- Agent's Initial Message -->
-                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
-                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                                                <i class="fas fa-comment-dots mr-2 text-indigo-600"></i>Agent's Initial Message <span class="text-red-500">*</span>
-                                            </h4>
-                                            
-                                            <div class="space-y-4">
-                                                <textarea id="agentInitialMessage" name="agentInitialMessage" rows="4" maxlength="190" class="form-input w-full resize-none" placeholder="Hi, Penguin Air conditioning! —how can I help you today?">Hi, Penguin Air conditioning! —how can I help you today?</textarea>
-                                                <div class="flex justify-between items-center">
-                                                    <p class="text-xs text-gray-500">This is the first message your AI agent will say when answering calls</p>
-                                                    <p class="text-xs text-gray-500"><span id="initialMessageCount">56</span> / 190</p>
-                                                </div>
-                                            </div>
+                                        </div>                        <!-- Agent's Initial Message -->
+                        <div class="bg-white border border-gray-200 rounded-lg p-6">
+                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                <i class="fas fa-comment-dots mr-2 text-indigo-600"></i>Agent's Initial Message <span class="text-red-500">*</span>
+                            </h4>
+                            
+                            <div class="space-y-4">
+                                <!-- Greeting Type Selection -->
+                                <div>
+                                    <label class="form-label">Message Type</label>
+                                    <div class="flex items-center space-x-4">
+                                        <label class="flex items-center">
+                                            <input type="radio" name="aiGreetingType" id="aiGreetingTypeTTS" value="tts" class="form-radio" checked>
+                                            <span class="ml-1">Text-to-Speech</span>
+                                        </label>
+                                        <label class="flex items-center">
+                                            <input type="radio" name="aiGreetingType" id="aiGreetingTypeAudio" value="audio" class="form-radio">
+                                            <span class="ml-1">Audio File</span>
+                                        </label>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-1">Choose between AI-generated speech or upload a recorded greeting to save on ElevenLabs character costs</p>
+                                </div>
+                                
+                                <!-- Audio Upload Container -->
+                                <div id="aiGreetingAudioUploadContainer" class="hidden">
+                                    <label for="aiGreetingAudioFile" class="form-label">Initial Greeting Audio (MP3)</label>
+                                    <input type="file" id="aiGreetingAudioFile" accept="audio/mpeg" class="form-input">
+                                    <audio id="aiGreetingAudioPreview" controls class="mt-2 hidden"></audio>
+                                    <p class="text-xs text-gray-500 mt-1">Upload an MP3 file for your agent's greeting. This will be played instead of using text-to-speech.</p>
+                                </div>
+                                
+                                <!-- Text Message Container -->
+                                <div id="aiGreetingTextContainer">
+                                    <textarea id="agentInitialMessage" name="agentInitialMessage" rows="4" maxlength="190" class="form-input w-full resize-none" placeholder="Hi, Penguin Air conditioning! —how can I help you today?">Hi, Penguin Air conditioning! —how can I help you today?</textarea>
+                                    <div class="flex justify-between items-center">
+                                        <p class="text-xs text-gray-500">This is the first message your AI agent will say when answering calls</p>
+                                        <p class="text-xs text-gray-500"><span id="initialMessageCount">56</span> / 190</p>
+                                    </div>
+                                </div>
+                            </div>
                                             
                                             <!-- Main Action Buttons -->
                                             <div class="mt-6 pt-4 border-t border-gray-200 flex flex-wrap gap-3 justify-end">
@@ -3520,6 +3545,114 @@ Cost estimate</textarea>
                 window.phoneUpdateTimeout = setTimeout(updateAIAgentPhoneOptions, 500);
             }
         });
+
+        // --- AI Agent Setup Greeting Type Toggle ---
+        function toggleAIGreetingType(greetingType) {
+            const audioContainer = document.getElementById('aiGreetingAudioUploadContainer');
+            const textContainer = document.getElementById('aiGreetingTextContainer');
+            
+            if (greetingType === 'audio') {
+                audioContainer?.classList.remove('hidden');
+                textContainer?.classList.add('hidden');
+            } else {
+                audioContainer?.classList.add('hidden');
+                textContainer?.classList.remove('hidden');
+            }
+        }
+
+        // Add event listeners for AI greeting type radio buttons
+        const aiGreetingTypeTTS = document.getElementById('aiGreetingTypeTTS');
+        const aiGreetingTypeAudio = document.getElementById('aiGreetingTypeAudio');
+        
+        if (aiGreetingTypeTTS) {
+            aiGreetingTypeTTS.addEventListener('change', function() {
+                if (this.checked) {
+                    toggleAIGreetingType('tts');
+                }
+            });
+        }
+        
+        if (aiGreetingTypeAudio) {
+            aiGreetingTypeAudio.addEventListener('change', function() {
+                if (this.checked) {
+                    toggleAIGreetingType('audio');
+                }
+            });
+        }
+
+        // Handle AI greeting audio file upload
+        const aiGreetingAudioFile = document.getElementById('aiGreetingAudioFile');
+        const aiGreetingAudioPreview = document.getElementById('aiGreetingAudioPreview');
+        
+        if (aiGreetingAudioFile && aiGreetingAudioPreview) {
+            aiGreetingAudioFile.addEventListener('change', function() {
+                const file = this.files[0];
+                if (file) {
+                    const url = URL.createObjectURL(file);
+                    aiGreetingAudioPreview.src = url;
+                    aiGreetingAudioPreview.classList.remove('hidden');
+                } else {
+                    aiGreetingAudioPreview.classList.add('hidden');
+                }
+            });
+        }
+
+        // --- Original Agent Setup Greeting Type Toggle ---
+        function toggleGreetingType(greetingType) {
+            const audioContainer = document.getElementById('greetingAudioUploadContainer');
+            const textContainer = document.getElementById('greetingTextContainer');
+            
+            if (greetingType === 'audio') {
+                audioContainer?.classList.remove('hidden');
+                textContainer?.classList.add('hidden');
+            } else {
+                audioContainer?.classList.add('hidden');
+                textContainer?.classList.remove('hidden');
+            }
+        }
+
+        // Add event listeners for original greeting type radio buttons
+        const greetingTypeTTS = document.getElementById('greetingTypeTTS');
+        const greetingTypeAudio = document.getElementById('greetingTypeAudio');
+        
+        if (greetingTypeTTS) {
+            greetingTypeTTS.addEventListener('change', function() {
+                if (this.checked) {
+                    toggleGreetingType('tts');
+                }
+            });
+        }
+        
+        if (greetingTypeAudio) {
+            greetingTypeAudio.addEventListener('change', function() {
+                if (this.checked) {
+                    toggleGreetingType('audio');
+                }
+            });
+        }
+
+        // Handle original greeting audio file upload
+        const greetingAudioFile = document.getElementById('greetingAudioFile');
+        const greetingAudioPreview = document.getElementById('greetingAudioPreview');
+        
+        if (greetingAudioFile && greetingAudioPreview) {
+            greetingAudioFile.addEventListener('change', function() {
+                const file = this.files[0];
+                if (file) {
+                    const url = URL.createObjectURL(file);
+                    greetingAudioPreview.src = url;
+                    greetingAudioPreview.classList.remove('hidden');
+                } else {
+                    greetingAudioPreview.classList.add('hidden');
+                }
+            });
+        }
+
+        // Initialize original greeting type on page load (default to TTS)
+        toggleGreetingType('tts');
+
+        // Initialize greeting type on page load (default to TTS)
+        toggleAIGreetingType('tts');
     });
 
 // ===========================================
