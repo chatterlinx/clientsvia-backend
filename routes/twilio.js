@@ -124,15 +124,28 @@ router.post('/voice', async (req, res) => {
     console.log(`[PERFORMANCE SETTINGS] [TARGET] Speech Confidence: ${speechThreshold} | Fuzzy Match: ${fuzzyThreshold}`);
     console.log(`[THRESHOLDS] Confidence: ${speechThreshold}`); // Keep legacy log for compatibility
 
-    const greetingType = company.agentSetup?.greetingType || 'tts';
-    const greetingAudioUrl = company.agentSetup?.greetingAudioUrl || '';
+    // BYPASS: Check for new AI Agent Setup greeting first, then fall back to old agent setup
+    let rawGreeting;
+    let greetingType = 'tts';
+    let greetingAudioUrl = '';
+    let placeholders = [];
+    
+    // Check if company has new AI Agent Setup with greeting
+    if (company.aiAgentSetup && company.aiAgentSetup.greeting) {
+        console.log(`[AI AGENT SETUP] Using new AI agent greeting`);
+        rawGreeting = company.aiAgentSetup.greeting;
+        greetingType = company.aiAgentSetup.greetingType || 'tts';
+        greetingAudioUrl = company.aiAgentSetup.greetingAudioUrl || '';
+        placeholders = company.aiAgentSetup.placeholders || [];
+    } else {
+        console.log(`[LEGACY AGENT SETUP] Using legacy agent setup greeting`);
+        greetingType = company.agentSetup?.greetingType || 'tts';
+        greetingAudioUrl = company.agentSetup?.greetingAudioUrl || '';
+        placeholders = company.agentSetup?.placeholders || [];
+        rawGreeting = company.agentSetup?.agentGreeting || "Hello, thank you for calling. How can I help you today?";
+    }
+    
     console.log(`[GREETING TYPE] [TTS] Type: ${greetingType} | Audio URL: ${greetingAudioUrl || 'none'}`);
-    
-    // Get placeholders for the company
-    const placeholders = company.agentSetup?.placeholders || [];
-    
-    // Get the raw greeting
-    let rawGreeting = company.agentSetup?.agentGreeting || "Hello, thank you for calling. How can I help you today?";
     
     // Import the placeholders utility
     const { applyPlaceholders } = require('../utils/placeholders');

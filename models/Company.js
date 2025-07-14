@@ -192,6 +192,7 @@ const companySchema = new mongoose.Schema({
     integrations: { type: integrationsSchema, default: () => ({}) }, 
     aiSettings: { type: aiSettingsSchema, default: () => ({}) },
     agentSetup: { type: agentSetupSchema, default: () => ({}) },
+    aiAgentSetup: { type: mongoose.Schema.Types.Mixed, default: null }, // New AI Agent Setup data
     personalityResponses: { type: personalityResponsesSchema, default: () => defaultResponses },
     learningSettings: { type: learningSettingsSchema, default: () => ({}) },
     
