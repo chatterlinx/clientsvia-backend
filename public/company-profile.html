@@ -3686,9 +3686,17 @@ Cost estimate</textarea>
      */
     function removePhoneNumber(button) {
         const phoneItem = button.closest('.phone-number-item');
-        const isPrimary = phoneItem.querySelector('.bg-blue-100.text-blue-800');
+        const primaryButton = phoneItem.querySelector('button[onclick*="setPrimaryNumber"]');
+        const phoneInput = phoneItem.querySelector('input[name="phoneNumber"]');
         
-        if (isPrimary && isPrimary.textContent.includes('Primary')) {
+        // Check if this is the primary number by looking at the button text
+        const isPrimary = primaryButton && primaryButton.textContent.trim() === 'Primary';
+        
+        console.log('Attempting to remove phone number:', phoneInput?.value);
+        console.log('Primary button text:', primaryButton?.textContent);
+        console.log('Is primary?', isPrimary);
+        
+        if (isPrimary) {
             showToast('Cannot remove primary number. Set another number as primary first.', 'error');
             return;
         }
