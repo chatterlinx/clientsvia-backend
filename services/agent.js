@@ -148,8 +148,8 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   // USE SCRIPT FROM COMPANY OBJECT, NOT PARAMETER
   const mainAgentScript = company?.agentSetup?.mainAgentScript || mainAgentScriptParam || '';
   
-  // Define fuzzy threshold for Q&A matching
-  const fuzzyThreshold = company?.aiSettings?.fuzzyMatchThreshold ?? 0.3;
+  // Define fuzzy threshold for Q&A matching (lower for better matching)
+  const fuzzyThreshold = company?.aiSettings?.fuzzyMatchThreshold ?? 0.15; // Lowered from 0.25 to 0.15 for better Q&A matching
 
   console.log(`[Agent] Company ${companyId} - LLM Fallback Enabled: ${llmFallbackEnabled}`);
   console.log(`[Agent] Company ${companyId} - Custom Escalation Message: ${customEscalationMessage}`);
@@ -546,8 +546,8 @@ async function generateIntelligentResponse(company, question, conversationHistor
     }
   }
   
-  // If we found a decent match (30% or better), process it intelligently
-  if (bestMatch && bestScore >= 0.3) {
+  // If we found a decent match (20% or better), process it intelligently
+  if (bestMatch && bestScore >= 0.2) { // Lowered from 0.3 to 0.2
     console.log(`[Intelligent Response] Found contextual Q&A match (${Math.round(bestScore * 100)}% relevance)`);
     return generateSmartAnswerFromQA(question, bestMatch.answer, company?.companyName);
   }
@@ -800,32 +800,83 @@ async function checkPersonalityScenarios(companyId, question, conversationHistor
 }
 
 // Extract quick answer from Q&A entries using fuzzy matching
-function extractQuickAnswerFromQA(qaEntries, question, threshold = 0.3) {
+function extractQuickAnswerFromQA(qaEntries, question, threshold = 0.15) { // Lowered from 0.2 to 0.15 for better matching
   if (!qaEntries || qaEntries.length === 0) return null;
   
   const qLower = question.toLowerCase().trim();
   let bestMatch = null;
   let bestScore = 0;
   
+  // Enhanced semantic synonym mapping with more thermostat variations
+  const synonymMap = {
+    'blank': ['not working', 'dead', 'dark', 'empty', 'black', 'screen blank', 'display blank', 'no display', 'off', 'nothing showing'],
+    'not working': ['blank', 'broken', 'dead', 'down', 'out', 'failed', 'malfunctioning', 'won\'t work', 'doesn\'t work'],
+    'broken': ['not working', 'dead', 'damaged', 'faulty', 'out of order', 'busted', 'messed up'],
+    'dead': ['blank', 'not working', 'no power', 'won\'t turn on', 'lifeless', 'unresponsive'],
+    'screen': ['display', 'monitor', 'panel', 'interface', 'readout', 'lcd'],
+    'thermostat': ['temperature control', 'temp control', 'hvac control', 'climate control', 'stat', 'unit'],
+    'fix': ['repair', 'service', 'maintenance', 'troubleshoot', 'check', 'look at'],
+    'price': ['cost', 'charge', 'fee', 'rate', 'how much', 'expense', 'bill'],
+    'hours': ['schedule', 'time', 'open', 'available', 'when', 'operating hours'],
+    'emergency': ['urgent', '24/7', 'after hours', 'weekend', 'immediate', 'asap', 'right now']
+  };
+  
   for (const entry of qaEntries) {
     const entryQuestion = (entry.question || '').toLowerCase();
     const entryAnswer = entry.answer || '';
+    const fullEntryText = entryQuestion + ' ' + entryAnswer.toLowerCase();
     
-    // Check for keyword matches
+    // Get question words and expand with synonyms
     const questionWords = qLower.split(' ').filter(word => word.length > 2);
-    const entryWords = entryQuestion.split(' ').filter(word => word.length > 2);
+    const expandedWords = new Set(questionWords);
     
-    const matchCount = questionWords.filter(word => 
-      entryWords.some(entryWord => 
-        entryWord.includes(word) || word.includes(entryWord)
-      )
-    ).length;
+    questionWords.forEach(word => {
+      if (synonymMap[word]) {
+        synonymMap[word].forEach(synonym => expandedWords.add(synonym));
+      }
+      // Check if word is a synonym of any key
+      Object.entries(synonymMap).forEach(([key, synonyms]) => {
+        if (synonyms.includes(word)) {
+          expandedWords.add(key);
+          synonyms.forEach(syn => expandedWords.add(syn));
+        }
+      });
+    });
     
-    const score = questionWords.length > 0 ? matchCount / questionWords.length : 0;
+    // Enhanced matching with synonyms and patterns
+    let matchCount = 0;
+    let bonusScore = 0;
     
-    if (score > threshold && score > bestScore && entryAnswer.length > 10) {
-      bestScore = score;
+    Array.from(expandedWords).forEach(word => {
+      if (fullEntryText.includes(word)) {
+        matchCount += entryQuestion.includes(word) ? 2 : 1; // Question matches worth more
+      }
+    });
+    
+    // Enhanced pattern bonuses for common issues
+    const patterns = [
+      { pattern: /(my|the)?\s*(thermostat|stat|unit)\s*(is\s*)?(blank|not working|dead|screen|display)/, boost: 4 },
+      { pattern: /(blank|dead|not working|dark|empty)\s*(thermostat|screen|display)/, boost: 4 },
+      { pattern: /(thermostat|temp|stat)\s*(blank|not working|dead|screen|won't|doesn't)/, boost: 3 },
+      { pattern: /(price|cost|charge)\s*(service|repair|call|visit)/, boost: 2 },
+      { pattern: /(emergency|urgent|24\/7|after hours|weekend|immediate)/, boost: 2 },
+      { pattern: /(blank|dead|not working|dark)\s*(screen|display|panel)/, boost: 3 }
+    ];
+    
+    patterns.forEach(({ pattern, boost }) => {
+      if (pattern.test(qLower) && pattern.test(fullEntryText)) {
+        bonusScore += boost;
+      }
+    });
+    
+    // Calculate final score
+    const baseScore = questionWords.length > 0 ? matchCount / questionWords.length : 0;
+    const finalScore = baseScore + (bonusScore * 0.1); // Add bonus as percentage
+    
+    if (finalScore > threshold && finalScore > bestScore && entryAnswer.length > 10) {
+      bestScore = finalScore;
       bestMatch = entryAnswer;
+      console.log(`[Enhanced Q&A Match] Found match with score ${Math.round(finalScore * 100)}% for: "${entry.question}"`);
     }
   }
   
@@ -837,49 +888,103 @@ function findMostRelevantQAs(question, qas, maxResults = 2) {
   if (!qas || qas.length === 0) return [];
   
   const qLower = question.toLowerCase();
-  const questionWords = qLower.split(/\s+/).filter(word => word.length > 3);
+  const questionWords = qLower.split(/\s+/).filter(word => word.length > 2); // Lowered threshold from 3 to 2
   
-  // Score each Q&A based on relevance
+  // Enhanced semantic synonym mapping
+  const synonymMap = {
+    'blank': ['not working', 'dead', 'dark', 'empty', 'black', 'screen blank', 'display blank', 'no display'],
+    'not working': ['blank', 'broken', 'dead', 'down', 'out', 'failed', 'malfunctioning'],
+    'broken': ['not working', 'dead', 'damaged', 'faulty', 'out of order'],
+    'dead': ['blank', 'not working', 'no power', 'won\'t turn on'],
+    'screen': ['display', 'monitor', 'panel', 'interface'],
+    'thermostat': ['temperature control', 'temp control', 'hvac control', 'climate control'],
+    'fix': ['repair', 'service', 'maintenance', 'troubleshoot'],
+    'price': ['cost', 'charge', 'fee', 'rate', 'how much'],
+    'hours': ['schedule', 'time', 'open', 'available', 'when'],
+    'emergency': ['urgent', '24/7', 'after hours', 'weekend', 'immediate']
+  };
+  
+  // Expand question words with synonyms
+  const expandedWords = new Set(questionWords);
+  questionWords.forEach(word => {
+    if (synonymMap[word]) {
+      synonymMap[word].forEach(synonym => expandedWords.add(synonym));
+    }
+    // Check if word is a synonym of any key
+    Object.entries(synonymMap).forEach(([key, synonyms]) => {
+      if (synonyms.includes(word)) {
+        expandedWords.add(key);
+        synonyms.forEach(syn => expandedWords.add(syn));
+      }
+    });
+  });
+  
+  // Score each Q&A based on enhanced relevance
   const scoredQAs = qas.map(qa => {
     const qText = qa.question.toLowerCase();
     const aText = qa.answer.toLowerCase();
     const fullText = qText + ' ' + aText;
     
-    // Calculate relevance score
     let score = 0;
     
-    // Direct word matches
-    questionWords.forEach(word => {
+    // Enhanced word matching with synonyms
+    Array.from(expandedWords).forEach(word => {
       if (fullText.includes(word)) {
-        score += qText.includes(word) ? 2 : 1; // Question matches worth more
+        score += qText.includes(word) ? 3 : 1; // Higher weight for question matches
       }
     });
     
-    // Bonus for specific question types
-    if (qLower.includes('price') || qLower.includes('cost')) {
-      if (aText.includes('$') || aText.includes('price') || aText.includes('cost')) {
-        score += 3;
+    // Semantic pattern matching for common issues
+    const patterns = [
+      // Thermostat issues
+      { pattern: /(thermostat|temp).*(blank|not working|dead|screen)/, boost: 5 },
+      { pattern: /(blank|dead|not working).*(thermostat|screen|display)/, boost: 5 },
+      // Service questions
+      { pattern: /(do you|can you).*(service|fix|repair)/, boost: 4 },
+      { pattern: /(price|cost|charge).*(service|repair|call)/, boost: 4 },
+      // Time/schedule questions
+      { pattern: /(what time|when|hours|schedule|available)/, boost: 3 },
+      // Emergency patterns
+      { pattern: /(emergency|urgent|24\/7|after hours)/, boost: 4 }
+    ];
+    
+    patterns.forEach(({ pattern, boost }) => {
+      if (pattern.test(qLower) && pattern.test(fullText)) {
+        score += boost;
+      }
+    });
+    
+    // Specific question type bonuses (enhanced)
+    if (qLower.includes('price') || qLower.includes('cost') || qLower.includes('how much')) {
+      if (aText.includes('$') || aText.includes('price') || aText.includes('cost') || aText.includes('charge')) {
+        score += 4;
       }
     }
     
-    if (qLower.includes('hour') || qLower.includes('open') || qLower.includes('when')) {
-      if (aText.includes('am') || aText.includes('pm') || aText.includes('hour')) {
-        score += 3;
+    if (qLower.includes('hour') || qLower.includes('open') || qLower.includes('when') || qLower.includes('schedule')) {
+      if (aText.includes('am') || aText.includes('pm') || aText.includes('hour') || aText.includes('time')) {
+        score += 4;
       }
     }
     
-    if (qLower.includes('do you') || qLower.includes('can you')) {
-      if (aText.includes('yes') || aText.includes('we do') || aText.includes('service')) {
-        score += 3;
+    if (qLower.includes('do you') || qLower.includes('can you') || qLower.includes('service')) {
+      if (aText.includes('yes') || aText.includes('we do') || aText.includes('service') || aText.includes('repair')) {
+        score += 4;
       }
+    }
+    
+    // Thermostat-specific scoring boost
+    if ((qLower.includes('thermostat') || qLower.includes('temp')) && 
+        (qText.includes('thermostat') || aText.includes('thermostat'))) {
+      score += 6; // High boost for thermostat questions
     }
     
     return { ...qa, score };
   });
   
-  // Sort by score and return top results
+  // Lower threshold and better sorting
   return scoredQAs
-    .filter(qa => qa.score > 0)
+    .filter(qa => qa.score > 2) // Lowered from 0 to 2 for better quality
     .sort((a, b) => b.score - a.score)
     .slice(0, maxResults);
 }

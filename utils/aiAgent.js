@@ -10,7 +10,7 @@ const stringSimilarity = require('string-similarity');
  * @param {Number} fuzzyThreshold - Similarity threshold (default 0.3)
  * @returns {String|null} Matching answer or null
  */
-function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.3) {
+function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.25) {
   if (!entries || !Array.isArray(entries) || !userQuestion) return null;
   
   const qNorm = userQuestion.trim().toLowerCase();
@@ -58,6 +58,10 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.3) {
           const variantRoot = variantWord.replace(/(ing|age|ed|er|ly)$/i, '');
           if (userRoot.length > 3 && variantRoot.length > 3 && userRoot === variantRoot) return true;
           
+          // Special handling for thermostat-related keywords
+          const thermostatKeywords = ['thermostat', 'blank', 'display', 'screen', 'dead', 'frozen', 'reset'];
+          if (thermostatKeywords.includes(userWord) && thermostatKeywords.includes(variantWord)) return true;
+          
           // Special handling for water-related keywords
           const waterKeywords = ['water', 'leak', 'leaking', 'leakage', 'drip', 'dripping', 'wet', 'moisture'];
           if (waterKeywords.includes(userWord) && waterKeywords.includes(variantWord)) return true;
@@ -85,16 +89,17 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.3) {
       // Check if this is a water-related issue (more lenient matching)
       const isWaterIssue = userWords.some(word => ['water', 'leak', 'leaking', 'leakage', 'drip', 'wet'].includes(word));
       const isHVACIssue = userWords.some(word => ['ac', 'air', 'conditioning', 'heat', 'cool', 'repair'].includes(word));
+      const isThermostatIssue = userWords.some(word => ['thermostat', 'blank', 'display', 'screen'].includes(word));
       
       let minWords, minRatio;
-      if (isWaterIssue || isHVACIssue) {
-        // More lenient for HVAC/water issues
+      if (isWaterIssue || isHVACIssue || isThermostatIssue) {
+        // More lenient for HVAC/water/thermostat issues
         minWords = userWords.length >= 8 ? 2 : 1;
-        minRatio = userWords.length >= 8 ? 0.25 : 0.5; // Lower threshold for water/HVAC
+        minRatio = userWords.length >= 8 ? 0.2 : 0.4; // Even lower threshold for better matching
       } else {
         // Standard matching
         minWords = userWords.length >= 6 ? 2 : 1;
-        minRatio = userWords.length >= 6 ? 0.4 : 0.6;
+        minRatio = userWords.length >= 6 ? 0.35 : 0.5; // Slightly lower than before
       }
       
       if (matchingWords.length >= minWords && matchRatio >= minRatio) {
