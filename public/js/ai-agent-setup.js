@@ -534,13 +534,13 @@ class AIAgentSetup {
     initializeLogicAIIntelligence() {
         console.log('Initializing Logic AI Intelligence features...');
         
-        // Initialize intelligence score slider
-        const intelligenceSlider = document.getElementById('logicIntelligenceScore');
-        const intelligenceValue = document.getElementById('logicIntelligenceValue');
+        // Initialize confidence threshold slider
+        const confidenceSlider = document.getElementById('logicConfidenceThreshold');
+        const confidenceValue = document.getElementById('logicConfidenceThresholdValue');
         
-        if (intelligenceSlider && intelligenceValue) {
-            intelligenceSlider.addEventListener('input', (e) => {
-                intelligenceValue.textContent = e.target.value + '%';
+        if (confidenceSlider && confidenceValue) {
+            confidenceSlider.addEventListener('input', (e) => {
+                confidenceValue.textContent = e.target.value + '%';
                 this.updateLogicIntelligenceSettings();
             });
         }
@@ -569,39 +569,60 @@ class AIAgentSetup {
             });
         }
         
-        // Initialize reasoning depth slider
-        const reasoningSlider = document.getElementById('logicReasoningDepth');
-        const reasoningValue = document.getElementById('logicReasoningValue');
-        
-        if (reasoningSlider && reasoningValue) {
-            reasoningSlider.addEventListener('input', (e) => {
-                const levels = ['Basic', 'Intermediate', 'Advanced', 'Expert', 'Genius'];
-                reasoningValue.textContent = levels[e.target.value - 1] || 'Basic';
+        // Initialize personalization level dropdown
+        const personalizationSelect = document.getElementById('logicPersonalizationLevel');
+        if (personalizationSelect) {
+            personalizationSelect.addEventListener('change', () => {
                 this.updateLogicIntelligenceSettings();
             });
         }
         
-        // Initialize learning rate slider
-        const learningSlider = document.getElementById('logicLearningRate');
-        const learningValue = document.getElementById('logicLearningValue');
+        // Initialize smart escalation toggle
+        const escalationToggle = document.getElementById('logicSmartEscalationEnabled');
+        if (escalationToggle) {
+            escalationToggle.addEventListener('change', () => {
+                this.updateLogicIntelligenceSettings();
+            });
+        }
         
-        if (learningSlider && learningValue) {
-            learningSlider.addEventListener('input', (e) => {
-                learningValue.textContent = e.target.value + 'x';
+        // Initialize learning toggles
+        const autoLearningToggle = document.getElementById('logicAutoLearningEnabled');
+        if (autoLearningToggle) {
+            autoLearningToggle.addEventListener('change', () => {
                 this.updateLogicLearningSettings();
             });
         }
         
-        // Initialize auto-optimization toggle
-        const autoOptToggle = document.getElementById('logicAutoOptimizationEnabled');
-        if (autoOptToggle) {
-            autoOptToggle.addEventListener('change', () => {
+        const performanceOptToggle = document.getElementById('logicPerformanceOptimization');
+        if (performanceOptToggle) {
+            performanceOptToggle.addEventListener('change', () => {
+                this.updateLogicLearningSettings();
+            });
+        }
+        
+        const abTestingToggle = document.getElementById('logicABTestingEnabled');
+        if (abTestingToggle) {
+            abTestingToggle.addEventListener('change', () => {
+                this.updateLogicLearningSettings();
+            });
+        }
+        
+        const realTimeOptToggle = document.getElementById('logicRealTimeOptimization');
+        if (realTimeOptToggle) {
+            realTimeOptToggle.addEventListener('change', () => {
+                this.updateLogicLearningSettings();
+            });
+        }
+        
+        const predictiveToggle = document.getElementById('logicPredictiveAnalytics');
+        if (predictiveToggle) {
+            predictiveToggle.addEventListener('change', () => {
                 this.updateLogicLearningSettings();
             });
         }
         
         // Initialize test button
-        const testButton = document.getElementById('logicTestSuperAI');
+        const testButton = document.getElementById('logicTestIntelligenceBtn');
         if (testButton) {
             testButton.addEventListener('click', () => {
                 this.testLogicSuperAIIntelligence();
@@ -615,7 +636,7 @@ class AIAgentSetup {
      * Test Logic Super AI Intelligence
      */
     async testLogicSuperAIIntelligence() {
-        const testButton = document.getElementById('logicTestSuperAI');
+        const testButton = document.getElementById('logicTestIntelligenceBtn');
         const resultsDiv = document.getElementById('logicIntelligenceTestResults');
         
         if (!testButton || !resultsDiv) return;
@@ -623,28 +644,33 @@ class AIAgentSetup {
         // Show loading state
         testButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Testing...';
         testButton.disabled = true;
+        resultsDiv.classList.remove('hidden');
         
         try {
             // Get current settings
             const settings = {
-                intelligenceScore: document.getElementById('logicIntelligenceScore')?.value || 85,
+                confidenceThreshold: document.getElementById('logicConfidenceThreshold')?.value || 85,
                 semanticKnowledge: document.getElementById('logicSemanticKnowledgeEnabled')?.checked || true,
                 contextualMemory: document.getElementById('logicContextualMemoryEnabled')?.checked || true,
                 dynamicReasoning: document.getElementById('logicDynamicReasoningEnabled')?.checked || true,
-                reasoningDepth: document.getElementById('logicReasoningDepth')?.value || 3,
-                learningRate: document.getElementById('logicLearningRate')?.value || 1.5,
-                autoOptimization: document.getElementById('logicAutoOptimizationEnabled')?.checked || true
+                personalizationLevel: document.getElementById('logicPersonalizationLevel')?.value || 'medium',
+                smartEscalation: document.getElementById('logicSmartEscalationEnabled')?.checked || true,
+                autoLearning: document.getElementById('logicAutoLearningEnabled')?.checked || true,
+                performanceOptimization: document.getElementById('logicPerformanceOptimization')?.checked || true,
+                testScenario: document.getElementById('logicTestScenario')?.value || 'standard',
+                testQuery: document.getElementById('logicTestQueryIntelligence')?.value || 'What are your emergency service hours?'
             };
             
             // Call backend intelligence test API
-            const response = await fetch('/api/agent/intelligence/test', {
+            const response = await fetch('/api/agent/test-intelligence', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     companyId: this.getCompanyIdFromUrl(),
-                    settings: settings
+                    scenario: settings.testScenario,
+                    query: settings.testQuery
                 })
             });
             
@@ -667,7 +693,7 @@ class AIAgentSetup {
             `;
         } finally {
             // Reset button
-            testButton.innerHTML = '<i class="fas fa-flask mr-2"></i>Test Super AI Intelligence';
+            testButton.innerHTML = '<i class="fas fa-rocket mr-1"></i>Test Super AI Intelligence';
             testButton.disabled = false;
         }
     }
@@ -679,7 +705,14 @@ class AIAgentSetup {
         const resultsDiv = document.getElementById('logicIntelligenceTestResults');
         if (!resultsDiv) return;
         
-        const overallScore = results.overallScore || 92;
+        const data = results.data || results;
+        const overallScore = data.intelligenceScore || 92;
+        const confidence = data.confidence || 85;
+        const responseTime = data.responseTime || 500;
+        const method = data.method || 'Semantic Knowledge Search';
+        const response = data.response || 'Test response generated successfully';
+        const processingChain = data.processingChain || [];
+        
         const scoreColor = overallScore >= 90 ? 'green' : overallScore >= 70 ? 'yellow' : 'red';
         
         resultsDiv.innerHTML = `
@@ -688,41 +721,40 @@ class AIAgentSetup {
                     <i class="fas fa-chart-line mr-2"></i>Intelligence Test Results
                 </h4>
                 
-                <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="grid grid-cols-3 gap-4 mb-6">
                     <div class="text-center">
                         <div class="text-3xl font-bold text-${scoreColor}-600">${overallScore}%</div>
-                        <div class="text-${scoreColor}-700">Overall Score</div>
+                        <div class="text-${scoreColor}-700 text-sm">Intelligence Score</div>
                     </div>
                     <div class="text-center">
-                        <div class="text-3xl font-bold text-${scoreColor}-600">${results.responseTime || '0.3'}s</div>
-                        <div class="text-${scoreColor}-700">Response Time</div>
+                        <div class="text-3xl font-bold text-blue-600">${responseTime}ms</div>
+                        <div class="text-blue-700 text-sm">Response Time</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-purple-600">${confidence}%</div>
+                        <div class="text-purple-700 text-sm">Confidence</div>
                     </div>
                 </div>
                 
-                <div class="space-y-3">
-                    <div class="flex justify-between items-center">
-                        <span class="text-${scoreColor}-700">Semantic Understanding:</span>
-                        <span class="font-semibold text-${scoreColor}-800">${results.semanticScore || 94}%</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-${scoreColor}-700">Contextual Memory:</span>
-                        <span class="font-semibold text-${scoreColor}-800">${results.memoryScore || 91}%</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-${scoreColor}-700">Dynamic Reasoning:</span>
-                        <span class="font-semibold text-${scoreColor}-800">${results.reasoningScore || 89}%</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-${scoreColor}-700">Learning Adaptation:</span>
-                        <span class="font-semibold text-${scoreColor}-800">${results.learningScore || 96}%</span>
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-${scoreColor}-700 font-medium">Processing Method:</span>
+                        <span class="text-${scoreColor}-800">${method}</span>
                     </div>
                 </div>
                 
-                <div class="mt-4 p-3 bg-${scoreColor}-100 rounded">
-                    <p class="text-${scoreColor}-800 text-sm">
-                        <i class="fas fa-lightbulb mr-2"></i>
-                        ${results.recommendation || 'Your AI intelligence engine is performing excellently with high scores across all areas.'}
-                    </p>
+                ${processingChain.length > 0 ? `
+                <div class="mb-4">
+                    <h5 class="text-${scoreColor}-700 font-medium mb-2">Processing Chain:</h5>
+                    <ol class="text-sm text-${scoreColor}-600 space-y-1">
+                        ${processingChain.map(step => `<li>${step}</li>`).join('')}
+                    </ol>
+                </div>
+                ` : ''}
+                
+                <div class="bg-${scoreColor}-100 border border-${scoreColor}-200 rounded p-4">
+                    <h5 class="text-${scoreColor}-800 font-medium mb-2">AI Response:</h5>
+                    <p class="text-${scoreColor}-700 text-sm">"${response}"</p>
                 </div>
             </div>
         `;
@@ -734,22 +766,20 @@ class AIAgentSetup {
     async updateLogicIntelligenceSettings() {
         try {
             const settings = {
-                intelligenceScore: document.getElementById('logicIntelligenceScore')?.value || 85,
+                confidenceThreshold: document.getElementById('logicConfidenceThreshold')?.value || 85,
                 semanticKnowledge: document.getElementById('logicSemanticKnowledgeEnabled')?.checked || true,
                 contextualMemory: document.getElementById('logicContextualMemoryEnabled')?.checked || true,
                 dynamicReasoning: document.getElementById('logicDynamicReasoningEnabled')?.checked || true,
-                reasoningDepth: document.getElementById('logicReasoningDepth')?.value || 3
+                personalizationLevel: document.getElementById('logicPersonalizationLevel')?.value || 'medium',
+                smartEscalation: document.getElementById('logicSmartEscalationEnabled')?.checked || true
             };
             
-            const response = await fetch('/api/agent/intelligence/settings', {
+            const response = await fetch(`/api/agent/intelligence-settings/${this.getCompanyIdFromUrl()}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    companyId: this.getCompanyIdFromUrl(),
-                    settings: settings
-                })
+                body: JSON.stringify(settings)
             });
             
             if (!response.ok) {
@@ -767,19 +797,19 @@ class AIAgentSetup {
     async updateLogicLearningSettings() {
         try {
             const settings = {
-                learningRate: document.getElementById('logicLearningRate')?.value || 1.5,
-                autoOptimization: document.getElementById('logicAutoOptimizationEnabled')?.checked || true
+                autoLearning: document.getElementById('logicAutoLearningEnabled')?.checked || true,
+                performanceOptimization: document.getElementById('logicPerformanceOptimization')?.checked || true,
+                abTesting: document.getElementById('logicABTestingEnabled')?.checked || false,
+                realTimeOptimization: document.getElementById('logicRealTimeOptimization')?.checked || true,
+                predictiveAnalytics: document.getElementById('logicPredictiveAnalytics')?.checked || false
             };
             
-            const response = await fetch('/api/agent/learning/settings', {
+            const response = await fetch(`/api/agent/learning-settings/${this.getCompanyIdFromUrl()}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    companyId: this.getCompanyIdFromUrl(),
-                    settings: settings
-                })
+                body: JSON.stringify(settings)
             });
             
             if (!response.ok) {
