@@ -5,6 +5,10 @@
 
 const SuperIntelligentAgentEngine = require('./superIntelligentAgent');
 const AgentService = require('./agent'); // Existing agent service
+const agentMonitoring = require('./agentMonitoring'); // Monitoring system
+
+// Import monitoring logger
+const { monitoringLogger } = agentMonitoring;
 
 class RealTimeAgentMiddleware {
     
@@ -40,6 +44,37 @@ class RealTimeAgentMiddleware {
             // Step 4: Generate optimized response
             const optimizedResponse = await this.optimizeResponse(intelligentResponse, callSession);
             
+            // Step 4.5: Check blacklist before responding
+            const blacklistCheck = await agentMonitoring.checkDisapprovalList(
+                companyId, 
+                query, 
+                optimizedResponse.response || optimizedResponse.text || optimizedResponse
+            );
+            
+            if (blacklistCheck.blocked) {
+                // Response is on blacklist - escalate instead
+                monitoringLogger.warn('Response blocked by blacklist', {
+                    companyId,
+                    callerId,
+                    query,
+                    reason: blacklistCheck.reason
+                });
+                
+                return {
+                    success: true,
+                    response: "I need to connect you with someone who can better assist you with this question.",
+                    shouldEscalate: true,
+                    escalationData: {
+                        reason: 'blacklisted_response',
+                        blacklistReason: blacklistCheck.reason,
+                        category: blacklistCheck.category,
+                        originalQuery: query
+                    },
+                    responseTime: Date.now() - startTime,
+                    confidence: 0
+                };
+            }
+            
             // Step 5: Update session context
             await this.updateCallSession(callSession.id, {
                 query,
@@ -47,8 +82,29 @@ class RealTimeAgentMiddleware {
                 timestamp: new Date()
             });
             
-            // Step 6: Log interaction for continuous improvement
+            // Step 6: Log interaction for monitoring and continuous improvement
             await this.logInteractionMetrics(callSession.id, query, optimizedResponse, startTime);
+            
+            // Step 7: Log to monitoring system for oversight
+            const interactionData = {
+                callerId,
+                companyId,
+                userQuery: query,
+                agentResponse: optimizedResponse,
+                confidence: intelligentResponse.confidence,
+                responseTime: Date.now() - startTime,
+                escalated: escalationCheck.shouldEscalate,
+                metadata: {
+                    sessionId: callSession.id,
+                    sentiment: callSession.sentiment,
+                    urgencyLevel: callSession.urgencyLevel,
+                    callSid: callData.metadata?.callSid,
+                    processingSteps: intelligentResponse.processingSteps || []
+                }
+            };
+            
+            // Log interaction for monitoring and review
+            await agentMonitoring.logAgentInteraction(interactionData);
             
             return {
                 success: true,
@@ -478,6 +534,28 @@ class RealTimeAgentMiddleware {
      */
     async handleCallError(callerId, companyId, error) {
         console.error('Call handling error:', error);
+        
+        // Log error to monitoring system
+        try {
+            await agentMonitoring.logAgentInteraction({
+                callerId,
+                companyId,
+                userQuery: 'Error occurred during processing',
+                agentResponse: "I'm experiencing a technical issue. Let me connect you with someone who can help immediately.",
+                confidence: 0,
+                responseTime: 0,
+                escalated: true,
+                isError: true,
+                metadata: {
+                    errorMessage: error.message,
+                    errorStack: error.stack,
+                    timestamp: new Date(),
+                    errorType: 'processing_error'
+                }
+            });
+        } catch (monitoringError) {
+            console.error('Failed to log error to monitoring:', monitoringError);
+        }
         
         return {
             success: false,

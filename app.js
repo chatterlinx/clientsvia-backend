@@ -23,6 +23,7 @@ const aiAgentAnalyticsRoutes = require('./routes/aiAgentAnalytics');
 const knowledgeAutoPopulationRoutes = require('./routes/knowledgeAutoPopulation');
 const enhancedAIAgentRoutes = require('./routes/enhancedAIAgent');
 const aiAgentHandlerRoutes = require('./routes/aiAgentHandler');
+const monitoringRoutes = require('./routes/monitoring');
 
 const app = express();
 
@@ -67,6 +68,7 @@ app.use('/api/ai-agent-analytics', aiAgentAnalyticsRoutes);
 app.use('/api/knowledge-auto-population', knowledgeAutoPopulationRoutes);
 app.use('/api/enhanced-ai-agent', enhancedAIAgentRoutes);
 app.use('/api/ai-agent', aiAgentHandlerRoutes);
+app.use('/api/monitoring', monitoringRoutes);
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 

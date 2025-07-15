@@ -690,6 +690,164 @@
                                         </div>
                                     </div>
 
+                                    <!-- AGENT MONITORING & OVERSIGHT SYSTEM -->
+                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="agent-monitoring">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-shield-alt mr-2"></i>Agent Monitoring & Oversight</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed">
+                                            <div class="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl p-6 mb-6">
+                                                <div class="flex items-center mb-4">
+                                                    <i class="fas fa-eye text-2xl text-orange-600 mr-3"></i>
+                                                    <div>
+                                                        <h4 class="text-lg font-semibold text-orange-900">Gold-Standard Monitoring System</h4>
+                                                        <p class="text-orange-700 text-sm">Complete traceability and human oversight for every agent interaction</p>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Monitoring Status & Controls -->
+                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
+                                                        <div class="text-2xl font-bold text-green-600" id="monitoring-status">ACTIVE</div>
+                                                        <div class="text-xs text-gray-600">System Status</div>
+                                                        <div class="text-xs text-green-600">✓ Recording all calls</div>
+                                                    </div>
+                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
+                                                        <div class="text-2xl font-bold text-blue-600" id="pending-reviews">24</div>
+                                                        <div class="text-xs text-gray-600">Pending Reviews</div>
+                                                        <div class="text-xs text-orange-600">⚠️ Needs attention</div>
+                                                    </div>
+                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
+                                                        <div class="text-2xl font-bold text-purple-600" id="flagged-interactions">3</div>
+                                                        <div class="text-xs text-gray-600">Flagged Repeats</div>
+                                                        <div class="text-xs text-red-600">🚩 Requires review</div>
+                                                    </div>
+                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
+                                                        <div class="text-2xl font-bold text-gray-600" id="approval-rate">89%</div>
+                                                        <div class="text-xs text-gray-600">Approval Rate</div>
+                                                        <div class="text-xs text-green-600">✓ Good performance</div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Quick Actions -->
+                                                <div class="flex flex-wrap gap-3 mb-6">
+                                                    <button id="open-monitoring-dashboard" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                        <i class="fas fa-tachometer-alt mr-2"></i>Open Dashboard
+                                                    </button>
+                                                    <button id="review-pending-interactions" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                        <i class="fas fa-clipboard-check mr-2"></i>Review Pending
+                                                    </button>
+                                                    <button id="view-flagged-items" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                        <i class="fas fa-flag mr-2"></i>View Flagged
+                                                    </button>
+                                                    <button id="export-monitoring-data" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                        <i class="fas fa-download mr-2"></i>Export Data
+                                                    </button>
+                                                </div>
+
+                                                <!-- Monitoring Configuration -->
+                                                <div class="bg-white rounded-lg p-4 border">
+                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                        <i class="fas fa-cogs text-gray-500 mr-2"></i>Monitoring Settings
+                                                    </h5>
+                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label class="flex items-center">
+                                                                <input type="checkbox" id="auto-flag-repeats" class="form-checkbox" checked>
+                                                                <span class="form-check-label">Auto-flag repeated interactions</span>
+                                                            </label>
+                                                        </div>
+                                                        <div>
+                                                            <label class="flex items-center">
+                                                                <input type="checkbox" id="require-approval" class="form-checkbox">
+                                                                <span class="form-check-label">Require approval for new responses</span>
+                                                            </label>
+                                                        </div>
+                                                        <div>
+                                                            <label class="flex items-center">
+                                                                <input type="checkbox" id="alert-on-flags" class="form-checkbox" checked>
+                                                                <span class="form-check-label">Real-time alerts for flags</span>
+                                                            </label>
+                                                        </div>
+                                                        <div>
+                                                            <label class="flex items-center">
+                                                                <input type="checkbox" id="detailed-logging" class="form-checkbox" checked>
+                                                                <span class="form-check-label">Detailed interaction logging</span>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="mt-4">
+                                                        <label for="repeat-threshold" class="form-label">Repeat Detection Threshold</label>
+                                                        <select id="repeat-threshold" class="form-select">
+                                                            <option value="3">3+ occurrences</option>
+                                                            <option value="5" selected>5+ occurrences</option>
+                                                            <option value="10">10+ occurrences</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Recent Activity Feed -->
+                                            <div class="mb-6">
+                                                <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                    <i class="fas fa-clock text-blue-500 mr-2"></i>Recent Monitoring Activity
+                                                </h5>
+                                                <div id="monitoring-activity-feed" class="space-y-3 max-h-64 overflow-y-auto">
+                                                    <div class="flex items-center text-sm text-gray-700 bg-white rounded-lg p-3 border-l-4 border-orange-400">
+                                                        <i class="fas fa-flag text-orange-500 mr-3"></i>
+                                                        <div class="flex-1">
+                                                            <span class="font-medium">Repeated question flagged:</span> "What are your hours?"
+                                                            <div class="text-xs text-gray-500">5 identical interactions in past 2 hours</div>
+                                                        </div>
+                                                        <span class="text-xs text-gray-400">2m ago</span>
+                                                    </div>
+                                                    <div class="flex items-center text-sm text-gray-700 bg-white rounded-lg p-3 border-l-4 border-green-400">
+                                                        <i class="fas fa-check text-green-500 mr-3"></i>
+                                                        <div class="flex-1">
+                                                            <span class="font-medium">Response approved:</span> Emergency HVAC protocol
+                                                            <div class="text-xs text-gray-500">Reviewed by admin@company.com</div>
+                                                        </div>
+                                                        <span class="text-xs text-gray-400">15m ago</span>
+                                                    </div>
+                                                    <div class="flex items-center text-sm text-gray-700 bg-white rounded-lg p-3 border-l-4 border-red-400">
+                                                        <i class="fas fa-times text-red-500 mr-3"></i>
+                                                        <div class="flex-1">
+                                                            <span class="font-medium">Response blacklisted:</span> Pricing discussion
+                                                            <div class="text-xs text-gray-500">Added to never-answer list</div>
+                                                        </div>
+                                                        <span class="text-xs text-gray-400">1h ago</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Monitoring Analytics Preview -->
+                                            <div class="bg-gray-50 rounded-lg p-4">
+                                                <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                    <i class="fas fa-chart-bar text-purple-500 mr-2"></i>Monitoring Analytics (Last 7 Days)
+                                                </h5>
+                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                                                    <div>
+                                                        <div class="text-lg font-bold text-blue-600">1,247</div>
+                                                        <div class="text-xs text-gray-600">Total Interactions</div>
+                                                    </div>
+                                                    <div>
+                                                        <div class="text-lg font-bold text-orange-600">18</div>
+                                                        <div class="text-xs text-gray-600">Flagged Items</div>
+                                                    </div>
+                                                    <div>
+                                                        <div class="text-lg font-bold text-green-600">15</div>
+                                                        <div class="text-xs text-gray-600">Approved</div>
+                                                    </div>
+                                                    <div>
+                                                        <div class="text-lg font-bold text-red-600">3</div>
+                                                        <div class="text-xs text-gray-600">Disapproved</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <!-- SMART AGENT INTELLIGENCE SYSTEM -->
                                     <div class="agent-setup-section-container" data-section-type="full" data-section-name="agent-intelligence">
                                         <h3 class="agent-setup-section-header">

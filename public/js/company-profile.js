@@ -432,7 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm('Delete entry?')) return;
         const res = await fetch(`/api/company/${companyId}/qna/${id}`, { method: 'DELETE' });
         if (res.ok) {
-            companyQnaListData = companyQnaListData.filter(e => e._id !== id);
+            companyQnaListData = companyQnaListData.filter e => e._id !== id);
             renderCompanyQnA(companyQnaListData);
         }
     }
@@ -2262,558 +2262,432 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- TAB SWITCHING LOGIC --- //
-    const tabButtons = document.querySelectorAll('.tab-button');
-    const tabContents = document.querySelectorAll('.tab-content-item');
-    tabButtons.forEach(btn => {
-        btn.addEventListener('click', function() {
-            tabButtons.forEach(b => b.classList.remove('tab-button-active'));
-            tabContents.forEach(tc => tc.classList.add('hidden'));
-            this.classList.add('tab-button-active');
-            const tab = this.getAttribute('data-tab');
-            const content = document.getElementById(`${tab}-content`);
-            if (content) content.classList.remove('hidden');
-        });
-    });
-
-    // --- ELEVENLABS FORM LOGIC --- //
-    const elevenlabsSettingsForm = document.getElementById('elevenlabs-settings-form');
-    const testElevenLabsVoiceBtn = document.getElementById('testElevenLabsVoiceBtn');
-    if (elevenlabsSettingsForm) {
-        elevenlabsSettingsForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!companyId) return;
-            const apiKey = document.getElementById('elevenlabsApiKey')?.value || '';
-            const voice = document.getElementById('elevenlabsVoice')?.value || '';
-            // Add more fields as needed
-            try {
-                const res = await fetch(`/api/company/${companyId}/elevenlabs`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ elevenlabs: { apiKey, voice } })
-                });
-                if (!res.ok) throw new Error('Failed to save ElevenLabs settings');
-                alert('ElevenLabs settings saved!');
-            } catch (err) {
-                alert('Error saving ElevenLabs settings: ' + err.message);
-            }
-        });
-    }
-    if (testElevenLabsVoiceBtn) {
-        testElevenLabsVoiceBtn.addEventListener('click', async () => {
-            const phrase = document.getElementById('elevenlabsTestPhrase')?.value || '';
-            const voice = document.getElementById('elevenlabsVoice')?.value || '';
-            const apiKey = document.getElementById('elevenlabsApiKey')?.value || '';
-            if (!phrase || !voice || !apiKey) return alert('Please fill in API Key, Voice, and Test Phrase.');
-            testElevenLabsVoiceBtn.disabled = true;
-            testElevenLabsVoiceBtn.textContent = 'Playing...';
-            try {
-                const res = await fetch('/api/elevenlabs/tts', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: phrase, voice: voice, apiKey: apiKey })
-                });
-                if (!res.ok) throw new Error('Failed to synthesize voice');
-                const data = await res.json();
-                const audioContent = data.audioContent;
-                if (!audioContent) throw new Error('No audio returned');
-                const binary = atob(audioContent);
-                const bytes = new Uint8Array(binary.length);
-                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                const blob = new Blob([bytes.buffer], { type: 'audio/mp3' });
-                const url = URL.createObjectURL(blob);
-                const audio = new Audio(url);
-                audio.addEventListener('ended', () => {
-                    testElevenLabsVoiceBtn.disabled = false;
-                    testElevenLabsVoiceBtn.textContent = 'Listen to Test Phrase';
-                    URL.revokeObjectURL(url);
-                });
-                audio.play().catch(err => {
-                    testElevenLabsVoiceBtn.disabled = false;
-                    testElevenLabsVoiceBtn.textContent = 'Listen to Test Phrase';
-                    console.error('Playback failed', err);
-                });
-            } catch (err) {
-                alert('Playback failed: ' + err.message);
-                testElevenLabsVoiceBtn.disabled = false;
-                testElevenLabsVoiceBtn.textContent = 'Listen to Test Phrase';
-            }
-        });
-    }
-
-    // --- SCRIPT EXECUTION START --- //
-    checkForGoogleAuthStatusInURL(); // Check for auth status on page load
-    populateTimezoneDropdown();
-    fetchCompanyData(); 
-
-    if (currentTimeDisplaySpan) {
-        updateCurrentTimeForInterpreter(); 
-        if (interpreterIntervalId) clearInterval(interpreterIntervalId); 
-        interpreterIntervalId = setInterval(updateCurrentTimeForInterpreter, 30000); 
-    }
+    // --- AGENT MONITORING & OVERSIGHT SYSTEM --- //
     
-    if (editProfileButton) { editProfileButton.addEventListener('click', () => { if (companyDetailsEditFormContainer?.classList.contains('hidden')) { showEditForm(); } else { hideEditForm(); } }); }
-    if (addNewNoteButton) { addNewNoteButton.addEventListener('click', handleAddNewNote); }
-    if (configSettingsForm) { configSettingsForm.addEventListener('submit', handleSaveConfiguration); trackUnsavedChanges('config-settings-form'); }
-    if (aiSettingsForm) { aiSettingsForm.addEventListener('submit', handleSaveAiSettings); trackUnsavedChanges('ai-settings-form'); }
-    if (personalityResponsesForm) { personalityResponsesForm.addEventListener('submit', handleSavePersonalityResponses); trackUnsavedChanges('personality-responses-form'); }
-    if (llmFallbackEnabledCheckbox) {
-        llmFallbackEnabledCheckbox.addEventListener('change', () => {
-            if (escalationMessageContainer) {
-                escalationMessageContainer.style.display = llmFallbackEnabledCheckbox.checked ? 'none' : 'block';
-            }
-        });
-    }
-    if (companyQnaForm) { companyQnaForm.addEventListener('submit', handleQnaSubmit); }
-    if (companyQnaCancelBtn) { companyQnaCancelBtn.addEventListener('click', resetQnaForm); }
-    updateQnaSaveBtnState();
-    const testMalfunctionBtn = document.getElementById('test-malfunction-btn');
-    if (testMalfunctionBtn) { testMalfunctionBtn.addEventListener('click', () => { if (companyId) { const testErrorMessage = `Simulated critical failure in AI core processing for company ${companyId} at ${new Date().toLocaleTimeString()}.`; reportMalfunction(companyId, testErrorMessage); } else { console.warn('Company ID not available to test malfunction reporting.');} }); }
-
-    // Note: Google TTS test voice functionality has been removed - only ElevenLabs is supported
-
-    async function loadGeminiModels() {
-        try {
-            const res = await fetch('/api/ai/models');
-            if (!res.ok) throw new Error('Failed to fetch Gemini models');
-            const models = await res.json();
-            const select = document.getElementById('aiModel');
-            if (select) {
-                select.innerHTML = '';
-                models.forEach(m => {
-                    const opt = document.createElement('option');
-                    opt.value = m.id;
-                    opt.textContent = m.displayName;
-                    select.appendChild(opt);
-                });
-            }
-        } catch (err) {
-            console.error('Error loading Gemini models:', err);
-        }
-    }
-    loadGeminiModels();
-
-    // =================================================================
-    // --- UNIFIED AI VOICE SETTINGS TAB LOGIC (NEW & CONTAINED) ---
-    // =================================================================
-
-    let elevenlabsSettings, fuzzyMatchInput, thresholdValue, responseDelayInput, delayValue, stabilityValue, clarityValue;
-    let unsavedElevenlabs = {};
-
-    // Function to dynamically load voices
-    const loadTtsVoices = async (provider) => {
-        // Default to elevenlabs if no provider specified
-        if (!provider) provider = 'elevenlabs'; 
-        
-        const companyId = new URLSearchParams(window.location.search).get('id');
-        
-        // Get API key only if field has a non-placeholder value
-        const apiKeyInput = document.getElementById('elevenlabsApiKey');
-        const apiKey = (provider === 'elevenlabs' && apiKeyInput && apiKeyInput.value !== '*****') 
-            ? apiKeyInput.value.trim() 
-            : null;
-
-        try {
-            // Always use POST for ElevenLabs
-            let res;
-            if (provider === 'elevenlabs') {
-                res = await fetch('/api/tts/voices', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ provider, companyId, apiKey: apiKey || undefined })
-                });
-            } else {
-                // Use GET for other providers (though we now only support ElevenLabs)
-                res = await fetch(`/api/tts/voices?provider=${provider}&companyId=${companyId}`);
-            }
-            if (!res.ok) throw new Error(`Failed to fetch voices for ${provider}`);
-            const voices = await res.json();
-
-            const selectId = 'elevenlabsVoiceSelect'; // Only ElevenLabs is supported now
-            const voiceSelect = document.getElementById(selectId);
-            voiceSelect.innerHTML = ''; // Clear previous options
-            voices.forEach(v => {
-                const opt = document.createElement('option');
-                opt.value = v.id; // API should return 'id' and 'displayName'
-                opt.textContent = v.displayName;
-                voiceSelect.appendChild(opt);
-            });
-        } catch (err) {
-            console.error(`Could not load voices: ${err.message}`);
-            if (provider === 'elevenlabs') {
-                document.getElementById('elevenlabsVoiceSelect').innerHTML = '<option>API Key is required to load voices.</option>';
-            }
-            showToast(`Could not load voices: ${err.message}`, 'error');
-        }
+    // Monitoring system state
+    let monitoringData = {
+        pendingReviews: 0,
+        flaggedInteractions: 0,
+        approvalRate: 0,
+        recentActivity: []
     };
 
-    function setupAiVoiceTab() {
-        // 1. Get the main container for our new tab
-        const container = document.getElementById('ai-voice-content');
-        if (!container) return;
-
-        // 2. Define the complete HTML for our new UI
-        const voiceUIHTML = `
-            <section class="profile-section bg-transparent shadow-none p-0">
-                <h2 class="profile-section-title"><i class="fas fa-microphone-alt mr-2 text-indigo-600"></i>Unified Voice & TTS Settings</h2>
-                <p class="text-sm text-gray-500 mb-6">Configure the Text-to-Speech provider and voice for the AI agent.</p>
-                
-                <form id="ai-voice-settings-form" class="space-y-6">
-                    <div>
-                        <label for="ttsProviderSelect" class="form-label text-base font-semibold">TTS Provider</label>
-                        <p class="text-xs text-gray-500 mb-2">Choose which service will generate the AI's voice.</p>
-                        <select id="ttsProviderSelect" name="ttsProvider" class="form-select wider-textbox">
-                            <option value="elevenlabs">ElevenLabs (Expressive & Natural)</option>
-                        </select>
-                    </div>
-
-                    <div id="elevenlabsTtsSettings" class="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-4">
-                         <h3 class="font-semibold text-gray-700">ElevenLabs TTS Settings</h3>
-                        <div>
-                            <label for="elevenlabsApiKey" class="form-label">ElevenLabs API Key</label>
-                            <input type="password" id="elevenlabsApiKey" name="elevenlabsApiKey" class="form-input wider-textbox" placeholder="Enter your ElevenLabs API Key">
-                            <p id="elevenlabsKeyHint" class="text-xs text-gray-500 mt-1">Using ClientsVia master account to load ElevenLabs voices.</p>
-                            <p id="elevenlabsKeyWarning" class="text-xs text-orange-600 mt-1 hidden">Using custom API key for this company.</p>
-                        </div>
-                        <div>
-                            <label for="elevenlabsVoiceSelect" class="form-label">ElevenLabs Voice</label>
-                            <select id="elevenlabsVoiceSelect" name="elevenlabsVoiceId" class="form-select">
-                                <option>Enter API Key to load voices...</option>
-                            </select>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="elevenlabsStability" class="form-label">Stability (More variable <-> More stable)</label>
-                                <input type="range" id="elevenlabsStability" name="elevenlabsStability" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" min="0" max="1" step="0.05" value="0.75">
-                                <span id="elevenlabsStabilityValue" class="ml-2">0.75</span>
-                            </div>
-                            <div>
-                                <label for="elevenlabsClarity" class="form-label">Clarity + Similarity</label>
-                                 <input type="range" id="elevenlabsClarity" name="elevenlabsClarity" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" min="0" max="1" step="0.05" value="0.75">
-                                <span id="elevenlabsClarityValue" class="ml-2">0.75</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-4">
-                        <h3 class="font-semibold text-gray-700">Agent Performance Controls</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="col-span-1 md:col-span-2">
-                                <label for="twilioSpeechConfidenceThreshold" class="form-label">Twilio Speech Confidence Threshold</label>
-                                <input type="range" id="twilioSpeechConfidenceThreshold" name="twilioSpeechConfidenceThreshold" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" min="0.1" max="1" step="0.05" value="0.5">
-                                <p class="text-xs text-gray-500">Higher values will reject more poor-quality speech, but may require customers to repeat themselves more often.</p>
-                            </div>
-                            <div>
-                                <label for="fuzzyMatchThreshold" class="form-label">Fuzzy Match Threshold</label>
-                                <input type="range" id="fuzzyMatchThreshold" name="fuzzyMatchThreshold" min="0.1" max="0.8" step="0.1" value="0.3" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                                <span id="fuzzyThresholdValue" class="ml-2">0.3</span>
-                                <p class="text-xs text-gray-500 mt-1">
-                                    <strong>Fuzzy Match Threshold:</strong> This controls how closely the AI will match a caller's words to your Q&amp;A entries.
-                                    <br>
-                                    • <strong>Lower values (0.2–0.5):</strong> More lenient, matches even if caller’s words are a little different. Use if your customers are not precise or speak in many ways.<br>
-                                    • <strong>Higher values (0.7–0.9):</strong> More strict, only matches very close to your Q&amp;A wording. Use if you want to avoid false matches.
-                                    <br>
-                                    <em>Ideal range: Start at <strong>0.5</strong> and adjust up/down based on how accurately the AI answers your callers. Lower if too many “no match” responses, higher if it’s answering the wrong thing.</em>
-                                </p>
-                            </div>
-                        </div>
-                        <div class="mt-4">
-                            <button type="button" id="resetVoiceDefaults" class="text-sm text-indigo-600 mt-2 underline">Reset to Defaults</button>
-                        </div>
-                    </div>
-
-                    <div class="pt-4 border-t">
-                        <label for="unifiedTestPhrase" class="form-label">Test Phrase</label>
-                        <textarea id="unifiedTestPhrase" class="form-textarea wider-textbox" rows="2">Hello, this is a test of the selected voice configuration.</textarea>
-                        <button id="unifiedTestVoiceBtn" type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md mt-2 flex items-center">
-                            <i class="fas fa-play mr-2"></i>Test Voice
-                        </button>
-                    </div>
-
-                    <div class="mt-8 pt-5 border-t border-gray-200">
-                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
-                            <i class="fas fa-save mr-2"></i>Save Voice Settings
-                        </button>
-                    </div>
-                </form>
-            </section>
-        `;
-
-        // Inject the HTML into our tab container
-        container.innerHTML = voiceUIHTML;
-
-        // 3. Get references to our new UI elements
-        const form = document.getElementById('ai-voice-settings-form');
-        console.log('🔍 Looking for form ai-voice-settings-form:', form);
-        if (!form) {
-            console.error('❌ Form ai-voice-settings-form not found!');
-            return;
-        }
-        const providerSelect = document.getElementById('ttsProviderSelect');
-        elevenlabsSettings = document.getElementById('elevenlabsTtsSettings');
-        const elevenlabsApiKeyInput = document.getElementById('elevenlabsApiKey');
-        const testButton = document.getElementById('unifiedTestVoiceBtn');
-        fuzzyMatchInput = document.getElementById('fuzzyMatchThreshold');
-        thresholdValue = document.getElementById('fuzzyThresholdValue');
-        const stabilityInput = document.getElementById('elevenlabsStability');
-        const clarityInput = document.getElementById('elevenlabsClarity');
-        stabilityValue = document.getElementById('elevenlabsStabilityValue');
-        clarityValue = document.getElementById('elevenlabsClarityValue');
-        if (stabilityValue && stabilityInput) {
-            stabilityValue.textContent = Number(stabilityInput.value).toFixed(2);
-        }
-        if (clarityValue && clarityInput) {
-            clarityValue.textContent = Number(clarityInput.value).toFixed(2);
-        }
-        
-        // 4. Define the functions that make the tab work
-
-        // Function to show/hide setting blocks based on provider
-        const toggleProviderView = async (provider) => {
-            elevenlabsSettings.classList.toggle('hidden', provider !== 'elevenlabs');
-            await loadTtsVoices(provider); // Load voices for the selected provider
-            applyUnsavedProviderSettings(provider);
-        };
-
-        const captureCurrentProviderSettings = () => {
-            // Only capture ElevenLabs settings now
-            unsavedElevenlabs = {
-                apiKey: document.getElementById('elevenlabsApiKey').value,
-                voiceId: document.getElementById('elevenlabsVoiceSelect').value,
-                stability: document.getElementById('elevenlabsStability').value,
-                clarity: document.getElementById('elevenlabsClarity').value
-            };
-        };
-
-        const applyUnsavedProviderSettings = (provider) => {
-            if (provider === 'elevenlabs' && Object.keys(unsavedElevenlabs).length) {
-                const apiInput = document.getElementById('elevenlabsApiKey');
-                if (unsavedElevenlabs.apiKey !== undefined) {
-                    apiInput.value = unsavedElevenlabs.apiKey;
-                    const hasVal = apiInput.value.trim() !== '';
-                    document.getElementById('elevenlabsKeyHint').classList.toggle('hidden', hasVal);
-                    document.getElementById('elevenlabsKeyWarning').classList.toggle('hidden', !hasVal);
-                }
-                if (unsavedElevenlabs.voiceId) document.getElementById('elevenlabsVoiceSelect').value = unsavedElevenlabs.voiceId;
-                if (unsavedElevenlabs.stability) {
-                    document.getElementById('elevenlabsStability').value = unsavedElevenlabs.stability;
-                    if (stabilityValue) stabilityValue.textContent = Number(unsavedElevenlabs.stability).toFixed(2);
-                }
-                if (unsavedElevenlabs.clarity) {
-                    document.getElementById('elevenlabsClarity').value = unsavedElevenlabs.clarity;
-                    if (clarityValue) clarityValue.textContent = Number(unsavedElevenlabs.clarity).toFixed(2);
-                }
-            }
-        };
-
-        // Adding spacing to change line numbers for console output
-        
-        
-        
-        
-        
-        // Function to handle the form submission
-        const handleSaveVoiceSettings = async (event) => {
-            console.log('✅ Voice settings save initiated');
-            event.preventDefault();
-            const companyId = new URLSearchParams(window.location.search).get('id');
-            if (!companyId) return showToast('Company ID is missing.', 'error');
-
-            const formData = new FormData(form);
-            const settings = Object.fromEntries(formData.entries());
-
-            settings.twilioSpeechConfidenceThreshold = parseFloat(settings.twilioSpeechConfidenceThreshold || '0.5');
-            settings.fuzzyMatchThreshold = parseFloat(formData.get('fuzzyMatchThreshold'));
-
-            if (settings.elevenlabsApiKey === '*****') {
-                if (document.getElementById('elevenlabsApiKey').dataset.hasValue === 'true') {
-                    delete settings.elevenlabsApiKey; // keep existing
-                } else {
-                    settings.elevenlabsApiKey = '';
-                }
-            }
-            
-            // Ensure numeric values are numbers, not strings
-            settings.elevenlabsStability = parseFloat(settings.elevenlabsStability);
-            settings.elevenlabsClarity = parseFloat(settings.elevenlabsClarity);
-
-            const saveBtn = form.querySelector('button[type="submit"]');
-            saveBtn.disabled = true;
-            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
-            
-            try {
-                console.log('Attempting to save voice settings:', settings);
-                const res = await fetch(`/api/company/${companyId}/voice-settings`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(settings)
-                });
-                console.log('Server response status:', res.status);
-                const responseData = await res.json();
-                console.log('Server response data:', responseData);
-                if (!res.ok) throw new Error(`Server error: ${res.status} - ${responseData.message || 'Unknown error'}`);
-                showToast('Voice settings saved successfully!', 'success');
-            } catch (err) {
-                console.error('Voice settings save error:', err);
-                showToast(`Error: ${err.message}`, 'error');
-            } finally {
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Voice Settings';
-            }
-        };
-
-        // 5. Attach event listeners
-        providerSelect.addEventListener('change', () => {
-            captureCurrentProviderSettings();
-            toggleProviderView(providerSelect.value);
-        });
-        const keyHint = document.getElementById('elevenlabsKeyHint');
-        const keyWarning = document.getElementById('elevenlabsKeyWarning');
-
-        elevenlabsApiKeyInput.addEventListener('input', () => {
-            const hasVal = elevenlabsApiKeyInput.value.trim() !== '';
-            keyHint.classList.toggle('hidden', hasVal);
-            keyWarning.classList.toggle('hidden', !hasVal);
-            if (providerSelect.value === 'elevenlabs') {
-                loadTtsVoices('elevenlabs');
-            }
-        });
-
-        if (fuzzyMatchInput) {
-            fuzzyMatchInput.addEventListener('input', () => {
-                if (thresholdValue) thresholdValue.textContent = fuzzyMatchInput.value;
-            });
-        }
-
-        if (responseDelayInput) {
-            responseDelayInput.addEventListener('input', () => {
-                if (delayValue) delayValue.textContent = `${responseDelayInput.value} ms`;
-            });
-        }
-
-        if (stabilityInput) {
-            stabilityInput.addEventListener('input', () => {
-                if (stabilityValue) stabilityValue.textContent = Number(stabilityInput.value).toFixed(2);
-            });
-        }
-
-        if (clarityInput) {
-            clarityInput.addEventListener('input', () => {
-                if (clarityValue) clarityValue.textContent = Number(clarityInput.value).toFixed(2);
-            });
-        }
-
-                const resetBtn = document.getElementById('resetVoiceDefaults');
-                if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
-                document.getElementById('twilioSpeechConfidenceThreshold').value = 0.5;
-                if (fuzzyMatchInput) fuzzyMatchInput.value = 0.3;
-                if (thresholdValue) thresholdValue.textContent = '0.3';
-                document.getElementById('elevenlabsStability').value = 0.75;
-                document.getElementById('elevenlabsClarity').value = 0.75;
-                if (stabilityValue) stabilityValue.textContent = '0.75';
-                if (clarityValue) clarityValue.textContent = '0.75';
-            });
-        }
-        console.log('📎 Attaching submit event listener to form:', form);
-        form.addEventListener('submit', handleSaveVoiceSettings);
-        console.log('✅ Event listener attached successfully');
-
-        // Function to test the current voice configuration
-        const handleTestVoice = async () => {
-            const provider = providerSelect.value;
-            const text = document.getElementById('unifiedTestPhrase').value;
-            let settings = {};
-
-            // Only ElevenLabs is supported now
-            const customApiKey = document.getElementById('elevenlabsApiKey').value.trim();
-            var apiKeyToSend = (customApiKey === '' || customApiKey === '*****') ? undefined : customApiKey;
-            settings.voiceId = document.getElementById('elevenlabsVoiceSelect').value;
-            settings.stability = parseFloat(document.getElementById('elevenlabsStability').value);
-            settings.clarity = parseFloat(document.getElementById('elevenlabsClarity').value);
-
-            const originalHtml = testButton.innerHTML;
-            testButton.disabled = true;
-            testButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Playing...';
-            
-            try {
-                const payload = { provider, text, settings };
-                if (typeof apiKeyToSend !== 'undefined') {
-                    payload.apiKey = apiKeyToSend; // Only include if user provided
-                }
-                const resp = await fetch('/api/test/tts', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                if (!resp.ok) throw new Error('TTS request failed');
-                const blob = await resp.blob();
-                const url = URL.createObjectURL(blob);
-                const audio = new Audio(url);
-                audio.addEventListener('ended', () => {
-                    testButton.disabled = false;
-                    testButton.innerHTML = originalHtml;
-                    URL.revokeObjectURL(url);
-                });
-                audio.play().catch(err => {
-                    testButton.disabled = false;
-                    testButton.innerHTML = originalHtml;
-                    console.error('Playback failed', err);
-                });
-            } catch (err) {
-                showToast(`Playback failed: ${err.message}`, 'error');
-                testButton.disabled = false;
-                testButton.innerHTML = originalHtml;
-            }
-        };
-
-        testButton.addEventListener('click', handleTestVoice);
-
-        // 6. Initial population of data will be handled by a new function
-        // called from within your main fetchCompanyData() success block.
+    // Initialize monitoring system
+    function initializeMonitoringSystem() {
+        setupMonitoringEventListeners();
+        loadMonitoringData();
+        startRealTimeUpdates();
     }
 
-    // This function needs to be created to populate the form with saved data
-    function populateAiVoiceSettings(voiceSettings = {}) {
-        if (!document.getElementById('ai-voice-settings-form')) return; // Check if our UI exists
+    // Setup event listeners for monitoring interface
+    function setupMonitoringEventListeners() {
+        // Dashboard and action buttons
+        const openDashboardBtn = document.getElementById('open-monitoring-dashboard');
+        const reviewPendingBtn = document.getElementById('review-pending-interactions');
+        const viewFlaggedBtn = document.getElementById('view-flagged-items');
+        const exportDataBtn = document.getElementById('export-monitoring-data');
 
-        document.getElementById('ttsProviderSelect').value = voiceSettings.ttsProvider || 'elevenlabs';
-        
-        // Populate ElevenLabs Fields
-        const apiInput = document.getElementById('elevenlabsApiKey');
-        const keyHint = document.getElementById('elevenlabsKeyHint');
-        const keyWarning = document.getElementById('elevenlabsKeyWarning');
-        if (voiceSettings.elevenlabsApiKey) {
-            apiInput.value = '*****';
-            apiInput.dataset.hasValue = 'true';
-            if (keyHint) keyHint.classList.add('hidden');
-            if (keyWarning) keyWarning.classList.remove('hidden');
-        } else {
-            apiInput.value = '';
-            apiInput.dataset.hasValue = 'false';
-            if (keyHint) keyHint.classList.remove('hidden');
-            if (keyWarning) keyWarning.classList.add('hidden');
+        if (openDashboardBtn) {
+            openDashboardBtn.addEventListener('click', openMonitoringDashboard);
         }
-        document.getElementById('elevenlabsStability').value = voiceSettings.elevenlabsStability ?? 0.75;
-        document.getElementById('elevenlabsClarity').value = voiceSettings.elevenlabsClarity ?? 0.75;
-        if (stabilityValue) stabilityValue.textContent = Number(document.getElementById('elevenlabsStability').value).toFixed(2);
-        if (clarityValue) clarityValue.textContent = Number(document.getElementById('elevenlabsClarity').value).toFixed(2);
+        if (reviewPendingBtn) {
+            reviewPendingBtn.addEventListener('click', openPendingReviews);
+        }
+        if (viewFlaggedBtn) {
+            viewFlaggedBtn.addEventListener('click', openFlaggedItems);
+        }
+        if (exportDataBtn) {
+            exportDataBtn.addEventListener('click', exportMonitoringData);
+        }
 
-        document.getElementById('twilioSpeechConfidenceThreshold').value = voiceSettings.twilioSpeechConfidenceThreshold ?? 0.5;
-        if (fuzzyMatchInput) fuzzyMatchInput.value = voiceSettings.fuzzyMatchThreshold ?? 0.3;
-        if (thresholdValue) thresholdValue.textContent = voiceSettings.fuzzyMatchThreshold ?? 0.3;
+        // Configuration checkboxes
+        const configCheckboxes = [
+            'auto-flag-repeats',
+            'require-approval', 
+            'alert-on-flags',
+            'detailed-logging'
+        ];
 
-        // Trigger the view toggle and load voices
-        const providerSelect = document.getElementById('ttsProviderSelect');
-        elevenlabsSettings.classList.toggle('hidden', providerSelect.value !== 'elevenlabs');
+        configCheckboxes.forEach(checkboxId => {
+            const checkbox = document.getElementById(checkboxId);
+            if (checkbox) {
+                checkbox.addEventListener('change', updateMonitoringConfig);
+            }
+        });
 
-        // Load voices and then select the saved one
-        const loadAndSelect = async () => {
-            await loadTtsVoices(providerSelect.value);
-            // Only ElevenLabs is supported now
-            document.getElementById('elevenlabsVoiceSelect').value = voiceSettings.elevenlabsVoiceId || '';
+        // Repeat threshold selector
+        const repeatThresholdSelect = document.getElementById('repeat-threshold');
+        if (repeatThresholdSelect) {
+            repeatThresholdSelect.addEventListener('change', updateMonitoringConfig);
+        }
+    }
+
+    // Load monitoring data from backend
+    async function loadMonitoringData() {
+        try {
+            const response = await fetch(`/api/monitoring/dashboard/${companyId}`);
+            if (response.ok) {
+                const data = await response.json();
+                updateMonitoringDisplay(data);
+                monitoringData = data;
+            }
+        } catch (error) {
+            console.error('Error loading monitoring data:', error);
+            showMonitoringNotification('Failed to load monitoring data', 'error');
+        }
+    }
+
+    // Update monitoring display with fresh data
+    function updateMonitoringDisplay(data) {
+        // Update metrics
+        const pendingReviewsEl = document.getElementById('pending-reviews');
+        const flaggedInteractionsEl = document.getElementById('flagged-interactions');
+        const approvalRateEl = document.getElementById('approval-rate');
+
+        if (pendingReviewsEl) pendingReviewsEl.textContent = data.pendingReviews || 0;
+        if (flaggedInteractionsEl) flaggedInteractionsEl.textContent = data.flaggedInteractions || 0;
+        if (approvalRateEl) approvalRateEl.textContent = `${data.approvalRate || 0}%`;
+
+        // Update activity feed
+        updateActivityFeed(data.recentActivity || []);
+
+        // Update analytics
+        updateMonitoringAnalytics(data.analytics || {});
+    }
+
+    // Update activity feed
+    function updateActivityFeed(activities) {
+        const feedContainer = document.getElementById('monitoring-activity-feed');
+        if (!feedContainer) return;
+
+        feedContainer.innerHTML = '';
+
+        if (activities.length === 0) {
+            feedContainer.innerHTML = '<p class="text-gray-500 text-sm">No recent activity</p>';
+            return;
+        }
+
+        activities.slice(0, 10).forEach(activity => {
+            const activityEl = createActivityElement(activity);
+            feedContainer.appendChild(activityEl);
+        });
+    }
+
+    // Create activity element
+    function createActivityElement(activity) {
+        const div = document.createElement('div');
+        
+        let borderColor, iconClass, iconColor;
+        switch (activity.type) {
+            case 'flag':
+                borderColor = 'border-orange-400';
+                iconClass = 'fas fa-flag';
+                iconColor = 'text-orange-500';
+                break;
+            case 'approval':
+                borderColor = 'border-green-400';
+                iconClass = 'fas fa-check';
+                iconColor = 'text-green-500';
+                break;
+            case 'disapproval':
+                borderColor = 'border-red-400';
+                iconClass = 'fas fa-times';
+                iconColor = 'text-red-500';
+                break;
+            default:
+                borderColor = 'border-gray-400';
+                iconClass = 'fas fa-info';
+                iconColor = 'text-gray-500';
+        }
+
+        div.className = `flex items-center text-sm text-gray-700 bg-white rounded-lg p-3 border-l-4 ${borderColor}`;
+        div.innerHTML = `
+            <i class="${iconClass} ${iconColor} mr-3"></i>
+            <div class="flex-1">
+                <span class="font-medium">${activity.title}</span>
+                <div class="text-xs text-gray-500">${activity.description}</div>
+            </div>
+            <span class="text-xs text-gray-400">${formatTimeAgo(activity.timestamp)}</span>
+        `;
+
+        return div;
+    }
+
+    // Update monitoring analytics
+    function updateMonitoringAnalytics(analytics) {
+        // This would update the analytics section with charts/graphs
+        // For now, just update the simple counters shown
+        const analyticsContainer = document.querySelector('.monitoring-analytics');
+        if (!analyticsContainer) return;
+
+        // Update totals if available
+        if (analytics.totalInteractions) {
+            const totalEl = analyticsContainer.querySelector('.total-interactions');
+            if (totalEl) totalEl.textContent = analytics.totalInteractions;
+        }
+    }
+
+    // Open monitoring dashboard in modal/new window
+    function openMonitoringDashboard() {
+        // Create modal dashboard
+        const modal = createMonitoringModal('dashboard');
+        document.body.appendChild(modal);
+    }
+
+    // Open pending reviews interface
+    function openPendingReviews() {
+        loadPendingInteractions();
+    }
+
+    // Open flagged items interface  
+    function openFlaggedItems() {
+        loadFlaggedInteractions();
+    }
+
+    // Load pending interactions for review
+    async function loadPendingInteractions() {
+        try {
+            const response = await fetch(`/api/monitoring/pending/${companyId}`);
+            if (response.ok) {
+                const interactions = await response.json();
+                showInteractionReviewModal(interactions, 'pending');
+            }
+        } catch (error) {
+            console.error('Error loading pending interactions:', error);
+            showMonitoringNotification('Failed to load pending interactions', 'error');
+        }
+    }
+
+    // Load flagged interactions
+    async function loadFlaggedInteractions() {
+        try {
+            const response = await fetch(`/api/monitoring/flagged/${companyId}`);
+            if (response.ok) {
+                const interactions = await response.json();
+                showInteractionReviewModal(interactions, 'flagged');
+            }
+        } catch (error) {
+            console.error('Error loading flagged interactions:', error);
+            showMonitoringNotification('Failed to load flagged interactions', 'error');
+        }
+    }
+
+    // Show interaction review modal
+    function showInteractionReviewModal(interactions, type) {
+        const modal = createInteractionReviewModal(interactions, type);
+        document.body.appendChild(modal);
+    }
+
+    // Create interaction review modal
+    function createInteractionReviewModal(interactions, type) {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        
+        const title = type === 'pending' ? 'Pending Reviews' : 'Flagged Interactions';
+        
+        modal.innerHTML = `
+            <div class="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-90vh overflow-y-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">${title}</h3>
+                    <button class="close-modal text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    ${interactions.map(interaction => createInteractionCard(interaction, type)).join('')}
+                </div>
+            </div>
+        `;
+
+        // Add event listeners
+        modal.querySelector('.close-modal').addEventListener('click', () => {
+            modal.remove();
+        });
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
+
+        return modal;
+    }
+
+    // Create interaction card for review
+    function createInteractionCard(interaction, type) {
+        return `
+            <div class="border rounded-lg p-4 bg-gray-50" data-interaction-id="${interaction._id}">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <div class="font-medium">Caller: ${interaction.callerInfo?.number || 'Unknown'}</div>
+                        <div class="text-sm text-gray-500">${formatDate(interaction.timestamp)}</div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button class="approve-btn bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">
+                            <i class="fas fa-check mr-1"></i>Approve
+                        </button>
+                        <button class="disapprove-btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">
+                            <i class="fas fa-times mr-1"></i>Disapprove
+                        </button>
+                        <button class="edit-btn bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">
+                            <i class="fas fa-edit mr-1"></i>Edit
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="font-medium text-sm text-gray-700">Question:</div>
+                    <div class="bg-white p-2 rounded border">${interaction.userInput}</div>
+                </div>
+                <div class="mb-3">
+                    <div class="font-medium text-sm text-gray-700">Agent Response:</div>
+                    <div class="bg-white p-2 rounded border">${interaction.agentResponse}</div>
+                </div>
+                ${interaction.reasoning ? `
+                    <div class="mb-3">
+                        <div class="font-medium text-sm text-gray-700">AI Reasoning:</div>
+                        <div class="bg-blue-50 p-2 rounded border text-sm">${interaction.reasoning}</div>
+                    </div>
+                ` : ''}
+                ${interaction.flags && interaction.flags.length > 0 ? `
+                    <div class="flex flex-wrap gap-1">
+                        ${interaction.flags.map(flag => `
+                            <span class="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded">${flag}</span>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    // Handle interaction approval
+    async function approveInteraction(interactionId) {
+        try {
+            const response = await fetch(`/api/monitoring/approve/${interactionId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ companyId })
+            });
+
+            if (response.ok) {
+                showMonitoringNotification('Interaction approved', 'success');
+                loadMonitoringData(); // Refresh data
+            }
+        } catch (error) {
+            console.error('Error approving interaction:', error);
+            showMonitoringNotification('Failed to approve interaction', 'error');
+        }
+    }
+
+    // Handle interaction disapproval
+    async function disapproveInteraction(interactionId, reason = '') {
+        try {
+            const response = await fetch(`/api/monitoring/disapprove/${interactionId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ companyId, reason })
+            });
+
+            if (response.ok) {
+                showMonitoringNotification('Interaction disapproved and blacklisted', 'success');
+                loadMonitoringData(); // Refresh data
+            }
+        } catch (error) {
+            console.error('Error disapproving interaction:', error);
+            showMonitoringNotification('Failed to disapprove interaction', 'error');
+        }
+    }
+
+    // Update monitoring configuration
+    async function updateMonitoringConfig() {
+        const config = {
+            autoFlagRepeats: document.getElementById('auto-flag-repeats')?.checked || false,
+            requireApproval: document.getElementById('require-approval')?.checked || false,
+            alertOnFlags: document.getElementById('alert-on-flags')?.checked || false,
+            detailedLogging: document.getElementById('detailed-logging')?.checked || false,
+            repeatThreshold: parseInt(document.getElementById('repeat-threshold')?.value) || 5
         };
-        loadAndSelect();
+
+        try {
+            const response = await fetch(`/api/monitoring/config/${companyId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            if (response.ok) {
+                showMonitoringNotification('Monitoring settings updated', 'success');
+            }
+        } catch (error) {
+            console.error('Error updating monitoring config:', error);
+            showMonitoringNotification('Failed to update settings', 'error');
+        }
+    }
+
+    // Export monitoring data
+    async function exportMonitoringData() {
+        try {
+            const response = await fetch(`/api/monitoring/export/${companyId}`);
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `monitoring-data-${companyId}-${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                showMonitoringNotification('Data exported successfully', 'success');
+            }
+        } catch (error) {
+            console.error('Error exporting monitoring data:', error);
+            showMonitoringNotification('Failed to export data', 'error');
+        }
+    }
+
+    // Start real-time updates
+    function startRealTimeUpdates() {
+        // Poll for updates every 30 seconds
+        setInterval(loadMonitoringData, 30000);
+    }
+
+    // Show monitoring notification
+    function showMonitoringNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg text-white z-50 ${
+            type === 'success' ? 'bg-green-600' : 
+            type === 'error' ? 'bg-red-600' : 'bg-blue-600'
+        }`;
+        notification.textContent = message;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 5000);
+    }
+
+    // Utility functions
+    function formatTimeAgo(timestamp) {
+        const now = new Date();
+        const time = new Date(timestamp);
+        const diff = now - time;
+        
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+        
+        if (minutes < 1) return 'Just now';
+        if (minutes < 60) return `${minutes}m ago`;
+        if (hours < 24) return `${hours}h ago`;
+        return `${days}d ago`;
+    }
+
+    function formatDate(timestamp) {
+        return new Date(timestamp).toLocaleString();
+    }
+
+    // Initialize monitoring system if on agent setup tab
+    if (agentSetupPageContainer) {
+        initializeMonitoringSystem();
     }
 
     // We need to call these setup functions.
