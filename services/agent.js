@@ -131,8 +131,14 @@ async function callModel(company, prompt) {
 
 const { ObjectId } = require('mongodb');
 const SuggestedKnowledgeEntry = require('../models/SuggestedKnowledgeEntry');
+const agentPerformanceTracker = require('./agentPerformanceTracker');
 
 async function answerQuestion(companyId, question, responseLength = 'concise', conversationHistory = [], mainAgentScriptParam = '', personality = 'friendly', companySpecialties = '', categoryQAs = '', originalCallSid = null) {
+  const startTime = Date.now();
+  let responseMethod = 'unknown';
+  let confidence = 0;
+  let debugInfo = {};
+  
   const db = getDB();
   const company = await db.collection('companiesCollection').findOne({ _id: new ObjectId(companyId) });
   const categories = company?.agentSetup?.categories || company?.tradeTypes || [];
@@ -163,6 +169,13 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   const protocolResponse = checkSpecificProtocols(protocols, question, conversationHistory, placeholders);
   if (protocolResponse) {
     console.log(`[Agent] Using specific scenario protocol`);
+    responseMethod = 'script';
+    confidence = 0.95;
+    debugInfo = { section: 'protocols', matchType: 'exact' };
+    
+    // Track performance
+    await trackPerformance(companyId, originalCallSid, question, protocolResponse, responseMethod, confidence, debugInfo, startTime);
+    
     return { text: protocolResponse, escalate: false };
   }
 
@@ -170,7 +183,14 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   const personalityResponse = await checkPersonalityScenarios(companyId, question.toLowerCase(), conversationHistory);
   if (personalityResponse) {
     console.log(`[Agent] Using personality response: ${personalityResponse.category}`);
-    return { text: applyPlaceholders(personalityResponse.text, placeholders), escalate: false };
+    responseMethod = 'script';
+    confidence = 0.85;
+    debugInfo = { section: 'personality', category: personalityResponse.category };
+    
+    const finalText = applyPlaceholders(personalityResponse.text, placeholders);
+    await trackPerformance(companyId, originalCallSid, question, finalText, responseMethod, confidence, debugInfo, startTime);
+    
+    return { text: finalText, escalate: false };
   }
 
   // STEP 3: Check KnowledgeEntry (approved Q&A entries)
@@ -182,15 +202,29 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
 
   if (entry) {
     console.log(`[KnowledgeBase] Found answer in KnowledgeEntry for: ${question}`);
-    return { text: applyPlaceholders(entry.answer, placeholders), escalate: false };
+    responseMethod = 'qa-direct';
+    confidence = 0.9;
+    debugInfo = { section: 'knowledge-entry', entryId: entry._id };
+    
+    const finalText = applyPlaceholders(entry.answer, placeholders);
+    await trackPerformance(companyId, originalCallSid, question, finalText, responseMethod, confidence, debugInfo, startTime);
+    
+    return { text: finalText, escalate: false };
   }
 
   // STEP 4: Try quick Q&A reference (cheat sheet approach)
   const quickQAAnswer = extractQuickAnswerFromQA(await KnowledgeEntry.find({ companyId }).exec(), question, fuzzyThreshold);
   if (quickQAAnswer) {
     console.log(`[Agent] Found quick Q&A reference for: ${question}`);
+    responseMethod = 'qa-intelligent';
+    confidence = 0.75;
+    debugInfo = { section: 'quick-qa', threshold: fuzzyThreshold };
+    
     const conversationalAnswer = generateShortConversationalResponse(question, quickQAAnswer, company?.companyName);
-    return { text: applyPlaceholders(conversationalAnswer, placeholders), escalate: false };
+    const finalText = applyPlaceholders(conversationalAnswer, placeholders);
+    await trackPerformance(companyId, originalCallSid, question, finalText, responseMethod, confidence, debugInfo, startTime);
+    
+    return { text: finalText, escalate: false };
   }
 
   // STEP 5: Try company Q&A from agentSetup.categoryQAs (also as quick reference)
@@ -199,8 +233,15 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     const quickCompanyAnswer = extractQuickAnswerFromQA(companyQAs, question, fuzzyThreshold);
     if (quickCompanyAnswer) {
       console.log(`[Agent] Found quick company Q&A reference for: ${question}`);
+      responseMethod = 'qa-intelligent';
+      confidence = 0.8;
+      debugInfo = { section: 'company-qa', threshold: fuzzyThreshold };
+      
       const conversationalAnswer = generateShortConversationalResponse(question, quickCompanyAnswer, company?.companyName);
-      return { text: applyPlaceholders(conversationalAnswer, placeholders), escalate: false };
+      const finalText = applyPlaceholders(conversationalAnswer, placeholders);
+      await trackPerformance(companyId, originalCallSid, question, finalText, responseMethod, confidence, debugInfo, startTime);
+      
+      return { text: finalText, escalate: false };
     }
   }
 
@@ -208,6 +249,12 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   const smartResponse = await generateSmartConversationalResponse(company, question, conversationHistory, categories, companySpecialties, placeholders);
   if (smartResponse) {
     console.log(`[Agent] Generated smart conversational response for: ${question}`);
+    responseMethod = 'smart-conversation';
+    confidence = 0.7;
+    debugInfo = { section: 'smart-conversation', categories: categories.join(',') };
+    
+    await trackPerformance(companyId, originalCallSid, question, smartResponse, responseMethod, confidence, debugInfo, startTime);
+    
     return { text: smartResponse, escalate: false };
   }
 
@@ -225,7 +272,14 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   const intelligentResponse = await generateIntelligentResponse(company, question, conversationHistory, categories, companySpecialties, parsedCompanyQAs);
   if (intelligentResponse) {
     console.log(`[Agent] Generated intelligent response for: ${question}`);
-    return { text: applyPlaceholders(intelligentResponse, placeholders), escalate: false };
+    responseMethod = 'qa-intelligent';
+    confidence = 0.65;
+    debugInfo = { section: 'intelligent-response', qaCount: parsedCompanyQAs.length };
+    
+    const finalText = applyPlaceholders(intelligentResponse, placeholders);
+    await trackPerformance(companyId, originalCallSid, question, finalText, responseMethod, confidence, debugInfo, startTime);
+    
+    return { text: finalText, escalate: false };
   }
 
 
@@ -394,7 +448,16 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: message, escalate: true };
   }
 
-  // Logic to create a suggested knowledge entry
+  // Track agent performance metrics for LLM fallback
+  responseMethod = 'llm-fallback';
+  confidence = 0.5; // LLM fallback has moderate confidence
+  debugInfo = { 
+    section: 'llm-fallback', 
+    originalLength: aiResponse?.length || 0,
+    finalLength: finalResponse?.length || 0,
+    wasShortened: aiResponse !== finalResponse
+  };
+  
   if (finalResponse) {
     try {
       const newSuggestedEntry = new SuggestedKnowledgeEntry({
@@ -409,9 +472,32 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     } catch (suggestErr) {
       console.error(`[SuggestedKB] Error saving suggested knowledge entry:`, suggestErr.message);
     }
+    
+    // Track the LLM fallback performance
+    await trackPerformance(companyId, originalCallSid, question, finalResponse, responseMethod, confidence, debugInfo, startTime);
   }
 
   return { text: applyPlaceholders(finalResponse, placeholders), escalate: false };
+}
+
+// Helper function to track agent performance
+async function trackPerformance(companyId, callSid, question, responseText, responseMethod, confidence, debugInfo, startTime) {
+  const responseTime = Date.now() - startTime;
+  
+  try {
+    await agentPerformanceTracker.trackAgentResponse({
+      companyId,
+      callSid: callSid || 'test-call',
+      question,
+      responseMethod,
+      responseTime,
+      responseText,
+      confidence,
+      debugInfo
+    });
+  } catch (error) {
+    console.error('[Performance] Error tracking response:', error.message);
+  }
 }
 
 // Generate intelligent responses by analyzing Q&A data contextually
