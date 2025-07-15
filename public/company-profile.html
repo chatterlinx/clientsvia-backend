@@ -759,26 +759,107 @@
                                                     <div id="smart-suggestions" class="space-y-3">
                                                         <div class="bg-white rounded-lg p-4 border-l-4 border-blue-500">
                                                             <div class="flex justify-between items-start">
-                                                                <div>
+                                                                <div class="flex-1 mr-4">
                                                                     <h6 class="font-medium text-gray-800">Add Q&A: "Do you work on weekends?"</h6>
                                                                     <p class="text-sm text-gray-600">Asked 31 times recently • 87% escalation rate</p>
-                                                                    <p class="text-sm text-blue-600 mt-1">Suggested: "We offer emergency service on weekends. Let me check our availability."</p>
+                                                                    <div class="mt-2">
+                                                                        <p class="text-sm font-medium text-blue-700">Suggested Answer:</p>
+                                                                        <div class="bg-blue-50 border border-blue-200 rounded p-3 mt-1">
+                                                                            <p class="text-sm text-blue-800" id="suggestion-1-text">"We offer emergency service on weekends. Let me check our availability for you."</p>
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                                <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded">
-                                                                    Apply
-                                                                </button>
+                                                                <div class="flex flex-col gap-2">
+                                                                    <button class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded flex items-center" onclick="applySuggestion(1)">
+                                                                        <i class="fas fa-check mr-1"></i>Apply
+                                                                    </button>
+                                                                    <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded flex items-center" onclick="editSuggestion(1)">
+                                                                        <i class="fas fa-edit mr-1"></i>Edit
+                                                                    </button>
+                                                                    <button class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded flex items-center" onclick="denySuggestion(1)">
+                                                                        <i class="fas fa-times mr-1"></i>Deny
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                         
                                                         <div class="bg-white rounded-lg p-4 border-l-4 border-green-500">
                                                             <div class="flex justify-between items-start">
-                                                                <div>
+                                                                <div class="flex-1 mr-4">
                                                                     <h6 class="font-medium text-gray-800">Optimize Greeting Length</h6>
                                                                     <p class="text-sm text-gray-600">Current: 23 words • Optimal: 15 words</p>
-                                                                    <p class="text-sm text-green-600 mt-1">Shorter greetings book 12% more appointments</p>
+                                                                    <div class="mt-2">
+                                                                        <p class="text-sm font-medium text-green-700">Current Greeting:</p>
+                                                                        <div class="bg-red-50 border border-red-200 rounded p-3 mt-1">
+                                                                            <p class="text-sm text-red-800">"Thank you for calling Penguin Air Conditioning, this is Sarah, how can I help you today?"</p>
+                                                                        </div>
+                                                                        <p class="text-sm font-medium text-green-700 mt-2">Suggested Optimized:</p>
+                                                                        <div class="bg-green-50 border border-green-200 rounded p-3 mt-1">
+                                                                            <p class="text-sm text-green-800" id="suggestion-2-text">"Hi, Penguin Air! How can I help you?"</p>
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                                <button class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded">
-                                                                    Optimize
+                                                                <div class="flex flex-col gap-2">
+                                                                    <button class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded flex items-center" onclick="applySuggestion(2)">
+                                                                        <i class="fas fa-check mr-1"></i>Apply
+                                                                    </button>
+                                                                    <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded flex items-center" onclick="editSuggestion(2)">
+                                                                        <i class="fas fa-edit mr-1"></i>Edit
+                                                                    </button>
+                                                                    <button class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded flex items-center" onclick="denySuggestion(2)">
+                                                                        <i class="fas fa-times mr-1"></i>Deny
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="bg-white rounded-lg p-4 border-l-4 border-purple-500">
+                                                            <div class="flex justify-between items-start">
+                                                                <div class="flex-1 mr-4">
+                                                                    <h6 class="font-medium text-gray-800">Add Q&A: "What's your warranty policy?"</h6>
+                                                                    <p class="text-sm text-gray-600">Asked 18 times recently • 92% escalation rate</p>
+                                                                    <div class="mt-2">
+                                                                        <p class="text-sm font-medium text-purple-700">Suggested Answer:</p>
+                                                                        <div class="bg-purple-50 border border-purple-200 rounded p-3 mt-1">
+                                                                            <p class="text-sm text-purple-800" id="suggestion-3-text">"We provide a full 1-year warranty on all repairs and installations. I can email you the warranty details after we schedule your appointment."</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="flex flex-col gap-2">
+                                                                    <button class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded flex items-center" onclick="applySuggestion(3)">
+                                                                        <i class="fas fa-check mr-1"></i>Apply
+                                                                    </button>
+                                                                    <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded flex items-center" onclick="editSuggestion(3)">
+                                                                        <i class="fas fa-edit mr-1"></i>Edit
+                                                                    </button>
+                                                                    <button class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded flex items-center" onclick="denySuggestion(3)">
+                                                                        <i class="fas fa-times mr-1"></i>Deny
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Edit Suggestion Modal (Hidden by default) -->
+                                                <div id="edit-suggestion-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+                                                    <div class="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
+                                                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Edit AI Suggestion</h3>
+                                                        <div class="space-y-4">
+                                                            <div>
+                                                                <label class="block text-sm font-medium text-gray-700 mb-1">Question</label>
+                                                                <input type="text" id="edit-question" class="form-input w-full" readonly>
+                                                            </div>
+                                                            <div>
+                                                                <label class="block text-sm font-medium text-gray-700 mb-1">Your Modified Answer</label>
+                                                                <textarea id="edit-answer" rows="4" class="form-textarea w-full" placeholder="Modify the suggested response..."></textarea>
+                                                            </div>
+                                                            <div class="flex justify-end gap-3">
+                                                                <button class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded" onclick="closeEditModal()">
+                                                                    Cancel
+                                                                </button>
+                                                                <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" onclick="saveEditedSuggestion()">
+                                                                    <i class="fas fa-save mr-2"></i>Save & Apply
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -3768,6 +3849,156 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+});
+
+// ===========================================
+// SMART LEARNING SUGGESTIONS MANAGEMENT
+// ===========================================
+
+let currentEditingSuggestion = null;
+
+/**
+ * Apply an AI suggestion directly
+ */
+function applySuggestion(suggestionId) {
+    // Show confirmation
+    if (!confirm('Apply this AI suggestion? This will add/update the agent configuration.')) {
+        return;
+    }
+    
+    // Simulate applying the suggestion
+    const suggestionElement = document.querySelector(`#suggestion-${suggestionId}-text`).closest('.bg-white');
+    
+    // Visual feedback
+    suggestionElement.style.border = '2px solid #10B981';
+    suggestionElement.style.backgroundColor = '#F0FDF4';
+    
+    // Add applied badge
+    const buttonsContainer = suggestionElement.querySelector('.flex.flex-col');
+    buttonsContainer.innerHTML = `
+        <div class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded flex items-center">
+            <i class="fas fa-check mr-1"></i>Applied
+        </div>
+    `;
+    
+    showToast('AI suggestion applied successfully!', 'success');
+    
+    // TODO: Send to backend to actually apply the suggestion
+    console.log(`Applied suggestion ${suggestionId}`);
+}
+
+/**
+ * Edit an AI suggestion before applying
+ */
+function editSuggestion(suggestionId) {
+    currentEditingSuggestion = suggestionId;
+    
+    // Get suggestion data
+    const suggestions = {
+        1: {
+            question: "Do you work on weekends?",
+            answer: "We offer emergency service on weekends. Let me check our availability for you."
+        },
+        2: {
+            question: "Greeting Optimization",
+            answer: "Hi, Penguin Air! How can I help you?"
+        },
+        3: {
+            question: "What's your warranty policy?",
+            answer: "We provide a full 1-year warranty on all repairs and installations. I can email you the warranty details after we schedule your appointment."
+        }
+    };
+    
+    const suggestion = suggestions[suggestionId];
+    if (!suggestion) return;
+    
+    // Populate edit modal
+    document.getElementById('edit-question').value = suggestion.question;
+    document.getElementById('edit-answer').value = suggestion.answer;
+    
+    // Show modal
+    document.getElementById('edit-suggestion-modal').classList.remove('hidden');
+}
+
+/**
+ * Deny/reject an AI suggestion
+ */
+function denySuggestion(suggestionId) {
+    if (!confirm('Deny this AI suggestion? It will be marked as rejected and won\'t appear again.')) {
+        return;
+    }
+    
+    const suggestionElement = document.querySelector(`#suggestion-${suggestionId}-text`).closest('.bg-white');
+    
+    // Visual feedback - fade out and mark as denied
+    suggestionElement.style.opacity = '0.5';
+    suggestionElement.style.border = '2px solid #EF4444';
+    
+    // Replace buttons with denied status
+    const buttonsContainer = suggestionElement.querySelector('.flex.flex-col');
+    buttonsContainer.innerHTML = `
+        <div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded flex items-center">
+            <i class="fas fa-times mr-1"></i>Denied
+        </div>
+    `;
+    
+    showToast('AI suggestion denied and marked for learning.', 'success');
+    
+    // TODO: Send to backend to mark suggestion as denied
+    console.log(`Denied suggestion ${suggestionId}`);
+}
+
+/**
+ * Close the edit suggestion modal
+ */
+function closeEditModal() {
+    document.getElementById('edit-suggestion-modal').classList.add('hidden');
+    currentEditingSuggestion = null;
+}
+
+/**
+ * Save the edited suggestion and apply it
+ */
+function saveEditedSuggestion() {
+    if (!currentEditingSuggestion) return;
+    
+    const editedAnswer = document.getElementById('edit-answer').value.trim();
+    if (!editedAnswer) {
+        showToast('Please enter a response before saving.', 'error');
+        return;
+    }
+    
+    // Update the suggestion text in the UI
+    const suggestionTextElement = document.querySelector(`#suggestion-${currentEditingSuggestion}-text`);
+    if (suggestionTextElement) {
+        suggestionTextElement.textContent = `"${editedAnswer}"`;
+    }
+    
+    // Close modal
+    closeEditModal();
+    
+    // Apply the edited suggestion
+    applySuggestion(currentEditingSuggestion);
+    
+    showToast('Edited suggestion saved and applied!', 'success');
+    
+    // TODO: Send edited suggestion to backend
+    console.log(`Saved edited suggestion ${currentEditingSuggestion}: ${editedAnswer}`);
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('edit-suggestion-modal');
+    if (e.target === modal) {
+        closeEditModal();
+    }
+});
+
+// Close modal with Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeEditModal();
+    }
 });
 
 // ...existing code...
