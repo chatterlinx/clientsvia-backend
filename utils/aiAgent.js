@@ -11,7 +11,7 @@ const stringSimilarity = require('string-similarity');
  * @param {Number} fuzzyThreshold - Similarity threshold (default 0.25)
  * @returns {String|null} Matching answer or null
  */
-function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.25) {
+function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.4) {
   if (!entries || !Array.isArray(entries) || !userQuestion) return null;
   
   const qNorm = userQuestion.trim().toLowerCase();
@@ -56,6 +56,10 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.25) {
     }
   }
 
+  // Use scoring system to find best match
+  let bestMatch = null;
+  let bestScore = 0;
+  
   for (const entry of entries) {
     const questionVariants = [
       (entry.question || '').trim().toLowerCase(),
@@ -65,6 +69,9 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.25) {
     ].filter(q => q); // Remove empty strings
     
     console.log(`🎯 [Q&A CHECK] Entry: "${entry.question}" | Variants: [${questionVariants.join(', ')}]`);
+    
+    let entryScore = 0;
+    let matchedVariant = '';
     
     for (const variant of questionVariants) {
       // 1. Exact match - highest priority (but check both original and corrected request)
@@ -90,8 +97,25 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.25) {
           }
         }
         
-        console.log(`✅ [Q&A FUZZY] High similarity match: "${entry.question}" | Score: ${similarity.toFixed(3)}`);
-        return entry.answer;
+        // Calculate context-specific score for pricing questions
+        let contextScore = similarity;
+        const isPricingQuestion = qNorm.includes('cost') || qNorm.includes('price') || qNorm.includes('charge') || qNorm.includes('fee') || qNorm.includes('much');
+        
+        if (isPricingQuestion) {
+          // Give higher scores for more specific matches
+          if (qNorm.includes('service call') && entry.question.includes('service call')) contextScore += 0.3;
+          if ((qNorm.includes('serviced') || qNorm.includes('tune-up') || qNorm.includes('maintenance')) && entry.question.includes('ac service')) contextScore += 0.3;
+          if ((qNorm.includes('repair') || qNorm.includes('fix')) && entry.question.includes('repair')) contextScore += 0.3;
+          
+          // Penalize less specific matches
+          if (qNorm.includes('serviced') && entry.question.includes('service call')) contextScore -= 0.2;
+          if (qNorm.includes('repair') && entry.question.includes('service call')) contextScore -= 0.2;
+        }
+        
+        if (contextScore > entryScore) {
+          entryScore = contextScore;
+          matchedVariant = variant;
+        }
       }
       
       // 3. Contextual word matching (prevents false positives)
@@ -132,6 +156,15 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.25) {
           const hvacKeywords = ['ac', 'air', 'conditioning', 'heat', 'heating', 'cool', 'cooling', 'repair', 'broken', 'fix'];
           if (hvacKeywords.includes(userWord) && hvacKeywords.includes(variantWord)) return true;
           
+          // Special handling for pricing-related keywords to improve specificity
+          const pricingKeywords = ['cost', 'price', 'charge', 'fee', 'much', 'money', 'bill', 'estimate', 'quote'];
+          const serviceKeywords = ['service', 'call', 'visit', 'trip', 'diagnostic', 'come', 'out'];
+          const maintenanceKeywords = ['serviced', 'maintenance', 'tune-up', 'tuneup', 'service', 'annual', 'check'];
+          const repairKeywords = ['repair', 'fix', 'fixing', 'broken', 'replace', 'replacement'];
+          
+          // Enhanced pricing context matching
+          if (pricingKeywords.includes(userWord) && pricingKeywords.includes(variantWord)) return true;
+          
           // For longer words, allow substring matching
           if (userWord.length > 4 && variantWord.length > 4) {
             if (userWord.includes(variantWord) || variantWord.includes(userWord)) return true;
@@ -152,25 +185,49 @@ function findCachedAnswer(entries, userQuestion, fuzzyThreshold = 0.25) {
       const isWaterIssue = requestWords.some(word => ['water', 'leak', 'leaking', 'leakage', 'drip', 'wet'].includes(word));
       const isHVACIssue = requestWords.some(word => ['ac', 'air', 'conditioning', 'heat', 'cool', 'repair'].includes(word));
       const isThermostatIssue = requestWords.some(word => ['thermostat', 'blank', 'display', 'screen'].includes(word));
+      const isPricingQuestion = requestWords.some(word => ['cost', 'price', 'charge', 'fee', 'much', 'money', 'expensive'].includes(word));
       
-      let minWords, minRatio;
-      if (isWaterIssue || isHVACIssue || isThermostatIssue) {
-        // More lenient for specific technical issues
-        minWords = requestWords.length >= 8 ? 2 : 1;
-        minRatio = hasNegativeContext ? 0.4 : 0.3; // Slightly higher for negative context
+      // For pricing questions, add context-specific scoring
+      let wordScore = 0;
+      if (isPricingQuestion) {
+        const hasServiceCallTerms = requestWords.some(word => ['call', 'visit', 'come', 'out', 'diagnostic', 'trip'].includes(word));
+        const hasMaintenanceTerms = requestWords.some(word => ['serviced', 'maintenance', 'tune-up', 'tuneup', 'service', 'annual'].includes(word));
+        const hasRepairTerms = requestWords.some(word => ['repair', 'fix', 'fixing', 'broken', 'replace'].includes(word));
+        
+        // Calculate word-based score for pricing questions
+        const baseScore = matchingWords.length / requestWords.length;
+        let contextMultiplier = 1;
+        
+        if (entry.question.includes('service call') && hasServiceCallTerms) contextMultiplier += 0.5;
+        if (entry.question.includes('ac service') && hasMaintenanceTerms) contextMultiplier += 0.5;
+        if (entry.question.includes('repair') && hasRepairTerms) contextMultiplier += 0.5;
+        
+        // Penalize wrong context
+        if (entry.question.includes('service call') && (hasMaintenanceTerms || hasRepairTerms)) contextMultiplier -= 0.3;
+        if (entry.question.includes('ac service') && hasServiceCallTerms && !hasMaintenanceTerms) contextMultiplier -= 0.3;
+        
+        wordScore = baseScore * contextMultiplier;
       } else {
-        // Standard matching - stricter for negative context
-        minWords = requestWords.length >= 6 ? 2 : 1;
-        minRatio = hasNegativeContext ? 0.6 : 0.4;
+        wordScore = matchingWords.length / requestWords.length;
       }
       
-      if (matchingWords.length >= minWords && matchRatio >= minRatio) {
-        console.log(`✅ [Q&A CONTEXTUAL] Word-based match: "${entry.question}" | Words: ${matchingWords.length}/${requestWords.length} (${(matchRatio * 100).toFixed(1)}%) | Matched: [${matchingWords.join(', ')}]`);
-        return entry.answer;
-      } else if (matchingWords.length > 0) {
-        console.log(`⚠️ [Q&A PARTIAL] Insufficient match: "${entry.question}" | Words: ${matchingWords.length}/${requestWords.length} (${(matchRatio * 100).toFixed(1)}%) | Matched: [${matchingWords.join(', ')}]`);
+      if (wordScore > entryScore) {
+        entryScore = wordScore;
+        matchedVariant = variant;
       }
     }
+    
+    // Update best match if this entry has a higher score
+    if (entryScore > bestScore && entryScore > 0.3) {
+      bestMatch = entry;
+      bestScore = entryScore;
+    }
+  }
+  
+  // Return the best match if found
+  if (bestMatch) {
+    console.log(`✅ [Q&A BEST MATCH] Selected: "${bestMatch.question}" | Score: ${bestScore.toFixed(3)}`);
+    return bestMatch.answer;
   }
 
   console.log(`❌ [Q&A NO MATCH] No suitable Q&A match found for: "${userQuestion}"`);

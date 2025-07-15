@@ -403,7 +403,60 @@ router.post('/handle-speech', async (req, res) => {
     console.log(`[Q&A DEBUG] Match result:`, cachedAnswer);
     
     if (cachedAnswer) {
-      console.log(`[Q&A MATCH FOUND] [OK] Using Q&A response for ${callSid}: ${cachedAnswer.substring(0, 100)}...`);
+      console.log(`[Q&A MATCH FOUND] [OK] Found Q&A response for ${callSid}: ${cachedAnswer.substring(0, 100)}...`);
+      
+      // Check conversation history for repetition detection
+      let conversationHistory = [];
+      const historyKey = `conversation-history:${callSid}`;
+      const storedHistory = await redisClient.get(historyKey);
+      if (storedHistory) {
+        conversationHistory = JSON.parse(storedHistory);
+      }
+      
+      // Check if this exact Q&A response was recently given (last 3 messages)
+      const recentAssistantMessages = conversationHistory
+        .filter(msg => msg.role === 'assistant')
+        .slice(-3); // Last 3 assistant messages
+      
+      const isRepeatingQA = recentAssistantMessages.some(msg => 
+        msg.text && msg.text.includes(cachedAnswer.substring(0, 50))
+      );
+      
+      if (isRepeatingQA) {
+        console.log(`[Q&A REPETITION] ⚠️ Same Q&A response was recently given, providing clarification instead`);
+        // Generate a clarification response instead of repeating
+        const clarificationResponses = [
+          "I've already shared that information with you. Is there something specific you'd like to know more about?",
+          "As I mentioned, " + cachedAnswer.substring(0, 100) + "... Is there another way I can help you?",
+          "I provided those details already. Do you have any other questions I can help with?",
+          "We covered that just now. What else would you like to know about our services?"
+        ];
+        const clarification = clarificationResponses[Math.floor(Math.random() * clarificationResponses.length)];
+        
+        const gather = twiml.gather({
+          input: 'speech',
+          action: `https://${req.get('host')}/api/twilio/handle-speech`,
+          method: 'POST',
+          bargeIn: company.aiSettings?.bargeIn ?? false,
+          timeout: 5,
+          speechTimeout: 'auto',
+          enhanced: true,
+          speechModel: 'phone_call',
+          partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
+        });
+        
+        gather.say(escapeTwiML(clarification));
+        
+        // Add to conversation history
+        conversationHistory.push({ role: 'user', text: speechText });
+        conversationHistory.push({ role: 'assistant', text: clarification });
+        await redisClient.setEx(historyKey, 60, JSON.stringify(conversationHistory));
+        
+        res.type('text/xml');
+        return res.send(twiml.toString());
+      }
+      
+      console.log(`[Q&A RESPONSE] [OK] Using Q&A response (no repetition detected)`);
       
       const gather = twiml.gather({
         input: 'speech',
@@ -443,6 +496,12 @@ router.post('/handle-speech', async (req, res) => {
       } else {
         gather.say(escapeTwiML(cachedAnswer));
       }
+
+      // Add to conversation history
+      conversationHistory.push({ role: 'user', text: speechText });
+      conversationHistory.push({ role: 'assistant', text: cachedAnswer });
+      await redisClient.setEx(historyKey, 60, JSON.stringify(conversationHistory));
+      console.log(`[Q&A HISTORY] 💾 Saved Q&A exchange to conversation history`);
 
       res.type('text/xml');
       return res.send(twiml.toString());
