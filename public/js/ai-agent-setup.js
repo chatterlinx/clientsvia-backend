@@ -862,12 +862,20 @@ class AIAgentSetup {
 
 // Initialize AI Agent Setup when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, checking for AI Agent Setup content...');
+    
     if (document.getElementById('ai-agent-setup-content')) {
+        console.log('AI Agent Setup content found, initializing...');
         window.aiAgentSetup = new AIAgentSetup();
         
         // Initialize Logic AI Intelligence features if present
         if (document.querySelector('[data-section-name="ai-intelligence-logic"]')) {
+            console.log('Logic AI Intelligence section found, initializing...');
             window.aiAgentSetup.initializeLogicAIIntelligence();
+        } else {
+            console.log('Logic AI Intelligence section not found');
         }
+    } else {
+        console.log('AI Agent Setup content not found');
     }
 });
