@@ -19,8 +19,7 @@ userSchema.pre('save', function(next) {
   next();
 });
 
-// Index for efficient lookups
-userSchema.index({ email: 1 });
-userSchema.index({ googleId: 1 });
+// Note: email and googleId indexes are already created by unique: true in schema definition
+// No need for duplicate index definitions
 
 module.exports = mongoose.model('User', userSchema);
