@@ -148,6 +148,16 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   // USE SCRIPT FROM COMPANY OBJECT, NOT PARAMETER
   const mainAgentScript = company?.agentSetup?.mainAgentScript || mainAgentScriptParam || '';
   
+  // REPEAT ANSWER PREVENTION - Check if we've recently given similar responses
+  const recentResponses = conversationHistory.filter(entry => entry.role === 'agent').slice(-3); // Last 3 agent responses
+  
+  // Extract key topics from customer's rambling (enhanced keyword extraction)
+  const customerKeywords = extractKeyTopicsFromRambling(question, conversationHistory);
+  console.log(`[Agent] Extracted key topics from customer: ${customerKeywords.join(', ')}`);
+  
+  // Enhanced question for better matching (combine original + extracted keywords)
+  const enhancedQuestion = question + ' ' + customerKeywords.join(' ');
+  
   // Define fuzzy threshold for Q&A matching (lower for better matching)
   const fuzzyThreshold = company?.aiSettings?.fuzzyMatchThreshold ?? 0.15; // Lowered from 0.25 to 0.15 for better Q&A matching
 
@@ -180,7 +190,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   }
 
   // STEP 2: Check personality responses for common scenarios
-  const personalityResponse = await checkPersonalityScenarios(companyId, question.toLowerCase(), conversationHistory);
+  const personalityResponse = await checkPersonalityScenarios(companyId, enhancedQuestion.toLowerCase(), conversationHistory);
   if (personalityResponse) {
     console.log(`[Agent] Using personality response: ${personalityResponse.category}`);
     responseMethod = 'script';
@@ -188,9 +198,14 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     debugInfo = { section: 'personality', category: personalityResponse.category };
     
     const finalText = applyPlaceholders(personalityResponse.text, placeholders);
-    await trackPerformance(companyId, originalCallSid, question, finalText, responseMethod, confidence, debugInfo, startTime);
     
-    return { text: finalText, escalate: false };
+    // Check for repetitive response
+    if (isRepetitiveResponse(finalText, recentResponses)) {
+      console.log(`[Agent] Personality response was repetitive, trying alternative approach`);
+    } else {
+      await trackPerformance(companyId, originalCallSid, question, finalText, responseMethod, confidence, debugInfo, startTime);
+      return { text: finalText, escalate: false };
+    }
   }
 
   // STEP 3: Check KnowledgeEntry (approved Q&A entries)
@@ -212,19 +227,29 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: finalText, escalate: false };
   }
 
-  // STEP 4: Try quick Q&A reference (cheat sheet approach)
-  const quickQAAnswer = extractQuickAnswerFromQA(await KnowledgeEntry.find({ companyId }).exec(), question, fuzzyThreshold);
+  // STEP 4: Try quick Q&A reference (cheat sheet approach) with enhanced question
+  const quickQAAnswer = extractQuickAnswerFromQA(await KnowledgeEntry.find({ companyId }).exec(), enhancedQuestion, fuzzyThreshold);
   if (quickQAAnswer) {
-    console.log(`[Agent] Found quick Q&A reference for: ${question}`);
+    console.log(`[Agent] Found quick Q&A reference for: ${enhancedQuestion}`);
     responseMethod = 'qa-intelligent';
     confidence = 0.75;
     debugInfo = { section: 'quick-qa', threshold: fuzzyThreshold };
     
-    const conversationalAnswer = generateShortConversationalResponse(question, quickQAAnswer, company?.companyName);
+    const conversationalAnswer = generateShortConversationalResponse(enhancedQuestion, quickQAAnswer, company?.companyName);
     const finalText = applyPlaceholders(conversationalAnswer, placeholders);
-    await trackPerformance(companyId, originalCallSid, question, finalText, responseMethod, confidence, debugInfo, startTime);
     
-    return { text: finalText, escalate: false };
+    // Check for repetitive response
+    if (isRepetitiveResponse(finalText, recentResponses)) {
+      console.log(`[Agent] Q&A response was repetitive, enhancing with personality`);
+      const enhancedAnswer = await enhanceResponseWithPersonality(finalText, personality, customerKeywords);
+      if (enhancedAnswer && !isRepetitiveResponse(enhancedAnswer, recentResponses)) {
+        await trackPerformance(companyId, originalCallSid, question, enhancedAnswer, responseMethod, confidence, debugInfo, startTime);
+        return { text: enhancedAnswer, escalate: false };
+      }
+    } else {
+      await trackPerformance(companyId, originalCallSid, question, finalText, responseMethod, confidence, debugInfo, startTime);
+      return { text: finalText, escalate: false };
+    }
   }
 
   // STEP 5: Try company Q&A from agentSetup.categoryQAs (also as quick reference)
@@ -316,9 +341,9 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     fullPrompt += `\n- Example: Q&A says "We service all major brands including..." → You say "Yes, we service that brand. Schedule a repair?"`;
   }
 
-  // Add conversation history
-  if (conversationHistory.length > 2) {
-    conversationHistory = conversationHistory.slice(-2);
+  // Add conversation history (increased from 2 to 8 for better context understanding)
+  if (conversationHistory.length > 8) {
+    conversationHistory = conversationHistory.slice(-8); // Keep last 8 exchanges for better context
   }
 
   if (conversationHistory.length > 0) {
@@ -1170,7 +1195,170 @@ async function generateSmartConversationalResponse(company, question, conversati
   return null;
 }
 
+// ===== ENHANCED CONVERSATION INTELLIGENCE FUNCTIONS =====
+
+/**
+ * Extract key topics from customer rambling - lets customers talk freely while identifying core issues
+ */
+function extractKeyTopicsFromRambling(question, conversationHistory = []) {
+  const text = question.toLowerCase();
+  const allCustomerText = conversationHistory
+    .filter(entry => entry.role === 'customer')
+    .map(entry => entry.text.toLowerCase())
+    .join(' ') + ' ' + text;
+  
+  // Core service keywords - what the customer actually needs help with
+  const serviceKeywords = {
+    'hvac_issues': ['thermostat', 'temperature', 'heating', 'cooling', 'ac', 'air conditioning', 'furnace', 'heat pump', 'duct', 'filter', 'hvac'],
+    'electrical_issues': ['electrical', 'power', 'outlet', 'switch', 'breaker', 'wiring', 'lights', 'electric'],
+    'plumbing_issues': ['plumbing', 'water', 'pipe', 'leak', 'drain', 'toilet', 'faucet', 'shower', 'sink'],
+    'appliance_issues': ['appliance', 'refrigerator', 'washer', 'dryer', 'dishwasher', 'oven', 'stove'],
+    'urgency_indicators': ['emergency', 'urgent', 'asap', 'right now', 'immediately', 'broken', 'not working', 'help'],
+    'problem_descriptors': ['blank', 'dead', 'broken', 'not working', 'malfunctioning', 'weird', 'strange', 'noise', 'leak'],
+    'scheduling_intent': ['schedule', 'appointment', 'service', 'come out', 'visit', 'when', 'available'],
+    'pricing_intent': ['cost', 'price', 'charge', 'fee', 'how much', 'expensive', 'cheap', 'bill']
+  };
+  
+  const extractedTopics = [];
+  
+  // Extract service-related keywords
+  Object.entries(serviceKeywords).forEach(([category, keywords]) => {
+    keywords.forEach(keyword => {
+      if (allCustomerText.includes(keyword)) {
+        extractedTopics.push(keyword);
+      }
+    });
+  });
+  
+  // Extract specific equipment mentions
+  const equipmentPatterns = [
+    /\b(my|the|our)\s+(thermostat|furnace|ac|air\s+conditioning|water\s+heater|dishwasher)\b/g,
+    /\b(upstairs|downstairs|basement|main\s+floor)\s+(thermostat|unit|system)\b/g,
+    /\b(kitchen|bathroom|bedroom|living\s+room)\s+(sink|faucet|toilet|outlet)\b/g
+  ];
+  
+  equipmentPatterns.forEach(pattern => {
+    const matches = allCustomerText.match(pattern);
+    if (matches) {
+      matches.forEach(match => extractedTopics.push(match.replace(/\b(my|the|our)\s+/, '')));
+    }
+  });
+  
+  // Remove duplicates and return top keywords
+  return [...new Set(extractedTopics)].slice(0, 8);
+}
+
+/**
+ * Check if response would be repetitive
+ */
+function isRepetitiveResponse(newResponse, recentResponses) {
+  if (!recentResponses || recentResponses.length === 0) return false;
+  
+  const newResponseLower = newResponse.toLowerCase();
+  
+  // Check for exact or very similar responses
+  for (const recent of recentResponses) {
+    const recentLower = recent.text.toLowerCase();
+    
+    // Calculate similarity (simple approach)
+    const similarity = calculateStringSimilarity(newResponseLower, recentLower);
+    if (similarity > 0.8) { // 80% similar = repetitive
+      console.log(`[Agent] Detected repetitive response (${Math.round(similarity * 100)}% similar)`);
+      return true;
+    }
+    
+    // Check for repeated key phrases
+    const newPhrases = newResponseLower.split(/[.!?]/).filter(phrase => phrase.length > 10);
+    const recentPhrases = recentLower.split(/[.!?]/).filter(phrase => phrase.length > 10);
+    
+    for (const newPhrase of newPhrases) {
+      for (const recentPhrase of recentPhrases) {
+        if (calculateStringSimilarity(newPhrase.trim(), recentPhrase.trim()) > 0.9) {
+          console.log(`[Agent] Detected repeated phrase: "${newPhrase.trim()}"`);
+          return true;
+        }
+      }
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Simple string similarity calculation
+ */
+function calculateStringSimilarity(str1, str2) {
+  const longer = str1.length > str2.length ? str1 : str2;
+  const shorter = str1.length > str2.length ? str2 : str1;
+  
+  if (longer.length === 0) return 1.0;
+  
+  const editDistance = calculateLevenshteinDistance(longer, shorter);
+  return (longer.length - editDistance) / longer.length;
+}
+
+/**
+ * Calculate Levenshtein distance between two strings
+ */
+function calculateLevenshteinDistance(str1, str2) {
+  const matrix = [];
+  
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+  
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  
+  return matrix[str2.length][str1.length];
+}
+
+/**
+ * Enhance response with personality when avoiding repetition
+ */
+async function enhanceResponseWithPersonality(baseResponse, personality, customerKeywords) {
+  try {
+    // Get a personality-based variation of the response
+    const personalityVariations = {
+      'friendly': ['Thanks for your patience!', 'I understand your concern.', 'Let me help you with that.'],
+      'professional': ['I can assist you with this matter.', 'Allow me to address your concern.', 'I will help resolve this issue.'],
+      'empathetic': ['I know this can be frustrating.', 'I completely understand.', 'That sounds concerning.'],
+      'solution-focused': ['Let\'s get this sorted out.', 'Here\'s what we can do.', 'Let me find the best solution.']
+    };
+    
+    const variations = personalityVariations[personality] || personalityVariations['friendly'];
+    const randomVariation = variations[Math.floor(Math.random() * variations.length)];
+    
+    // Combine the variation with focus on customer's key concerns
+    const keywordFocus = customerKeywords.length > 0 ? 
+      ` Regarding your ${customerKeywords[0]} issue, ` : ' ';
+    
+    return randomVariation + keywordFocus + baseResponse;
+    
+  } catch (error) {
+    console.error('[Agent] Error enhancing response with personality:', error);
+    return null;
+  }
+}
+
 module.exports = { 
   answerQuestion, 
-  loadCompanyQAs 
+  loadCompanyQAs,
+  extractKeyTopicsFromRambling,
+  isRepetitiveResponse
 };
