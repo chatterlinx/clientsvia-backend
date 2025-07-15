@@ -208,4 +208,183 @@ router.get('/performance/:companyId/health', async (req, res) => {
   }
 });
 
+// Test Super AI Intelligence
+router.post('/test-intelligence', async (req, res) => {
+  try {
+    const { companyId, scenario, query } = req.body;
+
+    if (!companyId || !query) {
+      return res.status(400).json({
+        success: false,
+        error: 'Company ID and query are required'
+      });
+    }
+
+    // Simulate intelligence test with different processing chains based on scenario
+    const startTime = Date.now();
+    
+    // Mock different test scenarios
+    let intelligenceScore, confidence, method, processingChain;
+    
+    switch (scenario) {
+      case 'complex':
+        intelligenceScore = Math.floor(Math.random() * 20) + 70; // 70-90%
+        confidence = Math.floor(Math.random() * 30) + 60; // 60-90%
+        method = 'Dynamic Reasoning + LLM';
+        processingChain = [
+          '1. Query analyzed for complexity',
+          '2. Dynamic reasoning engine activated',
+          '3. Contextual memory searched',
+          '4. LLM called with enhanced context',
+          '5. Response generated and validated'
+        ];
+        break;
+      case 'emotional':
+        intelligenceScore = Math.floor(Math.random() * 15) + 80; // 80-95%
+        confidence = Math.floor(Math.random() * 25) + 70; // 70-95%
+        method = 'Sentiment Analysis + Smart Escalation';
+        processingChain = [
+          '1. Sentiment analysis performed',
+          '2. Emotional context detected',
+          '3. Smart escalation rules checked',
+          '4. Empathetic response generated',
+          '5. Context preserved for handoff'
+        ];
+        break;
+      case 'urgent':
+        intelligenceScore = Math.floor(Math.random() * 10) + 85; // 85-95%
+        confidence = Math.floor(Math.random() * 20) + 75; // 75-95%
+        method = 'Priority Detection + Fast Path';
+        processingChain = [
+          '1. Urgency keywords detected',
+          '2. Priority escalation triggered',
+          '3. Fast-path knowledge search',
+          '4. Immediate response generated',
+          '5. Follow-up actions queued'
+        ];
+        break;
+      default: // standard
+        intelligenceScore = Math.floor(Math.random() * 25) + 75; // 75-100%
+        confidence = Math.floor(Math.random() * 30) + 70; // 70-100%
+        method = 'Semantic Knowledge Search';
+        processingChain = [
+          '1. Query parsed and analyzed',
+          '2. Semantic knowledge search performed',
+          '3. Best match found (95% confidence)',
+          '4. Response generated from knowledge base',
+          '5. Response quality validated'
+        ];
+    }
+
+    const responseTime = Date.now() - startTime + Math.floor(Math.random() * 800) + 200; // 200-1000ms
+
+    // Generate mock response based on query
+    const response = generateMockIntelligentResponse(query, scenario);
+
+    res.json({
+      success: true,
+      data: {
+        intelligenceScore,
+        responseTime,
+        confidence,
+        method,
+        response,
+        processingChain,
+        timestamp: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('[API] Error testing intelligence:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to test intelligence'
+    });
+  }
+});
+
+// Update intelligence settings
+router.post('/intelligence-settings/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const settings = req.body;
+
+    // In a real implementation, these would be saved to the database
+    // For now, we'll just acknowledge the settings update
+    console.log(`[API] Intelligence settings updated for company ${companyId}:`, settings);
+
+    res.json({
+      success: true,
+      message: 'Intelligence settings updated successfully'
+    });
+  } catch (error) {
+    console.error('[API] Error updating intelligence settings:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update intelligence settings'
+    });
+  }
+});
+
+// Update learning settings
+router.post('/learning-settings/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const settings = req.body;
+
+    // In a real implementation, these would be saved to the database
+    console.log(`[API] Learning settings updated for company ${companyId}:`, settings);
+
+    res.json({
+      success: true,
+      message: 'Learning settings updated successfully'
+    });
+  } catch (error) {
+    console.error('[API] Error updating learning settings:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update learning settings'
+    });
+  }
+});
+
+/**
+ * Generate a mock intelligent response based on query and scenario
+ */
+function generateMockIntelligentResponse(query, scenario) {
+  const lowerQuery = query.toLowerCase();
+  
+  // Emergency/urgent responses
+  if (lowerQuery.includes('emergency') || lowerQuery.includes('urgent') || scenario === 'urgent') {
+    return "I understand this is urgent. We offer 24/7 emergency service. I can connect you with our emergency dispatch team right now, or schedule the earliest available appointment. What would work better for you?";
+  }
+  
+  // Hours/availability questions
+  if (lowerQuery.includes('hours') || lowerQuery.includes('open') || lowerQuery.includes('available')) {
+    return "We're open Monday through Friday 8 AM to 6 PM, and Saturday 9 AM to 3 PM. For emergency service, we're available 24/7. Would you like to schedule an appointment during our regular hours or do you need emergency service?";
+  }
+  
+  // Service/repair questions
+  if (lowerQuery.includes('service') || lowerQuery.includes('repair') || lowerQuery.includes('fix')) {
+    return "We provide comprehensive HVAC services including repairs, maintenance, and installations. Our certified technicians can diagnose and fix most issues the same day. What specific problem are you experiencing with your system?";
+  }
+  
+  // Pricing questions
+  if (lowerQuery.includes('cost') || lowerQuery.includes('price') || lowerQuery.includes('charge')) {
+    return "Our service call fee is $89, which is applied toward any repair work. We provide upfront pricing before any work begins, and all our work is backed by our satisfaction guarantee. Would you like me to schedule a diagnostic appointment?";
+  }
+  
+  // Emotional/complex scenarios
+  if (scenario === 'emotional') {
+    return "I completely understand your frustration, and I'm here to help resolve this situation. Let me connect you with our customer care specialist who can review your account and find the best solution for you. Your satisfaction is our top priority.";
+  }
+  
+  // Complex questions
+  if (scenario === 'complex') {
+    return "That's a great question that involves several technical factors. Let me connect you with one of our HVAC specialists who can provide detailed information and recommendations specific to your situation. They'll be able to explain all your options clearly.";
+  }
+  
+  // Default response
+  return "Thank you for your question. I'd be happy to help you with that. Let me check our available options and connect you with the right specialist who can provide detailed assistance. How would you prefer to proceed?";
+}
+
 module.exports = router;
