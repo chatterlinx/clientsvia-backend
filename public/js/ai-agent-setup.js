@@ -648,6 +648,11 @@ class AIAgentSetup {
         
         try {
             // Get current settings
+            const companyId = this.getCompanyIdFromUrl();
+            if (!companyId) {
+                throw new Error('Company ID not found. Please make sure you are on a company profile page.');
+            }
+
             const settings = {
                 confidenceThreshold: document.getElementById('logicConfidenceThreshold')?.value || 85,
                 semanticKnowledge: document.getElementById('logicSemanticKnowledgeEnabled')?.checked || true,
@@ -668,7 +673,7 @@ class AIAgentSetup {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    companyId: this.getCompanyIdFromUrl(),
+                    companyId: companyId,
                     scenario: settings.testScenario,
                     query: settings.testQuery
                 })
@@ -765,6 +770,12 @@ class AIAgentSetup {
      */
     async updateLogicIntelligenceSettings() {
         try {
+            const companyId = this.getCompanyIdFromUrl();
+            if (!companyId) {
+                console.error('Cannot update settings: Company ID not found');
+                return;
+            }
+
             const settings = {
                 confidenceThreshold: document.getElementById('logicConfidenceThreshold')?.value || 85,
                 semanticKnowledge: document.getElementById('logicSemanticKnowledgeEnabled')?.checked || true,
@@ -774,7 +785,7 @@ class AIAgentSetup {
                 smartEscalation: document.getElementById('logicSmartEscalationEnabled')?.checked || true
             };
             
-            const response = await fetch(`/api/agent/intelligence-settings/${this.getCompanyIdFromUrl()}`, {
+            const response = await fetch(`/api/agent/intelligence-settings/${companyId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -796,6 +807,12 @@ class AIAgentSetup {
      */
     async updateLogicLearningSettings() {
         try {
+            const companyId = this.getCompanyIdFromUrl();
+            if (!companyId) {
+                console.error('Cannot update settings: Company ID not found');
+                return;
+            }
+
             const settings = {
                 autoLearning: document.getElementById('logicAutoLearningEnabled')?.checked || true,
                 performanceOptimization: document.getElementById('logicPerformanceOptimization')?.checked || true,
@@ -804,7 +821,7 @@ class AIAgentSetup {
                 predictiveAnalytics: document.getElementById('logicPredictiveAnalytics')?.checked || false
             };
             
-            const response = await fetch(`/api/agent/learning-settings/${this.getCompanyIdFromUrl()}`, {
+            const response = await fetch(`/api/agent/learning-settings/${companyId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -819,6 +836,27 @@ class AIAgentSetup {
         } catch (error) {
             console.error('Error updating learning settings:', error);
         }
+    }
+
+    /**
+     * Get company ID from URL parameters or global variable
+     */
+    getCompanyIdFromUrl() {
+        // First try to get from global variable set by company-profile.js
+        if (window.currentCompanyId) {
+            return window.currentCompanyId;
+        }
+        
+        // Fallback: extract from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const companyId = urlParams.get('id');
+        
+        if (!companyId) {
+            console.error('Company ID not found in URL or global variable');
+            return null;
+        }
+        
+        return companyId;
     }
 }
 
