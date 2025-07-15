@@ -885,6 +885,225 @@
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            <!-- DEVELOPER DEBUGGING TOOLS -->
+                                            <div class="bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-300 rounded-xl p-6 mb-6">
+                                                <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                    <i class="fas fa-bug text-red-600 mr-2"></i>Developer Debugging Tools
+                                                </h4>
+                                                
+                                                <!-- Conversation Flow Debugger -->
+                                                <div class="mb-6">
+                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                        <i class="fas fa-search text-blue-600 mr-2"></i>Conversation Flow Debugger
+                                                    </h5>
+                                                    <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                                        <div class="flex gap-3 mb-3">
+                                                            <input type="text" id="debug-question" placeholder="Test question: 'Do you work on weekends?'" class="form-input flex-1">
+                                                            <button onclick="testAgentResponse()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center">
+                                                                <i class="fas fa-play mr-2"></i>Test Response
+                                                            </button>
+                                                        </div>
+                                                        <div id="debug-output" class="hidden">
+                                                            <h6 class="font-medium text-gray-700 mb-2">Execution Trace:</h6>
+                                                            <div class="space-y-2 text-sm">
+                                                                <div class="flex items-center p-2 bg-green-50 rounded">
+                                                                    <i class="fas fa-check text-green-600 mr-2"></i>
+                                                                    <span>1. Checked Script: Found in "Weekend Service" section</span>
+                                                                </div>
+                                                                <div class="flex items-center p-2 bg-yellow-50 rounded">
+                                                                    <i class="fas fa-exclamation-triangle text-yellow-600 mr-2"></i>
+                                                                    <span>2. Q&A Match: 34% confidence (below 50% threshold)</span>
+                                                                </div>
+                                                                <div class="flex items-center p-2 bg-blue-50 rounded">
+                                                                    <i class="fas fa-robot text-blue-600 mr-2"></i>
+                                                                    <span>3. LLM Fallback: Generated response (247ms)</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="mt-3 p-3 bg-gray-50 rounded">
+                                                                <h6 class="font-medium text-gray-700">Final Response:</h6>
+                                                                <p class="text-sm text-gray-800 mt-1">"We offer emergency service on weekends. Let me check our availability for you."</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Technical Performance Metrics -->
+                                                <div class="mb-6">
+                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                        <i class="fas fa-tachometer-alt text-purple-600 mr-2"></i>Technical Performance Metrics
+                                                    </h5>
+                                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                        <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                                            <div class="text-xl font-bold text-green-600">94%</div>
+                                                            <div class="text-xs text-gray-600">Script Following Rate</div>
+                                                            <div class="text-xs text-green-600">↗️ +2% this week</div>
+                                                        </div>
+                                                        <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                                            <div class="text-xl font-bold text-orange-600">15%</div>
+                                                            <div class="text-xs text-gray-600">LLM Fallback Rate</div>
+                                                            <div class="text-xs text-orange-600">⚡ Normal range</div>
+                                                        </div>
+                                                        <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                                            <div class="text-xl font-bold text-blue-600">847ms</div>
+                                                            <div class="text-xs text-gray-600">Avg Response Latency</div>
+                                                            <div class="text-xs text-blue-600">🚀 -50ms optimized</div>
+                                                        </div>
+                                                        <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                                            <div class="text-xl font-bold text-purple-600">78%</div>
+                                                            <div class="text-xs text-gray-600">Knowledge Base Hit Rate</div>
+                                                            <div class="text-xs text-purple-600">📚 Good coverage</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Script Gap Analysis -->
+                                                <div class="mb-6">
+                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                        <i class="fas fa-chart-line text-red-600 mr-2"></i>Script Gap Analysis
+                                                    </h5>
+                                                    <div class="space-y-3">
+                                                        <div class="bg-white rounded-lg p-4 border border-red-200 border-l-4">
+                                                            <div class="flex justify-between items-start">
+                                                                <div class="flex-1">
+                                                                    <h6 class="font-medium text-gray-800">Unhandled: "What's your emergency rate?"</h6>
+                                                                    <p class="text-sm text-gray-600">Asked 23 times • No script guidance • 89% LLM fallback</p>
+                                                                    <p class="text-xs text-red-600 mt-1">High priority: Frequently asked, low script coverage</p>
+                                                                </div>
+                                                                <button onclick="addToScript('emergency-rate')" class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded">
+                                                                    Add to Script
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div class="bg-white rounded-lg p-4 border border-yellow-200 border-l-4">
+                                                            <div class="flex justify-between items-start">
+                                                                <div class="flex-1">
+                                                                    <h6 class="font-medium text-gray-800">Inconsistent: "Do you offer financing?"</h6>
+                                                                    <p class="text-sm text-gray-600">Asked 18 times • Multiple script sections • Conflicting responses</p>
+                                                                    <p class="text-xs text-yellow-600 mt-1">Medium priority: Script consolidation needed</p>
+                                                                </div>
+                                                                <button onclick="reviewScriptConflict('financing')" class="bg-yellow-600 hover:bg-yellow-700 text-white text-xs px-3 py-1 rounded">
+                                                                    Review Conflict
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- LIVE AGENT MONITORING -->
+                                            <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-300 rounded-xl p-6 mb-6">
+                                                <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                    <i class="fas fa-heartbeat text-green-600 mr-2"></i>Live Agent Health Monitoring
+                                                </h4>
+                                                
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <!-- System Status -->
+                                                    <div>
+                                                        <h5 class="font-semibold text-gray-800 mb-3">System Status</h5>
+                                                        <div class="space-y-3">
+                                                            <div class="flex items-center justify-between p-3 bg-white rounded-lg">
+                                                                <div class="flex items-center">
+                                                                    <div class="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                                                                    <span class="text-sm font-medium">Script Engine</span>
+                                                                </div>
+                                                                <span class="text-sm text-green-600">Online</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-between p-3 bg-white rounded-lg">
+                                                                <div class="flex items-center">
+                                                                    <div class="w-3 h-3 bg-yellow-500 rounded-full mr-3"></div>
+                                                                    <span class="text-sm font-medium">LLM Fallback</span>
+                                                                </div>
+                                                                <span class="text-sm text-yellow-600">High Usage</span>
+                                                            </div>
+                                                            <div class="flex items-center justify-between p-3 bg-white rounded-lg">
+                                                                <div class="flex items-center">
+                                                                    <div class="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
+                                                                    <span class="text-sm font-medium">Knowledge Base</span>
+                                                                </div>
+                                                                <span class="text-sm text-red-600">3 Broken Placeholders</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Recent Issues -->
+                                                    <div>
+                                                        <h5 class="font-semibold text-gray-800 mb-3">Recent Issues</h5>
+                                                        <div class="space-y-2">
+                                                            <div class="p-3 bg-white rounded-lg border border-red-200">
+                                                                <div class="flex items-start justify-between">
+                                                                    <div>
+                                                                        <p class="text-sm font-medium text-red-800">High Transfer Rate Detected</p>
+                                                                        <p class="text-xs text-red-600">Warranty questions → 89% transfer rate</p>
+                                                                    </div>
+                                                                    <button class="text-xs text-red-600 hover:text-red-800">Fix</button>
+                                                                </div>
+                                                            </div>
+                                                            <div class="p-3 bg-white rounded-lg border border-yellow-200">
+                                                                <div class="flex items-start justify-between">
+                                                                    <div>
+                                                                        <p class="text-sm font-medium text-yellow-800">Slow Response Times</p>
+                                                                        <p class="text-xs text-yellow-600">LLM calls averaging 1.2s</p>
+                                                                    </div>
+                                                                    <button class="text-xs text-yellow-600 hover:text-yellow-800">Optimize</button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- ADVANCED DEVELOPER CONTROLS -->
+                                            <div class="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-300 rounded-xl p-6">
+                                                <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                    <i class="fas fa-cogs text-indigo-600 mr-2"></i>Advanced Developer Controls
+                                                </h4>
+                                                
+                                                <div class="space-y-4">
+                                                    <div>
+                                                        <label class="flex items-center justify-between">
+                                                            <span class="text-sm font-medium text-gray-700">Auto-optimize response timing based on success rates</span>
+                                                            <input type="checkbox" class="form-checkbox" checked>
+                                                        </label>
+                                                    </div>
+                                                    
+                                                    <div>
+                                                        <label class="flex items-center justify-between">
+                                                            <span class="text-sm font-medium text-gray-700">Generate script suggestions from successful conversations</span>
+                                                            <input type="checkbox" class="form-checkbox" checked>
+                                                        </label>
+                                                    </div>
+                                                    
+                                                    <div>
+                                                        <label class="flex items-center justify-between">
+                                                            <span class="text-sm font-medium text-gray-700">Auto-detect and flag script conflicts</span>
+                                                            <input type="checkbox" class="form-checkbox">
+                                                        </label>
+                                                    </div>
+                                                    
+                                                    <div>
+                                                        <label class="block text-sm font-medium text-gray-700 mb-2">LLM Creativity Level</label>
+                                                        <div class="flex items-center space-x-3">
+                                                            <span class="text-xs text-gray-500">Strict Script</span>
+                                                            <input type="range" min="0" max="10" value="3" class="flex-1" id="creativity-level">
+                                                            <span class="text-xs text-gray-500">Creative</span>
+                                                            <span class="text-sm font-medium text-indigo-600" id="creativity-value">30%</span>
+                                                        </div>
+                                                        <p class="text-xs text-gray-500 mt-1">Controls how strictly the agent follows your script vs. generates creative responses</p>
+                                                    </div>
+                                                    
+                                                    <div>
+                                                        <label class="block text-sm font-medium text-gray-700 mb-2">Script Priority Override</label>
+                                                        <select class="form-select w-full">
+                                                            <option>Script First → Q&A → LLM (Recommended)</option>
+                                                            <option>Q&A First → Script → LLM</option>
+                                                            <option>LLM First → Script → Q&A (Debug Mode)</option>
+                                                            <option>Script Only (No fallback)</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -3998,6 +4217,180 @@ document.addEventListener('click', function(e) {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeEditModal();
+    }
+});
+
+// ===========================================
+// DEVELOPER DEBUGGING TOOLS
+// ===========================================
+
+/**
+ * Test agent response for debugging
+ */
+function testAgentResponse() {
+    const question = document.getElementById('debug-question').value.trim();
+    if (!question) {
+        showToast('Please enter a test question', 'error');
+        return;
+    }
+    
+    // Show loading
+    const outputDiv = document.getElementById('debug-output');
+    outputDiv.classList.remove('hidden');
+    outputDiv.innerHTML = `
+        <div class="flex items-center justify-center p-4">
+            <i class="fas fa-spinner fa-spin mr-2"></i>
+            <span>Testing agent response...</span>
+        </div>
+    `;
+    
+    // Simulate API call (replace with real endpoint)
+    setTimeout(() => {
+        const mockTrace = generateMockTrace(question);
+        displayDebugTrace(mockTrace);
+    }, 1500);
+    
+    // TODO: Replace with actual API call
+    // fetch(`/api/debug/test-response`, {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ question, companyId: getCurrentCompanyId() })
+    // }).then(response => response.json())
+    //   .then(data => displayDebugTrace(data));
+}
+
+/**
+ * Generate mock debug trace (replace with real data)
+ */
+function generateMockTrace(question) {
+    const qLower = question.toLowerCase();
+    
+    // Simulate different execution paths based on question
+    if (qLower.includes('weekend')) {
+        return {
+            steps: [
+                { type: 'script', status: 'found', message: 'Found in "Weekend Service" section', icon: 'check', color: 'green' },
+                { type: 'qa', status: 'low-confidence', message: 'Q&A Match: 34% confidence (below 50% threshold)', icon: 'exclamation-triangle', color: 'yellow' },
+                { type: 'llm', status: 'success', message: 'LLM Fallback: Generated response (247ms)', icon: 'robot', color: 'blue' }
+            ],
+            finalResponse: "We offer emergency service on weekends. Let me check our availability for you.",
+            metadata: {
+                responseTime: '247ms',
+                confidence: '87%',
+                source: 'LLM + Script guidance'
+            }
+        };
+    } else if (qLower.includes('price') || qLower.includes('cost')) {
+        return {
+            steps: [
+                { type: 'script', status: 'not-found', message: 'No script guidance for pricing questions', icon: 'times', color: 'red' },
+                { type: 'qa', status: 'found', message: 'Q&A Match: 92% confidence - "Service Pricing"', icon: 'check', color: 'green' },
+                { type: 'response', status: 'success', message: 'Using Q&A response (89ms)', icon: 'lightning-bolt', color: 'green' }
+            ],
+            finalResponse: "Our service calls start at $89, and we provide free estimates. The final cost depends on the specific repair needed.",
+            metadata: {
+                responseTime: '89ms',
+                confidence: '92%',
+                source: 'Q&A Knowledge Base'
+            }
+        };
+    } else {
+        return {
+            steps: [
+                { type: 'script', status: 'not-found', message: 'No script section matches this question', icon: 'times', color: 'red' },
+                { type: 'qa', status: 'not-found', message: 'No Q&A matches found (below 30% threshold)', icon: 'times', color: 'red' },
+                { type: 'llm', status: 'success', message: 'LLM Generated response (543ms)', icon: 'robot', color: 'blue' }
+            ],
+            finalResponse: "I'd be happy to help you with that. Let me connect you with one of our specialists who can provide detailed information.",
+            metadata: {
+                responseTime: '543ms',
+                confidence: '76%',
+                source: 'LLM Fallback'
+            }
+        };
+    }
+}
+
+/**
+ * Display debug trace results
+ */
+function displayDebugTrace(trace) {
+    const outputDiv = document.getElementById('debug-output');
+    
+    const stepsHtml = trace.steps.map((step, index) => `
+        <div class="flex items-center p-2 bg-${step.color}-50 rounded">
+            <i class="fas fa-${step.icon} text-${step.color}-600 mr-2"></i>
+            <span>${index + 1}. ${step.message}</span>
+        </div>
+    `).join('');
+    
+    outputDiv.innerHTML = `
+        <h6 class="font-medium text-gray-700 mb-2">Execution Trace:</h6>
+        <div class="space-y-2 text-sm">
+            ${stepsHtml}
+        </div>
+        <div class="mt-3 p-3 bg-gray-50 rounded">
+            <h6 class="font-medium text-gray-700">Final Response:</h6>
+            <p class="text-sm text-gray-800 mt-1">"${trace.finalResponse}"</p>
+            <div class="mt-2 flex gap-4 text-xs text-gray-600">
+                <span>⚡ ${trace.metadata.responseTime}</span>
+                <span>🎯 ${trace.metadata.confidence}</span>
+                <span>📍 ${trace.metadata.source}</span>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Add unhandled question to script
+ */
+function addToScript(questionType) {
+    // Show modal or inline editor for adding to script
+    const scripts = {
+        'emergency-rate': {
+            question: "What's your emergency rate?",
+            suggestedScript: `Emergency Service Rates:\nAgent: Our emergency service rate is $149 for the service call, plus parts and labor. Emergency calls are available 24/7, and we guarantee a response within 2 hours.`
+        }
+    };
+    
+    const script = scripts[questionType];
+    if (!script) return;
+    
+    if (confirm(`Add this to your main agent script?\n\nQuestion: ${script.question}\n\nSuggested script section:\n${script.suggestedScript}`)) {
+        // TODO: Add to actual script
+        showToast('Script section added! Remember to save your agent setup.', 'success');
+        
+        // Update the gap analysis to show it's resolved
+        const gapElement = event.target.closest('.border-red-200');
+        if (gapElement) {
+            gapElement.className = gapElement.className.replace('border-red-200', 'border-green-200');
+            gapElement.querySelector('.text-red-600').className = 'text-green-600';
+            gapElement.querySelector('.text-red-600').textContent = 'Resolved: Added to script';
+            event.target.textContent = 'Added ✓';
+            event.target.className = event.target.className.replace('bg-red-600', 'bg-green-600');
+        }
+    }
+}
+
+/**
+ * Review script conflicts
+ */
+function reviewScriptConflict(conflictType) {
+    alert(`Script Conflict Review for "${conflictType}":\n\nFound multiple sections mentioning financing:\n1. Line 45: "We offer financing options..."\n2. Line 89: "Payment plans available..."\n3. Line 134: "Ask about our financing..."\n\nRecommendation: Consolidate into single "Financing Options" section with clear, consistent messaging.`);
+}
+
+/**
+ * Update creativity level display
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    const creativitySlider = document.getElementById('creativity-level');
+    const creativityValue = document.getElementById('creativity-value');
+    
+    if (creativitySlider && creativityValue) {
+        creativitySlider.addEventListener('input', function() {
+            const value = this.value * 10;
+            creativityValue.textContent = `${value}%`;
+        });
     }
 });
 
