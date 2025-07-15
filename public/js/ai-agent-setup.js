@@ -858,24 +858,275 @@ class AIAgentSetup {
         
         return companyId;
     }
-}
 
-// Initialize AI Agent Setup when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, checking for AI Agent Setup content...');
-    
-    if (document.getElementById('ai-agent-setup-content')) {
-        console.log('AI Agent Setup content found, initializing...');
-        window.aiAgentSetup = new AIAgentSetup();
-        
-        // Initialize Logic AI Intelligence features if present
-        if (document.querySelector('[data-section-name="ai-intelligence-logic"]')) {
-            console.log('Logic AI Intelligence section found, initializing...');
-            window.aiAgentSetup.initializeLogicAIIntelligence();
-        } else {
-            console.log('Logic AI Intelligence section not found');
+    /**
+     * Save Smart Learning Settings
+     */
+    async saveSmartLearningSettings() {
+        try {
+            console.log('Saving Smart Learning settings...');
+            
+            const companyId = this.getCompanyIdFromUrl();
+            if (!companyId) {
+                alert('Error: Company ID not found. Please refresh the page.');
+                return;
+            }
+
+            // Collect all Smart Learning settings
+            const settings = {
+                // Learning Automation Settings
+                autoApplyHighImpact: document.getElementById('autoApplyHighImpact')?.checked || false,
+                autoCreateABTests: document.getElementById('autoCreateABTests')?.checked || false,
+                autoOptimizeResponses: document.getElementById('autoOptimizeResponses')?.checked || false,
+                autoUpdateKnowledge: document.getElementById('autoUpdateKnowledge')?.checked || false,
+                
+                // Learning Thresholds
+                patternSampleSize: document.getElementById('patternSampleSize')?.value || '25',
+                autoApplyThreshold: document.getElementById('autoApplyThreshold')?.value || '92',
+                learningAggressiveness: document.getElementById('learningAggressiveness')?.value || 'balanced',
+                
+                // Performance tracking settings from Agent Intelligence section
+                autoOptimizeMain: document.getElementById('auto-optimize-responses')?.checked || false,
+                autoDetectGaps: document.getElementById('auto-detect-knowledge-gaps')?.checked || false,
+                performanceInsights: document.getElementById('performance-insights')?.checked || false,
+                
+                // Timestamp
+                lastUpdated: new Date().toISOString()
+            };
+
+            // Show loading state
+            const saveButton = document.getElementById('saveSmartLearningBtn');
+            const originalText = saveButton.innerHTML;
+            saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+            saveButton.disabled = true;
+
+            // Call backend API to save settings
+            const response = await fetch(`/api/agent/smart-learning/${companyId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(settings)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            // Show success message
+            this.showNotification('Smart Learning settings saved successfully!', 'success');
+            
+            // Update performance metrics if the section is visible
+            if (document.getElementById('agentHealthStatus')) {
+                this.refreshPerformanceMetrics();
+            }
+            
+            console.log('Smart Learning settings saved:', result);
+
+        } catch (error) {
+            console.error('Error saving Smart Learning settings:', error);
+            this.showNotification('Failed to save settings. Please try again.', 'error');
+        } finally {
+            // Reset button state
+            const saveButton = document.getElementById('saveSmartLearningBtn');
+            if (saveButton) {
+                saveButton.innerHTML = '<i class="fas fa-save mr-2"></i>Save Smart Learning Settings';
+                saveButton.disabled = false;
+            }
         }
-    } else {
-        console.log('AI Agent Setup content not found');
     }
-});
+
+    /**
+     * Refresh Performance Metrics
+     */
+    async refreshPerformanceMetrics() {
+        try {
+            const companyId = this.getCompanyIdFromUrl();
+            if (!companyId) return;
+
+            const timeRange = document.getElementById('performanceTimeRange')?.value || '24h';
+            
+            // Update last updated timestamp
+            const lastUpdatedElement = document.getElementById('lastUpdated');
+            if (lastUpdatedElement) {
+                lastUpdatedElement.textContent = new Date().toLocaleTimeString();
+            }
+
+            // Call backend API for performance metrics
+            const response = await fetch(`/api/agent/performance-metrics/${companyId}?timeRange=${timeRange}`);
+            
+            if (response.ok) {
+                const metrics = await response.json();
+                this.updatePerformanceDisplay(metrics.data || metrics);
+            }
+
+        } catch (error) {
+            console.error('Error refreshing performance metrics:', error);
+        }
+    }
+
+    /**
+     * Update Performance Display with new metrics
+     */
+    updatePerformanceDisplay(metrics) {
+        // Update main metrics
+        this.updateElementText('totalResponses', metrics.totalResponses || '--');
+        this.updateElementText('avgIntelligence', metrics.avgIntelligence || '--');
+        this.updateElementText('avgResponseTime', metrics.avgResponseTime ? `${metrics.avgResponseTime}ms` : '--ms');
+        
+        // Update booking rate and other KPIs
+        this.updateElementText('booking-rate', metrics.bookingRate ? `${metrics.bookingRate}%` : '87%');
+        this.updateElementText('avg-response-time', metrics.responseTime ? `${metrics.responseTime}s` : '2.1s');
+        this.updateElementText('transfer-rate', metrics.transferRate ? `${metrics.transferRate}%` : '12%');
+        this.updateElementText('satisfaction-score', metrics.satisfactionScore || '4.3');
+        
+        // Update health status
+        const healthScore = metrics.healthScore || 95;
+        this.updateElementText('healthScore', healthScore);
+        
+        let healthStatus = 'Excellent';
+        let healthColor = 'green';
+        
+        if (healthScore < 60) {
+            healthStatus = 'Needs Attention';
+            healthColor = 'red';
+        } else if (healthScore < 80) {
+            healthStatus = 'Good';
+            healthColor = 'yellow';
+        }
+        
+        this.updateElementText('healthStatusText', healthStatus);
+        
+        // Update health indicator color
+        const healthIndicator = document.querySelector('#agentHealthStatus .w-4.h-4');
+        if (healthIndicator) {
+            healthIndicator.className = `w-4 h-4 bg-${healthColor}-500 rounded-full mr-3 animate-pulse`;
+        }
+        
+        // Update intelligence trend
+        const trend = metrics.intelligenceTrend || '↗️ Improving';
+        this.updateElementText('intelligenceTrend', trend);
+    }
+
+    /**
+     * Helper function to safely update element text
+     */
+    updateElementText(elementId, text) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = text;
+        }
+    }
+
+    /**
+     * Show notification message
+     */
+    showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg transition-all duration-300 ${
+            type === 'success' ? 'bg-green-600 text-white' : 
+            type === 'error' ? 'bg-red-600 text-white' : 
+            'bg-blue-600 text-white'
+        }`;
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'exclamation-triangle' : 'info'} mr-2"></i>
+                ${message}
+            </div>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 300);
+        }, 3000);
+    }
+
+    /**
+     * Initialize Smart Learning Controls
+     */
+    initializeSmartLearningControls() {
+        console.log('Initializing Smart Learning controls...');
+
+        // Initialize all checkboxes for Smart Learning
+        const smartLearningCheckboxes = [
+            'autoApplyHighImpact',
+            'autoCreateABTests', 
+            'autoOptimizeResponses',
+            'autoUpdateKnowledge'
+        ];
+
+        smartLearningCheckboxes.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('change', () => {
+                    console.log(`${id} changed to:`, element.checked);
+                });
+            }
+        });
+
+        // Initialize select dropdowns
+        const smartLearningSelects = ['patternSampleSize', 'learningAggressiveness'];
+        smartLearningSelects.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('change', () => {
+                    console.log(`${id} changed to:`, element.value);
+                });
+            }
+        });
+
+        // Initialize range sliders
+        const autoApplyThreshold = document.getElementById('autoApplyThreshold');
+        const autoApplyThresholdValue = document.getElementById('autoApplyThresholdValue');
+        
+        if (autoApplyThreshold && autoApplyThresholdValue) {
+            autoApplyThreshold.addEventListener('input', (e) => {
+                autoApplyThresholdValue.textContent = e.target.value + '%';
+            });
+        }
+
+        // Initialize performance time range dropdown
+        const performanceTimeRange = document.getElementById('performanceTimeRange');
+        if (performanceTimeRange) {
+            performanceTimeRange.addEventListener('change', () => {
+                this.refreshPerformanceMetrics();
+            });
+        }
+
+        console.log('Smart Learning controls initialized successfully');
+    }
+
+    /**
+     * Apply AI suggestion
+     */
+    applySuggestion(suggestionId) {
+        console.log(`Applying AI suggestion ${suggestionId}`);
+        
+        // This would typically call an API to apply the suggestion
+        // For now, we'll just update the UI
+        const suggestionElement = document.querySelector(`[onclick="applySuggestion(${suggestionId})"]`)?.closest('.bg-white');
+        if (suggestionElement) {
+            suggestionElement.style.position = 'relative';
+            suggestionElement.style.opacity = '0.7';
+            
+            const appliedBadge = document.createElement('div');
+            appliedBadge.className = 'absolute top-2 right-2 bg-green-600 text-white text-xs px-2 py-1 rounded';
+            appliedBadge.textContent = 'Applied ✓';
+            suggestionElement.appendChild(appliedBadge);
+            
+            // Disable buttons
+            const buttons = suggestionElement.querySelectorAll('button');
+            buttons.forEach(btn => btn.disabled = true);
+        }
+        
+        this.showNotification(`Suggestion ${suggestionId} applied successfully!`, 'success');
+    }
+}

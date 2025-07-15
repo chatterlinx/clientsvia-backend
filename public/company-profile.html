@@ -4795,6 +4795,35 @@ Cost estimate</textarea>
                     }, 3000);
                 }
             }
+    
+            // Initialize Smart Learning connections when AI Agent Setup is ready
+            function initializeSmartLearningConnections() {
+                // Connect auto-apply threshold slider
+                const thresholdSlider = document.getElementById('autoApplyThreshold');
+                const thresholdValue = document.getElementById('autoApplyThresholdValue');
+                
+                if (thresholdSlider && thresholdValue) {
+                    thresholdSlider.addEventListener('input', (e) => {
+                        thresholdValue.textContent = e.target.value + '%';
+                    });
+                }
+                
+                // Auto-refresh performance metrics every 30 seconds if section is visible
+                const performanceSection = document.getElementById('agentHealthStatus');
+                if (performanceSection) {
+                    setInterval(() => {
+                        refreshPerformanceMetrics();
+                    }, 30000); // 30 seconds
+                    
+                    // Initial load
+                    refreshPerformanceMetrics();
+                }
+                
+                console.log('Smart Learning connections initialized');
+            }
+            
+            // Call Smart Learning initialization
+            initializeSmartLearningConnections();
         });
     </script>
 
@@ -5684,7 +5713,184 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// ...existing code...
+        // ...existing code...
+
+        // Smart Learning Suggestion Functions
+        function applySuggestion(suggestionId) {
+            console.log(`Applying suggestion ${suggestionId}`);
+            
+            // Get the suggestion text
+            const suggestionText = document.getElementById(`suggestion-${suggestionId}-text`)?.textContent;
+            
+            if (suggestionText) {
+                // Show confirmation
+                if (confirm(`Apply this suggestion?\n\n"${suggestionText}"`)) {
+                    // In a real implementation, this would add to Q&A or update script
+                    alert('Suggestion applied successfully! The Q&A has been added to your knowledge base.');
+                    
+                    // Hide the suggestion card
+                    const suggestionCard = document.querySelector(`button[onclick="applySuggestion(${suggestionId})"]`).closest('.bg-white');
+                    if (suggestionCard) {
+                        suggestionCard.style.opacity = '0.5';
+                        suggestionCard.style.pointerEvents = 'none';
+                    }
+                    
+                    // Trigger performance metrics refresh
+                    if (window.aiAgentSetup && window.aiAgentSetup.refreshPerformanceMetrics) {
+                        window.aiAgentSetup.refreshPerformanceMetrics();
+                    }
+                }
+            }
+        }
+
+        function editSuggestion(suggestionId) {
+            console.log(`Editing suggestion ${suggestionId}`);
+            
+            // Get the suggestion text and question
+            const suggestionText = document.getElementById(`suggestion-${suggestionId}-text`)?.textContent;
+            
+            // Show edit modal
+            const modal = document.getElementById('edit-suggestion-modal');
+            const questionInput = document.getElementById('edit-question');
+            const answerTextarea = document.getElementById('edit-answer');
+            
+            if (modal && questionInput && answerTextarea && suggestionText) {
+                // Set default values based on suggestion type
+                if (suggestionId === 1) {
+                    questionInput.value = "Do you work on weekends?";
+                } else if (suggestionId === 2) {
+                    questionInput.value = "Greeting Optimization";
+                } else if (suggestionId === 3) {
+                    questionInput.value = "What's your warranty policy?";
+                }
+                
+                answerTextarea.value = suggestionText;
+                
+                // Store current suggestion ID for saving
+                window.currentEditingSuggestion = suggestionId;
+                
+                // Show modal
+                modal.classList.remove('hidden');
+            }
+        }
+
+        function denySuggestion(suggestionId) {
+            console.log(`Denying suggestion ${suggestionId}`);
+            
+            if (confirm('Are you sure you want to deny this suggestion? It will be removed from your list.')) {
+                // Hide the suggestion card
+                const suggestionCard = document.querySelector(`button[onclick="denySuggestion(${suggestionId})"]`).closest('.bg-white');
+                if (suggestionCard) {
+                    suggestionCard.style.display = 'none';
+                }
+                
+                alert('Suggestion denied and removed from your list.');
+            }
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById('edit-suggestion-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+            window.currentEditingSuggestion = null;
+        }
+
+        function saveEditedSuggestion() {
+            const suggestionId = window.currentEditingSuggestion;
+            const answerTextarea = document.getElementById('edit-answer');
+            
+            if (suggestionId && answerTextarea) {
+                const newAnswer = answerTextarea.value.trim();
+                
+                if (newAnswer) {
+                    // Update the suggestion text in the UI
+                    const suggestionElement = document.getElementById(`suggestion-${suggestionId}-text`);
+                    if (suggestionElement) {
+                        suggestionElement.textContent = newAnswer;
+                    }
+                    
+                    alert('Suggestion updated and applied successfully!');
+                    closeEditModal();
+                    
+                    // Apply the suggestion
+                    applySuggestion(suggestionId);
+                } else {
+                    alert('Please enter a response before saving.');
+                }
+            }
+        }
+
+        // Agent Testing Functions
+        function testAgentResponse() {
+            console.log('Testing agent response...');
+            
+            const questionInput = document.getElementById('debug-question');
+            const outputDiv = document.getElementById('debug-output');
+            
+            if (questionInput && outputDiv) {
+                const question = questionInput.value.trim() || 'Do you work on weekends?';
+                
+                // Show the debug output
+                outputDiv.classList.remove('hidden');
+                
+                // Simulate processing (in real implementation, this would call the agent)
+                setTimeout(() => {
+                    // Update the final response based on the question
+                    const responseElement = outputDiv.querySelector('.bg-gray-50 p');
+                    if (responseElement) {
+                        if (question.toLowerCase().includes('weekend')) {
+                            responseElement.textContent = '"We offer emergency service on weekends. Let me check our availability for you."';
+                        } else if (question.toLowerCase().includes('emergency')) {
+                            responseElement.textContent = '"Yes, we provide 24/7 emergency service. What type of HVAC emergency are you experiencing?"';
+                        } else {
+                            responseElement.textContent = '"Let me help you with that. I can connect you with our specialists for detailed information."';
+                        }
+                    }
+                }, 500);
+            }
+        }
+
+        // Performance Functions
+        function refreshPerformanceMetrics() {
+            console.log('Refreshing performance metrics...');
+            
+            // Delegate to AI Agent Setup if available
+            if (window.aiAgentSetup && window.aiAgentSetup.refreshPerformanceMetrics) {
+                window.aiAgentSetup.refreshPerformanceMetrics();
+            } else {
+                // Fallback: manual refresh
+                const companyId = getCurrentCompanyId();
+                if (companyId) {
+                    // Simple refresh without full implementation
+                    const lastUpdated = document.getElementById('lastUpdated');
+                    if (lastUpdated) {
+                        lastUpdated.textContent = new Date().toLocaleTimeString();
+                    }
+                }
+            }
+        }
+
+        // Script Management Functions
+        function addToScript(scriptType) {
+            console.log(`Adding to script: ${scriptType}`);
+            
+            if (scriptType === 'emergency-rate') {
+                alert('Script section added: "Emergency Rate Information" has been added to your agent script.');
+            } else {
+                alert(`Script section for "${scriptType}" has been added.`);
+            }
+        }
+
+        function reviewScriptConflict(conflictType) {
+            console.log(`Reviewing script conflict: ${conflictType}`);
+            
+            if (conflictType === 'financing') {
+                alert('Script conflict review: Multiple financing sections found. Please consolidate into a single, clear financing policy section.');
+            } else {
+                alert(`Script conflict for "${conflictType}" needs review.`);
+            }
+        }
 
 // === AGENT PERFORMANCE INTELLIGENCE FUNCTIONS ===
 

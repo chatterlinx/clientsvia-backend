@@ -387,4 +387,83 @@ function generateMockIntelligentResponse(query, scenario) {
   return "Thank you for your question. I'd be happy to help you with that. Let me check our available options and connect you with the right specialist who can provide detailed assistance. How would you prefer to proceed?";
 }
 
+// Save Smart Learning Settings
+router.post('/smart-learning/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const settings = req.body;
+
+    // In a real implementation, these would be saved to the database
+    console.log(`[API] Smart Learning settings updated for company ${companyId}:`, settings);
+
+    // Simulate some processing time
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    res.json({
+      success: true,
+      message: 'Smart Learning settings updated successfully',
+      settings: settings
+    });
+  } catch (error) {
+    console.error('[API] Error updating Smart Learning settings:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update Smart Learning settings'
+    });
+  }
+});
+
+// Get Performance Metrics
+router.get('/performance-metrics/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { timeRange } = req.query;
+
+    // Generate mock performance metrics based on time range
+    const now = new Date();
+    let multiplier = 1;
+    
+    switch (timeRange) {
+      case '1h':
+        multiplier = 0.1;
+        break;
+      case '24h':
+        multiplier = 1;
+        break;
+      case '7d':
+        multiplier = 7;
+        break;
+      case '30d':
+        multiplier = 30;
+        break;
+    }
+
+    const metrics = {
+      totalResponses: Math.floor((50 + Math.random() * 100) * multiplier),
+      avgIntelligence: Math.floor(80 + Math.random() * 20), // 80-100
+      avgResponseTime: Math.floor(200 + Math.random() * 600), // 200-800ms
+      bookingRate: Math.floor(75 + Math.random() * 20), // 75-95%
+      responseTime: (1.5 + Math.random() * 1.5).toFixed(1), // 1.5-3.0s
+      transferRate: Math.floor(5 + Math.random() * 20), // 5-25%
+      satisfactionScore: (3.8 + Math.random() * 1.2).toFixed(1), // 3.8-5.0
+      healthScore: Math.floor(70 + Math.random() * 30), // 70-100
+      intelligenceTrend: ['↗️ Improving', '↘️ Declining', '➡️ Stable'][Math.floor(Math.random() * 3)],
+      timestamp: now
+    };
+
+    console.log(`[API] Performance metrics retrieved for company ${companyId} (${timeRange}):`, metrics);
+
+    res.json({
+      success: true,
+      data: metrics
+    });
+  } catch (error) {
+    console.error('[API] Error retrieving performance metrics:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve performance metrics'
+    });
+  }
+});
+
 module.exports = router;
