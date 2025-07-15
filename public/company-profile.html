@@ -6498,6 +6498,12 @@ async function refreshImprovementSuggestions() {
         const companyId = getCurrentCompanyId();
         const container = document.getElementById('improvementSuggestions');
         
+        // Check if container exists
+        if (!container) {
+            console.warn('improvementSuggestions container not found');
+            return;
+        }
+        
         // Show loading state
         container.innerHTML = `
             <div class="text-center text-gray-500 py-4">
@@ -6519,11 +6525,14 @@ async function refreshImprovementSuggestions() {
         }
     } catch (error) {
         console.error('Error loading improvement suggestions:', error);
-        document.getElementById('improvementSuggestions').innerHTML = `
-            <div class="text-center text-gray-500 py-4">
-                <i class="fas fa-exclamation-triangle mr-2"></i>Error loading suggestions
-            </div>
-        `;
+        const container = document.getElementById('improvementSuggestions');
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center text-gray-500 py-4">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>Error loading suggestions
+                </div>
+            `;
+        }
     }
 }
 

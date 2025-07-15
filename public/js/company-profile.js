@@ -432,7 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm('Delete entry?')) return;
         const res = await fetch(`/api/company/${companyId}/qna/${id}`, { method: 'DELETE' });
         if (res.ok) {
-            companyQnaListData = companyQnaListData.filter e => e._id !== id);
+            companyQnaListData = companyQnaListData.filter(e => e._id !== id);
             renderCompanyQnA(companyQnaListData);
         }
     }
@@ -2325,28 +2325,72 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load monitoring data from backend
     async function loadMonitoringData() {
         try {
+            if (!companyId) {
+                console.error('No company ID available for monitoring data');
+                showMonitoringNotification('Company ID not found', 'error');
+                return;
+            }
+
+            console.log('Loading monitoring data for company:', companyId);
             const response = await fetch(`/api/monitoring/dashboard/${companyId}`);
+            
             if (response.ok) {
                 const data = await response.json();
+                console.log('Monitoring data loaded:', data);
                 updateMonitoringDisplay(data);
                 monitoringData = data;
+            } else if (response.status === 404) {
+                console.log('No monitoring data found for company:', companyId);
+                // Initialize with empty data
+                const emptyData = {
+                    pendingReviews: 0,
+                    flaggedInteractions: 0,
+                    approvalRate: 0,
+                    recentActivity: [],
+                    analytics: {
+                        totalInteractions: 0,
+                        averageConfidence: 0,
+                        escalationRate: 0
+                    }
+                };
+                updateMonitoringDisplay(emptyData);
+                monitoringData = emptyData;
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
         } catch (error) {
             console.error('Error loading monitoring data:', error);
-            showMonitoringNotification('Failed to load monitoring data', 'error');
+            showMonitoringNotification(`Failed to load monitoring data: ${error.message}`, 'error');
         }
     }
 
     // Update monitoring display with fresh data
     function updateMonitoringDisplay(data) {
-        // Update metrics
+        console.log('Updating monitoring display with data:', data);
+        
+        // Update metrics with safe element checking
         const pendingReviewsEl = document.getElementById('pending-reviews');
         const flaggedInteractionsEl = document.getElementById('flagged-interactions');
         const approvalRateEl = document.getElementById('approval-rate');
 
-        if (pendingReviewsEl) pendingReviewsEl.textContent = data.pendingReviews || 0;
-        if (flaggedInteractionsEl) flaggedInteractionsEl.textContent = data.flaggedInteractions || 0;
-        if (approvalRateEl) approvalRateEl.textContent = `${data.approvalRate || 0}%`;
+        if (pendingReviewsEl) {
+            pendingReviewsEl.textContent = data.pendingReviews || 0;
+        } else {
+            console.warn('pending-reviews element not found');
+        }
+        
+        if (flaggedInteractionsEl) {
+            flaggedInteractionsEl.textContent = data.flaggedInteractions || 0;
+        } else {
+            console.warn('flagged-interactions element not found');
+        }
+        
+        if (approvalRateEl) {
+            const rate = data.approvalRate ? Math.round(data.approvalRate * 100) : 0;
+            approvalRateEl.textContent = `${rate}%`;
+        } else {
+            console.warn('approval-rate element not found');
+        }
 
         // Update activity feed
         updateActivityFeed(data.recentActivity || []);
@@ -2687,7 +2731,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize monitoring system if on agent setup tab
     if (agentSetupPageContainer) {
+        console.log('Initializing monitoring system for company:', companyId);
         initializeMonitoringSystem();
+    } else {
+        console.log('Agent setup container not found, monitoring system not initialized');
     }
 
     // We need to call these setup functions.

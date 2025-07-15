@@ -1211,6 +1211,21 @@ class AIAgentSetup {
         
         this.showNotification(`Suggestion ${suggestionId} applied successfully!`, 'success');
     }
+
+    /**
+     * Create A/B Test
+     */
+    async createABTest() {
+        try {
+            console.log('Creating A/B test...');
+            this.showNotification('A/B test creation is not yet implemented', 'info');
+        } catch (error) {
+            console.error('Error creating A/B test:', error);
+            this.showNotification('Failed to create A/B test', 'error');
+        }
+    }
+
+    // ...existing code...
 }
 
 // ====== CRITICAL AGENT INTELLIGENCE & LEARNING FUNCTIONS ======
@@ -1414,7 +1429,12 @@ window.applySuggestion = function(suggestionId) {
 window.saveSmartLearningSettings = saveSmartLearningSettings;
 window.refreshPerformanceMetrics = refreshPerformanceMetrics;
 window.testLogicSuperAIIntelligence = testLogicSuperAIIntelligence;
-window.updateLogicIntelligenceSettings = updateLogicIntelligenceSettings;
+window.updateLogicIntelligenceSettings = () => {
+    if (window.aiAgentSetup && window.aiAgentSetup.updateLogicIntelligenceSettings) {
+        return window.aiAgentSetup.updateLogicIntelligenceSettings();
+    }
+    console.warn('updateLogicIntelligenceSettings: aiAgentSetup not available');
+};
 window.updateLogicLearningSettings = updateLogicLearningSettings;
 window.showNotification = showNotification;
 window.getCurrentCompanyId = getCurrentCompanyId;
