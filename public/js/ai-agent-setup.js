@@ -704,7 +704,7 @@ class AIAgentSetup {
     }
 
     /**
-     * Display Logic Intelligence Test Results
+     * Display Logic Intelligence Test Results with detailed debugging
      */
     displayLogicIntelligenceTestResults(results) {
         const resultsDiv = document.getElementById('logicIntelligenceTestResults');
@@ -714,19 +714,21 @@ class AIAgentSetup {
         const overallScore = data.intelligenceScore || 92;
         const confidence = data.confidence || 85;
         const responseTime = data.responseTime || 500;
-        const method = data.method || 'Semantic Knowledge Search';
+        const method = data.method || 'Unknown Method';
         const response = data.response || 'Test response generated successfully';
         const processingChain = data.processingChain || [];
+        const debugInfo = data.debugInfo || {};
         
         const scoreColor = overallScore >= 90 ? 'green' : overallScore >= 70 ? 'yellow' : 'red';
+        const methodColor = method.includes('Fallback') ? 'red' : method.includes('Q&A') ? 'green' : 'blue';
         
         resultsDiv.innerHTML = `
-            <div class="bg-${scoreColor}-50 border border-${scoreColor}-200 rounded-lg p-6">
-                <h4 class="text-${scoreColor}-800 font-semibold mb-4 flex items-center">
-                    <i class="fas fa-chart-line mr-2"></i>Intelligence Test Results
+            <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                <h4 class="text-gray-800 font-semibold mb-4 flex items-center">
+                    <i class="fas fa-brain mr-2 text-purple-600"></i>Logic AI Engine Test Results
                 </h4>
                 
-                <div class="grid grid-cols-3 gap-4 mb-6">
+                <div class="grid grid-cols-4 gap-4 mb-6">
                     <div class="text-center">
                         <div class="text-3xl font-bold text-${scoreColor}-600">${overallScore}%</div>
                         <div class="text-${scoreColor}-700 text-sm">Intelligence Score</div>
@@ -739,28 +741,108 @@ class AIAgentSetup {
                         <div class="text-3xl font-bold text-purple-600">${confidence}%</div>
                         <div class="text-purple-700 text-sm">Confidence</div>
                     </div>
-                </div>
-                
-                <div class="mb-4">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-${scoreColor}-700 font-medium">Processing Method:</span>
-                        <span class="text-${scoreColor}-800">${method}</span>
+                    <div class="text-center">
+                        <div class="text-lg font-semibold text-${methodColor}-600">${method}</div>
+                        <div class="text-${methodColor}-700 text-sm">AI Method</div>
                     </div>
                 </div>
                 
-                ${processingChain.length > 0 ? `
-                <div class="mb-4">
-                    <h5 class="text-${scoreColor}-700 font-medium mb-2">Processing Chain:</h5>
-                    <ol class="text-sm text-${scoreColor}-600 space-y-1">
-                        ${processingChain.map(step => `<li>${step}</li>`).join('')}
-                    </ol>
+                <div class="mb-6">
+                    <h5 class="text-gray-700 font-medium mb-3 flex items-center">
+                        <i class="fas fa-cogs mr-2"></i>Logic AI Processing Chain:
+                    </h5>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        ${processingChain.length > 0 ? `
+                            <ol class="text-sm text-blue-700 space-y-2">
+                                ${processingChain.map(step => {
+                                    const icon = step.includes('✅') ? 'fa-check-circle text-green-600' : 
+                                                step.includes('⚠️') ? 'fa-exclamation-triangle text-yellow-600' :
+                                                step.includes('❌') ? 'fa-times-circle text-red-600' : 'fa-gear text-blue-600';
+                                    return `<li class="flex items-start"><i class="fas ${icon} mr-2 mt-0.5"></i><span>${step}</span></li>`;
+                                }).join('')}
+                            </ol>
+                        ` : '<p class="text-blue-600 text-sm">No processing chain available</p>'}
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <h5 class="text-gray-700 font-medium mb-3 flex items-center">
+                        <i class="fas fa-robot mr-2"></i>Logic AI Response:
+                    </h5>
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <p class="text-gray-700">"${response}"</p>
+                    </div>
+                </div>
+                
+                ${Object.keys(debugInfo).length > 0 ? `
+                <div class="border-t border-gray-200 pt-4">
+                    <h5 class="text-gray-700 font-medium mb-3 flex items-center">
+                        <i class="fas fa-bug mr-2"></i>Agent Intelligence Analysis:
+                    </h5>
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Company:</span>
+                                <span class="text-gray-800 font-medium">${debugInfo.companyName || 'Unknown'}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Categories:</span>
+                                <span class="text-gray-800">${(debugInfo.availableCategories || []).length} available</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Main Script:</span>
+                                <span class="text-${debugInfo.hasMainScript ? 'green' : 'red'}-600">
+                                    <i class="fas fa-${debugInfo.hasMainScript ? 'check' : 'times'} mr-1"></i>
+                                    ${debugInfo.hasMainScript ? 'Available' : 'Missing'}
+                                </span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Category Q&As:</span>
+                                <span class="text-${debugInfo.hasCategoryQAs ? 'green' : 'red'}-600">
+                                    <i class="fas fa-${debugInfo.hasCategoryQAs ? 'check' : 'times'} mr-1"></i>
+                                    ${debugInfo.hasCategoryQAs ? 'Available' : 'Missing'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Protocols:</span>
+                                <span class="text-${debugInfo.hasProtocols ? 'green' : 'red'}-600">
+                                    <i class="fas fa-${debugInfo.hasProtocols ? 'check' : 'times'} mr-1"></i>
+                                    ${debugInfo.hasProtocols ? 'Available' : 'Missing'}
+                                </span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">LLM Fallback:</span>
+                                <span class="text-${debugInfo.llmFallbackEnabled ? 'green' : 'yellow'}-600">
+                                    <i class="fas fa-${debugInfo.llmFallbackEnabled ? 'check' : 'exclamation-triangle'} mr-1"></i>
+                                    ${debugInfo.llmFallbackEnabled ? 'Enabled' : 'Disabled'}
+                                </span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Escalated:</span>
+                                <span class="text-${debugInfo.escalated ? 'red' : 'green'}-600">
+                                    <i class="fas fa-${debugInfo.escalated ? 'arrow-up' : 'check'} mr-1"></i>
+                                    ${debugInfo.escalated ? 'Yes' : 'No'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${debugInfo.agentLogs && debugInfo.agentLogs.length > 0 ? `
+                    <div class="mt-4">
+                        <details class="bg-gray-100 rounded-lg p-3">
+                            <summary class="text-gray-700 font-medium cursor-pointer">
+                                <i class="fas fa-code mr-2"></i>Agent Processing Logs (${debugInfo.agentLogs.length})
+                            </summary>
+                            <div class="mt-2 max-h-40 overflow-y-auto">
+                                <pre class="text-xs text-gray-600 whitespace-pre-wrap">${debugInfo.agentLogs.slice(0, 10).join('\n')}</pre>
+                            </div>
+                        </details>
+                    </div>
+                    ` : ''}
                 </div>
                 ` : ''}
-                
-                <div class="bg-${scoreColor}-100 border border-${scoreColor}-200 rounded p-4">
-                    <h5 class="text-${scoreColor}-800 font-medium mb-2">AI Response:</h5>
-                    <p class="text-${scoreColor}-700 text-sm">"${response}"</p>
-                </div>
             </div>
         `;
     }

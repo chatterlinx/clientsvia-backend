@@ -208,7 +208,7 @@ router.get('/performance/:companyId/health', async (req, res) => {
   }
 });
 
-// Test Super AI Intelligence
+// Test Super AI Intelligence - REAL AGENT TESTING
 router.post('/test-intelligence', async (req, res) => {
   try {
     const { companyId, scenario, query } = req.body;
@@ -220,84 +220,101 @@ router.post('/test-intelligence', async (req, res) => {
       });
     }
 
-    // Simulate intelligence test with different processing chains based on scenario
+    console.log(`[Intelligence Test] Testing real agent for company ${companyId} with query: "${query}"`);
+    
     const startTime = Date.now();
     
-    // Mock different test scenarios
-    let intelligenceScore, confidence, method, processingChain;
+    // Import the actual agent
+    const { answerQuestion } = require('../services/agent');
     
-    switch (scenario) {
-      case 'complex':
-        intelligenceScore = Math.floor(Math.random() * 20) + 70; // 70-90%
-        confidence = Math.floor(Math.random() * 30) + 60; // 60-90%
-        method = 'Dynamic Reasoning + LLM';
-        processingChain = [
-          '1. Query analyzed for complexity',
-          '2. Dynamic reasoning engine activated',
-          '3. Contextual memory searched',
-          '4. LLM called with enhanced context',
-          '5. Response generated and validated'
-        ];
-        break;
-      case 'emotional':
-        intelligenceScore = Math.floor(Math.random() * 15) + 80; // 80-95%
-        confidence = Math.floor(Math.random() * 25) + 70; // 70-95%
-        method = 'Sentiment Analysis + Smart Escalation';
-        processingChain = [
-          '1. Sentiment analysis performed',
-          '2. Emotional context detected',
-          '3. Smart escalation rules checked',
-          '4. Empathetic response generated',
-          '5. Context preserved for handoff'
-        ];
-        break;
-      case 'urgent':
-        intelligenceScore = Math.floor(Math.random() * 10) + 85; // 85-95%
-        confidence = Math.floor(Math.random() * 20) + 75; // 75-95%
-        method = 'Priority Detection + Fast Path';
-        processingChain = [
-          '1. Urgency keywords detected',
-          '2. Priority escalation triggered',
-          '3. Fast-path knowledge search',
-          '4. Immediate response generated',
-          '5. Follow-up actions queued'
-        ];
-        break;
-      default: // standard
-        intelligenceScore = Math.floor(Math.random() * 25) + 75; // 75-100%
-        confidence = Math.floor(Math.random() * 30) + 70; // 70-100%
-        method = 'Semantic Knowledge Search';
-        processingChain = [
-          '1. Query parsed and analyzed',
-          '2. Semantic knowledge search performed',
-          '3. Best match found (95% confidence)',
-          '4. Response generated from knowledge base',
-          '5. Response quality validated'
-        ];
+    // Get company data for better testing
+    const { getDB } = require('../db');
+    const { ObjectId } = require('mongodb');
+    const db = getDB();
+    const company = await db.collection('companiesCollection').findOne({ _id: new ObjectId(companyId) });
+    
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        error: 'Company not found'
+      });
     }
 
-    const responseTime = Date.now() - startTime + Math.floor(Math.random() * 800) + 200; // 200-1000ms
+    // Create detailed tracking for debugging
+    const originalConsoleLog = console.log;
+    const agentLogs = [];
+    
+    // Capture agent logs for debugging
+    console.log = (...args) => {
+      const logMessage = args.join(' ');
+      agentLogs.push(logMessage);
+      originalConsoleLog(...args);
+    };
 
-    // Generate mock response based on query
-    const response = generateMockIntelligentResponse(query, scenario);
+    try {
+      // Call the real agent
+      const agentResult = await answerQuestion(
+        companyId,
+        query,
+        'concise', // responseLength
+        [], // conversationHistory 
+        company?.agentSetup?.mainAgentScript || '',
+        company?.aiSettings?.personality || 'friendly',
+        company?.specialties || '',
+        company?.agentSetup?.categoryQAs || '',
+        `test-${Date.now()}` // originalCallSid
+      );
 
-    res.json({
-      success: true,
-      data: {
-        intelligenceScore,
-        responseTime,
-        confidence,
-        method,
-        response,
-        processingChain,
-        timestamp: new Date()
-      }
-    });
+      // Restore console.log
+      console.log = originalConsoleLog;
+
+      const responseTime = Date.now() - startTime;
+
+      // Analyze the agent logs to determine what path was taken
+      const processingChain = analyzeAgentProcessing(agentLogs, query);
+      const confidence = extractConfidenceFromLogs(agentLogs);
+      const method = extractMethodFromLogs(agentLogs);
+      
+      // Calculate intelligence score based on response quality and method used
+      const intelligenceScore = calculateIntelligenceScore(agentResult.text, query, method, responseTime);
+
+      console.log(`[Intelligence Test] Agent response in ${responseTime}ms: "${agentResult.text}"`);
+      console.log(`[Intelligence Test] Processing method: ${method}`);
+      console.log(`[Intelligence Test] Intelligence score: ${intelligenceScore}%`);
+
+      res.json({
+        success: true,
+        data: {
+          intelligenceScore,
+          responseTime,
+          confidence,
+          method,
+          response: agentResult.text,
+          processingChain,
+          debugInfo: {
+            agentLogs: agentLogs.filter(log => log.includes('[Agent')), // Only agent-related logs
+            escalated: agentResult.escalate || false,
+            companyName: company.companyName,
+            availableCategories: company?.agentSetup?.categories || company?.tradeTypes || [],
+            hasMainScript: !!(company?.agentSetup?.mainAgentScript),
+            hasCategoryQAs: !!(company?.agentSetup?.categoryQAs),
+            hasProtocols: !!(company?.agentSetup?.protocols),
+            llmFallbackEnabled: company?.aiSettings?.llmFallbackEnabled !== false
+          },
+          timestamp: new Date()
+        }
+      });
+    } catch (agentError) {
+      // Restore console.log
+      console.log = originalConsoleLog;
+      throw agentError;
+    }
+
   } catch (error) {
     console.error('[API] Error testing intelligence:', error.message);
     res.status(500).json({
       success: false,
-      error: 'Failed to test intelligence'
+      error: 'Failed to test intelligence: ' + error.message
     });
   }
 });
@@ -465,5 +482,160 @@ router.get('/performance-metrics/:companyId', async (req, res) => {
     });
   }
 });
+
+/**
+ * Analyze agent processing logs to determine the decision chain
+ */
+function analyzeAgentProcessing(logs, query) {
+  const processingChain = [];
+  let stepNumber = 1;
+  
+  // Check what the agent actually did based on logs
+  const agentLogs = logs.filter(log => log.includes('[Agent')).join(' ');
+  
+  if (agentLogs.includes('Checking protocols')) {
+    processingChain.push(`${stepNumber++}. Checked specific scenario protocols`);
+  }
+  
+  if (agentLogs.includes('Using specific scenario protocol')) {
+    processingChain.push(`${stepNumber++}. ✅ Found matching protocol - used scripted response`);
+    return processingChain;
+  }
+  
+  if (agentLogs.includes('Using personality response')) {
+    processingChain.push(`${stepNumber++}. ✅ Found personality scenario match`);
+    return processingChain;
+  }
+  
+  if (agentLogs.includes('Found answer in KnowledgeEntry')) {
+    processingChain.push(`${stepNumber++}. ✅ Found direct Q&A match in knowledge base`);
+    return processingChain;
+  }
+  
+  if (agentLogs.includes('Found quick Q&A reference')) {
+    processingChain.push(`${stepNumber++}. ✅ Found intelligent Q&A match`);
+    return processingChain;
+  }
+  
+  if (agentLogs.includes('Found quick company Q&A')) {
+    processingChain.push(`${stepNumber++}. ✅ Found company Q&A match`);
+    return processingChain;
+  }
+  
+  if (agentLogs.includes('Generated smart conversational response')) {
+    processingChain.push(`${stepNumber++}. ✅ Used smart conversational AI`);
+    return processingChain;
+  }
+  
+  if (agentLogs.includes('PRIMARY SCRIPT RESPONSE')) {
+    processingChain.push(`${stepNumber++}. ✅ Used main agent script`);
+    return processingChain;
+  }
+  
+  if (agentLogs.includes('Generated intelligent response')) {
+    processingChain.push(`${stepNumber++}. ✅ Generated contextual intelligent response`);
+    return processingChain;
+  }
+  
+  if (agentLogs.includes('Sending prompt to')) {
+    processingChain.push(`${stepNumber++}. ⚠️ Fell back to LLM (no Q&A match found)`);
+    return processingChain;
+  }
+  
+  // If we get here, something unexpected happened
+  processingChain.push(`${stepNumber++}. ❌ Unknown processing path - check agent logs`);
+  return processingChain;
+}
+
+/**
+ * Extract confidence from agent logs
+ */
+function extractConfidenceFromLogs(logs) {
+  const agentLogs = logs.join(' ');
+  
+  // Look for explicit confidence mentions
+  const confidenceMatch = agentLogs.match(/confidence[:\s]*(\d+)/i);
+  if (confidenceMatch) {
+    return parseInt(confidenceMatch[1]);
+  }
+  
+  // Infer confidence based on method used
+  if (agentLogs.includes('Found answer in KnowledgeEntry')) return 95;
+  if (agentLogs.includes('Using specific scenario protocol')) return 90;
+  if (agentLogs.includes('Found quick Q&A reference')) return 85;
+  if (agentLogs.includes('Using personality response')) return 80;
+  if (agentLogs.includes('PRIMARY SCRIPT RESPONSE')) return 75;
+  if (agentLogs.includes('Generated smart conversational')) return 70;
+  if (agentLogs.includes('Sending prompt to')) return 50; // LLM fallback
+  
+  return 60; // Default
+}
+
+/**
+ * Extract the method used from agent logs
+ */
+function extractMethodFromLogs(logs) {
+  const agentLogs = logs.join(' ');
+  
+  if (agentLogs.includes('Using specific scenario protocol')) return 'Protocol Match';
+  if (agentLogs.includes('Using personality response')) return 'Personality Response';
+  if (agentLogs.includes('Found answer in KnowledgeEntry')) return 'Direct Q&A Match';
+  if (agentLogs.includes('Found quick Q&A reference')) return 'Intelligent Q&A Match';
+  if (agentLogs.includes('Found quick company Q&A')) return 'Company Q&A Match';
+  if (agentLogs.includes('Generated smart conversational')) return 'Smart Conversational AI';
+  if (agentLogs.includes('PRIMARY SCRIPT RESPONSE')) return 'Main Agent Script';
+  if (agentLogs.includes('Generated intelligent response')) return 'Contextual Intelligence';
+  if (agentLogs.includes('Sending prompt to')) return 'LLM Fallback';
+  
+  return 'Unknown Method';
+}
+
+/**
+ * Calculate intelligence score based on response quality and method
+ */
+function calculateIntelligenceScore(response, query, method, responseTime) {
+  let score = 50; // Base score
+  
+  // Method-based scoring
+  const methodScores = {
+    'Protocol Match': 95,
+    'Direct Q&A Match': 90,
+    'Intelligent Q&A Match': 85,
+    'Company Q&A Match': 85,
+    'Personality Response': 80,
+    'Smart Conversational AI': 75,
+    'Main Agent Script': 70,
+    'Contextual Intelligence': 65,
+    'LLM Fallback': 45
+  };
+  
+  score = methodScores[method] || 50;
+  
+  // Response quality adjustments
+  if (response.length < 20) score -= 10; // Too short
+  if (response.length > 200) score -= 5; // Too long
+  if (response.includes('I apologize') || response.includes('I\'m sorry')) score -= 5;
+  if (response.includes('specialist') && !response.includes('schedule')) score -= 10; // Generic escalation
+  
+  // Query-specific scoring for "blank thermostat"
+  if (query.toLowerCase().includes('blank') && query.toLowerCase().includes('thermostat')) {
+    if (response.toLowerCase().includes('power') || 
+        response.toLowerCase().includes('reset') || 
+        response.toLowerCase().includes('breaker') ||
+        response.toLowerCase().includes('battery') ||
+        response.toLowerCase().includes('wiring')) {
+      score += 10; // Good specific answer
+    } else if (response.toLowerCase().includes('specialist') && 
+               !response.toLowerCase().includes('thermostat')) {
+      score -= 15; // Generic non-helpful answer
+    }
+  }
+  
+  // Response time bonus/penalty
+  if (responseTime < 1000) score += 5;
+  if (responseTime > 3000) score -= 5;
+  
+  return Math.max(10, Math.min(100, score)); // Keep between 10-100
+}
 
 module.exports = router;
