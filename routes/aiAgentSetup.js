@@ -504,3 +504,5 @@ function validateScriptStructure(script) {
 
     return validation;
 }
+
+module.exports = router;
