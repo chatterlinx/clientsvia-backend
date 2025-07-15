@@ -307,4 +307,200 @@ router.post('/company/:companyId', authenticateJWT, async (req, res) => {
     }
 });
 
-module.exports = router;
+// ============================================================
+// SCRIPT DEBUGGING AND ANALYTICS ENDPOINTS
+// ============================================================
+
+// Test script with a sample question
+router.post('/test-script', authenticateJWT, async (req, res) => {
+    try {
+        const { question, companyId } = req.body;
+        
+        if (!question || !companyId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Question and companyId are required'
+            });
+        }
+
+        const { processMainAgentScript } = require('../services/agent');
+        const { getDB } = require('../db');
+        const { ObjectId } = require('mongodb');
+        
+        const db = getDB();
+        const company = await db.collection('companiesCollection').findOne({ 
+            _id: new ObjectId(companyId) 
+        });
+        
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+
+        const placeholders = company?.agentSetup?.placeholders || [];
+        const scriptResult = await processMainAgentScript(
+            company, 
+            question, 
+            [], // Empty conversation history for testing
+            placeholders
+        );
+
+        res.json({
+            success: true,
+            scriptResult: scriptResult,
+            scriptLength: company?.agentSetup?.mainAgentScript?.length || 0,
+            hasScript: !!company?.agentSetup?.mainAgentScript,
+            testQuestion: question
+        });
+
+    } catch (error) {
+        console.error('Script test failed:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Script test failed',
+            error: error.message
+        });
+    }
+});
+
+// Get script analytics and gaps
+router.get('/script-analytics/:companyId', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { period = '7d' } = req.query;
+
+        const { analyzeScriptGaps } = require('../services/agent');
+        
+        const analytics = await analyzeScriptGaps(companyId, period);
+        
+        res.json({
+            success: true,
+            analytics: analytics,
+            period: period,
+            companyId: companyId
+        });
+
+    } catch (error) {
+        console.error('Failed to get script analytics:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get script analytics',
+            error: error.message
+        });
+    }
+});
+
+// Validate script syntax and structure
+router.post('/validate-script', authenticateJWT, async (req, res) => {
+    try {
+        const { script, companyId } = req.body;
+        
+        if (!script) {
+            return res.status(400).json({
+                success: false,
+                message: 'Script content is required'
+            });
+        }
+
+        const validation = validateScriptStructure(script);
+        
+        res.json({
+            success: true,
+            validation: validation,
+            scriptLength: script.length,
+            companyId: companyId
+        });
+
+    } catch (error) {
+        console.error('Script validation failed:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Script validation failed',
+            error: error.message
+        });
+    }
+});
+
+// Helper function to validate script structure
+function validateScriptStructure(script) {
+    const validation = {
+        isValid: true,
+        warnings: [],
+        suggestions: [],
+        patterns: {
+            conditionals: 0,
+            qaPatterns: 0,
+            businessRules: 0
+        }
+    };
+
+    // Check for conditional patterns
+    const conditionalPatterns = [
+        /if\s+(?:the\s+)?(?:customer|caller|they|user)\s+(?:says?|asks?|mentions?)/gi,
+        /when\s+(?:asked|someone\s+asks|they\s+ask)/gi,
+        /for\s+(?:questions?\s+about|inquiries?\s+about)/gi
+    ];
+
+    conditionalPatterns.forEach(pattern => {
+        const matches = script.match(pattern);
+        if (matches) {
+            validation.patterns.conditionals += matches.length;
+        }
+    });
+
+    // Check for Q&A patterns
+    const qaPatterns = [
+        /(?:Q:|Question:)\s*([^?\n]+\??)[\s\n]*(?:A:|Answer:)\s*([^\n]+)/gi,
+        /(?:If asked|When asked)\s+['""]([^'"]+)['""][\s\S]*?['""]([^'"]+)['"]/gi
+    ];
+
+    qaPatterns.forEach(pattern => {
+        const matches = script.match(pattern);
+        if (matches) {
+            validation.patterns.qaPatterns += matches.length;
+        }
+    });
+
+    // Check for business rules
+    const businessRulePatterns = [
+        /(?:always|never)\s+([^.\n]+)/gi,
+        /(?:only|just)\s+([^.\n]+)/gi,
+        /(?:must|should|need to)\s+([^.\n]+)/gi
+    ];
+
+    businessRulePatterns.forEach(pattern => {
+        const matches = script.match(pattern);
+        if (matches) {
+            validation.patterns.businessRules += matches.length;
+        }
+    });
+
+    // Generate suggestions based on analysis
+    if (validation.patterns.conditionals === 0) {
+        validation.suggestions.push('Consider adding conditional logic (if/when patterns) to handle specific customer scenarios');
+    }
+
+    if (validation.patterns.qaPatterns === 0) {
+        validation.suggestions.push('Consider adding Q&A patterns for common questions');
+    }
+
+    if (validation.patterns.businessRules === 0) {
+        validation.suggestions.push('Consider adding business rules (always/never/must patterns) for consistent behavior');
+    }
+
+    if (script.length < 100) {
+        validation.warnings.push('Script is very short - consider adding more detailed guidance');
+    }
+
+    if (script.length > 5000) {
+        validation.warnings.push('Script is very long - consider breaking it into sections for better performance');
+    }
+
+    if (!script.toLowerCase().includes('transfer') && !script.toLowerCase().includes('escalate')) {
+        validation.suggestions.push('Consider adding escalation rules for complex situations');
+    }
+
+    return validation;
+}

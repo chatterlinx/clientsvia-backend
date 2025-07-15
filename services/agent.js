@@ -132,12 +132,15 @@ async function callModel(company, prompt) {
 const { ObjectId } = require('mongodb');
 const SuggestedKnowledgeEntry = require('../models/SuggestedKnowledgeEntry');
 
-async function answerQuestion(companyId, question, responseLength = 'concise', conversationHistory = [], mainAgentScript = '', personality = 'friendly', companySpecialties = '', categoryQAs = '', originalCallSid = null) {
+async function answerQuestion(companyId, question, responseLength = 'concise', conversationHistory = [], mainAgentScriptParam = '', personality = 'friendly', companySpecialties = '', categoryQAs = '', originalCallSid = null) {
   const db = getDB();
   const company = await db.collection('companiesCollection').findOne({ _id: new ObjectId(companyId) });
   const categories = company?.agentSetup?.categories || company?.tradeTypes || [];
   const { llmFallbackEnabled, customEscalationMessage } = company?.aiSettings || {};
   const placeholders = company?.agentSetup?.placeholders || [];
+  
+  // USE SCRIPT FROM COMPANY OBJECT, NOT PARAMETER
+  const mainAgentScript = company?.agentSetup?.mainAgentScript || mainAgentScriptParam || '';
   
   // Define fuzzy threshold for Q&A matching
   const fuzzyThreshold = company?.aiSettings?.fuzzyMatchThreshold ?? 0.3;
@@ -208,11 +211,13 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: smartResponse, escalate: false };
   }
 
-  // STEP 7: Try structured conversational script processing
-  const scriptResponse = await processConversationalScriptEnhanced(company, question, conversationHistory, placeholders);
+  // STEP 7: PRIMARY SCRIPT CONTROLLER - mainAgentScript drives responses
+  const scriptResponse = await processMainAgentScript(company, question, conversationHistory, placeholders);
   if (scriptResponse) {
-    console.log(`[Agent] Generated script-based response for: ${question}`);
-    return { text: scriptResponse, escalate: false };
+    console.log(`[Agent] PRIMARY SCRIPT RESPONSE for: ${question}`);
+    console.log(`[Script Debug] Used script section: ${scriptResponse.debugInfo?.section || 'unknown'}`);
+    console.log(`[Script Debug] Match type: ${scriptResponse.debugInfo?.matchType || 'unknown'}`);
+    return { text: scriptResponse.text, escalate: scriptResponse.escalate || false, debugInfo: scriptResponse.debugInfo };
   }
 
   // STEP 8: Try to understand the context and provide intelligent responses
@@ -849,59 +854,167 @@ function similarity(str1, str2) {
 // Serves ALL companies dynamically - no hardcoded company logic
 const { GoogleAuth } = require('google-auth-library');
 
-module.exports = {
-  answerQuestion,
-  FALLBACK_MODEL,
-  loadCompanyQAs,
-  findCachedAnswer
-};
+// ============================================================
+// PRIMARY SCRIPT PROCESSOR - Makes mainAgentScript the CONTROLLER
+// ============================================================
 
-// Enhanced Q&A reference system - use as cheat sheet for concise answers
-function extractQuickAnswerFromQA(entries, userQuestion, fuzzyThreshold = 0.3) {
-  if (!entries || !Array.isArray(entries) || !userQuestion) return null;
-  
-  const qNorm = userQuestion.trim().toLowerCase();
-  const userWords = qNorm.split(/\s+/).filter(w => w.length > 2);
-  
-  console.log(`🔍 [QUICK Q&A] Looking for concise answer to: "${userQuestion}"`);
+async function processMainAgentScript(company, question, conversationHistory, placeholders) {
+  const mainScript = company?.agentSetup?.mainAgentScript;
+  if (!mainScript || mainScript.trim().length === 0) {
+    console.log(`[Script Debug] No main agent script found for company ${company?._id}`);
+    return null;
+  }
 
-  for (const entry of entries) {
-    const questionVariants = [
-      (entry.question || '').trim().toLowerCase(),
-      ...(Array.isArray(entry.keywords)
-        ? entry.keywords.map(k => k.trim().toLowerCase())
-        : [])
-    ].filter(q => q);
-    
-    for (const variant of questionVariants) {
-      // Check for topic match
-      const variantWords = variant.split(/\s+/).filter(w => w.length > 2);
-      const matchingWords = userWords.filter(userWord => 
-        variantWords.some(variantWord => {
-          if (userWord === variantWord) return true;
-          
-          // Handle word variations
-          const userRoot = userWord.replace(/(ing|age|ed|er|ly)$/i, '');
-          const variantRoot = variantWord.replace(/(ing|age|ed|er|ly)$/i, '');
-          if (userRoot.length > 3 && variantRoot.length > 3 && userRoot === variantRoot) return true;
-          
-          // Substring matching for longer words
-          if (userWord.length > 4 && variantWord.length > 4) {
-            if (userWord.includes(variantWord) || variantWord.includes(userWord)) return true;
-          }
-          
-          return false;
-        })
-      );
-      
-      // If we have topic overlap, extract concise answer
-      if (matchingWords.length > 0) {
-        const fullAnswer = entry.answer || '';
-        const conciseAnswer = extractConciseAnswer(fullAnswer);
+  console.log(`[Script Debug] Processing script (${mainScript.length} chars) for question: "${question.substring(0, 50)}..."`);
+  
+  const qLower = question.toLowerCase().trim();
+  const scriptLower = mainScript.toLowerCase();
+  
+  // Debug info to track script execution
+  const debugInfo = {
+    scriptLength: mainScript.length,
+    question: question,
+    processingTime: Date.now()
+  };
+
+  try {
+    // PRIORITY 1: Look for explicit script patterns and responses
+    const scriptResponse = parseScriptForResponse(mainScript, question, conversationHistory, debugInfo);
+    if (scriptResponse) {
+      console.log(`[Script Debug] Found explicit script response: ${scriptResponse.debugInfo.section}`);
+      return {
+        text: applyPlaceholders(scriptResponse.text, placeholders),
+        escalate: scriptResponse.escalate || false,
+        debugInfo: scriptResponse.debugInfo
+      };
+    }
+
+    // PRIORITY 2: Look for conditional logic in script
+    const conditionalResponse = parseScriptConditionals(mainScript, question, conversationHistory, debugInfo);
+    if (conditionalResponse) {
+      console.log(`[Script Debug] Found conditional script response: ${conditionalResponse.debugInfo.section}`);
+      return {
+        text: applyPlaceholders(conditionalResponse.text, placeholders),
+        escalate: conditionalResponse.escalate || false,
+        debugInfo: conditionalResponse.debugInfo
+      };
+    }
+
+    // PRIORITY 3: Extract general script guidance for the question
+    const guidedResponse = extractScriptGuidance(mainScript, question, conversationHistory, debugInfo);
+    if (guidedResponse) {
+      console.log(`[Script Debug] Generated response based on script guidance: ${guidedResponse.debugInfo.section}`);
+      return {
+        text: applyPlaceholders(guidedResponse.text, placeholders),
+        escalate: guidedResponse.escalate || false,
+        debugInfo: guidedResponse.debugInfo
+      };
+    }
+
+  } catch (error) {
+    console.error(`[Script Debug] Error processing script:`, error);
+    debugInfo.error = error.message;
+  }
+
+  console.log(`[Script Debug] No script response found - script did not handle this scenario`);
+  debugInfo.result = 'no_match';
+  debugInfo.processingTimeMs = Date.now() - debugInfo.processingTime;
+  
+  return null;
+}
+
+// Parse script for explicit patterns and responses
+function parseScriptForResponse(script, question, conversationHistory, debugInfo) {
+  const qLower = question.toLowerCase().trim();
+  
+  // Look for IF/WHEN patterns in script
+  const conditionalPatterns = [
+    /if\s+(?:the\s+)?(?:customer|caller|they|user)\s+(?:says?|asks?|mentions?)\s*['""]([^'"]+)['""][\s\S]*?(?:respond|say|tell|answer)[\s\S]*?['""]([^'"]+)['"]/gi,
+    /when\s+(?:asked|someone\s+asks|they\s+ask)\s+(?:about\s+)?['""]([^'"]+)['""][\s\S]*?(?:respond|say|tell|answer)[\s\S]*?['""]([^'"]+)['"]/gi,
+    /for\s+(?:questions?\s+about|inquiries?\s+about)\s+['""]([^'"]+)['""][\s\S]*?(?:respond|say|tell|answer)[\s\S]*?['""]([^'"]+)['"]/gi
+  ];
+
+  for (const pattern of conditionalPatterns) {
+    let match;
+    while ((match = pattern.exec(script)) !== null) {
+      const [fullMatch, trigger, response] = match;
+      if (qLower.includes(trigger.toLowerCase())) {
+        debugInfo.section = 'explicit_pattern';
+        debugInfo.matchType = 'conditional';
+        debugInfo.trigger = trigger;
+        debugInfo.scriptMatch = fullMatch.substring(0, 100) + '...';
         
-        if (conciseAnswer) {
-          console.log(`✅ [QUICK Q&A] Found concise answer for: "${entry.question}"`);
-          return conciseAnswer;
+        return {
+          text: response.trim(),
+          escalate: response.toLowerCase().includes('transfer') || response.toLowerCase().includes('escalate'),
+          debugInfo
+        };
+      }
+    }
+  }
+
+  // Look for direct Q&A patterns in script
+  const qaPatterns = [
+    /(?:Q:|Question:)\s*([^?\n]+\??)[\s\n]*(?:A:|Answer:)\s*([^\n]+)/gi,
+    /(?:If asked|When asked)\s+['""]([^'"]+)['""][\s\S]*?['""]([^'"]+)['"]/gi
+  ];
+
+  for (const pattern of qaPatterns) {
+    let match;
+    while ((match = pattern.exec(script)) !== null) {
+      const [fullMatch, questionPart, answerPart] = match;
+      if (isQuestionMatch(qLower, questionPart.toLowerCase())) {
+        debugInfo.section = 'qa_pattern';
+        debugInfo.matchType = 'direct_qa';
+        debugInfo.scriptQuestion = questionPart;
+        debugInfo.scriptMatch = fullMatch;
+        
+        return {
+          text: answerPart.trim(),
+          escalate: answerPart.toLowerCase().includes('transfer') || answerPart.toLowerCase().includes('escalate'),
+          debugInfo
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+// Parse script for conditional logic
+function parseScriptConditionals(script, question, conversationHistory, debugInfo) {
+  const qLower = question.toLowerCase().trim();
+  
+  // Look for business logic conditions
+  const businessLogicPatterns = [
+    /(?:always|never)\s+([^.\n]+)/gi,
+    /(?:only|just)\s+([^.\n]+)/gi,
+    /(?:must|should|need to)\s+([^.\n]+)/gi,
+    /(?:don't|do not|never)\s+([^.\n]+)/gi
+  ];
+
+  for (const pattern of businessLogicPatterns) {
+    let match;
+    while ((match = pattern.exec(script)) !== null) {
+      const [fullMatch, instruction] = match;
+      const relevantKeywords = extractKeywords(instruction);
+      
+      if (relevantKeywords.some(keyword => qLower.includes(keyword))) {
+        debugInfo.section = 'business_logic';
+        debugInfo.matchType = 'conditional_rule';
+        debugInfo.rule = instruction;
+        debugInfo.scriptMatch = fullMatch;
+        
+        // Generate response based on the business rule
+        const response = generateResponseFromRule(instruction, question);
+        if (response) {
+          return {
+            text: response,
+            escalate: instruction.toLowerCase().includes('transfer') || 
+                     instruction.toLowerCase().includes('escalate') ||
+                     instruction.toLowerCase().includes('representative'),
+            debugInfo
+          };
         }
       }
     }
@@ -910,323 +1023,206 @@ function extractQuickAnswerFromQA(entries, userQuestion, fuzzyThreshold = 0.3) {
   return null;
 }
 
-// Extract the most important information from a long answer - ULTRA-CONCISE VERSION
-function extractConciseAnswer(fullAnswer) {
-  if (!fullAnswer || fullAnswer.length < 20) return fullAnswer;
-  
-  // Remove common filler phrases first
-  let cleanAnswer = fullAnswer
-    .replace(/Well,?\s*/gi, '')
-    .replace(/So,?\s*/gi, '')
-    .replace(/Actually,?\s*/gi, '')
-    .replace(/Basically,?\s*/gi, '')
-    .replace(/You know,?\s*/gi, '')
-    .replace(/I mean,?\s*/gi, '')
-    .replace(/Let me tell you,?\s*/gi, '')
-    .replace(/The thing is,?\s*/gi, '')
-    .trim();
-  
-  // Split into sentences
-  const sentences = cleanAnswer.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 5);
-  
-  if (sentences.length === 0) return fullAnswer;
-  if (sentences.length === 1) {
-    // Even single sentences can be shortened
-    return shortenSentence(sentences[0]);
-  }
-  
-  // Priority keywords for most actionable/informative sentences
-  const highPriorityKeywords = [
-    'yes', 'no', 'call', 'schedule', 'visit', 'today', 'available', '$', 'cost', 'price',
-    'we do', 'we don\'t', 'we can', 'we can\'t', 'emergency', '24/7', 'same day'
-  ];
-  
-  const mediumPriorityKeywords = [
-    'technician', 'service', 'repair', 'fix', 'help', 'our', 'we', 'appointment'
-  ];
-  
-  // Score sentences by priority
-  const scoredSentences = sentences.map(sentence => {
-    const lowerSentence = sentence.toLowerCase();
-    let score = 0;
-    
-    // High priority keywords get double points
-    highPriorityKeywords.forEach(keyword => {
-      if (lowerSentence.includes(keyword)) score += 2;
-    });
-    
-    // Medium priority keywords get single points
-    mediumPriorityKeywords.forEach(keyword => {
-      if (lowerSentence.includes(keyword)) score += 1;
-    });
-    
-    // Shorter sentences get bonus points (encourage brevity)
-    if (sentence.length < 50) score += 1;
-    if (sentence.length < 30) score += 1;
-    
-    return { sentence, score, length: sentence.length };
-  });
-  
-  // Sort by score (descending) then by length (ascending)
-  scoredSentences.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return a.length - b.length;
-  });
-  
-  // Return the highest scoring, shortest sentence
-  const bestSentence = scoredSentences[0].sentence;
-  return shortenSentence(bestSentence) + '.';
-}
-
-// Shorten individual sentences by removing unnecessary words
-function shortenSentence(sentence) {
-  if (!sentence || sentence.length < 20) return sentence;
-  
-  return sentence
-    // Remove unnecessary articles and adjectives
-    .replace(/\b(the|a|an)\s+/gi, '')
-    .replace(/\b(very|really|quite|pretty|extremely|absolutely)\s+/gi, '')
-    .replace(/\b(definitely|certainly|obviously|clearly)\s+/gi, '')
-    
-    // Simplify common phrases
-    .replace(/would you like me to/gi, 'should I')
-    .replace(/I would be happy to/gi, 'I can')
-    .replace(/we would be glad to/gi, 'we can')
-    .replace(/feel free to/gi, '')
-    .replace(/please don\'t hesitate to/gi, '')
-    .replace(/if you have any questions/gi, '')
-    
-    // Remove redundant conjunctions
-    .replace(/\s+and\s+/gi, ', ')
-    .replace(/,\s*,/g, ',')
-    
-    // Clean up spacing
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// Generate short, conversational responses using Q&A as reference - ULTRA-CONCISE VERSION
-function generateShortConversationalResponse(question, qnaAnswer, companyName) {
-  const qLower = question.toLowerCase();
-  
-  // Get the most concise answer first
-  const conciseAnswer = extractConciseAnswer(qnaAnswer);
-  
-  // For pricing questions, ultra-direct approach
-  if (qLower.includes('cost') || qLower.includes('price') || qLower.includes('how much')) {
-    const priceMatch = qnaAnswer.match(/\$\d+/);
-    if (priceMatch) {
-      return `${priceMatch[0]} service call. Want a quote?`;
-    }
-    return `Depends on the repair. Schedule a quote?`;
-  }
-  
-  // For yes/no service questions, one-word + action
-  if (qLower.includes('do you') || qLower.includes('can you')) {
-    if (qnaAnswer.toLowerCase().includes('yes') || qnaAnswer.toLowerCase().includes('we do')) {
-      return `Yes. Schedule a visit?`;
-    }
-    if (qnaAnswer.toLowerCase().includes('no') || qnaAnswer.toLowerCase().includes('don\'t')) {
-      return `No, but I can connect you with someone who can help.`;
-    }
-  }
-  
-  // For hours/availability, extract just the essentials
-  if (qLower.includes('hour') || qLower.includes('open') || qLower.includes('when')) {
-    const timeMatch = qnaAnswer.match(/\d{1,2}(:\d{2})?\s*(am|pm|AM|PM)/g);
-    if (timeMatch && timeMatch.length >= 2) {
-      return `${timeMatch[0]}-${timeMatch[timeMatch.length - 1]}, weekdays.`;
-    }
-    if (qnaAnswer.toLowerCase().includes('monday') && qnaAnswer.toLowerCase().includes('friday')) {
-      return `Monday-Friday business hours.`;
-    }
-  }
-  
-  // For emergency questions, immediate response
-  if (qLower.includes('emergency') || qLower.includes('urgent') || qLower.includes('24')) {
-    if (qnaAnswer.toLowerCase().includes('24') || qnaAnswer.toLowerCase().includes('emergency')) {
-      return `Yes, 24/7 emergency service. Need someone today?`;
-    }
-  }
-  
-  // For warranty/guarantee questions
-  if (qLower.includes('warrant') || qLower.includes('guarant')) {
-    if (qnaAnswer.toLowerCase().includes('year') || qnaAnswer.toLowerCase().includes('month')) {
-      const warrantyMatch = qnaAnswer.match(/\d+\s*(year|month)/i);
-      if (warrantyMatch) {
-        return `${warrantyMatch[0]} warranty included.`;
-      }
-    }
-    return `Yes, all work is guaranteed.`;
-  }
-  
-  // For appointment/scheduling questions
-  if (qLower.includes('appointment') || qLower.includes('schedule') || qLower.includes('available')) {
-    return `Available today. When works for you?`;
-  }
-  
-  // Extract the shortest meaningful phrase from the answer
-  if (conciseAnswer) {
-    // If the concise answer is still long, make it even shorter
-    if (conciseAnswer.length > 50) {
-      // Look for the core information
-      const sentences = conciseAnswer.split(/[.!?]/).map(s => s.trim()).filter(s => s.length > 5);
-      if (sentences.length > 0) {
-        // Find the shortest sentence with key information
-        const keyWords = ['yes', 'no', 'call', 'schedule', 'service', 'repair', 'available', '$'];
-        const keyScore = (sentence) => keyWords.filter(word => sentence.toLowerCase().includes(word)).length;
-        
-        const bestSentence = sentences.reduce((best, current) => {
-          const currentScore = keyScore(current);
-          const bestScore = keyScore(best);
-          
-          if (currentScore > bestScore) return current;
-          if (currentScore === bestScore && current.length < best.length) return current;
-          return best;
-        });
-        
-        return bestSentence + '.';
-      }
-    }
-    return conciseAnswer;
-  }
-  
-  // Fallback: extract first meaningful phrase
-  const firstSentence = qnaAnswer.split(/[.!?]/)[0].trim();
-  return firstSentence.length > 5 ? firstSentence + '.' : qnaAnswer;
-}
-
-// Check specific scenario protocols - handles company-specific response protocols
-function checkSpecificProtocols(protocols, question, conversationHistory, placeholders) {
-  if (!protocols || typeof protocols !== 'object') return null;
-  
+// Extract guidance from script for general responses
+function extractScriptGuidance(script, question, conversationHistory, debugInfo) {
   const qLower = question.toLowerCase().trim();
-  console.log(`[Protocols] Checking protocols for: "${question.substring(0, 50)}..."`);
   
-  // System delay protocol - when system is slow or unresponsive
-  if (protocols.systemDelay && 
-      (qLower.includes('slow') || qLower.includes('delay') || qLower.includes('taking long') || 
-       qLower.includes('wait') || qLower.includes('loading'))) {
-    console.log(`[Protocols] Using systemDelay protocol`);
-    return applyPlaceholders(protocols.systemDelay, placeholders);
+  // Extract key themes and tone from script
+  const scriptGuidance = analyzeScriptGuidance(script);
+  
+  // Look for relevant sections based on question content
+  const questionKeywords = extractKeywords(question);
+  const relevantSections = [];
+  
+  const scriptSections = script.split(/\n\s*\n/).filter(section => section.trim().length > 20);
+  
+  for (const section of scriptSections) {
+    const sectionLower = section.toLowerCase();
+    const matchScore = questionKeywords.reduce((score, keyword) => {
+      return score + (sectionLower.includes(keyword) ? 1 : 0);
+    }, 0);
+    
+    if (matchScore > 0) {
+      relevantSections.push({ section, score: matchScore });
+    }
   }
   
-  // Message taking protocol - when caller wants to leave a message
-  if (protocols.messageTaking && 
-      (qLower.includes('message') || qLower.includes('voicemail') || qLower.includes('call back') || 
-       qLower.includes('leave a') || qLower.includes('tell them'))) {
-    console.log(`[Protocols] Using messageTaking protocol`);
-    return applyPlaceholders(protocols.messageTaking, placeholders);
+  if (relevantSections.length > 0) {
+    // Sort by relevance and use the most relevant section
+    relevantSections.sort((a, b) => b.score - a.score);
+    const bestSection = relevantSections[0];
+    
+    debugInfo.section = 'guidance_extraction';
+    debugInfo.matchType = 'keyword_relevance';
+    debugInfo.relevanceScore = bestSection.score;
+    debugInfo.scriptSection = bestSection.section.substring(0, 100) + '...';
+    
+    // Generate a response guided by this section
+    const guidedResponse = generateGuidedResponse(bestSection.section, question, scriptGuidance);
+    if (guidedResponse) {
+      return {
+        text: guidedResponse,
+        escalate: bestSection.section.toLowerCase().includes('transfer') || 
+                 bestSection.section.toLowerCase().includes('escalate'),
+        debugInfo
+      };
+    }
   }
   
-  // Caller reconnect protocol - when connection issues
-  if (protocols.callerReconnect && 
-      (qLower.includes('can you hear') || qLower.includes('connection') || qLower.includes('breaking up') || 
-       qLower.includes('static') || qLower.includes('cutting out'))) {
-    console.log(`[Protocols] Using callerReconnect protocol`);
-    return applyPlaceholders(protocols.callerReconnect, placeholders);
-  }
-  
-  // When in doubt protocol - for unclear or confusing situations
-  if (protocols.whenInDoubt && 
-      (qLower.includes('confused') || qLower.includes('not sure') || qLower.includes('unclear') || 
-       qLower.includes('don\'t understand') || qLower.length < 10)) {
-    console.log(`[Protocols] Using whenInDoubt protocol`);
-    return applyPlaceholders(protocols.whenInDoubt, placeholders);
-  }
-  
-  // Caller frustration protocol - when customer is frustrated
-  if (protocols.callerFrustration && 
-      (qLower.includes('frustrat') || qLower.includes('angry') || qLower.includes('upset') || 
-       qLower.includes('annoyed') || qLower.includes('terrible') || qLower.includes('worst'))) {
-    console.log(`[Protocols] Using callerFrustration protocol`);
-    return applyPlaceholders(protocols.callerFrustration, placeholders);
-  }
-  
-  // Telemarketer filter protocol - detecting sales calls
-  if (protocols.telemarketerFilter && 
-      (qLower.includes('offer') || qLower.includes('deal') || qLower.includes('promotion') || 
-       qLower.includes('special') || qLower.includes('save money') || qLower.includes('limited time'))) {
-    console.log(`[Protocols] Using telemarketerFilter protocol`);
-    return applyPlaceholders(protocols.telemarketerFilter, placeholders);
-  }
-  
-  // Booking confirmation protocol - confirming appointments
-  if (protocols.bookingConfirmation && 
-      (qLower.includes('confirm') || qLower.includes('appointment') || qLower.includes('scheduled') || 
-       qLower.includes('booking') || qLower.includes('reschedule'))) {
-    console.log(`[Protocols] Using bookingConfirmation protocol`);
-    return applyPlaceholders(protocols.bookingConfirmation, placeholders);
-  }
-  
-  // Text to pay protocol - payment related
-  if (protocols.textToPay && 
-      (qLower.includes('payment') || qLower.includes('pay') || qLower.includes('bill') || 
-       qLower.includes('invoice') || qLower.includes('charge') || qLower.includes('cost'))) {
-    console.log(`[Protocols] Using textToPay protocol`);
-    return applyPlaceholders(protocols.textToPay, placeholders);
-  }
-  
-  console.log(`[Protocols] No matching protocol found`);
   return null;
 }
 
-// Check for specific personality scenarios based on customer input and conversation context
-async function checkPersonalityScenarios(companyId, question, conversationHistory) {
-  const qLower = question.toLowerCase().trim();
+// Helper functions for script processing
+function isQuestionMatch(question, scriptQuestion) {
+  const questionWords = question.split(' ').filter(w => w.length > 2);
+  const scriptWords = scriptQuestion.split(' ').filter(w => w.length > 2);
   
-  // Handle customer frustration and repetition complaints (PRIORITY 1)
-  if (qLower.includes('repeating') || qLower.includes('same thing') || qLower.includes('over and over')) {
-    const response = await getPersonalityResponse(companyId, 'frustratedCaller', 'empathetic');
-    return {
-      category: 'repetitionComplaint',
-      text: response || `I apologize for the confusion. Let me connect you directly with one of our specialists who can give you the specific information you need right away.`
-    };
+  const matchCount = questionWords.filter(word => 
+    scriptWords.some(scriptWord => 
+      scriptWord.includes(word) || word.includes(scriptWord)
+    )
+  ).length;
+  
+  return matchCount >= Math.min(2, questionWords.length * 0.4);
+}
+
+function extractKeywords(text) {
+  const stopWords = ['the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'but', 'in', 'with', 'to', 'for', 'of', 'as', 'by'];
+  return text.toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length > 2 && !stopWords.includes(word))
+    .slice(0, 10); // Limit to most important keywords
+}
+
+function generateResponseFromRule(rule, question) {
+  const ruleLower = rule.toLowerCase();
+  const qLower = question.toLowerCase();
+  
+  // Handle different rule types
+  if (ruleLower.includes('always') && ruleLower.includes('transfer')) {
+    return "Let me transfer you to the right person to help with that.";
   }
   
-  if (qLower.includes('not helping') || qLower.includes('frustrat') || qLower.includes('annoyed')) {
-    const response = await getPersonalityResponse(companyId, 'frustratedCaller', 'empathetic');
-    return {
-      category: 'customerFrustration', 
-      text: response || `I understand your frustration, and I want to make sure you get the help you need. Let me transfer you to one of our experienced technicians.`
-    };
+  if (ruleLower.includes('never') && (qLower.includes('price') || qLower.includes('cost'))) {
+    return "I'll need to have one of our specialists provide you with pricing information.";
   }
   
-  // Handle appreciation
-  if (qLower.includes('thank you') && !qLower.includes('no')) {
-    const response = await getPersonalityResponse(companyId, 'complimentResponse', 'friendly');
-    return {
-      category: 'gratitude',
-      text: response || `You're very welcome! I'm happy to help. What else can I do for you today?`
-    };
+  if (ruleLower.includes('only') && ruleLower.includes('schedule')) {
+    return "I can help you schedule that service. When would work best for you?";
   }
   
-  // Handle urgent situations  
-  if (qLower.includes('asap') || qLower.includes('urgent') || qLower.includes('emergency')) {
-    const response = await getPersonalityResponse(companyId, 'empathyResponse', 'professional');
-    return {
-      category: 'urgency',
-      text: response || `I understand this is urgent. Let me get you connected with our emergency team right away. What's the situation?`
-    };
+  if (ruleLower.includes('must') && ruleLower.includes('confirm')) {
+    return "I'll need to confirm some details with you first.";
   }
   
-  // Handle connection issues
-  if (qLower.includes('can you hear') || qLower.includes('connection') || qLower.includes('breaking up')) {
-    const response = await getPersonalityResponse(companyId, 'connectionTrouble', 'professional');
-    return {
-      category: 'connection',
-      text: response || `It sounds like the line is breaking up. Can you still hear me clearly?`
-    };
+  return null;
+}
+
+function analyzeScriptGuidance(script) {
+  const scriptLower = script.toLowerCase();
+  
+  return {
+    tone: scriptLower.includes('friendly') ? 'friendly' : 
+          scriptLower.includes('professional') ? 'professional' : 'neutral',
+    urgency: scriptLower.includes('emergency') || scriptLower.includes('urgent'),
+    scheduling: scriptLower.includes('schedule') || scriptLower.includes('appointment'),
+    transfer: scriptLower.includes('transfer') || scriptLower.includes('escalate'),
+    company: extractCompanyInfo(script)
+  };
+}
+
+function extractCompanyInfo(script) {
+  const info = {};
+  
+  // Look for company name, services, etc.
+  const serviceMatch = script.match(/(?:we|our company|we offer|our services)[^.]+/gi);
+  if (serviceMatch) {
+    info.services = serviceMatch[0];
   }
   
-  // Handle confusion/unclear requests
-  if (qLower.includes('confused') || qLower.includes('not sure') || qLower.includes('unclear')) {
-    const response = await getPersonalityResponse(companyId, 'cantUnderstand', 'helpful');
-    return {
-      category: 'confusion',
-      text: response || `I want to make sure I understand what you need help with. Could you tell me a bit more about what's going on?`
-    };
+  return info;
+}
+
+function generateGuidedResponse(section, question, guidance) {
+  const qLower = question.toLowerCase();
+  
+  // Extract actionable information from the relevant section
+  const actionPatterns = [
+    /(?:tell|say|respond|answer)[^.]+\.([^.]+\.)/gi,
+    /(?:if|when|for)[^,]+,\s*([^.]+\.)/gi
+  ];
+  
+  for (const pattern of actionPatterns) {
+    const match = pattern.exec(section);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
   }
   
-  return null; // No specific scenario matched
+  // Generate a response based on the guidance and section content
+  if (qLower.includes('schedule') && guidance.scheduling) {
+    return "I can help you schedule that. When would be convenient for you?";
+  }
+  
+  if (qLower.includes('emergency') && guidance.urgency) {
+    return "I understand this is urgent. Let me get you immediate assistance.";
+  }
+  
+  // Extract the most relevant sentence from the section
+  const sentences = section.split(/[.!?]/).filter(s => s.trim().length > 10);
+  if (sentences.length > 0) {
+    // Find sentence with question-relevant keywords
+    const questionWords = extractKeywords(question);
+    
+    for (const sentence of sentences) {
+      const sentenceLower = sentence.toLowerCase();
+      if (questionWords.some(word => sentenceLower.includes(word))) {
+        // Clean up the sentence for use as a response
+        const cleanSentence = sentence.trim()
+          .replace(/^(if|when|for|always|never|only|must|should)/i, '')
+          .trim();
+        
+        if (cleanSentence.length > 10) {
+          return cleanSentence + (cleanSentence.endsWith('.') ? '' : '.');
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
+// ============================================================
+// SCRIPT DEBUGGING AND ANALYTICS FUNCTIONS
+// ============================================================
+
+function logScriptDebugInfo(companyId, question, debugInfo, response) {
+  const logEntry = {
+    timestamp: new Date(),
+    companyId,
+    question,
+    debugInfo,
+    response: response?.text || null,
+    escalated: response?.escalate || false
+  };
+  
+  console.log(`[Script Analytics] ${JSON.stringify(logEntry, null, 2)}`);
+  
+  // TODO: Store in database for script analytics dashboard
+  // This could be expanded to track script performance metrics
+}
+
+async function analyzeScriptGaps(companyId, period = '7d') {
+  // TODO: Implement script gap analysis
+  // This would analyze questions that didn't match the script
+  // and provide suggestions for script improvements
+  
+  console.log(`[Script Analytics] Analyzing script gaps for company ${companyId} over ${period}`);
+  
+  return {
+    unmatchedQuestions: [],
+    suggestedImprovements: [],
+    scriptCoverage: 0
+  };
 }
