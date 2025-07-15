@@ -13,6 +13,14 @@
 const mongoose = require('mongoose');
 const winston = require('winston');
 const similarity = require('string-similarity');
+const fs = require('fs');
+const path = require('path');
+
+// Ensure logs directory exists
+const logsDir = path.join(process.cwd(), 'logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
 
 // Enhanced Logger for Agent Monitoring
 const monitoringLogger = winston.createLogger({
@@ -29,12 +37,12 @@ const monitoringLogger = winston.createLogger({
       format: winston.format.colorize({ all: true })
     }),
     new winston.transports.File({ 
-      filename: 'logs/agent_monitoring.log',
+      filename: path.join(logsDir, 'agent_monitoring.log'),
       maxsize: 5242880, // 5MB
       maxFiles: 10
     }),
     new winston.transports.File({ 
-      filename: 'logs/agent_monitoring_errors.log',
+      filename: path.join(logsDir, 'agent_monitoring_errors.log'),
       level: 'error',
       maxsize: 5242880,
       maxFiles: 5
