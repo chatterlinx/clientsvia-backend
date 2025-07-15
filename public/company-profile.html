@@ -4710,6 +4710,25 @@ Cost estimate</textarea>
     </div>
 
     <script>
+        // Global function to get current company ID
+        function getCurrentCompanyId() {
+            // First try to get from global variable
+            if (window.currentCompanyId) {
+                return window.currentCompanyId;
+            }
+            
+            // Fallback: extract from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const companyId = urlParams.get('id');
+            
+            if (!companyId) {
+                console.error('Company ID not found in URL or global variable');
+                return null;
+            }
+            
+            return companyId;
+        }
+
         // Basic mobile menu toggle
         document.getElementById('mobile-menu-button')?.addEventListener('click', () => {
             document.getElementById('mobile-menu')?.classList.toggle('hidden');
