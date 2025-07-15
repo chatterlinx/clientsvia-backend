@@ -860,7 +860,7 @@ const { GoogleAuth } = require('google-auth-library');
 
 async function processMainAgentScript(company, question, conversationHistory, placeholders) {
   const mainScript = company?.agentSetup?.mainAgentScript;
-  if (!mainScript || mainScript.trim().length === 0) {
+  if (!mainScript || mainAgentScript.trim().length === 0) {
     console.log(`[Script Debug] No main agent script found for company ${company?._id}`);
     return null;
   }
@@ -1226,3 +1226,12 @@ async function analyzeScriptGaps(companyId, period = '7d') {
     scriptCoverage: 0
   };
 }
+
+module.exports = {
+  answerQuestion,
+  callModel,
+  loadCompanyQAs,
+  processMainAgentScript,
+  analyzeScriptGaps,
+  logScriptDebugInfo
+};
