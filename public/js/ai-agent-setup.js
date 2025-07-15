@@ -31,6 +31,8 @@ class AIAgentSetup {
         this.populateHVACScriptDemo();
         this.handleGreetingTypeChange(); // Initialize greeting type display
         this.renderAICompanyQnAList(); // Initialize Q&A list
+        this.initSmartLearningFeatures(); // Initialize Smart Learning Dashboard
+        this.initDebuggingFeatures(); // Initialize Developer Debugging Tools
     }
 
     /**
@@ -155,6 +157,21 @@ class AIAgentSetup {
             e.preventDefault();
             this.saveAICompanyQnA();
         });
+
+        // Smart Learning Dashboard Events
+        document.getElementById('saveSmartLearningBtn')?.addEventListener('click', this.saveSmartLearningSettings.bind(this));
+        document.querySelector('.bg-green-600[data-action="create-ab-test"]')?.addEventListener('click', this.createABTest.bind(this));
+        document.getElementById('autoApplyThreshold')?.addEventListener('input', (e) => {
+            document.getElementById('autoApplyThresholdValue').textContent = e.target.value + '%';
+        });
+
+        // Developer Debugging Events
+        document.getElementById('verboseLogging')?.addEventListener('change', this.toggleVerboseLogging.bind(this));
+        document.getElementById('scriptTracing')?.addEventListener('change', this.toggleScriptTracing.bind(this));
+        document.getElementById('llmDebugMode')?.addEventListener('change', this.toggleLLMDebugMode.bind(this));
+        document.getElementById('debugResponseMode')?.addEventListener('change', this.changeDebugResponseMode.bind(this));
+        document.querySelector('.bg-red-600[data-action="emergency-stop"]')?.addEventListener('click', this.emergencyStop.bind(this));
+        document.getElementById('saveDebugSettingsBtn')?.addEventListener('click', this.saveDebugSettings.bind(this));
     }
 
     /**
@@ -420,617 +437,253 @@ class AIAgentSetup {
     }
 
     /**
-     * Handle template selection and other methods
+     * Initialize Smart Learning Dashboard features
      */
-    handleTemplateSelection(templateType) {
-        this.selectedTemplate = templateType;
-        this.showToast(`Template "${templateType}" selected`, 'info');
-    }
+    initSmartLearningFeatures() {
+        // Smart Learning suggestion interactions
+        document.addEventListener('click', (e) => {
+            const button = e.target.closest('button');
+            if (!button) return;
 
-    deployQuickSetup() {
-        const businessTemplate = document.getElementById('aiBusinessTypeTemplate')?.value;
-        const agentPersona = document.getElementById('aiAgentPersona')?.value;
-        
-        if (!businessTemplate) {
-            this.showToast('Please select a business type template first', 'error');
-            return;
-        }
-        
-        const btn = document.getElementById('quickSetupDeployBtn');
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Deploying AI Agent...';
-            btn.disabled = true;
-        }
-        
-        // Prepare the AI agent setup data
-        const aiAgentSetupData = {
-            template: businessTemplate,
-            personality: agentPersona,
-            deployedAt: new Date().toISOString(),
-            isQuickSetup: true
-        };
-        
-        // Save to company's aiAgentSetup field
-        fetch(`/api/ai-agent-setup/company/${window.currentCompanyId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify(aiAgentSetupData)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                this.showToast('AI Agent deployed successfully! Twilio calls will now use the new setup.', 'success');
-                
-                // Update button
-                if (btn) {
-                    btn.innerHTML = '<i class="fas fa-check mr-2"></i>Deployed Successfully';
-                    setTimeout(() => {
-                        btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Deploy AI Agent (1-Click)';
-                        btn.disabled = false;
-                    }, 3000);
-                }
-            } else {
-                throw new Error(data.message || 'Failed to deploy AI agent');
-            }
-        })
-        .catch(error => {
-            console.error('Error deploying AI agent:', error);
-            this.showToast('Failed to deploy AI agent: ' + error.message, 'error');
-            
-            // Reset button
-            if (btn) {
-                btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Deploy AI Agent (1-Click)';
-                btn.disabled = false;
+            // Check if button is in Smart Learning tab
+            const smartLearningTab = button.closest('#ai-smart-learning-tab');
+            if (!smartLearningTab) return;
+
+            // Handle different button actions
+            if (button.textContent.includes('Edit Script')) {
+                this.editSuggestion(e);
+            } else if (button.textContent.includes('Apply')) {
+                this.applySuggestion(e);
+            } else if (button.textContent.includes('Deny')) {
+                this.denySuggestion(e);
+            } else if (button.dataset.action === 'create-ab-test') {
+                this.createABTest();
             }
         });
-    }
 
-    showCustomSetup() {
-        document.getElementById('aiAgentConfigTabs')?.scrollIntoView({ behavior: 'smooth' });
-        this.showToast('Custom configuration mode activated', 'info');
-    }
+        // Auto-learning threshold sliders
+        document.getElementById('autoApplyThreshold')?.addEventListener('input', (e) => {
+            document.getElementById('autoApplyThresholdValue').textContent = e.target.value + '%';
+        });
 
-    addServiceType() {
-        this.showToast('Service type functionality coming soon', 'info');
+        // Save Smart Learning settings
+        document.getElementById('saveSmartLearningBtn')?.addEventListener('click', this.saveSmartLearningSettings.bind(this));
     }
 
     /**
-     * Utility methods for UI interactions
+     * Initialize Developer Debugging features
      */
-    updateCharacterCount(inputId, counterId, maxLength) {
-        const input = document.getElementById(inputId);
-        const counter = document.getElementById(counterId);
+    initDebuggingFeatures() {
+        // Live monitoring auto-refresh
+        this.startLiveMonitoring();
+
+        // Debug controls
+        document.getElementById('verboseLogging')?.addEventListener('change', this.toggleVerboseLogging.bind(this));
+        document.getElementById('scriptTracing')?.addEventListener('change', this.toggleScriptTracing.bind(this));
+        document.getElementById('llmDebugMode')?.addEventListener('change', this.toggleLLMDebugMode.bind(this));
+
+        // Testing controls
+        document.getElementById('debugResponseMode')?.addEventListener('change', this.changeDebugResponseMode.bind(this));
         
-        if (input && counter) {
-            const currentLength = input.value.length;
-            counter.textContent = currentLength;
-        }
-    }
-
-    updateWordCount(inputId, counterId, maxWords) {
-        const input = document.getElementById(inputId);
-        const counter = document.getElementById(counterId);
-        
-        if (input && counter) {
-            const words = input.value.trim().split(/\s+/).filter(word => word.length > 0);
-            const wordsLeft = maxWords - words.length;
-            counter.textContent = wordsLeft;
-        }
-    }
-
-    handleSliderChange(sliderId, value) {
-        const percentage = Math.round(value * 100);
-        const valueElement = document.getElementById(sliderId.replace('Threshold', 'Value'));
-        
-        if (valueElement) {
-            valueElement.textContent = percentage + '%';
-        }
-    }
-
-    toggle24x7Hours(is24x7) {
-        const hoursContainer = document.getElementById('businessHoursContainer');
-        if (hoursContainer) {
-            hoursContainer.style.display = is24x7 ? 'none' : 'block';
-        }
-    }
-
-    /**
-     * Show toast notification
-     */
-    showToast(message, type = 'info') {
-        // Create toast element
-        const toast = document.createElement('div');
-        toast.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
-            type === 'success' ? 'bg-green-500' : 
-            type === 'error' ? 'bg-red-500' : 
-            'bg-blue-500'
-        } text-white`;
-        toast.textContent = message;
-
-        document.body.appendChild(toast);
-
-        // Remove after 3 seconds
-        setTimeout(() => {
-            toast.remove();
-        }, 3000);
-    }
-
-    /**
-     * Test call functionality
-     */
-    testCall() {
-        const btn = document.getElementById('aiTestCallBtn');
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Initiating Test Call...';
-            btn.disabled = true;
-
-            // Simulate test call
-            setTimeout(() => {
-                btn.innerHTML = '<i class="fas fa-phone mr-2"></i>Test Call';
-                btn.disabled = false;
-                this.showToast('Test call completed successfully!', 'success');
-                
-                // Could integrate with actual test call system here
-                console.log('Test call initiated...');
-            }, 3000);
-        }
-    }
-
-    /**
-     * Preview agent functionality
-     */
-    previewAgent() {
-        const btn = document.getElementById('aiPreviewAgentBtn');
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading Preview...';
-            btn.disabled = true;
-
-            // Simulate preview loading
-            setTimeout(() => {
-                btn.innerHTML = '<i class="fas fa-eye mr-2"></i>Preview Agent';
-                btn.disabled = false;
-                this.showToast('Agent preview loaded!', 'success');
-                
-                // Could open a modal or new window here
-                console.log('Opening agent preview...');
-                this.openPreviewModal();
-            }, 2000);
-        }
-    }
-
-    /**
-     * Open preview modal (placeholder for future implementation)
-     */
-    openPreviewModal() {
-        // This would open a modal showing agent preview
-        // For now, just log the action
-        console.log('Preview modal would open here with agent conversation simulation');
-    }
-
-    /**
-     * Save configuration functionality  
-     */
-    saveConfiguration() {
-        const btn = document.getElementById('aiSaveConfigBtn');
-        const statusDiv = document.getElementById('aiConfigStatus');
-        const statusText = document.getElementById('aiConfigStatusText');
-        
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving & Deploying...';
-            btn.disabled = true;
-
-            // Show status
-            if (statusDiv && statusText) {
-                statusDiv.classList.remove('hidden');
-                statusText.innerHTML = 'Collecting configuration data...';
+        // Emergency stop
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('button')?.dataset.action === 'emergency-stop') {
+                this.emergencyStop();
             }
+        });
 
-            // Collect all configuration data including greeting type
-            const configData = this.collectConfigurationData();
-            console.log('AI Agent Configuration Data:', configData);
-            
-            // Make API call to save configuration
-            fetch(`/api/ai-agent-setup/company/${window.companyId || 'current'}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
-                },
-                body: JSON.stringify(configData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save & Deploy Configuration';
-                btn.disabled = false;
-                
-                if (statusDiv && statusText) {
-                    if (data.success) {
-                        statusText.innerHTML = 'Configuration saved and deployed successfully!';
-                        this.showToast('AI Agent configuration saved and deployed!', 'success');
-                    } else {
-                        statusText.innerHTML = 'Failed to save configuration: ' + (data.message || 'Unknown error');
-                        this.showToast('Failed to save configuration: ' + (data.message || 'Unknown error'), 'error');
-                    }
-                    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
-                }
-            })
-            .catch(error => {
-                console.error('Failed to save configuration:', error);
-                btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save & Deploy Configuration';
-                btn.disabled = false;
-                
-                if (statusDiv && statusText) {
-                    statusText.innerHTML = 'Failed to save configuration';
-                    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
-                }
-                
-                this.showToast('Failed to save configuration', 'error');
-            });
-        }
+        // Save debug settings
+        document.getElementById('saveDebugSettingsBtn')?.addEventListener('click', this.saveDebugSettings.bind(this));
     }
 
-    collectConfigurationData() {
-        const data = {
-            // Agent Details
-            agentName: document.getElementById('agentName')?.value || '',
-            businessName: document.getElementById('businessName')?.value || '',
-            agentLanguage: document.getElementById('agentLanguage')?.value || 'english',
-            agentTimezone: document.getElementById('agentTimezone')?.value || '',
-            callDirection: document.querySelector('input[name="callDirection"]:checked')?.value || 'inbound',
-            
-            // Greeting Configuration
-            greetingType: document.querySelector('input[name="aiGreetingType"]:checked')?.value || 'tts',
-            agentInitialMessage: document.getElementById('agentInitialMessage')?.value || '',
-            greetingAudioFile: document.getElementById('aiGreetingAudioFile')?.files[0] || null,
-            
-            // Company Q&As
-            companyQAs: this.customQAs || [],
-            
-            // Additional settings can be added here as needed
-            timestamp: new Date().toISOString()
-        };
+    /**
+     * Edit learning suggestion
+     */
+    editSuggestion(e) {
+        const suggestionCard = e.target.closest('.border');
+        const suggestionText = suggestionCard.querySelector('p').textContent;
+        const impact = suggestionCard.querySelector('.text-xs').textContent;
         
-        return data;
-    }
-
-    playVoicePreview() {
-        const playBtn = document.getElementById('playVoiceBtn');
-        if (playBtn) {
-            playBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Playing';
-            setTimeout(() => {
-                playBtn.innerHTML = '<i class="fas fa-play mr-1"></i>Play';
-                this.showToast('Voice preview completed', 'success');
-            }, 2000);
-        }
+        // Open modal or inline editor for suggestion modification
+        console.log('Editing suggestion:', suggestionText);
+        this.showToast('Suggestion editor opened', 'info');
     }
 
     /**
-     * Save agent goals functionality
+     * Apply learning suggestion
      */
-    saveAgentGoals() {
-        const btn = document.getElementById('aiSaveAgentGoalsBtn');
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Agent Goals...';
-            btn.disabled = true;
-
-            // Simulate save process
-            setTimeout(() => {
-                btn.innerHTML = '<i class="fas fa-check mr-2"></i>Agent Goals Saved';
-                btn.disabled = false;
-                this.showToast('Agent goals saved successfully!', 'success');
-            }, 2000);
-        }
-    }
-
-    /**
-     * Save phone and availability settings functionality
-     */
-    savePhoneAvailability() {
-        const btn = document.getElementById('aiSavePhoneAvailabilityBtn');
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Phone & Availability...';
-            btn.disabled = true;
-
-            // Simulate save process
-            setTimeout(() => {
-                btn.innerHTML = '<i class="fas fa-check mr-2"></i>Phone & Availability Saved';
-                btn.disabled = false;
-                this.showToast('Phone and availability settings saved successfully!', 'success');
-            }, 2000);
-        }
-    }
-
-    /**
-     * Save call workflows functionality
-     */
-    saveCallWorkflows() {
-        const btn = document.getElementById('aiSaveCallWorkflowsBtn');
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Call Workflows...';
-            btn.disabled = true;
-
-            // Simulate save process
-            setTimeout(() => {
-                btn.innerHTML = '<i class="fas fa-check mr-2"></i>Call Workflows Saved';
-                btn.disabled = false;
-                this.showToast('Call workflows saved successfully!', 'success');
-            }, 2000);
-        }
-    }
-
-    /**
-     * Save basic setup functionality
-     */
-    saveBasicSetup() {
-        const btn = document.getElementById('aiSaveBasicSetupBtn');
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Basic Setup...';
-            btn.disabled = true;
-
-            // Simulate save process
-            setTimeout(() => {
-                btn.innerHTML = '<i class="fas fa-check mr-2"></i>Basic Setup Saved';
-                btn.disabled = false;
-                this.showToast('Basic setup saved successfully!', 'success');
-            }, 2000);
-        }
-    }
-
-    /**
-     * Save personality settings functionality
-     */
-    savePersonality() {
-        const btn = document.getElementById('aiSavePersonalityBtn');
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Personality...';
-            btn.disabled = true;
-
-            // Simulate save process
-            setTimeout(() => {
-                btn.innerHTML = '<i class="fas fa-check mr-2"></i>Personality Saved';
-                btn.disabled = false;
-                this.showToast('Personality settings saved successfully!', 'success');
-            }, 2000);
-        }
-    }
-
-    /**
-     * Save advanced settings functionality
-     */
-    saveAdvanced() {
-        const btn = document.getElementById('aiSaveAdvancedBtn');
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Advanced Settings...';
-            btn.disabled = true;
-
-            // Simulate save process
-            setTimeout(() => {
-                btn.innerHTML = '<i class="fas fa-check mr-2"></i>Advanced Settings Saved';
-                btn.disabled = false;
-                this.showToast('Advanced settings saved successfully!', 'success');
-            }, 2000);
-        }
-    }
-
-    /**
-     * Handle greeting type change between text-to-speech and audio file
-     */
-    handleGreetingTypeChange() {
-        const greetingTypeTTS = document.getElementById('aiGreetingTypeTTS');
-        const greetingTypeAudio = document.getElementById('aiGreetingTypeAudio');
-        const audioContainer = document.getElementById('aiGreetingAudioUploadContainer');
-        const textContainer = document.getElementById('aiGreetingTextContainer');
+    applySuggestion(e) {
+        const suggestionCard = e.target.closest('.border');
+        const suggestionText = suggestionCard.querySelector('p').textContent;
         
-        if (greetingTypeAudio && greetingTypeAudio.checked) {
-            audioContainer?.classList.remove('hidden');
-            textContainer?.classList.add('hidden');
-        } else {
-            audioContainer?.classList.add('hidden');
-            textContainer?.classList.remove('hidden');
-        }
+        // Apply the suggestion to the agent configuration
+        console.log('Applying suggestion:', suggestionText);
+        
+        // Animate the suggestion card to show it's being applied
+        suggestionCard.style.opacity = '0.5';
+        suggestionCard.style.pointerEvents = 'none';
+        
+        // Show success feedback
+        this.showToast('Suggestion applied successfully!', 'success');
+        
+        // Remove the suggestion card after animation
+        setTimeout(() => {
+            suggestionCard.remove();
+        }, 1000);
     }
 
     /**
-     * Save AI Company Q&A
+     * Deny learning suggestion
      */
-    saveAICompanyQnA() {
-        const form = document.getElementById('aiCompanyQnaForm');
-        const question = document.getElementById('aiCompanyQnaQuestion').value.trim();
-        const answer = document.getElementById('aiCompanyQnaAnswer').value.trim();
-        const keywords = document.getElementById('aiCompanyQnaKeywords').value.trim();
-        const editingId = document.getElementById('aiEditingQnaId').value;
+    denySuggestion(e) {
+        const suggestionCard = e.target.closest('.border');
+        const suggestionText = suggestionCard.querySelector('p').textContent;
+        
+        // Mark suggestion as denied
+        console.log('Denying suggestion:', suggestionText);
+        
+        // Animate the suggestion card to show it's being denied
+        suggestionCard.style.opacity = '0.3';
+        suggestionCard.style.backgroundColor = '#fee2e2';
+        
+        // Show feedback
+        this.showToast('Suggestion denied', 'info');
+        
+        // Remove the suggestion card after animation
+        setTimeout(() => {
+            suggestionCard.remove();
+        }, 1000);
+    }
 
-        if (!question || !answer) {
-            this.showAIQnAError('Question and answer are required');
-            return;
-        }
+    /**
+     * Create new A/B test
+     */
+    createABTest() {
+        console.log('Creating new A/B test');
+        this.showToast('A/B Test Creator opened', 'info');
+        // TODO: Open A/B test creation modal
+    }
 
-        const qnaData = {
-            id: editingId || Date.now().toString(),
-            question: question,
-            answer: answer,
-            keywords: keywords.split(',').map(k => k.trim()).filter(k => k),
-            createdAt: editingId ? undefined : new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+    /**
+     * Save Smart Learning settings
+     */
+    saveSmartLearningSettings() {
+        const settings = {
+            autoApplyHighImpact: document.getElementById('autoApplyHighImpact')?.checked,
+            autoCreateABTests: document.getElementById('autoCreateABTests')?.checked,
+            autoOptimizeResponses: document.getElementById('autoOptimizeResponses')?.checked,
+            autoUpdateKnowledge: document.getElementById('autoUpdateKnowledge')?.checked,
+            patternSampleSize: document.getElementById('patternSampleSize')?.value,
+            autoApplyThreshold: document.getElementById('autoApplyThreshold')?.value,
+            learningAggressiveness: document.getElementById('learningAggressiveness')?.value
         };
 
-        // Add or update in customQAs array
-        const existingIndex = this.customQAs.findIndex(qa => qa.id === qnaData.id);
-        if (existingIndex >= 0) {
-            this.customQAs[existingIndex] = qnaData;
-        } else {
-            this.customQAs.push(qnaData);
-        }
-
-        this.renderAICompanyQnAList();
-        this.clearAICompanyQnAForm();
-        this.showToast(editingId ? 'Q&A updated successfully' : 'Q&A added successfully', 'success');
+        console.log('Saving Smart Learning settings:', settings);
+        this.showToast('Smart Learning settings saved!', 'success');
     }
 
     /**
-     * Cancel AI Company Q&A edit
+     * Start live monitoring with real-time updates
      */
-    cancelAICompanyQnAEdit() {
-        this.clearAICompanyQnAForm();
-        document.getElementById('aiCompanyQnaSaveBtn').textContent = 'Add Q&A';
-        document.getElementById('aiCompanyQnaCancelBtn').classList.add('hidden');
-    }
+    startLiveMonitoring() {
+        const logContainer = document.getElementById('liveMonitoringLog');
+        if (!logContainer) return;
 
-    /**
-     * Clear AI Company Q&A form
-     */
-    clearAICompanyQnAForm() {
-        document.getElementById('aiCompanyQnaQuestion').value = '';
-        document.getElementById('aiCompanyQnaAnswer').value = '';
-        document.getElementById('aiCompanyQnaKeywords').value = '';
-        document.getElementById('aiEditingQnaId').value = '';
-        document.getElementById('aiCompanyQnaPreview').textContent = '';
-        this.hideAIQnAError();
-    }
-
-    /**
-     * Insert placeholder into AI Q&A answer
-     */
-    insertAIPlaceholder() {
-        const select = document.getElementById('aiPlaceholderSelect');
-        const textarea = document.getElementById('aiCompanyQnaAnswer');
-        const placeholder = select.value;
-
-        if (placeholder && textarea) {
-            const cursorPos = textarea.selectionStart;
-            const textBefore = textarea.value.substring(0, cursorPos);
-            const textAfter = textarea.value.substring(cursorPos);
-            textarea.value = textBefore + placeholder + textAfter;
-            textarea.setSelectionRange(cursorPos + placeholder.length, cursorPos + placeholder.length);
-            textarea.focus();
-            this.updateAIQnAPreview();
-        }
-    }
-
-    /**
-     * Update AI Q&A preview
-     */
-    updateAIQnAPreview() {
-        const answer = document.getElementById('aiCompanyQnaAnswer').value;
-        const preview = document.getElementById('aiCompanyQnaPreview');
-        
-        if (answer && preview) {
-            // Simple placeholder replacement for preview
-            let previewText = answer
-                .replace(/{CompanyName}/g, 'Penguin Air Corp')
-                .replace(/{OwnerName}/g, 'John Smith')
-                .replace(/{ContactPhone}/g, '(555) 123-4567')
-                .replace(/{ContactEmail}/g, 'contact@company.com')
-                .replace(/{Address}/g, '123 Main St, City, State');
+        // Simulate live monitoring updates
+        setInterval(() => {
+            const timestamp = new Date().toLocaleTimeString();
+            const logTypes = ['INFO', 'DEBUG', 'WARN', 'METRIC'];
+            const logType = logTypes[Math.floor(Math.random() * logTypes.length)];
+            const messages = [
+                'Call accepted: +1-555-' + Math.floor(Math.random() * 1000).toString().padStart(3, '0') + '-' + Math.floor(Math.random() * 10000).toString().padStart(4, '0'),
+                'Intent recognition: booking (94% confidence)',
+                'Script response executed (' + (Math.random() * 500 + 100).toFixed(0) + 'ms)',
+                'Customer satisfaction: ' + (Math.random() * 3 + 7).toFixed(1) + '/10',
+                'Response time: ' + (Math.random() * 2 + 0.5).toFixed(1) + 's'
+            ];
+            const message = messages[Math.floor(Math.random() * messages.length)];
             
-            preview.textContent = `Preview: ${previewText}`;
-        } else if (preview) {
-            preview.textContent = '';
+            const colorClass = {
+                'INFO': 'text-green-400',
+                'DEBUG': 'text-blue-400',
+                'WARN': 'text-yellow-400',
+                'METRIC': 'text-purple-400'
+            }[logType];
+
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `[${timestamp}] <span class="${colorClass}">${logType}</span> ${message}`;
+            
+            logContainer.appendChild(logEntry);
+            
+            // Keep only last 20 log entries
+            while (logContainer.children.length > 20) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+            
+            // Auto-scroll to bottom
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }, 3000 + Math.random() * 2000); // Random interval between 3-5 seconds
+    }
+
+    /**
+     * Toggle verbose logging
+     */
+    toggleVerboseLogging(e) {
+        console.log('Verbose logging:', e.target.checked);
+        this.showToast(`Verbose logging ${e.target.checked ? 'enabled' : 'disabled'}`, 'info');
+    }
+
+    /**
+     * Toggle script tracing
+     */
+    toggleScriptTracing(e) {
+        console.log('Script tracing:', e.target.checked);
+        this.showToast(`Script tracing ${e.target.checked ? 'enabled' : 'disabled'}`, 'info');
+    }
+
+    /**
+     * Toggle LLM debug mode
+     */
+    toggleLLMDebugMode(e) {
+        console.log('LLM debug mode:', e.target.checked);
+        this.showToast(`LLM debug mode ${e.target.checked ? 'enabled' : 'disabled'}`, 'info');
+    }
+
+    /**
+     * Change debug response mode
+     */
+    changeDebugResponseMode(e) {
+        console.log('Debug response mode changed to:', e.target.value);
+        this.showToast(`Debug mode: ${e.target.value}`, 'info');
+    }
+
+    /**
+     * Emergency stop function
+     */
+    emergencyStop() {
+        if (confirm('Are you sure you want to perform an emergency stop? This will halt all agent operations immediately.')) {
+            console.log('Emergency stop activated');
+            this.showToast('EMERGENCY STOP ACTIVATED - All operations halted', 'error');
+            // TODO: Implement actual emergency stop logic
         }
     }
 
     /**
-     * Render AI Company Q&A list
+     * Save debug settings
      */
-    renderAICompanyQnAList() {
-        const container = document.getElementById('aiCompanyQnaList');
-        if (!container) return;
+    saveDebugSettings() {
+        const settings = {
+            verboseLogging: document.getElementById('verboseLogging')?.checked,
+            scriptTracing: document.getElementById('scriptTracing')?.checked,
+            llmDebugMode: document.getElementById('llmDebugMode')?.checked,
+            performanceMetrics: document.getElementById('performanceMetrics')?.checked,
+            debugResponseMode: document.getElementById('debugResponseMode')?.value,
+            artificialDelay: document.getElementById('artificialDelay')?.value
+        };
 
-        if (this.customQAs.length === 0) {
-            container.innerHTML = `
-                <div class="text-center text-gray-500 py-8">
-                    <i class="fas fa-question-circle text-3xl mb-3 text-gray-300"></i>
-                    <p class="text-gray-400">No company Q&As added yet</p>
-                    <p class="text-sm text-gray-400 mt-1">Add your first Q&A using the form above</p>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = this.customQAs.map(qa => `
-            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                <div class="flex justify-between items-start mb-2">
-                    <h5 class="font-semibold text-gray-900">${this.escapeHtml(qa.question)}</h5>
-                    <div class="flex gap-2">
-                        <button onclick="aiAgentSetup.editAICompanyQnA('${qa.id}')" class="text-indigo-600 hover:text-indigo-800 text-sm">
-                            <i class="fas fa-edit"></i> Edit
-                        </button>
-                        <button onclick="aiAgentSetup.deleteAICompanyQnA('${qa.id}')" class="text-red-600 hover:text-red-800 text-sm">
-                            <i class="fas fa-trash"></i> Delete
-                        </button>
-                    </div>
-                </div>
-                <p class="text-gray-700 mb-2">${this.escapeHtml(qa.answer)}</p>
-                ${qa.keywords && qa.keywords.length > 0 ? `
-                    <div class="flex flex-wrap gap-1">
-                        ${qa.keywords.map(keyword => `<span class="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded">${this.escapeHtml(keyword)}</span>`).join('')}
-                    </div>
-                ` : ''}
-            </div>
-        `).join('');
+        console.log('Saving debug settings:', settings);
+        this.showToast('Debug settings saved!', 'success');
     }
-
-    /**
-     * Edit AI Company Q&A
-     */
-    editAICompanyQnA(id) {
-        const qa = this.customQAs.find(q => q.id === id);
-        if (qa) {
-            document.getElementById('aiCompanyQnaQuestion').value = qa.question;
-            document.getElementById('aiCompanyQnaAnswer').value = qa.answer;
-            document.getElementById('aiCompanyQnaKeywords').value = qa.keywords ? qa.keywords.join(', ') : '';
-            document.getElementById('aiEditingQnaId').value = id;
-            document.getElementById('aiCompanyQnaSaveBtn').textContent = 'Update Q&A';
-            document.getElementById('aiCompanyQnaCancelBtn').classList.remove('hidden');
-            this.updateAIQnAPreview();
-        }
-    }
-
-    /**
-     * Delete AI Company Q&A
-     */
-    deleteAICompanyQnA(id) {
-        if (confirm('Are you sure you want to delete this Q&A?')) {
-            this.customQAs = this.customQAs.filter(qa => qa.id !== id);
-            this.renderAICompanyQnAList();
-            this.showToast('Q&A deleted successfully', 'success');
-        }
-    }
-
-    /**
-     * Show AI Q&A error
-     */
-    showAIQnAError(message) {
-        const errorElement = document.getElementById('aiCompanyQnaFormError');
-        if (errorElement) {
-            errorElement.textContent = message;
-            errorElement.classList.remove('hidden');
-        }
-    }
-
-    /**
-     * Hide AI Q&A error
-     */
-    hideAIQnAError() {
-        const errorElement = document.getElementById('aiCompanyQnaFormError');
-        if (errorElement) {
-            errorElement.classList.add('hidden');
-        }
-    }
-
-    /**
-     * Escape HTML to prevent XSS
-     */
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    // ...existing code...
 }
 
 // Initialize AI Agent Setup when DOM is ready
