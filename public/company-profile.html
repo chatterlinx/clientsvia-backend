@@ -5972,7 +5972,268 @@ document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('agentSetupTestIntelligenceBtn')) {
         initializeSuperAIIntelligence();
     }
+    
+    // Initialize Logic AI Intelligence features
+    if (document.getElementById('logicTestIntelligenceBtn')) {
+        initializeLogicAIIntelligence();
+    }
 });
+
+/**
+ * Initialize Logic AI Intelligence features (from Logic tab)
+ */
+function initializeLogicAIIntelligence() {
+    // Confidence threshold slider for Logic section
+    const logicConfidenceSlider = document.getElementById('logicConfidenceThreshold');
+    const logicConfidenceValue = document.getElementById('logicConfidenceThresholdValue');
+    
+    if (logicConfidenceSlider && logicConfidenceValue) {
+        logicConfidenceSlider.addEventListener('input', function() {
+            logicConfidenceValue.textContent = this.value + '%';
+            updateLogicIntelligenceSettings();
+        });
+    }
+    
+    // Test Intelligence button for Logic section
+    const logicTestBtn = document.getElementById('logicTestIntelligenceBtn');
+    if (logicTestBtn) {
+        logicTestBtn.addEventListener('click', function() {
+            testLogicSuperAIIntelligence();
+        });
+    }
+    
+    // Intelligence feature toggles for Logic section
+    const logicIntelligenceToggles = [
+        'logicSemanticKnowledgeEnabled',
+        'logicContextualMemoryEnabled', 
+        'logicDynamicReasoningEnabled',
+        'logicSmartEscalationEnabled'
+    ];
+    
+    logicIntelligenceToggles.forEach(toggleId => {
+        const toggle = document.getElementById(toggleId);
+        if (toggle) {
+            toggle.addEventListener('change', function() {
+                updateLogicIntelligenceSettings();
+            });
+        }
+    });
+    
+    // Personalization level change for Logic section
+    const logicPersonalizationLevel = document.getElementById('logicPersonalizationLevel');
+    if (logicPersonalizationLevel) {
+        logicPersonalizationLevel.addEventListener('change', function() {
+            updateLogicIntelligenceSettings();
+        });
+    }
+    
+    // Learning settings for Logic section
+    const logicLearningToggles = [
+        'logicAutoLearningEnabled',
+        'logicPerformanceOptimization',
+        'logicABTestingEnabled',
+        'logicRealTimeOptimization',
+        'logicPredictiveAnalytics'
+    ];
+    
+    logicLearningToggles.forEach(toggleId => {
+        const toggle = document.getElementById(toggleId);
+        if (toggle) {
+            toggle.addEventListener('change', function() {
+                updateLogicLearningSettings();
+            });
+        }
+    });
+}
+
+/**
+ * Test Logic Super AI Intelligence with different scenarios
+ */
+async function testLogicSuperAIIntelligence() {
+    const scenario = document.getElementById('logicTestScenario').value;
+    const query = document.getElementById('logicTestQueryIntelligence').value;
+    const resultsDiv = document.getElementById('logicIntelligenceTestResults');
+    
+    if (!query.trim()) {
+        alert('Please enter a test query');
+        return;
+    }
+    
+    // Show loading state
+    resultsDiv.style.display = 'block';
+    resultsDiv.innerHTML = `
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div class="flex items-center">
+                <i class="fas fa-spinner fa-spin text-blue-600 mr-2"></i>
+                <span class="text-blue-800">Testing Logic AI Intelligence Engine...</span>
+            </div>
+        </div>
+    `;
+    
+    try {
+        const companyId = getCurrentCompanyId();
+        const response = await fetch('/api/agent/test-intelligence', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                companyId,
+                scenario,
+                query,
+                source: 'logic-ai-engine'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            displayLogicIntelligenceTestResults(data.data);
+        } else {
+            throw new Error(data.error || 'Logic AI test failed');
+        }
+    } catch (error) {
+        console.error('Logic AI intelligence test error:', error);
+        resultsDiv.innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>
+                    <span class="text-red-800">Logic AI test failed: ${error.message}</span>
+                </div>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Display Logic AI intelligence test results
+ */
+function displayLogicIntelligenceTestResults(results) {
+    const resultsDiv = document.getElementById('logicIntelligenceTestResults');
+    
+    const html = `
+        <div class="space-y-4">
+            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <h6 class="font-medium text-purple-900 mb-2">Logic AI Engine Test Results</h6>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                        <span class="text-gray-600">Intelligence Score:</span>
+                        <span class="font-medium text-purple-600">${results.intelligenceScore}%</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600">Response Time:</span>
+                        <span class="font-medium text-green-600">${results.responseTime}ms</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600">Confidence:</span>
+                        <span class="font-medium text-blue-600">${results.confidence}%</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600">AI Method:</span>
+                        <span class="font-medium text-orange-600">${results.method}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white border border-purple-200 rounded-lg p-4">
+                <h6 class="font-medium text-purple-900 mb-2">Logic AI Response:</h6>
+                <p class="text-gray-800 bg-purple-50 p-3 rounded border">${results.response}</p>
+            </div>
+            
+            <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                <h6 class="font-medium text-indigo-900 mb-2">Logic AI Processing Chain:</h6>
+                <div class="space-y-1 text-sm">
+                    ${results.processingChain.map(step => `
+                        <div class="flex items-center">
+                            <i class="fas fa-cog text-indigo-600 mr-2"></i>
+                            <span>${step}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            
+            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h6 class="font-medium text-gray-900 mb-2">Intelligence Analysis:</h6>
+                <div class="text-sm space-y-1">
+                    <div><strong>Semantic Analysis:</strong> ${results.confidence > 80 ? 'High confidence match' : 'Moderate confidence'}</div>
+                    <div><strong>Context Awareness:</strong> ${results.intelligenceScore > 85 ? 'Excellent' : 'Good'}</div>
+                    <div><strong>Response Quality:</strong> ${results.responseTime < 1000 ? 'Optimal speed' : 'Acceptable speed'}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    resultsDiv.innerHTML = html;
+}
+
+/**
+ * Update Logic AI intelligence settings on the backend
+ */
+async function updateLogicIntelligenceSettings() {
+    try {
+        const companyId = getCurrentCompanyId();
+        const settings = {
+            semanticKnowledge: document.getElementById('logicSemanticKnowledgeEnabled')?.checked || false,
+            confidenceThreshold: parseInt(document.getElementById('logicConfidenceThreshold')?.value || 85),
+            contextualMemory: document.getElementById('logicContextualMemoryEnabled')?.checked || false,
+            personalizationLevel: document.getElementById('logicPersonalizationLevel')?.value || 'medium',
+            dynamicReasoning: document.getElementById('logicDynamicReasoningEnabled')?.checked || false,
+            smartEscalation: document.getElementById('logicSmartEscalationEnabled')?.checked || false,
+            source: 'logic-ai-engine'
+        };
+        
+        const response = await fetch(`/api/agent/intelligence-settings/${companyId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(settings)
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            console.log('Logic AI intelligence settings updated successfully');
+        } else {
+            console.error('Failed to update Logic AI intelligence settings:', data.error);
+        }
+    } catch (error) {
+        console.error('Error updating Logic AI intelligence settings:', error);
+    }
+}
+
+/**
+ * Update Logic AI learning settings on the backend
+ */
+async function updateLogicLearningSettings() {
+    try {
+        const companyId = getCurrentCompanyId();
+        const settings = {
+            autoLearning: document.getElementById('logicAutoLearningEnabled')?.checked || false,
+            performanceOptimization: document.getElementById('logicPerformanceOptimization')?.checked || false,
+            abTesting: document.getElementById('logicABTestingEnabled')?.checked || false,
+            realTimeOptimization: document.getElementById('logicRealTimeOptimization')?.checked || false,
+            predictiveAnalytics: document.getElementById('logicPredictiveAnalytics')?.checked || false,
+            source: 'logic-ai-engine'
+        };
+        
+        const response = await fetch(`/api/agent/learning-settings/${companyId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(settings)
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            console.log('Logic AI learning settings updated successfully');
+        } else {
+            console.error('Failed to update Logic AI learning settings:', data.error);
+        }
+    } catch (error) {
+        console.error('Error updating Logic AI learning settings:', error);
+    }
+}
     </script>
 </body>
 </html>
