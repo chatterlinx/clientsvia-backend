@@ -221,7 +221,8 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   }
 
   // STEP 8: Try to understand the context and provide intelligent responses
-  const intelligentResponse = await generateIntelligentResponse(company, question, conversationHistory, categories, companySpecialties, categoryQAs);
+  const parsedCompanyQAs = categoryQACache.get(companyId) || [];
+  const intelligentResponse = await generateIntelligentResponse(company, question, conversationHistory, categories, companySpecialties, parsedCompanyQAs);
   if (intelligentResponse) {
     console.log(`[Agent] Generated intelligent response for: ${question}`);
     return { text: applyPlaceholders(intelligentResponse, placeholders), escalate: false };
@@ -248,9 +249,17 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     fullPrompt += `\n\n**Your Instructions:**\n${mainAgentScript}`;
   }
 
-  // Add category Q&As for context
+  // Add category Q&As for context with intelligent usage instructions
   if (categoryQAs) {
-    fullPrompt += `\n\n**Common Questions & Answers:**\n${categoryQAs}`;
+    fullPrompt += `\n\n**Knowledge Base (Q&As):**\n${categoryQAs}`;
+    fullPrompt += `\n\n**CRITICAL: How to Use Q&A Knowledge:**`;
+    fullPrompt += `\n- If the customer's question relates to any Q&A above, extract ONLY the essential information needed`;
+    fullPrompt += `\n- DON'T read the entire answer - pick the most relevant 1-2 key facts`;
+    fullPrompt += `\n- For pricing: extract specific dollar amounts and offer quotes`;
+    fullPrompt += `\n- For services: confirm "Yes, we do that" + next action`;
+    fullPrompt += `\n- For hours: give specific times, not full explanations`;
+    fullPrompt += `\n- Transform Q&A content into natural, conversational responses`;
+    fullPrompt += `\n- Example: Q&A says "We service all major brands including..." → You say "Yes, we service that brand. Schedule a repair?"`;
   }
 
   // Add conversation history
@@ -267,6 +276,20 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
 
   fullPrompt += `\n\n**Current Question:** ${question}`;
 
+  // Add targeted Q&A context for the specific question
+  const parsedQAs = categoryQACache.get(companyId) || [];
+  if (parsedQAs.length > 0) {
+    const relevantQAs = findMostRelevantQAs(question, parsedQAs, 2); // Get top 2 most relevant
+    if (relevantQAs.length > 0) {
+      fullPrompt += `\n\n**Most Relevant Q&As for This Question:**`;
+      relevantQAs.forEach((qa, index) => {
+        fullPrompt += `\n${index + 1}. Q: ${qa.question}`;
+        fullPrompt += `\n   A: ${qa.answer}`;
+      });
+      fullPrompt += `\n\n**REMEMBER:** Extract only the essential information from these Q&As that directly answers their question. Don't repeat entire answers.`;
+    }
+  }
+
   // Check if this appears to be unclear speech or rambling
   const isUnclearSpeech = question.includes('[Speech unclear/low confidence:') || 
                          question.length < 5 || 
@@ -278,12 +301,23 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
 
   fullPrompt += `\n\n**Response Guidelines:**`;
   fullPrompt += `\n- ULTRA-CONCISE: Maximum 1-2 sentences. Get to the point immediately.`;
+  fullPrompt += `\n- SMART Q&A USAGE: If any Knowledge Base Q&A relates to their question, extract only the essential facts needed to help them`;
+  fullPrompt += `\n- Don't recite full Q&A answers - distill them into the specific information the customer needs`;
+  fullPrompt += `\n- Prioritize actionable responses: "Yes, we do that. When works for you?" over explanatory paragraphs`;
   fullPrompt += `\n- You are The Agent for ${company?.companyName} - be natural but brief`;
   fullPrompt += `\n- Don't repeat what the caller said - acknowledge briefly and offer next steps`;
   fullPrompt += `\n- Skip pleasantries unless they're greeting you - focus on solutions`;
   fullPrompt += `\n- If they need service: offer to schedule. If they have questions: answer directly.`;
   fullPrompt += `\n- NO rambling, NO lengthy explanations, NO unnecessary details`;
   fullPrompt += `\n- Examples of good responses: "Yes, we fix that. Schedule a visit?" or "Starts at $89. Want a quote?"`;
+  
+  // Add specific Q&A processing examples
+  fullPrompt += `\n\n**Smart Q&A Processing Examples:**`;
+  fullPrompt += `\n- If Q&A has pricing info: Extract dollar amount → "Repair starts at $X. Want a quote?"`;
+  fullPrompt += `\n- If Q&A lists services: Confirm briefly → "Yes, we handle that. Available today?"`;
+  fullPrompt += `\n- If Q&A has hours: Give specific times → "Open 8am-5pm weekdays. Need same-day service?"`;
+  fullPrompt += `\n- If Q&A has warranty info: Extract key terms → "2-year warranty included. Ready to schedule?"`;
+  fullPrompt += `\n- Transform long Q&A explanations into actionable responses that move the conversation forward`;
   
   if (isUnclearSpeech) {
     fullPrompt += `\n- IMPORTANT: The caller's speech was unclear or garbled. Ask them to clarify what they need help with in a friendly way.`;
@@ -378,6 +412,170 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   }
 
   return { text: applyPlaceholders(finalResponse, placeholders), escalate: false };
+}
+
+// Generate intelligent responses by analyzing Q&A data contextually
+async function generateIntelligentResponse(company, question, conversationHistory, categories, companySpecialties, categoryQAs) {
+  if (!categoryQAs || categoryQAs.length === 0) return null;
+  
+  const qLower = question.toLowerCase();
+  const companyId = company?._id?.toString();
+  
+  // Look for Q&A entries that might be contextually relevant
+  const relevantQAs = categoryQAs.filter(qa => {
+    const qText = qa.question.toLowerCase();
+    const aText = qa.answer.toLowerCase();
+    
+    // Check if the question contains keywords from the Q&A
+    const questionWords = qLower.split(/\s+/).filter(word => word.length > 3);
+    const qaWords = (qText + ' ' + aText).split(/\s+/).filter(word => word.length > 3);
+    
+    // Find common words between customer question and Q&A content
+    const commonWords = questionWords.filter(word => 
+      qaWords.some(qaWord => qaWord.includes(word) || word.includes(qaWord))
+    );
+    
+    return commonWords.length >= 1;
+  });
+  
+  if (relevantQAs.length === 0) return null;
+  
+  // Find the most relevant Q&A based on content overlap
+  let bestMatch = null;
+  let bestScore = 0;
+  
+  for (const qa of relevantQAs) {
+    const qText = qa.question.toLowerCase();
+    const aText = qa.answer.toLowerCase();
+    const fullQAText = qText + ' ' + aText;
+    
+    // Score based on keyword matches
+    const questionWords = qLower.split(/\s+/).filter(word => word.length > 3);
+    const matches = questionWords.filter(word => fullQAText.includes(word));
+    const score = matches.length / questionWords.length;
+    
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = qa;
+    }
+  }
+  
+  // If we found a decent match (30% or better), process it intelligently
+  if (bestMatch && bestScore >= 0.3) {
+    console.log(`[Intelligent Response] Found contextual Q&A match (${Math.round(bestScore * 100)}% relevance)`);
+    return generateSmartAnswerFromQA(question, bestMatch.answer, company?.companyName);
+  }
+  
+  return null;
+}
+
+// Generate smart answer from Q&A data by extracting key information
+function generateSmartAnswerFromQA(question, qaAnswer, companyName) {
+  const qLower = question.toLowerCase();
+  
+  // For pricing questions, extract specific costs
+  if (qLower.includes('cost') || qLower.includes('price') || qLower.includes('how much') || qLower.includes('charge')) {
+    const priceMatches = qaAnswer.match(/\$\d+(?:\.\d{2})?/g);
+    if (priceMatches && priceMatches.length > 0) {
+      const prices = priceMatches.slice(0, 2); // Take up to 2 prices
+      if (prices.length === 1) {
+        return `${prices[0]} for that service. Want a detailed quote?`;
+      } else {
+        return `${prices[0]}-${prices[prices.length - 1]} depending on the work. Need an estimate?`;
+      }
+    }
+    
+    // Look for cost-related keywords
+    if (qaAnswer.toLowerCase().includes('free estimate') || qaAnswer.toLowerCase().includes('no charge')) {
+      return `Free estimates. When would you like us to take a look?`;
+    }
+  }
+  
+  // For service availability questions
+  if (qLower.includes('do you') || qLower.includes('can you') || qLower.includes('service')) {
+    const keywords = ['repair', 'fix', 'install', 'replace', 'maintain', 'service'];
+    const hasServiceKeyword = keywords.some(keyword => qLower.includes(keyword));
+    
+    if (hasServiceKeyword) {
+      // Look for affirmative indicators in the answer
+      const affirmatives = ['yes', 'we do', 'we can', 'we offer', 'we provide', 'we handle', 'available'];
+      const hasAffirmative = affirmatives.some(phrase => qaAnswer.toLowerCase().includes(phrase));
+      
+      if (hasAffirmative) {
+        return `Yes, we handle that. Available today?`;
+      }
+    }
+  }
+  
+  // For hours/scheduling questions
+  if (qLower.includes('hour') || qLower.includes('open') || qLower.includes('when') || qLower.includes('available')) {
+    const timePattern = /\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM)/g;
+    const times = qaAnswer.match(timePattern);
+    
+    if (times && times.length >= 2) {
+      return `${times[0]} to ${times[times.length - 1]}, weekdays. Same-day service available.`;
+    }
+    
+    if (qaAnswer.toLowerCase().includes('24') || qaAnswer.toLowerCase().includes('emergency')) {
+      return `24/7 emergency service available. Need immediate help?`;
+    }
+    
+    if (qaAnswer.toLowerCase().includes('monday') && qaAnswer.toLowerCase().includes('friday')) {
+      return `Monday through Friday. Available today?`;
+    }
+  }
+  
+  // For warranty/guarantee questions
+  if (qLower.includes('warrant') || qLower.includes('guarant') || qLower.includes('cover')) {
+    const warrantyPattern = /\d+\s*(?:year|month|day)/gi;
+    const warranty = qaAnswer.match(warrantyPattern);
+    
+    if (warranty && warranty.length > 0) {
+      return `${warranty[0]} warranty on all work. Ready to schedule?`;
+    }
+    
+    if (qaAnswer.toLowerCase().includes('guarantee') || qaAnswer.toLowerCase().includes('covered')) {
+      return `All work is guaranteed. Want to schedule a service?`;
+    }
+  }
+  
+  // For emergency/urgent questions
+  if (qLower.includes('emergency') || qLower.includes('urgent') || qLower.includes('immediate')) {
+    if (qaAnswer.toLowerCase().includes('24') || qaAnswer.toLowerCase().includes('emergency') || qaAnswer.toLowerCase().includes('same day')) {
+      return `Emergency service available now. What's the issue?`;
+    }
+  }
+  
+  // For appointment/booking questions
+  if (qLower.includes('appointment') || qLower.includes('schedule') || qLower.includes('book')) {
+    return `We can schedule you today. What time works best?`;
+  }
+  
+  // Fallback: Extract the most actionable part of the answer
+  const sentences = qaAnswer.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 10);
+  if (sentences.length > 0) {
+    // Find sentences with actionable words
+    const actionWords = ['call', 'schedule', 'contact', 'visit', 'available', 'book', 'appointment'];
+    const actionableSentence = sentences.find(sentence => 
+      actionWords.some(word => sentence.toLowerCase().includes(word))
+    );
+    
+    if (actionableSentence && actionableSentence.length < 100) {
+      return actionableSentence + '.';
+    }
+    
+    // Return the shortest meaningful sentence
+    const shortestSentence = sentences.reduce((shortest, current) => 
+      current.length < shortest.length ? current : shortest
+    );
+    
+    if (shortestSentence.length < 80) {
+      return shortestSentence + '.';
+    }
+  }
+  
+  // Final fallback: ultra-concise extraction
+  return extractConciseAnswer(qaAnswer);
 }
 
 // Check specific scenario protocols - handles company-specific response protocols
@@ -528,8 +726,8 @@ function extractQuickAnswerFromQA(qaEntries, question, threshold = 0.3) {
     const entryAnswer = entry.answer || '';
     
     // Check for keyword matches
-    const questionWords = qLower.split(' ').filter(w => w.length > 2);
-    const entryWords = entryQuestion.split(' ').filter(w => w.length > 2);
+    const questionWords = qLower.split(' ').filter(word => word.length > 2);
+    const entryWords = entryQuestion.split(' ').filter(word => word.length > 2);
     
     const matchCount = questionWords.filter(word => 
       entryWords.some(entryWord => 
@@ -546,6 +744,58 @@ function extractQuickAnswerFromQA(qaEntries, question, threshold = 0.3) {
   }
   
   return bestMatch;
+}
+
+// Find the most relevant Q&As for a specific question
+function findMostRelevantQAs(question, qas, maxResults = 2) {
+  if (!qas || qas.length === 0) return [];
+  
+  const qLower = question.toLowerCase();
+  const questionWords = qLower.split(/\s+/).filter(word => word.length > 3);
+  
+  // Score each Q&A based on relevance
+  const scoredQAs = qas.map(qa => {
+    const qText = qa.question.toLowerCase();
+    const aText = qa.answer.toLowerCase();
+    const fullText = qText + ' ' + aText;
+    
+    // Calculate relevance score
+    let score = 0;
+    
+    // Direct word matches
+    questionWords.forEach(word => {
+      if (fullText.includes(word)) {
+        score += qText.includes(word) ? 2 : 1; // Question matches worth more
+      }
+    });
+    
+    // Bonus for specific question types
+    if (qLower.includes('price') || qLower.includes('cost')) {
+      if (aText.includes('$') || aText.includes('price') || aText.includes('cost')) {
+        score += 3;
+      }
+    }
+    
+    if (qLower.includes('hour') || qLower.includes('open') || qLower.includes('when')) {
+      if (aText.includes('am') || aText.includes('pm') || aText.includes('hour')) {
+        score += 3;
+      }
+    }
+    
+    if (qLower.includes('do you') || qLower.includes('can you')) {
+      if (aText.includes('yes') || aText.includes('we do') || aText.includes('service')) {
+        score += 3;
+      }
+    }
+    
+    return { ...qa, score };
+  });
+  
+  // Sort by score and return top results
+  return scoredQAs
+    .filter(qa => qa.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxResults);
 }
 
 // Generate short, conversational responses using Q&A as reference - ULTRA-CONCISE VERSION
@@ -671,3 +921,8 @@ function extractConciseAnswer(text) {
   // Return the first sentence if none match criteria
   return sentences[0].substring(0, 100) + (sentences[0].length > 100 ? '...' : '.');
 }
+
+module.exports = { 
+  answerQuestion, 
+  loadCompanyQAs 
+};
