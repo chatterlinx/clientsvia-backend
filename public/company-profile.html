@@ -1569,7 +1569,7 @@
                                                     </div>
                                                 </div>
                                                 
-                                                <button id="logicTestIntelligenceBtn" class="bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg text-sm">
+                                                <button id="testLogicSuperAIIntelligence" onclick="testLogicSuperAIIntelligence()" class="bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg text-sm">
                                                     <i class="fas fa-rocket mr-1"></i>Test Super AI Intelligence
                                                 </button>
                                                 
@@ -4215,6 +4215,267 @@ Cost estimate</textarea>
                                                         </div>
                                                     </div>
                                                 </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Smart Learning Configuration Controls -->
+                                        <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-sliders-h mr-2 text-blue-600"></i>Smart Learning Configuration
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div class="space-y-4">
+                                                    <h5 class="font-medium text-gray-900">Adaptive Learning Controls</h5>
+                                                    
+                                                    <!-- Adaptive Response Learning -->
+                                                    <div class="space-y-2">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="adaptiveResponseEnabled" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Adaptive Response Learning</span>
+                                                        </label>
+                                                        <div class="ml-6">
+                                                            <label class="form-label text-sm">Adaptation Level</label>
+                                                            <input type="range" id="adaptiveResponseLevel" min="0" max="1" step="0.1" value="0.5" class="w-full">
+                                                            <span class="text-xs text-gray-600">Conservative ← → Aggressive</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Conversation Memory -->
+                                                    <div class="space-y-2">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="conversationMemoryEnabled" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Conversation Memory</span>
+                                                        </label>
+                                                        <div class="ml-6">
+                                                            <label class="form-label text-sm">Memory Duration (hours)</label>
+                                                            <input type="number" id="conversationMemoryDuration" min="1" max="168" value="24" class="form-input">
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Personality Adaptation -->
+                                                    <div class="space-y-2">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="personalityAdaptationEnabled" class="form-checkbox">
+                                                            <span class="form-check-label">Personality Adaptation</span>
+                                                        </label>
+                                                        <div class="ml-6">
+                                                            <label class="form-label text-sm">Adaptation Strength</label>
+                                                            <input type="range" id="personalityAdaptationLevel" min="0" max="1" step="0.1" value="0.3" class="w-full">
+                                                            <span class="text-xs text-gray-600">Subtle ← → Strong</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="space-y-4">
+                                                    <h5 class="font-medium text-gray-900">Advanced Learning Settings</h5>
+                                                    
+                                                    <!-- Context Awareness -->
+                                                    <div class="space-y-2">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="contextAwarenessEnabled" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Context Awareness</span>
+                                                        </label>
+                                                        <div class="ml-6">
+                                                            <label class="form-label text-sm">Context Depth</label>
+                                                            <input type="range" id="contextAwarenessDepth" min="0" max="1" step="0.1" value="0.7" class="w-full">
+                                                            <span class="text-xs text-gray-600">Basic ← → Deep</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Learning Speed -->
+                                                    <div class="space-y-2">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="learningSpeedEnabled" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Accelerated Learning</span>
+                                                        </label>
+                                                        <div class="ml-6">
+                                                            <label class="form-label text-sm">Learning Speed</label>
+                                                            <input type="range" id="learningSpeedLevel" min="0" max="1" step="0.1" value="0.5" class="w-full">
+                                                            <span class="text-xs text-gray-600">Slow ← → Fast</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Response Optimization -->
+                                                    <div class="space-y-2">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="responseOptimizationEnabled" class="form-checkbox" checked>
+                                                            <span class="form-check-label">Response Optimization</span>
+                                                        </label>
+                                                        <div class="ml-6">
+                                                            <label class="form-label text-sm">Optimization Level</label>
+                                                            <input type="range" id="responseOptimizationLevel" min="0" max="1" step="0.1" value="0.6" class="w-full">
+                                                            <span class="text-xs text-gray-600">Minimal ← → Maximum</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Performance Metrics -->
+                                            <div class="mt-6 pt-6 border-t border-gray-200">
+                                                <h5 class="font-medium text-gray-900 mb-4">Smart Learning Performance Metrics</h5>
+                                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                                        <div class="text-2xl font-bold text-blue-600" id="avgResponseScore">87%</div>
+                                                        <div class="text-sm text-gray-600">Avg Response Score</div>
+                                                        <div class="text-xs text-blue-600">↗ +5% this week</div>
+                                                    </div>
+                                                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                                        <div class="text-2xl font-bold text-green-600" id="learningEfficiencyRate">92%</div>
+                                                        <div class="text-sm text-gray-600">Learning Efficiency</div>
+                                                        <div class="text-xs text-green-600">↗ +8% this week</div>
+                                                    </div>
+                                                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                                        <div class="text-2xl font-bold text-purple-600" id="adaptationSuccessScore">89%</div>
+                                                        <div class="text-sm text-gray-600">Adaptation Success</div>
+                                                        <div class="text-xs text-purple-600">↗ +3% this week</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Save Button -->
+                                            <div class="mt-6 flex justify-end">
+                                                <button onclick="saveSmartLearningSettings()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium">
+                                                    <i class="fas fa-save mr-2"></i>Save Smart Learning Settings
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Smart Learning Configuration Controls -->
+                                        <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                <i class="fas fa-brain mr-2 text-purple-600"></i>Smart Learning Configuration
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <!-- Adaptive Response Settings -->
+                                                <div class="space-y-4">
+                                                    <h5 class="font-medium text-gray-900">Adaptive Response Intelligence</h5>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="adaptiveResponseEnabled" class="form-checkbox" checked>
+                                                        <span class="form-check-label">Enable Adaptive Response Learning</span>
+                                                    </label>
+                                                    <div class="mt-3">
+                                                        <label class="form-label">Response Adaptation Level</label>
+                                                        <input type="range" id="adaptiveResponseLevel" min="0" max="1" step="0.1" value="0.7" class="w-full">
+                                                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                            <span>Conservative</span>
+                                                            <span>Balanced</span>
+                                                            <span>Aggressive</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Conversation Memory Settings -->
+                                                <div class="space-y-4">
+                                                    <h5 class="font-medium text-gray-900">Conversation Memory</h5>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="conversationMemoryEnabled" class="form-checkbox" checked>
+                                                        <span class="form-check-label">Enable Conversation Memory</span>
+                                                    </label>
+                                                    <div class="mt-3">
+                                                        <label class="form-label">Memory Duration (hours)</label>
+                                                        <input type="number" id="conversationMemoryDuration" min="1" max="168" value="24" class="form-input">
+                                                    </div>
+                                                </div>
+
+                                                <!-- Personality Adaptation -->
+                                                <div class="space-y-4">
+                                                    <h5 class="font-medium text-gray-900">Personality Adaptation</h5>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="personalityAdaptationEnabled" class="form-checkbox">
+                                                        <span class="form-check-label">Enable Personality Adaptation</span>
+                                                    </label>
+                                                    <div class="mt-3">
+                                                        <label class="form-label">Adaptation Sensitivity</label>
+                                                        <input type="range" id="personalityAdaptationLevel" min="0" max="1" step="0.1" value="0.3" class="w-full">
+                                                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                            <span>Subtle</span>
+                                                            <span>Moderate</span>
+                                                            <span>Strong</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Context Awareness -->
+                                                <div class="space-y-4">
+                                                    <h5 class="font-medium text-gray-900">Context Awareness</h5>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="contextAwarenessEnabled" class="form-checkbox" checked>
+                                                        <span class="form-check-label">Enable Context Awareness</span>
+                                                    </label>
+                                                    <div class="mt-3">
+                                                        <label class="form-label">Context Depth</label>
+                                                        <input type="range" id="contextAwarenessDepth" min="0" max="1" step="0.1" value="0.7" class="w-full">
+                                                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                            <span>Surface</span>
+                                                            <span>Deep</span>
+                                                            <span>Comprehensive</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Learning Speed -->
+                                                <div class="space-y-4">
+                                                    <h5 class="font-medium text-gray-900">Learning Speed</h5>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="learningSpeedEnabled" class="form-checkbox" checked>
+                                                        <span class="form-check-label">Enable Accelerated Learning</span>
+                                                    </label>
+                                                    <div class="mt-3">
+                                                        <label class="form-label">Learning Rate</label>
+                                                        <input type="range" id="learningSpeedLevel" min="0" max="1" step="0.1" value="0.5" class="w-full">
+                                                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                            <span>Gradual</span>
+                                                            <span>Normal</span>
+                                                            <span>Rapid</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Response Optimization -->
+                                                <div class="space-y-4">
+                                                    <h5 class="font-medium text-gray-900">Response Optimization</h5>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="responseOptimizationEnabled" class="form-checkbox" checked>
+                                                        <span class="form-check-label">Enable Response Optimization</span>
+                                                    </label>
+                                                    <div class="mt-3">
+                                                        <label class="form-label">Optimization Level</label>
+                                                        <input type="range" id="responseOptimizationLevel" min="0" max="1" step="0.1" value="0.6" class="w-full">
+                                                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                            <span>Basic</span>
+                                                            <span>Enhanced</span>
+                                                            <span>Maximum</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Performance Metrics Display -->
+                                            <div class="mt-6 pt-6 border-t border-gray-200">
+                                                <h5 class="font-medium text-gray-900 mb-4">Smart Learning Performance Metrics</h5>
+                                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 text-center">
+                                                        <div class="text-2xl font-bold text-green-600" id="avgResponseScore">--</div>
+                                                        <div class="text-sm text-green-800">Avg Response Score</div>
+                                                    </div>
+                                                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 text-center">
+                                                        <div class="text-2xl font-bold text-blue-600" id="learningEfficiencyRate">--</div>
+                                                        <div class="text-sm text-blue-800">Learning Efficiency</div>
+                                                    </div>
+                                                    <div class="bg-gradient-to-r from-purple-50 to-violet-50 border border-purple-200 rounded-lg p-4 text-center">
+                                                        <div class="text-2xl font-bold text-purple-600" id="adaptationSuccessScore">--</div>
+                                                        <div class="text-sm text-purple-800">Adaptation Success</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Save Button -->
+                                            <div class="mt-6 flex justify-end">
+                                                <button onclick="saveSmartLearningSettings()" class="form-button-agent-setup">
+                                                    <i class="fas fa-save mr-2"></i>Save Smart Learning Settings
+                                                </button>
                                             </div>
                                         </div>
 

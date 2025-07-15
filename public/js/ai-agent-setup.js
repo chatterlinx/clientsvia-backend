@@ -1130,3 +1130,212 @@ class AIAgentSetup {
         this.showNotification(`Suggestion ${suggestionId} applied successfully!`, 'success');
     }
 }
+
+// ====== CRITICAL AGENT INTELLIGENCE & LEARNING FUNCTIONS ======
+
+/**
+ * Get company ID from URL
+ */
+function getCompanyIdFromUrl() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('companyId') || urlParams.get('id');
+}
+
+/**
+ * Get current company ID
+ */
+function getCurrentCompanyId() {
+    // Try URL first
+    let companyId = getCompanyIdFromUrl();
+    
+    // Try from page context
+    if (!companyId && window.companyData && window.companyData.id) {
+        companyId = window.companyData.id;
+    }
+    
+    // Try from localStorage
+    if (!companyId) {
+        companyId = localStorage.getItem('currentCompanyId');
+    }
+    
+    // Try from sessionStorage
+    if (!companyId) {
+        companyId = sessionStorage.getItem('companyId');
+    }
+    
+    return companyId;
+}
+
+/**
+ * Save Smart Learning Settings
+ */
+async function saveSmartLearningSettings() {
+    const companyId = getCurrentCompanyId();
+    if (!companyId) {
+        console.error('No company ID found');
+        return;
+    }
+
+    const settings = {
+        adaptiveResponseEnabled: document.getElementById('adaptiveResponseEnabled')?.checked || false,
+        adaptiveResponseLevel: document.getElementById('adaptiveResponseLevel')?.value || 0.5,
+        conversationMemoryEnabled: document.getElementById('conversationMemoryEnabled')?.checked || false,
+        conversationMemoryDuration: document.getElementById('conversationMemoryDuration')?.value || 24,
+        personalityAdaptationEnabled: document.getElementById('personalityAdaptationEnabled')?.checked || false,
+        personalityAdaptationLevel: document.getElementById('personalityAdaptationLevel')?.value || 0.3,
+        contextAwarenessEnabled: document.getElementById('contextAwarenessEnabled')?.checked || false,
+        contextAwarenessDepth: document.getElementById('contextAwarenessDepth')?.value || 0.7,
+        learningSpeedEnabled: document.getElementById('learningSpeedEnabled')?.checked || false,
+        learningSpeedLevel: document.getElementById('learningSpeedLevel')?.value || 0.5,
+        responseOptimizationEnabled: document.getElementById('responseOptimizationEnabled')?.checked || false,
+        responseOptimizationLevel: document.getElementById('responseOptimizationLevel')?.value || 0.6
+    };
+
+    try {
+        const response = await fetch(`/api/agent/smart-learning/${companyId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(settings)
+        });
+
+        if (response.ok) {
+            showNotification('Smart Learning settings saved successfully!', 'success');
+            refreshPerformanceMetrics(); // Refresh metrics after saving
+        } else {
+            throw new Error('Failed to save settings');
+        }
+    } catch (error) {
+        console.error('Error saving Smart Learning settings:', error);
+        showNotification('Failed to save Smart Learning settings', 'error');
+    }
+}
+
+/**
+ * Refresh Performance Metrics
+ */
+async function refreshPerformanceMetrics() {
+    const companyId = getCurrentCompanyId();
+    if (!companyId) {
+        console.error('No company ID found for performance metrics');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/agent/performance-metrics/${companyId}`);
+        if (response.ok) {
+            const metrics = await response.json();
+            updatePerformanceDisplay(metrics);
+        } else {
+            console.error('Failed to fetch performance metrics');
+        }
+    } catch (error) {
+        console.error('Error fetching performance metrics:', error);
+    }
+}
+
+/**
+ * Update Performance Display
+ */
+function updatePerformanceDisplay(metrics) {
+    // Update Smart Learning Performance metrics
+    if (metrics.smartLearning) {
+        const avgScore = document.getElementById('avgResponseScore');
+        const learningRate = document.getElementById('learningEfficiencyRate');
+        const adaptationScore = document.getElementById('adaptationSuccessScore');
+        
+        if (avgScore) avgScore.textContent = `${metrics.smartLearning.averageResponseScore || 0}%`;
+        if (learningRate) learningRate.textContent = `${metrics.smartLearning.learningEfficiencyRate || 0}%`;
+        if (adaptationScore) adaptationScore.textContent = `${metrics.smartLearning.adaptationSuccessScore || 0}%`;
+    }
+
+    // Update general metrics
+    if (metrics.general) {
+        const totalCalls = document.getElementById('totalCallsMetric');
+        const successRate = document.getElementById('successRateMetric');
+        const avgDuration = document.getElementById('avgDurationMetric');
+        
+        if (totalCalls) totalCalls.textContent = metrics.general.totalCalls || 0;
+        if (successRate) successRate.textContent = `${metrics.general.successRate || 0}%`;
+        if (avgDuration) avgDuration.textContent = `${metrics.general.averageDuration || 0}s`;
+    }
+}
+
+/**
+ * Show Notification
+ */
+function showNotification(message, type = 'info') {
+    // Remove existing notifications
+    const existingNotifications = document.querySelectorAll('.notification-toast');
+    existingNotifications.forEach(n => n.remove());
+
+    // Create notification
+    const notification = document.createElement('div');
+    notification.className = `notification-toast fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 transform translate-x-full`;
+    
+    const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+    notification.className += ` ${bgColor} text-white`;
+    
+    notification.innerHTML = `
+        <div class="flex items-center">
+            <span class="mr-2">${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ'}</span>
+            <span>${message}</span>
+            <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">×</button>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.classList.remove('translate-x-full');
+    }, 100);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentElement) {
+            notification.classList.add('translate-x-full');
+            setTimeout(() => notification.remove(), 300);
+        }
+    }, 5000);
+}
+
+// ====== INITIALIZATION & EVENT HANDLERS ======
+
+// Initialize AI Agent Setup when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing AI Agent Setup...');
+    
+    // Initialize main AIAgentSetup class
+    window.aiAgentSetup = new AIAgentSetup();
+    
+    // Initialize standalone functions
+    initializeLogicAIIntelligence();
+    
+    // Auto-refresh performance metrics every 30 seconds
+    setInterval(refreshPerformanceMetrics, 30000);
+    
+    // Initial performance metrics load
+    setTimeout(refreshPerformanceMetrics, 2000); // Wait 2 seconds for page to fully load
+    
+    console.log('AI Agent Setup initialization complete');
+});
+
+// Global functions for HTML onclick handlers
+window.applySuggestion = function(suggestionId) {
+    if (window.aiAgentSetup) {
+        window.aiAgentSetup.applySuggestion(suggestionId);
+    }
+};
+
+window.saveSmartLearningSettings = saveSmartLearningSettings;
+window.refreshPerformanceMetrics = refreshPerformanceMetrics;
+window.testLogicSuperAIIntelligence = testLogicSuperAIIntelligence;
+window.updateLogicIntelligenceSettings = updateLogicIntelligenceSettings;
+window.updateLogicLearningSettings = updateLogicLearningSettings;
+window.showNotification = showNotification;
+window.getCurrentCompanyId = getCurrentCompanyId;
+window.getCompanyIdFromUrl = getCompanyIdFromUrl;
+
+console.log('AI Agent Setup - Agent Intelligence & Learning System Ready!');
