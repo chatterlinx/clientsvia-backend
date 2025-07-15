@@ -922,6 +922,63 @@ function extractConciseAnswer(text) {
   return sentences[0].substring(0, 100) + (sentences[0].length > 100 ? '...' : '.');
 }
 
+// Generate smart conversational responses using multiple AI techniques
+async function generateSmartConversationalResponse(company, question, conversationHistory, categories, companySpecialties, placeholders) {
+  if (!question || question.trim().length === 0) return null;
+  
+  const qLower = question.toLowerCase();
+  const companyName = company?.companyName || 'our company';
+  
+  // Handle common service inquiry patterns
+  if (qLower.includes('leak') || qLower.includes('leakage') || qLower.includes('dripping')) {
+    if (categories.some(cat => cat.toLowerCase().includes('hvac') || cat.toLowerCase().includes('plumbing'))) {
+      return `I can help with leak repairs. Where exactly is the leak occurring? Let's get someone out to take a look.`;
+    }
+  }
+  
+  // Handle repair/fix inquiries
+  if (qLower.includes('repair') || qLower.includes('fix') || qLower.includes('broken') || qLower.includes('not working')) {
+    if (categories.length > 0) {
+      const service = categories[0].toLowerCase().includes('hvac') ? 'HVAC' : 'service';
+      return `I can help with ${service} repairs. What seems to be the issue? Let's schedule a technician to take a look.`;
+    }
+  }
+  
+  // Handle maintenance inquiries
+  if (qLower.includes('maintenance') || qLower.includes('service') || qLower.includes('check') || qLower.includes('tune')) {
+    return `We offer regular maintenance services. When was your last service? I can schedule a maintenance visit for you.`;
+  }
+  
+  // Handle emergency/urgent situations
+  if (qLower.includes('emergency') || qLower.includes('urgent') || qLower.includes('immediate')) {
+    return `I understand this is urgent. Let me get emergency service dispatched to you right away. What's your address?`;
+  }
+  
+  // Handle pricing inquiries
+  if (qLower.includes('cost') || qLower.includes('price') || qLower.includes('how much') || qLower.includes('charge')) {
+    return `Service costs depend on the specific work needed. I can schedule a free estimate for you. When would be convenient?`;
+  }
+  
+  // Handle availability/scheduling
+  if (qLower.includes('available') || qLower.includes('schedule') || qLower.includes('appointment') || qLower.includes('when')) {
+    return `We have availability this week. What day works best for you? I can check our schedule and get you set up.`;
+  }
+  
+  // Handle vague or unclear inquiries
+  if (qLower.includes('looking for') || qLower.includes('need help') || qLower.includes('don\'t know')) {
+    const serviceType = categories.length > 0 ? categories[0] : 'service';
+    return `I'm here to help with ${serviceType}. Can you tell me more about what you need assistance with today?`;
+  }
+  
+  // General fallback for service companies
+  if (categories.length > 0) {
+    const serviceType = categories[0].toLowerCase().includes('hvac') ? 'HVAC' : categories[0];
+    return `I can help you with ${serviceType} services. What specific issue can I assist you with today?`;
+  }
+  
+  return null;
+}
+
 module.exports = { 
   answerQuestion, 
   loadCompanyQAs 
