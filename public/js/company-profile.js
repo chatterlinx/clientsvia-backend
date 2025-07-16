@@ -574,6 +574,12 @@ document.addEventListener('DOMContentLoaded', () => {
             populatePersonalityResponses(currentCompanyData.personalityResponses || {});
             renderNotes();
             initializeAgentSetupInteractivity();
+            
+            // Initialize monitoring system after company data is loaded
+            if (agentSetupPageContainer && currentCompanyData) {
+                console.log('Company data loaded successfully, initializing monitoring system for:', companyId);
+                initializeMonitoringSystem();
+            }
         } catch (error) {
             console.error('Error fetching company data:', error.message, error.stack);
             if (companyNameHeader) companyNameHeader.textContent = "Error Loading Profile";
@@ -2281,9 +2287,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize monitoring system
     function initializeMonitoringSystem() {
+        console.log('Setting up monitoring system...');
+        
+        if (!companyId) {
+            console.error('Cannot initialize monitoring: No company ID available');
+            showMonitoringNotification('Company ID not found - monitoring disabled', 'warning');
+            return;
+        }
+        
+        if (!currentCompanyData) {
+            console.error('Cannot initialize monitoring: Company data not loaded');
+            showMonitoringNotification('Company data not loaded - monitoring disabled', 'warning');
+            return;
+        }
+        
+        console.log('Initializing monitoring for company:', currentCompanyData.name || companyId);
         setupMonitoringEventListeners();
         loadMonitoringData();
         startRealTimeUpdates();
+        
+        showMonitoringNotification('Monitoring system initialized', 'success');
     }
 
     // Setup event listeners for monitoring interface
@@ -2744,12 +2767,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Initialize monitoring system if on agent setup tab
-    if (agentSetupPageContainer) {
-        console.log('Initializing monitoring system for company:', companyId);
-        initializeMonitoringSystem();
-    } else {
-        console.log('Agent setup container not found, monitoring system not initialized');
-    }
+    // Note: Monitoring will be initialized after company data is loaded in fetchCompanyData()
+    console.log('Agent setup container found:', !!agentSetupPageContainer);
+    console.log('Company ID from URL:', companyId);
 
     // We need to call these setup functions.
     // This one builds the UI

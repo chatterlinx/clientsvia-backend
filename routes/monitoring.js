@@ -4,11 +4,18 @@
 const express = require('express');
 const router = express.Router();
 const agentMonitoring = require('../services/agentMonitoring');
+const Company = require('../models/Company');
 
 // Get monitoring dashboard data
 router.get('/dashboard/:companyId', async (req, res) => {
     try {
         const { companyId } = req.params;
+        
+        // Validate company exists
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
         
         // Get pending reviews count
         const pendingReviews = await agentMonitoring.getPendingReviewsCount(companyId);
@@ -26,6 +33,7 @@ router.get('/dashboard/:companyId', async (req, res) => {
         const analytics = await agentMonitoring.getAnalytics(companyId, 7); // Last 7 days
         
         res.json({
+            companyName: company.name,
             pendingReviews,
             flaggedInteractions,
             approvalRate,

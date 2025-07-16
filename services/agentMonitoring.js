@@ -294,18 +294,35 @@ async function logAgentInteraction({
   tenantId,
   companyId,
   callerQuery,
+  userQuery, // Alternative parameter name
   agentResponse,
   decisionTrace = [],
   callerNumber = '',
+  callerId = '', // Alternative parameter name
   responseTime = 0,
   confidenceScore = 0,
+  confidence = 0, // Alternative parameter name
+  escalated = false,
+  isError = false,
   intentClassification = {},
   entityExtraction = [],
   agentVersion = '1.0',
-  modelVersion = '1.0'
+  modelVersion = '1.0',
+  metadata = {}
 }) {
   try {
-    monitoringLogger.info('Logging agent interaction', { callId, tenantId, callerQuery: callerQuery.substring(0, 100) });
+    // Handle alternative parameter names
+    const query = callerQuery || userQuery || '';
+    const caller = callerNumber || callerId || '';
+    const confScore = confidenceScore || confidence || 0;
+    const tenant = tenantId || companyId;
+    const callIdentifier = callId || metadata?.callSid || `call_${Date.now()}`;
+
+    monitoringLogger.info('Logging agent interaction', { 
+      callId: callIdentifier, 
+      tenantId: tenant, 
+      callerQuery: query.substring(0, 100) 
+    });
     
     // Check for similar interactions (repeat detection)
     const { similarityFlag, similarityScore, similarInteractionIds, repetitionCount } = 

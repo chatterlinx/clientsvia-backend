@@ -27,49 +27,88 @@ async function testRealMonitoringSystem() {
         
         const sampleInteractions = [
             {
-                callerId: '+15551234567',
+                callId: 'CA1234567890',
+                tenantId: realCompanyId,
                 companyId: realCompanyId,
-                userQuery: 'What are your business hours?',
+                callerQuery: 'What are your business hours?',
                 agentResponse: 'We are open Monday through Friday from 9 AM to 6 PM, and Saturday from 10 AM to 4 PM.',
-                confidence: 0.95,
+                callerNumber: '+15551234567',
+                confidenceScore: 0.95,
                 responseTime: 1200,
-                escalated: false,
-                metadata: {
-                    sessionId: 'real_session_001',
-                    callSid: 'CA1234567890',
-                    timestamp: new Date(),
-                    processingSteps: ['Intent detection: business_hours', 'Knowledge base lookup', 'Response generation']
-                }
+                decisionTrace: [
+                    {
+                        step: 'Intent detection',
+                        details: 'Detected business_hours intent',
+                        timestamp: new Date(),
+                        duration: 200
+                    },
+                    {
+                        step: 'Knowledge base lookup',
+                        details: 'Found business hours information',
+                        timestamp: new Date(),
+                        duration: 300
+                    },
+                    {
+                        step: 'Response generation',
+                        details: 'Generated customer-friendly response',
+                        timestamp: new Date(),
+                        duration: 700
+                    }
+                ]
             },
             {
-                callerId: '+15559876543',
+                callId: 'CA0987654321',
+                tenantId: realCompanyId,
                 companyId: realCompanyId,
-                userQuery: 'How much does your service cost?',
+                callerQuery: 'How much does your service cost?',
                 agentResponse: 'Our pricing varies based on your specific needs. I can connect you with our sales team for a custom quote.',
-                confidence: 0.87,
+                callerNumber: '+15559876543',
+                confidenceScore: 0.87,
                 responseTime: 1800,
-                escalated: true,
-                metadata: {
-                    sessionId: 'real_session_002',
-                    callSid: 'CA0987654321',
-                    timestamp: new Date(),
-                    processingSteps: ['Intent detection: pricing_inquiry', 'Escalation trigger: sales_required']
-                }
+                decisionTrace: [
+                    {
+                        step: 'Intent detection',
+                        details: 'Detected pricing_inquiry intent',
+                        timestamp: new Date(),
+                        duration: 250
+                    },
+                    {
+                        step: 'Escalation trigger',
+                        details: 'Sales team escalation required',
+                        timestamp: new Date(),
+                        duration: 150
+                    }
+                ]
             },
             {
-                callerId: '+15551112222',
+                callId: 'CA1122334455',
+                tenantId: realCompanyId,
                 companyId: realCompanyId,
-                userQuery: 'Can you help me reset my password?',
+                callerQuery: 'Can you help me reset my password?',
                 agentResponse: 'I can guide you through the password reset process. First, go to our login page and click "Forgot Password".',
-                confidence: 0.92,
+                callerNumber: '+15551112222',
+                confidenceScore: 0.92,
                 responseTime: 950,
-                escalated: false,
-                metadata: {
-                    sessionId: 'real_session_003',
-                    callSid: 'CA1122334455',
-                    timestamp: new Date(),
-                    processingSteps: ['Intent detection: tech_support', 'Knowledge base lookup', 'Step-by-step guidance']
-                }
+                decisionTrace: [
+                    {
+                        step: 'Intent detection',
+                        details: 'Detected tech_support intent',
+                        timestamp: new Date(),
+                        duration: 180
+                    },
+                    {
+                        step: 'Knowledge base lookup',
+                        details: 'Found password reset instructions',
+                        timestamp: new Date(),
+                        duration: 220
+                    },
+                    {
+                        step: 'Step-by-step guidance',
+                        details: 'Generated help response',
+                        timestamp: new Date(),
+                        duration: 550
+                    }
+                ]
             }
         ];
 
@@ -97,17 +136,22 @@ async function testRealMonitoringSystem() {
         // Test 4: Test repeat detection
         console.log('\n🔄 Testing repeat detection...');
         const similarInteraction = {
-            callerId: '+15553334444',
+            callId: 'CA4433221100',
+            tenantId: realCompanyId,
             companyId: realCompanyId,
-            userQuery: 'What time do you open?', // Similar to business hours query
+            callerQuery: 'What time do you open?', // Similar to business hours query
             agentResponse: 'We open at 9 AM on weekdays and 10 AM on Saturday.',
-            confidence: 0.94,
+            callerNumber: '+15553334444',
+            confidenceScore: 0.94,
             responseTime: 1100,
-            escalated: false,
-            metadata: {
-                sessionId: 'real_session_004',
-                callSid: 'CA4433221100'
-            }
+            decisionTrace: [
+                {
+                    step: 'Intent detection',
+                    details: 'Detected business_hours intent',
+                    timestamp: new Date(),
+                    duration: 190
+                }
+            ]
         };
 
         const similarResult = await agentMonitoring.logAgentInteraction(similarInteraction);
