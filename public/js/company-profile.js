@@ -1221,7 +1221,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...'; }
         try {
             const res = await fetch(`/api/company/${companyId}/personality-responses`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ personalityResponses: data }) });
-            if (!res.ok) { const err = await res.json().catch(() => ({ message: 'Failed to save responses' })); throw new Error(err.message); }
+            if (!res.ok) { const err = await res.json().catch(() => ({ message: `Failed to save responses` })); throw new Error(err.message); }
             const updated = await res.json();
             currentCompanyData.personalityResponses = updated.personalityResponses || {};
             populatePersonalityResponses(currentCompanyData.personalityResponses);
@@ -2301,13 +2301,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Setup AI Voice Tab function
-    function setupAiVoiceTab() {
-        console.log('Setting up AI Voice tab...');
-        // This function sets up the AI voice configuration UI
-        // Add voice-related initialization here if needed
-    }
-
     // --- AGENT MONITORING & OVERSIGHT SYSTEM --- //
     
     // Monitoring system state
@@ -2318,22 +2311,25 @@ document.addEventListener('DOMContentLoaded', () => {
         recentActivity: []
     };
 
-    // Initialize monitoring system
+    // Initialize monitoring system with enhanced error handling and setup validation
     function initializeMonitoringSystem() {
         console.log('🎯 initializeMonitoringSystem called');
         console.log('🎯 Company ID available:', !!companyId, companyId);
         console.log('🎯 Company data available:', !!currentCompanyData);
         console.log('🎯 Agent setup container:', !!agentSetupPageContainer);
         
+        // Enhanced validation with detailed error reporting
         if (!companyId) {
             console.error('❌ Cannot initialize monitoring: No company ID available');
             showMonitoringNotification('Company ID not found - monitoring disabled', 'warning');
+            updateMonitoringStatus('DISABLED', 'No Company ID');
             return;
         }
         
         if (!currentCompanyData) {
             console.error('❌ Cannot initialize monitoring: Company data not loaded');
             showMonitoringNotification('Company data not loaded - monitoring disabled', 'warning');
+            updateMonitoringStatus('DISABLED', 'Company Data Missing');
             return;
         }
         
@@ -2341,15 +2337,34 @@ document.addEventListener('DOMContentLoaded', () => {
         const monitoringSection = document.getElementById('agent-monitoring-section');
         if (!monitoringSection) {
             console.warn('⚠️ Monitoring UI section not found - monitoring system available but UI not loaded');
+            // Still initialize backend monitoring even without UI
+            loadMonitoringData();
             return;
         }
         
         console.log('✅ Initializing monitoring for company:', currentCompanyData.name || companyId);
-        setupMonitoringEventListeners();
-        loadMonitoringData();
-        startRealTimeUpdates();
         
-        showMonitoringNotification('Monitoring system initialized', 'success');
+        try {
+            // Initialize in proper order with error handling
+            updateMonitoringStatus('INITIALIZING', 'Setting up monitoring...');
+            setupMonitoringEventListeners();
+            
+            // Load initial data
+            loadMonitoringData().then(() => {
+                updateMonitoringStatus('ACTIVE', 'All systems operational');
+                startRealTimeUpdates();
+                showMonitoringNotification('Monitoring system fully initialized', 'success');
+            }).catch(error => {
+                console.error('Failed to load initial monitoring data:', error);
+                updateMonitoringStatus('ERROR', 'Data load failed');
+                showMonitoringNotification('Monitoring initialization incomplete', 'warning');
+            });
+            
+        } catch (error) {
+            console.error('Error during monitoring initialization:', error);
+            updateMonitoringStatus('ERROR', 'Initialization failed');
+            showMonitoringNotification('Monitoring initialization failed', 'error');
+        }
     }
 
     // Setup event listeners for monitoring interface
@@ -2412,46 +2427,108 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Load monitoring data from backend
+    // Load monitoring data from backend with enhanced error handling and fallbacks
     async function loadMonitoringData() {
         try {
             if (!companyId) {
-                console.error('No company ID available for monitoring data');
-                showMonitoringNotification('Company ID not found', 'error');
-                return;
+                throw new Error('No company ID available for monitoring data');
             }
 
-            console.log('Loading monitoring data for company:', companyId);
-            const response = await fetch(`/api/monitoring/dashboard/${companyId}`);
+            console.log('📊 Loading monitoring data for company:', companyId);
+            updateMonitoringStatus('LOADING', 'Fetching data...');
+            
+            const response = await fetch(`/api/monitoring/dashboard/${companyId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache'
+                }
+            });
             
             if (response.ok) {
                 const data = await response.json();
-                console.log('Monitoring data loaded:', data);
-                updateMonitoringDisplay(data);
-                monitoringData = data;
+                console.log('📊 Monitoring data loaded successfully:', data);
+                
+                // Validate data structure before using
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('📊 Monitoring data loaded successfully:', data);
+                
+                // Validate data structure before using
+                const validatedData = validateMonitoringData(data);
+                updateMonitoringDisplay(validatedData);
+                monitoringData = validatedData;
+                
+                updateMonitoringStatus('ACTIVE', 'Data loaded successfully');
+                
             } else if (response.status === 404) {
-                console.log('No monitoring data found for company:', companyId);
-                // Initialize with empty data
-                const emptyData = {
-                    pendingReviews: 0,
-                    flaggedInteractions: 0,
-                    approvalRate: 0,
-                    recentActivity: [],
-                    analytics: {
-                        totalInteractions: 0,
-                        averageConfidence: 0,
-                        escalationRate: 0
-                    }
-                };
+                console.log('📊 No monitoring data found for company:', companyId);
+                console.log('📊 Initializing with empty data structure');
+                
+                // Initialize with comprehensive empty data
+                const emptyData = createEmptyMonitoringData();
                 updateMonitoringDisplay(emptyData);
                 monitoringData = emptyData;
+                
+                updateMonitoringStatus('ACTIVE', 'Initialized with empty data');
+                
             } else {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
             }
         } catch (error) {
-            console.error('Error loading monitoring data:', error);
+            console.error('❌ Error loading monitoring data:', error);
+            
+            // Show detailed error to user but continue with fallback
             showMonitoringNotification(`Failed to load monitoring data: ${error.message}`, 'error');
+            
+            // Use cached data if available, otherwise use empty data
+            const fallbackData = monitoringData || createEmptyMonitoringData();
+            updateMonitoringDisplay(fallbackData);
+            
+            updateMonitoringStatus('ERROR', `Data load failed: ${error.message}`);
         }
+    }
+    
+    // Validate monitoring data structure
+    function validateMonitoringData(data) {
+        const defaults = createEmptyMonitoringData();
+        
+        return {
+            pendingReviews: Number(data.pendingReviews) || defaults.pendingReviews,
+            flaggedInteractions: Number(data.flaggedInteractions) || defaults.flaggedInteractions,
+            approvalRate: Number(data.approvalRate) || defaults.approvalRate,
+            recentActivity: Array.isArray(data.recentActivity) ? data.recentActivity : defaults.recentActivity,
+            analytics: {
+                totalInteractions: Number(data.analytics?.totalInteractions) || 0,
+                averageConfidence: Number(data.analytics?.averageConfidence) || 0,
+                escalationRate: Number(data.analytics?.escalationRate) || 0,
+                flaggedItems: Number(data.analytics?.flaggedItems) || 0,
+                approvedItems: Number(data.analytics?.approvedItems) || 0,
+                disapprovedItems: Number(data.analytics?.disapprovedItems) || 0
+            },
+            companyName: data.companyName || currentCompanyData?.name || 'Unknown Company'
+        };
+    }
+    
+    // Create empty monitoring data structure
+    function createEmptyMonitoringData() {
+        return {
+            pendingReviews: 0,
+            flaggedInteractions: 0,
+            approvalRate: 0,
+            recentActivity: [],
+            analytics: {
+                totalInteractions: 0,
+                averageConfidence: 0,
+                escalationRate: 0,
+                flaggedItems: 0,
+                approvedItems: 0,
+                disapprovedItems: 0
+            }
+        };
     }
 
     // Update monitoring display with fresh data
