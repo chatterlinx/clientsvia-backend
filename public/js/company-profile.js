@@ -6,6 +6,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const companyId = urlParams.get('id');
     
+    // Debug company ID loading
+    console.log('🔍 Company Profile Debug:');
+    console.log('- URL:', window.location.href);
+    console.log('- URL Search Params:', window.location.search);
+    console.log('- Extracted Company ID:', companyId);
+    console.log('- Company ID type:', typeof companyId);
+    console.log('- Company ID length:', companyId?.length);
+    
+    if (!companyId) {
+        console.error('❌ NO COMPANY ID FOUND IN URL!');
+        console.log('💡 Expected URL format: company-profile.html?id=COMPANY_ID');
+    } else {
+        console.log('✅ Company ID found:', companyId);
+    }
+    
     // Make companyId globally available for workflow management
     window.currentCompanyId = companyId;
 
@@ -498,7 +513,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Note: Google TTS functionality has been removed - using ElevenLabs only
     
     async function fetchCompanyData() {
+        console.log('📡 fetchCompanyData called, companyId:', companyId);
+        
         if (!companyId) {
+            console.error('❌ fetchCompanyData: No company ID available');
             if (companyNameHeader) companyNameHeader.textContent = "Company Profile (No ID)";
             if (companyIdSubheader) companyIdSubheader.textContent = "ID: Not available";
             if (editProfileButton) editProfileButton.style.display = 'none';
@@ -507,6 +525,9 @@ document.addEventListener('DOMContentLoaded', () => {
             populatePersonalityResponses({});
             return;
         }
+        
+        console.log('🔍 Fetching company data for ID:', companyId);
+        
         try {
             const response = await fetch(`/api/company/${companyId}`);
             if (!response.ok) {
@@ -516,6 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             currentCompanyData = await response.json();
             
+            console.log('✅ Company data fetched successfully:', currentCompanyData.name);
             console.log('[JS company-profile.js] Fetched currentCompanyData:', JSON.stringify(currentCompanyData, null, 2));
             
             currentCompanyData.address = currentCompanyData.address || {};
@@ -577,8 +599,15 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Initialize monitoring system after company data is loaded
             if (agentSetupPageContainer && currentCompanyData) {
-                console.log('Company data loaded successfully, initializing monitoring system for:', companyId);
+                console.log('✅ Company data loaded successfully, initializing monitoring system for:', companyId);
+                console.log('✅ Agent setup container found:', !!agentSetupPageContainer);
+                console.log('✅ Company data available:', !!currentCompanyData);
                 initializeMonitoringSystem();
+            } else {
+                console.warn('⚠️ Monitoring system NOT initialized:');
+                console.warn('  - Agent setup container:', !!agentSetupPageContainer);
+                console.warn('  - Company data:', !!currentCompanyData);
+                console.warn('  - Company ID:', companyId);
             }
         } catch (error) {
             console.error('Error fetching company data:', error.message, error.stack);
@@ -2287,21 +2316,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize monitoring system
     function initializeMonitoringSystem() {
-        console.log('Setting up monitoring system...');
+        console.log('🎯 initializeMonitoringSystem called');
+        console.log('🎯 Company ID available:', !!companyId, companyId);
+        console.log('🎯 Company data available:', !!currentCompanyData);
+        console.log('🎯 Agent setup container:', !!agentSetupPageContainer);
         
         if (!companyId) {
-            console.error('Cannot initialize monitoring: No company ID available');
+            console.error('❌ Cannot initialize monitoring: No company ID available');
             showMonitoringNotification('Company ID not found - monitoring disabled', 'warning');
             return;
         }
         
         if (!currentCompanyData) {
-            console.error('Cannot initialize monitoring: Company data not loaded');
+            console.error('❌ Cannot initialize monitoring: Company data not loaded');
             showMonitoringNotification('Company data not loaded - monitoring disabled', 'warning');
             return;
         }
         
-        console.log('Initializing monitoring for company:', currentCompanyData.name || companyId);
+        console.log('✅ Initializing monitoring for company:', currentCompanyData.name || companyId);
         setupMonitoringEventListeners();
         loadMonitoringData();
         startRealTimeUpdates();
@@ -2774,6 +2806,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // We need to call these setup functions.
     // This one builds the UI
     setupAiVoiceTab(); 
+    
+    // *** CRITICAL: Fetch company data on page load ***
+    console.log('🚀 Starting initial company data fetch...');
+    fetchCompanyData().then(() => {
+        console.log('✅ Initial company data fetch completed');
+    }).catch(error => {
+        console.error('❌ Initial company data fetch failed:', error);
+    });
+    
     // You must call populateAiVoiceSettings(currentCompanyData.voiceSettings) inside your main
     // fetchCompanyData() function after you get a successful response.
 });
