@@ -1677,7 +1677,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const checkedCategoriesHTML = Array.from(categoryCheckboxes)
                 .filter(cb => cb.checked)
                 .map(cb => `<li>${escapeHTML(cb.value)}</li>`).join('');
-            selectedCategoriesListLocal.innerHTML = checkedCategoriesHTML || '<li class="text-gray-500 italic">No categories selected yet.</li>';
+            selectedCategoriesListLocal.innerHTML = checkedCategoriesListLocal || '<li class="text-gray-500 italic">No categories selected yet.</li>';
         }
 
         if (agentModeSelect) agentModeSelect.value = agentSetup.agentMode || 'full';
@@ -2262,6 +2262,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Setup AI Voice Tab function
+    function setupAiVoiceTab() {
+        console.log('Setting up AI Voice tab...');
+        // This function sets up the AI voice configuration UI
+        // Add voice-related initialization here if needed
+    }
+
     // --- AGENT MONITORING & OVERSIGHT SYSTEM --- //
     
     // Monitoring system state
@@ -2727,6 +2734,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatDate(timestamp) {
         return new Date(timestamp).toLocaleString();
+    }
+
+    // Setup AI Voice Tab function
+    function setupAiVoiceTab() {
+        console.log('Setting up AI Voice tab...');
+        // This function sets up the AI voice configuration UI
+        // Add voice-related initialization here if needed
     }
 
     // Initialize monitoring system if on agent setup tab

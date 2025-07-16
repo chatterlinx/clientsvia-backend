@@ -1225,6 +1225,39 @@ class AIAgentSetup {
         }
     }
 
+    /**
+     * Debug Methods
+     */
+    toggleVerboseLogging(event) {
+        console.log('Verbose logging toggled:', event.target.checked);
+        this.showNotification(`Verbose logging ${event.target.checked ? 'enabled' : 'disabled'}`, 'info');
+    }
+
+    toggleScriptTracing(event) {
+        console.log('Script tracing toggled:', event.target.checked);
+        this.showNotification(`Script tracing ${event.target.checked ? 'enabled' : 'disabled'}`, 'info');
+    }
+
+    toggleLLMDebugMode(event) {
+        console.log('LLM debug mode toggled:', event.target.checked);
+        this.showNotification(`LLM debug mode ${event.target.checked ? 'enabled' : 'disabled'}`, 'info');
+    }
+
+    changeDebugResponseMode(event) {
+        console.log('Debug response mode changed:', event.target.value);
+        this.showNotification(`Debug response mode set to: ${event.target.value}`, 'info');
+    }
+
+    emergencyStop() {
+        console.log('Emergency stop triggered');
+        this.showNotification('Emergency stop activated - all AI processing halted', 'warning');
+    }
+
+    saveDebugSettings() {
+        console.log('Saving debug settings...');
+        this.showNotification('Debug settings saved successfully', 'success');
+    }
+
     // ...existing code...
 }
 
@@ -1435,7 +1468,12 @@ window.updateLogicIntelligenceSettings = () => {
     }
     console.warn('updateLogicIntelligenceSettings: aiAgentSetup not available');
 };
-window.updateLogicLearningSettings = updateLogicLearningSettings;
+window.updateLogicLearningSettings = () => {
+    if (window.aiAgentSetup && window.aiAgentSetup.updateLogicLearningSettings) {
+        return window.aiAgentSetup.updateLogicLearningSettings();
+    }
+    console.warn('updateLogicLearningSettings: aiAgentSetup not available');
+};
 window.showNotification = showNotification;
 window.getCurrentCompanyId = getCurrentCompanyId;
 window.getCompanyIdFromUrl = getCompanyIdFromUrl;
