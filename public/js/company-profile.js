@@ -593,7 +593,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     twilioSpeechConfidenceThreshold: currentCompanyData.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.5,
                     fuzzyMatchThreshold: currentCompanyData.aiSettings?.fuzzyMatchThreshold ?? 0.3
                 };
-                populateAiVoiceSettings(voiceSettings);
+                // TODO: Implement populateAiVoiceSettings function if needed
+                console.log('Voice settings prepared:', voiceSettings);
             }
             // --- END OF NEW BLOCK ---
             populatePersonalityResponses(currentCompanyData.personalityResponses || {});
