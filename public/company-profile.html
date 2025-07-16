@@ -7115,5 +7115,41 @@ async function updateLogicLearningSettings() {
     }
 }
     </script>
+
+    <!-- Main Page Initialization Script -->
+    <script>
+        // Main initialization when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
+            
+            // Get company ID from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const companyId = urlParams.get('id');
+            
+            if (companyId) {
+                console.log('✅ Company ID found in URL:', companyId);
+                
+                // Set global company ID
+                window.companyId = companyId;
+                
+                // Start fetching company data immediately
+                if (typeof fetchCompanyData === 'function') {
+                    console.log('📡 Calling fetchCompanyData...');
+                    fetchCompanyData()
+                        .then(() => {
+                            console.log('✅ Company data fetch completed successfully');
+                        })
+                        .catch(error => {
+                            console.error('❌ Error fetching company data:', error);
+                        });
+                } else {
+                    console.error('❌ fetchCompanyData function not found');
+                }
+            } else {
+                console.error('❌ No company ID found in URL');
+                document.body.innerHTML = '<div class="p-8 text-center"><h1 class="text-2xl font-bold text-red-600">Error: No company ID provided</h1><p class="text-gray-600 mt-2">Please access this page with a valid company ID.</p></div>';
+            }
+        });
+    </script>
 </body>
 </html>
