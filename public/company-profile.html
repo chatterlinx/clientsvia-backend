@@ -6371,6 +6371,10 @@ function updatePerformanceDisplay(metrics) {
     const avgResponseTimeEl = document.getElementById('avgResponseTime');
     const llmFallbackRateEl = document.getElementById('llmFallbackRate');
     
+    // Calculate total for use throughout the function
+    const total = metrics.totalResponses || 1;
+    const methodDistribution = metrics.methodDistribution || {};
+    
     // Only update if elements exist
     if (totalResponsesEl) totalResponsesEl.textContent = metrics.totalResponses || 0;
     if (avgIntelligenceEl) avgIntelligenceEl.textContent = metrics.avgIntelligence || 0;
@@ -6378,26 +6382,34 @@ function updatePerformanceDisplay(metrics) {
     
     // Calculate and display LLM fallback rate
     if (llmFallbackRateEl) {
-        const llmFallback = metrics.methodDistribution['llm-fallback'] || 0;
-        const total = metrics.totalResponses || 1;
+        const llmFallback = methodDistribution['llm-fallback'] || 0;
         const fallbackRate = Math.round((llmFallback / total) * 100);
         llmFallbackRateEl.textContent = `${fallbackRate}%`;
     }
     
     // Update method distribution bars
-    updateMethodDistribution(metrics.methodDistribution, total);
+    updateMethodDistribution(methodDistribution, total);
     
     // Update trends
     updateTrendIndicators(metrics);
     
-    // Update last updated time
-    document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+    // Update last updated time safely
+    const lastUpdatedEl = document.getElementById('lastUpdated');
+    if (lastUpdatedEl) {
+        lastUpdatedEl.textContent = new Date().toLocaleTimeString();
+    }
 }
 
 /**
  * Update method distribution visualization
  */
 function updateMethodDistribution(methodDist, total) {
+    // Safely handle missing methodDist
+    if (!methodDist || typeof methodDist !== 'object') {
+        console.warn('⚠️ Method distribution data not available');
+        return;
+    }
+    
     const script = (methodDist.script || 0) + (methodDist['smart-conversation'] || 0);
     const qa = (methodDist['qa-direct'] || 0) + (methodDist['qa-intelligent'] || 0);
     const llm = methodDist['llm-fallback'] || 0;
@@ -6406,59 +6418,79 @@ function updateMethodDistribution(methodDist, total) {
     const qaPercent = total > 0 ? Math.round((qa / total) * 100) : 0;
     const llmPercent = total > 0 ? Math.round((llm / total) * 100) : 0;
     
-    // Update bars
-    document.getElementById('scriptBar').style.width = `${scriptPercent}%`;
-    document.getElementById('qaBar').style.width = `${qaPercent}%`;
-    document.getElementById('llmBar').style.width = `${llmPercent}%`;
+    // Update bars safely
+    const scriptBar = document.getElementById('scriptBar');
+    const qaBar = document.getElementById('qaBar');
+    const llmBar = document.getElementById('llmBar');
     
-    // Update percentages
-    document.getElementById('scriptPercent').textContent = `${scriptPercent}%`;
-    document.getElementById('qaPercent').textContent = `${qaPercent}%`;
-    document.getElementById('llmPercent').textContent = `${llmPercent}%`;
+    if (scriptBar) scriptBar.style.width = `${scriptPercent}%`;
+    if (qaBar) qaBar.style.width = `${qaPercent}%`;
+    if (llmBar) llmBar.style.width = `${llmPercent}%`;
+    
+    // Update percentages safely
+    const scriptPercentEl = document.getElementById('scriptPercent');
+    const qaPercentEl = document.getElementById('qaPercent');
+    const llmPercentEl = document.getElementById('llmPercent');
+    
+    if (scriptPercentEl) scriptPercentEl.textContent = `${scriptPercent}%`;
+    if (qaPercentEl) qaPercentEl.textContent = `${qaPercent}%`;
+    if (llmPercentEl) llmPercentEl.textContent = `${llmPercent}%`;
 }
 
 /**
  * Update trend indicators based on performance
  */
 function updateTrendIndicators(metrics) {
+    // Safely handle missing metrics
+    if (!metrics || typeof metrics !== 'object') {
+        console.warn('⚠️ Metrics data not available for trend indicators');
+        return;
+    }
+    
     // Intelligence trend
     const intelligenceTrend = document.getElementById('intelligenceTrend');
-    if (metrics.avgIntelligence >= 85) {
-        intelligenceTrend.textContent = '🚀 Excellent';
-        intelligenceTrend.className = 'text-xs text-green-600 mt-1';
-    } else if (metrics.avgIntelligence >= 70) {
-        intelligenceTrend.textContent = '📈 Good';
-        intelligenceTrend.className = 'text-xs text-blue-600 mt-1';
-    } else {
-        intelligenceTrend.textContent = '⚠️ Needs Work';
-        intelligenceTrend.className = 'text-xs text-orange-600 mt-1';
+    if (intelligenceTrend) {
+        if (metrics.avgIntelligence >= 85) {
+            intelligenceTrend.textContent = '🚀 Excellent';
+            intelligenceTrend.className = 'text-xs text-green-600 mt-1';
+        } else if (metrics.avgIntelligence >= 70) {
+            intelligenceTrend.textContent = '📈 Good';
+            intelligenceTrend.className = 'text-xs text-blue-600 mt-1';
+        } else {
+            intelligenceTrend.textContent = '⚠️ Needs Work';
+            intelligenceTrend.className = 'text-xs text-orange-600 mt-1';
+        }
     }
     
     // Response time trend
     const responseTrend = document.getElementById('responseTimeTrend');
-    if (metrics.avgResponseTime < 1000) {
-        responseTrend.textContent = '⚡ Lightning';
-        responseTrend.className = 'text-xs text-green-600 mt-1';
-    } else if (metrics.avgResponseTime < 2000) {
-        responseTrend.textContent = '🚀 Fast';
-        responseTrend.className = 'text-xs text-blue-600 mt-1';
-    } else {
-        responseTrend.textContent = '🐌 Slow';
-        responseTrend.className = 'text-xs text-orange-600 mt-1';
+    if (responseTrend) {
+        if (metrics.avgResponseTime < 1000) {
+            responseTrend.textContent = '⚡ Lightning';
+            responseTrend.className = 'text-xs text-green-600 mt-1';
+        } else if (metrics.avgResponseTime < 2000) {
+            responseTrend.textContent = '🚀 Fast';
+            responseTrend.className = 'text-xs text-blue-600 mt-1';
+        } else {
+            responseTrend.textContent = '🐌 Slow';
+            responseTrend.className = 'text-xs text-orange-600 mt-1';
+        }
     }
     
     // Fallback trend
     const fallbackTrend = document.getElementById('fallbackTrend');
-    const fallbackRate = (metrics.methodDistribution['llm-fallback'] || 0) / (metrics.totalResponses || 1);
-    if (fallbackRate < 0.2) {
-        fallbackTrend.textContent = '✨ Optimal';
-        fallbackTrend.className = 'text-xs text-green-600 mt-1';
-    } else if (fallbackRate < 0.4) {
-        fallbackTrend.textContent = '⚡ Normal';
-        fallbackTrend.className = 'text-xs text-orange-600 mt-1';
-    } else {
-        fallbackTrend.textContent = '⚠️ High';
-        fallbackTrend.className = 'text-xs text-red-600 mt-1';
+    if (fallbackTrend && metrics.methodDistribution) {
+        const fallbackRate = (metrics.methodDistribution['llm-fallback'] || 0) / (metrics.totalResponses || 1);
+        if (fallbackRate < 0.2) {
+            fallbackTrend.textContent = '✨ Optimal';
+            fallbackTrend.className = 'text-xs text-green-600 mt-1';
+        } else if (fallbackRate < 0.4) {
+            fallbackTrend.textContent = '⚡ Normal';
+            fallbackTrend.className = 'text-xs text-orange-600 mt-1';
+        } else {
+            fallbackTrend.textContent = '⚠️ High';
+            fallbackTrend.className = 'text-xs text-red-600 mt-1';
+        }
     }
 }
 
