@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Debug Test</title>
+</head>
+<body>
+    <h1>Frontend Debug Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        function log(message) {
+            console.log(message);
+            results.innerHTML += '<p>' + message + '</p>';
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            log('🚀 DOM Content Loaded');
+            
+            // Test URL parameter extraction
+            const urlParams = new URLSearchParams(window.location.search);
+            const companyId = urlParams.get('id');
+            log('📋 Company ID from URL: ' + companyId);
+            
+            if (companyId) {
+                log('✅ Company ID found, testing API call...');
+                
+                // Test API call
+                fetch(`/api/company/${companyId}`)
+                    .then(response => {
+                        log('📡 API Response Status: ' + response.status);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        log('✅ API Success! Company: ' + data.companyName);
+                        log('📊 Full data: ' + JSON.stringify(data, null, 2));
+                    })
+                    .catch(error => {
+                        log('❌ API Error: ' + error.message);
+                    });
+            } else {
+                log('❌ No company ID in URL');
+            }
+        });
+    </script>
+</body>
+</html>
