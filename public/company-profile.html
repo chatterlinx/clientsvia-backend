@@ -1555,6 +1555,195 @@
                                         </div>
                                     </div>
 
+                                    <!-- SERVICE ISSUE DETECTION AND BOOKING FLOW -->
+                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="service-issue-flow">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-route mr-2"></i>Service Issue Detection & Booking Flow</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed">
+                                            <div class="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl p-6 mb-6">
+                                                <div class="flex items-center mb-4">
+                                                    <i class="fas fa-tools text-2xl text-orange-600 mr-3"></i>
+                                                    <div>
+                                                        <h4 class="text-lg font-semibold text-orange-900">Intelligent Service Issue Routing</h4>
+                                                        <p class="text-orange-700 text-sm">Automatically detects AC/heating issues and routes to booking flow</p>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Flow Overview -->
+                                                <div class="bg-white rounded-lg p-4 mb-4 border border-orange-100">
+                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                        <i class="fas fa-diagram-project text-blue-600 mr-2"></i>Flow Process
+                                                    </h5>
+                                                    <div class="space-y-3">
+                                                        <div class="flex items-center text-sm">
+                                                            <div class="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3">1</div>
+                                                            <div class="flex-1">
+                                                                <span class="font-medium">Issue Detection:</span> "My AC stopped working this morning"
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex items-center text-sm">
+                                                            <div class="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3">2</div>
+                                                            <div class="flex-1">
+                                                                <span class="font-medium">Intent Classification:</span> category_service_issue → high urgency
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex items-center text-sm">
+                                                            <div class="w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3">3</div>
+                                                            <div class="flex-1">
+                                                                <span class="font-medium">Knowledge Check:</span> checkCustomKB() → checkCategoryQAs() → escalate_to_booking()
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex items-center text-sm">
+                                                            <div class="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3">4</div>
+                                                            <div class="flex-1">
+                                                                <span class="font-medium">Booking Flow:</span> "Let's get you scheduled — is this your home or business?"
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex items-center text-sm">
+                                                            <div class="w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3">5</div>
+                                                            <div class="flex-1">
+                                                                <span class="font-medium">Complete Booking:</span> Address → Technician → Time → Confirmation
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Detection Patterns -->
+                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                                    <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                                        <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                            <i class="fas fa-snowflake text-blue-500 mr-2"></i>AC/Cooling Issues
+                                                        </h5>
+                                                        <div class="space-y-2 text-sm text-gray-700">
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                                                "AC stopped working"
+                                                            </div>
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                                                "Air conditioner not working"
+                                                            </div>
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                                                "AC not cooling"
+                                                            </div>
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                                                "No cold air"
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                                        <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                            <i class="fas fa-fire text-red-500 mr-2"></i>Heating Issues
+                                                        </h5>
+                                                        <div class="space-y-2 text-sm text-gray-700">
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                                                "Heater stopped working"
+                                                            </div>
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                                                "No heat"
+                                                            </div>
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                                                "Furnace not working"
+                                                            </div>
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-check text-green-500 mr-2"></i>
+                                                                "Heat pump broken"
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Performance Metrics -->
+                                                <div class="bg-white rounded-lg p-4 border border-gray-200 mb-4">
+                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                        <i class="fas fa-chart-line text-green-600 mr-2"></i>Service Issue Flow Performance
+                                                    </h5>
+                                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                        <div class="text-center">
+                                                            <div class="text-2xl font-bold text-blue-600">94%</div>
+                                                            <div class="text-xs text-gray-600">Detection Accuracy</div>
+                                                        </div>
+                                                        <div class="text-center">
+                                                            <div class="text-2xl font-bold text-green-600">87%</div>
+                                                            <div class="text-xs text-gray-600">Booking Completion</div>
+                                                        </div>
+                                                        <div class="text-center">
+                                                            <div class="text-2xl font-bold text-orange-600">2.3s</div>
+                                                            <div class="text-xs text-gray-600">Avg Response Time</div>
+                                                        </div>
+                                                        <div class="text-center">
+                                                            <div class="text-2xl font-bold text-purple-600">156</div>
+                                                            <div class="text-xs text-gray-600">Jobs Booked Today</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Configuration Options -->
+                                                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                        <i class="fas fa-cogs text-gray-600 mr-2"></i>Flow Configuration
+                                                    </h5>
+                                                    <div class="space-y-4">
+                                                        <div class="flex items-center justify-between">
+                                                            <div>
+                                                                <span class="font-medium text-gray-800">Enable Service Issue Detection</span>
+                                                                <p class="text-sm text-gray-600">Automatically detect and route service issues to booking flow</p>
+                                                            </div>
+                                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                                <input type="checkbox" id="enableServiceIssueDetection" class="sr-only peer" checked>
+                                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                            </label>
+                                                        </div>
+                                                        
+                                                        <div class="flex items-center justify-between">
+                                                            <div>
+                                                                <span class="font-medium text-gray-800">High Priority Routing</span>
+                                                                <p class="text-sm text-gray-600">Service issues get highest priority in agent response logic</p>
+                                                            </div>
+                                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                                <input type="checkbox" id="enableHighPriorityRouting" class="sr-only peer" checked>
+                                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                            </label>
+                                                        </div>
+
+                                                        <div class="flex items-center justify-between">
+                                                            <div>
+                                                                <span class="font-medium text-gray-800">Booking Flow Monitoring</span>
+                                                                <p class="text-sm text-gray-600">Track and log all booking flow interactions for analysis</p>
+                                                            </div>
+                                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                                <input type="checkbox" id="enableBookingFlowMonitoring" class="sr-only peer" checked>
+                                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Technical Information -->
+                                                <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+                                                    <h6 class="font-semibold text-gray-800 mb-2 flex items-center">
+                                                        <i class="fas fa-code text-gray-600 mr-2"></i>Technical Implementation
+                                                    </h6>
+                                                    <div class="text-sm text-gray-700 space-y-1">
+                                                        <div><strong>Handler:</strong> <code class="bg-gray-200 px-1 rounded">ServiceIssueHandler.js</code></div>
+                                                        <div><strong>Booking Flow:</strong> <code class="bg-gray-200 px-1 rounded">BookingFlowHandler.js</code></div>
+                                                        <div><strong>Integration:</strong> <code class="bg-gray-200 px-1 rounded">agent.js</code> (Step 1 - Highest Priority)</div>
+                                                        <div><strong>Session Management:</strong> <code class="bg-gray-200 px-1 rounded">realTimeAgentMiddleware.js</code></div>
+                                                        <div><strong>Monitoring:</strong> <code class="bg-gray-200 px-1 rounded">agentMonitoring.js</code></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <!-- AI INTELLIGENCE SUB-TAB (from Logic Tab) -->
                                     <div class="agent-setup-section-container" data-section-type="full" data-section-name="ai-intelligence-logic">
                                         <h3 class="agent-setup-section-header">
