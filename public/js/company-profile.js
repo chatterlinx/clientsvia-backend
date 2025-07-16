@@ -2841,6 +2841,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // This one builds the UI
     setupAiVoiceTab(); 
     
+    // *** CRITICAL: Set up form event listeners ***
+    // Add personality responses form submit event listener
+    if (personalityResponsesForm) {
+        personalityResponsesForm.addEventListener('submit', handleSavePersonalityResponses);
+        console.log('✅ Personality responses form event listener attached');
+    } else {
+        console.warn('⚠️ Personality responses form not found - will try again after data load');
+    }
+    
     // *** CRITICAL: Fetch company data on page load ***
     console.log('🚀 Starting initial company data fetch...');
     fetchCompanyData().then(() => {
