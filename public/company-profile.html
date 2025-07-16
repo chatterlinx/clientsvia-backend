@@ -7131,20 +7131,39 @@ async function updateLogicLearningSettings() {
                 
                 // Set global company ID
                 window.companyId = companyId;
+                     // Start fetching company data immediately
+            if (typeof fetchCompanyData === 'function') {
+                console.log('📡 Calling fetchCompanyData...');
+                fetchCompanyData()
+                    .then(() => {
+                        console.log('✅ Company data fetch completed successfully');
+                    })
+                    .catch(error => {
+                        console.error('❌ Error fetching company data:', error);
+                    });
+            } else {
+                console.log('⏳ fetchCompanyData not yet available, waiting...');
+                // Wait for the function to be available
+                const checkForFunction = setInterval(() => {
+                    if (typeof fetchCompanyData === 'function') {
+                        console.log('📡 fetchCompanyData now available, calling...');
+                        clearInterval(checkForFunction);
+                        fetchCompanyData()
+                            .then(() => {
+                                console.log('✅ Company data fetch completed successfully');
+                            })
+                            .catch(error => {
+                                console.error('❌ Error fetching company data:', error);
+                            });
+                    }
+                }, 100); // Check every 100ms
                 
-                // Start fetching company data immediately
-                if (typeof fetchCompanyData === 'function') {
-                    console.log('📡 Calling fetchCompanyData...');
-                    fetchCompanyData()
-                        .then(() => {
-                            console.log('✅ Company data fetch completed successfully');
-                        })
-                        .catch(error => {
-                            console.error('❌ Error fetching company data:', error);
-                        });
-                } else {
-                    console.error('❌ fetchCompanyData function not found');
-                }
+                // Stop checking after 5 seconds
+                setTimeout(() => {
+                    clearInterval(checkForFunction);
+                    console.error('❌ fetchCompanyData function not found after 5 seconds');
+                }, 5000);
+            }
             } else {
                 console.error('❌ No company ID found in URL');
                 document.body.innerHTML = '<div class="p-8 text-center"><h1 class="text-2xl font-bold text-red-600">Error: No company ID provided</h1><p class="text-gray-600 mt-2">Please access this page with a valid company ID.</p></div>';
