@@ -1919,3 +1919,13 @@ class AIAgentSetup {
         }, 3000);
     }
 }
+
+
+// Initialize AI Agent Setup when DOM is loaded
+document.addEventListener("DOMContentLoaded", function() {
+    if (window.location.pathname.includes("company-profile")) {
+        console.log("DOM loaded, initializing AI Agent Setup...");
+        new AIAgentSetup();
+        console.log("AI Agent Setup - Agent Intelligence & Learning System Ready!");
+    }
+});
