@@ -1101,6 +1101,58 @@ async function getMonitoringStatus(companyId) {
   }
 }
 
+/**
+ * Log booking completion for tracking and analytics
+ */
+async function logBookingCompletion(bookingData) {
+  try {
+    monitoringLogger.info('Booking completed via agent', {
+      companyId: bookingData.companyId,
+      callerId: bookingData.callerId,
+      serviceType: bookingData.serviceType,
+      urgency: bookingData.urgency,
+      bookingReference: bookingData.bookingReference,
+      duration: bookingData.duration,
+      completedAt: bookingData.completedAt
+    });
+
+    // Create interaction log entry for booking completion
+    const interactionLog = new InteractionLog({
+      companyId: bookingData.companyId,
+      callerId: bookingData.callerId,
+      userQuery: `Service booking: ${bookingData.issueDescription}`,
+      agentResponse: `Booking completed - Reference: ${bookingData.bookingReference}`,
+      responseType: 'booking_completion',
+      confidence: 1.0,
+      responseTime: bookingData.duration,
+      escalated: false,
+      approved: true, // Auto-approve booking completions
+      flagged: false,
+      metadata: {
+        bookingReference: bookingData.bookingReference,
+        serviceType: bookingData.serviceType,
+        urgency: bookingData.urgency,
+        bookingData: bookingData.bookingData,
+        issueDescription: bookingData.issueDescription,
+        bookingFlow: true
+      },
+      timestamp: bookingData.completedAt
+    });
+
+    await interactionLog.save();
+    
+    console.log(`[Monitoring] Logged booking completion: ${bookingData.bookingReference}`);
+    return { success: true, logId: interactionLog._id };
+    
+  } catch (error) {
+    monitoringLogger.error('Failed to log booking completion', {
+      error: error.message,
+      bookingData
+    });
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   // Models
   InteractionLog,
@@ -1110,6 +1162,7 @@ module.exports = {
   
   // Core functions
   logAgentInteraction,
+  logBookingCompletion,
   detectSimilarInteractions,
   flagInteractionForReview,
   sendAlert,

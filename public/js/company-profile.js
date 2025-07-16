@@ -1221,7 +1221,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...'; }
         try {
             const res = await fetch(`/api/company/${companyId}/personality-responses`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ personalityResponses: data }) });
-            if (!res.ok) { const err = await res.json().catch(() => ({ message: `Failed to save responses` })); throw new Error(err.message); }
+            if (!res.ok) { const err = await res.json().catch(() => ({ message: 'Failed to save responses' })); throw new Error(err.message); }
             const updated = await res.json();
             currentCompanyData.personalityResponses = updated.personalityResponses || {};
             populatePersonalityResponses(currentCompanyData.personalityResponses);
@@ -2074,231 +2074,201 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function initializeAgentSetupInteractivity() {
-        if (!agentSetupPageContainer) {
-            console.warn("initializeAgentSetupInteractivity: agentSetupPageContainer not found.");
+    // --- INTENT FLOW CONFIGURATION FUNCTIONS --- //
+    
+    /**
+     * Test intent flow with a specific query
+     */
+    async function testIntentFlow(intentType) {
+        const testQuery = document.getElementById('intent-flow-test-query').value.trim();
+        if (!testQuery) {
+            showNotification('Please enter a test query', 'error');
             return;
         }
-        trackUnsavedChanges('agent-setup-form');
-        greetingTypeTtsRadio?.addEventListener('change', updateGreetingTypeUI);
-        greetingTypeAudioRadio?.addEventListener('change', updateGreetingTypeUI);
-        greetingAudioFileInput?.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async () => {
-                try {
-                    const res = await fetch('/api/upload/greeting', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ fileName: file.name, data: reader.result })
-                    });
-                    if (!res.ok) throw new Error('Upload failed');
-                    const data = await res.json();
-                    uploadedGreetingAudioUrl = data.url;
-                    if (greetingAudioPreview) {
-                        greetingAudioPreview.src = uploadedGreetingAudioUrl;
-                        greetingAudioPreview.classList.remove('hidden');
-                    }
-                    showToast('Audio uploaded successfully');
-                } catch (err) {
-                    console.error('Audio upload error', err);
-                    alert('Failed to upload audio');
-                }
-            };
-            reader.readAsDataURL(file);
-        });
-        const saveAgentSetupBtnLocal = agentSetupPageContainer.querySelector('#save-agent-setup-button');
-        if (saveAgentSetupBtnLocal && !saveAgentSetupBtnLocal.dataset.listenerAttached) {
-            saveAgentSetupBtnLocal.addEventListener('click', handleSaveAgentSetup);
-            saveAgentSetupBtnLocal.dataset.listenerAttached = 'true';
-        }
-        
-        const agentModeSelectElement = agentSetupPageContainer.querySelector('#agentModeSelect'); 
-        const mainAgentScriptOuterDiv = agentSetupPageContainer.querySelector('div[data-section-name="agent-script"] div[data-section-type="full"]');
-        function toggleAgentSetupSectionsVisibility(mode) {
-            agentSetupPageContainer.querySelectorAll('.agent-setup-section-container').forEach(section => {
-                const sectionType = section.getAttribute('data-section-type');
-                let shouldBeHidden = false;
-                if (mode === 'receptionist' && sectionType && sectionType.includes('full') && !sectionType.includes('receptionist')) {
-                    shouldBeHidden = true;
-                }
-                section.classList.toggle('hidden-by-mode', shouldBeHidden);
+
+        try {
+            const response = await fetch(`/api/ai-agent/test`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    query: testQuery,
+                    companyId: companyId,
+                    intentType: intentType
+                })
             });
-            if (mainAgentScriptOuterDiv) {
-                mainAgentScriptOuterDiv.classList.toggle('hidden-by-mode', mode === 'receptionist');
-            }
+
+            const result = await response.json();
+            displayIntentFlowTestResults(result, intentType);
+
+        } catch (error) {
+            console.error('Intent flow test error:', error);
+            showNotification('Test failed: ' + error.message, 'error');
         }
-        if (agentModeSelectElement) { 
-            agentModeSelectElement.addEventListener('change', (event) => toggleAgentSetupSectionsVisibility(event.target.value));
-             if(currentCompanyData?.agentSetup?.agentMode) {
-                 toggleAgentSetupSectionsVisibility(currentCompanyData.agentSetup.agentMode);
-            } else if (agentModeSelectElement.value) { 
-                 toggleAgentSetupSectionsVisibility(agentModeSelectElement.value);
+    }
+
+    /**
+     * Display intent flow test results
+     */
+    function displayIntentFlowTestResults(result, expectedIntent) {
+        const resultsContainer = document.getElementById('intent-flow-test-results');
+        
+        const html = `
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h6 class="font-medium text-gray-800 mb-3">Test Results</h6>
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Detected Intent:</span>
+                        <span class="font-medium ${result.success ? 'text-green-600' : 'text-red-600'}">
+                            ${result.detectedIntent || 'unknown'}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Confidence:</span>
+                        <span class="font-medium">${result.confidence || 0}%</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Response Time:</span>
+                        <span class="font-medium">${result.responseTime || 0}ms</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Source:</span>
+                        <span class="font-medium">${result.source || 'unknown'}</span>
+                    </div>
+                </div>
+                <div class="mt-3 p-3 bg-white rounded border">
+                    <h6 class="font-medium text-gray-700 mb-1">Agent Response:</h6>
+                    <p class="text-gray-800">${result.response || 'No response generated'}</p>
+                </div>
+                ${result.requiresBooking ? `
+                    <div class="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                        <span class="text-sm text-blue-800">
+                            <i class="fas fa-calendar-check mr-1"></i>
+                            Booking flow triggered
+                        </span>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        
+        resultsContainer.innerHTML = html;
+        resultsContainer.classList.remove('hidden');
+    }
+
+    /**
+     * Edit intent flow configuration
+     */
+    function editIntentFlow(intentType) {
+        // For now, show a notification that this feature is coming
+        showNotification(`Intent flow editor for "${intentType}" coming soon!`, 'info');
+        
+        // TODO: Open modal with flow step editor
+        // - Allow drag/drop reordering of steps
+        // - Add/remove flow steps
+        // - Configure step parameters
+        // - Preview flow execution
+    }
+
+    /**
+     * Load and display intent flows for the company
+     */
+    async function loadIntentFlows() {
+        try {
+            const response = await fetch(`/api/ai-agent-setup/${companyId}/intent-flows`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+
+            if (response.ok) {
+                const intentFlows = await response.json();
+                displayIntentFlows(intentFlows);
+            }
+        } catch (error) {
+            console.error('Error loading intent flows:', error);
+        }
+    }
+
+    /**
+     * Display intent flows in the UI
+     */
+    function displayIntentFlows(intentFlows) {
+        // Update the UI with actual intent flows from the company
+        console.log('Intent flows loaded:', intentFlows);
+        
+        // For now, the UI shows static examples
+        // TODO: Dynamically generate based on company's actual intent flows
+    }
+
+    /**
+     * Save intent flow configuration
+     */
+    async function saveIntentFlows() {
+        try {
+            const intentFlowEnabled = document.getElementById('intent-flow-enabled').checked;
+            const intentFlowFallback = document.getElementById('intent-flow-fallback').checked;
+            const intentFlowLearning = document.getElementById('intent-flow-learning').checked;
+            const intentFlowLogging = document.getElementById('intent-flow-logging').checked;
+
+            const settings = {
+                enabled: intentFlowEnabled,
+                fallbackEnabled: intentFlowFallback,
+                learningEnabled: intentFlowLearning,
+                loggingEnabled: intentFlowLogging
+            };
+
+            const response = await fetch(`/api/ai-agent-setup/${companyId}/intent-flows/settings`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify(settings)
+            });
+
+            if (response.ok) {
+                showNotification('Intent flow settings saved successfully!', 'success');
             } else {
-                 toggleAgentSetupSectionsVisibility('full'); 
+                throw new Error('Failed to save settings');
             }
+        } catch (error) {
+            console.error('Error saving intent flow settings:', error);
+            showNotification('Failed to save intent flow settings', 'error');
+        }
+    }
+
+    // Event listeners for intent flow functionality
+    document.addEventListener('click', (e) => {
+        if (e.target.id === 'test-intent-flow-btn') {
+            e.preventDefault();
+            const expectedIntent = document.getElementById('expected-intent').value;
+            testIntentFlow(expectedIntent || null);
         }
         
-        const selectedCategoriesListLocal = agentSetupPageContainer.querySelector('#selectedCategoriesList');
-        agentSetupPageContainer.addEventListener('change', (event) => {
-            if (event.target.name === 'category' && event.target.type === 'checkbox') {
-                if (selectedCategoriesListLocal) {
-                    const checkedCategories = Array.from(agentSetupPageContainer.querySelectorAll('input[name="category"]:checked'))
-                        .map(cb => `<li>${escapeHTML(cb.value)}</li>`).join('');
-                    selectedCategoriesListLocal.innerHTML = checkedCategories || '<li class="text-gray-500 italic">No categories selected yet.</li>';
-                }
-                loadAndDisplayCategoryQAs();
-            }
-        });
-        
-        const timezoneSelectElement = agentSetupPageContainer.querySelector('#agentSetupTimezoneSelect'); 
-        const currentTimeDisplayElement = agentSetupPageContainer.querySelector('#agentSetupCurrentTimeDisplay'); 
-
-        function updateCurrentTimeAgentSetup() {
-            if (!timezoneSelectElement || !currentTimeDisplayElement) return;
-            const selectedTimezone = timezoneSelectElement.value;
-            try {
-                const timeString = new Date().toLocaleTimeString('en-US', { timeZone: selectedTimezone, hour: '2-digit', minute: '2-digit', hour12: true });
-                const tzData = ianaTimeZones.find(tz => tz.value === selectedTimezone);
-                const tzLabel = tzData ? tzData.label : selectedTimezone;
-                currentTimeDisplayElement.textContent = `Current Agent Time: ${timeString} ${tzLabel}`;
-            } catch (e) {
-                currentTimeDisplayElement.textContent = 'Could not display time for selected zone.';
-            }
+        if (e.target.id === 'add-custom-intent-flow') {
+            e.preventDefault();
+            showNotification('Custom intent flow builder coming soon!', 'info');
         }
-        if (timezoneSelectElement) timezoneSelectElement.addEventListener('change', updateCurrentTimeAgentSetup);
-        if (currentTimeDisplayElement && timezoneSelectElement) { 
-            if(timezoneSelectElement.value) updateCurrentTimeAgentSetup(); 
-            setInterval(updateCurrentTimeAgentSetup, 60000); 
-        }
+    });
 
-        const sectionHeaders = agentSetupPageContainer.querySelectorAll('.agent-setup-section-header');
-        sectionHeaders.forEach(header => {
-            const sectionContent = header.nextElementSibling;
-            const chevron = header.querySelector('i.fas.fa-chevron-up, i.fas.fa-chevron-down');
-            if (sectionContent && chevron) { 
-                if (header.parentElement?.dataset.sectionName !== 'categories') { 
-                    sectionContent.classList.add('collapsed');
-                    chevron.classList.remove('fa-chevron-up'); 
-                    chevron.classList.add('fa-chevron-down'); 
-                } else { 
-                    sectionContent.classList.remove('collapsed');
-                    chevron.classList.remove('fa-chevron-down'); 
-                    chevron.classList.add('fa-chevron-up'); 
-                }
-                header.addEventListener('click', () => {
-                    sectionContent.classList.toggle('collapsed');
-                    chevron.classList.toggle('fa-chevron-up');
-                    chevron.classList.toggle('fa-chevron-down');
-                });
-            }
-        });
-
-        const protocolToggles = agentSetupPageContainer.querySelectorAll('.protocol-toggle');
-        protocolToggles.forEach(toggle => { 
-            const targetId = toggle.getAttribute('data-protocol-target');
-            const section = agentSetupPageContainer.querySelector(`#${targetId}`);
-            const chevron = toggle.querySelector('i.fas');
-            if (section && chevron) {
-                section.classList.add('collapsed');
-                chevron.classList.remove('fa-chevron-down'); 
-                chevron.classList.add('fa-chevron-right');
-                toggle.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const isCollapsed = section.classList.contains('collapsed');
-                    section.classList.toggle('collapsed', !isCollapsed);
-                    chevron.classList.toggle('fa-chevron-right', !isCollapsed);
-                    chevron.classList.toggle('fa-chevron-down', isCollapsed);
-                });
-            }
-         });
-        
-        const toggle24Hours = agentSetupPageContainer.querySelector('#toggle24Hours'); 
-        const opHoursListContainer = agentSetupPageContainer.querySelector('#operating-hours-list'); 
-
-        if (toggle24Hours && opHoursListContainer) { 
-            const setOperatingHoursDisabled = (isDisabled) => {
-                opHoursListContainer.querySelectorAll('input[type="time"], input[type="checkbox"]:not(#toggle24Hours)').forEach(input => {
-                    input.disabled = isDisabled;
-                    input.classList.toggle('disabled-input', isDisabled);
-                });
-            };
-            toggle24Hours.addEventListener('change', () => setOperatingHoursDisabled(toggle24Hours.checked));
-            const initialDisabledState = currentCompanyData?.agentSetup?.use247Routing ?? toggle24Hours.checked; 
-            setOperatingHoursDisabled(initialDisabledState); 
+    // Intent flow checkbox change handlers
+    document.addEventListener('change', (e) => {
+        if (e.target.matches('#intent-flow-enabled, #intent-flow-fallback, #intent-flow-learning, #intent-flow-logging')) {
+            saveIntentFlows();
         }
-        
-        function setupDynamicList(addButtonId, containerId, itemHtmlCallback, removeButtonClass) {
-             const addButton = agentSetupPageContainer?.querySelector(`#${addButtonId}`);
-            const container = agentSetupPageContainer?.querySelector(`#${containerId}`);
-            if (!addButton || !container) {
-                console.warn(`Dynamic list setup missing elements for: Button ID '${addButtonId}' or Container ID '${containerId}' within Agent Setup tab.`);
-                return;
-            }
-            addButton.addEventListener('click', () => {
-                const newItemWrapper = document.createElement('div');
-                newItemWrapper.className = `dynamic-list-item`; 
-                newItemWrapper.innerHTML = itemHtmlCallback(container.querySelectorAll('.dynamic-list-item').length);
-                const removeBtn = newItemWrapper.querySelector(`.${removeButtonClass}`);
-                if (removeBtn) {
-                     removeBtn.removeEventListener('click', handleDynamicItemRemove);
-                    removeBtn.addEventListener('click', handleDynamicItemRemove);
-                }
-                container.appendChild(newItemWrapper);
-                hasUnsavedChanges = true;
-                if (containerId === 'placeholders-list') {
-                    updatePlaceholderSelectOptions();
-                    updateAllPreviews();
-                }
-            });
-        }
-        
-        setupDynamicList('add-call-routing-option', 'call-routing-list', (idx) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="callRoutingName_${idx}" placeholder="Department / Name" class="form-input flex-1"><input type="tel" name="callRoutingPhone_${idx}" placeholder="Phone Number (E.164)" class="form-input flex-1"><button type="button" class="remove-call-routing form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-call-routing');
-        setupDynamicList('add-after-hours-routing-option', 'after-hours-routing-list', (idx) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="ahRoutingName_${idx}" placeholder="e.g., On-Call Tech" class="form-input flex-1"><input type="tel" name="ahRoutingPhone_${idx}" placeholder="Phone Number (E.164)" class="form-input flex-1"><button type="button" class="remove-ah-route form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-ah-route');
-        setupDynamicList('add-call-summary-recipient', 'call-summaries-list', (idx) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="summaryRecipient_${idx}" placeholder="Email or Phone Number" class="form-input flex-1"><button type="button" class="remove-summary-recipient form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-summary-recipient');
-        setupDynamicList('add-after-hours-notification-recipient', 'after-hours-notifications-list', (idx) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="ahNotificationRecipient_${idx}" placeholder="Email or Phone Number" class="form-input flex-1"><button type="button" class="remove-ah-notification form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-ah-notification');
-        setupDynamicList('add-malfunction-forwarding-number', 'malfunction-forwarding-list', (idx) => `<div class="flex items-end space-x-2 mt-2"><input type="tel" name="mfForwardingPhone_${idx}" placeholder="Phone Number (E.164)" class="form-input flex-1"><button type="button" class="remove-mf-forward form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-mf-forward');
-        setupDynamicList('add-malfunction-notification-recipient', 'malfunction-notifications-list', (idx) => `<div class="flex items-end space-x-2 mt-2"><input type="tel" name="mfNotificationRecipient_${idx}" placeholder="Phone Number (E.164) for SMS" class="form-input flex-1" value="${escapeHTML(item.phoneNumber || item.contact || '')}"><button type="button" class="remove-mf-notify form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-mf-notify');
-        setupDynamicList('add-placeholder-btn', 'placeholders-list', (idx) => `<div class="flex items-end space-x-2 mt-1"><input type="text" name="placeholderName_${idx}" placeholder="Name" class="form-input flex-1"><input type="text" name="placeholderValue_${idx}" placeholder="Value" class="form-input flex-1"><button type="button" class="remove-placeholder form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-placeholder');
+    });
 
-        if (placeholdersListContainer) {
-            placeholdersListContainer.addEventListener('input', () => {
-                updatePlaceholderSelectOptions();
-                updateAllPreviews();
-            });
-        }
+    // --- END INTENT FLOW CONFIGURATION FUNCTIONS --- //
 
-        if (insertPlaceholderBtn && placeholderSelect && companyQnaAnswer) {
-            insertPlaceholderBtn.addEventListener('click', () => {
-                const token = placeholderSelect.value;
-                if (!token) return;
-                const placeholder = `{{${token}}}`;
-                const start = companyQnaAnswer.selectionStart || 0;
-                const end = companyQnaAnswer.selectionEnd || 0;
-                const val = companyQnaAnswer.value;
-                companyQnaAnswer.value = val.slice(0, start) + placeholder + val.slice(end);
-                companyQnaAnswer.focus();
-                companyQnaAnswer.selectionStart = companyQnaAnswer.selectionEnd = start + placeholder.length;
-                companyQnaAnswer.dispatchEvent(new Event('input'));
-            });
-        }
+    // ...existing code...
 
-        if (addSchedulingRuleButton && serviceSchedulingRulesContainer) {
-            addSchedulingRuleButton.addEventListener('click', () => {
-                const newRuleHTML = createSchedulingRuleHTML({}, `new_${Date.now()}`);
-                const tempContainer = document.createElement('div');
-                tempContainer.innerHTML = newRuleHTML;
-                const newRuleElement = tempContainer.firstElementChild; 
-                
-                if (newRuleElement) {
-                    serviceSchedulingRulesContainer.appendChild(newRuleElement);
-                    attachSchedulingRuleEventListeners(newRuleElement); 
-                    hasUnsavedChanges = true; 
-                    refreshInterpreterForRule(newRuleElement); 
-                }
-            });
-        }
+    // Setup AI Voice Tab function
+    function setupAiVoiceTab() {
+        console.log('Setting up AI Voice tab...');
+        // This function sets up the AI voice configuration UI
+        // Add voice-related initialization here if needed
     }
 
     // --- AGENT MONITORING & OVERSIGHT SYSTEM --- //
@@ -2311,25 +2281,22 @@ document.addEventListener('DOMContentLoaded', () => {
         recentActivity: []
     };
 
-    // Initialize monitoring system with enhanced error handling and setup validation
+    // Initialize monitoring system
     function initializeMonitoringSystem() {
         console.log('🎯 initializeMonitoringSystem called');
         console.log('🎯 Company ID available:', !!companyId, companyId);
         console.log('🎯 Company data available:', !!currentCompanyData);
         console.log('🎯 Agent setup container:', !!agentSetupPageContainer);
         
-        // Enhanced validation with detailed error reporting
         if (!companyId) {
             console.error('❌ Cannot initialize monitoring: No company ID available');
             showMonitoringNotification('Company ID not found - monitoring disabled', 'warning');
-            updateMonitoringStatus('DISABLED', 'No Company ID');
             return;
         }
         
         if (!currentCompanyData) {
             console.error('❌ Cannot initialize monitoring: Company data not loaded');
             showMonitoringNotification('Company data not loaded - monitoring disabled', 'warning');
-            updateMonitoringStatus('DISABLED', 'Company Data Missing');
             return;
         }
         
@@ -2337,34 +2304,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const monitoringSection = document.getElementById('agent-monitoring-section');
         if (!monitoringSection) {
             console.warn('⚠️ Monitoring UI section not found - monitoring system available but UI not loaded');
-            // Still initialize backend monitoring even without UI
-            loadMonitoringData();
             return;
         }
         
         console.log('✅ Initializing monitoring for company:', currentCompanyData.name || companyId);
+        setupMonitoringEventListeners();
+        loadMonitoringData();
+        startRealTimeUpdates();
         
-        try {
-            // Initialize in proper order with error handling
-            updateMonitoringStatus('INITIALIZING', 'Setting up monitoring...');
-            setupMonitoringEventListeners();
-            
-            // Load initial data
-            loadMonitoringData().then(() => {
-                updateMonitoringStatus('ACTIVE', 'All systems operational');
-                startRealTimeUpdates();
-                showMonitoringNotification('Monitoring system fully initialized', 'success');
-            }).catch(error => {
-                console.error('Failed to load initial monitoring data:', error);
-                updateMonitoringStatus('ERROR', 'Data load failed');
-                showMonitoringNotification('Monitoring initialization incomplete', 'warning');
-            });
-            
-        } catch (error) {
-            console.error('Error during monitoring initialization:', error);
-            updateMonitoringStatus('ERROR', 'Initialization failed');
-            showMonitoringNotification('Monitoring initialization failed', 'error');
-        }
+        showMonitoringNotification('Monitoring system initialized', 'success');
     }
 
     // Setup event listeners for monitoring interface
@@ -2427,108 +2375,83 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Load monitoring data from backend with enhanced error handling and fallbacks
+    // Load monitoring data from backend
     async function loadMonitoringData() {
         try {
             if (!companyId) {
-                throw new Error('No company ID available for monitoring data');
+                console.error('No company ID available for monitoring data');
+                showMonitoringNotification('Company ID not found', 'error');
+                return;
             }
 
-            console.log('📊 Loading monitoring data for company:', companyId);
-            updateMonitoringStatus('LOADING', 'Fetching data...');
-            
-            const response = await fetch(`/api/monitoring/dashboard/${companyId}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Cache-Control': 'no-cache'
-                }
-            });
+            console.log('Loading monitoring data for company:', companyId);
+            const response = await fetch(`/api/monitoring/dashboard/${companyId}`);
             
             if (response.ok) {
                 const data = await response.json();
-                console.log('📊 Monitoring data loaded successfully:', data);
-                
-                // Validate data structure before using
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                console.log('📊 Monitoring data loaded successfully:', data);
-                
-                // Validate data structure before using
-                const validatedData = validateMonitoringData(data);
-                updateMonitoringDisplay(validatedData);
-                monitoringData = validatedData;
-                
-                updateMonitoringStatus('ACTIVE', 'Data loaded successfully');
-                
+                console.log('Monitoring data loaded:', data);
+                updateMonitoringDisplay(data);
+                monitoringData = data;
             } else if (response.status === 404) {
-                console.log('📊 No monitoring data found for company:', companyId);
-                console.log('📊 Initializing with empty data structure');
-                
-                // Initialize with comprehensive empty data
-                const emptyData = createEmptyMonitoringData();
+                console.log('No monitoring data found for company:', companyId);
+                // Initialize with empty data
+                const emptyData = {
+                    pendingReviews: 0,
+                    flaggedInteractions: 0,
+                    approvalRate: 0,
+                    recentActivity: [],
+                    analytics: {
+                        totalInteractions: 0,
+                        averageConfidence: 0,
+                        escalationRate: 0
+                    }
+                };
                 updateMonitoringDisplay(emptyData);
                 monitoringData = emptyData;
-                
-                updateMonitoringStatus('ACTIVE', 'Initialized with empty data');
-                
             } else {
-                const errorText = await response.text();
-                throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
         } catch (error) {
-            console.error('❌ Error loading monitoring data:', error);
-            
-            // Show detailed error to user but continue with fallback
+            console.error('Error loading monitoring data:', error);
             showMonitoringNotification(`Failed to load monitoring data: ${error.message}`, 'error');
-            
-            // Use cached data if available, otherwise use empty data
-            const fallbackData = monitoringData || createEmptyMonitoringData();
-            updateMonitoringDisplay(fallbackData);
-            
-            updateMonitoringStatus('ERROR', `Data load failed: ${error.message}`);
-        }
-    }
-    
-    // Validate monitoring data structure
-    function validateMonitoringData(data) {
-        const defaults = createEmptyMonitoringData();
-        
-        return {
-            pendingReviews: Number(data.pendingReviews) || defaults.pendingReviews,
-            flaggedInteractions: Number(data.flaggedInteractions) || defaults.flaggedInteractions,
-            approvalRate: Number(data.approvalRate) || defaults.approvalRate,
-            recentActivity: Array.isArray(data.recentActivity) ? data.recentActivity : defaults.recentActivity,
-            analytics: {
-                totalInteractions: Number(data.analytics?.totalInteractions) || 0,
-                averageConfidence: Number(data.analytics?.averageConfidence) || 0,
-                escalationRate: Number(data.analytics?.escalationRate) || 0,
-                flaggedItems: Number(data.analytics?.flaggedItems) || 0,
-                approvedItems: Number(data.analytics?.approvedItems) || 0,
-                disapprovedItems: Number(data.analytics?.disapprovedItems) || 0
-            },
-            companyName: data.companyName || currentCompanyData?.name || 'Unknown Company'
-        };
-    }
-    
-    // Create empty monitoring data structure
-    function createEmptyMonitoringData() {
-        return {
-            pendingReviews: 0,
-            flaggedInteractions: 0,
-            approvalRate: 0,
-            recentActivity: [],
-            analytics: {
-                totalInteractions: 0,
-                averageConfidence: 0,
-                escalationRate: 0,
-                flaggedItems: 0,
-                approvedItems: 0,
-                disapprovedItems: 0
+        try {
+            if (!companyId) {
+                console.error('No company ID available for monitoring data');
+                showMonitoringNotification('Company ID not found', 'error');
+                return;
             }
-        };
+
+            console.log('Loading monitoring data for company:', companyId);
+            const response = await fetch(`/api/monitoring/dashboard/${companyId}`);
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Monitoring data loaded:', data);
+                updateMonitoringDisplay(data);
+                monitoringData = data;
+            } else if (response.status === 404) {
+                console.log('No monitoring data found for company:', companyId);
+                // Initialize with empty data
+                const emptyData = {
+                    pendingReviews: 0,
+                    flaggedInteractions: 0,
+                    approvalRate: 0,
+                    recentActivity: [],
+                    analytics: {
+                        totalInteractions: 0,
+                        averageConfidence: 0,
+                        escalationRate: 0
+                    }
+                };
+                updateMonitoringDisplay(emptyData);
+                monitoringData = emptyData;
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('Error loading monitoring data:', error);
+            showMonitoringNotification(`Failed to load monitoring data: ${error.message}`, 'error');
+        }
     }
 
     // Update monitoring display with fresh data

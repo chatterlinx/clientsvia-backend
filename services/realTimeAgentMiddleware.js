@@ -6,6 +6,7 @@
 const SuperIntelligentAgentEngine = require('./superIntelligentAgent');
 const AgentService = require('./agent'); // Existing agent service
 const agentMonitoring = require('./agentMonitoring'); // Monitoring system
+const BookingFlowHandler = require('./bookingFlowHandler'); // Booking flow
 
 // Import monitoring logger
 const { monitoringLogger } = agentMonitoring;
@@ -14,7 +15,9 @@ class RealTimeAgentMiddleware {
     
     constructor() {
         this.intelligentEngine = new SuperIntelligentAgentEngine();
+        this.bookingFlowHandler = new BookingFlowHandler();
         this.activeCalls = new Map(); // Track active call sessions
+        this.activeBookings = new Map(); // Track active booking flows
         this.responseCache = new Map(); // Cache frequent responses
         this.performanceMetrics = {
             averageResponseTime: 0,
@@ -32,19 +35,34 @@ class RealTimeAgentMiddleware {
         const { callerId, companyId, query, audioStream } = callData;
         
         try {
-            // Step 1: Initialize call session with context
+            // Step 1: Check if caller is in active booking flow
+            const activeBookingKey = `${companyId}_${callerId}`;
+            const activeBooking = this.activeBookings.get(activeBookingKey);
+            
+            if (activeBooking) {
+                console.log(`[Booking Flow] Continuing booking for caller: ${callerId}`);
+                return await this.handleBookingFlow(callData, activeBooking);
+            }
+            
+            // Step 2: Initialize call session with context
             const callSession = await this.initializeCallSession(callerId, companyId);
             
-            // Step 2: Process query with intelligent engine
+            // Step 3: Process query with intelligent engine (includes service issue detection)
             const intelligentResponse = await this.processWithIntelligence(query, callSession);
             
-            // Step 3: Check for escalation triggers
+            // Step 4: Check if response initiated booking flow
+            if (intelligentResponse.proceedToBooking) {
+                console.log(`[Booking Flow] Initiating booking flow for service issue`);
+                return await this.initiateBookingFlow(callData, intelligentResponse);
+            }
+            
+            // Step 5: Check for escalation triggers
             const escalationCheck = await this.checkEscalationNeeded(intelligentResponse, callSession);
             
-            // Step 4: Generate optimized response
+            // Step 6: Generate optimized response
             const optimizedResponse = await this.optimizeResponse(intelligentResponse, callSession);
             
-            // Step 4.5: Check blacklist before responding
+            // Step 7: Check blacklist before responding
             const blacklistCheck = await agentMonitoring.checkDisapprovalList(
                 companyId, 
                 query, 

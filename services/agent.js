@@ -10,6 +10,9 @@ const { findCachedAnswer } = require('../utils/aiAgent');
 const { getRandomPersonalityResponse, getPersonalityResponse } = require('../utils/personalityResponses_enhanced');
 const { applyPlaceholders } = require('../utils/placeholders');
 
+// Import Service Issue Handler for booking flow
+const ServiceIssueHandler = require('./serviceIssueHandler');
+const serviceIssueHandler = new ServiceIssueHandler();
 
 // In-memory cache for parsed Category Q&A by company ID
 const categoryQACache = new Map();
@@ -174,7 +177,34 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
 
   console.log(`[Agent Response Chain] Starting for company ${companyId}, question: "${question.substring(0, 100)}..."`);
   
-  // STEP 1: Check for specific scenario protocols FIRST (highest priority)
+  // NEW STEP 1: Check for Service Issues that require booking flow (highest priority for service calls)
+  const serviceIssueResult = await serviceIssueHandler.handleServiceIssue(question, companyId, { 
+    conversationHistory, 
+    callSid: originalCallSid 
+  });
+  
+  if (serviceIssueResult) {
+    console.log(`[Agent] Service Issue Detected - Source: ${serviceIssueResult.source}`);
+    responseMethod = 'service-issue-booking';
+    confidence = 0.95;
+    debugInfo = { 
+      section: 'service-issue', 
+      source: serviceIssueResult.source,
+      proceedToBooking: serviceIssueResult.proceedToBooking 
+    };
+    
+    // Track performance
+    await trackPerformance(companyId, originalCallSid, question, serviceIssueResult.response, responseMethod, confidence, debugInfo, startTime);
+    
+    return { 
+      text: serviceIssueResult.response, 
+      escalate: serviceIssueResult.shouldEscalate,
+      bookingFlow: serviceIssueResult.bookingFlow,
+      proceedToBooking: serviceIssueResult.proceedToBooking
+    };
+  }
+  
+  // STEP 2: Check for specific scenario protocols (moved to second priority)
   const protocols = company?.agentSetup?.protocols || {};
   const protocolResponse = checkSpecificProtocols(protocols, question, conversationHistory, placeholders);
   if (protocolResponse) {
@@ -189,7 +219,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: protocolResponse, escalate: false };
   }
 
-  // STEP 2: Check personality responses for common scenarios
+  // STEP 3: Check personality responses for common scenarios
   const personalityResponse = await checkPersonalityScenarios(companyId, enhancedQuestion.toLowerCase(), conversationHistory);
   if (personalityResponse) {
     console.log(`[Agent] Using personality response: ${personalityResponse.category}`);
@@ -208,7 +238,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     }
   }
 
-  // STEP 3: Check KnowledgeEntry (approved Q&A entries)
+  // STEP 4: Check KnowledgeEntry (approved Q&A entries)
   const entry = await KnowledgeEntry.findOne({ companyId, 
     category: { $in: categories },
     question: { $regex: new RegExp(question, 'i') },
@@ -227,7 +257,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: finalText, escalate: false };
   }
 
-  // STEP 4: Try quick Q&A reference (cheat sheet approach) with enhanced question
+  // STEP 5: Try quick Q&A reference (cheat sheet approach) with enhanced question
   const quickQAAnswer = extractQuickAnswerFromQA(await KnowledgeEntry.find({ companyId }).exec(), enhancedQuestion, fuzzyThreshold);
   if (quickQAAnswer) {
     console.log(`[Agent] Found quick Q&A reference for: ${enhancedQuestion}`);
@@ -252,7 +282,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     }
   }
 
-  // STEP 5: Try company Q&A from agentSetup.categoryQAs (also as quick reference)
+  // STEP 6: Try company Q&A from agentSetup.categoryQAs (also as quick reference)
   const companyQAs = categoryQACache.get(companyId) || [];
   if (companyQAs.length > 0) {
     const quickCompanyAnswer = extractQuickAnswerFromQA(companyQAs, question, fuzzyThreshold);
@@ -270,7 +300,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     }
   }
 
-  // STEP 6: SMART CONVERSATIONAL BRAIN - NEW INTELLIGENT PROCESSING
+  // STEP 7: SMART CONVERSATIONAL BRAIN - NEW INTELLIGENT PROCESSING
   const smartResponse = await generateSmartConversationalResponse(company, question, conversationHistory, categories, companySpecialties, placeholders);
   if (smartResponse) {
     console.log(`[Agent] Generated smart conversational response for: ${question}`);
@@ -283,7 +313,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: smartResponse, escalate: false };
   }
 
-  // STEP 7: PRIMARY SCRIPT CONTROLLER - mainAgentScript drives responses
+  // STEP 8: PRIMARY SCRIPT CONTROLLER - mainAgentScript drives responses
   const scriptResponse = await processMainAgentScript(company, question, conversationHistory, placeholders);
   if (scriptResponse) {
     console.log(`[Agent] PRIMARY SCRIPT RESPONSE for: ${question}`);
