@@ -123,8 +123,8 @@ const interactionLogSchema = new mongoose.Schema({
     bookingMade: { type: Boolean }
   },
   
-  // Error tracking
-  errors: [{
+  // Error tracking (renamed from 'errors' to avoid Mongoose reserved keyword warning)
+  interactionErrors: [{
     type: { type: String },
     message: { type: String },
     stack: { type: String },
@@ -138,6 +138,7 @@ const interactionLogSchema = new mongoose.Schema({
   archived: { type: Boolean, default: false }
 }, {
   timestamps: true,
+  suppressReservedKeysWarning: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
@@ -176,7 +177,8 @@ const approvedKnowledgeSchema = new mongoose.Schema({
   active: { type: Boolean, default: true },
   tags: [{ type: String }]
 }, {
-  timestamps: true
+  timestamps: true,
+  suppressReservedKeysWarning: true
 });
 
 // 3. DISAPPROVAL LIST SCHEMA - What NOT to answer
@@ -221,7 +223,8 @@ const disapprovalListSchema = new mongoose.Schema({
   active: { type: Boolean, default: true },
   tags: [{ type: String }]
 }, {
-  timestamps: true
+  timestamps: true,
+  suppressReservedKeysWarning: true
 });
 
 // 4. PERFORMANCE ANALYTICS SCHEMA - Insights and trends
@@ -275,7 +278,8 @@ const performanceAnalyticsSchema = new mongoose.Schema({
     count: { type: Number }
   }]
 }, {
-  timestamps: true
+  timestamps: true,
+  suppressReservedKeysWarning: true
 });
 
 // Models
