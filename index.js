@@ -40,6 +40,7 @@ const knowledgeAutoPopulationRoutes = require('./routes/knowledgeAutoPopulation'
 const enhancedAIAgentRoutes = require('./routes/enhancedAIAgent');
 const aiAgentHandlerRoutes = require('./routes/aiAgentHandler');
 const agentPerformanceRoutes = require('./routes/agentPerformance');
+const intentRoutingRoutes = require('./routes/intentRouting'); // Intent Routing & Flow Control
 
 // Initialize Express app
 const app = express();
@@ -87,6 +88,7 @@ app.use('/api/knowledge-auto-population', knowledgeAutoPopulationRoutes);
 app.use('/api/enhanced-ai-agent', enhancedAIAgentRoutes);
 app.use('/api/ai-agent', aiAgentHandlerRoutes);
 app.use('/api/agent', agentPerformanceRoutes);
+app.use('/api/agent', intentRoutingRoutes); // Intent Routing & Flow Control routes
 
 /*
 --- TWILIO SMOKE TEST ROUTE (COMMENTED OUT) ---

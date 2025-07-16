@@ -82,6 +82,24 @@
             font-style: italic;
             opacity: 0.8;
         }
+
+        /* Intent Routing Styles */
+        #agent-setup-content .intent-flow-step { @apply flex items-center p-3 bg-white border border-gray-200 rounded-lg mb-2 cursor-move; }
+        #agent-setup-content .intent-flow-step.active { @apply border-teal-400 bg-teal-50; }
+        #agent-setup-content .intent-flow-step:hover { @apply bg-gray-50 border-gray-300; }
+        #agent-setup-content .intent-priority-badge { @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium; }
+        #agent-setup-content .intent-priority-high { @apply bg-red-100 text-red-800; }
+        #agent-setup-content .intent-priority-medium { @apply bg-yellow-100 text-yellow-800; }
+        #agent-setup-content .intent-priority-low { @apply bg-green-100 text-green-800; }
+        #agent-setup-content .intent-flow-connector { @apply flex items-center justify-center w-8 h-8 bg-teal-100 text-teal-600 rounded-full; }
+        #agent-setup-content .intent-drag-handle { @apply cursor-move text-gray-400 hover:text-gray-600; }
+        #agent-setup-content .intent-config-toggle { @apply ml-auto; }
+        #agent-setup-content .intent-config-panel { @apply mt-3 p-3 bg-gray-50 border border-gray-200 rounded; }
+        #agent-setup-content .intent-test-result { @apply p-3 bg-blue-50 border border-blue-200 rounded-lg; }
+        #agent-setup-content .intent-test-step { @apply text-sm text-gray-700 py-1; }
+        #agent-setup-content .intent-test-step.success { @apply text-green-700; }
+        #agent-setup-content .intent-test-step.warning { @apply text-yellow-700; }
+        #agent-setup-content .intent-test-step.error { @apply text-red-700; }
         
         .contact-block-view { @apply mt-3 pt-3 border-t border-gray-200; }
         .contact-block-view .detail-item:last-child { padding-bottom: 0; }
@@ -1744,6 +1762,204 @@
                                         </div>
                                     </div>
 
+                                                    <!-- INTENT ROUTING & FLOW CONTROL PANEL -->
+                                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="intent-routing">
+                                                        <h3 class="agent-setup-section-header">
+                                                            <span><i class="fas fa-code-branch mr-2"></i>Intent Routing & Flow Control Panel</span>
+                                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                                        </h3>
+                                                        <div class="section-content collapsed">
+                                                            <div class="bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 rounded-xl p-6 mb-6">
+                                                                <div class="flex items-center mb-4">
+                                                                    <i class="fas fa-sitemap text-2xl text-teal-600 mr-3"></i>
+                                                                    <div>
+                                                                        <h4 class="text-lg font-semibold text-teal-900">Multi-Tenant AI Logic Configurator</h4>
+                                                                        <p class="text-teal-700 text-sm">Configure, reorder, and validate the complete agent decision flow logic</p>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <!-- Intent Flow Visualization -->
+                                                                <div class="bg-white rounded-lg p-4 mb-6 border border-teal-100">
+                                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                                        <i class="fas fa-route text-teal-600 mr-2"></i>Current Decision Flow
+                                                                    </h5>
+                                                                    <div id="intentFlowVisualization" class="space-y-3">
+                                                                        <!-- Flow steps will be dynamically populated here -->
+                                                                        <div class="text-center text-gray-500 italic">Loading intent flow...</div>
+                                                                    </div>
+                                                                </div>
+                
+                                                                <!-- Flow Configuration Panel -->
+                                                                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                                                    <div class="flex items-center justify-between mb-4">
+                                                                        <h5 class="font-semibold text-gray-800 flex items-center">
+                                                                            <i class="fas fa-cogs text-gray-600 mr-2"></i>Intent Processing Order
+                                                                        </h5>
+                                                                        <div class="flex gap-2">
+                                                                            <button id="resetToDefault" class="bg-gray-500 hover:bg-gray-600 text-white text-xs px-3 py-1 rounded">
+                                                                                <i class="fas fa-undo mr-1"></i>Reset to Default
+                                                                            </button>
+                                                                            <button id="validateFlow" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded">
+                                                                                <i class="fas fa-check-circle mr-1"></i>Validate Flow
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    <!-- Intent Categories List -->
+                                                                    <div id="intentCategoriesList" class="space-y-3">
+                                                                        <!-- Intent items will be populated here -->
+                                                                    </div>
+                                                                    
+                                                                    <!-- Add New Intent Category -->
+                                                                    <div class="mt-4 p-3 border border-dashed border-gray-300 rounded-lg bg-gray-50">
+                                                                        <div class="flex items-center gap-3">
+                                                                            <select id="newIntentType" class="text-sm border border-gray-300 rounded px-2 py-1 flex-none">
+                                                                                <option value="">Add Intent Type...</option>
+                                                                                <option value="service_issue">Service Issue Detection</option>
+                                                                                <option value="booking_request">Booking Request</option>
+                                                                                <option value="emergency">Emergency Priority</option>
+                                                                                <option value="information_request">Information Request</option>
+                                                                                <option value="complaint">Complaint Handling</option>
+                                                                                <option value="transfer_request">Transfer Request</option>
+                                                                                <option value="after_hours">After Hours Protocol</option>
+                                                                                <option value="custom">Custom Intent</option>
+                                                                            </select>
+                                                                            <input type="text" id="newIntentName" placeholder="Intent name..." class="text-sm border border-gray-300 rounded px-2 py-1 flex-1">
+                                                                            <button id="addNewIntent" class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded">
+                                                                                <i class="fas fa-plus mr-1"></i>Add
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                
+                                                                <!-- Flow Testing Panel -->
+                                                                <div class="bg-white rounded-lg p-4 border border-gray-200 mt-4">
+                                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                                        <i class="fas fa-flask text-purple-600 mr-2"></i>Flow Testing & Simulation
+                                                                    </h5>
+                                                                    
+                                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                                        <div>
+                                                                            <label class="form-label text-sm">Test Scenario</label>
+                                                                            <select id="flowTestScenario" class="form-select">
+                                                                                <option value="service_emergency">Emergency AC Failure</option>
+                                                                                <option value="routine_booking">Routine Maintenance</option>
+                                                                                <option value="pricing_inquiry">Pricing Question</option>
+                                                                                <option value="complaint">Service Complaint</option>
+                                                                                <option value="transfer_request">Transfer to Technician</option>
+                                                                                <option value="after_hours">After Hours Call</option>
+                                                                                <option value="custom">Custom Query</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label class="form-label text-sm">Test Input</label>
+                                                                            <input type="text" id="flowTestInput" class="form-input" placeholder="My AC stopped working this morning">
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    <button id="runFlowTest" class="bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg text-sm">
+                                                                        <i class="fas fa-play mr-1"></i>Run Flow Test
+                                                                    </button>
+                                                                    
+                                                                    <div id="flowTestResults" class="mt-4 hidden">
+                                                                        <!-- Test results will be populated here -->
+                                                                    </div>
+                                                                </div>
+                
+                                                                <!-- Performance Metrics -->
+                                                                <div class="bg-white rounded-lg p-4 border border-gray-200 mt-4">
+                                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                                        <i class="fas fa-chart-line text-green-600 mr-2"></i>Intent Routing Performance
+                                                                    </h5>
+                                                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                                        <div class="text-center">
+                                                                            <div class="text-2xl font-bold text-blue-600" id="intentAccuracy">94%</div>
+                                                                            <div class="text-xs text-gray-600">Intent Accuracy</div>
+                                                                        </div>
+                                                                        <div class="text-center">
+                                                                            <div class="text-2xl font-bold text-green-600" id="routingSpeed">0.3s</div>
+                                                                            <div class="text-xs text-gray-600">Avg Routing Time</div>
+                                                                        </div>
+                                                                        <div class="text-center">
+                                                                            <div class="text-2xl font-bold text-orange-600" id="fallbackRate">8%</div>
+                                                                            <div class="text-xs text-gray-600">Fallback Rate</div>
+                                                                        </div>
+                                                                        <div class="text-center">
+                                                                            <div class="text-2xl font-bold text-purple-600" id="totalIntents">1,247</div>
+                                                                            <div class="text-xs text-gray-600">Total Today</div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                
+                                                                <!-- Configuration Settings -->
+                                                                <div class="bg-white rounded-lg p-4 border border-gray-200 mt-4">
+                                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                                        <i class="fas fa-sliders-h text-gray-600 mr-2"></i>Flow Configuration
+                                                                    </h5>
+                                                                    <div class="space-y-4">
+                                                                        <div class="flex items-center justify-between">
+                                                                            <div>
+                                                                                <span class="font-medium text-gray-800">Enable Intent Classification</span>
+                                                                                <p class="text-sm text-gray-600">Automatically classify caller intents and route accordingly</p>
+                                                                            </div>
+                                                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                                                <input type="checkbox" id="enableIntentClassification" class="sr-only peer" checked>
+                                                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                                            </label>
+                                                                        </div>
+                                                                        
+                                                                        <div class="flex items-center justify-between">
+                                                                            <div>
+                                                                                <span class="font-medium text-gray-800">Strict Priority Enforcement</span>
+                                                                                <p class="text-sm text-gray-600">Enforce intent processing order strictly (no skip-ahead)</p>
+                                                                            </div>
+                                                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                                                <input type="checkbox" id="enableStrictPriority" class="sr-only peer" checked>
+                                                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                                            </label>
+                                                                        </div>
+                
+                                                                        <div class="flex items-center justify-between">
+                                                                            <div>
+                                                                                <span class="font-medium text-gray-800">Real-time Flow Monitoring</span>
+                                                                                <p class="text-sm text-gray-600">Log all intent routing decisions for analysis</p>
+                                                                            </div>
+                                                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                                                <input type="checkbox" id="enableFlowMonitoring" class="sr-only peer" checked>
+                                                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                                            </label>
+                                                                        </div>
+                
+                                                                        <div>
+                                                                            <label class="form-label text-sm">Intent Confidence Threshold</label>
+                                                                            <div class="flex items-center space-x-3">
+                                                                                <span class="text-xs text-gray-500">Low (60%)</span>
+                                                                                <input type="range" id="intentConfidenceThreshold" min="60" max="95" value="75" class="flex-1">
+                                                                                <span class="text-xs text-gray-500">High (95%)</span>
+                                                                                <span class="text-sm font-medium text-teal-600" id="intentConfidenceValue">75%</span>
+                                                                            </div>
+                                                                            <p class="text-xs text-gray-500 mt-1">Minimum confidence required for intent classification</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                
+                                                                <!-- Technical Information -->
+                                                                <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+                                                                    <h6 class="font-semibold text-gray-800 mb-2 flex items-center">
+                                                                        <i class="fas fa-code text-gray-600 mr-2"></i>Technical Implementation
+                                                                    </h6>
+                                                                    <div class="text-sm text-gray-700 space-y-1">
+                                                                        <div><strong>Intent Router:</strong> <code class="bg-gray-200 px-1 rounded">intentRouter.js</code></div>
+                                                                        <div><strong>Flow Engine:</strong> <code class="bg-gray-200 px-1 rounded">flowControlEngine.js</code></div>
+                                                                        <div><strong>Main Integration:</strong> <code class="bg-gray-200 px-1 rounded">agent.js</code> (Step 0 - Intent Classification)</div>
+                                                                        <div><strong>Validation:</strong> <code class="bg-gray-200 px-1 rounded">flowValidator.js</code></div>
+                                                                        <div><strong>Monitoring:</strong> <code class="bg-gray-200 px-1 rounded">intentMonitoring.js</code></div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                
                                     <!-- AI INTELLIGENCE SUB-TAB (from Logic Tab) -->
                                     <div class="agent-setup-section-container" data-section-type="full" data-section-name="ai-intelligence-logic">
                                         <h3 class="agent-setup-section-header">
@@ -5563,9 +5779,741 @@ Cost estimate</textarea>
         </div>
     </div>
 
-    <script src="/js/company-profile.js"></script>
-    <!-- <script src="/js/ai-agent-setup.js"></script> TEMPORARILY DISABLED DUE TO SYNTAX ERROR -->
-    <script>
+        <script src="/js/company-profile.js"></script>
+        <!-- <script src="/js/ai-agent-setup.js"></script> TEMPORARILY DISABLED DUE TO SYNTAX ERROR -->
+        <script>
+    /**
+     * Initialize Intent Routing & Flow Control Panel
+     */
+    function initializeIntentRoutingPanel() {
+        // Initialize default intent flow
+        initializeDefaultIntentFlow();
+        
+        // Set up event listeners
+        setupIntentRoutingEventListeners();
+        
+        // Load current configuration
+        loadIntentRoutingConfiguration();
+        
+        // Initialize drag and drop
+        initializeIntentDragAndDrop();
+        
+        // Update flow visualization
+        updateFlowVisualization();
+        
+        console.log('Intent Routing Panel initialized');
+    }
+    
+    /**
+     * Initialize default intent flow structure
+     */
+    function initializeDefaultIntentFlow() {
+        const defaultFlow = [
+            {
+                id: 'service_issue',
+                name: 'Service Issue Detection',
+                description: 'Detect AC/heating/plumbing emergencies',
+                priority: 'high',
+                enabled: true,
+                confidence: 85,
+                keywords: ['broken', 'not working', 'emergency', 'repair', 'fix'],
+                order: 1
+            },
+            {
+                id: 'booking_request',
+                name: 'Booking Request',
+                description: 'Schedule appointments and services',
+                priority: 'high',
+                enabled: true,
+                confidence: 80,
+                keywords: ['schedule', 'appointment', 'book', 'availability'],
+                order: 2
+            },
+            {
+                id: 'information_request',
+                name: 'Information Request',
+                description: 'General questions and info',
+                priority: 'medium',
+                enabled: true,
+                confidence: 75,
+                keywords: ['hours', 'pricing', 'services', 'about'],
+                order: 3
+            },
+            {
+                id: 'transfer_request',
+                name: 'Transfer Request',
+                description: 'Transfer to human agent',
+                priority: 'medium',
+                enabled: true,
+                confidence: 70,
+                keywords: ['manager', 'human', 'transfer', 'speak to'],
+                order: 4
+            },
+            {
+                id: 'after_hours',
+                name: 'After Hours Protocol',
+                description: 'Handle calls outside business hours',
+                priority: 'low',
+                enabled: true,
+                confidence: 90,
+                keywords: ['closed', 'hours', 'emergency'],
+                order: 5
+            }
+        ];
+        
+        // Store in global variable for manipulation
+        window.currentIntentFlow = defaultFlow;
+    }
+    
+    /**
+     * Set up event listeners for Intent Routing panel
+     */
+    function setupIntentRoutingEventListeners() {
+        // Reset to default button
+        const resetBtn = document.getElementById('resetToDefault');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', resetIntentFlowToDefault);
+        }
+        
+        // Validate flow button
+        const validateBtn = document.getElementById('validateFlow');
+        if (validateBtn) {
+            validateBtn.addEventListener('click', validateIntentFlow);
+        }
+        
+        // Add new intent button
+        const addIntentBtn = document.getElementById('addNewIntent');
+        if (addIntentBtn) {
+            addIntentBtn.addEventListener('click', addNewIntentCategory);
+        }
+        
+        // Flow test button
+        const runTestBtn = document.getElementById('runFlowTest');
+        if (runTestBtn) {
+            runTestBtn.addEventListener('click', runIntentFlowTest);
+        }
+        
+        // Configuration toggles
+        const configToggles = [
+            'enableIntentClassification',
+            'enableStrictPriority',
+            'enableFlowMonitoring'
+        ];
+        
+        configToggles.forEach(toggleId => {
+            const toggle = document.getElementById(toggleId);
+            if (toggle) {
+                toggle.addEventListener('change', updateIntentRoutingConfig);
+            }
+        });
+        
+        // Confidence threshold slider
+        const confidenceSlider = document.getElementById('intentConfidenceThreshold');
+        const confidenceValue = document.getElementById('intentConfidenceValue');
+        
+        if (confidenceSlider && confidenceValue) {
+            confidenceSlider.addEventListener('input', function() {
+                confidenceValue.textContent = this.value + '%';
+                updateIntentRoutingConfig();
+            });
+        }
+        
+        // Test scenario change
+        const testScenario = document.getElementById('flowTestScenario');
+        if (testScenario) {
+            testScenario.addEventListener('change', updateTestInputPlaceholder);
+        }
+    }
+    
+    /**
+     * Load intent routing configuration from server
+     */
+    async function loadIntentRoutingConfiguration() {
+        try {
+            const companyId = getCurrentCompanyId();
+            const response = await fetch(`/api/agent/intent-routing/${companyId}`);
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.data) {
+                    window.currentIntentFlow = data.data.intentFlow || window.currentIntentFlow;
+                    
+                    // Update performance metrics
+                    if (data.data.performance) {
+                        updateIntentPerformanceMetrics(data.data.performance);
+                    }
+                    
+                    updateIntentCategoriesList();
+                    updateFlowVisualization();
+                    
+                    console.log('Intent routing configuration loaded successfully');
+                }
+            }
+        } catch (error) {
+            console.warn('Could not load intent routing config:', error);
+            // Use default flow
+            updateIntentCategoriesList();
+            updateFlowVisualization();
+        }
+    }
+    
+    /**
+     * Update the intent categories list UI
+     */
+    function updateIntentCategoriesList() {
+        const container = document.getElementById('intentCategoriesList');
+        if (!container || !window.currentIntentFlow) return;
+        
+        // Sort by order
+        const sortedFlow = [...window.currentIntentFlow].sort((a, b) => a.order - b.order);
+        
+        container.innerHTML = sortedFlow.map((intent, index) => `
+            <div class="intent-flow-step" data-intent-id="${intent.id}" data-order="${intent.order}">
+                <div class="flex items-center w-full">
+                    <div class="intent-drag-handle mr-3">
+                        <i class="fas fa-grip-vertical"></i>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <span class="font-medium text-gray-900 mr-2">${index + 1}. ${intent.name}</span>
+                                <span class="intent-priority-badge intent-priority-${intent.priority}">
+                                    ${intent.priority.toUpperCase()}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" class="sr-only peer" ${intent.enabled ? 'checked' : ''} 
+                                           onchange="toggleIntentEnabled('${intent.id}')">
+                                    <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                                <button class="text-blue-600 hover:text-blue-800 text-sm" onclick="configureIntent('${intent.id}')">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                                <button class="text-red-600 hover:text-red-800 text-sm" onclick="removeIntent('${intent.id}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-600 mt-1">${intent.description}</p>
+                        <div class="text-xs text-gray-500 mt-1">
+                            Confidence: ${intent.confidence}% | Keywords: ${intent.keywords.join(', ')}
+                        </div>
+                    </div>
+                </div>
+                <div id="config-${intent.id}" class="intent-config-panel hidden">
+                    <!-- Configuration panel will be populated here -->
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    /**
+     * Update flow visualization
+     */
+    function updateFlowVisualization() {
+        const container = document.getElementById('intentFlowVisualization');
+        if (!container || !window.currentIntentFlow) return;
+        
+        const sortedFlow = [...window.currentIntentFlow].sort((a, b) => a.order - b.order);
+        
+        container.innerHTML = sortedFlow.map((intent, index) => `
+            <div class="flex items-center">
+                <div class="flex-1 bg-white rounded-lg p-3 border ${intent.enabled ? 'border-teal-300' : 'border-gray-300'}">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <span class="text-sm font-medium text-gray-900">${index + 1}. ${intent.name}</span>
+                            <span class="ml-2 intent-priority-badge intent-priority-${intent.priority}">
+                                ${intent.priority}
+                            </span>
+                        </div>
+                        <div class="text-xs text-gray-500">
+                            ${intent.confidence}%
+                        </div>
+                    </div>
+                </div>
+                ${index < sortedFlow.length - 1 ? '<div class="intent-flow-connector mt-2 mb-2"><i class="fas fa-arrow-down"></i></div>' : ''}
+            </div>
+        `).join('');
+    }
+    
+    /**
+     * Initialize drag and drop functionality
+     */
+    function initializeIntentDragAndDrop() {
+        // This would typically use a library like SortableJS
+        // For now, we'll implement basic reordering with buttons
+        console.log('Drag and drop functionality would be implemented here');
+    }
+    
+    /**
+     * Reset intent flow to default
+     */
+    function resetIntentFlowToDefault() {
+        if (confirm('Are you sure you want to reset to the default intent flow? This will overwrite any custom configuration.')) {
+            initializeDefaultIntentFlow();
+            updateIntentCategoriesList();
+            updateFlowVisualization();
+            showToast('Intent flow reset to default configuration', 'success');
+        }
+    }
+    
+    /**
+     * Validate intent flow configuration
+     */
+    function validateIntentFlow() {
+        const issues = [];
+        
+        if (!window.currentIntentFlow || window.currentIntentFlow.length === 0) {
+            issues.push('No intent categories configured');
+        }
+        
+        // Check for duplicate priorities
+        const highPriorityIntents = window.currentIntentFlow.filter(i => i.priority === 'high' && i.enabled);
+        if (highPriorityIntents.length === 0) {
+            issues.push('No high-priority intents enabled');
+        }
+        
+        // Check for gaps in ordering
+        const orders = window.currentIntentFlow.map(i => i.order).sort((a, b) => a - b);
+        for (let i = 1; i < orders.length; i++) {
+            if (orders[i] !== orders[i-1] + 1) {
+                issues.push('Gaps detected in intent ordering');
+                break;
+            }
+        }
+        
+        // Display results
+        const resultsDiv = document.createElement('div');
+        resultsDiv.className = 'mt-3 p-3 rounded-lg';
+        
+        if (issues.length === 0) {
+            resultsDiv.className += ' bg-green-50 border border-green-200';
+            resultsDiv.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-check-circle text-green-600 mr-2"></i>
+                    <span class="text-green-800 font-medium">Flow validation passed</span>
+                </div>
+                <p class="text-green-700 text-sm mt-1">Your intent routing configuration is valid and ready for deployment.</p>
+            `;
+        } else {
+            resultsDiv.className += ' bg-red-50 border border-red-200';
+            resultsDiv.innerHTML = `
+                <div class="flex items-center mb-2">
+                    <i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>
+                    <span class="text-red-800 font-medium">Flow validation failed</span>
+                </div>
+                <ul class="text-red-700 text-sm space-y-1">
+                    ${issues.map(issue => `<li>• ${issue}</li>`).join('')}
+                </ul>
+            `;
+        }
+        
+        // Remove any existing validation results
+        const existing = document.querySelector('.flow-validation-results');
+        if (existing) existing.remove();
+        
+        resultsDiv.classList.add('flow-validation-results');
+        document.getElementById('validateFlow').parentNode.appendChild(resultsDiv);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (resultsDiv.parentNode) {
+                resultsDiv.remove();
+            }
+        }, 5000);
+    }
+    
+    /**
+     * Add new intent category
+     */
+    function addNewIntentCategory() {
+        const typeSelect = document.getElementById('newIntentType');
+        const nameInput = document.getElementById('newIntentName');
+        
+        const type = typeSelect.value;
+        const name = nameInput.value.trim();
+        
+        if (!type || !name) {
+            alert('Please select a type and enter a name for the new intent');
+            return;
+        }
+        
+        const newIntent = {
+            id: type + '_' + Date.now(),
+            name: name,
+            description: 'Custom intent: ' + name,
+            priority: 'medium',
+            enabled: true,
+            confidence: 75,
+            keywords: [],
+            order: window.currentIntentFlow.length + 1
+        };
+        
+        window.currentIntentFlow.push(newIntent);
+        updateIntentCategoriesList();
+        updateFlowVisualization();
+        
+        // Clear inputs
+        typeSelect.value = '';
+        nameInput.value = '';
+        
+        showToast('New intent category added', 'success');
+    }
+    
+    /**
+     * Run intent flow test
+     */
+    async function runIntentFlowTest() {
+        const scenario = document.getElementById('flowTestScenario').value;
+        const input = document.getElementById('flowTestInput').value.trim();
+        const resultsDiv = document.getElementById('flowTestResults');
+        
+        if (!input) {
+            alert('Please enter a test input');
+            return;
+        }
+        
+        resultsDiv.style.display = 'block';
+        resultsDiv.innerHTML = `
+            <div class="intent-test-result">
+                <div class="flex items-center mb-2">
+                    <i class="fas fa-spinner fa-spin text-blue-600 mr-2"></i>
+                    <span class="font-medium text-blue-800">Running flow test...</span>
+                </div>
+            </div>
+        `;
+        
+        try {
+            const companyId = getCurrentCompanyId();
+            const response = await fetch('/api/agent/test-intent-flow', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    companyId,
+                    testInput: input,
+                    scenario
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                displayFlowTestResults(data.data);
+            } else {
+                throw new Error(data.error || 'Flow test failed');
+            }
+            
+        } catch (error) {
+            console.error('Flow test error:', error);
+            resultsDiv.innerHTML = `
+                <div class="intent-test-result bg-red-50 border-red-200">
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>
+                        <span class="text-red-800">Flow test failed: ${error.message}</span>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    /**
+     * Simulate intent flow test (replace with actual API call)
+     */
+    function simulateIntentFlowTest(input, scenario) {
+        const steps = [];
+        
+        // Step 1: Intent Classification
+        steps.push({
+            step: 'Intent Classification',
+            status: 'success',
+            message: `Classified as: ${scenario} (confidence: 89%)`
+        });
+        
+        // Step 2: Priority Check
+        steps.push({
+            step: 'Priority Check',
+            status: 'success',
+            message: 'High priority intent - processing immediately'
+        });
+        
+        // Step 3: Flow Routing
+        steps.push({
+            step: 'Flow Routing',
+            status: 'success',
+            message: 'Routed to Service Issue Handler'
+        });
+        
+        // Step 4: Response Generation
+        steps.push({
+            step: 'Response Generation',
+            status: 'success',
+            message: 'Generated appropriate response'
+        });
+        
+        return {
+            input,
+            scenario,
+            steps,
+            finalResponse: "I understand you're having an issue with your AC. Let me help you get that fixed right away. Can you tell me your name and the best phone number to reach you?",
+            processingTime: '0.34s',
+            confidence: '89%'
+        };
+    }
+    
+    /**
+     * Display flow test results
+     */
+    function displayFlowTestResults(results) {
+        const resultsDiv = document.getElementById('flowTestResults');
+        
+        resultsDiv.innerHTML = `
+            <div class="space-y-4">
+                <div class="intent-test-result">
+                    <h6 class="font-medium text-gray-900 mb-2">Flow Test Results</h6>
+                    <div class="grid grid-cols-2 gap-4 text-sm mb-4">
+                        <div>
+                            <span class="text-gray-600">Processing Time:</span>
+                            <span class="font-medium text-green-600 ml-1">${results.processingTime}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-600">Confidence:</span>
+                            <span class="font-medium text-blue-600 ml-1">${results.confidence}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h7 class="font-medium text-gray-800">Processing Steps:</h7>
+                        <div class="mt-2 space-y-2">
+                            ${results.steps.map((step, index) => `
+                                <div class="intent-test-step ${step.status}">
+                                    <div class="flex items-center">
+                                        <span class="w-6 h-6 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center text-xs font-bold mr-3">${index + 1}</span>
+                                        <div class="flex-1">
+                                            <span class="font-medium">${step.step}:</span>
+                                            <span class="ml-1">${step.message}</span>
+                                        </div>
+                                        <i class="fas fa-check text-green-600"></i>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h7 class="font-medium text-gray-800">Final Response:</h7>
+                        <div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded">
+                            <p class="text-blue-800 text-sm">${results.finalResponse}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Toggle intent enabled/disabled
+     */
+    function toggleIntentEnabled(intentId) {
+        const intent = window.currentIntentFlow.find(i => i.id === intentId);
+        if (intent) {
+            intent.enabled = !intent.enabled;
+            updateFlowVisualization();
+            showToast(`Intent ${intent.enabled ? 'enabled' : 'disabled'}`, 'info');
+        }
+    }
+    
+    /**
+     * Configure specific intent
+     */
+    function configureIntent(intentId) {
+        const intent = window.currentIntentFlow.find(i => i.id === intentId);
+        if (!intent) return;
+        
+        const configPanel = document.getElementById(`config-${intentId}`);
+        if (!configPanel) return;
+        
+        if (configPanel.classList.contains('hidden')) {
+            // Show configuration panel
+            configPanel.classList.remove('hidden');
+            configPanel.innerHTML = `
+                <div class="space-y-3">
+                    <div>
+                        <label class="form-label text-xs">Priority Level</label>
+                        <select class="form-select text-xs" onchange="updateIntentPriority('${intentId}', this.value)">
+                            <option value="high" ${intent.priority === 'high' ? 'selected' : ''}>High</option>
+                            <option value="medium" ${intent.priority === 'medium' ? 'selected' : ''}>Medium</option>
+                            <option value="low" ${intent.priority === 'low' ? 'selected' : ''}>Low</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label text-xs">Confidence Threshold</label>
+                        <input type="range" min="50" max="95" value="${intent.confidence}" class="w-full" 
+                               onchange="updateIntentConfidence('${intentId}', this.value)">
+                        <div class="text-xs text-gray-500">${intent.confidence}%</div>
+                    </div>
+                    <div>
+                        <label class="form-label text-xs">Keywords (comma-separated)</label>
+                        <input type="text" value="${intent.keywords.join(', ')}" class="form-input text-xs" 
+                               onchange="updateIntentKeywords('${intentId}', this.value)">
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded" 
+                                onclick="saveIntentConfig('${intentId}')">Save</button>
+                        <button class="bg-gray-500 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded" 
+                                onclick="hideIntentConfig('${intentId}')">Cancel</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Hide configuration panel
+            configPanel.classList.add('hidden');
+        }
+    }
+    
+    /**
+     * Remove intent
+     */
+    function removeIntent(intentId) {
+        if (confirm('Are you sure you want to remove this intent category?')) {
+            window.currentIntentFlow = window.currentIntentFlow.filter(i => i.id !== intentId);
+            updateIntentCategoriesList();
+            updateFlowVisualization();
+            showToast('Intent category removed', 'success');
+        }
+    }
+    
+    /**
+     * Update intent routing configuration
+     */
+    function updateIntentRoutingConfig() {
+        console.log('Intent routing configuration updated');
+        // Auto-save configuration when settings change
+        saveIntentRoutingConfiguration();
+    }
+    
+    /**
+     * Update test input placeholder based on scenario
+     */
+    function updateTestInputPlaceholder() {
+        const scenario = document.getElementById('flowTestScenario').value;
+        const input = document.getElementById('flowTestInput');
+        
+        const placeholders = {
+            'service_emergency': 'My AC stopped working this morning',
+            'routine_booking': 'I need to schedule maintenance',
+            'pricing_inquiry': 'How much does AC repair cost?',
+            'complaint': 'I\'m not happy with the service',
+            'transfer_request': 'Can I speak to a manager?',
+            'after_hours': 'Are you open right now?',
+            'custom': 'Enter your test query...'
+        };
+        
+        input.placeholder = placeholders[scenario] || placeholders.custom;
+    }
+    
+    // Helper functions for intent configuration
+    function updateIntentPriority(intentId, priority) {
+        const intent = window.currentIntentFlow.find(i => i.id === intentId);
+        if (intent) {
+            intent.priority = priority;
+            updateIntentCategoriesList();
+            updateFlowVisualization();
+        }
+    }
+    
+    function updateIntentConfidence(intentId, confidence) {
+        const intent = window.currentIntentFlow.find(i => i.id === intentId);
+        if (intent) {
+            intent.confidence = parseInt(confidence);
+            // Update display
+            const display = document.querySelector(`#config-${intentId} .text-xs.text-gray-500`);
+            if (display) display.textContent = confidence + '%';
+        }
+    }
+    
+    function updateIntentKeywords(intentId, keywordsStr) {
+        const intent = window.currentIntentFlow.find(i => i.id === intentId);
+        if (intent) {
+            intent.keywords = keywordsStr.split(',').map(k => k.trim()).filter(k => k);
+        }
+    }
+    
+    function saveIntentConfig(intentId) {
+        hideIntentConfig(intentId);
+        updateIntentCategoriesList();
+        updateFlowVisualization();
+        showToast('Intent configuration saved', 'success');
+    }
+    
+    function hideIntentConfig(intentId) {
+        const configPanel = document.getElementById(`config-${intentId}`);
+        if (configPanel) {
+            configPanel.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Update intent performance metrics display
+     */
+    function updateIntentPerformanceMetrics(metrics) {
+        if (metrics) {
+            // Update intent accuracy
+            const intentAccuracy = document.getElementById('intentAccuracy');
+            if (intentAccuracy) intentAccuracy.textContent = metrics.intentAccuracy + '%';
+            
+            // Update routing speed
+            const routingSpeed = document.getElementById('routingSpeed');
+            if (routingSpeed) routingSpeed.textContent = metrics.routingSpeed + 's';
+            
+            // Update fallback rate
+            const fallbackRate = document.getElementById('fallbackRate');
+            if (fallbackRate) fallbackRate.textContent = metrics.fallbackRate + '%';
+            
+            // Update total intents
+            const totalIntents = document.getElementById('totalIntents');
+            if (totalIntents) totalIntents.textContent = metrics.totalIntents.toLocaleString();
+        }
+    }
+
+    /**
+     * Save intent routing configuration to server
+     */
+    async function saveIntentRoutingConfiguration() {
+        try {
+            const companyId = getCurrentCompanyId();
+            const config = {
+                intentFlow: window.currentIntentFlow,
+                settings: {
+                    enableIntentClassification: document.getElementById('enableIntentClassification')?.checked || true,
+                    enableStrictPriority: document.getElementById('enableStrictPriority')?.checked || true,
+                    enableFlowMonitoring: document.getElementById('enableFlowMonitoring')?.checked || true,
+                    intentConfidenceThreshold: parseInt(document.getElementById('intentConfidenceThreshold')?.value) || 75
+                }
+            };
+            
+            const response = await fetch(`/api/agent/intent-routing/${companyId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showToast('Intent routing configuration saved successfully', 'success');
+            } else {
+                throw new Error(data.error || 'Failed to save configuration');
+            }
+        } catch (error) {
+            console.error('Error saving intent routing configuration:', error);
+            showToast('Failed to save configuration: ' + error.message, 'error');
+        }
+    }
     // ===========================================
     // PHONE NUMBER MANAGEMENT FUNCTIONALITY
     // ===========================================
@@ -7099,6 +8047,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize Logic AI Intelligence features
     if (document.getElementById('logicTestIntelligenceBtn')) {
         initializeLogicAIIntelligence();
+    }
+    
+    // Initialize Intent Routing Panel
+    if (document.getElementById('intentFlowVisualization')) {
+        initializeIntentRoutingPanel();
     }
 });
 
