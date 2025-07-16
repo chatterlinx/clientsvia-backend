@@ -5,7 +5,8 @@
 
 const express = require('express');
 const router = express.Router();
-const intentRoutingService = require('../services/intentRoutingService');
+const { IntentRoutingService } = require('../services/intentRoutingService');
+const intentRoutingService = new IntentRoutingService();
 const winston = require('winston');
 
 // Logger setup
@@ -292,6 +293,60 @@ router.get('/intent-templates', async (req, res) => {
     } catch (error) {
         logger.error('Error in GET intent-templates', { error: error.message });
         res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+/**
+ * POST /api/agent/test-intent-flow-steps
+ * Test intent flow with flow steps
+ */
+router.post('/test-intent-flow-steps', async (req, res) => {
+    try {
+        const { companyId, intentId, inputText } = req.body;
+        
+        if (!companyId || !intentId || !inputText) {
+            return res.status(400).json({
+                success: false,
+                error: 'companyId, intentId, and inputText are required'
+            });
+        }
+
+        // Get the intent configuration
+        const config = await intentRoutingService.getIntentRoutingConfig(companyId);
+        const intent = config.data.intentFlow.find(i => i.id === intentId);
+        
+        if (!intent) {
+            return res.status(404).json({
+                success: false,
+                error: 'Intent not found'
+            });
+        }
+
+        // Run the intent flow
+        const result = await intentRoutingService.runIntentFlow(
+            intent.name, 
+            inputText, 
+            companyId, 
+            intent.flowSteps || []
+        );
+
+        res.json({
+            success: true,
+            data: {
+                intent: intent.name,
+                inputText,
+                result,
+                flowSteps: intent.flowSteps || [],
+                timestamp: new Date().toISOString()
+            }
+        });
+
+    } catch (error) {
+        console.error('Intent flow test error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
     }
 });
 

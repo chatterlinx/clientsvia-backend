@@ -6359,14 +6359,51 @@ Cost estimate</textarea>
                         <input type="text" value="${intent.keywords.join(', ')}" class="form-input text-xs" 
                                onchange="updateIntentKeywords('${intentId}', this.value)">
                     </div>
+                    
+                    <!-- Flow Steps Subsection -->
+                    <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="form-label text-xs font-semibold">Flow Steps for ${intent.name}</label>
+                            <span class="text-xs text-gray-500">Execution Order</span>
+                        </div>
+                        <div id="flowSteps-${intentId}" class="space-y-2 mb-3">
+                            <!-- Flow steps will be populated here -->
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <select id="newStepAction-${intentId}" class="form-select text-xs flex-1">
+                                <option value="">Add Step...</option>
+                                <option value="checkCustomKB">Check Custom Knowledge Base</option>
+                                <option value="checkCategoryQAs">Check Category Q&As</option>
+                                <option value="triggerBooking">Trigger Booking Flow</option>
+                                <option value="lookupCompanyData">Lookup Company Data</option>
+                                <option value="respondGreeting">Respond with Greeting</option>
+                                <option value="respondEstimateScript">Respond with Estimate Script</option>
+                                <option value="transferToHuman">Transfer to Human</option>
+                                <option value="fallbackAI">Use AI Fallback</option>
+                                <option value="askClarifyingQuestion">Ask Clarifying Question</option>
+                            </select>
+                            <button class="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1 rounded" 
+                                    onclick="addFlowStep('${intentId}')">
+                                <i class="fas fa-plus mr-1"></i>Add
+                            </button>
+                        </div>
+                    </div>
+                    
                     <div class="flex gap-2">
                         <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded" 
                                 onclick="saveIntentConfig('${intentId}')">Save</button>
+                        <button class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded" 
+                                onclick="testIntentFlowSteps('${intentId}')">
+                            <i class="fas fa-flask mr-1"></i>Test Flow
+                        </button>
                         <button class="bg-gray-500 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded" 
                                 onclick="hideIntentConfig('${intentId}')">Cancel</button>
                     </div>
                 </div>
             `;
+            
+            // Render flow steps after the panel is created
+            setTimeout(() => renderFlowSteps(intentId), 0);
         } else {
             // Hide configuration panel
             configPanel.classList.add('hidden');
@@ -6414,46 +6451,107 @@ Cost estimate</textarea>
         input.placeholder = placeholders[scenario] || placeholders.custom;
     }
     
-    // Helper functions for intent configuration
-    function updateIntentPriority(intentId, priority) {
-        const intent = window.currentIntentFlow.find(i => i.id === intentId);
-        if (intent) {
-            intent.priority = priority;
+        // Helper functions for intent configuration
+        function updateIntentPriority(intentId, priority) {
+            const intent = window.currentIntentFlow.find(i => i.id === intentId);
+            if (intent) {
+                intent.priority = priority;
+                updateIntentCategoriesList();
+                updateFlowVisualization();
+            }
+        }
+        
+        function updateIntentConfidence(intentId, confidence) {
+            const intent = window.currentIntentFlow.find(i => i.id === intentId);
+            if (intent) {
+                intent.confidence = parseInt(confidence);
+                // Update display
+                const display = document.querySelector(`#config-${intentId} .text-xs.text-gray-500`);
+                if (display) display.textContent = confidence + '%';
+            }
+        }
+        
+        function updateIntentKeywords(intentId, keywordsStr) {
+            const intent = window.currentIntentFlow.find(i => i.id === intentId);
+            if (intent) {
+                intent.keywords = keywordsStr.split(',').map(k => k.trim()).filter(k => k);
+            }
+        }
+    
+        /**
+         * Test intent flow steps
+         */
+        async function testIntentFlowSteps(intentId) {
+            const intent = window.currentIntentFlow.find(i => i.id === intentId);
+            if (!intent) return;
+            
+            // Create a simple test input dialog
+            const testInput = prompt(`Test "${intent.name}" flow steps with input:`, 
+                                   intent.keywords[0] || 'test input');
+            
+            if (!testInput) return;
+            
+            try {
+                const response = await fetch('/api/agent/test-intent-flow-steps', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        companyId: getCompanyId(),
+                        intentId: intentId,
+                        inputText: testInput
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Show test results in a modal or alert
+                    const flowStepsText = result.data.flowSteps.map((step, index) => 
+                        `${index + 1}. ${getActionDisplayName(step.type)}`
+                    ).join('\n');
+                    
+                    const message = `
+    🧪 Flow Test Results for "${intent.name}"
+    
+    📝 Test Input: "${testInput}"
+    
+    🔄 Flow Steps Executed:
+    ${flowStepsText}
+    
+    💬 Final Response: 
+    "${result.data.result.response}"
+    
+    ✅ Success: ${result.data.result.success ? 'Yes' : 'No'}
+    🎯 Step Type: ${result.data.result.stepType || 'N/A'}
+    ⚡ Fallback Used: ${result.data.result.fallback ? 'Yes' : 'No'}
+                    `.trim();
+                    
+                    alert(message);
+                    showToast('Flow test completed successfully', 'success');
+                } else {
+                    showToast(`Flow test failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Flow test error:', error);
+                showToast('Failed to test flow steps', 'error');
+            }
+        }
+        
+        function saveIntentConfig(intentId) {
+            hideIntentConfig(intentId);
             updateIntentCategoriesList();
             updateFlowVisualization();
+            showToast('Intent configuration saved', 'success');
         }
-    }
-    
-    function updateIntentConfidence(intentId, confidence) {
-        const intent = window.currentIntentFlow.find(i => i.id === intentId);
-        if (intent) {
-            intent.confidence = parseInt(confidence);
-            // Update display
-            const display = document.querySelector(`#config-${intentId} .text-xs.text-gray-500`);
-            if (display) display.textContent = confidence + '%';
+        
+        function hideIntentConfig(intentId) {
+            const configPanel = document.getElementById(`config-${intentId}`);
+            if (configPanel) {
+                configPanel.classList.add('hidden');
+            }
         }
-    }
-    
-    function updateIntentKeywords(intentId, keywordsStr) {
-        const intent = window.currentIntentFlow.find(i => i.id === intentId);
-        if (intent) {
-            intent.keywords = keywordsStr.split(',').map(k => k.trim()).filter(k => k);
-        }
-    }
-    
-    function saveIntentConfig(intentId) {
-        hideIntentConfig(intentId);
-        updateIntentCategoriesList();
-        updateFlowVisualization();
-        showToast('Intent configuration saved', 'success');
-    }
-    
-    function hideIntentConfig(intentId) {
-        const configPanel = document.getElementById(`config-${intentId}`);
-        if (configPanel) {
-            configPanel.classList.add('hidden');
-        }
-    }
 
     /**
      * Update intent performance metrics display

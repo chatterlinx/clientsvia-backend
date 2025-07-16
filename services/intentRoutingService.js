@@ -4,6 +4,21 @@
  */
 
 const winston = require('winston');
+const fs = require('fs').promises;
+const path = require('path');
+
+// Valid actions that can be used in intent flow steps
+const VALID_ACTIONS = [
+    'checkCustomKB',
+    'checkCategoryQAs', 
+    'triggerBooking',
+    'lookupCompanyData',
+    'respondGreeting',
+    'respondEstimateScript',
+    'transferToHuman',
+    'fallbackAI',
+    'askClarifyingQuestion'
+];
 
 class IntentRoutingService {
     constructor() {
@@ -21,87 +36,106 @@ class IntentRoutingService {
             ]
         });
         
-        // Default intent flow configuration
+        // Default intent flow configuration following the schema structure
         this.defaultIntentFlow = [
             {
-                id: 'service_issue',
+                id: 'category_service',
                 name: 'Service Issue Detection',
-                description: 'Detect AC/heating/plumbing emergencies',
+                description: 'Detects service issues, repairs, and maintenance requests',
                 priority: 'high',
-                enabled: true,
                 confidence: 85,
-                keywords: ['broken', 'not working', 'emergency', 'repair', 'fix', 'stopped working', 'no cold air', 'no heat'],
+                enabled: true,
                 order: 1,
-                handler: 'ServiceIssueHandler',
-                conditions: {
-                    urgency: 'high',
-                    businessHours: 'any',
-                    escalateAfter: 0
-                }
+                keywords: ['broken', 'not working', 'emergency', 'repair', 'fix'],
+                flowSteps: [
+                    { type: 'checkCustomKB' },
+                    { type: 'checkCategoryQAs' },
+                    { type: 'triggerBooking' }
+                ]
             },
             {
-                id: 'booking_request',
+                id: 'category_booking',
                 name: 'Booking Request',
                 description: 'Schedule appointments and services',
                 priority: 'high',
-                enabled: true,
                 confidence: 80,
-                keywords: ['schedule', 'appointment', 'book', 'availability', 'when can you come', 'technician'],
+                enabled: true,
                 order: 2,
-                handler: 'BookingFlowHandler',
-                conditions: {
-                    urgency: 'medium',
-                    businessHours: 'preferred',
-                    escalateAfter: 2
-                }
+                keywords: ['schedule', 'appointment', 'book', 'availability'],
+                flowSteps: [
+                    { type: 'lookupCompanyData' },
+                    { type: 'triggerBooking' }
+                ]
             },
             {
-                id: 'information_request',
+                id: 'category_emergency',
+                name: 'Emergency Priority',
+                description: 'Emergency situations requiring immediate attention',
+                priority: 'high',
+                confidence: 90,
+                enabled: true,
+                order: 3,
+                keywords: ['emergency', 'urgent', 'now', 'immediately'],
+                flowSteps: [
+                    { type: 'respondGreeting' },
+                    { type: 'transferToHuman' }
+                ]
+            },
+            {
+                id: 'category_information',
                 name: 'Information Request',
                 description: 'General questions and company info',
                 priority: 'medium',
-                enabled: true,
                 confidence: 75,
-                keywords: ['hours', 'pricing', 'services', 'about', 'cost', 'how much', 'what do you'],
-                order: 3,
-                handler: 'KnowledgeBaseHandler',
-                conditions: {
-                    urgency: 'low',
-                    businessHours: 'any',
-                    escalateAfter: 3
-                }
-            },
-            {
-                id: 'transfer_request',
-                name: 'Transfer Request',
-                description: 'Transfer to human agent',
-                priority: 'medium',
                 enabled: true,
-                confidence: 90,
-                keywords: ['manager', 'human', 'transfer', 'speak to', 'real person', 'representative'],
                 order: 4,
-                handler: 'TransferHandler',
-                conditions: {
-                    urgency: 'immediate',
-                    businessHours: 'required',
-                    escalateAfter: 0
-                }
+                keywords: ['hours', 'pricing', 'services', 'cost', 'how much'],
+                flowSteps: [
+                    { type: 'lookupCompanyData' },
+                    { type: 'checkCategoryQAs' },
+                    { type: 'respondGreeting' }
+                ]
             },
             {
-                id: 'after_hours',
-                name: 'After Hours Protocol',
-                description: 'Handle calls outside business hours',
-                priority: 'low',
+                id: 'category_complaint',
+                name: 'Complaint Handling',
+                description: 'Customer complaints and issues',
+                priority: 'medium',
+                confidence: 80,
                 enabled: true,
-                confidence: 95,
-                keywords: ['closed', 'hours', 'open', 'business hours'],
                 order: 5,
-                handler: 'AfterHoursHandler',
-                conditions: {
-                    urgency: 'low',
-                    businessHours: 'outside',
-                    escalateAfter: 1
-                }
+                keywords: ['complaint', 'unhappy', 'disappointed', 'problem'],
+                flowSteps: [
+                    { type: 'checkCustomKB' },
+                    { type: 'transferToHuman' }
+                ]
+            },
+            {
+                id: 'category_transfer',
+                name: 'Transfer Request',
+                description: 'Requests to speak with someone',
+                priority: 'low',
+                confidence: 70,
+                enabled: true,
+                order: 6,
+                keywords: ['speak to', 'talk to', 'manager', 'supervisor'],
+                flowSteps: [
+                    { type: 'transferToHuman' }
+                ]
+            },
+            {
+                id: 'category_after_hours',
+                name: 'After Hours Protocol',
+                description: 'Calls outside business hours',
+                priority: 'low',
+                confidence: 60,
+                enabled: true,
+                order: 7,
+                keywords: ['after hours', 'weekend', 'closed'],
+                flowSteps: [
+                    { type: 'respondGreeting' },
+                    { type: 'askClarifyingQuestion' }
+                ]
             }
         ];
     }
@@ -468,6 +502,136 @@ class IntentRoutingService {
             return { success: false, error: error.message };
         }
     }
+
+    /**
+     * Runtime handler that safely executes flow steps
+     */
+    async runIntentFlow(intent, userText, companyId, flowSteps) {
+        try {
+            this.logger.info('Running intent flow', { intent, companyId, steps: flowSteps?.length });
+            
+            if (!Array.isArray(flowSteps) || flowSteps.length === 0) {
+                return { 
+                    success: false, 
+                    response: "I'm not sure how to help with that.", 
+                    fallback: true 
+                };
+            }
+
+            // Execute each step in the flow
+            for (const step of flowSteps) {
+                if (!VALID_ACTIONS.includes(step.type)) {
+                    this.logger.warn('Invalid step type in flow', { step, intent });
+                    continue;
+                }
+
+                try {
+                    const result = await this.executeFlowStep(step.type, userText, companyId, step);
+                    if (result?.found) {
+                        this.logger.info('Flow step successful', { step: step.type, intent });
+                        return { 
+                            success: true, 
+                            response: result.response,
+                            stepType: step.type,
+                            intent 
+                        };
+                    }
+                } catch (err) {
+                    this.logger.error('Step handler error', { step: step.type, intent, error: err.message });
+                    continue;
+                }
+            }
+
+            // If no step returned a response, use fallback
+            return { 
+                success: false, 
+                response: "I wasn't able to find an answer for that. Let me get someone to help.", 
+                fallback: true 
+            };
+            
+        } catch (error) {
+            this.logger.error('Intent flow execution error', { intent, companyId, error: error.message });
+            return { 
+                success: false, 
+                response: "I'm experiencing some technical difficulties. Please hold while I connect you to someone who can help.", 
+                error: true 
+            };
+        }
+    }
+
+    /**
+     * Execute a single flow step with mock handlers
+     */
+    async executeFlowStep(stepType, userText, companyId, stepConfig) {
+        // Mock implementations of step handlers
+        const handlers = {
+            respondGreeting: async () => ({ 
+                found: true, 
+                response: "Hello! I'm here to help you today. How can I assist you?" 
+            }),
+            
+            checkCustomKB: async (text, companyId) => {
+                // Mock custom knowledge base check
+                const mockKBResults = ['broken ac', 'no heat', 'emergency'];
+                const hasMatch = mockKBResults.some(term => text.toLowerCase().includes(term));
+                return { 
+                    found: hasMatch, 
+                    response: hasMatch ? "I found some information about your issue. Let me help you with that." : null 
+                };
+            },
+            
+            checkCategoryQAs: async (text, companyId) => {
+                // Mock category Q&A check  
+                const mockQAs = ['pricing', 'hours', 'services'];
+                const hasMatch = mockQAs.some(term => text.toLowerCase().includes(term));
+                return { 
+                    found: hasMatch, 
+                    response: hasMatch ? "Here's what I can tell you about that..." : null 
+                };
+            },
+            
+            fallbackAI: async (text, companyId) => ({ 
+                found: true, 
+                response: "Based on what you've described, it sounds like you need professional assistance. Let me help you get that scheduled." 
+            }),
+            
+            triggerBooking: async () => ({ 
+                found: true, 
+                response: "I'd be happy to help you schedule an appointment. What day and time would work best for you?" 
+            }),
+            
+            transferToHuman: async (text, companyId, step) => ({ 
+                found: true, 
+                response: `Let me connect you to our ${step.to || 'team'}. Please hold while I transfer your call.` 
+            }),
+            
+            lookupCompanyData: async (text, companyId, step) => ({ 
+                found: true, 
+                response: "We're open Monday through Friday from 8 AM to 6 PM. Is there anything specific you'd like to know?" 
+            }),
+            
+            respondEstimateScript: async () => ({ 
+                found: true, 
+                response: "I'd be happy to help you get an estimate. May I have your address so we can provide accurate pricing?" 
+            }),
+            
+            askClarifyingQuestion: async () => ({ 
+                found: true, 
+                response: "To better assist you, could you tell me a bit more about what you're needing help with today?" 
+            })
+        };
+
+        const handler = handlers[stepType];
+        if (!handler) {
+            this.logger.warn('No handler found for step type', { stepType });
+            return { found: false };
+        }
+
+        return await handler(userText, companyId, stepConfig);
+    }
 }
 
-module.exports = new IntentRoutingService();
+module.exports = {
+    IntentRoutingService,
+    VALID_ACTIONS
+};
