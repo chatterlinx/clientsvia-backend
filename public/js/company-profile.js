@@ -2179,28 +2179,6 @@ document.addEventListener('DOMContentLoaded', () => {
             setInterval(updateCurrentTimeAgentSetup, 60000); 
         }
 
-        const sectionHeaders = agentSetupPageContainer.querySelectorAll('.agent-setup-section-header');
-        sectionHeaders.forEach(header => {
-            const sectionContent = header.nextElementSibling;
-            const chevron = header.querySelector('i.fas.fa-chevron-up, i.fas.fa-chevron-down');
-            if (sectionContent && chevron) { 
-                if (header.parentElement?.dataset.sectionName !== 'categories') { 
-                    sectionContent.classList.add('collapsed');
-                    chevron.classList.remove('fa-chevron-up'); 
-                    chevron.classList.add('fa-chevron-down'); 
-                } else { 
-                    sectionContent.classList.remove('collapsed');
-                    chevron.classList.remove('fa-chevron-down'); 
-                    chevron.classList.add('fa-chevron-up'); 
-                }
-                header.addEventListener('click', () => {
-                    sectionContent.classList.toggle('collapsed');
-                    chevron.classList.toggle('fa-chevron-up');
-                    chevron.classList.toggle('fa-chevron-down');
-                });
-            }
-        });
-
         const protocolToggles = agentSetupPageContainer.querySelectorAll('.protocol-toggle');
         protocolToggles.forEach(toggle => { 
             const targetId = toggle.getAttribute('data-protocol-target');
@@ -2848,6 +2826,46 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('✅ Personality responses form event listener attached');
     } else {
         console.warn('⚠️ Personality responses form not found - will try again after data load');
+    }
+    
+    // *** CRITICAL: Set up agent setup accordion functionality ***
+    // This needs to run immediately when page loads, not just when company data is fetched
+    if (agentSetupPageContainer) {
+        const sectionHeaders = agentSetupPageContainer.querySelectorAll('.agent-setup-section-header');
+        console.log(`🔧 Setting up ${sectionHeaders.length} accordion sections...`);
+        
+        sectionHeaders.forEach(header => {
+            const sectionContent = header.nextElementSibling;
+            const chevron = header.querySelector('i.fas.fa-chevron-up, i.fas.fa-chevron-down');
+            if (sectionContent && chevron) { 
+                // Initialize collapsed state (except for categories which should be open by default)
+                if (header.parentElement?.dataset.sectionName !== 'categories') { 
+                    sectionContent.classList.add('collapsed');
+                    chevron.classList.remove('fa-chevron-up'); 
+                    chevron.classList.add('fa-chevron-down'); 
+                } else { 
+                    sectionContent.classList.remove('collapsed');
+                    chevron.classList.remove('fa-chevron-down'); 
+                    chevron.classList.add('fa-chevron-up'); 
+                }
+                
+                // Add click event listener for accordion functionality
+                header.addEventListener('click', () => {
+                    console.log('🖱️ Accordion section clicked:', header.parentElement?.dataset.sectionName);
+                    sectionContent.classList.toggle('collapsed');
+                    chevron.classList.toggle('fa-chevron-up');
+                    chevron.classList.toggle('fa-chevron-down');
+                });
+                
+                console.log('✅ Accordion setup for section:', header.parentElement?.dataset.sectionName);
+            } else {
+                console.warn('⚠️ Missing content or chevron for accordion section:', header.parentElement?.dataset.sectionName);
+            }
+        });
+        
+        console.log('🎯 Agent setup accordion initialization complete');
+    } else {
+        console.warn('⚠️ Agent setup container not found - accordion setup skipped');
     }
     
     // *** CRITICAL: Fetch company data on page load ***
