@@ -11,9 +11,7 @@ class ServiceIssueHandler {
         keywords: [
           'ac stopped working', 'ac not working', 'air conditioner stopped', 
           'ac broke', 'ac broken', 'ac quit working', 'ac died',
-          'air conditioning not working', 'air conditioner not working',
-          'ac not cooling', 'ac blowing warm', 'ac blowing hot',
-          'air conditioner broken', 'cooling not working'
+          'air conditioning not working', 'air conditioner not working'
         ],
         intent: 'category_service_issue',
         urgency: 'high',
@@ -25,8 +23,7 @@ class ServiceIssueHandler {
       heating_not_working: {
         keywords: [
           'heat not working', 'heater stopped', 'furnace not working',
-          'no heat', 'heater broke', 'furnace died', 'heating stopped',
-          'heat stopped working', 'furnace broken', 'heating system down'
+          'no heat', 'heater broke', 'furnace died', 'heating stopped'
         ],
         intent: 'category_service_issue', 
         urgency: 'high',
@@ -38,8 +35,7 @@ class ServiceIssueHandler {
       hvac_malfunction: {
         keywords: [
           'hvac not working', 'system down', 'unit not working',
-          'thermostat not working', 'system stopped', 'hvac broken',
-          'hvac system down', 'completely down', 'system completely down'
+          'thermostat not working', 'system stopped'
         ],
         intent: 'category_service_issue',
         urgency: 'medium',
@@ -56,31 +52,9 @@ class ServiceIssueHandler {
     const normalizedQuery = query.toLowerCase();
     
     for (const [issueType, config] of Object.entries(this.serviceIssuePatterns)) {
-      const matched = config.keywords.some(keyword => {
-        const keywordLower = keyword.toLowerCase();
-        
-        // Exact match
-        if (normalizedQuery.includes(keywordLower)) {
-          return true;
-        }
-        
-        // Flexible matching for phrases with articles/conjunctions
-        const flexibleKeyword = keywordLower
-          .replace(/\bthe\b/g, '')
-          .replace(/\bis\b/g, '')
-          .replace(/\band\b/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-          
-        const flexibleQuery = normalizedQuery
-          .replace(/\bthe\b/g, '')
-          .replace(/\bis\b/g, '')
-          .replace(/\band\b/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-        
-        return flexibleQuery.includes(flexibleKeyword);
-      });
+      const matched = config.keywords.some(keyword => 
+        normalizedQuery.includes(keyword.toLowerCase())
+      );
       
       if (matched) {
         return {
