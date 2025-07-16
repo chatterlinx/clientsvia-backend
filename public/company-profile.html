@@ -6319,6 +6319,13 @@ document.addEventListener('DOMContentLoaded', function() {
 async function refreshPerformanceMetrics() {
     try {
         const companyId = getCurrentCompanyId();
+        
+        // Don't proceed if no company ID
+        if (!companyId) {
+            console.warn('⚠️ No company ID available - skipping performance metrics refresh');
+            return;
+        }
+        
         const timeRangeElement = document.getElementById('performanceTimeRange');
         const timeRange = timeRangeElement ? timeRangeElement.value : '24h';
         
@@ -6358,16 +6365,24 @@ async function refreshPerformanceMetrics() {
  * Update the performance metrics display
  */
 function updatePerformanceDisplay(metrics) {
-    // Update main metrics
-    document.getElementById('totalResponses').textContent = metrics.totalResponses || 0;
-    document.getElementById('avgIntelligence').textContent = metrics.avgIntelligence || 0;
-    document.getElementById('avgResponseTime').textContent = `${metrics.avgResponseTime || 0}ms`;
+    // Check if required elements exist before updating
+    const totalResponsesEl = document.getElementById('totalResponses');
+    const avgIntelligenceEl = document.getElementById('avgIntelligence');
+    const avgResponseTimeEl = document.getElementById('avgResponseTime');
+    const llmFallbackRateEl = document.getElementById('llmFallbackRate');
+    
+    // Only update if elements exist
+    if (totalResponsesEl) totalResponsesEl.textContent = metrics.totalResponses || 0;
+    if (avgIntelligenceEl) avgIntelligenceEl.textContent = metrics.avgIntelligence || 0;
+    if (avgResponseTimeEl) avgResponseTimeEl.textContent = `${metrics.avgResponseTime || 0}ms`;
     
     // Calculate and display LLM fallback rate
-    const llmFallback = metrics.methodDistribution['llm-fallback'] || 0;
-    const total = metrics.totalResponses || 1;
-    const fallbackRate = Math.round((llmFallback / total) * 100);
-    document.getElementById('llmFallbackRate').textContent = `${fallbackRate}%`;
+    if (llmFallbackRateEl) {
+        const llmFallback = metrics.methodDistribution['llm-fallback'] || 0;
+        const total = metrics.totalResponses || 1;
+        const fallbackRate = Math.round((llmFallback / total) * 100);
+        llmFallbackRateEl.textContent = `${fallbackRate}%`;
+    }
     
     // Update method distribution bars
     updateMethodDistribution(metrics.methodDistribution, total);
@@ -6514,6 +6529,13 @@ function updateHealthDisplay(health) {
 async function refreshImprovementSuggestions() {
     try {
         const companyId = getCurrentCompanyId();
+        
+        // Don't proceed if no company ID
+        if (!companyId) {
+            console.warn('⚠️ No company ID available - skipping improvement suggestions refresh');
+            return;
+        }
+        
         const container = document.getElementById('improvementSuggestions');
         
         if (!container) {
@@ -7166,7 +7188,47 @@ async function updateLogicLearningSettings() {
             }
             } else {
                 console.error('❌ No company ID found in URL');
-                document.body.innerHTML = '<div class="p-8 text-center"><h1 class="text-2xl font-bold text-red-600">Error: No company ID provided</h1><p class="text-gray-600 mt-2">Please access this page with a valid company ID.</p></div>';
+                console.log('🔧 Current URL:', window.location.href);
+                console.log('🔧 Search params:', window.location.search);
+                
+                // Show user-friendly error with suggestions
+                const errorHTML = `
+                    <div class="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
+                            <div class="mb-6">
+                                <i class="fas fa-exclamation-triangle text-6xl text-yellow-500 mb-4"></i>
+                                <h1 class="text-2xl font-bold text-gray-800 mb-2">Company ID Required</h1>
+                                <p class="text-gray-600">This page requires a company ID to load profile data.</p>
+                            </div>
+                            
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
+                                <h3 class="font-semibold text-blue-800 mb-2">Expected URL format:</h3>
+                                <code class="text-sm bg-blue-100 px-2 py-1 rounded text-blue-800">
+                                    company-profile.html?id=YOUR_COMPANY_ID
+                                </code>
+                                
+                                <h3 class="font-semibold text-blue-800 mt-4 mb-2">Example:</h3>
+                                <code class="text-sm bg-blue-100 px-2 py-1 rounded text-blue-800">
+                                    company-profile.html?id=686a680241806a4991f7367f
+                                </code>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <button onclick="window.location.href='company-profile.html?id=686a680241806a4991f7367f'" 
+                                        class="w-full bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 transition-colors">
+                                    <i class="fas fa-building mr-2"></i>Load Demo Company (Penguin Air)
+                                </button>
+                                
+                                <button onclick="window.location.href='directory.html'" 
+                                        class="w-full bg-gray-600 text-white py-2 px-4 rounded hover:bg-gray-700 transition-colors">
+                                    <i class="fas fa-list mr-2"></i>Go to Company Directory
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.innerHTML = errorHTML;
             }
         });
     </script>
