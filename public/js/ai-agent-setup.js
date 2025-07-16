@@ -409,6 +409,43 @@ class AIAgentSetup {
     }
 
     /**
+     * Load existing agent configuration data if available
+     */
+    loadExistingData() {
+        try {
+            // Check if we have company data and agent setup configuration
+            if (window.currentCompanyData && window.currentCompanyData.agentSetup) {
+                console.log('Loading existing agent setup data:', window.currentCompanyData.agentSetup);
+                
+                const agentSetup = window.currentCompanyData.agentSetup;
+                
+                // Load agent details
+                if (agentSetup.agentName) {
+                    const agentNameInput = document.getElementById('agentName');
+                    if (agentNameInput) agentNameInput.value = agentSetup.agentName;
+                }
+                
+                if (agentSetup.agentInitialMessage) {
+                    const initialMessageInput = document.getElementById('agentInitialMessage');
+                    if (initialMessageInput) initialMessageInput.value = agentSetup.agentInitialMessage;
+                }
+                
+                if (agentSetup.behaviorGuidelines) {
+                    const behaviorInput = document.getElementById('behaviorGuidelines');
+                    if (behaviorInput) behaviorInput.value = agentSetup.behaviorGuidelines;
+                }
+                
+                // Load other configuration as needed
+                console.log('✅ Existing agent data loaded successfully');
+            } else {
+                console.log('No existing agent setup data found, using defaults');
+            }
+        } catch (error) {
+            console.warn('Could not load existing agent data:', error);
+        }
+    }
+
+    /**
      * Switch between configuration tabs
      */
     switchTab(tabName) {

@@ -570,6 +570,9 @@ document.addEventListener('DOMContentLoaded', () => {
             currentCompanyData.agentSetup.malfunctionRecipients = currentCompanyData.agentSetup.malfunctionRecipients || [];
             if (typeof currentCompanyData.isActive !== 'boolean') currentCompanyData.isActive = true;
 
+            // Make company data globally available for other scripts
+            window.currentCompanyData = currentCompanyData;
+
             await fetchAvailableTradeCategories();
             populateCompanyData(currentCompanyData); 
             updateCompanyStatusDisplay(currentCompanyData.isActive);
@@ -1712,7 +1715,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const checkedCategoriesHTML = Array.from(categoryCheckboxes)
                 .filter(cb => cb.checked)
                 .map(cb => `<li>${escapeHTML(cb.value)}</li>`).join('');
-            selectedCategoriesListLocal.innerHTML = checkedCategoriesListLocal || '<li class="text-gray-500 italic">No categories selected yet.</li>';
+            selectedCategoriesListLocal.innerHTML = checkedCategoriesHTML || '<li class="text-gray-500 italic">No categories selected yet.</li>';
         }
 
         if (agentModeSelect) agentModeSelect.value = agentSetup.agentMode || 'full';
@@ -2333,6 +2336,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
+        // Check if monitoring UI elements exist before setting up
+        const monitoringSection = document.getElementById('agent-monitoring-section');
+        if (!monitoringSection) {
+            console.warn('⚠️ Monitoring UI section not found - monitoring system available but UI not loaded');
+            return;
+        }
+        
         console.log('✅ Initializing monitoring for company:', currentCompanyData.name || companyId);
         setupMonitoringEventListeners();
         loadMonitoringData();
@@ -2343,6 +2353,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Setup event listeners for monitoring interface
     function setupMonitoringEventListeners() {
+        console.log('🔧 Setting up monitoring event listeners...');
+        
         // Dashboard and action buttons
         const openDashboardBtn = document.getElementById('open-monitoring-dashboard');
         const reviewPendingBtn = document.getElementById('review-pending-interactions');
@@ -2351,15 +2363,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (openDashboardBtn) {
             openDashboardBtn.addEventListener('click', openMonitoringDashboard);
+            console.log('✅ Dashboard button listener added');
+        } else {
+            console.warn('⚠️ Dashboard button not found');
         }
+        
         if (reviewPendingBtn) {
             reviewPendingBtn.addEventListener('click', openPendingReviews);
+            console.log('✅ Review pending button listener added');
+        } else {
+            console.warn('⚠️ Review pending button not found');
         }
+        
         if (viewFlaggedBtn) {
             viewFlaggedBtn.addEventListener('click', openFlaggedItems);
+            console.log('✅ View flagged button listener added');
+        } else {
+            console.warn('⚠️ View flagged button not found');
         }
+        
         if (exportDataBtn) {
             exportDataBtn.addEventListener('click', exportMonitoringData);
+            console.log('✅ Export data button listener added');
+        } else {
+            console.warn('⚠️ Export data button not found');
         }
 
         // Configuration checkboxes

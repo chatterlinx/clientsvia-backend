@@ -6319,13 +6319,25 @@ document.addEventListener('DOMContentLoaded', function() {
 async function refreshPerformanceMetrics() {
     try {
         const companyId = getCurrentCompanyId();
-        const timeRange = document.getElementById('performanceTimeRange').value;
+        const timeRangeElement = document.getElementById('performanceTimeRange');
+        const timeRange = timeRangeElement ? timeRangeElement.value : '24h';
+        
+        // Check if performance UI elements exist
+        const totalResponsesEl = document.getElementById('totalResponses');
+        const avgIntelligenceEl = document.getElementById('avgIntelligence');
+        const avgResponseTimeEl = document.getElementById('avgResponseTime');
+        const llmFallbackRateEl = document.getElementById('llmFallbackRate');
+        
+        if (!totalResponsesEl || !avgIntelligenceEl || !avgResponseTimeEl || !llmFallbackRateEl) {
+            console.warn('⚠️ Performance metrics UI elements not found - skipping metrics update');
+            return;
+        }
         
         // Show loading state
-        document.getElementById('totalResponses').textContent = '--';
-        document.getElementById('avgIntelligence').textContent = '--';
-        document.getElementById('avgResponseTime').textContent = '--ms';
-        document.getElementById('llmFallbackRate').textContent = '--%';
+        totalResponsesEl.textContent = '--';
+        avgIntelligenceEl.textContent = '--';
+        avgResponseTimeEl.textContent = '--ms';
+        llmFallbackRateEl.textContent = '--%';
         
         // Fetch performance metrics
         const response = await fetch(`/api/agent/performance/${companyId}?timeRange=${timeRange}`);
@@ -6462,6 +6474,12 @@ function updateHealthDisplay(health) {
     const issuesContainer = document.getElementById('healthIssues');
     const issuesList = document.getElementById('healthIssuesList');
     
+    // Check if elements exist before updating
+    if (!statusText || !scoreElement) {
+        console.warn('⚠️ Health display elements not found - skipping health update');
+        return;
+    }
+    
     // Update status
     statusText.textContent = health.healthStatus.charAt(0).toUpperCase() + health.healthStatus.slice(1);
     scoreElement.textContent = health.healthScore;
@@ -6498,7 +6516,6 @@ async function refreshImprovementSuggestions() {
         const companyId = getCurrentCompanyId();
         const container = document.getElementById('improvementSuggestions');
         
-        // Check if container exists
         if (!container) {
             console.warn('improvementSuggestions container not found');
             return;
@@ -6525,14 +6542,11 @@ async function refreshImprovementSuggestions() {
         }
     } catch (error) {
         console.error('Error loading improvement suggestions:', error);
-        const container = document.getElementById('improvementSuggestions');
-        if (container) {
-            container.innerHTML = `
-                <div class="text-center text-gray-500 py-4">
-                    <i class="fas fa-exclamation-triangle mr-2"></i>Error loading suggestions
-                </div>
-            `;
-        }
+        document.getElementById('improvementSuggestions').innerHTML = `
+            <div class="text-center text-gray-500 py-4">
+                <i class="fas fa-exclamation-triangle mr-2"></i>Error loading suggestions
+            </div>
+        `;
     }
 }
 
