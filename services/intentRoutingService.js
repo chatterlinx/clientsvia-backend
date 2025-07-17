@@ -7,17 +7,36 @@ const winston = require('winston');
 const fs = require('fs').promises;
 const path = require('path');
 
-// Valid actions that can be used in intent flow steps - CONNECTED TO REAL FUNCTIONS
+// Valid actions - ACTUAL FUNCTIONS FROM CODEBASE ANALYSIS
 const VALID_ACTIONS = [
-    'checkTradeCategories',      // Uses /api/trade-categories and findMostRelevantQAs
-    'checkCompanyQnAs',         // Uses company.companyQnAs from agent.js
-    'triggerServiceIssue',      // Uses ServiceIssueHandler.js
-    'triggerBookingFlow',       // Uses BookingFlowHandler.js
-    'lookupCompanyData',        // Uses company profile data
-    'respondGreeting',          // Uses agent greeting logic
-    'transferToHuman',          // Uses existing transfer logic
-    'useAIFallback',           // Uses generateIntelligentResponse from agent.js
-    'askClarifyingQuestion'     // Uses conversation flow logic
+    // From services/agent.js
+    'answerQuestion',                    // Main Q&A function
+    'generateIntelligentResponse',       // AI response generation
+    'checkPersonalityScenarios',        // Personality handling
+    'generateSmartConversationalResponse', // Smart conversation
+    'enhanceResponseWithPersonality',   // Personality enhancement
+    'trackPerformance',                 // Performance tracking
+    
+    // From services/serviceIssueHandler.js  
+    'handleServiceIssue',               // Service issue handling
+    'checkCustomKB',                    // Custom knowledge base check
+    'checkCategoryQAs',                 // Category Q&A check
+    
+    // From services/bookingFlowHandler.js
+    'processBookingStep',               // Booking flow processing
+    
+    // From actual route endpoints
+    'GET:/api/intent-routing/:companyId',        // routes/intentRouting.js
+    'PUT:/api/intent-routing/:companyId',        // routes/intentRouting.js  
+    'POST:/api/classify-intent',                 // routes/intentRouting.js
+    'POST:/api/test-intent-flow',                // routes/intentRouting.js
+    'GET:/api/performance/:companyId',           // routes/agentPerformance.js
+    'POST:/api/performance/:companyId/test',     // routes/agentPerformance.js
+    'GET:/api/companyQna',                       // routes/companyQna.js
+    'POST:/api/companyQna',                      // routes/companyQna.js
+    
+    // Standard actions
+    'transferToHuman'                   // Transfer to human agent
 ];
 
 class IntentRoutingService {
@@ -48,9 +67,9 @@ class IntentRoutingService {
                 order: 1,
                 keywords: ['broken', 'not working', 'emergency', 'repair', 'fix'],
                 flowSteps: [
-                    { type: 'triggerServiceIssue' },
-                    { type: 'checkTradeCategories' },
-                    { type: 'triggerBookingFlow' }
+                    { type: 'handleServiceIssue' },
+                    { type: 'checkCustomKB' },
+                    { type: 'processBookingStep' }
                 ]
             },
             {
@@ -63,8 +82,8 @@ class IntentRoutingService {
                 order: 2,
                 keywords: ['schedule', 'appointment', 'book', 'availability'],
                 flowSteps: [
-                    { type: 'lookupCompanyData' },
-                    { type: 'triggerBookingFlow' }
+                    { type: 'answerQuestion' },
+                    { type: 'processBookingStep' }
                 ]
             },
             {
@@ -77,7 +96,7 @@ class IntentRoutingService {
                 order: 3,
                 keywords: ['emergency', 'urgent', 'now', 'immediately'],
                 flowSteps: [
-                    { type: 'respondGreeting' },
+                    { type: 'generateIntelligentResponse' },
                     { type: 'transferToHuman' }
                 ]
             },
@@ -91,9 +110,9 @@ class IntentRoutingService {
                 order: 4,
                 keywords: ['hours', 'pricing', 'services', 'cost', 'how much'],
                 flowSteps: [
-                    { type: 'lookupCompanyData' },
-                    { type: 'checkCompanyQnAs' },
-                    { type: 'respondGreeting' }
+                    { type: 'answerQuestion' },
+                    { type: 'checkCategoryQAs' },
+                    { type: 'generateIntelligentResponse' }
                 ]
             },
             {
@@ -106,7 +125,7 @@ class IntentRoutingService {
                 order: 5,
                 keywords: ['complaint', 'unhappy', 'disappointed', 'problem'],
                 flowSteps: [
-                    { type: 'checkTradeCategories' },
+                    { type: 'checkCategoryQAs' },
                     { type: 'transferToHuman' }
                 ]
             },
@@ -133,8 +152,8 @@ class IntentRoutingService {
                 order: 7,
                 keywords: ['after hours', 'weekend', 'closed'],
                 flowSteps: [
-                    { type: 'respondGreeting' },
-                    { type: 'askClarifyingQuestion' }
+                    { type: 'generateIntelligentResponse' },
+                    { type: 'answerQuestion' }
                 ]
             }
         ];

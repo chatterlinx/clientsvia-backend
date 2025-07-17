@@ -138,6 +138,180 @@
                     </div>
                 </div>
             </div>
+
+            <!-- BOOKING SCRIPT CONFIGURATION PANEL -->
+            <div class="agent-setup-section-container" data-section-type="full" data-section-name="booking-script-config">
+                <h3 class="agent-setup-section-header">
+                    <span><i class="fas fa-calendar-check mr-2"></i>📘 Booking Script Configuration (Per Trade & Service)</span>
+                    <i class="fas fa-chevron-up transition-transform duration-200"></i>
+                </h3>
+                <div class="section-content">
+                    <!-- Booking Script Configuration -->
+                    <div class="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-6 mb-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="text-xl font-semibold text-blue-900 flex items-center">
+                                <i class="fas fa-calendar-check mr-3 text-2xl"></i>Multi-Trade Booking Script Configurator
+                            </h4>
+                            <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+                                Per Service Type
+                            </span>
+                        </div>
+                        <p class="text-blue-800 mb-4">
+                            Configure custom booking flows for each trade type and service combination. Define step-by-step scripts 
+                            that guide your AI agent through the booking process with customers.
+                        </p>
+                    </div>
+
+                    <!-- Trade & Service Selection -->
+                    <div class="grid md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <label class="form-label font-semibold">Trade Type</label>
+                            <select id="bookingTradeType" class="form-select">
+                                <option value="">Select Trade Type...</option>
+                                <option value="hvac">HVAC</option>
+                                <option value="plumbing">Plumbing</option>
+                                <option value="electrical">Electrical</option>
+                                <option value="roofing">Roofing</option>
+                                <option value="flooring">Flooring</option>
+                                <option value="general">General Contractor</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label font-semibold">Service Type</label>
+                            <select id="bookingServiceType" class="form-select">
+                                <option value="">Select Service Type...</option>
+                                <option value="repair">Repair</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="installation">Installation</option>
+                                <option value="emergency">Emergency</option>
+                                <option value="consultation">Consultation</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Current Configuration Display -->
+                    <div id="currentBookingConfig" class="hidden mb-6">
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <h5 class="font-semibold text-gray-900 mb-2">Current Configuration:</h5>
+                            <div id="configDisplay" class="text-sm text-gray-700"></div>
+                        </div>
+                    </div>
+
+                    <!-- Booking Script Form -->
+                    <div id="bookingScriptForm" class="hidden space-y-6">
+                        <!-- Pre-Step Clarifier -->
+                        <div>
+                            <label class="form-label font-semibold">Pre-Step Clarifier Prompt</label>
+                            <textarea id="preStepClarifier" 
+                                      rows="2" 
+                                      class="form-textarea" 
+                                      placeholder="e.g., So I may help you correctly, do you need AC repair or maintenance?"></textarea>
+                            <p class="text-xs text-gray-500 mt-1">Helps clarify the customer's specific need before starting the booking flow</p>
+                        </div>
+
+                        <!-- Booking Flow Steps -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h5 class="font-semibold text-gray-900 mb-4">Booking Flow Steps</h5>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="form-label text-sm font-medium">Step 1: Initial Contact</label>
+                                    <input type="text" 
+                                           id="step1" 
+                                           class="form-input" 
+                                           placeholder="e.g., Is this your home or business?" />
+                                </div>
+                                <div>
+                                    <label class="form-label text-sm font-medium">Step 2: Location</label>
+                                    <input type="text" 
+                                           id="step2" 
+                                           class="form-input" 
+                                           placeholder="e.g., Can I get your address please?" />
+                                </div>
+                                <div>
+                                    <label class="form-label text-sm font-medium">Step 3: Scheduling</label>
+                                    <input type="text" 
+                                           id="step3" 
+                                           class="form-input" 
+                                           placeholder="e.g., What day and time works best for you?" />
+                                </div>
+                                <div>
+                                    <label class="form-label text-sm font-medium">Step 4: Contact Info</label>
+                                    <input type="text" 
+                                           id="step4" 
+                                           class="form-input" 
+                                           placeholder="e.g., Can I get your name and phone number?" />
+                                </div>
+                                <div>
+                                    <label class="form-label text-sm font-medium">Step 5: Confirmation</label>
+                                    <input type="text" 
+                                           id="step5" 
+                                           class="form-input" 
+                                           placeholder="e.g., Let me confirm your appointment details." />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Additional Prompts -->
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="form-label font-semibold">Modify Booking Prompt</label>
+                                <textarea id="modifyBookingPrompt" 
+                                          rows="2" 
+                                          class="form-textarea" 
+                                          placeholder="e.g., Would you like me to check for another time?"></textarea>
+                            </div>
+                            <div>
+                                <label class="form-label font-semibold">Confirmation Message Template</label>
+                                <textarea id="confirmationText" 
+                                          rows="2" 
+                                          class="form-textarea" 
+                                          placeholder="e.g., You are booked for {{timeSlot}} at {{address}}."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Fallback Script -->
+                        <div>
+                            <label class="form-label font-semibold">Fallback Script (Unclear Caller)</label>
+                            <textarea id="fallbackScript" 
+                                      rows="3" 
+                                      class="form-textarea" 
+                                      placeholder="e.g., If you're not sure what's wrong, we can still schedule a technician to take a look."></textarea>
+                            <p class="text-xs text-gray-500 mt-1">Used when the customer can't clearly describe their issue</p>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+                            <div class="flex space-x-3">
+                                <button id="saveBookingScriptBtn" 
+                                        class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center"
+                                        onclick="saveBookingScript()">
+                                    <i class="fas fa-save mr-2"></i>Save Booking Script
+                                </button>
+                                <button id="testBookingScriptBtn" 
+                                        class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center"
+                                        onclick="testBookingScript()">
+                                    <i class="fas fa-play mr-2"></i>Test Script
+                                </button>
+                            </div>
+                            <button id="resetBookingScriptBtn" 
+                                    class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center"
+                                    onclick="resetBookingScript()">
+                                <i class="fas fa-undo mr-2"></i>Reset
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Existing Configurations List -->
+                    <div class="mt-8">
+                        <h5 class="font-semibold text-gray-900 mb-4">Existing Booking Configurations</h5>
+                        <div id="existingBookingConfigs" class="space-y-2">
+                            <div class="text-gray-500 text-sm">No configurations saved yet. Create your first booking script above.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ...existing code... -->
             <div id="mobile-menu" class="md:hidden hidden">
                 <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
                     <a href="/index.html" class="block nav-link text-base">Home</a>
@@ -6372,15 +6546,30 @@ Cost estimate</textarea>
                         <div class="flex items-center gap-2">
                             <select id="newStepAction-${intentId}" class="form-select text-xs flex-1">
                                 <option value="">Add Step...</option>
-                                <option value="checkTradeCategories">Check Trade Categories Q&As</option>
-                                <option value="checkCompanyQnAs">Check Company Q&As</option>
-                                <option value="triggerServiceIssue">Trigger Service Issue Handler</option>
-                                <option value="triggerBookingFlow">Trigger Booking Flow</option>
-                                <option value="lookupCompanyData">Lookup Company Data</option>
-                                <option value="respondGreeting">Respond with Greeting</option>
-                                <option value="transferToHuman">Transfer to Human</option>
-                                <option value="useAIFallback">Use AI Fallback</option>
-                                <option value="askClarifyingQuestion">Ask Clarifying Question</option>
+                                <!-- Functions from services/agent.js -->
+                                <option value="answerQuestion">answerQuestion() - services/agent.js</option>
+                                <option value="generateIntelligentResponse">generateIntelligentResponse() - services/agent.js</option>
+                                <option value="checkPersonalityScenarios">checkPersonalityScenarios() - services/agent.js</option>
+                                <option value="generateSmartConversationalResponse">generateSmartConversationalResponse() - services/agent.js</option>
+                                <option value="enhanceResponseWithPersonality">enhanceResponseWithPersonality() - services/agent.js</option>
+                                <option value="trackPerformance">trackPerformance() - services/agent.js</option>
+                                <!-- Functions from services/serviceIssueHandler.js -->
+                                <option value="handleServiceIssue">handleServiceIssue() - services/serviceIssueHandler.js</option>
+                                <option value="checkCustomKB">checkCustomKB() - services/serviceIssueHandler.js</option>
+                                <option value="checkCategoryQAs">checkCategoryQAs() - services/serviceIssueHandler.js</option>
+                                <!-- Functions from services/bookingFlowHandler.js -->
+                                <option value="processBookingStep">processBookingStep() - services/bookingFlowHandler.js</option>
+                                <!-- API Endpoints from routes/ -->
+                                <option value="GET:/api/intent-routing/:companyId">GET /api/intent-routing/:companyId - routes/intentRouting.js</option>
+                                <option value="PUT:/api/intent-routing/:companyId">PUT /api/intent-routing/:companyId - routes/intentRouting.js</option>
+                                <option value="POST:/api/classify-intent">POST /api/classify-intent - routes/intentRouting.js</option>
+                                <option value="POST:/api/test-intent-flow">POST /api/test-intent-flow - routes/intentRouting.js</option>
+                                <option value="GET:/api/performance/:companyId">GET /api/performance/:companyId - routes/agentPerformance.js</option>
+                                <option value="POST:/api/performance/:companyId/test">POST /api/performance/:companyId/test - routes/agentPerformance.js</option>
+                                <option value="GET:/api/companyQna">GET /api/companyQna - routes/companyQna.js</option>
+                                <option value="POST:/api/companyQna">POST /api/companyQna - routes/companyQna.js</option>
+                                <!-- Standard actions -->
+                                <option value="transferToHuman">transferToHuman() - Standard Transfer Action</option>
                             </select>
                             <button class="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1 rounded" 
                                     onclick="addFlowStep('${intentId}')">
@@ -6612,9 +6801,381 @@ Cost estimate</textarea>
             showToast('Failed to save configuration: ' + error.message, 'error');
         }
     }
-    // ===========================================
-    // PHONE NUMBER MANAGEMENT FUNCTIONALITY
-    // ===========================================
+        // ===========================================
+        // PHONE NUMBER MANAGEMENT FUNCTIONALITY
+        // ===========================================
+    
+        // ===========================================
+        // BOOKING SCRIPT CONFIGURATION FUNCTIONALITY
+        // ===========================================
+    
+        /**
+         * Initialize booking script configuration panel
+         */
+        function initializeBookingScriptPanel() {
+            const tradeTypeSelect = document.getElementById('bookingTradeType');
+            const serviceTypeSelect = document.getElementById('bookingServiceType');
+            
+            if (tradeTypeSelect && serviceTypeSelect) {
+                tradeTypeSelect.addEventListener('change', updateBookingConfigDisplay);
+                serviceTypeSelect.addEventListener('change', updateBookingConfigDisplay);
+            }
+            
+            // Load existing configurations
+            loadExistingBookingConfigs();
+        }
+    
+        /**
+         * Update booking configuration display when trade/service is selected
+         */
+        function updateBookingConfigDisplay() {
+            const tradeType = document.getElementById('bookingTradeType').value;
+            const serviceType = document.getElementById('bookingServiceType').value;
+            const form = document.getElementById('bookingScriptForm');
+            const currentConfig = document.getElementById('currentBookingConfig');
+            
+            if (tradeType && serviceType) {
+                form.classList.remove('hidden');
+                loadBookingScript(tradeType, serviceType);
+            } else {
+                form.classList.add('hidden');
+                currentConfig.classList.add('hidden');
+            }
+        }
+    
+        /**
+         * Load existing booking script for selected trade/service combination
+         */
+        async function loadBookingScript(tradeType, serviceType) {
+            try {
+                const companyId = getCurrentCompanyId();
+                const response = await fetch(`/api/booking-scripts/${companyId}/${tradeType}/${serviceType}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+    
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.data) {
+                        populateBookingScriptForm(data.data);
+                        showCurrentConfig(tradeType, serviceType, data.data);
+                    } else {
+                        clearBookingScriptForm();
+                        hideCurrentConfig();
+                    }
+                } else {
+                    clearBookingScriptForm();
+                    hideCurrentConfig();
+                }
+            } catch (error) {
+                console.error('Error loading booking script:', error);
+                clearBookingScriptForm();
+                hideCurrentConfig();
+            }
+        }
+    
+        /**
+         * Populate form with existing booking script data
+         */
+        function populateBookingScriptForm(scriptData) {
+            document.getElementById('preStepClarifier').value = scriptData.preStepClarifier || '';
+            document.getElementById('step1').value = scriptData.flowSteps?.step1 || '';
+            document.getElementById('step2').value = scriptData.flowSteps?.step2 || '';
+            document.getElementById('step3').value = scriptData.flowSteps?.step3 || '';
+            document.getElementById('step4').value = scriptData.flowSteps?.step4 || '';
+            document.getElementById('step5').value = scriptData.flowSteps?.step5 || '';
+            document.getElementById('modifyBookingPrompt').value = scriptData.modifyBookingPrompt || '';
+            document.getElementById('confirmationText').value = scriptData.confirmationText || '';
+            document.getElementById('fallbackScript').value = scriptData.fallbackScript || '';
+        }
+    
+        /**
+         * Clear the booking script form
+         */
+        function clearBookingScriptForm() {
+            document.getElementById('preStepClarifier').value = '';
+            document.getElementById('step1').value = '';
+            document.getElementById('step2').value = '';
+            document.getElementById('step3').value = '';
+            document.getElementById('step4').value = '';
+            document.getElementById('step5').value = '';
+            document.getElementById('modifyBookingPrompt').value = '';
+            document.getElementById('confirmationText').value = '';
+            document.getElementById('fallbackScript').value = '';
+        }
+    
+        /**
+         * Show current configuration display
+         */
+        function showCurrentConfig(tradeType, serviceType, scriptData) {
+            const currentConfig = document.getElementById('currentBookingConfig');
+            const configDisplay = document.getElementById('configDisplay');
+            
+            configDisplay.innerHTML = `
+                <strong>${tradeType.toUpperCase()}</strong> → <strong>${serviceType.charAt(0).toUpperCase() + serviceType.slice(1)}</strong>
+                <br>Last updated: ${scriptData.lastUpdated ? new Date(scriptData.lastUpdated).toLocaleDateString() : 'Never'}
+            `;
+            
+            currentConfig.classList.remove('hidden');
+        }
+    
+        /**
+         * Hide current configuration display
+         */
+        function hideCurrentConfig() {
+            document.getElementById('currentBookingConfig').classList.add('hidden');
+        }
+    
+        /**
+         * Save booking script configuration
+         */
+        async function saveBookingScript() {
+            const tradeType = document.getElementById('bookingTradeType').value;
+            const serviceType = document.getElementById('bookingServiceType').value;
+    
+            if (!tradeType || !serviceType) {
+                showToast('Please select both trade type and service type', 'error');
+                return;
+            }
+    
+            const preStepClarifier = document.getElementById('preStepClarifier').value;
+            const step1 = document.getElementById('step1').value;
+            const step2 = document.getElementById('step2').value;
+            const step3 = document.getElementById('step3').value;
+            const step4 = document.getElementById('step4').value;
+            const step5 = document.getElementById('step5').value;
+            const modifyBookingPrompt = document.getElementById('modifyBookingPrompt').value;
+            const confirmationText = document.getElementById('confirmationText').value;
+            const fallbackScript = document.getElementById('fallbackScript').value;
+    
+            const bookingConfig = {
+                tradeType,
+                serviceType,
+                preStepClarifier,
+                flowSteps: {
+                    step1,
+                    step2,
+                    step3,
+                    step4,
+                    step5
+                },
+                modifyBookingPrompt,
+                confirmationText,
+                fallbackScript,
+                lastUpdated: new Date().toISOString()
+            };
+    
+            try {
+                const companyId = getCurrentCompanyId();
+                const response = await fetch('/api/booking-scripts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        companyId,
+                        ...bookingConfig
+                    })
+                });
+    
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(`Booking script saved for ${tradeType} ${serviceType}`, 'success');
+                    showCurrentConfig(tradeType, serviceType, bookingConfig);
+                    loadExistingBookingConfigs();
+                } else {
+                    throw new Error(data.error || 'Failed to save booking script');
+                }
+            } catch (error) {
+                console.error('Error saving booking script:', error);
+                showToast('Failed to save booking script: ' + error.message, 'error');
+            }
+        }
+    
+        /**
+         * Test booking script
+         */
+        async function testBookingScript() {
+            const tradeType = document.getElementById('bookingTradeType').value;
+            const serviceType = document.getElementById('bookingServiceType').value;
+    
+            if (!tradeType || !serviceType) {
+                showToast('Please select both trade type and service type', 'error');
+                return;
+            }
+    
+            const testInput = prompt('Enter a test customer inquiry:', 'My AC is not working and I need it fixed today');
+            
+            if (!testInput) return;
+    
+            try {
+                const companyId = getCurrentCompanyId();
+                const response = await fetch('/api/booking-scripts/test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        companyId,
+                        tradeType,
+                        serviceType,
+                        testInput
+                    })
+                });
+    
+                const data = await response.json();
+                
+                if (data.success) {
+                    const result = data.data;
+                    const message = `
+    🧪 Booking Script Test Results
+    
+    📝 Customer Input: "${testInput}"
+    🎯 Trade/Service: ${tradeType} ${serviceType}
+    
+    📋 Script Flow:
+    ${result.scriptSteps ? result.scriptSteps.map((step, index) => `${index + 1}. ${step}`).join('\n') : 'N/A'}
+    
+    💬 Agent Response: 
+    "${result.response}"
+    
+    ✅ Test Status: ${result.success ? 'Success' : 'Failed'}
+                    `.trim();
+                    
+                    alert(message);
+                    showToast('Booking script test completed', 'success');
+                } else {
+                    throw new Error(data.error || 'Test failed');
+                }
+            } catch (error) {
+                console.error('Error testing booking script:', error);
+                showToast('Failed to test booking script: ' + error.message, 'error');
+            }
+        }
+    
+        /**
+         * Reset booking script form
+         */
+        function resetBookingScript() {
+            if (confirm('Are you sure you want to reset all fields? This will clear any unsaved changes.')) {
+                clearBookingScriptForm();
+                hideCurrentConfig();
+                showToast('Booking script form reset', 'info');
+            }
+        }
+    
+        /**
+         * Load and display existing booking configurations
+         */
+        async function loadExistingBookingConfigs() {
+            try {
+                const companyId = getCurrentCompanyId();
+                const response = await fetch(`/api/booking-scripts/${companyId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+    
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.data) {
+                        displayExistingConfigs(data.data);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading existing booking configs:', error);
+            }
+        }
+    
+        /**
+         * Display existing booking configurations
+         */
+        function displayExistingConfigs(configs) {
+            const container = document.getElementById('existingBookingConfigs');
+            
+            if (!configs || configs.length === 0) {
+                container.innerHTML = '<div class="text-gray-500 text-sm">No configurations saved yet. Create your first booking script above.</div>';
+                return;
+            }
+    
+            const configsHTML = configs.map(config => `
+                <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
+                    <div>
+                        <span class="font-medium">${config.tradeType.toUpperCase()} → ${config.serviceType.charAt(0).toUpperCase() + config.serviceType.slice(1)}</span>
+                        <div class="text-xs text-gray-500">Updated: ${new Date(config.lastUpdated).toLocaleDateString()}</div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="loadConfigForEditing('${config.tradeType}', '${config.serviceType}')" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">
+                            <i class="fas fa-edit mr-1"></i>Edit
+                        </button>
+                        <button onclick="deleteBookingConfig('${config.tradeType}', '${config.serviceType}')" 
+                                class="text-red-600 hover:text-red-800 text-sm">
+                            <i class="fas fa-trash mr-1"></i>Delete
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+    
+            container.innerHTML = configsHTML;
+        }
+    
+        /**
+         * Load configuration for editing
+         */
+        function loadConfigForEditing(tradeType, serviceType) {
+            document.getElementById('bookingTradeType').value = tradeType;
+            document.getElementById('bookingServiceType').value = serviceType;
+            updateBookingConfigDisplay();
+            
+            // Scroll to form
+            document.getElementById('bookingScriptForm').scrollIntoView({ behavior: 'smooth' });
+        }
+    
+        /**
+         * Delete booking configuration
+         */
+        async function deleteBookingConfig(tradeType, serviceType) {
+            if (!confirm(`Are you sure you want to delete the booking script for ${tradeType} ${serviceType}?`)) {
+                return;
+            }
+    
+            try {
+                const companyId = getCurrentCompanyId();
+                const response = await fetch(`/api/booking-scripts/${companyId}/${tradeType}/${serviceType}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+    
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(`Booking script deleted for ${tradeType} ${serviceType}`, 'success');
+                    loadExistingBookingConfigs();
+                    
+                    // Clear form if currently editing this config
+                    const currentTrade = document.getElementById('bookingTradeType').value;
+                    const currentService = document.getElementById('bookingServiceType').value;
+                    if (currentTrade === tradeType && currentService === serviceType) {
+                        clearBookingScriptForm();
+                        hideCurrentConfig();
+                    }
+                } else {
+                    throw new Error(data.error || 'Failed to delete booking script');
+                }
+            } catch (error) {
+                console.error('Error deleting booking script:', error);
+                showToast('Failed to delete booking script: ' + error.message, 'error');
+            }
+        }
+    
+        // ===========================================
 
     /**
      * Add a new phone number to the configuration
@@ -8150,6 +8711,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize Intent Routing Panel
     if (document.getElementById('intentFlowVisualization')) {
         initializeIntentRoutingPanel();
+    }
+    
+    // Initialize Booking Script Configuration Panel
+    if (document.getElementById('bookingTradeType')) {
+        initializeBookingScriptPanel();
     }
 });
 

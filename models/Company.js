@@ -198,6 +198,15 @@ const companySchema = new mongoose.Schema({
     
     notes: { type: [noteSchema], default: [] },
     
+    // Booking Scripts Configuration
+    bookingScripts: [{
+        tradeType: { type: String, required: true, trim: true },
+        serviceType: { type: String, required: true, trim: true },
+        script: [{ type: String, trim: true }], // Array of script steps
+        lastUpdated: { type: Date, default: Date.now },
+        isActive: { type: Boolean, default: true }
+    }],
+    
     isActive: { type: Boolean, default: true },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
