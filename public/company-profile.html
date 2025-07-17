@@ -2399,12 +2399,29 @@
                                                     </div>
                                                 </div>
                                                 
-                                                <button id="testLogicSuperAIIntelligence" onclick="testLogicSuperAIIntelligence()" class="bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg text-sm">
-                                                    <i class="fas fa-rocket mr-1"></i>Test Super AI Intelligence
-                                                </button>
+                                                <div class="flex gap-2 mb-4">
+                                                    <button id="testLogicSuperAIIntelligence" onclick="testLogicSuperAIIntelligence()" class="bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg text-sm">
+                                                        <i class="fas fa-rocket mr-1"></i>Test Super AI Intelligence
+                                                    </button>
+                                                    <button id="testCustomKBTrace" onclick="testCustomKBWithTrace()" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg text-sm">
+                                                        <i class="fas fa-search mr-1"></i>Test Custom KB + Trace
+                                                    </button>
+                                                </div>
                                                 
                                                 <div id="logicIntelligenceTestResults" class="mt-4 hidden">
                                                     <!-- Test results will be populated here -->
+                                                </div>
+                                                
+                                                <!-- AI Response Trace Log -->
+                                                <div id="aiResponseTraceLog" class="mt-4 hidden">
+                                                    <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                                        <h5 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                                            <i class="fas fa-route mr-2 text-blue-600"></i>AI Response Trace Log
+                                                        </h5>
+                                                        <div id="traceLogContent">
+                                                            <!-- Trace content will be populated here -->
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
 

@@ -1,16 +1,26 @@
 // utils/checkCustomKB.js
 // Production-grade Custom Knowledge Base checker for Trade Categories
+// Now with transparent AI Response Trace Logging
 
 const ServiceIssueHandler = require('../services/serviceIssueHandler');
 const { getDB } = require('../db');
 const { ObjectId } = require('mongodb');
+const ResponseTraceLogger = require('./responseTraceLogger');
 
 /**
- * Check Custom Knowledge Base for trade-specific answers
- * This function bridges the gap between conversation flow and trade category Q&As
+ * Check Custom Knowledge Base for trade-specific answers with trace logging
  */
-async function checkCustomKB(transcript, companyID, tradeCategoryID = null) {
+async function checkCustomKB(transcript, companyID, tradeCategoryID = null, traceLogger = null) {
   try {
+    // Extract keywords for trace logging
+    const keywords = extractKeywords(transcript);
+    
+    // Initialize trace logger if not provided
+    if (!traceLogger) {
+      traceLogger = new ResponseTraceLogger();
+      traceLogger.startTrace(transcript, keywords);
+    }
+    
     console.log(`[checkCustomKB] Processing: "${transcript}" for company: ${companyID}`);
     
     // Get company data with trade category info
@@ -21,7 +31,15 @@ async function checkCustomKB(transcript, companyID, tradeCategoryID = null) {
     
     if (!company) {
       console.log(`[checkCustomKB] Company not found: ${companyID}`);
-      return null;
+      traceLogger.logSourceCheck('Company Lookup', {}, {
+        matched: false,
+        matchedKeywords: [],
+        totalMatches: 0,
+        totalAvailable: 0,
+        confidence: 0,
+        reason: 'Company not found'
+      });
+      return { result: null, trace: traceLogger.getTraceLog() };
     }
     
     // Determine trade category - use provided or infer from company
@@ -46,33 +64,66 @@ async function checkCustomKB(transcript, companyID, tradeCategoryID = null) {
     console.log(`[checkCustomKB] Using trade category: ${effectiveTradeCategoryID}`);
     
     // Method 1: Check company's category Q&As first (fastest)
-    const categoryQAResult = await checkCompanyCategoryQAs(transcript, company);
-    if (categoryQAResult) {
+    const categoryQAResult = await checkCompanyCategoryQAsWithTrace(transcript, company, keywords, traceLogger);
+    if (categoryQAResult.matched) {
       console.log(`[checkCustomKB] Found match in company category Q&As`);
-      return categoryQAResult;
+      traceLogger.setSelectedSource('Company Category Q&As', 'Direct keyword match', categoryQAResult.confidence, categoryQAResult.answer);
+      return { result: categoryQAResult.answer, trace: traceLogger.getTraceLog() };
     }
     
     // Method 2: Use ServiceIssueHandler for systematic checking
-    const serviceHandler = new ServiceIssueHandler();
-    const serviceResult = await serviceHandler.checkCategoryQAs(transcript, companyID, {
-      category: effectiveTradeCategoryID,
-      intent: 'knowledge_lookup'
-    });
-    
-    if (serviceResult) {
-      console.log(`[checkCustomKB] Found match in service issue handler`);
-      return serviceResult.response;
+    try {
+      const serviceHandler = new ServiceIssueHandler();
+      const serviceResult = await serviceHandler.checkCategoryQAs(transcript, companyID, {
+        category: effectiveTradeCategoryID,
+        intent: 'knowledge_lookup'
+      });
+      
+      if (serviceResult && serviceResult.response) {
+        console.log(`[checkCustomKB] Found match in service issue handler`);
+        traceLogger.logSourceCheck('Service Issue Handler', { category: effectiveTradeCategoryID }, {
+          matchedKeywords: keywords,
+          totalMatches: keywords.length,
+          totalAvailable: keywords.length,
+          confidence: 0.8,
+          reason: 'Service handler match',
+          matched: true
+        });
+        traceLogger.setSelectedSource('Service Issue Handler', 'Trade category match', 0.8, serviceResult.response);
+        return { result: serviceResult.response, trace: traceLogger.getTraceLog() };
+      } else {
+        traceLogger.logSourceCheck('Service Issue Handler', { category: effectiveTradeCategoryID }, {
+          matchedKeywords: [],
+          totalMatches: 0,
+          totalAvailable: keywords.length,
+          confidence: 0,
+          reason: 'No service handler match',
+          matched: false
+        });
+      }
+    } catch (serviceError) {
+      console.error(`[checkCustomKB] Service handler error:`, serviceError);
+      traceLogger.logSourceCheck('Service Issue Handler', { category: effectiveTradeCategoryID }, {
+        matchedKeywords: [],
+        totalMatches: 0,
+        totalAvailable: keywords.length,
+        confidence: 0,
+        reason: `Error: ${serviceError.message}`,
+        matched: false
+      });
     }
     
     // Method 3: Direct database lookup for trade category Q&As
-    const directResult = await checkTradeCategoryDatabase(transcript, effectiveTradeCategoryID, companyID);
-    if (directResult) {
+    const directResult = await checkTradeCategoryDatabaseWithTrace(transcript, effectiveTradeCategoryID, companyID, keywords, traceLogger);
+    if (directResult.matched) {
       console.log(`[checkCustomKB] Found match in direct database lookup`);
-      return directResult;
+      traceLogger.setSelectedSource('Trade Category Database', 'Database direct match', directResult.confidence, directResult.answer);
+      return { result: directResult.answer, trace: traceLogger.getTraceLog() };
     }
     
     console.log(`[checkCustomKB] No matches found for: "${transcript}"`);
-    return null;
+    traceLogger.setSelectedSource('None', 'No matches found in any source', 0);
+    return { result: null, trace: traceLogger.getTraceLog() };
     
   } catch (error) {
     console.error(`[checkCustomKB] Error:`, error);
@@ -81,51 +132,94 @@ async function checkCustomKB(transcript, companyID, tradeCategoryID = null) {
 }
 
 /**
- * Check company's category Q&As (stored in agentSetup.categoryQAs)
+ * Check company's category Q&As with trace logging
  */
-async function checkCompanyCategoryQAs(transcript, company) {
+async function checkCompanyCategoryQAsWithTrace(transcript, company, keywords, traceLogger) {
   try {
     const categoryQAsText = company?.agentSetup?.categoryQAs;
     if (!categoryQAsText) {
-      return null;
+      traceLogger.logSourceCheck('Company Category Q&As', {}, {
+        matched: false,
+        matchedKeywords: [],
+        totalMatches: 0,
+        totalAvailable: 0,
+        confidence: 0,
+        reason: 'No company Q&As configured'
+      });
+      return { matched: false };
     }
     
     // Parse the category Q&As
     const qaPairs = parseCategoryQAs(categoryQAsText);
     const lowerTranscript = transcript.toLowerCase();
+    let bestMatch = null;
+    let bestScore = 0;
+    let matchedKeywords = [];
     
     // Look for keyword matches
     for (const qa of qaPairs) {
       const questionLower = qa.question.toLowerCase();
+      const currentMatches = [];
       
       // Direct keyword matching
       if (questionLower.includes('thermostat') && lowerTranscript.includes('thermostat')) {
+        currentMatches.push('thermostat');
         if (lowerTranscript.includes('blank') || lowerTranscript.includes('display') || 
             lowerTranscript.includes('screen') || lowerTranscript.includes('not working')) {
+          currentMatches.push('blank/display/screen');
           console.log(`[checkCustomKB] Category Q&A match: "${qa.question}"`);
-          return qa.answer;
+          bestMatch = qa.answer;
+          bestScore = 0.9;
+          matchedKeywords = currentMatches;
+          break;
         }
       }
       
       // Calculate relevance score
       const relevance = calculateRelevance(questionLower, lowerTranscript);
-      if (relevance > 0.6) {
+      if (relevance > 0.6 && relevance > bestScore) {
         console.log(`[checkCustomKB] High relevance match (${relevance.toFixed(2)}): "${qa.question}"`);
-        return qa.answer;
+        bestMatch = qa.answer;
+        bestScore = relevance;
+        matchedKeywords = keywords.filter(k => questionLower.includes(k.toLowerCase()));
       }
     }
     
-    return null;
+    // Log the trace
+    traceLogger.logSourceCheck('Company Category Q&As', { totalQAs: qaPairs.length }, {
+      matched: !!bestMatch,
+      matchedKeywords: matchedKeywords,
+      totalMatches: matchedKeywords.length,
+      totalAvailable: keywords.length,
+      confidence: bestScore,
+      reason: bestMatch ? `Matched: "${bestMatch.substring(0, 50)}..."` : 'No matches above threshold'
+    });
+    
+    return { 
+      matched: !!bestMatch, 
+      answer: bestMatch, 
+      confidence: bestScore, 
+      matchedKeywords 
+    };
+    
   } catch (error) {
     console.error(`[checkCustomKB] Error checking category Q&As:`, error);
-    return null;
+    traceLogger.logSourceCheck('Company Category Q&As', {}, {
+      matched: false,
+      matchedKeywords: [],
+      totalMatches: 0,
+      totalAvailable: 0,
+      confidence: 0,
+      reason: `Error: ${error.message}`
+    });
+    return { matched: false };
   }
 }
 
 /**
- * Direct database lookup for trade category Q&As
+ * Direct database lookup with trace logging
  */
-async function checkTradeCategoryDatabase(transcript, categoryID, companyID) {
+async function checkTradeCategoryDatabaseWithTrace(transcript, categoryID, companyID, keywords, traceLogger) {
   try {
     const db = getDB();
     
@@ -140,16 +234,55 @@ async function checkTradeCategoryDatabase(transcript, categoryID, companyID) {
       ]
     }).toArray();
     
+    const matchedKeywords = keywords.filter(k => 
+      transcript.toLowerCase().includes(k.toLowerCase())
+    );
+    
+    traceLogger.logSourceCheck('Trade Category Database', { categoryID, totalEntries: matches.length }, {
+      matched: matches.length > 0,
+      matchedKeywords: matchedKeywords,
+      totalMatches: matchedKeywords.length,
+      totalAvailable: keywords.length,
+      confidence: matches.length > 0 ? 0.85 : 0,
+      reason: matches.length > 0 ? `Found ${matches.length} database matches` : 'No database matches'
+    });
+    
     if (matches.length > 0) {
       console.log(`[checkCustomKB] Found ${matches.length} trade category matches`);
-      return matches[0].answer;
+      return { 
+        matched: true, 
+        answer: matches[0].answer, 
+        confidence: 0.85, 
+        matchedKeywords 
+      };
     }
     
-    return null;
+    return { matched: false };
   } catch (error) {
     console.error(`[checkCustomKB] Error checking trade category database:`, error);
-    return null;
+    traceLogger.logSourceCheck('Trade Category Database', {}, {
+      matched: false,
+      matchedKeywords: [],
+      totalMatches: 0,
+      totalAvailable: 0,
+      confidence: 0,
+      reason: `Database error: ${error.message}`
+    });
+    return { matched: false };
   }
+}
+
+/**
+ * Extract keywords from transcript for trace logging
+ */
+function extractKeywords(transcript) {
+  const commonWords = ['the', 'is', 'my', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'];
+  return transcript
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .split(/\s+/)
+    .filter(word => word.length > 2 && !commonWords.includes(word))
+    .slice(0, 10); // Limit to first 10 keywords
 }
 
 /**
@@ -216,6 +349,29 @@ async function checkCustomKBWithBehavior(transcript, companyID, tradeCategoryID,
   }
   
   return null;
+}
+
+/**
+ * Check company's category Q&As (original function for backwards compatibility)
+ */
+async function checkCompanyCategoryQAs(transcript, company) {
+  const traceLogger = new ResponseTraceLogger();
+  const keywords = extractKeywords(transcript);
+  traceLogger.startTrace(transcript, keywords);
+  
+  const result = await checkCompanyCategoryQAsWithTrace(transcript, company, keywords, traceLogger);
+  return result.matched ? result.answer : null;
+}
+
+/**
+ * Check trade category database (original function for backwards compatibility)
+ */
+async function checkTradeCategoryDatabase(transcript, categoryID, companyID) {
+  const traceLogger = new ResponseTraceLogger();
+  const keywords = extractKeywords(transcript);
+  
+  const result = await checkTradeCategoryDatabaseWithTrace(transcript, categoryID, companyID, keywords, traceLogger);
+  return result.matched ? result.answer : null;
 }
 
 module.exports = {

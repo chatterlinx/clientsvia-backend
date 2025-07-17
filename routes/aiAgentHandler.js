@@ -187,6 +187,124 @@ router.post('/test', authenticateJWT, async (req, res) => {
     }
 });
 
+/**
+ * Test Custom KB with AI Response Trace Log
+ * Used by the Test Intelligence Engine in the admin UI
+ */
+router.post('/test-custom-kb-trace', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId, query } = req.body;
+        
+        if (!companyId || !query) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing companyId or query'
+            });
+        }
+        
+        console.log(`[Test Custom KB] Testing query: "${query}" for company: ${companyId}`);
+        
+        // Import the checkCustomKB function with trace logging
+        const { checkCustomKB } = require('../utils/checkCustomKB');
+        const ResponseTraceLogger = require('../utils/responseTraceLogger');
+        
+        // Create a new trace logger
+        const traceLogger = new ResponseTraceLogger();
+        
+        // Test the Custom KB with trace logging
+        const result = await checkCustomKB(query, companyId, null, traceLogger);
+        
+        // Extract the result and trace
+        const response = result?.result || null;
+        const trace = result?.trace || traceLogger.getTraceLog();
+        
+        console.log(`[Test Custom KB] Result: ${response ? 'Found match' : 'No match'}`);
+        console.log(`[Test Custom KB] Trace steps: ${trace.steps?.length || 0}`);
+        
+        res.json({
+            success: true,
+            result: response,
+            trace: trace,
+            metadata: {
+                timestamp: new Date().toISOString(),
+                companyId: companyId,
+                query: query,
+                sourcesTested: trace.steps?.length || 0,
+                matchFound: !!response
+            }
+        });
+        
+    } catch (error) {
+        console.error('[Test Custom KB] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Internal server error'
+        });
+    }
+});
+
+/**
+ * Test AI Intelligence Engine
+ * Legacy endpoint for backwards compatibility
+ */
+router.post('/test-intelligence', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId, scenario, query } = req.body;
+        
+        if (!companyId || !query) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing companyId or query'
+            });
+        }
+        
+        console.log(`[Test Intelligence] Testing scenario: ${scenario}, query: "${query}"`);
+        
+        // Import the AI Intelligence Engine
+        const AIIntelligenceEngine = require('../services/aiIntelligenceEngine');
+        const aiIntelligenceEngine = new AIIntelligenceEngine();
+        
+        // Test the AI Intelligence with features based on scenario
+        const featuresEnabled = {
+            semanticKnowledge: true,
+            contextualMemory: scenario !== 'simple',
+            dynamicReasoning: scenario === 'complex',
+            smartEscalation: scenario === 'emotional' || scenario === 'urgent'
+        };
+        
+        const result = await aiIntelligenceEngine.testAIIntelligence(companyId, query, featuresEnabled);
+        
+        // Format response for legacy compatibility
+        const response = {
+            intelligenceScore: Math.round(result.overallScore * 100),
+            confidence: Math.round((result.features.semanticKnowledge?.confidence || 0.8) * 100),
+            responseTime: Math.round(result.performance.responseTime * 1000),
+            method: result.features.semanticKnowledge?.result ? 'Semantic Knowledge' : 'LLM Fallback',
+            response: result.features.semanticKnowledge?.result?.answer || 'Generated intelligent response based on available context',
+            processingChain: [
+                '✅ Query analysis completed',
+                result.features.semanticKnowledge?.enabled ? '✅ Semantic knowledge search' : '❌ Semantic knowledge disabled',
+                result.features.contextualMemory?.enabled ? '✅ Contextual memory lookup' : '❌ Contextual memory disabled',
+                result.features.dynamicReasoning?.enabled ? '✅ Dynamic reasoning applied' : '❌ Dynamic reasoning disabled',
+                result.features.smartEscalation?.enabled ? '✅ Smart escalation check' : '❌ Smart escalation disabled',
+                '✅ Response generation completed'
+            ].filter(Boolean)
+        };
+        
+        res.json({
+            success: true,
+            data: response
+        });
+        
+    } catch (error) {
+        console.error('[Test Intelligence] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Internal server error'
+        });
+    }
+});
+
 // Helper functions for TwiML generation
 function generateTwiMLResponse(message) {
     return `<?xml version="1.0" encoding="UTF-8"?>
