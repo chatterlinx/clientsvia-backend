@@ -8990,7 +8990,7 @@ async function saveCompanyQA(question, answer, keywords) {
         saveBtn.textContent = 'Saving...';
         errorDiv.classList.add('hidden');
         
-        const response = await fetch(`/api/companies/${companyId}/qna`, {
+        const response = await fetch(`/api/company/${companyId}/qna`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -9030,59 +9030,6 @@ async function saveCompanyQA(question, answer, keywords) {
 }
 
 /**
- * Save AI Company Q&A entry
- */
-async function saveAICompanyQA(question, answer, keywords) {
-    try {
-        const companyId = getCurrentCompanyId();
-        const saveBtn = document.getElementById('aiCompanyQnaSaveBtn');
-        const errorDiv = document.getElementById('aiCompanyQnaFormError');
-        
-        // Show loading state
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Saving...';
-        errorDiv.classList.add('hidden');
-        
-        const response = await fetch(`/api/companies/${companyId}/ai-qna`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                question,
-                answer,
-                keywords: keywords.split(',').map(k => k.trim()).filter(k => k)
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            // Clear form
-            document.getElementById('aiCompanyQnaQuestion').value = '';
-            document.getElementById('aiCompanyQnaAnswer').value = '';
-            document.getElementById('aiCompanyQnaKeywords').value = '';
-            
-            // Refresh AI Q&A list
-            loadAICompanyQAs();
-            
-            // Show success message
-            showToast('AI Q&A added successfully!', 'success');
-        } else {
-            throw new Error(data.error || 'Failed to save AI Q&A');
-        }
-    } catch (error) {
-        console.error('Error saving AI Company Q&A:', error);
-        showFormError('aiCompanyQnaFormError', 'Error saving AI Q&A: ' + error.message);
-    } finally {
-        // Reset button
-        const saveBtn = document.getElementById('aiCompanyQnaSaveBtn');
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'Add Q&A';
-    }
-}
-
-/**
  * Show form error message
  */
 function showFormError(errorElementId, message) {
@@ -9100,15 +9047,6 @@ function loadCompanyQAs() {
     console.log('Loading Company Q&As...');
     // This function should load and display the Q&A list
     // Implementation depends on your existing Q&A loading logic
-}
-
-/**
- * Load AI Company Q&As (placeholder function)
- */
-function loadAICompanyQAs() {
-    console.log('Loading AI Company Q&As...');
-    // This function should load and display the AI Q&A list
-    // Implementation depends on your existing AI Q&A loading logic
 }
 
 /**
