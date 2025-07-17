@@ -8693,6 +8693,9 @@ async function updateLearningSettings() {
 document.addEventListener('DOMContentLoaded', function() {
     // ... existing initialization code ...
     
+    // Initialize tab switching functionality
+    initializeTabSwitching();
+    
     // Initialize performance intelligence if on the right tab
     if (document.getElementById('agentHealthStatus')) {
         initializePerformanceIntelligence();
@@ -8718,6 +8721,41 @@ document.addEventListener('DOMContentLoaded', function() {
         initializeBookingScriptPanel();
     }
 });
+
+/**
+ * Initialize tab switching functionality
+ */
+function initializeTabSwitching() {
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content-item');
+    
+    tabButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const targetTab = this.getAttribute('data-tab');
+            
+            // Remove active class from all buttons
+            tabButtons.forEach(btn => {
+                btn.classList.remove('tab-button-active');
+                btn.classList.add('tab-button-inactive');
+            });
+            
+            // Add active class to clicked button
+            this.classList.remove('tab-button-inactive');
+            this.classList.add('tab-button-active');
+            
+            // Hide all tab contents
+            tabContents.forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // Show the target tab content
+            const targetContent = document.getElementById(targetTab + '-content');
+            if (targetContent) {
+                targetContent.classList.remove('hidden');
+            }
+        });
+    });
+}
 
 /**
  * Initialize Logic AI Intelligence features (from Logic tab)
