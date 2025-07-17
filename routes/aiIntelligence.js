@@ -62,7 +62,7 @@ router.put('/settings/:companyId', async (req, res) => {
     
     try {
         const db = getDB();
-        const companiesCollection = db.collection('companies');
+        const companiesCollection = db.collection('companiesCollection');
         
         // Build update object for nested AI settings
         const updateObject = {};
@@ -136,7 +136,7 @@ router.get('/settings/:companyId', async (req, res) => {
     
     try {
         const db = getDB();
-        const company = await db.collection('companies').findOne({ _id: new ObjectId(companyId) });
+        const company = await db.collection('companiesCollection').findOne({ _id: new ObjectId(companyId) });
         
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
@@ -184,7 +184,7 @@ router.get('/performance/:companyId', async (req, res) => {
     try {
         // Calculate mock performance data based on company settings
         const db = getDB();
-        const company = await db.collection('companies').findOne({ _id: new ObjectId(companyId) });
+        const company = await db.collection('companiesCollection').findOne({ _id: new ObjectId(companyId) });
         
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
@@ -257,7 +257,7 @@ router.post('/enhance-query', async (req, res) => {
     
     try {
         const db = getDB();
-        const company = await db.collection('companies').findOne({ _id: new ObjectId(companyId) });
+        const company = await db.collection('companiesCollection').findOne({ _id: new ObjectId(companyId) });
         
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });

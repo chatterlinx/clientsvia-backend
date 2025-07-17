@@ -36,7 +36,7 @@ class AIIntelligenceEngine {
         try {
             // Search company's knowledge base with semantic matching
             const db = getDB();
-            const companiesCollection = db.collection('companies');
+            const companiesCollection = db.collection('companiesCollection');
             const companyData = await companiesCollection.findOne({ _id: new ObjectId(companyId) });
             
             if (!companyData) return null;
@@ -300,7 +300,7 @@ class AIIntelligenceEngine {
         try {
             // Get company data
             const db = getDB();
-            const company = await db.collection('companies').findOne({ _id: new ObjectId(companyId) });
+            const company = await db.collection('companiesCollection').findOne({ _id: new ObjectId(companyId) });
             
             if (!company) {
                 throw new Error('Company not found');
