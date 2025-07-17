@@ -680,9 +680,12 @@ router.post('/update-service-types', async (req, res) => {
             .map(type => type.trim())
             .filter(type => type.length > 0);
         
-        // Update service types for the trade category
+        // Escape special regex characters in tradeName for safe matching
+        const escapedTradeName = tradeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        
+        // Update service types for the trade category using case-insensitive matching
         const result = await tradeCategoriesCollection.findOneAndUpdate(
-            { name: { $regex: `^${tradeName}$`, $options: 'i' } },
+            { name: { $regex: `^${escapedTradeName}$`, $options: 'i' } },
             { 
                 $set: { 
                     serviceTypes: cleanServiceTypes,
@@ -691,12 +694,15 @@ router.post('/update-service-types', async (req, res) => {
             },
             { 
                 returnDocument: 'after',
-                upsert: false // Don't create new trade categories here
+                upsert: false
             }
         );
         
-        if (!result.value) {
-            console.warn(`[API POST update-service-types] Trade not found: ${tradeName}`);
+        // Handle different MongoDB driver response formats
+        const updatedDoc = result.value || result;
+        
+        if (!updatedDoc || !updatedDoc._id) {
+            console.warn(`[API POST update-service-types] Trade category not found: ${tradeName}`);
             return res.status(404).json({ error: 'Trade category not found' });
         }
         
@@ -704,9 +710,9 @@ router.post('/update-service-types', async (req, res) => {
         res.json({ 
             success: true, 
             updated: {
-                _id: result.value._id,
-                tradeName: result.value.name,
-                serviceTypes: result.value.serviceTypes
+                _id: updatedDoc._id,
+                tradeName: updatedDoc.name,
+                serviceTypes: updatedDoc.serviceTypes
             }
         });
         
