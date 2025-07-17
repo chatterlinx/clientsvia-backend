@@ -7043,7 +7043,9 @@ Cost estimate</textarea>
         async function loadBookingScript(tradeType, serviceType) {
             try {
                 const companyId = getCurrentCompanyId();
-                const response = await fetch(`/api/booking-scripts/${companyId}/${tradeType}/${serviceType}`, {
+                const encodedTradeType = encodeURIComponent(tradeType);
+                const encodedServiceType = encodeURIComponent(serviceType);
+                const response = await fetch(`/api/booking-scripts/${companyId}/${encodedTradeType}/${encodedServiceType}`, {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json'
@@ -7340,7 +7342,9 @@ Cost estimate</textarea>
     
             try {
                 const companyId = getCurrentCompanyId();
-                const response = await fetch(`/api/booking-scripts/${companyId}/${tradeType}/${serviceType}`, {
+                const encodedTradeType = encodeURIComponent(tradeType);
+                const encodedServiceType = encodeURIComponent(serviceType);
+                const response = await fetch(`/api/booking-scripts/${companyId}/${encodedTradeType}/${encodedServiceType}`, {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json'
