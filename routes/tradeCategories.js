@@ -595,5 +595,121 @@ router.put('/service-types/:tradeName', async (req, res) => {
     }
 });
 
+// ========================================================================
+// == SERVICE TYPE MANAGER API - Full CRUD for service types management ==
+// ========================================================================
+
+/**
+ * @route   GET /api/trade-categories/trades
+ * @desc    Get all trade categories with their service types (for management UI)
+ * @access  Public
+ */
+router.get('/trades', async (req, res) => {
+    console.log('[API GET /api/trade-categories/trades] Fetching all trades with service types for management UI');
+    
+    const db = getDB();
+    if (!db) {
+        console.error('[API GET trades] Database not connected');
+        return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const tradeCategoriesCollection = db.collection(CATEGORY_COLLECTION);
+    
+    try {
+        // Fetch all trade categories with only name and serviceTypes fields
+        const trades = await tradeCategoriesCollection.find({}, {
+            projection: { 
+                name: 1,
+                serviceTypes: 1,
+                _id: 1
+            }
+        }).sort({ name: 1 }).toArray();
+        
+        // Transform to match expected structure (tradeName instead of name for consistency)
+        const formattedTrades = trades.map(trade => ({
+            _id: trade._id,
+            tradeName: trade.name,
+            serviceTypes: trade.serviceTypes || [
+                'Repair',
+                'Maintenance', 
+                'Installation',
+                'Emergency',
+                'Consultation'
+            ]
+        }));
+        
+        console.log(`[API GET trades] Found ${formattedTrades.length} trades with service types`);
+        res.json(formattedTrades);
+        
+    } catch (error) {
+        console.error('[API GET trades] Error fetching trades:', error.message, error.stack);
+        res.status(500).json({ error: `Failed to fetch trades: ${error.message}` });
+    }
+});
+
+/**
+ * @route   POST /api/trade-categories/update-service-types
+ * @desc    Update service types for a specific trade category
+ * @access  Public
+ */
+router.post('/update-service-types', async (req, res) => {
+    const { tradeName, serviceTypes } = req.body;
+    
+    console.log(`[API POST /api/trade-categories/update-service-types] Updating service types for ${tradeName}:`, serviceTypes);
+    
+    if (!tradeName || !Array.isArray(serviceTypes)) {
+        return res.status(400).json({ error: 'tradeName and serviceTypes array are required' });
+    }
+    
+    const db = getDB();
+    if (!db) {
+        console.error('[API POST update-service-types] Database not connected');
+        return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const tradeCategoriesCollection = db.collection(CATEGORY_COLLECTION);
+    
+    try {
+        // Clean up service types (remove empty strings, trim whitespace)
+        const cleanServiceTypes = serviceTypes
+            .map(type => type.trim())
+            .filter(type => type.length > 0);
+        
+        // Update service types for the trade category
+        const result = await tradeCategoriesCollection.findOneAndUpdate(
+            { name: { $regex: `^${tradeName}$`, $options: 'i' } },
+            { 
+                $set: { 
+                    serviceTypes: cleanServiceTypes,
+                    updatedAt: new Date()
+                }
+            },
+            { 
+                returnDocument: 'after',
+                upsert: false // Don't create new trade categories here
+            }
+        );
+        
+        if (!result.value) {
+            console.warn(`[API POST update-service-types] Trade not found: ${tradeName}`);
+            return res.status(404).json({ error: 'Trade category not found' });
+        }
+        
+        console.log(`[API POST update-service-types] Successfully updated ${cleanServiceTypes.length} service types for ${tradeName}`);
+        res.json({ 
+            success: true, 
+            updated: {
+                _id: result.value._id,
+                tradeName: result.value.name,
+                serviceTypes: result.value.serviceTypes
+            }
+        });
+        
+    } catch (error) {
+        console.error(`[API POST update-service-types] Error updating service types for ${tradeName}:`, error.message, error.stack);
+        res.status(500).json({ error: `Update failed: ${error.message}` });
+    }
+});
+
 
 module.exports = router;

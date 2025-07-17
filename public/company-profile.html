@@ -137,6 +137,109 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- SERVICE TYPE MANAGER PANEL -->
+                <div class="agent-setup-section-container" data-section-type="full" data-section-name="service-type-manager">
+                    <h3 class="agent-setup-section-header">
+                        <span><i class="fas fa-cogs mr-2"></i>🛠️ Service Type Manager (Per Trade)</span>
+                        <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                    </h3>
+                    <div class="section-content collapsed">
+                        <!-- Service Type Manager -->
+                        <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6 mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h4 class="text-xl font-semibold text-green-900 flex items-center">
+                                    <i class="fas fa-list-alt mr-3 text-2xl"></i>Manage Service Types by Trade Category
+                                </h4>
+                                <span class="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+                                    Admin Panel
+                                </span>
+                            </div>
+                            <p class="text-green-800 mb-4">
+                                Create and manage service types for each trade category. These will be used in the booking script configurator 
+                                and throughout the system for service-specific configurations.
+                            </p>
+                        </div>
+
+                        <!-- Trade Selection -->
+                        <div class="mb-6">
+                            <label for="serviceManagerTradeList" class="form-label font-semibold">Select Trade Category:</label>
+                            <select id="serviceManagerTradeList" class="form-select" onchange="loadServiceTypesForTradeManager()">
+                                <option value="">Loading trades...</option>
+                            </select>
+                        </div>
+
+                        <!-- Service Types Editor -->
+                        <div id="serviceTypesEditor" class="hidden">
+                            <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+                                <h5 class="font-semibold text-gray-900 mb-4 flex items-center">
+                                    <i class="fas fa-edit text-blue-600 mr-2"></i>Service Types for <span id="currentTradeDisplay" class="text-blue-600 ml-1">Selected Trade</span>
+                                </h5>
+                                
+                                <!-- Current Service Types List -->
+                                <div class="mb-4">
+                                    <label class="form-label text-sm">Current Service Types:</label>
+                                    <ul id="serviceTypeList" class="space-y-2 mt-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                                        <!-- Service types will be populated here -->
+                                    </ul>
+                                </div>
+                                
+                                <!-- Add New Service Type -->
+                                <div class="flex items-center space-x-3 mb-4">
+                                    <div class="flex-1">
+                                        <label for="newServiceType" class="form-label text-sm">Add New Service Type:</label>
+                                        <input 
+                                            type="text" 
+                                            id="newServiceType" 
+                                            class="form-input" 
+                                            placeholder="e.g., Emergency Repair, Routine Maintenance..."
+                                            onkeypress="if(event.key==='Enter') addServiceType()"
+                                        />
+                                    </div>
+                                    <div class="pt-6">
+                                        <button 
+                                            onclick="addServiceType()" 
+                                            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                            <i class="fas fa-plus mr-2"></i>Add
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Action Buttons -->
+                                <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+                                    <div class="text-sm text-gray-600">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Click on any service type to edit it inline
+                                    </div>
+                                    <div class="flex space-x-3">
+                                        <button 
+                                            onclick="resetServiceTypesToDefault()" 
+                                            class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                            <i class="fas fa-undo mr-2"></i>Reset to Default
+                                        </button>
+                                        <button 
+                                            onclick="saveServiceTypes()" 
+                                            class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                            <i class="fas fa-save mr-2"></i>Save Changes
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Service Type Preview -->
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <h6 class="font-medium text-blue-900 mb-2">Preview: How this will appear in Booking Script Configuration</h6>
+                                <div class="flex items-center space-x-2 text-sm">
+                                    <span class="text-gray-700">Trade:</span>
+                                    <span id="previewTradeName" class="font-medium text-blue-800">-</span>
+                                    <span class="text-gray-500">→</span>
+                                    <span class="text-gray-700">Service Types:</span>
+                                    <span id="previewServiceTypes" class="font-medium text-blue-800">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- ...existing code... -->
@@ -8021,6 +8124,269 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
         // ...existing code...
+        
+        // ========================================================================
+        // == SERVICE TYPE MANAGER FUNCTIONALITY ==
+        // ========================================================================
+        
+        /**
+         * Initialize Service Type Manager panel
+         */
+        function initializeServiceTypeManager() {
+            console.log('Initializing Service Type Manager panel...');
+            loadTradeListForManager();
+        }
+        
+        let currentManagerTrade = '';
+        let managerServiceTypes = [];
+        
+        /**
+         * Load trade categories for the Service Type Manager
+         */
+        async function loadTradeListForManager() {
+            const tradeSelect = document.getElementById('serviceManagerTradeList');
+            if (!tradeSelect) return;
+            
+            tradeSelect.innerHTML = '<option value="">Loading trades...</option>';
+            
+            try {
+                console.log('Loading trades for Service Type Manager...');
+                const response = await fetch('/api/trade-categories/trades');
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch trades: ${response.status}`);
+                }
+                
+                const trades = await response.json();
+                console.log('Trades loaded for manager:', trades);
+                
+                tradeSelect.innerHTML = '<option value="">Select Trade Category...</option>';
+                trades.forEach(trade => {
+                    const option = document.createElement('option');
+                    option.value = trade.tradeName;
+                    option.textContent = trade.tradeName;
+                    option.dataset.tradeId = trade._id;
+                    tradeSelect.appendChild(option);
+                });
+                
+                console.log(`Populated ${trades.length} trades in Service Type Manager`);
+                
+            } catch (error) {
+                console.error('Error loading trades for manager:', error);
+                tradeSelect.innerHTML = '<option value="">Error loading trades</option>';
+            }
+        }
+        
+        /**
+         * Load service types for selected trade in manager
+         */
+        async function loadServiceTypesForTradeManager() {
+            const tradeSelect = document.getElementById('serviceManagerTradeList');
+            const editor = document.getElementById('serviceTypesEditor');
+            const currentTradeDisplay = document.getElementById('currentTradeDisplay');
+            
+            currentManagerTrade = tradeSelect.value;
+            
+            if (!currentManagerTrade) {
+                editor.classList.add('hidden');
+                return;
+            }
+            
+            currentTradeDisplay.textContent = currentManagerTrade;
+            editor.classList.remove('hidden');
+            
+            try {
+                console.log(`Loading service types for trade: ${currentManagerTrade}`);
+                const response = await fetch('/api/trade-categories/trades');
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch trades: ${response.status}`);
+                }
+                
+                const trades = await response.json();
+                const selectedTrade = trades.find(t => t.tradeName === currentManagerTrade);
+                
+                managerServiceTypes = selectedTrade?.serviceTypes || [
+                    'Repair',
+                    'Maintenance', 
+                    'Installation',
+                    'Emergency',
+                    'Consultation'
+                ];
+                
+                console.log(`Loaded ${managerServiceTypes.length} service types for ${currentManagerTrade}:`, managerServiceTypes);
+                renderServiceTypeList();
+                updatePreview();
+                
+            } catch (error) {
+                console.error('Error loading service types for manager:', error);
+                showToast('Error loading service types', 'error');
+            }
+        }
+        
+        /**
+         * Render the service type list with edit capabilities
+         */
+        function renderServiceTypeList() {
+            const ul = document.getElementById('serviceTypeList');
+            if (!ul) return;
+            
+            ul.innerHTML = '';
+            
+            if (managerServiceTypes.length === 0) {
+                ul.innerHTML = '<li class="text-gray-500 italic">No service types defined yet. Add some below.</li>';
+                return;
+            }
+            
+            managerServiceTypes.forEach((type, index) => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center justify-between p-2 bg-white border border-gray-200 rounded';
+                li.innerHTML = `
+                    <input 
+                        type="text" 
+                        value="${type}" 
+                        onchange="editServiceType(${index}, this.value)"
+                        class="flex-1 px-2 py-1 border border-gray-300 rounded mr-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button 
+                        onclick="removeServiceType(${index})" 
+                        class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-sm flex items-center"
+                        title="Remove this service type">
+                        <i class="fas fa-trash mr-1"></i>Remove
+                    </button>
+                `;
+                ul.appendChild(li);
+            });
+        }
+        
+        /**
+         * Edit a service type
+         */
+        function editServiceType(index, newValue) {
+            if (newValue.trim()) {
+                managerServiceTypes[index] = newValue.trim();
+                updatePreview();
+            }
+        }
+        
+        /**
+         * Remove a service type
+         */
+        function removeServiceType(index) {
+            if (confirm('Are you sure you want to remove this service type?')) {
+                managerServiceTypes.splice(index, 1);
+                renderServiceTypeList();
+                updatePreview();
+            }
+        }
+        
+        /**
+         * Add a new service type
+         */
+        function addServiceType() {
+            const input = document.getElementById('newServiceType');
+            const newType = input.value.trim();
+            
+            if (!newType) {
+                showToast('Please enter a service type name', 'error');
+                return;
+            }
+            
+            if (managerServiceTypes.includes(newType)) {
+                showToast('This service type already exists', 'error');
+                return;
+            }
+            
+            managerServiceTypes.push(newType);
+            input.value = '';
+            renderServiceTypeList();
+            updatePreview();
+            showToast('Service type added', 'success');
+        }
+        
+        /**
+         * Reset service types to default
+         */
+        function resetServiceTypesToDefault() {
+            if (confirm('Reset to default service types? This will replace all current service types.')) {
+                managerServiceTypes = [
+                    'Repair',
+                    'Maintenance', 
+                    'Installation',
+                    'Emergency',
+                    'Consultation'
+                ];
+                renderServiceTypeList();
+                updatePreview();
+                showToast('Reset to default service types', 'success');
+            }
+        }
+        
+        /**
+         * Save service types to database
+         */
+        async function saveServiceTypes() {
+            if (!currentManagerTrade) {
+                showToast('Please select a trade category first', 'error');
+                return;
+            }
+            
+            if (managerServiceTypes.length === 0) {
+                showToast('Please add at least one service type', 'error');
+                return;
+            }
+            
+            try {
+                console.log(`Saving ${managerServiceTypes.length} service types for ${currentManagerTrade}`);
+                
+                const response = await fetch('/api/trade-categories/update-service-types', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        tradeName: currentManagerTrade,
+                        serviceTypes: managerServiceTypes
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || `Server error: ${response.status}`);
+                }
+                
+                console.log('Service types saved successfully:', result);
+                showToast(`Service types saved for ${currentManagerTrade}`, 'success');
+                
+                // Refresh the booking script panel if it's visible
+                if (typeof loadTradeCategories === 'function') {
+                    loadTradeCategories();
+                }
+                
+            } catch (error) {
+                console.error('Error saving service types:', error);
+                showToast(`Error saving service types: ${error.message}`, 'error');
+            }
+        }
+        
+        /**
+         * Update the preview section
+         */
+        function updatePreview() {
+            const tradeNameSpan = document.getElementById('previewTradeName');
+            const serviceTypesSpan = document.getElementById('previewServiceTypes');
+            
+            if (tradeNameSpan) {
+                tradeNameSpan.textContent = currentManagerTrade || '-';
+            }
+            
+            if (serviceTypesSpan) {
+                serviceTypesSpan.textContent = managerServiceTypes.length > 0 
+                    ? managerServiceTypes.join(', ') 
+                    : 'No service types defined';
+            }
+        }
 
         // Smart Learning Suggestion Functions
         function applySuggestion(suggestionId) {
@@ -8811,6 +9177,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize Booking Script Configuration Panel
     if (document.getElementById('bookingTradeType')) {
         initializeBookingScriptPanel();
+    }
+    
+    // Initialize Service Type Manager Panel
+    if (document.getElementById('serviceManagerTradeList')) {
+        initializeServiceTypeManager();
     }
 });
 
