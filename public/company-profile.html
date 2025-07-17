@@ -138,110 +138,6 @@
                     </div>
                 </div>
 
-                <!-- SERVICE TYPE MANAGER PANEL -->
-                <div class="agent-setup-section-container" data-section-type="full" data-section-name="service-type-manager">
-                    <h3 class="agent-setup-section-header">
-                        <span><i class="fas fa-cogs mr-2"></i>🛠️ Service Type Manager (Per Trade)</span>
-                        <i class="fas fa-chevron-down transition-transform duration-200"></i>
-                    </h3>
-                    <div class="section-content collapsed">
-                        <!-- Service Type Manager -->
-                        <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6 mb-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <h4 class="text-xl font-semibold text-green-900 flex items-center">
-                                    <i class="fas fa-list-alt mr-3 text-2xl"></i>Manage Service Types by Trade Category
-                                </h4>
-                                <span class="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-medium">
-                                    Admin Panel
-                                </span>
-                            </div>
-                            <p class="text-green-800 mb-4">
-                                Create and manage service types for each trade category. These will be used in the booking script configurator 
-                                and throughout the system for service-specific configurations.
-                            </p>
-                        </div>
-
-                        <!-- Trade Selection -->
-                        <div class="mb-6">
-                            <label for="serviceManagerTradeList" class="form-label font-semibold">Select Trade Category:</label>
-                            <select id="serviceManagerTradeList" class="form-select" onchange="loadServiceTypesForTradeManager()">
-                                <option value="">Loading trades...</option>
-                            </select>
-                        </div>
-
-                        <!-- Service Types Editor -->
-                        <div id="serviceTypesEditor" class="hidden">
-                            <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
-                                <h5 class="font-semibold text-gray-900 mb-4 flex items-center">
-                                    <i class="fas fa-edit text-blue-600 mr-2"></i>Service Types for <span id="currentTradeDisplay" class="text-blue-600 ml-1">Selected Trade</span>
-                                </h5>
-                                
-                                <!-- Current Service Types List -->
-                                <div class="mb-4">
-                                    <label class="form-label text-sm">Current Service Types:</label>
-                                    <ul id="serviceTypeList" class="space-y-2 mt-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
-                                        <!-- Service types will be populated here -->
-                                    </ul>
-                                </div>
-                                
-                                <!-- Add New Service Type -->
-                                <div class="flex items-center space-x-3 mb-4">
-                                    <div class="flex-1">
-                                        <label for="newServiceType" class="form-label text-sm">Add New Service Type:</label>
-                                        <input 
-                                            type="text" 
-                                            id="newServiceType" 
-                                            class="form-input" 
-                                            placeholder="e.g., Emergency Repair, Routine Maintenance..."
-                                            onkeypress="if(event.key==='Enter') addServiceType()"
-                                        />
-                                    </div>
-                                    <div class="pt-6">
-                                        <button 
-                                            onclick="addServiceType()" 
-                                            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
-                                            <i class="fas fa-plus mr-2"></i>Add
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <!-- Action Buttons -->
-                                <div class="flex justify-between items-center pt-4 border-t border-gray-200">
-                                    <div class="text-sm text-gray-600">
-                                        <i class="fas fa-info-circle mr-1"></i>
-                                        Click on any service type to edit it inline
-                                    </div>
-                                    <div class="flex space-x-3">
-                                        <button 
-                                            onclick="resetServiceTypesToDefault()" 
-                                            class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
-                                            <i class="fas fa-undo mr-2"></i>Reset to Default
-                                        </button>
-                                        <button 
-                                            onclick="saveServiceTypes()" 
-                                            class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
-                                            <i class="fas fa-save mr-2"></i>Save Changes
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Service Type Preview -->
-                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                <h6 class="font-medium text-blue-900 mb-2">Preview: How this will appear in Booking Script Configuration</h6>
-                                <div class="flex items-center space-x-2 text-sm">
-                                    <span class="text-gray-700">Trade:</span>
-                                    <span id="previewTradeName" class="font-medium text-blue-800">-</span>
-                                    <span class="text-gray-500">→</span>
-                                    <span class="text-gray-700">Service Types:</span>
-                                    <span id="previewServiceTypes" class="font-medium text-blue-800">-</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- ...existing code... -->
             <div id="mobile-menu" class="md:hidden hidden">
                 <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
@@ -2064,6 +1960,109 @@
                                                             </div>
                                                         </div>
                                                     </div>
+
+                                    <!-- SERVICE TYPE MANAGER PANEL -->
+                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="service-type-manager">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-cogs mr-2"></i>🛠️ Service Type Manager (Per Trade)</span>
+                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content collapsed">
+                                            <!-- Service Type Manager -->
+                                            <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6 mb-6">
+                                                <div class="flex items-center justify-between mb-4">
+                                                    <h4 class="text-xl font-semibold text-green-900 flex items-center">
+                                                        <i class="fas fa-list-alt mr-3 text-2xl"></i>Manage Service Types by Trade Category
+                                                    </h4>
+                                                    <span class="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+                                                        Admin Panel
+                                                    </span>
+                                                </div>
+                                                <p class="text-green-800 mb-4">
+                                                    Create and manage service types for each trade category. These will be used in the booking script configurator 
+                                                    and throughout the system for service-specific configurations.
+                                                </p>
+                                            </div>
+
+                                            <!-- Trade Selection -->
+                                            <div class="mb-6">
+                                                <label for="serviceManagerTradeList" class="form-label font-semibold">Select Trade Category:</label>
+                                                <select id="serviceManagerTradeList" class="form-select" onchange="loadServiceTypesForTradeManager()">
+                                                    <option value="">Loading trades...</option>
+                                                </select>
+                                            </div>
+
+                                            <!-- Service Types Editor -->
+                                            <div id="serviceTypesEditor" class="hidden">
+                                                <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+                                                    <h5 class="font-semibold text-gray-900 mb-4 flex items-center">
+                                                        <i class="fas fa-edit text-blue-600 mr-2"></i>Service Types for <span id="currentTradeDisplay" class="text-blue-600 ml-1">Selected Trade</span>
+                                                    </h5>
+                                                    
+                                                    <!-- Current Service Types List -->
+                                                    <div class="mb-4">
+                                                        <label class="form-label text-sm">Current Service Types:</label>
+                                                        <ul id="serviceTypeList" class="space-y-2 mt-2 max-h-64 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
+                                                            <!-- Service types will be populated here -->
+                                                        </ul>
+                                                    </div>
+                                                    
+                                                    <!-- Add New Service Type -->
+                                                    <div class="flex items-center space-x-3 mb-4">
+                                                        <div class="flex-1">
+                                                            <label for="newServiceType" class="form-label text-sm">Add New Service Type:</label>
+                                                            <input 
+                                                                type="text" 
+                                                                id="newServiceType" 
+                                                                class="form-input" 
+                                                                placeholder="e.g., Emergency Repair, Routine Maintenance..."
+                                                                onkeypress="if(event.key==='Enter') addServiceType()"
+                                                            />
+                                                        </div>
+                                                        <div class="pt-6">
+                                                            <button 
+                                                                onclick="addServiceType()" 
+                                                                class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                                                <i class="fas fa-plus mr-2"></i>Add
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Action Buttons -->
+                                                    <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+                                                        <div class="text-sm text-gray-600">
+                                                            <i class="fas fa-info-circle mr-1"></i>
+                                                            Click on any service type to edit it inline
+                                                        </div>
+                                                        <div class="flex space-x-3">
+                                                            <button 
+                                                                onclick="resetServiceTypesToDefault()" 
+                                                                class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                                                <i class="fas fa-undo mr-2"></i>Reset to Default
+                                                            </button>
+                                                            <button 
+                                                                onclick="saveServiceTypes()" 
+                                                                class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                                                <i class="fas fa-save mr-2"></i>Save Changes
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Service Type Preview -->
+                                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                                    <h6 class="font-medium text-blue-900 mb-2">Preview: How this will appear in Booking Script Configuration</h6>
+                                                    <div class="flex items-center space-x-2 text-sm">
+                                                        <span class="text-gray-700">Trade:</span>
+                                                        <span id="previewTradeName" class="font-medium text-blue-800">-</span>
+                                                        <span class="text-gray-500">→</span>
+                                                        <span class="text-gray-700">Service Types:</span>
+                                                        <span id="previewServiceTypes" class="font-medium text-blue-800">-</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     <!-- BOOKING SCRIPT CONFIGURATION PANEL -->
                                     <div class="agent-setup-section-container" data-section-type="full" data-section-name="booking-script-config">
