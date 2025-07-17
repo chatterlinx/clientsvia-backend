@@ -1991,12 +1991,7 @@
                                                     <label class="form-label font-semibold">Trade Type</label>
                                                     <select id="bookingTradeType" class="form-select">
                                                         <option value="">Select Trade Type...</option>
-                                                        <option value="hvac">HVAC</option>
-                                                        <option value="plumbing">Plumbing</option>
-                                                        <option value="electrical">Electrical</option>
-                                                        <option value="roofing">Roofing</option>
-                                                        <option value="flooring">Flooring</option>
-                                                        <option value="general">General Contractor</option>
+                                                        <!-- Options will be populated dynamically from trade categories API -->
                                                     </select>
                                                 </div>
                                                 <div>
@@ -6821,8 +6816,50 @@ Cost estimate</textarea>
                 serviceTypeSelect.addEventListener('change', updateBookingConfigDisplay);
             }
             
+            // Load trade categories from API
+            loadTradeCategories();
+            
             // Load existing configurations
             loadExistingBookingConfigs();
+        }
+
+        /**
+         * Load trade categories from the API and populate the dropdown
+         */
+        async function loadTradeCategories() {
+            const tradeTypeSelect = document.getElementById('bookingTradeType');
+            if (!tradeTypeSelect) return;
+            
+            try {
+                console.log('Loading trade categories for booking script configuration...');
+                const response = await fetch('/api/trade-categories');
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch trade categories: ${response.status}`);
+                }
+                
+                const categories = await response.json();
+                console.log('Trade categories loaded:', categories);
+                
+                // Clear existing options (except the first "Select Trade Type..." option)
+                tradeTypeSelect.innerHTML = '<option value="">Select Trade Type...</option>';
+                
+                // Add categories to the dropdown
+                categories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category.name.toLowerCase().replace(/\s+/g, '_'); // Convert to slug format
+                    option.textContent = category.name;
+                    option.dataset.categoryId = category._id;
+                    tradeTypeSelect.appendChild(option);
+                });
+                
+                console.log(`Populated ${categories.length} trade categories in booking script dropdown`);
+                
+            } catch (error) {
+                console.error('Error loading trade categories:', error);
+                // Show error in the dropdown
+                tradeTypeSelect.innerHTML = '<option value="">Error loading trade types...</option>';
+            }
         }
     
         /**
