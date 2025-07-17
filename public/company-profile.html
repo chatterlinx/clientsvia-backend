@@ -4060,58 +4060,6 @@ Cost estimate</textarea>
                                             </div>
                                         </div>
 
-                                        <!-- Company Q&As -->
-                                        <div class="bg-white border border-gray-200 rounded-lg p-6">
-                                            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                                                <i class="fas fa-question-circle mr-2 text-indigo-600"></i>Company Q&A
-                                            </h4>
-                                            <p class="text-sm text-gray-500 mb-4">Add company-specific questions and answers.</p>
-                                            
-                                            <!-- Q&A Form -->
-                                            <form id="aiCompanyQnaForm" class="space-y-4 mb-6">
-                                                <input type="hidden" id="aiEditingQnaId">
-                                                <div>
-                                                    <label for="aiCompanyQnaQuestion" class="form-label">Question</label>
-                                                    <textarea id="aiCompanyQnaQuestion" class="form-input w-full" rows="2" required placeholder="Enter the question customers might ask"></textarea>
-                                                </div>
-                                                <div>
-                                                    <label for="aiCompanyQnaAnswer" class="form-label">Answer</label>
-                                                    <div class="flex items-center gap-2 mb-2">
-                                                        <select id="aiPlaceholderSelect" class="form-select text-sm flex-none">
-                                                            <option value="">Insert Placeholder</option>
-                                                            <option value="{CompanyName}">Company Name</option>
-                                                            <option value="{OwnerName}">Owner Name</option>
-                                                            <option value="{ContactPhone}">Contact Phone</option>
-                                                            <option value="{ContactEmail}">Contact Email</option>
-                                                            <option value="{Address}">Address</option>
-                                                        </select>
-                                                        <button type="button" id="aiInsertPlaceholderBtn" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">Insert</button>
-                                                    </div>
-                                                    <textarea id="aiCompanyQnaAnswer" class="form-input w-full" rows="4" required placeholder="Enter the answer that will be provided to customers"></textarea>
-                                                    <p id="aiCompanyQnaPreview" class="text-xs text-gray-600 mt-1"></p>
-                                                </div>
-                                                <div>
-                                                    <label for="aiCompanyQnaKeywords" class="form-label">Keywords</label>
-                                                    <input type="text" id="aiCompanyQnaKeywords" class="form-input w-full" placeholder="Comma-separated keywords (e.g. hours, pricing, service area)">
-                                                    <p class="text-xs text-gray-500 mt-1">Keywords help the AI identify when to use this Q&A</p>
-                                                </div>
-                                                <div class="flex gap-3 justify-end">
-                                                    <button type="submit" id="aiCompanyQnaSaveBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition">Add Q&A</button>
-                                                    <button type="button" id="aiCompanyQnaCancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-2 px-4 rounded-lg transition hidden">Cancel</button>
-                                                </div>
-                                                <p id="aiCompanyQnaFormError" class="text-red-600 text-sm hidden"></p>
-                                            </form>
-                                            
-                                            <!-- Q&As List -->
-                                            <div id="aiCompanyQnaList" class="space-y-3">
-                                                <div class="text-center text-gray-500 py-8">
-                                                    <i class="fas fa-question-circle text-3xl mb-3 text-gray-300"></i>
-                                                    <p class="text-gray-400">No company Q&As added yet</p>
-                                                    <p class="text-sm text-gray-400 mt-1">Add your first Q&A using the form above</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
                                         <!-- Knowledge Learning -->
                                         <div class="bg-white border border-gray-200 rounded-lg p-6">
                                             <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -9199,7 +9147,206 @@ document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('serviceManagerTradeList')) {
         initializeServiceTypeManager();
     }
+    
+    // Initialize Company Q&A form handlers
+    initializeCompanyQAForms();
 });
+
+/**
+ * Initialize Company Q&A form handlers
+ */
+function initializeCompanyQAForms() {
+    // Handle the main company Q&A form
+    const companyQnaForm = document.getElementById('companyQnaForm');
+    if (companyQnaForm) {
+        companyQnaForm.addEventListener('submit', function(e) {
+            e.preventDefault(); // Prevent default form submission
+            
+            console.log('Company Q&A form submitted');
+            
+            // Get form values
+            const question = document.getElementById('companyQnaQuestion').value.trim();
+            const answer = document.getElementById('companyQnaAnswer').value.trim();
+            const keywords = document.getElementById('companyQnaKeywords').value.trim();
+            
+            // Validate form
+            if (!question || !answer) {
+                showFormError('companyQnaFormError', 'Please fill in both question and answer fields');
+                return;
+            }
+            
+            // Save the Q&A
+            saveCompanyQA(question, answer, keywords);
+        });
+    }
+    
+    // Initialize placeholder insertion for the main form
+    const insertPlaceholderBtn = document.getElementById('insertPlaceholderBtn');
+    const placeholderSelect = document.getElementById('placeholderSelect');
+    const answerTextarea = document.getElementById('companyQnaAnswer');
+    
+    if (insertPlaceholderBtn && placeholderSelect && answerTextarea) {
+        insertPlaceholderBtn.addEventListener('click', function() {
+            const selectedPlaceholder = placeholderSelect.value;
+            if (selectedPlaceholder) {
+                const currentPos = answerTextarea.selectionStart;
+                const currentValue = answerTextarea.value;
+                const newValue = currentValue.slice(0, currentPos) + selectedPlaceholder + currentValue.slice(currentPos);
+                answerTextarea.value = newValue;
+                answerTextarea.focus();
+                // Clear the selection
+                placeholderSelect.value = '';
+                
+                // Update preview if needed
+                updateAnswerPreview();
+            }
+        });
+    }
+}
+
+/**
+ * Save Company Q&A entry
+ */
+async function saveCompanyQA(question, answer, keywords) {
+    try {
+        const companyId = getCurrentCompanyId();
+        const saveBtn = document.getElementById('companyQnaSaveBtn');
+        const errorDiv = document.getElementById('companyQnaFormError');
+        
+        // Show loading state
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        errorDiv.classList.add('hidden');
+        
+        const response = await fetch(`/api/companies/${companyId}/qna`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                question,
+                answer,
+                keywords: keywords.split(',').map(k => k.trim()).filter(k => k)
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Clear form
+            document.getElementById('companyQnaQuestion').value = '';
+            document.getElementById('companyQnaAnswer').value = '';
+            document.getElementById('companyQnaKeywords').value = '';
+            
+            // Refresh Q&A list
+            loadCompanyQAs();
+            
+            // Show success message
+            showToast('Q&A added successfully!', 'success');
+        } else {
+            throw new Error(data.error || 'Failed to save Q&A');
+        }
+    } catch (error) {
+        console.error('Error saving Company Q&A:', error);
+        showFormError('companyQnaFormError', 'Error saving Q&A: ' + error.message);
+    } finally {
+        // Reset button
+        const saveBtn = document.getElementById('companyQnaSaveBtn');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Add';
+    }
+}
+
+/**
+ * Save AI Company Q&A entry
+ */
+async function saveAICompanyQA(question, answer, keywords) {
+    try {
+        const companyId = getCurrentCompanyId();
+        const saveBtn = document.getElementById('aiCompanyQnaSaveBtn');
+        const errorDiv = document.getElementById('aiCompanyQnaFormError');
+        
+        // Show loading state
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        errorDiv.classList.add('hidden');
+        
+        const response = await fetch(`/api/companies/${companyId}/ai-qna`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                question,
+                answer,
+                keywords: keywords.split(',').map(k => k.trim()).filter(k => k)
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Clear form
+            document.getElementById('aiCompanyQnaQuestion').value = '';
+            document.getElementById('aiCompanyQnaAnswer').value = '';
+            document.getElementById('aiCompanyQnaKeywords').value = '';
+            
+            // Refresh AI Q&A list
+            loadAICompanyQAs();
+            
+            // Show success message
+            showToast('AI Q&A added successfully!', 'success');
+        } else {
+            throw new Error(data.error || 'Failed to save AI Q&A');
+        }
+    } catch (error) {
+        console.error('Error saving AI Company Q&A:', error);
+        showFormError('aiCompanyQnaFormError', 'Error saving AI Q&A: ' + error.message);
+    } finally {
+        // Reset button
+        const saveBtn = document.getElementById('aiCompanyQnaSaveBtn');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Add Q&A';
+    }
+}
+
+/**
+ * Show form error message
+ */
+function showFormError(errorElementId, message) {
+    const errorDiv = document.getElementById(errorElementId);
+    if (errorDiv) {
+        errorDiv.textContent = message;
+        errorDiv.classList.remove('hidden');
+    }
+}
+
+/**
+ * Load Company Q&As (placeholder function)
+ */
+function loadCompanyQAs() {
+    console.log('Loading Company Q&As...');
+    // This function should load and display the Q&A list
+    // Implementation depends on your existing Q&A loading logic
+}
+
+/**
+ * Load AI Company Q&As (placeholder function)
+ */
+function loadAICompanyQAs() {
+    console.log('Loading AI Company Q&As...');
+    // This function should load and display the AI Q&A list
+    // Implementation depends on your existing AI Q&A loading logic
+}
+
+/**
+ * Show toast notification (if not already implemented)
+ */
+function showToast(message, type = 'info') {
+    console.log(`Toast [${type}]: ${message}`);
+    // Basic implementation - you can enhance this
+    alert(message);
+}
 
 /**
  * Initialize tab switching functionality
