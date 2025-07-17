@@ -217,7 +217,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   const customKBResult = await checkCustomKB(question, companyId, tradeCategoryID);
   
   // Handle both old format (string) and new format (object with result and trace)
-  const customKBResponse = customKBResult?.result || customKBResult;
+  const customKBResponse = typeof customKBResult === 'string' ? customKBResult : customKBResult?.result;
   
   if (customKBResponse) {
     const displayText = typeof customKBResponse === 'string' ? customKBResponse : String(customKBResponse || '');

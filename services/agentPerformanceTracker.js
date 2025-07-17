@@ -30,13 +30,13 @@ class AgentPerformanceTracker {
       companyId,
       callSid,
       timestamp,
-      question: question.substring(0, 500), // Limit length
+      question: typeof question === 'string' ? question.substring(0, 500) : String(question || '').substring(0, 500), // Limit length
       responseMethod,
       responseTime,
-      responseText: responseText.substring(0, 1000),
+      responseText: typeof responseText === 'string' ? responseText.substring(0, 1000) : String(responseText || '').substring(0, 1000),
       confidence,
-      questionLength: question.length,
-      responseLength: responseText.length,
+      questionLength: typeof question === 'string' ? question.length : String(question || '').length,
+      responseLength: typeof responseText === 'string' ? responseText.length : String(responseText || '').length,
       debugInfo,
       // Agent intelligence metrics
       scriptMatchScore: debugInfo.scriptMatchScore || 0,

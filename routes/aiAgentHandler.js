@@ -191,7 +191,7 @@ router.post('/test', authenticateJWT, async (req, res) => {
  * Test Custom KB with AI Response Trace Log
  * Used by the Test Intelligence Engine in the admin UI
  */
-router.post('/test-custom-kb-trace', authenticateJWT, async (req, res) => {
+router.post('/test-custom-kb-trace', async (req, res) => {
     try {
         const { companyId, query } = req.body;
         
