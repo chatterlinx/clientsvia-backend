@@ -220,7 +220,8 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   const customKBResponse = customKBResult?.result || customKBResult;
   
   if (customKBResponse) {
-    console.log(`[Custom KB] Found trade category match: "${customKBResponse.substring(0, 100)}..."`);
+    const displayText = typeof customKBResponse === 'string' ? customKBResponse : String(customKBResponse || '');
+    console.log(`[Custom KB] Found trade category match: "${displayText.substring(0, 100)}..."`);
     responseMethod = 'custom-trade-kb';
     confidence = 0.9;
     debugInfo = { 

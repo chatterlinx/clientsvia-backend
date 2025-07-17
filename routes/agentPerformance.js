@@ -596,6 +596,9 @@ function extractMethodFromLogs(logs) {
 function calculateIntelligenceScore(response, query, method, responseTime) {
   let score = 50; // Base score
   
+  // Ensure response is a string
+  const responseText = typeof response === 'string' ? response : String(response || '');
+  
   // Method-based scoring
   const methodScores = {
     'Protocol Match': 95,
@@ -612,21 +615,21 @@ function calculateIntelligenceScore(response, query, method, responseTime) {
   score = methodScores[method] || 50;
   
   // Response quality adjustments
-  if (response.length < 20) score -= 10; // Too short
-  if (response.length > 200) score -= 5; // Too long
-  if (response.includes('I apologize') || response.includes('I\'m sorry')) score -= 5;
-  if (response.includes('specialist') && !response.includes('schedule')) score -= 10; // Generic escalation
+  if (responseText.length < 20) score -= 10; // Too short
+  if (responseText.length > 200) score -= 5; // Too long
+  if (responseText.includes('I apologize') || responseText.includes('I\'m sorry')) score -= 5;
+  if (responseText.includes('specialist') && !responseText.includes('schedule')) score -= 10; // Generic escalation
   
   // Query-specific scoring for "blank thermostat"
   if (query.toLowerCase().includes('blank') && query.toLowerCase().includes('thermostat')) {
-    if (response.toLowerCase().includes('power') || 
-        response.toLowerCase().includes('reset') || 
-        response.toLowerCase().includes('breaker') ||
-        response.toLowerCase().includes('battery') ||
-        response.toLowerCase().includes('wiring')) {
+    if (responseText.toLowerCase().includes('power') || 
+        responseText.toLowerCase().includes('reset') || 
+        responseText.toLowerCase().includes('breaker') ||
+        responseText.toLowerCase().includes('battery') ||
+        responseText.toLowerCase().includes('wiring')) {
       score += 10; // Good specific answer
-    } else if (response.toLowerCase().includes('specialist') && 
-               !response.toLowerCase().includes('thermostat')) {
+    } else if (responseText.toLowerCase().includes('specialist') && 
+               !responseText.toLowerCase().includes('thermostat')) {
       score -= 15; // Generic non-helpful answer
     }
   }
