@@ -587,7 +587,12 @@ router.put('/service-types/:tradeName', async (req, res) => {
         }
         
         console.log(`[API PUT service-types] Successfully updated service types for ${tradeName}`);
-        res.json({ message: 'Service types updated successfully' });
+        res.json({ 
+            success: true,
+            message: 'Service types updated successfully',
+            tradeName: tradeName,
+            serviceTypes: serviceTypes.filter(type => type && type.trim())
+        });
         
     } catch (error) {
         console.error(`[API PUT service-types] Error updating service types for ${tradeName}:`, error.message, error.stack);
