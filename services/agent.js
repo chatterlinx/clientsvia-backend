@@ -14,6 +14,9 @@ const { applyPlaceholders } = require('../utils/placeholders');
 const ServiceIssueHandler = require('./serviceIssueHandler');
 const serviceIssueHandler = new ServiceIssueHandler();
 
+// 🧠 Import AI Intelligence Engine
+const aiIntelligenceEngine = require('./aiIntelligenceEngine');
+
 // In-memory cache for parsed Category Q&A by company ID
 const categoryQACache = new Map();
 
@@ -203,7 +206,137 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
       proceedToBooking: serviceIssueResult.proceedToBooking
     };
   }
+
+  // 🧠 NEW STEP 1.5: AI INTELLIGENCE ENGINE PROCESSING
+  console.log(`[AI Intelligence] Processing query with Super-Intelligent AI Engine...`);
   
+  // Get contextual memory for personalization
+  const callerId = originalCallSid || 'anonymous';
+  const contextualMemory = await aiIntelligenceEngine.getContextualMemory(callerId, companyId, company);
+  
+  // Check for semantic knowledge match
+  const semanticResult = await aiIntelligenceEngine.processSemanticKnowledge(question, companyId, company);
+  
+  if (semanticResult && semanticResult.confidence >= (company?.aiSettings?.semanticKnowledge?.confidenceThreshold || 0.87)) {
+    console.log(`[AI Intelligence] High-confidence semantic match found: ${(semanticResult.confidence * 100).toFixed(1)}%`);
+    
+    // Store interaction in contextual memory
+    await aiIntelligenceEngine.storeContextualMemory(callerId, companyId, {
+      query: question,
+      response: semanticResult.answer,
+      source: 'semantic_knowledge',
+      confidence: semanticResult.confidence
+    }, company);
+    
+    responseMethod = 'ai-semantic-knowledge';
+    confidence = semanticResult.confidence;
+    debugInfo = { 
+      section: 'ai-intelligence', 
+      source: 'semantic_knowledge',
+      confidence: semanticResult.confidence,
+      category: semanticResult.category
+    };
+    
+    // Track performance
+    await trackPerformance(companyId, originalCallSid, question, semanticResult.answer, responseMethod, confidence, debugInfo, startTime);
+    
+    return { 
+      text: semanticResult.answer,
+      responseMethod: responseMethod,
+      confidence: confidence,
+      debugInfo: debugInfo,
+      aiIntelligence: {
+        semanticMatch: true,
+        confidence: semanticResult.confidence,
+        source: semanticResult.source
+      }
+    };
+  }
+
+  // Check for smart escalation triggers
+  const escalationCheck = await aiIntelligenceEngine.checkSmartEscalation(
+    question, 
+    { conversationHistory, contextualMemory }, 
+    companyId, 
+    company
+  );
+  
+  if (escalationCheck.shouldEscalate) {
+    console.log(`[AI Intelligence] Smart escalation triggered: ${escalationCheck.reasons.join(', ')}`);
+    
+    responseMethod = 'ai-smart-escalation';
+    confidence = escalationCheck.confidence;
+    debugInfo = { 
+      section: 'ai-intelligence', 
+      source: 'smart_escalation',
+      reasons: escalationCheck.reasons
+    };
+    
+    const escalationMessage = customEscalationMessage || 
+      "I understand this requires specialized attention. Let me connect you with one of our experts who can provide the detailed assistance you need.";
+    
+    // Track performance
+    await trackPerformance(companyId, originalCallSid, question, escalationMessage, responseMethod, confidence, debugInfo, startTime);
+    
+    return { 
+      text: escalationMessage,
+      responseMethod: responseMethod,
+      confidence: confidence,
+      debugInfo: debugInfo,
+      shouldEscalate: true,
+      aiIntelligence: {
+        smartEscalation: true,
+        confidence: escalationCheck.confidence,
+        reasons: escalationCheck.reasons
+      }
+    };
+  }
+
+  // Try dynamic reasoning for complex queries
+  if (company?.aiSettings?.dynamicReasoning?.enabled !== false) {
+    const reasoningResult = await aiIntelligenceEngine.processWithDynamicReasoning(
+      question, 
+      { conversationHistory, contextualMemory }, 
+      companyId, 
+      company
+    );
+    
+    if (reasoningResult && reasoningResult.answer) {
+      console.log(`[AI Intelligence] Dynamic reasoning provided answer in ${reasoningResult.stepsUsed} steps`);
+      
+      // Store interaction in contextual memory
+      await aiIntelligenceEngine.storeContextualMemory(callerId, companyId, {
+        query: question,
+        response: reasoningResult.answer,
+        source: 'dynamic_reasoning',
+        stepsUsed: reasoningResult.stepsUsed
+      }, company);
+      
+      responseMethod = 'ai-dynamic-reasoning';
+      confidence = 0.85;
+      debugInfo = { 
+        section: 'ai-intelligence', 
+        source: 'dynamic_reasoning',
+        stepsUsed: reasoningResult.stepsUsed
+      };
+      
+      // Track performance
+      await trackPerformance(companyId, originalCallSid, question, reasoningResult.answer, responseMethod, confidence, debugInfo, startTime);
+      
+      return { 
+        text: reasoningResult.answer,
+        responseMethod: responseMethod,
+        confidence: confidence,
+        debugInfo: debugInfo,
+        aiIntelligence: {
+          dynamicReasoning: true,
+          stepsUsed: reasoningResult.stepsUsed,
+          reasoningSteps: reasoningResult.reasoningSteps
+        }
+      };
+    }
+  }
+
   // STEP 2: Check for specific scenario protocols (moved to second priority)
   const protocols = company?.agentSetup?.protocols || {};
   const protocolResponse = checkSpecificProtocols(protocols, question, conversationHistory, placeholders);

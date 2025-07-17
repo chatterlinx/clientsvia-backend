@@ -43,6 +43,7 @@ const agentPerformanceRoutes = require('./routes/agentPerformance');
 const intentRoutingRoutes = require('./routes/intentRouting'); // Intent Routing & Flow Control
 const bookingScriptsRoutes = require('./routes/bookingScripts'); // Booking Scripts Configuration
 const bookingHandlerRoutes = require('./routes/bookingHandler'); // Booking Handler API
+const aiIntelligenceRoutes = require('./routes/aiIntelligence'); // AI Intelligence Engine
 
 // Initialize Express app
 const app = express();
@@ -93,6 +94,7 @@ app.use('/api/agent', agentPerformanceRoutes);
 app.use('/api/agent', intentRoutingRoutes); // Intent Routing & Flow Control routes
 app.use('/api/booking-scripts', bookingScriptsRoutes); // Booking Scripts Configuration
 app.use('/api/booking-handler', bookingHandlerRoutes); // Booking Handler API for testing and integration
+app.use('/api/ai-intelligence', aiIntelligenceRoutes); // AI Intelligence Engine routes
 
 /*
 --- TWILIO SMOKE TEST ROUTE (COMMENTED OUT) ---

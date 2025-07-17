@@ -124,8 +124,40 @@ const aiSettingsSchema = new mongoose.Schema({
     debugMode: { type: Boolean, default: false },
     twilioVoice: { type: String, default: 'alice', trim: true }, // Consistent fallback voice
     conversationContextTracking: { type: Boolean, default: true }, // Track conversation flow better
-    preventRepetitiveQuestions: { type: Boolean, default: true } // Prevent asking same questions
-    // The enableGoogleCalendarIntegration field was moved to integrations.googleOAuth.isEnabled
+    preventRepetitiveQuestions: { type: Boolean, default: true }, // Prevent asking same questions
+    
+    // 🧠 AI Intelligence Engine Settings
+    semanticKnowledge: {
+        enabled: { type: Boolean, default: true },
+        confidenceThreshold: { type: Number, default: 0.87, min: 0, max: 1 }
+    },
+    contextualMemory: {
+        enabled: { type: Boolean, default: true },
+        personalizationLevel: { type: String, default: 'medium', enum: ['low', 'medium', 'high'] },
+        memoryRetentionHours: { type: Number, default: 24 }
+    },
+    dynamicReasoning: {
+        enabled: { type: Boolean, default: true },
+        useReActFramework: { type: Boolean, default: true },
+        maxReasoningSteps: { type: Number, default: 3 }
+    },
+    smartEscalation: {
+        enabled: { type: Boolean, default: true },
+        sentimentTrigger: { type: Boolean, default: true },
+        contextualHandoffs: { type: Boolean, default: true }
+    },
+    continuousLearning: {
+        autoUpdateKnowledge: { type: Boolean, default: true },
+        optimizeResponsePatterns: { type: Boolean, default: true },
+        abTestStrategies: { type: Boolean, default: false },
+        realTimeOptimization: { type: Boolean, default: true },
+        predictiveIntentAnalysis: { type: Boolean, default: false }
+    },
+    performanceBenchmarks: {
+        targetConfidenceRate: { type: Number, default: 0.87 },
+        targetResponseTime: { type: Number, default: 1.8 },
+        targetEscalationRate: { type: Number, default: 0.12 }
+    }
 }, { _id: false });
 
 // --- Sub-schema for Agent Setup ---
