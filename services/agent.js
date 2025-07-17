@@ -17,6 +17,9 @@ const serviceIssueHandler = new ServiceIssueHandler();
 // 🧠 Import AI Intelligence Engine
 const aiIntelligenceEngine = require('./aiIntelligenceEngine');
 
+// Import the custom KB checker
+const { checkCustomKB } = require('../utils/checkCustomKB');
+
 // In-memory cache for parsed Category Q&A by company ID
 const categoryQACache = new Map();
 
@@ -207,7 +210,35 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     };
   }
 
-  // 🧠 NEW STEP 1.5: AI INTELLIGENCE ENGINE PROCESSING
+  // NEW STEP 1.5: CHECK CUSTOM KNOWLEDGE BASE FOR TRADE CATEGORY Q&AS
+  console.log(`[Custom KB] Checking trade category knowledge base for: "${question}"`);
+  
+  const tradeCategoryID = categories.length > 0 ? categories[0].toLowerCase().replace(/\s+/g, '-') : 'hvac-residential';
+  const customKBResult = await checkCustomKB(question, companyId, tradeCategoryID);
+  
+  if (customKBResult) {
+    console.log(`[Custom KB] Found trade category match: "${customKBResult.substring(0, 100)}..."`);
+    responseMethod = 'custom-trade-kb';
+    confidence = 0.9;
+    debugInfo = { 
+      section: 'custom-kb', 
+      source: 'trade-category-qa',
+      category: tradeCategoryID
+    };
+    
+    // Track performance
+    await trackPerformance(companyId, originalCallSid, question, customKBResult, responseMethod, confidence, debugInfo, startTime);
+    
+    return { 
+      text: customKBResult, 
+      escalate: false,
+      responseMethod: responseMethod,
+      confidence: confidence,
+      debugInfo: debugInfo
+    };
+  }
+
+  // 🧠 NEW STEP 2: AI INTELLIGENCE ENGINE PROCESSING
   console.log(`[AI Intelligence] Processing query with Super-Intelligent AI Engine...`);
   
   // Get contextual memory for personalization
@@ -1376,7 +1407,7 @@ function extractKeyTopicsFromRambling(question, conversationHistory = []) {
     'electrical_issues': ['electrical', 'power', 'outlet', 'switch', 'breaker', 'wiring', 'lights', 'electric'],
     'plumbing_issues': ['plumbing', 'water', 'pipe', 'leak', 'drain', 'toilet', 'faucet', 'shower', 'sink'],
     'appliance_issues': ['appliance', 'refrigerator', 'washer', 'dryer', 'dishwasher', 'oven', 'stove'],
-    'urgency_indicators': ['emergency', 'urgent', 'asap', 'right now', 'immediately', 'broken', 'not working', 'help'],
+    'urgency_indicators': ['emergency', 'urgent', 'asap', 'right now', 'immediate', 'broken', 'not working', 'help'],
     'problem_descriptors': ['blank', 'dead', 'broken', 'not working', 'malfunctioning', 'weird', 'strange', 'noise', 'leak'],
     'scheduling_intent': ['schedule', 'appointment', 'service', 'come out', 'visit', 'when', 'available'],
     'pricing_intent': ['cost', 'price', 'charge', 'fee', 'how much', 'expensive', 'cheap', 'bill']
