@@ -216,21 +216,25 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   const tradeCategoryID = categories.length > 0 ? categories[0].toLowerCase().replace(/\s+/g, '-') : 'hvac-residential';
   const customKBResult = await checkCustomKB(question, companyId, tradeCategoryID);
   
-  if (customKBResult) {
-    console.log(`[Custom KB] Found trade category match: "${customKBResult.substring(0, 100)}..."`);
+  // Handle both old format (string) and new format (object with result and trace)
+  const customKBResponse = customKBResult?.result || customKBResult;
+  
+  if (customKBResponse) {
+    console.log(`[Custom KB] Found trade category match: "${customKBResponse.substring(0, 100)}..."`);
     responseMethod = 'custom-trade-kb';
     confidence = 0.9;
     debugInfo = { 
       section: 'custom-kb', 
       source: 'trade-category-qa',
-      category: tradeCategoryID
+      category: tradeCategoryID,
+      trace: customKBResult?.trace ? 'Available' : 'Not available'
     };
     
     // Track performance
-    await trackPerformance(companyId, originalCallSid, question, customKBResult, responseMethod, confidence, debugInfo, startTime);
+    await trackPerformance(companyId, originalCallSid, question, customKBResponse, responseMethod, confidence, debugInfo, startTime);
     
     return { 
-      text: customKBResult, 
+      text: customKBResponse, 
       escalate: false,
       responseMethod: responseMethod,
       confidence: confidence,
