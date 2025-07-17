@@ -1998,11 +1998,7 @@
                                                     <label class="form-label font-semibold">Service Type</label>
                                                     <select id="bookingServiceType" class="form-select">
                                                         <option value="">Select Service Type...</option>
-                                                        <option value="repair">Repair</option>
-                                                        <option value="maintenance">Maintenance</option>
-                                                        <option value="installation">Installation</option>
-                                                        <option value="emergency">Emergency</option>
-                                                        <option value="consultation">Consultation</option>
+                                                        <!-- Options will be populated dynamically based on selected trade type -->
                                                     </select>
                                                 </div>
                                             </div>
@@ -6812,7 +6808,12 @@ Cost estimate</textarea>
             const serviceTypeSelect = document.getElementById('bookingServiceType');
             
             if (tradeTypeSelect && serviceTypeSelect) {
-                tradeTypeSelect.addEventListener('change', updateBookingConfigDisplay);
+                tradeTypeSelect.addEventListener('change', function() {
+                    // Load service types when trade type changes
+                    loadServiceTypesForTrade();
+                    // Then update the config display
+                    updateBookingConfigDisplay();
+                });
                 serviceTypeSelect.addEventListener('change', updateBookingConfigDisplay);
             }
             
@@ -6821,6 +6822,60 @@ Cost estimate</textarea>
             
             // Load existing configurations
             loadExistingBookingConfigs();
+        }
+
+        /**
+         * Load service types for the selected trade category
+         */
+        async function loadServiceTypesForTrade() {
+            const tradeTypeSelect = document.getElementById('bookingTradeType');
+            const serviceTypeSelect = document.getElementById('bookingServiceType');
+            
+            if (!tradeTypeSelect || !serviceTypeSelect) return;
+            
+            const selectedTradeSlug = tradeTypeSelect.value;
+            if (!selectedTradeSlug) {
+                serviceTypeSelect.innerHTML = '<option value="">Select Service Type...</option>';
+                return;
+            }
+            
+            // Get the actual trade name from the selected option
+            const selectedOption = tradeTypeSelect.options[tradeTypeSelect.selectedIndex];
+            const tradeName = selectedOption.textContent;
+            
+            serviceTypeSelect.innerHTML = '<option value="">Loading service types...</option>';
+            
+            try {
+                console.log(`Loading service types for trade: ${tradeName}`);
+                const response = await fetch(`/api/trade-categories/service-types/${encodeURIComponent(tradeName)}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch service types: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Service types loaded:', data.serviceTypes);
+                
+                // Clear and populate service type dropdown
+                serviceTypeSelect.innerHTML = '<option value="">Select Service Type...</option>';
+                
+                if (data.serviceTypes && data.serviceTypes.length > 0) {
+                    data.serviceTypes.forEach(serviceType => {
+                        const option = document.createElement('option');
+                        option.value = serviceType.toLowerCase().replace(/\s+/g, '_');
+                        option.textContent = serviceType;
+                        serviceTypeSelect.appendChild(option);
+                    });
+                    
+                    console.log(`Populated ${data.serviceTypes.length} service types for ${tradeName}`);
+                } else {
+                    serviceTypeSelect.innerHTML = '<option value="">No service types available</option>';
+                }
+                
+            } catch (error) {
+                console.error('Error loading service types:', error);
+                serviceTypeSelect.innerHTML = '<option value="">Error loading service types</option>';
+            }
         }
 
         /**

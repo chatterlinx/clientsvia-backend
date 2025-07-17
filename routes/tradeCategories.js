@@ -496,5 +496,104 @@ router.delete('/:categoryId/qas/:qaId', async (req, res) => {
     }
 });
 
+// ========================================================================
+// == SERVICE TYPES API - Load service types for a specific trade ==
+// ========================================================================
+
+/**
+ * @route   GET /api/trade-categories/service-types/:tradeName
+ * @desc    Get service types for a specific trade category
+ * @access  Public
+ */
+router.get('/service-types/:tradeName', async (req, res) => {
+    const { tradeName } = req.params;
+    console.log(`[API GET /api/trade-categories/service-types/${tradeName}] Fetching service types for trade:`, tradeName);
+    
+    const db = getDB();
+    if (!db) {
+        console.error('[API GET service-types] Database not connected');
+        return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const tradeCategoriesCollection = db.collection(CATEGORY_COLLECTION);
+    
+    try {
+        // Find trade category by name (case-insensitive)
+        const trade = await tradeCategoriesCollection.findOne({ 
+            name: { $regex: `^${tradeName}$`, $options: 'i' } 
+        });
+        
+        if (!trade) {
+            console.warn(`[API GET service-types] Trade not found: ${tradeName}`);
+            return res.status(404).json({ error: 'Trade category not found' });
+        }
+        
+        // Return service types or default ones if not set
+        const serviceTypes = trade.serviceTypes || [
+            'Repair',
+            'Maintenance', 
+            'Installation',
+            'Emergency',
+            'Consultation'
+        ];
+        
+        console.log(`[API GET service-types] Found ${serviceTypes.length} service types for ${tradeName}:`, serviceTypes);
+        res.json({ serviceTypes });
+        
+    } catch (error) {
+        console.error(`[API GET service-types] Error fetching service types for ${tradeName}:`, error.message, error.stack);
+        res.status(500).json({ error: `Server error: ${error.message}` });
+    }
+});
+
+/**
+ * @route   PUT /api/trade-categories/service-types/:tradeName
+ * @desc    Update service types for a specific trade category
+ * @access  Public
+ */
+router.put('/service-types/:tradeName', async (req, res) => {
+    const { tradeName } = req.params;
+    const { serviceTypes } = req.body;
+    
+    console.log(`[API PUT /api/trade-categories/service-types/${tradeName}] Updating service types:`, serviceTypes);
+    
+    if (!Array.isArray(serviceTypes)) {
+        return res.status(400).json({ error: 'serviceTypes must be an array' });
+    }
+    
+    const db = getDB();
+    if (!db) {
+        console.error('[API PUT service-types] Database not connected');
+        return res.status(500).json({ error: 'Database not connected' });
+    }
+    
+    const tradeCategoriesCollection = db.collection(CATEGORY_COLLECTION);
+    
+    try {
+        // Update service types for the trade category
+        const result = await tradeCategoriesCollection.updateOne(
+            { name: { $regex: `^${tradeName}$`, $options: 'i' } },
+            { 
+                $set: { 
+                    serviceTypes: serviceTypes.filter(type => type && type.trim()),
+                    updatedAt: new Date()
+                }
+            }
+        );
+        
+        if (result.matchedCount === 0) {
+            console.warn(`[API PUT service-types] Trade not found: ${tradeName}`);
+            return res.status(404).json({ error: 'Trade category not found' });
+        }
+        
+        console.log(`[API PUT service-types] Successfully updated service types for ${tradeName}`);
+        res.json({ message: 'Service types updated successfully' });
+        
+    } catch (error) {
+        console.error(`[API PUT service-types] Error updating service types for ${tradeName}:`, error.message, error.stack);
+        res.status(500).json({ error: `Server error: ${error.message}` });
+    }
+});
+
 
 module.exports = router;
