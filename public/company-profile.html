@@ -139,178 +139,6 @@
                 </div>
             </div>
 
-            <!-- BOOKING SCRIPT CONFIGURATION PANEL -->
-            <div class="agent-setup-section-container" data-section-type="full" data-section-name="booking-script-config">
-                <h3 class="agent-setup-section-header">
-                    <span><i class="fas fa-calendar-check mr-2"></i>📘 Booking Script Configuration (Per Trade & Service)</span>
-                    <i class="fas fa-chevron-up transition-transform duration-200"></i>
-                </h3>
-                <div class="section-content">
-                    <!-- Booking Script Configuration -->
-                    <div class="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-6 mb-6">
-                        <div class="flex items-center justify-between mb-4">
-                            <h4 class="text-xl font-semibold text-blue-900 flex items-center">
-                                <i class="fas fa-calendar-check mr-3 text-2xl"></i>Multi-Trade Booking Script Configurator
-                            </h4>
-                            <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
-                                Per Service Type
-                            </span>
-                        </div>
-                        <p class="text-blue-800 mb-4">
-                            Configure custom booking flows for each trade type and service combination. Define step-by-step scripts 
-                            that guide your AI agent through the booking process with customers.
-                        </p>
-                    </div>
-
-                    <!-- Trade & Service Selection -->
-                    <div class="grid md:grid-cols-2 gap-6 mb-6">
-                        <div>
-                            <label class="form-label font-semibold">Trade Type</label>
-                            <select id="bookingTradeType" class="form-select">
-                                <option value="">Select Trade Type...</option>
-                                <option value="hvac">HVAC</option>
-                                <option value="plumbing">Plumbing</option>
-                                <option value="electrical">Electrical</option>
-                                <option value="roofing">Roofing</option>
-                                <option value="flooring">Flooring</option>
-                                <option value="general">General Contractor</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="form-label font-semibold">Service Type</label>
-                            <select id="bookingServiceType" class="form-select">
-                                <option value="">Select Service Type...</option>
-                                <option value="repair">Repair</option>
-                                <option value="maintenance">Maintenance</option>
-                                <option value="installation">Installation</option>
-                                <option value="emergency">Emergency</option>
-                                <option value="consultation">Consultation</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Current Configuration Display -->
-                    <div id="currentBookingConfig" class="hidden mb-6">
-                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                            <h5 class="font-semibold text-gray-900 mb-2">Current Configuration:</h5>
-                            <div id="configDisplay" class="text-sm text-gray-700"></div>
-                        </div>
-                    </div>
-
-                    <!-- Booking Script Form -->
-                    <div id="bookingScriptForm" class="hidden space-y-6">
-                        <!-- Pre-Step Clarifier -->
-                        <div>
-                            <label class="form-label font-semibold">Pre-Step Clarifier Prompt</label>
-                            <textarea id="preStepClarifier" 
-                                      rows="2" 
-                                      class="form-textarea" 
-                                      placeholder="e.g., So I may help you correctly, do you need AC repair or maintenance?"></textarea>
-                            <p class="text-xs text-gray-500 mt-1">Helps clarify the customer's specific need before starting the booking flow</p>
-                        </div>
-
-                        <!-- Booking Flow Steps -->
-                        <div class="bg-gray-50 rounded-lg p-4">
-                            <h5 class="font-semibold text-gray-900 mb-4">Booking Flow Steps</h5>
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="form-label text-sm font-medium">Step 1: Initial Contact</label>
-                                    <input type="text" 
-                                           id="step1" 
-                                           class="form-input" 
-                                           placeholder="e.g., Is this your home or business?" />
-                                </div>
-                                <div>
-                                    <label class="form-label text-sm font-medium">Step 2: Location</label>
-                                    <input type="text" 
-                                           id="step2" 
-                                           class="form-input" 
-                                           placeholder="e.g., Can I get your address please?" />
-                                </div>
-                                <div>
-                                    <label class="form-label text-sm font-medium">Step 3: Scheduling</label>
-                                    <input type="text" 
-                                           id="step3" 
-                                           class="form-input" 
-                                           placeholder="e.g., What day and time works best for you?" />
-                                </div>
-                                <div>
-                                    <label class="form-label text-sm font-medium">Step 4: Contact Info</label>
-                                    <input type="text" 
-                                           id="step4" 
-                                           class="form-input" 
-                                           placeholder="e.g., Can I get your name and phone number?" />
-                                </div>
-                                <div>
-                                    <label class="form-label text-sm font-medium">Step 5: Confirmation</label>
-                                    <input type="text" 
-                                           id="step5" 
-                                           class="form-input" 
-                                           placeholder="e.g., Let me confirm your appointment details." />
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Additional Prompts -->
-                        <div class="grid md:grid-cols-2 gap-6">
-                            <div>
-                                <label class="form-label font-semibold">Modify Booking Prompt</label>
-                                <textarea id="modifyBookingPrompt" 
-                                          rows="2" 
-                                          class="form-textarea" 
-                                          placeholder="e.g., Would you like me to check for another time?"></textarea>
-                            </div>
-                            <div>
-                                <label class="form-label font-semibold">Confirmation Message Template</label>
-                                <textarea id="confirmationText" 
-                                          rows="2" 
-                                          class="form-textarea" 
-                                          placeholder="e.g., You are booked for {{timeSlot}} at {{address}}."></textarea>
-                            </div>
-                        </div>
-
-                        <!-- Fallback Script -->
-                        <div>
-                            <label class="form-label font-semibold">Fallback Script (Unclear Caller)</label>
-                            <textarea id="fallbackScript" 
-                                      rows="3" 
-                                      class="form-textarea" 
-                                      placeholder="e.g., If you're not sure what's wrong, we can still schedule a technician to take a look."></textarea>
-                            <p class="text-xs text-gray-500 mt-1">Used when the customer can't clearly describe their issue</p>
-                        </div>
-
-                        <!-- Action Buttons -->
-                        <div class="flex justify-between items-center pt-4 border-t border-gray-200">
-                            <div class="flex space-x-3">
-                                <button id="saveBookingScriptBtn" 
-                                        class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center"
-                                        onclick="saveBookingScript()">
-                                    <i class="fas fa-save mr-2"></i>Save Booking Script
-                                </button>
-                                <button id="testBookingScriptBtn" 
-                                        class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center"
-                                        onclick="testBookingScript()">
-                                    <i class="fas fa-play mr-2"></i>Test Script
-                                </button>
-                            </div>
-                            <button id="resetBookingScriptBtn" 
-                                    class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center"
-                                    onclick="resetBookingScript()">
-                                <i class="fas fa-undo mr-2"></i>Reset
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Existing Configurations List -->
-                    <div class="mt-8">
-                        <h5 class="font-semibold text-gray-900 mb-4">Existing Booking Configurations</h5>
-                        <div id="existingBookingConfigs" class="space-y-2">
-                            <div class="text-gray-500 text-sm">No configurations saved yet. Create your first booking script above.</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- ...existing code... -->
             <div id="mobile-menu" class="md:hidden hidden">
                 <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
@@ -2133,6 +1961,178 @@
                                                             </div>
                                                         </div>
                                                     </div>
+
+                                    <!-- BOOKING SCRIPT CONFIGURATION PANEL -->
+                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="booking-script-config">
+                                        <h3 class="agent-setup-section-header">
+                                            <span><i class="fas fa-calendar-check mr-2"></i>📘 Booking Script Configuration (Per Trade & Service)</span>
+                                            <i class="fas fa-chevron-up transition-transform duration-200"></i>
+                                        </h3>
+                                        <div class="section-content">
+                                            <!-- Booking Script Configuration -->
+                                            <div class="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-6 mb-6">
+                                                <div class="flex items-center justify-between mb-4">
+                                                    <h4 class="text-xl font-semibold text-blue-900 flex items-center">
+                                                        <i class="fas fa-calendar-check mr-3 text-2xl"></i>Multi-Trade Booking Script Configurator
+                                                    </h4>
+                                                    <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+                                                        Per Service Type
+                                                    </span>
+                                                </div>
+                                                <p class="text-blue-800 mb-4">
+                                                    Configure custom booking flows for each trade type and service combination. Define step-by-step scripts 
+                                                    that guide your AI agent through the booking process with customers.
+                                                </p>
+                                            </div>
+
+                                            <!-- Trade & Service Selection -->
+                                            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                                                <div>
+                                                    <label class="form-label font-semibold">Trade Type</label>
+                                                    <select id="bookingTradeType" class="form-select">
+                                                        <option value="">Select Trade Type...</option>
+                                                        <option value="hvac">HVAC</option>
+                                                        <option value="plumbing">Plumbing</option>
+                                                        <option value="electrical">Electrical</option>
+                                                        <option value="roofing">Roofing</option>
+                                                        <option value="flooring">Flooring</option>
+                                                        <option value="general">General Contractor</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="form-label font-semibold">Service Type</label>
+                                                    <select id="bookingServiceType" class="form-select">
+                                                        <option value="">Select Service Type...</option>
+                                                        <option value="repair">Repair</option>
+                                                        <option value="maintenance">Maintenance</option>
+                                                        <option value="installation">Installation</option>
+                                                        <option value="emergency">Emergency</option>
+                                                        <option value="consultation">Consultation</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <!-- Current Configuration Display -->
+                                            <div id="currentBookingConfig" class="hidden mb-6">
+                                                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                                    <h5 class="font-semibold text-gray-900 mb-2">Current Configuration:</h5>
+                                                    <div id="configDisplay" class="text-sm text-gray-700"></div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Booking Script Form -->
+                                            <div id="bookingScriptForm" class="hidden space-y-6">
+                                                <!-- Pre-Step Clarifier -->
+                                                <div>
+                                                    <label class="form-label font-semibold">Pre-Step Clarifier Prompt</label>
+                                                    <textarea id="preStepClarifier" 
+                                                              rows="2" 
+                                                              class="form-textarea" 
+                                                              placeholder="e.g., So I may help you correctly, do you need AC repair or maintenance?"></textarea>
+                                                    <p class="text-xs text-gray-500 mt-1">Helps clarify the customer's specific need before starting the booking flow</p>
+                                                </div>
+
+                                                <!-- Booking Flow Steps -->
+                                                <div class="bg-gray-50 rounded-lg p-4">
+                                                    <h5 class="font-semibold text-gray-900 mb-4">Booking Flow Steps</h5>
+                                                    <div class="space-y-4">
+                                                        <div>
+                                                            <label class="form-label text-sm font-medium">Step 1: Initial Contact</label>
+                                                            <input type="text" 
+                                                                   id="step1" 
+                                                                   class="form-input" 
+                                                                   placeholder="e.g., Is this your home or business?" />
+                                                        </div>
+                                                        <div>
+                                                            <label class="form-label text-sm font-medium">Step 2: Location</label>
+                                                            <input type="text" 
+                                                                   id="step2" 
+                                                                   class="form-input" 
+                                                                   placeholder="e.g., Can I get your address please?" />
+                                                        </div>
+                                                        <div>
+                                                            <label class="form-label text-sm font-medium">Step 3: Scheduling</label>
+                                                            <input type="text" 
+                                                                   id="step3" 
+                                                                   class="form-input" 
+                                                                   placeholder="e.g., What day and time works best for you?" />
+                                                        </div>
+                                                        <div>
+                                                            <label class="form-label text-sm font-medium">Step 4: Contact Info</label>
+                                                            <input type="text" 
+                                                                   id="step4" 
+                                                                   class="form-input" 
+                                                                   placeholder="e.g., Can I get your name and phone number?" />
+                                                        </div>
+                                                        <div>
+                                                            <label class="form-label text-sm font-medium">Step 5: Confirmation</label>
+                                                            <input type="text" 
+                                                                   id="step5" 
+                                                                   class="form-input" 
+                                                                   placeholder="e.g., Let me confirm your appointment details." />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Additional Prompts -->
+                                                <div class="grid md:grid-cols-2 gap-6">
+                                                    <div>
+                                                        <label class="form-label font-semibold">Modify Booking Prompt</label>
+                                                        <textarea id="modifyBookingPrompt" 
+                                                                  rows="2" 
+                                                                  class="form-textarea" 
+                                                                  placeholder="e.g., Would you like me to check for another time?"></textarea>
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label font-semibold">Confirmation Message Template</label>
+                                                        <textarea id="confirmationText" 
+                                                                  rows="2" 
+                                                                  class="form-textarea" 
+                                                                  placeholder="e.g., You are booked for {{timeSlot}} at {{address}}."></textarea>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Fallback Script -->
+                                                <div>
+                                                    <label class="form-label font-semibold">Fallback Script (Unclear Caller)</label>
+                                                    <textarea id="fallbackScript" 
+                                                              rows="3" 
+                                                              class="form-textarea" 
+                                                              placeholder="e.g., If you're not sure what's wrong, we can still schedule a technician to take a look."></textarea>
+                                                    <p class="text-xs text-gray-500 mt-1">Used when the customer can't clearly describe their issue</p>
+                                                </div>
+
+                                                <!-- Action Buttons -->
+                                                <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+                                                    <div class="flex space-x-3">
+                                                        <button id="saveBookingScriptBtn" 
+                                                                class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center"
+                                                                onclick="saveBookingScript()">
+                                                            <i class="fas fa-save mr-2"></i>Save Booking Script
+                                                        </button>
+                                                        <button id="testBookingScriptBtn" 
+                                                                class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center"
+                                                                onclick="testBookingScript()">
+                                                            <i class="fas fa-play mr-2"></i>Test Script
+                                                        </button>
+                                                    </div>
+                                                    <button id="resetBookingScriptBtn" 
+                                                            class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center"
+                                                            onclick="resetBookingScript()">
+                                                        <i class="fas fa-undo mr-2"></i>Reset
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Existing Configurations List -->
+                                            <div class="mt-8">
+                                                <h5 class="font-semibold text-gray-900 mb-4">Existing Booking Configurations</h5>
+                                                <div id="existingBookingConfigs" class="space-y-2">
+                                                    <div class="text-gray-500 text-sm">No configurations saved yet. Create your first booking script above.</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                 
                                     <!-- AI INTELLIGENCE SUB-TAB (from Logic Tab) -->
                                     <div class="agent-setup-section-container" data-section-type="full" data-section-name="ai-intelligence-logic">
