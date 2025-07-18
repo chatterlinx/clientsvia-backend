@@ -9146,6 +9146,37 @@ async function saveCompanyQA(question, answer, keywords) {
 }
 
 /**
+ * Clear form and reset to add mode
+ */
+function clearAndResetForm() {
+    const questionField = document.getElementById('companyQnaQuestion');
+    const answerField = document.getElementById('companyQnaAnswer');
+    const keywordsField = document.getElementById('companyQnaKeywords');
+    const saveBtn = document.getElementById('companyQnaSaveBtn');
+    const cancelBtn = document.getElementById('companyQnaCancelBtn');
+    const editingIdField = document.getElementById('editingQnaId');
+    const previewField = document.getElementById('companyQnaPreview');
+    
+    // Clear form fields
+    if (questionField) questionField.value = '';
+    if (answerField) answerField.value = '';
+    if (keywordsField) keywordsField.value = '';
+    if (editingIdField) editingIdField.value = '';
+    if (previewField) previewField.classList.add('hidden');
+    
+    // Reset buttons
+    if (saveBtn) saveBtn.textContent = 'Add';
+    if (cancelBtn) cancelBtn.classList.add('hidden');
+}
+
+/**
+ * Cancel editing mode
+ */
+function cancelEdit() {
+    clearAndResetForm();
+}
+
+/**
  * Show form error message
  */
 function showFormError(errorElementId, message) {
