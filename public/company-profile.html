@@ -1863,6 +1863,22 @@
                                                                     
                                                                     <div id="flowTestResults" class="mt-4 hidden">
                                                                         <!-- Test results will be populated here -->
+                                                                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                                                            <h6 class="font-semibold text-gray-800 mb-2">Flow Test Results</h6>
+                                                                            <div id="flowTestBasicResults" class="mb-4">
+                                                                                <!-- Basic results -->
+                                                                            </div>
+                                                                            
+                                                                            <!-- AI Response Trace Log -->
+                                                                            <div class="ai-trace-log bg-white border border-gray-200 rounded-lg p-4 mt-4">
+                                                                                <h6 class="font-semibold text-gray-800 mb-3 flex items-center">
+                                                                                    <i class="fas fa-search text-blue-600 mr-2"></i>AI Response Trace Log
+                                                                                </h6>
+                                                                                <div id="traceLogContainer" class="text-sm">
+                                                                                    <!-- Trace log will be populated here -->
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                 
@@ -3304,24 +3320,24 @@
         
         resultsDiv.style.display = 'block';
         resultsDiv.innerHTML = `
-            <div class="intent-test-result">
+            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
                 <div class="flex items-center mb-2">
                     <i class="fas fa-spinner fa-spin text-blue-600 mr-2"></i>
-                    <span class="font-medium text-blue-800">Running flow test...</span>
+                    <span class="font-medium text-blue-800">Running flow test with AI trace logging...</span>
                 </div>
             </div>
         `;
         
         try {
             const companyId = getCurrentCompanyId();
-            const response = await fetch('/api/agent/test-intent-flow', {
+            const response = await fetch('/api/ai-agent/test-custom-kb-trace', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     companyId,
-                    testInput: input,
+                    query: input,
                     scenario
                 })
             });
@@ -3329,7 +3345,7 @@
             const data = await response.json();
             
             if (data.success) {
-                displayFlowTestResults(data.data);
+                displayFlowTestResultsWithTrace(data);
             } else {
                 throw new Error(data.error || 'Flow test failed');
             }
@@ -3337,7 +3353,7 @@
         } catch (error) {
             console.error('Flow test error:', error);
             resultsDiv.innerHTML = `
-                <div class="intent-test-result bg-red-50 border-red-200">
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
                     <div class="flex items-center">
                         <i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>
                         <span class="text-red-800">Flow test failed: ${error.message}</span>
