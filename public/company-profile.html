@@ -161,9 +161,6 @@
                     </div>
                     <div class="flex items-center gap-x-3 mt-3 md:mt-0">
                          <span id="company-status-badge" class="status-badge mr-3">Status</span> 
-                        <button id="edit-profile-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
-                            <i class="fas fa-edit mr-2"></i>Edit Profile
-                        </button>
                     </div>
                 </div>
                 <hr class="mb-6 mt-3">
@@ -204,7 +201,10 @@
                         <section class="profile-section bg-transparent shadow-none p-0">
                             <div class="flex justify-between items-center mb-2">
                                 <h2 class="profile-section-title !mb-0"><i class="fas fa-building mr-2 text-indigo-600"></i>Company Information</h2>
-                                </div>
+                                <button id="edit-profile-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
+                                    <i class="fas fa-edit mr-2"></i>Edit Profile
+                                </button>
+                            </div>
                             <div id="company-details-view">
                                 <div class="detail-item"><span class="detail-label">Company Name:</span><span class="detail-value" id="company-name-view">Loading...</span></div> 
                                 <div class="detail-item"><span class="detail-label">Owner:</span><span class="detail-value" id="company-owner-view">Loading...</span></div>

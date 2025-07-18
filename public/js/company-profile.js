@@ -115,6 +115,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (companyQnaAnswer) {
         companyQnaAnswer.addEventListener('input', () => { updateQnaSaveBtnState(); updateAllPreviews(); });
     }
+
+    // Add Edit Profile button event listener
+    if (editProfileButton) {
+        editProfileButton.addEventListener('click', () => {
+            if (editProfileButton.innerHTML.includes('Edit Profile')) {
+                showEditForm();
+            } else {
+                hideEditForm();
+            }
+        });
+    }
     const toggle24HoursCheckbox = agentSetupPageContainer?.querySelector('#toggle24Hours');
     const operatingHoursListContainer = agentSetupPageContainer?.querySelector('#operating-hours-list');
     const agentGreetingTextareaAgentSetup = agentSetupPageContainer?.querySelector('#agentGreeting');
