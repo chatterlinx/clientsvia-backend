@@ -208,8 +208,13 @@ router.post('/test-custom-kb-trace', async (req, res) => {
         const { checkCustomKB } = require('../utils/checkCustomKB');
         const ResponseTraceLogger = require('../utils/responseTraceLogger');
         
-        // Create a new trace logger
+        // Create a new trace logger and start tracing
         const traceLogger = new ResponseTraceLogger();
+        
+        // Extract keywords for trace logging
+        const { extractKeywords } = require('../utils/checkCustomKB');
+        const keywords = extractKeywords(query);
+        traceLogger.startTrace(query, keywords);
         
         // Test the Custom KB with trace logging
         const result = await checkCustomKB(query, companyId, null, traceLogger);

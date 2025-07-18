@@ -25,9 +25,13 @@ async function checkCustomKB(transcript, companyID, tradeCategoryID = null, trac
     
     // Get company data with trade category info
     const db = getDB();
+    console.log(`[checkCustomKB] Database name:`, db.databaseName);
     const company = await db.collection('companiesCollection').findOne({ 
       _id: new ObjectId(companyID) 
     });
+    
+    console.log(`[checkCustomKB] Company lookup result:`, company ? 'Found' : 'Not found');
+    console.log(`[checkCustomKB] Company ID used:`, companyID);
     
     if (!company) {
       console.log(`[checkCustomKB] Company not found: ${companyID}`);
@@ -41,6 +45,10 @@ async function checkCustomKB(transcript, companyID, tradeCategoryID = null, trac
       });
       return { result: null, trace: traceLogger.getTraceLog() };
     }
+    
+    console.log(`[checkCustomKB] Company found: ${company.companyName}`);
+    console.log(`[checkCustomKB] Has agentSetup:`, company.agentSetup ? 'Yes' : 'No');
+    console.log(`[checkCustomKB] Has categoryQAs:`, company.agentSetup?.categoryQAs ? 'Yes' : 'No');
     
     // Determine trade category - use provided or infer from company
     let effectiveTradeCategoryID = tradeCategoryID;
@@ -62,6 +70,11 @@ async function checkCustomKB(transcript, companyID, tradeCategoryID = null, trac
     }
     
     console.log(`[checkCustomKB] Using trade category: ${effectiveTradeCategoryID}`);
+    
+    // Debug company data
+    console.log(`[checkCustomKB] Company found: ${company.companyName}`);
+    console.log(`[checkCustomKB] Has agentSetup:`, company.agentSetup ? 'Yes' : 'No');
+    console.log(`[checkCustomKB] Has categoryQAs:`, company.agentSetup?.categoryQAs ? 'Yes' : 'No');
     
     // Method 1: Check company's category Q&As first (fastest)
     const categoryQAResult = await checkCompanyCategoryQAsWithTrace(transcript, company, keywords, traceLogger);
@@ -380,5 +393,6 @@ module.exports = {
   checkCompanyCategoryQAs,
   checkTradeCategoryDatabase,
   parseCategoryQAs,
-  calculateRelevance
+  calculateRelevance,
+  extractKeywords
 };
