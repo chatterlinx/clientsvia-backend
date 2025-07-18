@@ -2336,45 +2336,81 @@ document.addEventListener('DOMContentLoaded', () => {
         showMonitoringNotification('Monitoring system initialized', 'success');
     }
 
-    // Setup event listeners for monitoring interface
+    // Setup event listeners for monitoring interface - ENHANCED LINE BY LINE
     function setupMonitoringEventListeners() {
-        console.log('🔧 Setting up monitoring event listeners...');
+        console.log('🔧 [STEP 1] Setting up monitoring event listeners...');
         
-        // Dashboard and action buttons
+        // STEP 1: Find and setup dashboard button
+        console.log('🎛️ [STEP 1.1] Setting up dashboard button...');
         const openDashboardBtn = document.getElementById('open-monitoring-dashboard');
-        const reviewPendingBtn = document.getElementById('review-pending-interactions');
-        const viewFlaggedBtn = document.getElementById('view-flagged-items');
-        const exportDataBtn = document.getElementById('export-monitoring-data');
-
         if (openDashboardBtn) {
-            openDashboardBtn.addEventListener('click', openMonitoringDashboard);
-            console.log('✅ Dashboard button listener added');
+            // Remove any existing listeners
+            openDashboardBtn.replaceWith(openDashboardBtn.cloneNode(true));
+            const newDashboardBtn = document.getElementById('open-monitoring-dashboard');
+            
+            newDashboardBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('🎛️ Dashboard button clicked');
+                openMonitoringDashboard();
+            });
+            console.log('✅ [STEP 1.1] Dashboard button listener added');
         } else {
-            console.warn('⚠️ Dashboard button not found');
+            console.warn('⚠️ [STEP 1.1] Dashboard button not found in DOM');
         }
         
+        // STEP 2: Find and setup review pending button
+        console.log('👀 [STEP 1.2] Setting up review pending button...');
+        const reviewPendingBtn = document.getElementById('review-pending-interactions');
         if (reviewPendingBtn) {
-            reviewPendingBtn.addEventListener('click', openPendingReviews);
-            console.log('✅ Review pending button listener added');
+            reviewPendingBtn.replaceWith(reviewPendingBtn.cloneNode(true));
+            const newReviewBtn = document.getElementById('review-pending-interactions');
+            
+            newReviewBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('👀 Review pending button clicked');
+                openPendingReviews();
+            });
+            console.log('✅ [STEP 1.2] Review pending button listener added');
         } else {
-            console.warn('⚠️ Review pending button not found');
+            console.warn('⚠️ [STEP 1.2] Review pending button not found in DOM');
         }
         
+        // STEP 3: Find and setup view flagged button
+        console.log('🚩 [STEP 1.3] Setting up view flagged button...');
+        const viewFlaggedBtn = document.getElementById('view-flagged-items');
         if (viewFlaggedBtn) {
-            viewFlaggedBtn.addEventListener('click', openFlaggedItems);
-            console.log('✅ View flagged button listener added');
+            viewFlaggedBtn.replaceWith(viewFlaggedBtn.cloneNode(true));
+            const newFlaggedBtn = document.getElementById('view-flagged-items');
+            
+            newFlaggedBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('🚩 View flagged button clicked');
+                openFlaggedItems();
+            });
+            console.log('✅ [STEP 1.3] View flagged button listener added');
         } else {
-            console.warn('⚠️ View flagged button not found');
+            console.warn('⚠️ [STEP 1.3] View flagged button not found in DOM');
         }
         
+        // STEP 4: Find and setup export data button
+        console.log('📥 [STEP 1.4] Setting up export data button...');
+        const exportDataBtn = document.getElementById('export-monitoring-data');
         if (exportDataBtn) {
-            exportDataBtn.addEventListener('click', exportMonitoringData);
-            console.log('✅ Export data button listener added');
+            exportDataBtn.replaceWith(exportDataBtn.cloneNode(true));
+            const newExportBtn = document.getElementById('export-monitoring-data');
+            
+            newExportBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('📥 Export data button clicked');
+                exportMonitoringData();
+            });
+            console.log('✅ [STEP 1.4] Export data button listener added');
         } else {
-            console.warn('⚠️ Export data button not found');
+            console.warn('⚠️ [STEP 1.4] Export data button not found in DOM');
         }
 
-        // Configuration checkboxes
+        // STEP 5: Setup configuration checkboxes
+        console.log('⚙️ [STEP 2] Setting up configuration checkboxes...');
         const configCheckboxes = [
             'auto-flag-repeats',
             'require-approval', 
@@ -2382,41 +2418,127 @@ document.addEventListener('DOMContentLoaded', () => {
             'detailed-logging'
         ];
 
-        configCheckboxes.forEach(checkboxId => {
+        configCheckboxes.forEach((checkboxId, index) => {
+            console.log(`📋 [STEP 2.${index + 1}] Setting up checkbox: ${checkboxId}`);
             const checkbox = document.getElementById(checkboxId);
             if (checkbox) {
-                checkbox.addEventListener('change', updateMonitoringConfig);
+                checkbox.addEventListener('change', (e) => {
+                    console.log(`📋 Checkbox ${checkboxId} changed to:`, e.target.checked);
+                    updateMonitoringConfig();
+                });
+                console.log(`✅ [STEP 2.${index + 1}] Checkbox ${checkboxId} listener added`);
+            } else {
+                console.warn(`⚠️ [STEP 2.${index + 1}] Checkbox ${checkboxId} not found in DOM`);
             }
         });
 
-        // Repeat threshold selector
+        // STEP 6: Setup repeat threshold selector
+        console.log('🔢 [STEP 3] Setting up repeat threshold selector...');
         const repeatThresholdSelect = document.getElementById('repeat-threshold');
         if (repeatThresholdSelect) {
-            repeatThresholdSelect.addEventListener('change', updateMonitoringConfig);
+            repeatThresholdSelect.addEventListener('change', (e) => {
+                console.log('🔢 Repeat threshold changed to:', e.target.value);
+                updateMonitoringConfig();
+            });
+            console.log('✅ [STEP 3] Repeat threshold selector listener added');
+        } else {
+            console.warn('⚠️ [STEP 3] Repeat threshold selector not found in DOM');
+        }
+
+        // STEP 7: Add keyboard shortcuts
+        console.log('⌨️ [STEP 4] Setting up keyboard shortcuts...');
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+M to open monitoring dashboard
+            if (e.ctrlKey && e.key === 'm') {
+                e.preventDefault();
+                console.log('⌨️ Keyboard shortcut: Ctrl+M (Dashboard)');
+                openMonitoringDashboard();
+            }
+            // Ctrl+R to open pending reviews
+            if (e.ctrlKey && e.key === 'r') {
+                e.preventDefault();
+                console.log('⌨️ Keyboard shortcut: Ctrl+R (Reviews)');
+                openPendingReviews();
+            }
+        });
+        console.log('✅ [STEP 4] Keyboard shortcuts added');
+
+        // STEP 8: Setup auto-refresh toggle
+        console.log('🔄 [STEP 5] Setting up auto-refresh controls...');
+        addAutoRefreshControls();
+        console.log('✅ [STEP 5] Auto-refresh controls added');
+
+        console.log('🎉 [COMPLETE] All monitoring event listeners setup successfully');
+    }
+
+    // Add auto-refresh controls to monitoring interface
+    function addAutoRefreshControls() {
+        const statusContainer = document.getElementById('monitoring-status')?.parentElement;
+        if (statusContainer) {
+            const refreshToggle = document.createElement('div');
+            refreshToggle.className = 'text-xs mt-2';
+            refreshToggle.innerHTML = `
+                <label class="flex items-center cursor-pointer">
+                    <input type="checkbox" id="auto-refresh-toggle" class="mr-1" checked>
+                    <span class="text-gray-600">Auto-refresh (30s)</span>
+                </label>
+            `;
+            statusContainer.appendChild(refreshToggle);
+
+            const toggleCheckbox = document.getElementById('auto-refresh-toggle');
+            toggleCheckbox.addEventListener('change', (e) => {
+                console.log('🔄 Auto-refresh toggled:', e.target.checked);
+                if (e.target.checked) {
+                    startRealTimeUpdates();
+                } else {
+                    stopRealTimeUpdates();
+                }
+            });
         }
     }
 
-    // Load monitoring data from backend
+    // Load monitoring data from backend - ENHANCED LINE BY LINE
     async function loadMonitoringData() {
+        console.log('🔍 [STEP 1] Starting loadMonitoringData function...');
+        
         try {
+            // STEP 1: Validate company ID
             if (!companyId) {
-                console.error('No company ID available for monitoring data');
+                console.error('❌ [STEP 1] No company ID available for monitoring data');
                 showMonitoringNotification('Company ID not found', 'error');
                 return;
             }
+            console.log('✅ [STEP 1] Company ID validated:', companyId);
 
-            console.log('Loading monitoring data for company:', companyId);
-            const response = await fetch(`/api/monitoring/dashboard/${companyId}`);
+            // STEP 2: Construct API endpoint URL
+            const apiUrl = `/api/monitoring/dashboard/${companyId}`;
+            console.log('🌐 [STEP 2] API URL constructed:', apiUrl);
+
+            // STEP 3: Make fetch request with error handling
+            console.log('📡 [STEP 3] Making fetch request...');
+            const response = await fetch(apiUrl, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache'
+                }
+            });
+            console.log('📡 [STEP 3] Response received:', response.status, response.statusText);
             
+            // STEP 4: Handle response based on status
             if (response.ok) {
+                console.log('✅ [STEP 4] Response OK, parsing JSON...');
                 const data = await response.json();
-                console.log('Monitoring data loaded:', data);
+                console.log('📊 [STEP 4] Monitoring data loaded:', data);
+                console.log('🎯 [STEP 5] Calling updateMonitoringDisplay...');
                 updateMonitoringDisplay(data);
                 monitoringData = data;
+                console.log('✅ [STEP 5] Monitoring data successfully loaded and displayed');
             } else if (response.status === 404) {
-                console.log('No monitoring data found for company:', companyId);
+                console.log('⚠️ [STEP 4] No monitoring data found (404), initializing empty data...');
                 // Initialize with empty data
                 const emptyData = {
+                    companyName: currentCompanyData?.name || 'Unknown Company',
                     pendingReviews: 0,
                     flaggedInteractions: 0,
                     approvalRate: 0,
@@ -2424,111 +2546,405 @@ document.addEventListener('DOMContentLoaded', () => {
                     analytics: {
                         totalInteractions: 0,
                         averageConfidence: 0,
-                        escalationRate: 0
+                        escalationRate: 0,
+                        approvedInteractions: 0,
+                        disapprovedInteractions: 0
                     }
                 };
+                console.log('🔄 [STEP 5] Updating display with empty data...');
                 updateMonitoringDisplay(emptyData);
                 monitoringData = emptyData;
+                console.log('✅ [STEP 5] Empty monitoring data initialized');
+            } else if (response.status === 500) {
+                console.error('💥 [STEP 4] Server error (500), monitoring system may not be initialized');
+                const errorData = await response.text();
+                console.error('💥 [STEP 4] Server error details:', errorData);
+                throw new Error(`Server Error: Monitoring system initialization required`);
             } else {
+                console.error(`❌ [STEP 4] HTTP Error ${response.status}: ${response.statusText}`);
+                const errorText = await response.text();
+                console.error('❌ [STEP 4] Error details:', errorText);
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
         } catch (error) {
-            console.error('Error loading monitoring data:', error);
-            showMonitoringNotification(`Failed to load monitoring data: ${error.message}`, 'error');
+            console.error('💥 [ERROR] loadMonitoringData failed:', error);
+            console.error('💥 [ERROR] Error stack:', error.stack);
+            
+            // Show user-friendly error message
+            let errorMessage = 'Failed to load monitoring data';
+            if (error.message.includes('fetch')) {
+                errorMessage = 'Network error - please check connection';
+            } else if (error.message.includes('Server Error')) {
+                errorMessage = 'Monitoring system initializing - please wait';
+            } else if (error.message.includes('404')) {
+                errorMessage = 'Monitoring data not found - will initialize';
+            }
+            
+            showMonitoringNotification(errorMessage, 'error');
+            
+            // Initialize with error state but still show UI
+            const errorData = {
+                companyName: currentCompanyData?.name || 'Unknown Company',
+                pendingReviews: '?',
+                flaggedInteractions: '?',
+                approvalRate: '?',
+                recentActivity: [{
+                    type: 'error',
+                    title: 'Monitoring System Status',
+                    description: 'Initializing or temporarily unavailable',
+                    timestamp: new Date()
+                }],
+                analytics: {
+                    totalInteractions: '?',
+                    averageConfidence: '?',
+                    escalationRate: '?'
+                }
+            };
+            updateMonitoringDisplay(errorData);
+            monitoringData = errorData;
         }
     }
 
-    // Update monitoring display with fresh data
+    // Update monitoring display with fresh data - ENHANCED LINE BY LINE
     function updateMonitoringDisplay(data) {
-        console.log('Updating monitoring display with data:', data);
+        console.log('🎨 [STEP 1] Starting updateMonitoringDisplay with data:', data);
         
-        // Update metrics with safe element checking
+        // STEP 1: Validate input data
+        if (!data || typeof data !== 'object') {
+            console.error('❌ [STEP 1] Invalid data provided to updateMonitoringDisplay:', data);
+            return;
+        }
+        console.log('✅ [STEP 1] Data validation passed');
+        
+        // STEP 2: Update pending reviews metric
+        console.log('📊 [STEP 2] Updating pending reviews...');
         const pendingReviewsEl = document.getElementById('pending-reviews');
-        const flaggedInteractionsEl = document.getElementById('flagged-interactions');
-        const approvalRateEl = document.getElementById('approval-rate');
-
         if (pendingReviewsEl) {
-            pendingReviewsEl.textContent = data.pendingReviews || 0;
+            const pendingCount = data.pendingReviews || 0;
+            pendingReviewsEl.textContent = pendingCount;
+            console.log('✅ [STEP 2] Pending reviews updated to:', pendingCount);
+            
+            // Update the warning indicator
+            const parentEl = pendingReviewsEl.closest('.bg-white');
+            if (parentEl) {
+                const warningEl = parentEl.querySelector('.text-orange-600, .text-green-600');
+                if (warningEl) {
+                    if (pendingCount > 0) {
+                        warningEl.textContent = '⚠️ Needs attention';
+                        warningEl.className = 'text-xs text-orange-600';
+                    } else {
+                        warningEl.textContent = '✓ All reviewed';
+                        warningEl.className = 'text-xs text-green-600';
+                    }
+                }
+            }
         } else {
-            console.warn('pending-reviews element not found');
+            console.warn('⚠️ [STEP 2] pending-reviews element not found in DOM');
         }
         
+        // STEP 3: Update flagged interactions metric
+        console.log('🚩 [STEP 3] Updating flagged interactions...');
+        const flaggedInteractionsEl = document.getElementById('flagged-interactions');
         if (flaggedInteractionsEl) {
-            flaggedInteractionsEl.textContent = data.flaggedInteractions || 0;
+            const flaggedCount = data.flaggedInteractions || 0;
+            flaggedInteractionsEl.textContent = flaggedCount;
+            console.log('✅ [STEP 3] Flagged interactions updated to:', flaggedCount);
+            
+            // Update the flag indicator
+            const parentEl = flaggedInteractionsEl.closest('.bg-white');
+            if (parentEl) {
+                const flagEl = parentEl.querySelector('.text-red-600, .text-green-600');
+                if (flagEl) {
+                    if (flaggedCount > 0) {
+                        flagEl.textContent = '🚩 Requires review';
+                        flagEl.className = 'text-xs text-red-600';
+                    } else {
+                        flagEl.textContent = '✓ No flags';
+                        flagEl.className = 'text-xs text-green-600';
+                    }
+                }
+            }
         } else {
-            console.warn('flagged-interactions element not found');
+            console.warn('⚠️ [STEP 3] flagged-interactions element not found in DOM');
         }
         
+        // STEP 4: Update approval rate metric
+        console.log('📈 [STEP 4] Updating approval rate...');
+        const approvalRateEl = document.getElementById('approval-rate');
         if (approvalRateEl) {
-            const rate = data.approvalRate ? Math.round(data.approvalRate * 100) : 0;
-            approvalRateEl.textContent = `${rate}%`;
+            let rate;
+            if (typeof data.approvalRate === 'number') {
+                rate = Math.round(data.approvalRate * 100);
+            } else if (typeof data.approvalRate === 'string') {
+                rate = data.approvalRate;
+            } else {
+                rate = 0;
+            }
+            approvalRateEl.textContent = typeof rate === 'number' ? `${rate}%` : rate;
+            console.log('✅ [STEP 4] Approval rate updated to:', rate);
+            
+            // Update the performance indicator
+            const parentEl = approvalRateEl.closest('.bg-white');
+            if (parentEl) {
+                const perfEl = parentEl.querySelector('.text-green-600, .text-orange-600, .text-red-600');
+                if (perfEl && typeof rate === 'number') {
+                    if (rate >= 80) {
+                        perfEl.textContent = '✓ Good performance';
+                        perfEl.className = 'text-xs text-green-600';
+                    } else if (rate >= 60) {
+                        perfEl.textContent = '⚠️ Needs improvement';
+                        perfEl.className = 'text-xs text-orange-600';
+                    } else {
+                        perfEl.textContent = '⚠️ Poor performance';
+                        perfEl.className = 'text-xs text-red-600';
+                    }
+                }
+            }
         } else {
-            console.warn('approval-rate element not found');
+            console.warn('⚠️ [STEP 4] approval-rate element not found in DOM');
         }
 
-        // Update activity feed
-        updateActivityFeed(data.recentActivity || []);
+        // STEP 5: Update monitoring status
+        console.log('🟢 [STEP 5] Updating monitoring status...');
+        const monitoringStatusEl = document.getElementById('monitoring-status');
+        if (monitoringStatusEl) {
+            // Determine status based on data freshness and errors
+            let status = 'ACTIVE';
+            let statusClass = 'text-green-600';
+            
+            if (data.error) {
+                status = 'ERROR';
+                statusClass = 'text-red-600';
+            } else if (data.pendingReviews === '?' || data.flaggedInteractions === '?') {
+                status = 'INIT';
+                statusClass = 'text-orange-600';
+            }
+            
+            monitoringStatusEl.textContent = status;
+            monitoringStatusEl.className = `text-2xl font-bold ${statusClass}`;
+            console.log('✅ [STEP 5] Monitoring status updated to:', status);
+        } else {
+            console.warn('⚠️ [STEP 5] monitoring-status element not found in DOM');
+        }
 
-        // Update analytics
-        updateMonitoringAnalytics(data.analytics || {});
+        // STEP 6: Update activity feed
+        console.log('📋 [STEP 6] Updating activity feed...');
+        try {
+            updateActivityFeed(data.recentActivity || []);
+            console.log('✅ [STEP 6] Activity feed updated successfully');
+        } catch (error) {
+            console.error('❌ [STEP 6] Error updating activity feed:', error);
+        }
+
+        // STEP 7: Update analytics
+        console.log('📊 [STEP 7] Updating monitoring analytics...');
+        try {
+            updateMonitoringAnalytics(data.analytics || {});
+            console.log('✅ [STEP 7] Analytics updated successfully');
+        } catch (error) {
+            console.error('❌ [STEP 7] Error updating analytics:', error);
+        }
+        
+        console.log('🎉 [COMPLETE] updateMonitoringDisplay finished successfully');
     }
 
-    // Update activity feed
+    // Update activity feed - ENHANCED LINE BY LINE
     function updateActivityFeed(activities) {
+        console.log('📋 [STEP 1] Starting updateActivityFeed with activities:', activities);
+        
+        // STEP 1: Find the feed container
         const feedContainer = document.getElementById('monitoring-activity-feed');
-        if (!feedContainer) return;
+        if (!feedContainer) {
+            console.error('❌ [STEP 1] Activity feed container not found in DOM');
+            return;
+        }
+        console.log('✅ [STEP 1] Feed container found');
 
+        // STEP 2: Validate activities array
+        if (!Array.isArray(activities)) {
+            console.warn('⚠️ [STEP 2] Activities is not an array:', typeof activities);
+            activities = [];
+        }
+        console.log('📊 [STEP 2] Processing', activities.length, 'activities');
+
+        // STEP 3: Clear existing content
         feedContainer.innerHTML = '';
+        console.log('🧹 [STEP 3] Feed container cleared');
 
+        // STEP 4: Handle empty state
         if (activities.length === 0) {
-            feedContainer.innerHTML = '<p class="text-gray-500 text-sm">No recent activity</p>';
+            console.log('📭 [STEP 4] No activities to display, showing empty state');
+            feedContainer.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-history text-gray-300 text-3xl mb-3"></i>
+                    <p class="text-gray-500 text-sm">No recent monitoring activity</p>
+                    <p class="text-gray-400 text-xs">Activity will appear here as interactions are processed</p>
+                </div>
+            `;
             return;
         }
 
-        activities.slice(0, 10).forEach(activity => {
-            const activityEl = createActivityElement(activity);
-            feedContainer.appendChild(activityEl);
+        // STEP 5: Process and display activities
+        console.log('🔄 [STEP 5] Creating activity elements...');
+        const maxActivities = 10;
+        const activitiesToShow = activities.slice(0, maxActivities);
+        
+        activitiesToShow.forEach((activity, index) => {
+            try {
+                console.log(`📝 [STEP 5.${index + 1}] Creating activity element for:`, activity.type);
+                const activityEl = createActivityElement(activity);
+                feedContainer.appendChild(activityEl);
+                console.log(`✅ [STEP 5.${index + 1}] Activity element added successfully`);
+            } catch (error) {
+                console.error(`❌ [STEP 5.${index + 1}] Error creating activity element:`, error);
+                // Add error placeholder
+                const errorEl = document.createElement('div');
+                errorEl.className = 'text-red-500 text-sm p-2 bg-red-50 rounded';
+                errorEl.textContent = 'Error displaying activity';
+                feedContainer.appendChild(errorEl);
+            }
         });
+
+        // STEP 6: Add "more activities" indicator if needed
+        if (activities.length > maxActivities) {
+            console.log(`📊 [STEP 6] Adding "more activities" indicator (${activities.length - maxActivities} more)`);
+            const moreEl = document.createElement('div');
+            moreEl.className = 'text-center py-2 border-t border-gray-200 mt-3';
+            moreEl.innerHTML = `
+                <button class="text-blue-600 hover:text-blue-800 text-sm font-medium" onclick="loadAllActivities()">
+                    <i class="fas fa-chevron-down mr-1"></i>
+                    View ${activities.length - maxActivities} more activities
+                </button>
+            `;
+            feedContainer.appendChild(moreEl);
+        }
+
+        console.log('🎉 [COMPLETE] updateActivityFeed finished successfully');
     }
 
-    // Create activity element
+    // Create activity element - ENHANCED LINE BY LINE
     function createActivityElement(activity) {
-        const div = document.createElement('div');
+        console.log('🎨 [STEP 1] Creating activity element for:', activity);
         
-        let borderColor, iconClass, iconColor;
-        switch (activity.type) {
+        // STEP 1: Validate activity object
+        if (!activity || typeof activity !== 'object') {
+            console.error('❌ [STEP 1] Invalid activity object:', activity);
+            throw new Error('Invalid activity object');
+        }
+        
+        // STEP 2: Determine activity styling based on type
+        let borderColor, iconClass, iconColor, bgColor;
+        const activityType = activity.type || 'unknown';
+        
+        console.log('🎭 [STEP 2] Determining styling for activity type:', activityType);
+        
+        switch (activityType) {
             case 'flag':
                 borderColor = 'border-orange-400';
                 iconClass = 'fas fa-flag';
                 iconColor = 'text-orange-500';
+                bgColor = 'bg-orange-50';
                 break;
             case 'approval':
                 borderColor = 'border-green-400';
                 iconClass = 'fas fa-check';
                 iconColor = 'text-green-500';
+                bgColor = 'bg-green-50';
                 break;
             case 'disapproval':
                 borderColor = 'border-red-400';
                 iconClass = 'fas fa-times';
                 iconColor = 'text-red-500';
+                bgColor = 'bg-red-50';
+                break;
+            case 'error':
+                borderColor = 'border-red-600';
+                iconClass = 'fas fa-exclamation-triangle';
+                iconColor = 'text-red-600';
+                bgColor = 'bg-red-50';
+                break;
+            case 'review':
+                borderColor = 'border-blue-400';
+                iconClass = 'fas fa-eye';
+                iconColor = 'text-blue-500';
+                bgColor = 'bg-blue-50';
+                break;
+            case 'system':
+                borderColor = 'border-purple-400';
+                iconClass = 'fas fa-cog';
+                iconColor = 'text-purple-500';
+                bgColor = 'bg-purple-50';
                 break;
             default:
                 borderColor = 'border-gray-400';
                 iconClass = 'fas fa-info';
                 iconColor = 'text-gray-500';
+                bgColor = 'bg-gray-50';
+        }
+        console.log('✅ [STEP 2] Styling determined:', { borderColor, iconClass, iconColor });
+
+        // STEP 3: Create DOM element
+        console.log('🏗️ [STEP 3] Creating DOM element...');
+        const div = document.createElement('div');
+        
+        // STEP 4: Set element classes
+        div.className = `flex items-center text-sm text-gray-700 ${bgColor} rounded-lg p-3 border-l-4 ${borderColor} hover:shadow-sm transition-shadow duration-200`;
+        console.log('✅ [STEP 4] Element classes set');
+
+        // STEP 5: Prepare content data with fallbacks
+        const title = activity.title || 'Unknown Activity';
+        const description = activity.description || 'No description available';
+        const timestamp = activity.timestamp || new Date();
+        
+        console.log('📝 [STEP 5] Content prepared:', { title: title.substring(0, 50), description: description.substring(0, 50) });
+
+        // STEP 6: Format timestamp
+        let timeDisplay;
+        try {
+            timeDisplay = formatTimeAgo(timestamp);
+        } catch (error) {
+            console.warn('⚠️ [STEP 6] Error formatting timestamp:', error);
+            timeDisplay = 'Unknown time';
+        }
+        console.log('⏰ [STEP 6] Timestamp formatted:', timeDisplay);
+
+        // STEP 7: Build HTML content
+        div.innerHTML = `
+            <i class="${iconClass} ${iconColor} mr-3 flex-shrink-0"></i>
+            <div class="flex-1 min-w-0">
+                <span class="font-medium text-gray-800 block truncate">${escapeHtml(title)}</span>
+                <div class="text-xs text-gray-600 mt-1 break-words">${escapeHtml(description)}</div>
+            </div>
+            <span class="text-xs text-gray-400 ml-2 flex-shrink-0">${timeDisplay}</span>
+        `;
+        console.log('✅ [STEP 7] HTML content built');
+
+        // STEP 8: Add click handler for detailed view (if interaction ID available)
+        if (activity.interactionId) {
+            div.style.cursor = 'pointer';
+            div.addEventListener('click', () => {
+                console.log('🖱️ Activity clicked, opening details for:', activity.interactionId);
+                openActivityDetails(activity);
+            });
+            div.title = 'Click to view details';
         }
 
-        div.className = `flex items-center text-sm text-gray-700 bg-white rounded-lg p-3 border-l-4 ${borderColor}`;
-        div.innerHTML = `
-            <i class="${iconClass} ${iconColor} mr-3"></i>
-            <div class="flex-1">
-                <span class="font-medium">${activity.title}</span>
-                <div class="text-xs text-gray-500">${activity.description}</div>
-            </div>
-            <span class="text-xs text-gray-400">${formatTimeAgo(activity.timestamp)}</span>
-        `;
-
+        console.log('🎉 [COMPLETE] Activity element created successfully');
         return div;
+    }
+
+    // Helper function to escape HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Open activity details (placeholder function)
+    function openActivityDetails(activity) {
+        console.log('📖 Opening activity details:', activity);
+        // TODO: Implement detailed activity view modal
+        showMonitoringNotification('Activity details view - coming soon', 'info');
     }
 
     // Update monitoring analytics
@@ -2545,16 +2961,290 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Open monitoring dashboard in modal/new window
+    // Open monitoring dashboard in modal/new window - ENHANCED LINE BY LINE
     function openMonitoringDashboard() {
-        // Create modal dashboard
-        const modal = createMonitoringModal('dashboard');
-        document.body.appendChild(modal);
+        console.log('🎛️ [STEP 1] Opening monitoring dashboard...');
+        
+        try {
+            // STEP 1: Check if company ID is available
+            if (!companyId) {
+                console.error('❌ [STEP 1] Cannot open dashboard: No company ID');
+                showMonitoringNotification('Company ID not available', 'error');
+                return;
+            }
+            console.log('✅ [STEP 1] Company ID validated:', companyId);
+
+            // STEP 2: Show loading state
+            console.log('⏳ [STEP 2] Showing loading state...');
+            showMonitoringNotification('Loading monitoring dashboard...', 'info');
+
+            // STEP 3: Create modal backdrop
+            console.log('🏗️ [STEP 3] Creating modal backdrop...');
+            const existingModal = document.querySelector('.monitoring-dashboard-modal');
+            if (existingModal) {
+                console.log('🗑️ [STEP 3] Removing existing modal...');
+                existingModal.remove();
+            }
+
+            const modal = document.createElement('div');
+            modal.className = 'monitoring-dashboard-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            console.log('✅ [STEP 3] Modal backdrop created');
+
+            // STEP 4: Create modal content structure
+            console.log('📋 [STEP 4] Building modal content...');
+            modal.innerHTML = `
+                <div class="bg-white rounded-lg max-w-6xl w-full mx-4 max-h-90vh overflow-hidden flex flex-col">
+                    <!-- Header -->
+                    <div class="flex justify-between items-center p-6 border-b">
+                        <div class="flex items-center">
+                            <i class="fas fa-tachometer-alt text-orange-600 text-xl mr-3"></i>
+                            <h3 class="text-xl font-semibold text-gray-800">Agent Monitoring Dashboard</h3>
+                            <span class="ml-3 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">LIVE</span>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <button id="refresh-dashboard" class="text-gray-500 hover:text-gray-700" title="Refresh Data">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                            <button id="close-dashboard" class="text-gray-400 hover:text-gray-600 text-xl">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Content -->
+                    <div class="flex-1 overflow-y-auto p-6">
+                        <div id="dashboard-content">
+                            <div class="text-center py-8">
+                                <i class="fas fa-spinner fa-spin text-gray-400 text-3xl mb-3"></i>
+                                <p class="text-gray-600">Loading dashboard data...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            console.log('✅ [STEP 4] Modal content created');
+
+            // STEP 5: Add modal to DOM
+            document.body.appendChild(modal);
+            console.log('✅ [STEP 5] Modal added to DOM');
+
+            // STEP 6: Setup close functionality
+            console.log('🔒 [STEP 6] Setting up close functionality...');
+            const closeBtn = modal.querySelector('#close-dashboard');
+            const refreshBtn = modal.querySelector('#refresh-dashboard');
+            
+            closeBtn.addEventListener('click', () => {
+                console.log('🔒 Dashboard close button clicked');
+                modal.remove();
+            });
+
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    console.log('🔒 Dashboard backdrop clicked');
+                    modal.remove();
+                }
+            });
+
+            // ESC key to close
+            const escHandler = (e) => {
+                if (e.key === 'Escape') {
+                    console.log('🔒 ESC key pressed, closing dashboard');
+                    modal.remove();
+                    document.removeEventListener('keydown', escHandler);
+                }
+            };
+            document.addEventListener('keydown', escHandler);
+
+            // STEP 7: Setup refresh functionality
+            refreshBtn.addEventListener('click', () => {
+                console.log('🔄 Dashboard refresh button clicked');
+                loadDashboardContent();
+            });
+            console.log('✅ [STEP 6] Close and refresh functionality setup');
+
+            // STEP 8: Load dashboard content
+            console.log('📊 [STEP 7] Loading dashboard content...');
+            loadDashboardContent();
+
+            console.log('🎉 [COMPLETE] Monitoring dashboard opened successfully');
+
+        } catch (error) {
+            console.error('💥 [ERROR] Failed to open monitoring dashboard:', error);
+            showMonitoringNotification('Failed to open dashboard', 'error');
+        }
     }
 
-    // Open pending reviews interface
+    // Load dashboard content
+    async function loadDashboardContent() {
+        console.log('📊 [DASHBOARD] Loading dashboard content...');
+        
+        const contentContainer = document.getElementById('dashboard-content');
+        if (!contentContainer) {
+            console.error('❌ [DASHBOARD] Content container not found');
+            return;
+        }
+
+        try {
+            // Show loading state
+            contentContainer.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-orange-600 text-3xl mb-3"></i>
+                    <p class="text-gray-600">Loading real-time monitoring data...</p>
+                </div>
+            `;
+
+            // Load comprehensive dashboard data
+            const response = await fetch(`/api/monitoring/dashboard/${companyId}`);
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('📊 [DASHBOARD] Data loaded:', data);
+                renderDashboardContent(data);
+            } else {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+        } catch (error) {
+            console.error('💥 [DASHBOARD] Error loading content:', error);
+            contentContainer.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-exclamation-triangle text-red-500 text-3xl mb-3"></i>
+                    <p class="text-red-600">Error loading dashboard data</p>
+                    <p class="text-gray-500 text-sm mt-2">${error.message}</p>
+                    <button onclick="loadDashboardContent()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                        <i class="fas fa-retry mr-2"></i>Retry
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    // Render dashboard content
+    function renderDashboardContent(data) {
+        console.log('🎨 [DASHBOARD] Rendering dashboard content...');
+        
+        const contentContainer = document.getElementById('dashboard-content');
+        if (!contentContainer) return;
+
+        // Build comprehensive dashboard HTML
+        contentContainer.innerHTML = `
+            <!-- Key Metrics Grid -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-6 text-white">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-green-100 text-sm">System Status</p>
+                            <p class="text-2xl font-bold">ACTIVE</p>
+                        </div>
+                        <i class="fas fa-shield-alt text-3xl text-green-200"></i>
+                    </div>
+                </div>
+                
+                <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-6 text-white">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-blue-100 text-sm">Pending Reviews</p>
+                            <p class="text-2xl font-bold">${data.pendingReviews || 0}</p>
+                        </div>
+                        <i class="fas fa-clipboard-check text-3xl text-blue-200"></i>
+                    </div>
+                </div>
+                
+                <div class="bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg p-6 text-white">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-orange-100 text-sm">Flagged Items</p>
+                            <p class="text-2xl font-bold">${data.flaggedInteractions || 0}</p>
+                        </div>
+                        <i class="fas fa-flag text-3xl text-orange-200"></i>
+                    </div>
+                </div>
+                
+                <div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg p-6 text-white">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-purple-100 text-sm">Approval Rate</p>
+                            <p class="text-2xl font-bold">${Math.round((data.approvalRate || 0) * 100)}%</p>
+                        </div>
+                        <i class="fas fa-thumbs-up text-3xl text-purple-200"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts and Activity -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Recent Activity -->
+                <div class="bg-white rounded-lg border p-6">
+                    <h4 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fas fa-clock text-blue-500 mr-2"></i>
+                        Recent Activity
+                    </h4>
+                    <div class="space-y-3 max-h-64 overflow-y-auto">
+                        ${(data.recentActivity || []).map(activity => `
+                            <div class="flex items-center text-sm border-b pb-2">
+                                <i class="fas fa-${activity.type === 'approval' ? 'check text-green-500' : activity.type === 'flag' ? 'flag text-orange-500' : 'times text-red-500'} mr-3"></i>
+                                <div class="flex-1">
+                                    <div class="font-medium">${activity.title}</div>
+                                    <div class="text-gray-500 text-xs">${activity.description}</div>
+                                </div>
+                                <span class="text-xs text-gray-400">${formatTimeAgo(activity.timestamp)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Analytics Summary -->
+                <div class="bg-white rounded-lg border p-6">
+                    <h4 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fas fa-chart-bar text-purple-500 mr-2"></i>
+                        Analytics Summary
+                    </h4>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Total Interactions</span>
+                            <span class="font-semibold">${data.analytics?.totalInteractions || 0}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Average Confidence</span>
+                            <span class="font-semibold">${Math.round((data.analytics?.averageConfidence || 0) * 100)}%</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Escalation Rate</span>
+                            <span class="font-semibold">${Math.round((data.analytics?.escalationRate || 0) * 100)}%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        console.log('✅ [DASHBOARD] Content rendered successfully');
+    }
+
+    // Open pending reviews interface - ENHANCED LINE BY LINE  
     function openPendingReviews() {
-        loadPendingInteractions();
+        console.log('👀 [STEP 1] Opening pending reviews interface...');
+        
+        try {
+            // STEP 1: Validate prerequisites
+            if (!companyId) {
+                console.error('❌ [STEP 1] Cannot open reviews: No company ID');
+                showMonitoringNotification('Company ID not available', 'error');
+                return;
+            }
+            console.log('✅ [STEP 1] Company ID validated:', companyId);
+
+            // STEP 2: Show loading notification
+            console.log('⏳ [STEP 2] Showing loading notification...');
+            showMonitoringNotification('Loading pending reviews...', 'info');
+
+            // STEP 3: Load pending interactions
+            console.log('📡 [STEP 3] Loading pending interactions...');
+            loadPendingInteractions();
+
+        } catch (error) {
+            console.error('💥 [ERROR] Failed to open pending reviews:', error);
+            showMonitoringNotification('Failed to open pending reviews', 'error');
+        }
     }
 
     // Open flagged items interface  
@@ -2562,17 +3252,64 @@ document.addEventListener('DOMContentLoaded', () => {
         loadFlaggedInteractions();
     }
 
-    // Load pending interactions for review
+    // Load pending interactions for review - ENHANCED LINE BY LINE
     async function loadPendingInteractions() {
+        console.log('📋 [STEP 1] Starting loadPendingInteractions...');
+        
         try {
-            const response = await fetch(`/api/monitoring/pending/${companyId}`);
+            // STEP 1: Validate company ID
+            if (!companyId) {
+                console.error('❌ [STEP 1] No company ID for loading pending interactions');
+                showMonitoringNotification('Company ID not found', 'error');
+                return;
+            }
+            console.log('✅ [STEP 1] Company ID validated:', companyId);
+
+            // STEP 2: Construct API endpoint
+            const apiUrl = `/api/monitoring/pending/${companyId}`;
+            console.log('🌐 [STEP 2] API URL:', apiUrl);
+
+            // STEP 3: Make API request
+            console.log('📡 [STEP 3] Making API request...');
+            const response = await fetch(apiUrl, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache'
+                }
+            });
+            console.log('📡 [STEP 3] Response received:', response.status, response.statusText);
+
+            // STEP 4: Handle response
             if (response.ok) {
                 const interactions = await response.json();
+                console.log('✅ [STEP 4] Pending interactions loaded:', interactions.length, 'items');
+                console.log('🎭 [STEP 5] Opening interaction review modal...');
                 showInteractionReviewModal(interactions, 'pending');
+            } else if (response.status === 404) {
+                console.log('📭 [STEP 4] No pending interactions found');
+                showInteractionReviewModal([], 'pending');
+            } else {
+                const errorText = await response.text();
+                console.error('❌ [STEP 4] API error:', response.status, errorText);
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
+
         } catch (error) {
-            console.error('Error loading pending interactions:', error);
-            showMonitoringNotification('Failed to load pending interactions', 'error');
+            console.error('💥 [ERROR] loadPendingInteractions failed:', error);
+            
+            // Show user-friendly error message
+            let errorMessage = 'Failed to load pending interactions';
+            if (error.message.includes('fetch')) {
+                errorMessage = 'Network error - please check connection';
+            } else if (error.message.includes('404')) {
+                errorMessage = 'No pending interactions found';
+                // Still show empty modal
+                showInteractionReviewModal([], 'pending');
+                return;
+            }
+            
+            showMonitoringNotification(errorMessage, 'error');
         }
     }
 
@@ -2761,10 +3498,92 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Start real-time updates
+    // Start real-time updates - ENHANCED LINE BY LINE
     function startRealTimeUpdates() {
-        // Poll for updates every 30 seconds
-        setInterval(loadMonitoringData, 30000);
+        console.log('🔄 [STEP 1] Starting real-time monitoring updates...');
+        
+        // STEP 1: Clear any existing intervals
+        if (window.monitoringUpdateInterval) {
+            console.log('🧹 [STEP 1] Clearing existing update interval');
+            clearInterval(window.monitoringUpdateInterval);
+        }
+
+        // STEP 2: Validate prerequisites
+        if (!companyId) {
+            console.error('❌ [STEP 2] Cannot start updates: No company ID');
+            return;
+        }
+        console.log('✅ [STEP 2] Company ID available for updates:', companyId);
+
+        // STEP 3: Set up periodic updates
+        const updateInterval = 30000; // 30 seconds
+        console.log(`⏰ [STEP 3] Setting up updates every ${updateInterval/1000}s`);
+        
+        window.monitoringUpdateInterval = setInterval(async () => {
+            try {
+                console.log('🔄 [UPDATE] Performing scheduled monitoring data refresh...');
+                
+                // Check if monitoring section is visible
+                const monitoringSection = document.querySelector('[data-section-name="agent-monitoring"]');
+                const isVisible = monitoringSection && !monitoringSection.querySelector('.section-content.collapsed');
+                
+                if (isVisible) {
+                    console.log('👁️ [UPDATE] Monitoring section visible, refreshing data...');
+                    await loadMonitoringData();
+                    console.log('✅ [UPDATE] Data refreshed successfully');
+                } else {
+                    console.log('👁️‍🗨️ [UPDATE] Monitoring section not visible, skipping refresh');
+                }
+                
+            } catch (error) {
+                console.error('💥 [UPDATE] Error during scheduled update:', error);
+            }
+        }, updateInterval);
+        
+        console.log('✅ [STEP 3] Real-time updates started successfully');
+
+        // STEP 4: Add page visibility API support
+        console.log('👁️ [STEP 4] Setting up page visibility monitoring...');
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('👁️ [VISIBILITY] Page hidden, pausing updates');
+                stopRealTimeUpdates();
+            } else {
+                console.log('👁️ [VISIBILITY] Page visible, resuming updates');
+                startRealTimeUpdates();
+                // Immediate refresh when page becomes visible
+                loadMonitoringData();
+            }
+        });
+        console.log('✅ [STEP 4] Page visibility monitoring setup');
+        
+        // STEP 5: Add network status monitoring  
+        console.log('🌐 [STEP 5] Setting up network status monitoring...');
+        window.addEventListener('online', () => {
+            console.log('🌐 [NETWORK] Connection restored, refreshing data');
+            loadMonitoringData();
+        });
+        
+        window.addEventListener('offline', () => {
+            console.log('🌐 [NETWORK] Connection lost, pausing updates');
+            showMonitoringNotification('Connection lost - updates paused', 'warning');
+        });
+        console.log('✅ [STEP 5] Network status monitoring setup');
+        
+        console.log('🎉 [COMPLETE] Real-time monitoring system fully initialized');
+    }
+
+    // Stop real-time updates
+    function stopRealTimeUpdates() {
+        console.log('⏹️ [STOP] Stopping real-time monitoring updates...');
+        
+        if (window.monitoringUpdateInterval) {
+            clearInterval(window.monitoringUpdateInterval);
+            window.monitoringUpdateInterval = null;
+            console.log('✅ [STOP] Update interval cleared');
+        } else {
+            console.log('ℹ️ [STOP] No active update interval to clear');
+        }
     }
 
     // Show monitoring notification
