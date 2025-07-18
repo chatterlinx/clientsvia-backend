@@ -3475,7 +3475,14 @@
     function displayFlowTestResultsWithTrace(data) {
         const resultsDiv = document.getElementById('flowTestResults');
         const trace = data.trace || {};
-        const result = data.result || null;  // Fix: result is a string, not an object
+        const result = data.result || null;
+        
+        console.log('🔍 Flow Test Debug:', {
+            dataType: typeof data,
+            resultType: typeof result,
+            result: result,
+            trace: trace
+        });
         
         // Calculate processing time
         const processingTime = trace.totalTime ? `${trace.totalTime}ms` : '1ms';
@@ -3531,10 +3538,25 @@
         
         // Build final response
         let finalResponseHtml = '';
-        if (result && typeof result === 'string') {
+        
+        // Handle different response formats
+        let responseText = '';
+        if (result) {
+            if (typeof result === 'string') {
+                responseText = result;
+            } else if (typeof result === 'object' && result.toString) {
+                // If result is an object, try to get meaningful text
+                responseText = result.toString();
+                if (responseText === '[object Object]') {
+                    responseText = JSON.stringify(result, null, 2);
+                }
+            }
+        }
+        
+        if (responseText) {
             finalResponseHtml = `
                 <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                    <p class="text-blue-800 text-sm">${result}</p>
+                    <p class="text-blue-800 text-sm">${responseText}</p>
                 </div>
             `;
         } else {
