@@ -8959,24 +8959,7 @@ function initializeCompanyQAForms() {
             return false; // Prevent any default behavior
         });
         
-        // Also add a click handler to the submit button as backup
-        const submitBtn = document.getElementById('companyQnaSaveBtn');
-        if (submitBtn) {
-            submitBtn.addEventListener('click', function(e) {
-                // Only handle if this is not part of a form submission
-                if (e.type === 'click' && !e.defaultPrevented) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    // Trigger the form submission manually
-                    const form = this.closest('form');
-                    if (form) {
-                        const event = new Event('submit', { cancelable: true });
-                        form.dispatchEvent(event);
-                    }
-                }
-            });
-        }
+        // Note: Submit button is type="submit" so it will trigger the form's submit event automatically
         
         // Add real-time preview update for answer field
         const answerField = document.getElementById('companyQnaAnswer');
@@ -9061,10 +9044,21 @@ function updateAnswerPreview() {
     }
 }
 
+// Global variable to prevent double submissions
+let isSubmittingQA = false;
+
 /**
  * Save Company Q&A entry
  */
 async function saveCompanyQA(question, answer, keywords) {
+    // Prevent double submissions
+    if (isSubmittingQA) {
+        console.log('⚠️ Save already in progress, ignoring duplicate request');
+        return;
+    }
+    
+    isSubmittingQA = true;
+    
     try {
         console.log('🔄 Starting saveCompanyQA with:', { question, answer, keywords });
         
@@ -9078,12 +9072,15 @@ async function saveCompanyQA(question, answer, keywords) {
         const editingIdField = document.getElementById('editingQnaId');
         const editingId = editingIdField ? editingIdField.value : null;
         
+        console.log('🔍 Current editing state:', { editingId, fieldValue: editingIdField?.value });
+        
         // Determine if this is an update or create operation
         const isEditing = editingId && editingId.trim() !== '';
         const method = isEditing ? 'PUT' : 'POST';
         const url = isEditing ? `/api/company/${companyId}/qna/${editingId}` : `/api/company/${companyId}/qna`;
         
         console.log(`📡 Making ${method} API request to:`, url);
+        console.log('📡 Is editing mode:', isEditing);
         
         // Show loading state
         if (saveBtn) {
@@ -9142,6 +9139,7 @@ async function saveCompanyQA(question, answer, keywords) {
             saveBtn.textContent = isEditing ? 'Update' : 'Add';
         }
         console.log('🔄 saveCompanyQA completed');
+        isSubmittingQA = false; // Reset the guard
     }
 }
 
