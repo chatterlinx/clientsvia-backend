@@ -2322,7 +2322,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Check if monitoring UI elements exist before setting up
-        const monitoringSection = document.getElementById('agent-monitoring-section');
+        const monitoringSection = document.querySelector('[data-section-name="agent-monitoring"]');
         if (!monitoringSection) {
             console.warn('⚠️ Monitoring UI section not found - monitoring system available but UI not loaded');
             return;
