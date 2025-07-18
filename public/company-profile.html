@@ -8943,6 +8943,15 @@ function initializeCompanyQAForms() {
             
             console.log('Company Q&A form submitted');
             
+            // Debug: Check editing state at form submission time
+            const editingIdField = document.getElementById('editingQnaId');
+            console.log('🔍 At form submission - editingIdField:', {
+                exists: !!editingIdField,
+                value: editingIdField?.value,
+                valueLength: editingIdField?.value?.length,
+                isEmpty: !editingIdField?.value || editingIdField.value.trim() === ''
+            });
+            
             // Get form values
             const question = document.getElementById('companyQnaQuestion').value.trim();
             const answer = document.getElementById('companyQnaAnswer').value.trim();
@@ -9072,7 +9081,14 @@ async function saveCompanyQA(question, answer, keywords) {
         const editingIdField = document.getElementById('editingQnaId');
         const editingId = editingIdField ? editingIdField.value : null;
         
-        console.log('🔍 Current editing state:', { editingId, fieldValue: editingIdField?.value });
+        console.log('🔍 Current editing state:', { 
+            editingId, 
+            fieldValue: editingIdField?.value,
+            fieldExists: !!editingIdField,
+            fieldType: typeof editingIdField?.value,
+            isEmptyString: editingIdField?.value === '',
+            trimmedLength: editingIdField?.value?.trim()?.length || 0
+        });
         
         // Determine if this is an update or create operation
         const isEditing = editingId && editingId.trim() !== '';
@@ -9284,6 +9300,8 @@ async function deleteQnA(qnaId) {
  */
 async function editQnA(qnaId) {
     try {
+        console.log('🔧 editQnA called with ID:', qnaId);
+        
         const companyId = getCurrentCompanyId();
         const response = await fetch(`/api/company/${companyId}/qna`);
         
@@ -9298,6 +9316,8 @@ async function editQnA(qnaId) {
             throw new Error('Q&A entry not found');
         }
         
+        console.log('📋 Found entry to edit:', { id: entry._id, question: entry.question.substring(0, 50) + '...' });
+        
         // Populate the form with the entry data
         const questionField = document.getElementById('companyQnaQuestion');
         const answerField = document.getElementById('companyQnaAnswer');
@@ -9306,14 +9326,33 @@ async function editQnA(qnaId) {
         const cancelBtn = document.getElementById('companyQnaCancelBtn');
         const editingIdField = document.getElementById('editingQnaId');
         
+        console.log('🔍 Form fields found:', {
+            questionField: !!questionField,
+            answerField: !!answerField,
+            keywordsField: !!keywordsField,
+            saveBtn: !!saveBtn,
+            cancelBtn: !!cancelBtn,
+            editingIdField: !!editingIdField
+        });
+        
         if (questionField) questionField.value = entry.question;
         if (answerField) answerField.value = entry.answer;
         if (keywordsField) keywordsField.value = entry.keywords ? entry.keywords.join(', ') : '';
-        if (editingIdField) editingIdField.value = qnaId;
+        if (editingIdField) {
+            editingIdField.value = qnaId;
+            console.log('✅ Set editingIdField.value to:', qnaId);
+            console.log('🔍 Verification - editingIdField.value is now:', editingIdField.value);
+        }
         
         // Change button text and show cancel button
-        if (saveBtn) saveBtn.textContent = 'Update';
-        if (cancelBtn) cancelBtn.classList.remove('hidden');
+        if (saveBtn) {
+            saveBtn.textContent = 'Update';
+            console.log('✅ Changed save button text to "Update"');
+        }
+        if (cancelBtn) {
+            cancelBtn.classList.remove('hidden');
+            console.log('✅ Showed cancel button');
+        }
         
         // Update preview
         updateAnswerPreview();
@@ -9323,6 +9362,8 @@ async function editQnA(qnaId) {
         if (form) {
             form.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+        
+        console.log('🎯 Edit mode setup complete for entry:', qnaId);
         
     } catch (error) {
         console.error('Error loading Q&A entry for editing:', error);
