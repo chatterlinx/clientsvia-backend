@@ -8977,6 +8977,13 @@ function initializeCompanyQAForms() {
                 }
             });
         }
+        
+        // Add real-time preview update for answer field
+        const answerField = document.getElementById('companyQnaAnswer');
+        if (answerField) {
+            answerField.addEventListener('input', updateAnswerPreview);
+            answerField.addEventListener('keyup', updateAnswerPreview);
+        }
     }
     
     // Initialize placeholder insertion for the main form
@@ -9003,7 +9010,39 @@ function initializeCompanyQAForms() {
     }
     
     // Load existing Q&As when page loads
-    loadCompanyQAs();
+    loadCompanyQnas();
+}
+
+/**
+ * Update answer preview with placeholder values
+ */
+function updateAnswerPreview() {
+    const answerField = document.getElementById('companyQnaAnswer');
+    const previewField = document.getElementById('companyQnaPreview');
+    
+    if (answerField && previewField) {
+        let previewText = answerField.value;
+        
+        // Replace common placeholders with sample values for preview
+        const placeholderMap = {
+            '{{CompanyName}}': 'Penguin Air Corp.',
+            '{{AgentName}}': 'Michael',
+            '{{CustomerName}}': 'Customer',
+            '{{ServiceType}}': 'AC Repair',
+            '{{ContactPhone}}': '(239) 565-2202'
+        };
+        
+        for (const [placeholder, replacement] of Object.entries(placeholderMap)) {
+            previewText = previewText.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'), replacement);
+        }
+        
+        if (previewText.trim()) {
+            previewField.textContent = 'Preview: ' + previewText;
+            previewField.classList.remove('hidden');
+        } else {
+            previewField.classList.add('hidden');
+        }
+    }
 }
 
 /**
