@@ -5785,6 +5785,93 @@ Cost estimate</textarea>
 
         <script src="/js/company-profile.js"></script>
         <!-- <script src="/js/ai-agent-setup.js"></script> TEMPORARILY DISABLED DUE TO SYNTAX ERROR -->
+        
+        <!-- Agent Monitoring System Browser Test -->
+        <script>
+            // Browser-based Agent Monitoring System Test
+            window.testMonitoringSystem = async function() {
+                console.log('🧪 Testing Agent Monitoring System in Browser...');
+                console.log('=' .repeat(50));
+                
+                // Test 1: Check if monitoring functions are loaded
+                console.log('🔍 [TEST 1] Checking monitoring functions...');
+                const monitoringFunctions = [
+                    'loadMonitoringData',
+                    'updateMonitoringDisplay', 
+                    'setupMonitoringEventListeners',
+                    'openMonitoringDashboard',
+                    'openPendingReviews',
+                    'startRealTimeUpdates'
+                ];
+                
+                let availableFunctions = 0;
+                monitoringFunctions.forEach(func => {
+                    if (typeof window[func] === 'function') {
+                        availableFunctions++;
+                        console.log(`  ✅ ${func}`);
+                    } else {
+                        console.log(`  ❌ ${func} - not found`);
+                    }
+                });
+                console.log(`📊 [TEST 1] Available functions: ${availableFunctions}/${monitoringFunctions.length}`);
+                
+                // Test 2: Check if monitoring UI elements exist
+                console.log('🎨 [TEST 2] Checking monitoring UI elements...');
+                const uiElements = [
+                    'monitoring-status',
+                    'pending-reviews',
+                    'flagged-interactions', 
+                    'approval-rate',
+                    'monitoring-activity-feed',
+                    'open-monitoring-dashboard',
+                    'review-pending-interactions',
+                    'view-flagged-items',
+                    'export-monitoring-data'
+                ];
+                
+                let availableElements = 0;
+                uiElements.forEach(id => {
+                    if (document.getElementById(id)) {
+                        availableElements++;
+                        console.log(`  ✅ ${id}`);
+                    } else {
+                        console.log(`  ❌ ${id} - not found`);
+                    }
+                });
+                console.log(`📊 [TEST 2] Available UI elements: ${availableElements}/${uiElements.length}`);
+                
+                // Test 3: Check if company ID is available
+                console.log('🏢 [TEST 3] Checking company ID...');
+                const companyId = window.companyId || new URLSearchParams(window.location.search).get('companyId');
+                console.log(`✅ [TEST 3] Company ID: ${companyId}`);
+                
+                // Test 4: Test monitoring initialization
+                console.log('🚀 [TEST 4] Testing monitoring initialization...');
+                if (typeof window.initializeMonitoringSystem === 'function') {
+                    try {
+                        console.log('🔄 Calling initializeMonitoringSystem...');
+                        window.initializeMonitoringSystem();
+                        console.log('✅ [TEST 4] Monitoring system initialized');
+                    } catch (error) {
+                        console.error('❌ [TEST 4] Monitoring initialization failed:', error);
+                    }
+                } else {
+                    console.error('❌ [TEST 4] initializeMonitoringSystem function not found');
+                }
+                
+                console.log('\n🎉 Browser testing complete!');
+                console.log('💡 To manually test dashboard: openMonitoringDashboard()');
+                console.log('💡 To manually test data loading: loadMonitoringData()');
+                console.log('💡 To manually test real-time updates: startRealTimeUpdates()');
+            };
+            
+            // Auto-run test after page load
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(() => {
+                    console.log('🌐 Monitoring test available. Run: testMonitoringSystem()');
+                }, 2000);
+            });
+        </script>
         <script>
     /**
      * Initialize Intent Routing & Flow Control Panel
