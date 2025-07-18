@@ -8922,6 +8922,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize Company Q&A form handlers
     initializeCompanyQAForms();
+    
+    // Load existing Company Q&A entries
+    loadCompanyQnas();
 });
 
 /**
@@ -8974,6 +8977,9 @@ function initializeCompanyQAForms() {
             }
         });
     }
+    
+    // Load existing Q&As when page loads
+    loadCompanyQAs();
 }
 
 /**
@@ -9002,21 +9008,22 @@ async function saveCompanyQA(question, answer, keywords) {
             })
         });
         
-        const data = await response.json();
-        
-        if (data.success) {
+        if (response.ok) {
+            const entries = await response.json();
+            
             // Clear form
             document.getElementById('companyQnaQuestion').value = '';
             document.getElementById('companyQnaAnswer').value = '';
             document.getElementById('companyQnaKeywords').value = '';
             
             // Refresh Q&A list
-            loadCompanyQAs();
+            loadCompanyQnas();
             
             // Show success message
             showToast('Q&A added successfully!', 'success');
         } else {
-            throw new Error(data.error || 'Failed to save Q&A');
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to save Q&A');
         }
     } catch (error) {
         console.error('Error saving Company Q&A:', error);
@@ -9043,10 +9050,90 @@ function showFormError(errorElementId, message) {
 /**
  * Load Company Q&As (placeholder function)
  */
-function loadCompanyQAs() {
+function loadCompanyQnas() {
     console.log('Loading Company Q&As...');
-    // This function should load and display the Q&A list
-    // Implementation depends on your existing Q&A loading logic
+    
+    const companyId = getCurrentCompanyId();
+    if (!companyId) {
+        console.error('No company ID available');
+        return;
+    }
+    
+    fetch(`/api/company/${companyId}/qna`)
+        .then(response => response.json())
+        .then(entries => {
+            const qnaList = document.getElementById('companyQnaList');
+            if (!qnaList) return;
+            
+            if (entries.length === 0) {
+                qnaList.innerHTML = '<p class="text-gray-500 text-sm">No Q&A entries yet. Add one above.</p>';
+                return;
+            }
+            
+            const qnaHtml = entries.map(entry => `
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                    <div class="flex justify-between items-start mb-2">
+                        <h4 class="font-medium text-gray-900 text-sm">${escapeHtml(entry.question)}</h4>
+                        <button onclick="deleteQnA('${entry._id}')" class="text-red-600 hover:text-red-800 text-xs">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <p class="text-gray-700 text-sm mb-2">${escapeHtml(entry.answer)}</p>
+                    ${entry.keywords && entry.keywords.length > 0 ? `
+                        <div class="flex flex-wrap gap-1">
+                            ${entry.keywords.map(keyword => 
+                                `<span class="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">${escapeHtml(keyword)}</span>`
+                            ).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+            
+            qnaList.innerHTML = qnaHtml;
+        })
+        .catch(error => {
+            console.error('Error loading Company Q&As:', error);
+            const qnaList = document.getElementById('companyQnaList');
+            if (qnaList) {
+                qnaList.innerHTML = '<p class="text-red-500 text-sm">Error loading Q&A entries.</p>';
+            }
+        });
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * Delete a Q&A entry
+ */
+async function deleteQnA(qnaId) {
+    if (!confirm('Are you sure you want to delete this Q&A entry?')) {
+        return;
+    }
+    
+    try {
+        const companyId = getCurrentCompanyId();
+        const response = await fetch(`/api/company/${companyId}/qna/${qnaId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            loadCompanyQnas(); // Refresh the list
+            showToast('Q&A entry deleted successfully!', 'success');
+        } else {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to delete Q&A entry');
+        }
+    } catch (error) {
+        console.error('Error deleting Q&A entry:', error);
+        showToast('Error deleting Q&A entry: ' + error.message, 'error');
+    }
 }
 
 /**
