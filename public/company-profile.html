@@ -9013,6 +9013,14 @@ function initializeCompanyQAForms() {
         });
     }
     
+    // Handle cancel button for editing mode
+    const cancelBtn = document.getElementById('companyQnaCancelBtn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+            cancelEdit();
+        });
+    }
+    
     // Load existing Q&As when page loads
     loadCompanyQnas();
 }
@@ -9067,20 +9075,27 @@ async function saveCompanyQA(question, answer, keywords) {
         
         const saveBtn = document.getElementById('companyQnaSaveBtn');
         const errorDiv = document.getElementById('companyQnaFormError');
+        const editingIdField = document.getElementById('editingQnaId');
+        const editingId = editingIdField ? editingIdField.value : null;
+        
+        // Determine if this is an update or create operation
+        const isEditing = editingId && editingId.trim() !== '';
+        const method = isEditing ? 'PUT' : 'POST';
+        const url = isEditing ? `/api/company/${companyId}/qna/${editingId}` : `/api/company/${companyId}/qna`;
+        
+        console.log(`📡 Making ${method} API request to:`, url);
         
         // Show loading state
         if (saveBtn) {
             saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving...';
+            saveBtn.textContent = isEditing ? 'Updating...' : 'Saving...';
         }
         if (errorDiv) {
             errorDiv.classList.add('hidden');
         }
         
-        console.log('📡 Making API request to:', `/api/company/${companyId}/qna`);
-        
-        const response = await fetch(`/api/company/${companyId}/qna`, {
-            method: 'POST',
+        const response = await fetch(url, {
+            method: method,
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -9094,23 +9109,22 @@ async function saveCompanyQA(question, answer, keywords) {
         console.log('📡 Response status:', response.status, response.statusText);
         
         if (response.ok) {
-            const entries = await response.json();
-            console.log('✅ Q&A saved successfully:', entries);
+            if (isEditing) {
+                const updatedEntry = await response.json();
+                console.log('✅ Q&A updated successfully:', updatedEntry);
+                showToast('Q&A updated successfully!', 'success');
+            } else {
+                const entries = await response.json();
+                console.log('✅ Q&A saved successfully:', entries);
+                showToast('Q&A added successfully!', 'success');
+            }
             
-            // Clear form
-            const questionField = document.getElementById('companyQnaQuestion');
-            const answerField = document.getElementById('companyQnaAnswer');
-            const keywordsField = document.getElementById('companyQnaKeywords');
-            
-            if (questionField) questionField.value = '';
-            if (answerField) answerField.value = '';
-            if (keywordsField) keywordsField.value = '';
+            // Clear form and reset to add mode
+            clearAndResetForm();
             
             // Refresh Q&A list
             loadCompanyQnas();
             
-            // Show success message
-            showToast('Q&A added successfully!', 'success');
         } else {
             const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
             throw new Error(errorData.message || `Server error: ${response.status}`);
@@ -9123,7 +9137,9 @@ async function saveCompanyQA(question, answer, keywords) {
         const saveBtn = document.getElementById('companyQnaSaveBtn');
         if (saveBtn) {
             saveBtn.disabled = false;
-            saveBtn.textContent = 'Add';
+            const editingIdField = document.getElementById('editingQnaId');
+            const isEditing = editingIdField && editingIdField.value && editingIdField.value.trim() !== '';
+            saveBtn.textContent = isEditing ? 'Update' : 'Add';
         }
         console.log('🔄 saveCompanyQA completed');
     }
@@ -9167,9 +9183,14 @@ function loadCompanyQnas() {
                 <div class="bg-white border border-gray-200 rounded-lg p-4">
                     <div class="flex justify-between items-start mb-2">
                         <h4 class="font-medium text-gray-900 text-sm">${escapeHtml(entry.question)}</h4>
-                        <button onclick="deleteQnA('${entry._id}')" class="text-red-600 hover:text-red-800 text-xs">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button onclick="editQnA('${entry._id}')" class="text-blue-600 hover:text-blue-800 text-xs">
+                                Edit
+                            </button>
+                            <button onclick="deleteQnA('${entry._id}')" class="text-red-600 hover:text-red-800 text-xs">
+                                Delete
+                            </button>
+                        </div>
                     </div>
                     <p class="text-gray-700 text-sm mb-2">${escapeHtml(entry.answer)}</p>
                     ${entry.keywords && entry.keywords.length > 0 ? `
@@ -9226,6 +9247,57 @@ async function deleteQnA(qnaId) {
     } catch (error) {
         console.error('Error deleting Q&A entry:', error);
         showToast('Error deleting Q&A entry: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Edit Q&A entry
+ */
+async function editQnA(qnaId) {
+    try {
+        const companyId = getCurrentCompanyId();
+        const response = await fetch(`/api/company/${companyId}/qna`);
+        
+        if (!response.ok) {
+            throw new Error('Failed to fetch Q&A entries');
+        }
+        
+        const entries = await response.json();
+        const entry = entries.find(e => e._id === qnaId);
+        
+        if (!entry) {
+            throw new Error('Q&A entry not found');
+        }
+        
+        // Populate the form with the entry data
+        const questionField = document.getElementById('companyQnaQuestion');
+        const answerField = document.getElementById('companyQnaAnswer');
+        const keywordsField = document.getElementById('companyQnaKeywords');
+        const saveBtn = document.getElementById('companyQnaSaveBtn');
+        const cancelBtn = document.getElementById('companyQnaCancelBtn');
+        const editingIdField = document.getElementById('editingQnaId');
+        
+        if (questionField) questionField.value = entry.question;
+        if (answerField) answerField.value = entry.answer;
+        if (keywordsField) keywordsField.value = entry.keywords ? entry.keywords.join(', ') : '';
+        if (editingIdField) editingIdField.value = qnaId;
+        
+        // Change button text and show cancel button
+        if (saveBtn) saveBtn.textContent = 'Update';
+        if (cancelBtn) cancelBtn.classList.remove('hidden');
+        
+        // Update preview
+        updateAnswerPreview();
+        
+        // Scroll to form
+        const form = document.getElementById('companyQnaForm');
+        if (form) {
+            form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+    } catch (error) {
+        console.error('Error loading Q&A entry for editing:', error);
+        showToast('Error loading Q&A entry: ' + error.message, 'error');
     }
 }
 
