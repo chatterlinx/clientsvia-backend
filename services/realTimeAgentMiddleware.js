@@ -7,6 +7,7 @@ const SuperIntelligentAgentEngine = require('./superIntelligentAgent');
 const AgentService = require('./agent'); // Existing agent service
 const agentMonitoring = require('./agentMonitoring'); // Monitoring system
 const BookingFlowHandler = require('./bookingFlowHandler'); // Booking flow
+const { evaluateBehavior, createBehaviorSession, updateBehaviorSession } = require('../utils/behaviorRules'); // Behavior engine
 
 // Import monitoring logger
 const { monitoringLogger } = agentMonitoring;
@@ -47,7 +48,64 @@ class RealTimeAgentMiddleware {
             // Step 2: Initialize call session with context
             const callSession = await this.initializeCallSession(callerId, companyId);
             
-            // Step 3: Process query with intelligent engine (includes service issue detection)
+            // Step 3: BEHAVIOR ENGINE CHECK - Early detection of caller behavior patterns
+            const behaviorCheck = await evaluateBehavior({
+                query: query,
+                agentSetup: callSession.companyProfile.agentSetup,
+                session: callSession.behaviorSession,
+                context: {
+                    silenceDuration: callData.metadata?.silenceDuration || 0,
+                    callDuration: callData.metadata?.callDuration || 0
+                }
+            });
+            
+            // If behavior is detected, handle immediately and return (overrides normal flow)
+            if (behaviorCheck) {
+                console.log(`[BEHAVIOR ENGINE] Behavior detected:`, behaviorCheck);
+                
+                // Update behavior session
+                updateBehaviorSession(callSession.behaviorSession, query);
+                
+                // Log behavior detection for monitoring
+                await agentMonitoring.logAgentInteraction({
+                    callerId,
+                    companyId,
+                    userQuery: query,
+                    agentResponse: behaviorCheck.message,
+                    confidence: 0.95, // High confidence for behavior-based responses
+                    responseTime: Date.now() - startTime,
+                    escalated: ['escalate_to_human', 'de-escalate', 'escalate_silence'].includes(behaviorCheck.action),
+                    metadata: {
+                        sessionId: callSession.id,
+                        behaviorDetected: behaviorCheck.action,
+                        behaviorTrace: behaviorCheck.trace,
+                        behaviorFlags: behaviorCheck.flags,
+                        callSid: callData.metadata?.callSid,
+                        processingSteps: [{
+                            step: 'Behavior Engine',
+                            details: `${behaviorCheck.action} - ${behaviorCheck.trace.join('; ')}`,
+                            timestamp: new Date()
+                        }]
+                    }
+                });
+                
+                return {
+                    success: true,
+                    response: behaviorCheck.message,
+                    shouldEscalate: ['escalate_to_human', 'de-escalate', 'escalate_silence'].includes(behaviorCheck.action),
+                    escalationData: {
+                        reason: behaviorCheck.transferReason || behaviorCheck.action,
+                        behaviorDetected: behaviorCheck.action,
+                        flags: behaviorCheck.flags,
+                        trace: behaviorCheck.trace
+                    },
+                    responseTime: Date.now() - startTime,
+                    confidence: 0.95,
+                    behaviorOverride: true
+                };
+            }
+            
+            // Step 4: Process query with intelligent engine (includes service issue detection)
             const intelligentResponse = await this.processWithIntelligence(query, callSession);
             
             // Step 4: Check if response initiated booking flow
@@ -151,6 +209,9 @@ class RealTimeAgentMiddleware {
         // Get company configuration
         const companyConfig = await this.getCompanyAIConfig(companyId);
         
+        // Create behavior session for this call
+        const behaviorSession = createBehaviorSession(callerId, companyId);
+        
         const session = {
             id: sessionId,
             callerId,
@@ -158,6 +219,8 @@ class RealTimeAgentMiddleware {
             startTime: new Date(),
             context: callerContext,
             config: companyConfig,
+            companyProfile: companyConfig, // Add for behavior engine access
+            behaviorSession: behaviorSession, // Add behavior tracking
             interactions: [],
             sentiment: 0,
             urgencyLevel: 1,

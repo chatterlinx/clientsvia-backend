@@ -616,6 +616,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.warn('  - Company data:', !!currentCompanyData);
                 console.warn('  - Company ID:', companyId);
             }
+            
+            // Initialize behavior engine configuration
+            if (currentCompanyData && currentCompanyData.agentSetup && currentCompanyData.agentSetup.behaviors) {
+                console.log('🧠 Initializing behavior configuration...');
+                populateBehaviorConfiguration(currentCompanyData.agentSetup.behaviors);
+            } else {
+                console.log('🧠 No behavior configuration found, using defaults');
+                populateBehaviorConfiguration({});
+            }
         } catch (error) {
             console.error('Error fetching company data:', error.message, error.stack);
             if (companyNameHeader) companyNameHeader.textContent = "Error Loading Profile";
@@ -1826,6 +1835,15 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchCompanyQnA();
         updatePlaceholderSelectOptions();
         updateAllPreviews();
+        
+        // Populate behavior configuration
+        if (agentSetup.behaviors) {
+            console.log('🧠 Populating behavior configuration from agent setup:', agentSetup.behaviors);
+            populateBehaviorConfiguration(agentSetup.behaviors);
+        } else {
+            console.log('🧠 No behavior configuration found in agent setup, using defaults');
+            populateBehaviorConfiguration({});
+        }
     }
 
     async function handleSaveAgentSetup(event) {
@@ -1888,6 +1906,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saveBtnLocal) { saveBtnLocal.disabled = true; saveBtnLocal.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...'; }
         
         try {
+            // Add behavior configuration
+            const behaviorConfig = collectBehaviorConfiguration();
+            agentSetupData.behaviors = behaviorConfig;
+            console.log('🧠 Added behavior configuration to save data:', behaviorConfig);
+            
             const payload = { agentSetup: agentSetupData, tradeTypes: agentSetupData.categories, timezone: agentSetupData.timezone };
             const response = await fetch(`/api/company/${companyId}/agentsetup`, {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
@@ -3695,6 +3718,229 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('❌ Initial company data fetch failed:', error);
     });
     
+    // Initialize behavior engine configuration
+    initializeBehaviorEngine();
+    
     // You must call populateAiVoiceSettings(currentCompanyData.voiceSettings) inside your main
     // fetchCompanyData() function after you get a successful response.
 });
+
+// ===========================================
+// BEHAVIOR ENGINE CONFIGURATION
+// ===========================================
+
+/**
+ * Initialize behavior engine configuration
+ */
+function initializeBehaviorEngine() {
+    console.log('🧠 Initializing behavior engine configuration...');
+    
+    // Test behavior button
+    const testBehaviorBtn = document.getElementById('test-behavior-btn');
+    if (testBehaviorBtn) {
+        testBehaviorBtn.addEventListener('click', testBehaviorDetection);
+        console.log('✅ Behavior test button initialized');
+    }
+    
+    // Add behavior settings to the save handler
+    setupBehaviorSaveHandler();
+}
+
+/**
+ * Populate behavior configuration form with current data
+ */
+function populateBehaviorConfiguration(behaviorConfig) {
+    console.log('📝 Populating behavior configuration:', behaviorConfig);
+    
+    if (!behaviorConfig) {
+        console.log('⚠️ No behavior configuration found, using defaults');
+        return;
+    }
+    
+    // Populate form fields
+    const frustrationKeywords = document.getElementById('frustration-keywords');
+    const silenceThreshold = document.getElementById('silence-threshold');
+    const repetitionLimit = document.getElementById('repetition-limit');
+    const offTopicKeywords = document.getElementById('off-topic-keywords');
+    const useLLMSentiment = document.getElementById('use-llm-sentiment');
+    const enableEmpathy = document.getElementById('enable-empathy-responses');
+    
+    if (frustrationKeywords) {
+        frustrationKeywords.value = behaviorConfig.frustrationKeywords?.join(', ') || 'frustrated, annoyed, upset, ridiculous, terrible';
+    }
+    
+    if (silenceThreshold) {
+        silenceThreshold.value = behaviorConfig.silenceThreshold || 8;
+    }
+    
+    if (repetitionLimit) {
+        repetitionLimit.value = behaviorConfig.repetitionLimit || 3;
+    }
+    
+    if (offTopicKeywords) {
+        offTopicKeywords.value = behaviorConfig.offTopicKeywords?.join(', ') || 'spam, unrelated, politics';
+    }
+    
+    if (useLLMSentiment) {
+        useLLMSentiment.checked = behaviorConfig.useLLMForSentiment || false;
+    }
+    
+    if (enableEmpathy) {
+        enableEmpathy.checked = behaviorConfig.enableEmpathyResponses !== false; // Default to true
+    }
+    
+    console.log('✅ Behavior configuration populated');
+}
+
+/**
+ * Collect behavior configuration from form
+ */
+function collectBehaviorConfiguration() {
+    console.log('📦 Collecting behavior configuration from form...');
+    
+    const frustrationKeywords = document.getElementById('frustration-keywords')?.value.split(',').map(k => k.trim()).filter(Boolean) || [];
+    const silenceThreshold = parseInt(document.getElementById('silence-threshold')?.value) || 8;
+    const repetitionLimit = parseInt(document.getElementById('repetition-limit')?.value) || 3;
+    const offTopicKeywords = document.getElementById('off-topic-keywords')?.value.split(',').map(k => k.trim()).filter(Boolean) || [];
+    const useLLMSentiment = document.getElementById('use-llm-sentiment')?.checked || false;
+    const enableEmpathy = document.getElementById('enable-empathy-responses')?.checked !== false;
+    
+    const behaviorConfig = {
+        frustrationKeywords,
+        silenceThreshold,
+        repetitionLimit,
+        offTopicKeywords,
+        useLLMForSentiment: useLLMSentiment,
+        enableEmpathyResponses: enableEmpathy
+    };
+    
+    console.log('✅ Collected behavior configuration:', behaviorConfig);
+    return behaviorConfig;
+}
+
+/**
+ * Test behavior detection with sample input
+ */
+async function testBehaviorDetection() {
+    console.log('🧪 Testing behavior detection...');
+    
+    const testInput = document.getElementById('behavior-test-input');
+    const resultDiv = document.getElementById('behavior-test-result');
+    const detectionType = document.getElementById('behavior-detection-type');
+    const responseText = document.getElementById('behavior-response-text');
+    const actionText = document.getElementById('behavior-action');
+    
+    if (!testInput || !resultDiv) {
+        console.error('❌ Test elements not found');
+        return;
+    }
+    
+    const query = testInput.value.trim();
+    if (!query) {
+        showToast('Please enter a test phrase', 'error');
+        return;
+    }
+    
+    // Show loading
+    resultDiv.classList.remove('hidden');
+    detectionType.textContent = 'Testing...';
+    responseText.textContent = '';
+    actionText.textContent = '';
+    
+    try {
+        // Collect current behavior configuration
+        const behaviorConfig = collectBehaviorConfiguration();
+        
+        // Test with current company data
+        const response = await fetch('/api/ai-agent/test-behavior', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                query: query,
+                companyId: currentCompanyData._id,
+                behaviorConfig: behaviorConfig
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            if (result.behaviorDetected) {
+                detectionType.textContent = result.behaviorDetected.action || 'Unknown';
+                responseText.textContent = result.behaviorDetected.message || 'No response';
+                actionText.textContent = result.behaviorDetected.flags?.join(', ') || 'No flags';
+                
+                // Color code the result
+                resultDiv.className = 'mt-3 p-3 bg-red-50 border border-red-200 rounded-lg';
+                showToast('Behavior detected!', 'warning');
+            } else {
+                detectionType.textContent = 'No behavior detected';
+                responseText.textContent = 'Normal processing would continue';
+                actionText.textContent = 'No special action';
+                
+                // Color code as normal
+                resultDiv.className = 'mt-3 p-3 bg-green-50 border border-green-200 rounded-lg';
+                showToast('No behavior detected - normal processing', 'success');
+            }
+        } else {
+            throw new Error('Test failed');
+        }
+    } catch (error) {
+        console.error('❌ Behavior test failed:', error);
+        detectionType.textContent = 'Test failed';
+        responseText.textContent = 'Error occurred during testing';
+        actionText.textContent = 'Check console for details';
+        
+        resultDiv.className = 'mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg';
+        showToast('Behavior test failed', 'error');
+    }
+}
+
+/**
+ * Setup behavior configuration save handler
+ */
+function setupBehaviorSaveHandler() {
+    console.log('🔧 Setting up behavior save handler...');
+    
+    // Add behavior configuration to the main save handler
+    const originalSaveHandler = window.handleSaveAgentSetup;
+    if (originalSaveHandler) {
+        window.handleSaveAgentSetup = function(event) {
+            console.log('💾 Enhanced save handler called - including behavior configuration');
+            
+            // Add behavior configuration to the save data
+            const behaviorConfig = collectBehaviorConfiguration();
+            
+            // Store in global currentCompanyData for saving
+            if (currentCompanyData && currentCompanyData.agentSetup) {
+                currentCompanyData.agentSetup.behaviors = behaviorConfig;
+                console.log('✅ Behavior configuration added to save data');
+            }
+            
+            // Call original save handler
+            return originalSaveHandler.call(this, event);
+        };
+    }
+    
+    // Also add to the populateAgentSetupForm function
+    const originalPopulateHandler = window.populateAgentSetupForm;
+    if (originalPopulateHandler) {
+        window.populateAgentSetupForm = function(companyData) {
+            console.log('📋 Enhanced populate handler called - including behavior configuration');
+            
+            // Call original populate handler
+            const result = originalPopulateHandler.call(this, companyData);
+            
+            // Add behavior configuration population
+            if (companyData && companyData.agentSetup && companyData.agentSetup.behaviors) {
+                populateBehaviorConfiguration(companyData.agentSetup.behaviors);
+            }
+            
+            return result;
+        };
+    }
+    
+    console.log('✅ Behavior save handler setup complete');
+}

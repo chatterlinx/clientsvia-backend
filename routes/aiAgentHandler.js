@@ -305,6 +305,62 @@ router.post('/test-intelligence', authenticateJWT, async (req, res) => {
     }
 });
 
+/**
+ * Test behavior detection endpoint
+ */
+router.post('/test-behavior', async (req, res) => {
+    try {
+        console.log('[AI AGENT] Testing behavior detection:', req.body);
+        
+        const { query, companyId, behaviorConfig } = req.body;
+        
+        if (!query || !companyId) {
+            return res.status(400).json({ error: 'Missing required parameters' });
+        }
+        
+        // Get company data
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Import behavior engine
+        const { evaluateBehavior } = require('../utils/behaviorRules');
+        
+        // Create mock agent setup with behavior config
+        const agentSetup = {
+            ...company.agentSetup,
+            behaviors: behaviorConfig
+        };
+        
+        // Create mock session
+        const session = {
+            queryHistory: [],
+            silenceCount: 0,
+            frustrationCount: 0
+        };
+        
+        // Test behavior detection
+        const behaviorResult = await evaluateBehavior({
+            query: query,
+            agentSetup: agentSetup,
+            session: session,
+            context: {}
+        });
+        
+        res.json({
+            success: true,
+            behaviorDetected: behaviorResult,
+            query: query,
+            timestamp: new Date()
+        });
+        
+    } catch (error) {
+        console.error('[AI AGENT] Behavior test failed:', error);
+        res.status(500).json({ error: 'Behavior test failed' });
+    }
+});
+
 // Helper functions for TwiML generation
 function generateTwiMLResponse(message) {
     return `<?xml version="1.0" encoding="UTF-8"?>
