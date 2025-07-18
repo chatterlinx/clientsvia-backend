@@ -8934,8 +8934,12 @@ function initializeCompanyQAForms() {
     // Handle the main company Q&A form
     const companyQnaForm = document.getElementById('companyQnaForm');
     if (companyQnaForm) {
+        // Remove any existing submit handlers
+        companyQnaForm.onsubmit = null;
+        
         companyQnaForm.addEventListener('submit', function(e) {
             e.preventDefault(); // Prevent default form submission
+            e.stopPropagation(); // Stop event bubbling
             
             console.log('Company Q&A form submitted');
             
@@ -8947,12 +8951,32 @@ function initializeCompanyQAForms() {
             // Validate form
             if (!question || !answer) {
                 showFormError('companyQnaFormError', 'Please fill in both question and answer fields');
-                return;
+                return false; // Explicitly return false
             }
             
             // Save the Q&A
             saveCompanyQA(question, answer, keywords);
+            return false; // Prevent any default behavior
         });
+        
+        // Also add a click handler to the submit button as backup
+        const submitBtn = document.getElementById('companyQnaSaveBtn');
+        if (submitBtn) {
+            submitBtn.addEventListener('click', function(e) {
+                // Only handle if this is not part of a form submission
+                if (e.type === 'click' && !e.defaultPrevented) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Trigger the form submission manually
+                    const form = this.closest('form');
+                    if (form) {
+                        const event = new Event('submit', { cancelable: true });
+                        form.dispatchEvent(event);
+                    }
+                }
+            });
+        }
     }
     
     // Initialize placeholder insertion for the main form
@@ -8987,14 +9011,26 @@ function initializeCompanyQAForms() {
  */
 async function saveCompanyQA(question, answer, keywords) {
     try {
+        console.log('🔄 Starting saveCompanyQA with:', { question, answer, keywords });
+        
         const companyId = getCurrentCompanyId();
+        if (!companyId) {
+            throw new Error('Company ID not found');
+        }
+        
         const saveBtn = document.getElementById('companyQnaSaveBtn');
         const errorDiv = document.getElementById('companyQnaFormError');
         
         // Show loading state
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Saving...';
-        errorDiv.classList.add('hidden');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+        }
+        if (errorDiv) {
+            errorDiv.classList.add('hidden');
+        }
+        
+        console.log('📡 Making API request to:', `/api/company/${companyId}/qna`);
         
         const response = await fetch(`/api/company/${companyId}/qna`, {
             method: 'POST',
@@ -9008,13 +9044,20 @@ async function saveCompanyQA(question, answer, keywords) {
             })
         });
         
+        console.log('📡 Response status:', response.status, response.statusText);
+        
         if (response.ok) {
             const entries = await response.json();
+            console.log('✅ Q&A saved successfully:', entries);
             
             // Clear form
-            document.getElementById('companyQnaQuestion').value = '';
-            document.getElementById('companyQnaAnswer').value = '';
-            document.getElementById('companyQnaKeywords').value = '';
+            const questionField = document.getElementById('companyQnaQuestion');
+            const answerField = document.getElementById('companyQnaAnswer');
+            const keywordsField = document.getElementById('companyQnaKeywords');
+            
+            if (questionField) questionField.value = '';
+            if (answerField) answerField.value = '';
+            if (keywordsField) keywordsField.value = '';
             
             // Refresh Q&A list
             loadCompanyQnas();
@@ -9022,17 +9065,20 @@ async function saveCompanyQA(question, answer, keywords) {
             // Show success message
             showToast('Q&A added successfully!', 'success');
         } else {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Failed to save Q&A');
+            const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+            throw new Error(errorData.message || `Server error: ${response.status}`);
         }
     } catch (error) {
-        console.error('Error saving Company Q&A:', error);
+        console.error('❌ Error saving Company Q&A:', error);
         showFormError('companyQnaFormError', 'Error saving Q&A: ' + error.message);
     } finally {
         // Reset button
         const saveBtn = document.getElementById('companyQnaSaveBtn');
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'Add';
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Add';
+        }
+        console.log('🔄 saveCompanyQA completed');
     }
 }
 
@@ -9194,6 +9240,7 @@ function initializeLogicAIIntelligence() {
             updateLogicIntelligenceSettings();
         });
     }
+}
     </script>
 
     <!-- Main Page Initialization Script -->
