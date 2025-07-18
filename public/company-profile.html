@@ -3475,7 +3475,7 @@
     function displayFlowTestResultsWithTrace(data) {
         const resultsDiv = document.getElementById('flowTestResults');
         const trace = data.trace || {};
-        const result = data.result || {};
+        const result = data.result || null;  // Fix: result is a string, not an object
         
         // Calculate processing time
         const processingTime = trace.totalTime ? `${trace.totalTime}ms` : '1ms';
@@ -3531,7 +3531,7 @@
         
         // Build final response
         let finalResponseHtml = '';
-        if (result) {
+        if (result && typeof result === 'string') {
             finalResponseHtml = `
                 <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
                     <p class="text-blue-800 text-sm">${result}</p>
