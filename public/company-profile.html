@@ -9229,10 +9229,10 @@ function loadCompanyQnas() {
                     <div class="flex justify-between items-start mb-2">
                         <h4 class="font-medium text-gray-900 text-sm">${escapeHtml(entry.question)}</h4>
                         <div class="flex items-center gap-2">
-                            <button onclick="editQnA('${entry._id}')" class="text-blue-600 hover:text-blue-800 text-xs">
+                            <button onclick="console.log('🖱️ Edit button clicked for ID:', '${entry._id}'); editQnA('${entry._id}')" class="text-blue-600 hover:text-blue-800 text-xs">
                                 Edit
                             </button>
-                            <button onclick="deleteQnA('${entry._id}')" class="text-red-600 hover:text-red-800 text-xs">
+                            <button onclick="console.log('🖱️ Delete button clicked for ID:', '${entry._id}'); deleteQnA('${entry._id}')" class="text-red-600 hover:text-red-800 text-xs">
                                 Delete
                             </button>
                         </div>
@@ -9299,6 +9299,7 @@ async function deleteQnA(qnaId) {
  * Edit Q&A entry
  */
 async function editQnA(qnaId) {
+    console.log('🔧🔧🔧 editQnA FUNCTION CALLED with ID:', qnaId);
     try {
         console.log('🔧 editQnA called with ID:', qnaId);
         
