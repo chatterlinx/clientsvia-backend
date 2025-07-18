@@ -6,6 +6,18 @@
     <title>Admin Dashboard - Company Profile</title>
     <link rel="icon" href="/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Suppress Tailwind CDN production warning
+        if (window.tailwindcss) {
+            window.tailwindcss.config = {
+                ...window.tailwindcss.config,
+                corePlugins: {
+                    ...window.tailwindcss.config?.corePlugins,
+                    preflight: false
+                }
+            };
+        }
+    </script>
     <link rel="stylesheet" href="/css/tailwind-production.css">
     <!-- Production-ready Tailwind CSS replacement -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -1842,13 +1854,8 @@
                                                                         <div>
                                                                             <label class="form-label text-sm">Test Scenario</label>
                                                                             <select id="flowTestScenario" class="form-select">
-                                                                                <option value="service_emergency">Emergency AC Failure</option>
-                                                                                <option value="routine_booking">Routine Maintenance</option>
-                                                                                <option value="pricing_inquiry">Pricing Question</option>
-                                                                                <option value="complaint">Service Complaint</option>
-                                                                                <option value="transfer_request">Transfer to Technician</option>
-                                                                                <option value="after_hours">After Hours Call</option>
-                                                                                <option value="custom">Custom Query</option>
+                                                                                <option value="">Select a scenario...</option>
+                                                                                <!-- Options will be populated dynamically from intent routing configuration -->
                                                                             </select>
                                                                         </div>
                                                                         <div>
@@ -3089,6 +3096,7 @@
                     
                     updateIntentCategoriesList();
                     updateFlowVisualization();
+                    populateTestScenarios();
                     
                     console.log('Intent routing configuration loaded successfully');
                 }
@@ -3179,6 +3187,9 @@
                 ${index < sortedFlow.length - 1 ? '<div class="intent-flow-connector mt-2 mb-2"><i class="fas fa-arrow-down"></i></div>' : ''}
             </div>
         `).join('');
+        
+        // Update test scenarios dropdown when flow visualization is updated
+        populateTestScenarios();
     }
     
     /**
@@ -3198,6 +3209,7 @@
             initializeDefaultIntentFlow();
             updateIntentCategoriesList();
             updateFlowVisualization();
+            populateTestScenarios();
             showToast('Intent flow reset to default configuration', 'success');
         }
     }
@@ -3458,6 +3470,131 @@
     }
     
     /**
+     * Display flow test results with AI Response Trace Log
+     */
+    function displayFlowTestResultsWithTrace(data) {
+        const resultsDiv = document.getElementById('flowTestResults');
+        const trace = data.trace || {};
+        const result = data.result || {};
+        
+        // Calculate processing time
+        const processingTime = trace.totalTime ? `${trace.totalTime}ms` : '1ms';
+        
+        // Determine confidence
+        let confidence = '0%';
+        if (result && trace.selectedConfidence) {
+            confidence = `${Math.round(trace.selectedConfidence * 100)}%`;
+        }
+        
+        // Build basic results
+        let basicResultsHtml = `
+            <div class="grid grid-cols-2 gap-4 text-sm mb-4">
+                <div>
+                    <span class="text-gray-600">Processing Time:</span>
+                    <span class="font-medium text-green-600 ml-1">${processingTime}</span>
+                </div>
+                <div>
+                    <span class="text-gray-600">Confidence:</span>
+                    <span class="font-medium text-blue-600 ml-1">${confidence}</span>
+                </div>
+            </div>
+        `;
+        
+        // Build trace steps
+        let traceStepsHtml = '';
+        if (trace.steps && trace.steps.length > 0) {
+            trace.steps.forEach((step, index) => {
+                const isSelected = step.source === trace.selectedSource;
+                const statusIcon = isSelected ? 'fas fa-check text-green-600' : 'fas fa-circle text-gray-400';
+                const statusClass = isSelected ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200';
+                const selectedBadge = isSelected ? '<span class="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">SELECTED</span>' : '';
+                
+                const matchSummary = generateMatchSummary(step.matchResult);
+                
+                traceStepsHtml += `
+                    <div class="trace-step ${statusClass} border rounded-lg p-3 mb-2">
+                        <div class="flex items-center">
+                            <span class="w-6 h-6 bg-white border border-gray-300 text-gray-700 rounded-full flex items-center justify-center text-xs font-bold mr-3">${step.stepNumber}</span>
+                            <div class="flex-1">
+                                <div class="font-medium text-gray-800">${step.source}</div>
+                                <div class="text-sm text-gray-600 mt-1">${matchSummary}</div>
+                            </div>
+                            <i class="${statusIcon}"></i>
+                            ${selectedBadge}
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            traceStepsHtml = '<div class="text-gray-500 text-sm">No trace steps available</div>';
+        }
+        
+        // Build final response
+        let finalResponseHtml = '';
+        if (result) {
+            finalResponseHtml = `
+                <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                    <p class="text-blue-800 text-sm">${result}</p>
+                </div>
+            `;
+        } else {
+            finalResponseHtml = `
+                <div class="mt-4 p-3 bg-gray-50 border border-gray-200 rounded">
+                    <p class="text-gray-600 text-sm">No response generated</p>
+                </div>
+            `;
+        }
+        
+        // Update the results div
+        resultsDiv.innerHTML = `
+            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h6 class="font-semibold text-gray-800 mb-2">Flow Test Results</h6>
+                <div id="flowTestBasicResults" class="mb-4">
+                    ${basicResultsHtml}
+                </div>
+                
+                <!-- AI Response Trace Log -->
+                <div class="ai-trace-log bg-white border border-gray-200 rounded-lg p-4 mt-4">
+                    <h6 class="font-semibold text-gray-800 mb-3 flex items-center">
+                        <i class="fas fa-search text-blue-600 mr-2"></i>AI Response Trace Log
+                    </h6>
+                    <div id="traceLogContainer" class="text-sm">
+                        <div class="mb-3">
+                            <div class="text-xs text-gray-600 mb-2">Query: "${trace.query || 'N/A'}"</div>
+                            <div class="text-xs text-gray-600 mb-3">Keywords: [${(trace.keywords || []).join(', ')}]</div>
+                        </div>
+                        <div class="space-y-2">
+                            ${traceStepsHtml}
+                        </div>
+                        <div class="mt-4">
+                            <div class="font-medium text-gray-800 mb-2">Final Response:</div>
+                            ${finalResponseHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Generate match summary for trace display
+     */
+    function generateMatchSummary(matchResult) {
+        if (!matchResult) return 'No match data';
+        
+        const { totalMatches = 0, totalAvailable = 0, matchedKeywords = [], reason = '' } = matchResult;
+        
+        if (totalMatches === 0) {
+            return reason || '0/0 matches';
+        }
+        
+        const percentage = totalAvailable > 0 ? Math.round((totalMatches / totalAvailable) * 100) : 0;
+        const keywordList = matchedKeywords.length > 0 ? ` (${matchedKeywords.join(', ')})` : '';
+        
+        return `${totalMatches}/${totalAvailable} match${totalMatches !== 1 ? 'es' : ''} - ${percentage}%${keywordList}`;
+    }
+    
+    /**
      * Toggle intent enabled/disabled
      */
     function toggleIntentEnabled(intentId) {
@@ -3608,6 +3745,61 @@
         };
         
         input.placeholder = placeholders[scenario] || placeholders.custom;
+    }
+
+    /**
+     * Populate test scenario dropdown with actual intent routing configuration
+     */
+    function populateTestScenarios() {
+        const scenarioSelect = document.getElementById('flowTestScenario');
+        if (!scenarioSelect) return;
+
+        // Clear existing options except the first one
+        scenarioSelect.innerHTML = '<option value="">Select a scenario...</option>';
+
+        if (window.currentIntentFlow && window.currentIntentFlow.length > 0) {
+            // Sort intents by order/priority
+            const sortedIntents = [...window.currentIntentFlow].sort((a, b) => {
+                if (a.priority !== b.priority) {
+                    const priorityOrder = { high: 1, medium: 2, low: 3 };
+                    return priorityOrder[a.priority] - priorityOrder[b.priority];
+                }
+                return a.order - b.order;
+            });
+
+            // Add each intent as an option
+            sortedIntents.forEach(intent => {
+                const option = document.createElement('option');
+                option.value = intent.id;
+                option.textContent = `${intent.name} (${intent.priority.toUpperCase()})`;
+                
+                // Add visual indicator for enabled/disabled
+                if (!intent.enabled) {
+                    option.textContent += ' - DISABLED';
+                    option.style.color = '#9CA3AF';
+                }
+                
+                scenarioSelect.appendChild(option);
+            });
+        } else {
+            // Add fallback options if no intents are configured
+            const fallbackOptions = [
+                { value: 'service_emergency', text: 'Emergency AC Failure' },
+                { value: 'routine_booking', text: 'Routine Maintenance' },
+                { value: 'pricing_inquiry', text: 'Pricing Question' },
+                { value: 'complaint', text: 'Service Complaint' },
+                { value: 'transfer_request', text: 'Transfer to Technician' },
+                { value: 'after_hours', text: 'After Hours Call' },
+                { value: 'custom', text: 'Custom Query' }
+            ];
+
+            fallbackOptions.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.text;
+                scenarioSelect.appendChild(option);
+            });
+        }
     }
     
         // Helper functions for intent configuration
