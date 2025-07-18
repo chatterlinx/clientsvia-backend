@@ -6,6 +6,8 @@ const router = express.Router();
 const agentMonitoring = require('../services/agentMonitoring');
 const Company = require('../models/Company');
 
+console.log('🔧 Loading monitoring routes...');
+
 // Get monitoring dashboard data
 router.get('/dashboard/:companyId', async (req, res) => {
     try {
@@ -246,5 +248,7 @@ router.post('/webhook/:companyId', async (req, res) => {
         res.status(500).json({ error: 'Failed to process webhook' });
     }
 });
+
+console.log('✅ Monitoring routes loaded successfully');
 
 module.exports = router;
