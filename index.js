@@ -33,7 +33,7 @@ const uploadRoutes = require('./routes/upload');
 const learningRoutes = require('./routes/learning'); // Learning management routes
 
 // Import new AI Agent routes
-const aiAgentSetupRoutes = require('./routes/aiAgentSetup');
+
 const aiAgentWorkflowRoutes = require('./routes/aiAgentWorkflows');
 const aiAgentAnalyticsRoutes = require('./routes/aiAgentAnalytics');
 const knowledgeAutoPopulationRoutes = require('./routes/knowledgeAutoPopulation');
@@ -85,7 +85,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/learning', learningRoutes); // Learning management routes
 
 // Register AI Agent routes
-app.use('/api/ai-agent-setup', aiAgentSetupRoutes);
+
 app.use('/api/ai-agent-workflows', aiAgentWorkflowRoutes);
 app.use('/api/ai-agent-analytics', aiAgentAnalyticsRoutes);
 app.use('/api/knowledge-auto-population', knowledgeAutoPopulationRoutes);

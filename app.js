@@ -17,7 +17,7 @@ const authRoutes = require('./routes/auth');
 const companyRoutes = require('./routes/company');
 const tradeCategoryRoutes = require('./routes/tradeCategories');
 const settingsRoutes = require('./routes/settings');
-const aiAgentSetupRoutes = require('./routes/aiAgentSetup');
+
 const aiAgentWorkflowRoutes = require('./routes/aiAgentWorkflows');
 const aiAgentAnalyticsRoutes = require('./routes/aiAgentAnalytics');
 const knowledgeAutoPopulationRoutes = require('./routes/knowledgeAutoPopulation');
@@ -62,7 +62,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/company', tradeCategoryRoutes);
 app.use('/api/company', settingsRoutes);
-app.use('/api/ai-agent-setup', aiAgentSetupRoutes);
+
 app.use('/api/ai-agent-workflows', aiAgentWorkflowRoutes);
 app.use('/api/ai-agent-analytics', aiAgentAnalyticsRoutes);
 app.use('/api/knowledge-auto-population', knowledgeAutoPopulationRoutes);
