@@ -8997,9 +8997,13 @@ function initializeCompanyQAForms() {
             if (selectedPlaceholder) {
                 const currentPos = answerTextarea.selectionStart;
                 const currentValue = answerTextarea.value;
-                const newValue = currentValue.slice(0, currentPos) + selectedPlaceholder + currentValue.slice(currentPos);
+                // Format the placeholder with single curly braces - this is the standard format
+                const formattedPlaceholder = `{${selectedPlaceholder}}`;
+                const newValue = currentValue.slice(0, currentPos) + formattedPlaceholder + currentValue.slice(currentPos);
                 answerTextarea.value = newValue;
                 answerTextarea.focus();
+                // Set cursor position after the inserted placeholder
+                answerTextarea.setSelectionRange(currentPos + formattedPlaceholder.length, currentPos + formattedPlaceholder.length);
                 // Clear the selection
                 placeholderSelect.value = '';
                 
@@ -9024,12 +9028,16 @@ function updateAnswerPreview() {
         let previewText = answerField.value;
         
         // Replace common placeholders with sample values for preview
+        // Using single curly braces format {PlaceholderName} - this is the standard format
         const placeholderMap = {
-            '{{CompanyName}}': 'Penguin Air Corp.',
-            '{{AgentName}}': 'Michael',
-            '{{CustomerName}}': 'Customer',
-            '{{ServiceType}}': 'AC Repair',
-            '{{ContactPhone}}': '(239) 565-2202'
+            '{CompanyName}': 'Penguin Air Corp.',
+            '{AgentName}': 'Michael',
+            '{CustomerName}': 'Customer',
+            '{ServiceType}': 'AC Repair',
+            '{ContactPhone}': '(239) 565-2202',
+            '{ouraddress}': '12155 Metro Pkwy, Fort Myers, FL 33966',
+            '{servicecall}': '$49',
+            '{emergencyphone}': '(239) 565-2202'
         };
         
         for (const [placeholder, replacement] of Object.entries(placeholderMap)) {
