@@ -6,8 +6,8 @@ async function checkCustomKB(transcript, companyID, traceLogger) {
   const keywords = extractKeywords(transcript);
 
   // Step 1: Load Company Q&As (Multi-Tenant)
-  let companyMatches = [];
   const company = await Company.findById(companyID);
+  let companyMatches = [];
   if (!company || !company.aiSettings.companyQAs?.length) {
     traceLogger.addCheck({ source: 'Company Category Q&As', details: 'No company Q&As configured' });
   } else {
@@ -35,7 +35,7 @@ async function checkCustomKB(transcript, companyID, traceLogger) {
     traceLogger.addCheck({ source: 'Trade Category Database', details: tradeMatches.map(m => `${m.question}: ${m.matches}`).join('\n') || 'No matches' });
   }
 
-  // Step 3: Select Best Match (Company > Trade, min threshold 70%)
+  // Step 3: Select Best Match (Company > Trade, Threshold 70%)
   const allMatches = [...companyMatches, ...tradeMatches];
   if (!allMatches.length) return null;
   const best = allMatches.reduce((max, cur) => cur.confidence > max.confidence ? cur : max);
