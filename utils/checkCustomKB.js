@@ -82,8 +82,18 @@ async function checkCustomKB(transcript, companyID, tradeCategoryID = null, trac
     const categoryQAResult = await checkCompanyCategoryQAsWithTrace(transcript, company, keywords, traceLogger);
     if (categoryQAResult.matched) {
       console.log(`[checkCustomKB] Found match in company category Q&As`);
-      traceLogger.setSelectedSource('Company Category Q&As', 'Direct keyword match', categoryQAResult.confidence, categoryQAResult.answer);
-      return { result: categoryQAResult.answer, trace: traceLogger.getTraceLog() };
+      console.log(`[checkCustomKB] CRITICAL CHECK - Answer exists:`, !!categoryQAResult.answer);
+      console.log(`[checkCustomKB] CRITICAL CHECK - Answer content:`, categoryQAResult.answer);
+      
+      // FORCE answer if confidence is high but answer is missing
+      let finalAnswer = categoryQAResult.answer;
+      if (categoryQAResult.confidence >= 0.9 && !finalAnswer) {
+        finalAnswer = "I found a match for your question but the answer wasn't configured properly. Please contact support for assistance.";
+        console.error(`[checkCustomKB] FORCED FALLBACK ANSWER due to missing content`);
+      }
+      
+      traceLogger.setSelectedSource('Company Category Q&As', 'Direct keyword match', categoryQAResult.confidence, finalAnswer);
+      return { result: finalAnswer, trace: traceLogger.getTraceLog() };
     }
     
     // Method 2: Use ServiceIssueHandler for systematic checking
@@ -176,6 +186,20 @@ async function checkCompanyCategoryQAsWithTrace(transcript, company, keywords, t
       const questionLower = qa.question.toLowerCase();
       const currentMatches = [];
       
+      // DEBUG: Log Q&A data structure
+      console.log(`[checkCustomKB] DEBUG Q&A entry:`, { 
+        question: qa.question, 
+        answer: qa.answer,
+        answerExists: !!qa.answer,
+        answerLength: qa.answer?.length || 0
+      });
+      
+      // Skip if no answer exists
+      if (!qa.answer || qa.answer.trim() === '') {
+        console.log(`[checkCustomKB] WARNING: Skipping Q&A with empty answer: "${qa.question}"`);
+        continue;
+      }
+      
       // Direct keyword matching
       if (questionLower.includes('thermostat') && lowerTranscript.includes('thermostat')) {
         currentMatches.push('thermostat');
@@ -183,8 +207,9 @@ async function checkCompanyCategoryQAsWithTrace(transcript, company, keywords, t
             lowerTranscript.includes('screen') || lowerTranscript.includes('not working')) {
           currentMatches.push('blank/display/screen');
           console.log(`[checkCustomKB] Category Q&A match: "${qa.question}"`);
+          console.log(`[checkCustomKB] ANSWER FOUND: "${qa.answer}"`);
           bestMatch = qa.answer;
-          bestScore = 0.9;
+          bestScore = 1.0; // 100% match for exact keyword combo
           matchedKeywords = currentMatches;
           break;
         }
@@ -194,6 +219,7 @@ async function checkCompanyCategoryQAsWithTrace(transcript, company, keywords, t
       const relevance = calculateRelevance(questionLower, lowerTranscript);
       if (relevance > 0.6 && relevance > bestScore) {
         console.log(`[checkCustomKB] High relevance match (${relevance.toFixed(2)}): "${qa.question}"`);
+        console.log(`[checkCustomKB] ANSWER FOUND: "${qa.answer}"`);
         bestMatch = qa.answer;
         bestScore = relevance;
         matchedKeywords = keywords.filter(k => questionLower.includes(k.toLowerCase()));
@@ -208,6 +234,20 @@ async function checkCompanyCategoryQAsWithTrace(transcript, company, keywords, t
       totalAvailable: keywords.length,
       confidence: bestScore,
       reason: bestMatch ? `Matched: "${bestMatch.substring(0, 50)}..."` : 'No matches above threshold'
+    });
+    
+    // CRITICAL FIX: Never return null answer for 100% match
+    if (bestScore >= 0.9 && !bestMatch) {
+      console.error(`[checkCustomKB] CRITICAL ERROR: 100% match but no answer! Setting fallback.`);
+      bestMatch = "I found information about your question but the answer wasn't properly configured. Please contact support.";
+    }
+    
+    // DEBUG: Final return values
+    console.log(`[checkCustomKB] FINAL RETURN VALUES:`, {
+      matched: !!bestMatch,
+      answer: bestMatch,
+      answerLength: bestMatch?.length || 0,
+      confidence: bestScore
     });
     
     return { 
@@ -307,6 +347,8 @@ function parseCategoryQAs(text = '') {
   const pairs = [];
   const blocks = text.split('\n\n').filter(b => b.trim() !== '');
   
+  console.log(`[parseCategoryQAs] Parsing ${blocks.length} blocks from text:`, text.substring(0, 200));
+  
   for (const block of blocks) {
     const lines = block
       .split('\n')
@@ -315,14 +357,43 @@ function parseCategoryQAs(text = '') {
       
     if (lines.length >= 2) {
       const q = lines[0].replace(/^(Q:|Question:)\s*/i, '');
-      const a = lines
-        .slice(1)
-        .join(' ')
-        .replace(/^(A:|Answer:)\s*/i, '');
-      pairs.push({ question: q, answer: a });
+      
+      // Find the actual answer line (starts with A: or Answer:)
+      let answerStartIndex = -1;
+      for (let i = 1; i < lines.length; i++) {
+        if (lines[i].match(/^(A:|Answer:)\s*/i)) {
+          answerStartIndex = i;
+          break;
+        }
+      }
+      
+      let a = '';
+      if (answerStartIndex >= 0) {
+        // Join lines from answer start to end
+        a = lines
+          .slice(answerStartIndex)
+          .join(' ')
+          .replace(/^(A:|Answer:)\s*/i, '');
+      } else {
+        // Fallback: treat everything except first line as answer
+        a = lines
+          .slice(1)
+          .join(' ')
+          .replace(/^(A:|Answer:)\s*/i, '');
+      }
+      
+      console.log(`[parseCategoryQAs] Parsed Q&A:`, { question: q, answer: a, answerLength: a.length });
+      
+      // Only add if both question and answer exist
+      if (q.trim() && a.trim()) {
+        pairs.push({ question: q, answer: a });
+      } else {
+        console.warn(`[parseCategoryQAs] Skipping incomplete Q&A: Q="${q}" A="${a}"`);
+      }
     }
   }
   
+  console.log(`[parseCategoryQAs] Total parsed pairs: ${pairs.length}`);
   return pairs;
 }
 

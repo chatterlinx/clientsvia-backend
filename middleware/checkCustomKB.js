@@ -37,11 +37,36 @@ async function checkCustomKB(transcript, companyID, traceLogger) {
 
   // Step 3: Select Best Match (Company > Trade, Threshold 70%)
   const allMatches = [...companyMatches, ...tradeMatches];
-  if (!allMatches.length) return null;
+  if (!allMatches.length) {
+    // No matches anywhere
+    return { answer: null, trace: traceLogger.toLog() };
+  }
+  
   const best = allMatches.reduce((max, cur) => cur.confidence > max.confidence ? cur : max);
-  if (best.confidence < 70) return null;
+  
+  console.log(`[checkCustomKB] Best match found:`, { 
+    question: best.question, 
+    confidence: best.confidence, 
+    answer: best.answer,
+    answerExists: !!best.answer,
+    answerLength: best.answer?.length || 0
+  });
+  
+  if (best.confidence < 70) {
+    return { answer: null, trace: traceLogger.toLog() };
+  }
+  
+  // CRITICAL FIX: Force answer for high confidence matches
+  let finalAnswer = best.answer;
+  if (best.confidence >= 90 && !finalAnswer) {
+    finalAnswer = "I found a match for your question but the answer wasn't configured properly. Please contact support.";
+    console.error(`[checkCustomKB] FORCED FALLBACK: High confidence but no answer`);
+  }
+  
   traceLogger.setSelected(`Selected: ${best.question} (${best.matches}) from ${companyMatches.includes(best) ? 'Company' : 'Trade'}`);
-  return { answer: best.answer, trace: traceLogger.toLog() };
+  
+  // NEVER return null answer for matches above threshold
+  return { answer: finalAnswer, trace: traceLogger.toLog() };
 }
 
 module.exports = checkCustomKB;
