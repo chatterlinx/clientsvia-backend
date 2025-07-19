@@ -25,6 +25,7 @@ const enhancedAIAgentRoutes = require('./routes/enhancedAIAgent');
 const aiAgentHandlerRoutes = require('./routes/aiAgentHandler');
 const monitoringRoutes = require('./routes/monitoring');
 const ollamaRoutes = require('./routes/ollama');
+const llmRoutes = require('./routes/llm');
 
 const app = express();
 
@@ -71,8 +72,10 @@ app.use('/api/enhanced-ai-agent', enhancedAIAgentRoutes);
 app.use('/api/ai-agent', aiAgentHandlerRoutes);
 app.use('/api/monitoring', monitoringRoutes);
 app.use('/api/ollama', ollamaRoutes);
+app.use('/api/llm', llmRoutes);
 console.log('✅ Monitoring routes registered at /api/monitoring');
 console.log('✅ Ollama routes registered at /api/ollama');
+console.log('✅ LLM routes registered at /api/llm');
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 

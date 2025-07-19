@@ -57,10 +57,21 @@ function loadCompanyQAs(company) {
 
 
 // The explicit initialization using your Render Environment Variables
-const vertex_ai = new VertexAI({
-    project: process.env.GCLOUD_PROJECT_ID, 
-    location: process.env.GCLOUD_LOCATION 
-});
+// Initialize VertexAI only when needed and with proper error handling
+let vertex_ai;
+function getVertexAI() {
+  if (!vertex_ai) {
+    const projectId = process.env.GCLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    if (!projectId) {
+      throw new Error('Google Cloud Project ID not configured. Set GCLOUD_PROJECT_ID or GOOGLE_CLOUD_PROJECT environment variable.');
+    }
+    vertex_ai = new VertexAI({
+        project: projectId, 
+        location: process.env.GCLOUD_LOCATION || 'us-central1'
+    });
+  }
+  return vertex_ai;
+}
 
 // Gemini Flash model
 const MODEL_ID = process.env.MODEL_ID || 'gemini-1.5-flash-002'; // Use env or default to stable version
@@ -69,105 +80,77 @@ const MODEL_NAME = MODEL_ID;
 // Default model used when a configured one fails with a not found error
 const FALLBACK_MODEL = MODEL_NAME;
 
-// PRODUCTION READY: OLLAMA PRIMARY + GEMINI BACKUP
+// Call the model - ENHANCED WITH LOCAL LLM FALLBACK
 async function callModel(company, prompt) {
-  const ollamaService = require('./ollamaService');
+  const { localLLMWithContext, testOllamaConnection } = require('../utils/localLLM');
+  const ResponseTraceLogger = require('../utils/responseTraceLogger');
   
-  // STEP 1: OLLAMA PRIMARY (Privacy-First Local LLM)
-  console.log(`[LLM Chain] 🧠 Starting Ollama Primary → Gemini Backup chain...`);
-  
-  const ollamaEnabled = company?.aiSettings?.ollamaFallbackEnabled !== false; // Default enabled
-  if (ollamaEnabled) {
-    try {
-      console.log(`[Ollama Primary] � Attempting local LLM first (privacy-first)...`);
+  // First, try local LLM if available (privacy-first approach)
+  try {
+    console.log(`[LocalLLM] 🧠 Attempting offline LLM first (privacy-first)...`);
+    
+    const isOllamaAvailable = await testOllamaConnection();
+    if (isOllamaAvailable) {
+      console.log(`[LocalLLM] ✅ Ollama is available, using offline LLM`);
       
-      const isOllamaHealthy = await ollamaService.checkHealth();
-      if (isOllamaHealthy) {
-        console.log(`[Ollama Primary] ✅ Service available, generating response...`);
-        
-        const context = {
-          companyName: company?.companyName || 'Service Company',
-          tradeCategory: getTradeCategory(company),
-          personality: company?.aiSettings?.personality || 'professional and helpful',
-          conversationHistory: [], // Can be enhanced to pass actual history
-          customInstructions: `You are responding for ${company?.companyName || 'the company'}. Keep responses concise (1-2 sentences).`
-        };
-        
-        const ollamaResult = await ollamaService.generateAgentResponse(prompt, context);
-        
-        if (ollamaResult.success && ollamaResult.text) {
-          console.log(`[Ollama Primary] ✅ Generated response (${ollamaResult.responseTime}ms): "${ollamaResult.text.substring(0, 100)}..."`);
-          return {
-            text: ollamaResult.text,
-            source: 'ollama',
-            model: ollamaResult.model || 'llama3.2:3b',
-            responseTime: ollamaResult.responseTime
-          };
-        } else {
-          console.log(`[Ollama Primary] ❌ Failed: ${ollamaResult.error}`);
-        }
-      } else {
-        console.log(`[Ollama Primary] ❌ Service not available`);
-      }
-    } catch (ollamaError) {
-      console.error(`[Ollama Primary] ❌ Exception:`, ollamaError.message);
+      const startTime = Date.now();
+      const response = await localLLMWithContext(
+        prompt, 
+        company?.companyName || 'Service Company',
+        'hvac-residential'
+      );
+      const processingTime = Date.now() - startTime;
+      
+      console.log(`[LocalLLM] ✅ Local LLM response received (${processingTime}ms): "${response.substring(0, 100)}..."`);
+      
+      return response;
+    } else {
+      console.log(`[LocalLLM] ❌ Ollama not available, falling back to cloud API`);
     }
-  } else {
-    console.log(`[Ollama Primary] ⚠️ Disabled for this company`);
+  } catch (localError) {
+    console.error(`[LocalLLM] ❌ Local LLM failed, falling back to cloud API:`, localError.message);
   }
 
-  // STEP 2: GEMINI BACKUP (Cloud API Fallback)
-  console.log(`[Gemini Backup] 🌐 Ollama failed, using Gemini backup...`);
+  // Fallback to Google Vertex AI (original cloud API)
+  console.log(`[CloudAPI] 🌐 Using cloud API fallback...`);
   
   const auth = new google.auth.GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/cloud-platform']
   });
   const authClient = await auth.getClient();
   const projectId = process.env.GCLOUD_PROJECT_ID || await auth.getProjectId();
-  const aiplatform = google.aiplatform({ version: 'v1beta1', auth: authClient });
-
-  const invoke = async (modelName) => {
-    const model = `projects/${projectId}/locations/us-central1/publishers/google/models/${modelName}`;
-    try {
-      const geminiStartTime = Date.now();
-      console.log(`[Gemini Backup] Sending prompt to ${modelName}:`, prompt.substring(0, 200) + '...');
-      const res = await aiplatform.projects.locations.publishers.models.generateContent({
-        model,
-        requestBody: {
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.3,
-            topK: 5,
-            topP: 0.6,
-            maxOutputTokens: 75,
+  const aiplatform = google.aiplatform({ version: 'v1beta1', auth: authClient });    const invoke = async (modelName) => {
+      const model = `projects/${projectId}/locations/us-central1/publishers/google/models/${modelName}`;
+      try {
+        const vertexStartTime = Date.now();
+        console.log(`[TIMING] VertexAI API call started at: ${vertexStartTime}`);
+        console.log(`[VertexAI] Sending prompt to ${modelName}:`, prompt.substring(0, 200) + '...');
+        const res = await aiplatform.projects.locations.publishers.models.generateContent({
+          model,
+          requestBody: {
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.3, // Further reduced for more consistent, concise responses
+              topK: 5, // Reduced for faster, more focused responses
+              topP: 0.6, // Reduced for more deterministic, shorter responses
+              maxOutputTokens: 75, // Significantly reduced for ultra-concise responses
+            }
           }
-        }
-      });
-      const geminiEndTime = Date.now();
-      const responseTime = geminiEndTime - geminiStartTime;
-      console.log(`[Gemini Backup] Completed (${responseTime}ms)`);
-      const responseText = res.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      console.log(`[Gemini Backup] Response: ${responseText}`);
-    
+        });
+        const vertexEndTime = Date.now();
+        console.log(`[TIMING] VertexAI API call completed at: ${vertexEndTime}, took: ${vertexEndTime - vertexStartTime}ms`);
+        const responseText = res.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        console.log(`[VertexAI] Received response from ${modelName}:`, responseText);
+      
+      // Check for potential issues with the response
       if (!responseText || responseText.trim() === '') {
-        console.log(`[Gemini Backup] WARNING: Empty response from ${modelName}`);
-        const fallbackText = 'I apologize, but I\'m having trouble processing your request right now. Let me connect you with a team member who can help.';
-        return {
-          text: fallbackText,
-          source: 'gemini',
-          model: modelName,
-          responseTime: responseTime
-        };
+        console.log(`[VertexAI] WARNING: Empty response from ${modelName}`);
+        return 'I apologize, but I\'m having trouble processing your request right now. Let me connect you with a team member who can help.';
       }
       
-      return {
-        text: responseText,
-        source: 'gemini',
-        model: modelName,
-        responseTime: responseTime
-      };
+      return responseText;
     } catch (err) {
-      console.error(`[Gemini Backup] Error invoking model ${modelName}:`, err.response?.data || err.message);
+      console.error(`[VertexAI] Error invoking model ${modelName}:`, err.response?.data || err.message, err.stack);
       throw err;
     }
   };
@@ -180,7 +163,7 @@ async function callModel(company, prompt) {
     const status = err?.response?.status;
     const msg = err?.message || '';
     if (status === 404 || msg.includes('not found')) {
-      console.warn(`[Gemini Backup] Model not found: ${initialModel}, falling back to ${FALLBACK_MODEL}`);
+      console.warn(`[VertexAI] Model not found: ${initialModel}, falling back to ${FALLBACK_MODEL}`);
       // Self-healing: Update the database with the fallback model
       if (company && company._id) {
         const db = getDB();
@@ -188,28 +171,15 @@ async function callModel(company, prompt) {
           { _id: company._id },
           { $set: { 'aiSettings.model': FALLBACK_MODEL } }
         ).then(() => {
-          console.log(`[Gemini Backup] Updated company ${company._id} to use model ${FALLBACK_MODEL}`);
+          console.log(`[VertexAI] Updated company ${company._id} to use model ${FALLBACK_MODEL}`);
         }).catch(err => {
-          console.error(`[Gemini Backup] Error updating company ${company._id}:`, err);
+          console.error(`[VertexAI] Error updating company ${company._id}:`, err);
         });
       }
       return await invoke(FALLBACK_MODEL);
     }
     throw err;
   }
-}
-
-// Helper function to extract trade category
-function getTradeCategory(company) {
-  if (!company) return 'general service';
-  if (company.tradeCategory) return company.tradeCategory;
-  if (company.trade) return company.trade;
-  if (company.industry) return company.industry;
-  if (company.businessType) return company.businessType;
-  if (company.tradeTypes && company.tradeTypes.length > 0) {
-    return company.tradeTypes[0];
-  }
-  return 'general service';
 }
 
 const { ObjectId } = require('mongodb');
@@ -730,29 +700,13 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return response;
   })();
 
-  // Extract response text and metadata
-  let responseText, llmSource, llmModel, llmResponseTime;
-  if (typeof aiResponse === 'string') {
-    // Backwards compatibility for old response format
-    responseText = aiResponse;
-    llmSource = 'unknown';
-    llmModel = 'unknown';
-    llmResponseTime = 0;
-  } else {
-    // New response format with metadata
-    responseText = aiResponse.text;
-    llmSource = aiResponse.source;
-    llmModel = aiResponse.model;
-    llmResponseTime = aiResponse.responseTime;
-  }
-
-  console.log(`[LLM] Received response from ${llmSource} (${llmModel}):`, responseText);
+  console.log(`[LLM] Received response:`, aiResponse);
 
   // Post-process AI response to ensure it's ultra-concise
-  let finalResponse = responseText;
-  if (responseText && responseText.length > 150) {
-    console.log(`[LLM] Response too long (${responseText.length} chars), making it concise...`);
-    finalResponse = extractConciseAnswer(responseText);
+  let finalResponse = aiResponse;
+  if (aiResponse && aiResponse.length > 150) {
+    console.log(`[LLM] Response too long (${aiResponse.length} chars), making it concise...`);
+    finalResponse = extractConciseAnswer(aiResponse);
     if (finalResponse.length > 100) {
       // Even more aggressive shortening if still too long
       const sentences = finalResponse.split(/[.!?]+/).filter(s => s.trim().length > 5);
@@ -771,17 +725,14 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: message, escalate: true };
   }
 
-  // Track agent performance metrics for LLM fallback with enhanced details
-  responseMethod = llmSource === 'ollama' ? 'ollama-primary' : 'gemini-backup';
-  confidence = llmSource === 'ollama' ? 0.7 : 0.5; // Ollama gets higher confidence due to being local/faster
+  // Track agent performance metrics for LLM fallback
+  responseMethod = 'llm-fallback';
+  confidence = 0.5; // LLM fallback has moderate confidence
   debugInfo = { 
-    section: 'llm-chain', 
-    llmSource: llmSource,
-    llmModel: llmModel,
-    llmResponseTime: llmResponseTime,
-    originalLength: responseText?.length || 0,
+    section: 'llm-fallback', 
+    originalLength: aiResponse?.length || 0,
     finalLength: finalResponse?.length || 0,
-    wasShortened: responseText !== finalResponse
+    wasShortened: aiResponse !== finalResponse
   };
   
   if (finalResponse) {
