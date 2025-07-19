@@ -28,43 +28,63 @@ class SuperIntelligentAgentEngine {
             // Step 1: Semantic search in knowledge base and trade category
             const knowledgeResults = await this.semanticSearch(query, companyId);
             
-            // Step 2: Check for best match (>= threshold)
+            // Step 2: Check for high confidence match (>= threshold)
             if (knowledgeResults.confidence >= this.contextThreshold && knowledgeResults.content) {
                 return {
                     response: this.generateNaturalResponse(query, knowledgeResults.content),
                     confidence: knowledgeResults.confidence,
-                    source: 'knowledge_base',
-                    shouldEscalate: false
+                    source: knowledgeResults.source === 'company' ? 'knowledge_base' : 'trade_category',
+                    shouldEscalate: false,
+                    processingSteps: [{
+                        step: 'High Confidence Match',
+                        details: `Found ${knowledgeResults.source} Q&A with ${(knowledgeResults.confidence * 100).toFixed(1)}% confidence`,
+                        timestamp: new Date()
+                    }]
                 };
             }
             
-            // Step 3: Check for partial match (e.g., 50%)
-            if (knowledgeResults.partialConfidence > 0.5 && knowledgeResults.partialContent) {
+            // Step 3: Check for partial match (>= 50% but < threshold)
+            if (knowledgeResults.partialConfidence >= 0.5 && knowledgeResults.partialContent) {
                 return {
-                    response: `Partial match found: ${knowledgeResults.partialContent.answer}`,
+                    response: this.generateNaturalResponse(query, knowledgeResults.partialContent),
                     confidence: knowledgeResults.partialConfidence,
                     source: 'partial_match',
-                    shouldEscalate: false
+                    shouldEscalate: false,
+                    processingSteps: [{
+                        step: 'Partial Match',
+                        details: `Found partial match with ${(knowledgeResults.partialConfidence * 100).toFixed(1)}% confidence`,
+                        timestamp: new Date()
+                    }]
                 };
             }
             
-            // Step 4: Fallback to best available match in trade category
-            if (knowledgeResults.content) {
+            // Step 4: Fallback to best available match if confidence > 0.3
+            if (knowledgeResults.content && knowledgeResults.confidence > 0.3) {
                 return {
                     response: this.generateNaturalResponse(query, knowledgeResults.content),
                     confidence: knowledgeResults.confidence,
-                    source: 'trade_category',
-                    shouldEscalate: false
+                    source: knowledgeResults.source === 'company' ? 'knowledge_base' : 'trade_category',
+                    shouldEscalate: false,
+                    processingSteps: [{
+                        step: 'Low Confidence Match',
+                        details: `Using best available ${knowledgeResults.source} match with ${(knowledgeResults.confidence * 100).toFixed(1)}% confidence`,
+                        timestamp: new Date()
+                    }]
                 };
             }
             
-            // Step 5: No match found
+            // Step 5: No useful match found
             return {
                 response: "Let me connect you with a specialist who can better assist you with that specific question.",
                 confidence: 0,
                 source: 'escalation',
                 shouldEscalate: true,
-                escalationReason: 'no_match_found'
+                escalationReason: 'no_match_found',
+                processingSteps: [{
+                    step: 'No Match Found',
+                    details: `No suitable match found (best: ${(knowledgeResults.confidence * 100).toFixed(1)}%)`,
+                    timestamp: new Date()
+                }]
             };
         } catch (error) {
             console.error('Query handling failed:', error);
@@ -73,7 +93,12 @@ class SuperIntelligentAgentEngine {
                 confidence: 0,
                 source: 'error',
                 shouldEscalate: true,
-                escalationReason: 'technical_error'
+                escalationReason: 'technical_error',
+                processingSteps: [{
+                    step: 'Error',
+                    details: `Processing error: ${error.message}`,
+                    timestamp: new Date()
+                }]
             };
         }
     }
@@ -90,43 +115,50 @@ class SuperIntelligentAgentEngine {
             let allMatches = [];
             let bestMatch = null;
             let bestScore = 0;
+            let bestSource = null;
             let partialMatch = null;
             let partialScore = 0;
 
             // Generate embeddings for query
             const queryEmbedding = await this.generateEmbedding(query);
 
-            // Search company QAs
+            // Search company QAs first
             for (const qa of knowledgeBase) {
                 const qaEmbedding = await this.generateEmbedding(qa.question);
                 const similarity = this.cosineSimilarity(queryEmbedding, qaEmbedding);
                 if (similarity > bestScore) {
                     bestScore = similarity;
                     bestMatch = qa;
+                    bestSource = 'company';
                 }
                 if (similarity > 0.5 && similarity < this.contextThreshold) {
                     partialScore = similarity;
                     partialMatch = qa;
                 }
-                allMatches.push({qa, similarity});
+                allMatches.push({qa, similarity, source: 'company'});
             }
 
-            // If no company QA found, search trade category QAs
-            if (!bestMatch && tradeCategoryBase.length > 0) {
-                for (const qa of tradeCategoryBase) {
-                    const qaEmbedding = await this.generateEmbedding(qa.question);
-                    const similarity = this.cosineSimilarity(queryEmbedding, qaEmbedding);
-                    if (similarity > bestScore) {
-                        bestScore = similarity;
-                        bestMatch = qa;
-                    }
-                    if (similarity > 0.5 && similarity < this.contextThreshold) {
+            // ALWAYS search trade category QAs - don't skip based on company results
+            for (const qa of tradeCategoryBase) {
+                const qaEmbedding = await this.generateEmbedding(qa.question);
+                const similarity = this.cosineSimilarity(queryEmbedding, qaEmbedding);
+                if (similarity > bestScore) {
+                    bestScore = similarity;
+                    bestMatch = qa;
+                    bestSource = 'trade';
+                }
+                if (similarity > 0.5 && similarity < this.contextThreshold) {
+                    // Only update partial if this trade match is better than existing partial
+                    if (similarity > partialScore) {
                         partialScore = similarity;
                         partialMatch = qa;
                     }
-                    allMatches.push({qa, similarity});
                 }
+                allMatches.push({qa, similarity, source: 'trade'});
             }
+
+            // Sort all matches by similarity for debugging
+            allMatches.sort((a, b) => b.similarity - a.similarity);
 
             // Return best match, partial match, and all matches for trace
             return {
@@ -134,6 +166,7 @@ class SuperIntelligentAgentEngine {
                 content: bestMatch,
                 matchedQuery: bestMatch?.question,
                 answer: bestMatch?.answer,
+                source: bestSource,
                 partialConfidence: partialScore,
                 partialContent: partialMatch,
                 allMatches
