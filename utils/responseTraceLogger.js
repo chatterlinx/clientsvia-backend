@@ -5,6 +5,9 @@ class ResponseTraceLogger {
   constructor() {
     this.traceSteps = [];
     this.selectedSource = null;
+    this.selectedConfidence = 0;
+    this.selectionReason = '';
+    this.selectedData = null;
     this.startTime = Date.now();
     this.userQuery = '';
     this.extractedKeywords = [];
@@ -19,6 +22,9 @@ class ResponseTraceLogger {
     this.startTime = Date.now();
     this.traceSteps = [];
     this.selectedSource = null;
+    this.selectedConfidence = 0;
+    this.selectionReason = '';
+    this.selectedData = null;
     
     console.log(`[TRACE] 🔍 Starting AI decision trace for: "${userQuery}"`);
     console.log(`[TRACE] 📋 Extracted keywords: [${extractedKeywords.join(', ')}]`);
@@ -53,18 +59,23 @@ class ResponseTraceLogger {
   }
 
   /**
-   * Set the selected source and reason
+   * Set the selected source and reason - ENHANCED WITH DEBUG LOGGING
    */
   setSelectedSource(sourceName, reason, confidence, matchedData = null) {
-    this.selectedSource = {
-      source: sourceName,
-      reason: reason,
-      confidence: confidence,
-      matchedData: matchedData,
-      selectedAt: Date.now()
-    };
+    this.selectedSource = sourceName;
+    this.selectedConfidence = confidence;
+    this.selectionReason = reason;
+    this.selectedData = matchedData;
     
-    console.log(`[TRACE] ✅ Selected: ${sourceName} (${reason}) - Confidence: ${confidence}`);
+    console.log(`[TRACE] ✅ HARD FIX - Selected: ${sourceName} (${reason}) - Confidence: ${confidence}`);
+    console.log(`[TRACE] ✅ HARD FIX - Selected Data:`, {
+      hasData: !!matchedData,
+      dataKeys: matchedData ? Object.keys(matchedData) : [],
+      question: matchedData?.question || 'N/A',
+      answer: matchedData?.answer || 'N/A',
+      answerLength: matchedData?.answer?.length || 0
+    });
+    console.log(`[TRACE] ✅ HARD FIX - Full Selected Data Object:`, matchedData);
   }
 
   /**
@@ -84,7 +95,7 @@ class ResponseTraceLogger {
   }
 
   /**
-   * Get complete trace log for debugging/display
+   * Get complete trace log for debugging/display - FIXED TO USE ACTUAL STORED DATA
    */
   getTraceLog() {
     const totalTime = Date.now() - this.startTime;
@@ -94,16 +105,16 @@ class ResponseTraceLogger {
       keywords: this.extractedKeywords,
       totalTime: totalTime,
       steps: this.traceSteps,
-      selectedSource: this.selectedSource?.source || 'None',
-      selectionReason: this.selectedSource?.reason || 'No matches found in any source',
-      selectedConfidence: this.selectedSource?.confidence || 0,
-      selectedData: this.selectedSource?.matchedData || null,
+      selectedSource: this.selectedSource || 'None',
+      selectionReason: this.selectionReason || 'No matches found in any source',
+      selectedConfidence: this.selectedConfidence || 0,
+      selectedData: this.selectedData || null,
       summary: this.generateTraceSummary()
     };
   }
 
   /**
-   * Generate a formatted trace summary for display
+   * Generate a formatted trace summary for display - FIXED TO USE ACTUAL DATA
    */
   generateTraceSummary() {
     const lines = [];
@@ -113,14 +124,14 @@ class ResponseTraceLogger {
     lines.push('');
     
     this.traceSteps.forEach(step => {
-      const icon = step.source === this.selectedSource?.source ? '✅' : '🔹';
-      const selected = step.source === this.selectedSource?.source ? ' ✅ SELECTED' : '';
+      const icon = step.source === this.selectedSource ? '✅' : '🔹';
+      const selected = step.source === this.selectedSource ? ' ✅ SELECTED' : '';
       lines.push(`${icon} ${step.stepNumber}. ${step.source} → ${step.matchSummary}${selected}`);
     });
     
     lines.push('');
-    lines.push(`🎯 Final Source: ${this.selectedSource?.source || 'None'}`);
-    lines.push(`📊 Confidence: ${this.selectedSource?.confidence || 0}`);
+    lines.push(`🎯 Final Source: ${this.selectedSource || 'None'}`);
+    lines.push(`📊 Confidence: ${this.selectedConfidence || 0}`);
     
     return lines.join('\n');
   }
