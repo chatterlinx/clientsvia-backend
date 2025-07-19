@@ -25,11 +25,11 @@ class SuperIntelligentAgentEngine {
      */
     async handleQuery(query, companyId, callerId = null) {
         try {
-            // Step 1: Semantic search in knowledge base
+            // Step 1: Semantic search in knowledge base and trade category
             const knowledgeResults = await this.semanticSearch(query, companyId);
             
-            // Step 2: Check confidence threshold
-            if (knowledgeResults.confidence >= this.contextThreshold) {
+            // Step 2: Check for best match (>= threshold)
+            if (knowledgeResults.confidence >= this.contextThreshold && knowledgeResults.content) {
                 return {
                     response: this.generateNaturalResponse(query, knowledgeResults.content),
                     confidence: knowledgeResults.confidence,
@@ -38,15 +38,34 @@ class SuperIntelligentAgentEngine {
                 };
             }
             
-            // Step 3: Low confidence - prepare for escalation
+            // Step 3: Check for partial match (e.g., 50%)
+            if (knowledgeResults.partialConfidence > 0.5 && knowledgeResults.partialContent) {
+                return {
+                    response: `Partial match found: ${knowledgeResults.partialContent.answer}`,
+                    confidence: knowledgeResults.partialConfidence,
+                    source: 'partial_match',
+                    shouldEscalate: false
+                };
+            }
+            
+            // Step 4: Fallback to best available match in trade category
+            if (knowledgeResults.content) {
+                return {
+                    response: this.generateNaturalResponse(query, knowledgeResults.content),
+                    confidence: knowledgeResults.confidence,
+                    source: 'trade_category',
+                    shouldEscalate: false
+                };
+            }
+            
+            // Step 5: No match found
             return {
                 response: "Let me connect you with a specialist who can better assist you with that specific question.",
-                confidence: knowledgeResults.confidence,
+                confidence: 0,
                 source: 'escalation',
                 shouldEscalate: true,
-                escalationReason: 'low_confidence_knowledge'
+                escalationReason: 'no_match_found'
             };
-            
         } catch (error) {
             console.error('Query handling failed:', error);
             return {
@@ -67,35 +86,58 @@ class SuperIntelligentAgentEngine {
             // Get company knowledge base
             const company = await Company.findById(companyId);
             const knowledgeBase = company.customQAs || [];
-            
-            if (knowledgeBase.length === 0) {
-                return { confidence: 0.0, content: null };
-            }
+            const tradeCategoryBase = company.tradeCategoryQAs || [];
+            let allMatches = [];
+            let bestMatch = null;
+            let bestScore = 0;
+            let partialMatch = null;
+            let partialScore = 0;
 
             // Generate embeddings for query
             const queryEmbedding = await this.generateEmbedding(query);
-            
-            // Find best matches (simplified - use proper vector similarity in production)
-            let bestMatch = null;
-            let bestScore = 0;
-            
+
+            // Search company QAs
             for (const qa of knowledgeBase) {
                 const qaEmbedding = await this.generateEmbedding(qa.question);
                 const similarity = this.cosineSimilarity(queryEmbedding, qaEmbedding);
-                
                 if (similarity > bestScore) {
                     bestScore = similarity;
                     bestMatch = qa;
                 }
+                if (similarity > 0.5 && similarity < this.contextThreshold) {
+                    partialScore = similarity;
+                    partialMatch = qa;
+                }
+                allMatches.push({qa, similarity});
             }
-            
+
+            // If no company QA found, search trade category QAs
+            if (!bestMatch && tradeCategoryBase.length > 0) {
+                for (const qa of tradeCategoryBase) {
+                    const qaEmbedding = await this.generateEmbedding(qa.question);
+                    const similarity = this.cosineSimilarity(queryEmbedding, qaEmbedding);
+                    if (similarity > bestScore) {
+                        bestScore = similarity;
+                        bestMatch = qa;
+                    }
+                    if (similarity > 0.5 && similarity < this.contextThreshold) {
+                        partialScore = similarity;
+                        partialMatch = qa;
+                    }
+                    allMatches.push({qa, similarity});
+                }
+            }
+
+            // Return best match, partial match, and all matches for trace
             return {
                 confidence: bestScore,
                 content: bestMatch,
                 matchedQuery: bestMatch?.question,
-                answer: bestMatch?.answer
+                answer: bestMatch?.answer,
+                partialConfidence: partialScore,
+                partialContent: partialMatch,
+                allMatches
             };
-            
         } catch (error) {
             console.error('Semantic search failed:', error);
             return { confidence: 0.0, content: null };
