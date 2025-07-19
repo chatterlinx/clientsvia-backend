@@ -18,7 +18,7 @@ const serviceIssueHandler = new ServiceIssueHandler();
 const aiIntelligenceEngine = require('./aiIntelligenceEngine');
 
 // Import the custom KB checker
-const { checkCustomKB } = require('../utils/checkCustomKB');
+const checkCustomKB = require('../middleware/checkCustomKB');
 
 // In-memory cache for parsed Category Q&A by company ID
 const categoryQACache = new Map();
@@ -212,34 +212,26 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
 
   // NEW STEP 1.5: CHECK CUSTOM KNOWLEDGE BASE FOR TRADE CATEGORY Q&AS
   console.log(`[Custom KB] Checking trade category knowledge base for: "${question}"`);
-  
-  const tradeCategoryID = categories.length > 0 ? categories[0].toLowerCase().replace(/\s+/g, '-') : 'hvac-residential';
-  const customKBResult = await checkCustomKB(question, companyId, tradeCategoryID);
-  
-  // Handle both old format (string) and new format (object with result and trace)
-  const customKBResponse = typeof customKBResult === 'string' ? customKBResult : customKBResult?.result;
-  
-  if (customKBResponse) {
-    const displayText = typeof customKBResponse === 'string' ? customKBResponse : String(customKBResponse || '');
-    console.log(`[Custom KB] Found trade category match: "${displayText.substring(0, 100)}..."`);
+
+  const TraceLogger = require('../utils/traceLogger');
+  const traceLogger = new TraceLogger();
+  const customKBResult = await checkCustomKB(question, companyId, traceLogger);
+
+  if (customKBResult) {
+    console.log(`[Custom KB] Found match: "${customKBResult.answer.substring(0, 100)}..."`);
     responseMethod = 'custom-trade-kb';
     confidence = 0.9;
-    debugInfo = { 
-      section: 'custom-kb', 
+    debugInfo = {
+      section: 'custom-kb',
       source: 'trade-category-qa',
-      category: tradeCategoryID,
-      trace: customKBResult?.trace ? 'Available' : 'Not available'
+      trace: customKBResult.trace
     };
-    
-    // Track performance
-    await trackPerformance(companyId, originalCallSid, question, customKBResponse, responseMethod, confidence, debugInfo, startTime);
-    
-    return { 
-      text: customKBResponse, 
+    await trackPerformance(companyId, originalCallSid, question, customKBResult.answer, responseMethod, confidence, debugInfo, startTime);
+    return {
+      text: customKBResult.answer,
       escalate: false,
       responseMethod: responseMethod,
-      confidence: confidence,
-      debugInfo: debugInfo
+      trace: customKBResult.trace
     };
   }
 
@@ -1432,7 +1424,7 @@ function extractKeyTopicsFromRambling(question, conversationHistory = []) {
   // Extract specific equipment mentions
   const equipmentPatterns = [
     /\b(my|the|our)\s+(thermostat|furnace|ac|air\s+conditioning|water\s+heater|dishwasher)\b/g,
-    /\b(upstairs|downstairs|basement|main\s+floor)\s+(thermostat|unit|system)\b/g,
+    /\b(upstairs|downstairs|basement|main\s+floor)\s+(thermostat|stat|unit)\b/g,
     /\b(kitchen|bathroom|bedroom|living\s+room)\s+(sink|faucet|toilet|outlet)\b/g
   ];
   

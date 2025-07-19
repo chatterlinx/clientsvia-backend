@@ -1,3 +1,5 @@
+// Deprecated: Use /middleware/checkCustomKB.js instead
+
 // utils/checkCustomKB.js
 // Production-grade Custom Knowledge Base checker for Trade Categories
 // Now with transparent AI Response Trace Logging
