@@ -205,6 +205,39 @@ class ResponseTraceLogger {
       details
     };
   }
+
+  /**
+   * Log Local LLM usage for trace logging
+   */
+  logLocalLLMCheck(prompt, response, model = 'llama3.1:8b-instruct-q4_0', processingTime = 0) {
+    const step = {
+      stepNumber: this.traceSteps.length + 1,
+      source: 'Offline Local LLM',
+      timestamp: Date.now(),
+      details: {
+        model: model,
+        promptLength: prompt.length,
+        responseLength: response?.length || 0,
+        processingTime: processingTime
+      },
+      matchResult: {
+        matched: !!response,
+        matchedKeywords: this.extractedKeywords,
+        totalMatches: this.extractedKeywords.length,
+        totalAvailable: this.extractedKeywords.length,
+        confidence: response ? 0.8 : 0, // 80% confidence for LLM responses
+        reason: response ? `Offline LLM generated response using ${model}` : 'LLM generation failed'
+      }
+    };
+
+    this.traceSteps.push(step);
+    
+    const statusIcon = step.matchResult.matched ? '🧠' : '❌';
+    const summary = response ? `Generated ${response.length} chars via ${model}` : 'Generation failed';
+    console.log(`[TRACE] ${statusIcon} ${step.stepNumber}. Offline Local LLM → ${summary}`);
+    
+    return step;
+  }
 }
 
 module.exports = ResponseTraceLogger;

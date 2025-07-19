@@ -19,6 +19,7 @@ const aiIntelligenceEngine = require('./aiIntelligenceEngine');
 
 // Import the custom KB checker
 const checkCustomKB = require('../middleware/checkCustomKB');
+const { checkKBWithFallback } = require('../middleware/checkKBWithOllama');
 
 // In-memory cache for parsed Category Q&A by company ID
 const categoryQACache = new Map();
@@ -68,8 +69,40 @@ const MODEL_NAME = MODEL_ID;
 // Default model used when a configured one fails with a not found error
 const FALLBACK_MODEL = MODEL_NAME;
 
-// Call the Gemini model via Vertex AI
+// Call the model - ENHANCED WITH LOCAL LLM FALLBACK
 async function callModel(company, prompt) {
+  const { localLLMWithContext, testOllamaConnection } = require('../utils/localLLM');
+  const ResponseTraceLogger = require('../utils/responseTraceLogger');
+  
+  // First, try local LLM if available (privacy-first approach)
+  try {
+    console.log(`[LocalLLM] 🧠 Attempting offline LLM first (privacy-first)...`);
+    
+    const isOllamaAvailable = await testOllamaConnection();
+    if (isOllamaAvailable) {
+      console.log(`[LocalLLM] ✅ Ollama is available, using offline LLM`);
+      
+      const startTime = Date.now();
+      const response = await localLLMWithContext(
+        prompt, 
+        company?.companyName || 'Service Company',
+        'hvac-residential'
+      );
+      const processingTime = Date.now() - startTime;
+      
+      console.log(`[LocalLLM] ✅ Local LLM response received (${processingTime}ms): "${response.substring(0, 100)}..."`);
+      
+      return response;
+    } else {
+      console.log(`[LocalLLM] ❌ Ollama not available, falling back to cloud API`);
+    }
+  } catch (localError) {
+    console.error(`[LocalLLM] ❌ Local LLM failed, falling back to cloud API:`, localError.message);
+  }
+
+  // Fallback to Google Vertex AI (original cloud API)
+  console.log(`[CloudAPI] 🌐 Using cloud API fallback...`);
+  
   const auth = new google.auth.GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/cloud-platform']
   });
@@ -210,28 +243,45 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     };
   }
 
-  // NEW STEP 1.5: CHECK CUSTOM KNOWLEDGE BASE FOR TRADE CATEGORY Q&AS
-  console.log(`[Custom KB] Checking trade category knowledge base for: "${question}"`);
+  // NEW STEP 1.5: CHECK CUSTOM KNOWLEDGE BASE WITH OLLAMA FALLBACK
+  console.log(`[Custom KB + Ollama] Checking knowledge base with Ollama fallback for: "${question}"`);
 
   const TraceLogger = require('../utils/traceLogger');
   const traceLogger = new TraceLogger();
-  const customKBResult = await checkCustomKB(question, companyId, traceLogger);
+  
+  // Use enhanced KB with Ollama fallback
+  const ollamaFallbackEnabled = company?.aiSettings?.ollamaFallbackEnabled !== false; // Default to enabled
+  const customKBResult = await checkKBWithFallback(question, companyId, traceLogger, {
+    ollamaFallbackEnabled: ollamaFallbackEnabled,
+    company: company,
+    conversationHistory: conversationHistory
+  });
 
-  if (customKBResult) {
-    console.log(`[Custom KB] Found match: "${customKBResult.answer.substring(0, 100)}..."`);
-    responseMethod = 'custom-trade-kb';
-    confidence = 0.9;
+  if (customKBResult && customKBResult.answer) {
+    const sourceDescription = customKBResult.source === 'ollama_fallback' ? 
+      'Ollama LLM Fallback' : 'Custom Knowledge Base';
+    
+    console.log(`[Custom KB + Ollama] Found match from ${sourceDescription}: "${customKBResult.answer.substring(0, 100)}..."`);
+    
+    responseMethod = customKBResult.source === 'ollama_fallback' ? 'ollama-fallback' : 'custom-trade-kb';
+    confidence = customKBResult.confidence;
     debugInfo = {
-      section: 'custom-kb',
-      source: 'trade-category-qa',
+      section: 'custom-kb-ollama',
+      source: customKBResult.source,
+      fallbackUsed: customKBResult.fallbackUsed,
+      ollamaModel: customKBResult.ollamaModel,
+      responseTime: customKBResult.responseTime,
       trace: customKBResult.trace
     };
+    
     await trackPerformance(companyId, originalCallSid, question, customKBResult.answer, responseMethod, confidence, debugInfo, startTime);
+    
     return {
       text: customKBResult.answer,
       escalate: false,
       responseMethod: responseMethod,
-      trace: customKBResult.trace
+      trace: customKBResult.trace,
+      ollamaFallbackUsed: customKBResult.fallbackUsed
     };
   }
 
