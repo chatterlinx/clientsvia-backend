@@ -37,6 +37,10 @@ async function checkCustomKB(transcript, companyID, traceLogger) {
 
   // Step 3: Select Best Match (Company > Trade, Threshold 70%)
   const allMatches = [...companyMatches, ...tradeMatches];
+  
+  // DEBUG: Log all matches for debugging
+  console.log('ALL MATCHES', allMatches);
+  
   if (!allMatches.length) {
     // No matches anywhere
     return { answer: null, trace: traceLogger.toLog() };

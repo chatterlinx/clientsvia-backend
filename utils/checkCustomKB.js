@@ -73,30 +73,25 @@ async function checkCustomKB(transcript, companyID, tradeCategoryID = null, trac
     
     console.log(`[checkCustomKB] Using trade category: ${effectiveTradeCategoryID}`);
     
-    // Debug company data
-    console.log(`[checkCustomKB] Company found: ${company.companyName}`);
-    console.log(`[checkCustomKB] Has agentSetup:`, company.agentSetup ? 'Yes' : 'No');
-    console.log(`[checkCustomKB] Has categoryQAs:`, company.agentSetup?.categoryQAs ? 'Yes' : 'No');
+    // BULLETPROOF MATCHING LOGIC - NO MORE BROKEN RETURNS
+    console.log(`[checkCustomKB] === STARTING BULLETPROOF MATCH LOGIC ===`);
     
-    // Method 1: Check company's category Q&As first (fastest)
+    // Step 1: Gather ALL matches from all sources
+    let companyMatches = [];
+    let tradeMatches = [];
+    
+    // Get company category Q&A matches
     const categoryQAResult = await checkCompanyCategoryQAsWithTrace(transcript, company, keywords, traceLogger);
-    if (categoryQAResult.matched) {
-      console.log(`[checkCustomKB] Found match in company category Q&As`);
-      console.log(`[checkCustomKB] CRITICAL CHECK - Answer exists:`, !!categoryQAResult.answer);
-      console.log(`[checkCustomKB] CRITICAL CHECK - Answer content:`, categoryQAResult.answer);
-      
-      // FORCE answer if confidence is high but answer is missing
-      let finalAnswer = categoryQAResult.answer;
-      if (categoryQAResult.confidence >= 0.9 && !finalAnswer) {
-        finalAnswer = "I found a match for your question but the answer wasn't configured properly. Please contact support for assistance.";
-        console.error(`[checkCustomKB] FORCED FALLBACK ANSWER due to missing content`);
-      }
-      
-      traceLogger.setSelectedSource('Company Category Q&As', 'Direct keyword match', categoryQAResult.confidence, finalAnswer);
-      return { result: finalAnswer, trace: traceLogger.getTraceLog() };
+    if (categoryQAResult.matched && categoryQAResult.answer) {
+      companyMatches.push({
+        question: `Company Q&A Match`,
+        answer: categoryQAResult.answer,
+        confidence: categoryQAResult.confidence * 100, // Convert to percentage
+        matches: `${categoryQAResult.matchedKeywords?.length || 0}/${keywords.length} matches - ${Math.round(categoryQAResult.confidence * 100)}% (${categoryQAResult.matchedKeywords?.join(', ') || 'no keywords'})`
+      });
     }
     
-    // Method 2: Use ServiceIssueHandler for systematic checking
+    // Get service handler matches  
     try {
       const serviceHandler = new ServiceIssueHandler();
       const serviceResult = await serviceHandler.checkCategoryQAs(transcript, companyID, {
@@ -105,49 +100,67 @@ async function checkCustomKB(transcript, companyID, tradeCategoryID = null, trac
       });
       
       if (serviceResult && serviceResult.response) {
-        console.log(`[checkCustomKB] Found match in service issue handler`);
-        traceLogger.logSourceCheck('Service Issue Handler', { category: effectiveTradeCategoryID }, {
-          matchedKeywords: keywords,
-          totalMatches: keywords.length,
-          totalAvailable: keywords.length,
-          confidence: 0.8,
-          reason: 'Service handler match',
-          matched: true
-        });
-        traceLogger.setSelectedSource('Service Issue Handler', 'Trade category match', 0.8, serviceResult.response);
-        return { result: serviceResult.response, trace: traceLogger.getTraceLog() };
-      } else {
-        traceLogger.logSourceCheck('Service Issue Handler', { category: effectiveTradeCategoryID }, {
-          matchedKeywords: [],
-          totalMatches: 0,
-          totalAvailable: keywords.length,
-          confidence: 0,
-          reason: 'No service handler match',
-          matched: false
+        tradeMatches.push({
+          question: `Service Handler Match`,
+          answer: serviceResult.response,
+          confidence: 80, // Fixed confidence for service handler
+          matches: `Service handler - 80% (trade category match)`
         });
       }
     } catch (serviceError) {
       console.error(`[checkCustomKB] Service handler error:`, serviceError);
-      traceLogger.logSourceCheck('Service Issue Handler', { category: effectiveTradeCategoryID }, {
-        matchedKeywords: [],
-        totalMatches: 0,
-        totalAvailable: keywords.length,
-        confidence: 0,
-        reason: `Error: ${serviceError.message}`,
-        matched: false
+    }
+    
+    // Get direct database matches
+    const directResult = await checkTradeCategoryDatabaseWithTrace(transcript, effectiveTradeCategoryID, companyID, keywords, traceLogger);
+    if (directResult.matched && directResult.answer) {
+      tradeMatches.push({
+        question: `Trade Database Match`,
+        answer: directResult.answer,
+        confidence: directResult.confidence * 100, // Convert to percentage
+        matches: `${directResult.matchedKeywords?.length || 0}/${keywords.length} matches - ${Math.round(directResult.confidence * 100)}% (${directResult.matchedKeywords?.join(', ') || 'no keywords'})`
       });
     }
     
-    // Method 3: Direct database lookup for trade category Q&As
-    const directResult = await checkTradeCategoryDatabaseWithTrace(transcript, effectiveTradeCategoryID, companyID, keywords, traceLogger);
-    if (directResult.matched) {
-      console.log(`[checkCustomKB] Found match in direct database lookup`);
-      traceLogger.setSelectedSource('Trade Category Database', 'Database direct match', directResult.confidence, directResult.answer);
-      return { result: directResult.answer, trace: traceLogger.getTraceLog() };
+    // Step 1: Gather all matches (companyMatches, tradeMatches)
+    const allMatches = [
+      ...(companyMatches || []),
+      ...(tradeMatches || [])
+    ];
+    
+    // DEBUG: Log all matches for debugging
+    console.log('ALL MATCHES', allMatches);
+    
+    // Step 2: If no matches, log and bail out
+    if (!allMatches.length) {
+      console.log(`[checkCustomKB] No matches found anywhere`);
+      traceLogger.setSelectedSource('No matches found, agent falling back to generic/no response');
+      return { result: null, trace: traceLogger.getTraceLog() };
     }
     
-    console.log(`[checkCustomKB] No matches found for: "${transcript}"`);
-    traceLogger.setSelectedSource('None', 'No matches found in any source', 0);
+    // Step 3: Find highest confidence match
+    const best = allMatches.reduce((max, cur) => cur.confidence > max.confidence ? cur : max);
+    
+    console.log(`[checkCustomKB] BEST MATCH FOUND:`, {
+      question: best.question,
+      confidence: best.confidence,
+      answer: best.answer,
+      answerExists: !!best.answer,
+      answerLength: best.answer?.length || 0
+    });
+    
+    // Step 4: Return the answer if a match exists (NO MORE EXCUSES)
+    if (best.confidence >= 70 && best.answer) {
+      const source = companyMatches?.includes(best) ? 'Company' : 'Trade';
+      traceLogger.setSelectedSource(`Selected: ${best.question} (${best.matches}) from ${source}`);
+      console.log(`[checkCustomKB] === MATCH FOUND - RETURNING ANSWER ===`);
+      console.log(`[checkCustomKB] FINAL ANSWER:`, best.answer);
+      return { result: best.answer, trace: traceLogger.getTraceLog() };
+    } else {
+      traceLogger.setSelectedSource(`Best match did not meet threshold or answer missing: ${best.confidence}%`);
+      console.log(`[checkCustomKB] === NO SUITABLE MATCH - CONFIDENCE TOO LOW ===`);
+      return { result: null, trace: traceLogger.getTraceLog() };
+    }
     return { result: null, trace: traceLogger.getTraceLog() };
     
   } catch (error) {
