@@ -220,10 +220,28 @@ router.post('/test-custom-kb-trace', async (req, res) => {
         const result = await checkCustomKB(query, companyId, null, traceLogger);
         
         // Extract the result and trace
-        const response = result?.result || null;
-        const trace = result?.trace || traceLogger.getTraceLog();
+        let response = null;
+        let trace = traceLogger.getTraceLog();
         
-        console.log(`[Test Custom KB] Result: ${response ? 'Found match' : 'No match'}`);
+        // Handle different return formats from checkCustomKB
+        if (result) {
+            if (typeof result === 'string') {
+                // Direct string response
+                response = result;
+            } else if (result.result !== undefined) {
+                // New format: { result: "answer", trace: {...} }
+                response = result.result;
+                trace = result.trace || trace;
+            } else if (result.answer !== undefined) {
+                // Fallback format: { answer: "answer", trace: {...} }
+                response = result.answer;
+                trace = result.trace || trace;
+            }
+        }
+        
+        console.log(`[Test Custom KB] Result type: ${typeof result}`);
+        console.log(`[Test Custom KB] Response extracted: ${response ? 'Found' : 'None'}`);
+        console.log(`[Test Custom KB] Response content:`, response);
         console.log(`[Test Custom KB] Trace steps: ${trace.steps?.length || 0}`);
         
         res.json({

@@ -3479,9 +3479,12 @@
         
         console.log('🔍 Flow Test Debug:', {
             dataType: typeof data,
+            data: data,
             resultType: typeof result,
             result: result,
-            trace: trace
+            resultLength: result?.length || 0,
+            trace: trace,
+            traceSteps: trace.steps?.length || 0
         });
         
         // Calculate processing time
@@ -3491,6 +3494,12 @@
         let confidence = '0%';
         if (result && trace.selectedConfidence) {
             confidence = `${Math.round(trace.selectedConfidence * 100)}%`;
+        } else if (trace.steps && trace.steps.length > 0) {
+            // Look for confidence in trace steps
+            const selectedStep = trace.steps.find(s => s.source === trace.selectedSource);
+            if (selectedStep && selectedStep.matchResult && selectedStep.matchResult.confidence) {
+                confidence = `${Math.round(selectedStep.matchResult.confidence * 100)}%`;
+            }
         }
         
         // Build basic results
@@ -3535,25 +3544,50 @@
         } else {
             traceStepsHtml = '<div class="text-gray-500 text-sm">No trace steps available</div>';
         }
-        
-        // Build final response
+         // Build final response
         let finalResponseHtml = '';
         
-        // Handle different response formats
+        // Handle different response formats with extensive debugging
         let responseText = '';
+        
+        console.log('🔍 Final Response Processing:', {
+            result: result,
+            resultType: typeof result,
+            resultExists: !!result,
+            resultLength: result?.length || 0,
+            resultString: String(result || 'null')
+        });
+        
         if (result) {
             if (typeof result === 'string') {
-                responseText = result;
-            } else if (typeof result === 'object' && result.toString) {
-                // If result is an object, try to get meaningful text
-                responseText = result.toString();
-                if (responseText === '[object Object]') {
+                responseText = result.trim();
+            } else if (typeof result === 'object' && result !== null) {
+                // Handle object results
+                if (result.answer) {
+                    responseText = result.answer;
+                } else if (result.result) {
+                    responseText = result.result;
+                } else if (result.toString && result.toString() !== '[object Object]') {
+                    responseText = result.toString();
+                } else {
                     responseText = JSON.stringify(result, null, 2);
                 }
+            } else {
+                // Handle other types (number, boolean, etc.)
+                responseText = String(result);
             }
         }
         
-        if (responseText) {
+        // Ensure we have actual content
+        responseText = responseText?.trim() || '';
+        
+        console.log('🔍 Final Response Text:', {
+            responseText: responseText,
+            responseLength: responseText.length,
+            isEmpty: !responseText
+        });
+        
+        if (responseText && responseText.length > 0) {
             finalResponseHtml = `
                 <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
                     <p class="text-blue-800 text-sm">${responseText}</p>
