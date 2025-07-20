@@ -716,6 +716,73 @@
                                 </div>
                             </div>
 
+                            <!-- Booking Flow Config Section -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50 px-4 py-3 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-calendar-check mr-2 text-blue-600"></i>Booking Flow Configuration
+                                        <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">Interactive</span>
+                                    </h3>
+                                    <p class="text-sm text-gray-600 mt-1">Configure the conversation flow for booking appointments with customers</p>
+                                </div>
+                                
+                                <div class="p-4">
+                                    <div class="mb-4">
+                                        <table id="booking-flow-table" class="table-auto w-full border mb-4 text-sm">
+                                            <thead>
+                                                <tr class="bg-gray-100">
+                                                    <th class="p-3 text-left font-medium text-gray-700">Prompt</th>
+                                                    <th class="p-3 text-left font-medium text-gray-700">Field Name</th>
+                                                    <th class="p-3 text-left font-medium text-gray-700">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="booking-flow-body">
+                                                <!-- Fields will load here -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div class="flex items-center gap-2 mb-4 p-3 bg-gray-50 rounded-lg">
+                                        <input 
+                                            id="new-prompt" 
+                                            placeholder="Prompt (e.g. What's your address?)" 
+                                            class="form-input flex-1 text-sm"
+                                        />
+                                        <input 
+                                            id="new-name" 
+                                            placeholder="Field Name (e.g. address)" 
+                                            class="form-input w-1/3 text-sm"
+                                        />
+                                        <button 
+                                            type="button"
+                                            class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out" 
+                                            onclick="addBookingField()"
+                                        >
+                                            <i class="fas fa-plus mr-1"></i>Add Field
+                                        </button>
+                                    </div>
+
+                                    <div class="flex justify-between items-center pt-3 border-t border-gray-200">
+                                        <div class="text-sm text-gray-600">
+                                            <i class="fas fa-info-circle mr-1 text-blue-500"></i>
+                                            These fields define the conversation flow for booking appointments
+                                        </div>
+                                        <div class="flex items-center space-x-3">
+                                            <button 
+                                                type="button"
+                                                class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out" 
+                                                onclick="saveBookingFlow()"
+                                            >
+                                                <i class="fas fa-save mr-2"></i>Save Booking Flow
+                                            </button>
+                                            <span id="booking-flow-saved" class="text-green-600 text-sm hidden">
+                                                <i class="fas fa-check-circle mr-1"></i>Saved!
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- AI Agent Setup Section -->
                             <div class="bg-white rounded-lg shadow-sm border border-gray-200">
                                 <div class="border-b border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50 px-6 py-4 rounded-t-lg">
@@ -7236,6 +7303,12 @@ function initializeTabSwitching() {
             const targetContent = document.getElementById(targetTab + '-content');
             if (targetContent) {
                 targetContent.classList.remove('hidden');
+                
+                // Initialize tab-specific content
+                if (targetTab === 'ai-agent-logic') {
+                    console.log('🤖 AI Agent Logic tab activated - Loading booking flow...');
+                    loadBookingFlow();
+                }
             }
         });
     });
@@ -7427,6 +7500,132 @@ function renderLogicNotes() {
     }).join('');
     
     notesList.innerHTML = notesHTML;
+}
+
+/**
+ * Booking Flow Configuration Functions
+ */
+let bookingFlowFields = [];
+
+function loadBookingFlow() {
+    const companyId = getCurrentCompanyId();
+
+    fetch(`/api/company/${companyId}/booking-flow`)
+        .then(res => res.json())
+        .then(data => {
+            bookingFlowFields = data || [];
+            renderBookingFlowTable();
+        })
+        .catch(err => {
+            console.error('Failed to load booking flow:', err);
+            // Load default booking flow if API fails
+            bookingFlowFields = [
+                { prompt: "What type of service are you looking for today?", name: "serviceType" },
+                { prompt: "Great! What is the full service address?", name: "address" },
+                { prompt: "And what's the best phone number to reach you?", name: "phoneNumber" },
+                { prompt: "What email should we use for booking confirmations?", name: "email" }
+            ];
+            renderBookingFlowTable();
+        });
+}
+
+function renderBookingFlowTable() {
+    const body = document.getElementById('booking-flow-body');
+    if (!body) return;
+    
+    body.innerHTML = '';
+
+    if (bookingFlowFields.length === 0) {
+        body.innerHTML = `
+            <tr>
+                <td colspan="3" class="p-4 text-center text-gray-500 italic">
+                    No booking flow fields configured. Add your first field below.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    bookingFlowFields.forEach((field, index) => {
+        const row = document.createElement('tr');
+        row.className = 'border-b hover:bg-gray-50';
+        row.innerHTML = `
+            <td class="p-3 text-sm">${field.prompt}</td>
+            <td class="p-3 text-sm text-gray-600">${field.name}</td>
+            <td class="p-3">
+                <button 
+                    onclick="removeBookingField(${index})" 
+                    class="text-red-500 hover:text-red-700 text-sm font-medium transition-colors"
+                    title="Remove this field"
+                >
+                    <i class="fas fa-trash mr-1"></i>Remove
+                </button>
+            </td>
+        `;
+        body.appendChild(row);
+    });
+}
+
+function addBookingField() {
+    const promptInput = document.getElementById('new-prompt');
+    const nameInput = document.getElementById('new-name');
+    
+    if (!promptInput || !nameInput) return;
+    
+    const prompt = promptInput.value.trim();
+    const name = nameInput.value.trim();
+
+    if (!prompt || !name) {
+        alert('Both prompt and field name are required.');
+        return;
+    }
+    
+    // Check for duplicate field names
+    if (bookingFlowFields.some(field => field.name === name)) {
+        alert('Field name already exists. Please use a unique field name.');
+        nameInput.focus();
+        return;
+    }
+
+    bookingFlowFields.push({ prompt, name });
+    renderBookingFlowTable();
+
+    // Clear inputs
+    promptInput.value = '';
+    nameInput.value = '';
+    promptInput.focus();
+}
+
+function removeBookingField(index) {
+    if (confirm('Are you sure you want to remove this booking field?')) {
+        bookingFlowFields.splice(index, 1);
+        renderBookingFlowTable();
+    }
+}
+
+function saveBookingFlow() {
+    const companyId = getCurrentCompanyId();
+    const savedIndicator = document.getElementById('booking-flow-saved');
+
+    fetch(`/api/company/${companyId}/booking-flow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bookingFlowFields)
+    })
+        .then(res => res.json())
+        .then(() => {
+            if (savedIndicator) {
+                savedIndicator.classList.remove('hidden');
+                setTimeout(() => {
+                    savedIndicator.classList.add('hidden');
+                }, 3000);
+            }
+            console.log('Booking flow saved successfully');
+        })
+        .catch(err => {
+            console.error('Failed to save booking flow:', err);
+            alert('Error saving booking flow. Please try again.');
+        });
 }
 
 /**

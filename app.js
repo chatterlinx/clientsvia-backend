@@ -100,6 +100,11 @@ if (process.env.NODE_ENV !== 'production') {
         res.sendFile(path.join(__dirname, 'test-booking-flow-engine.js'));
     });
     
+    // Serve booking flow UI test
+    app.get('/test-booking-flow-ui.js', (req, res) => {
+        res.sendFile(path.join(__dirname, 'test-booking-flow-ui.js'));
+    });
+    
     // Serve selfCheckLogger service
     app.get('/services/selfCheckLogger.js', (req, res) => {
         res.sendFile(path.join(__dirname, 'services', 'selfCheckLogger.js'));

@@ -739,4 +739,88 @@ router.get('/companies/:companyId/personality-status', async (req, res) => {
     }
 });
 
+// --- Booking Flow Configuration Routes ---
+
+// Get booking flow configuration for a company
+router.get('/companies/:companyId/booking-flow', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        if (!ObjectId.isValid(companyId)) {
+            return res.status(400).json({ error: 'Invalid company ID' });
+        }
+        
+        const db = getDB();
+        const company = await db.collection('companies').findOne(
+            { _id: new ObjectId(companyId) },
+            { projection: { bookingFlow: 1 } }
+        );
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Return booking flow or default configuration
+        const defaultBookingFlow = [
+            { prompt: "What type of service are you looking for today?", name: "serviceType" },
+            { prompt: "Great! What is the full service address?", name: "address" },
+            { prompt: "And what's the best phone number to reach you?", name: "phoneNumber" },
+            { prompt: "What email should we use for booking confirmations?", name: "email" }
+        ];
+        
+        res.json(company.bookingFlow || defaultBookingFlow);
+    } catch (error) {
+        console.error('[API Error] Error fetching booking flow:', error);
+        res.status(500).json({ error: 'Failed to fetch booking flow configuration' });
+    }
+});
+
+// Save booking flow configuration for a company
+router.post('/companies/:companyId/booking-flow', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const bookingFlowFields = req.body;
+        
+        if (!ObjectId.isValid(companyId)) {
+            return res.status(400).json({ error: 'Invalid company ID' });
+        }
+        
+        // Validate booking flow fields
+        if (!Array.isArray(bookingFlowFields)) {
+            return res.status(400).json({ error: 'Booking flow must be an array' });
+        }
+        
+        for (const field of bookingFlowFields) {
+            if (!field.prompt || !field.name || typeof field.prompt !== 'string' || typeof field.name !== 'string') {
+                return res.status(400).json({ error: 'Each booking flow field must have a prompt and name' });
+            }
+        }
+        
+        const db = getDB();
+        const result = await db.collection('companies').updateOne(
+            { _id: new ObjectId(companyId) },
+            { 
+                $set: { 
+                    bookingFlow: bookingFlowFields,
+                    bookingFlowUpdatedAt: new Date()
+                } 
+            }
+        );
+        
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        console.log(`[API] Updated booking flow for company ${companyId} with ${bookingFlowFields.length} fields`);
+        res.json({ 
+            success: true, 
+            message: 'Booking flow configuration saved successfully',
+            fieldCount: bookingFlowFields.length
+        });
+    } catch (error) {
+        console.error('[API Error] Error saving booking flow:', error);
+        res.status(500).json({ error: 'Failed to save booking flow configuration' });
+    }
+});
+
 module.exports = router;
