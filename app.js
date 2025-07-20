@@ -28,6 +28,7 @@ const monitoringRoutes = require('./routes/monitoring');
 const ollamaRoutes = require('./routes/ollama');
 const llmRoutes = require('./routes/llm');
 const bookingRoutes = require('./routes/booking');
+const transferRoutes = require('./routes/transfer');
 
 const app = express();
 
@@ -76,10 +77,12 @@ app.use('/api/monitoring', monitoringRoutes);
 app.use('/api/ollama', ollamaRoutes);
 app.use('/api/llm', llmRoutes);
 app.use('/api/booking', bookingRoutes);
+app.use('/api/transfer', transferRoutes);
 console.log('✅ Monitoring routes registered at /api/monitoring');
 console.log('✅ Ollama routes registered at /api/ollama');
 console.log('✅ LLM routes registered at /api/llm');
 console.log('✅ Booking routes registered at /api/booking');
+console.log('✅ Transfer routes registered at /api/transfer');
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 
@@ -103,6 +106,11 @@ if (process.env.NODE_ENV !== 'production') {
     // Serve booking flow UI test
     app.get('/test-booking-flow-ui.js', (req, res) => {
         res.sendFile(path.join(__dirname, 'test-booking-flow-ui.js'));
+    });
+    
+    // Serve transfer router test
+    app.get('/test-transfer-router.js', (req, res) => {
+        res.sendFile(path.join(__dirname, 'test-transfer-router.js'));
     });
     
     // Serve selfCheckLogger service
