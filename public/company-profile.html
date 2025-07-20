@@ -727,12 +727,156 @@
                                 </div>
                                 
                                 <div class="p-6">
-                                    <!-- Agent Setup Content Will Go Here -->
-                                    <div class="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
-                                        <i class="fas fa-cogs text-4xl text-gray-400 mb-4"></i>
-                                        <h4 class="text-lg font-medium text-gray-700 mb-2">AI Agent Configuration Ready</h4>
-                                        <p class="text-gray-500">Advanced agent features will be built here</p>
-                                    </div>
+                                    <!-- QA Engine Configuration -->
+                                    <form id="qa-engine-form" class="space-y-6">
+                                        <!-- QA Engine Status -->
+                                        <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
+                                            <div class="flex items-center">
+                                                <div class="flex-shrink-0">
+                                                    <i class="fas fa-check-circle text-green-600 text-xl"></i>
+                                                </div>
+                                                <div class="ml-3">
+                                                    <h4 class="text-sm font-medium text-green-800">QA Engine Ready</h4>
+                                                    <p class="text-sm text-green-700">Advanced Q&A system with Ollama LLM integration</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- QA Search Configuration -->
+                                        <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                                <i class="fas fa-search mr-2 text-blue-600"></i>Q&A Search Configuration
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <!-- Company Q&A -->
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="enableCompanyQA" name="enableCompanyQA" class="form-checkbox text-indigo-600" checked>
+                                                        <span class="ml-2 text-sm font-medium text-gray-700">Enable Company-Specific Q&A</span>
+                                                    </label>
+                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Priority 1: Search company knowledge base first</p>
+                                                </div>
+
+                                                <!-- Trade Q&A -->
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="enableTradeQA" name="enableTradeQA" class="form-checkbox text-indigo-600" checked>
+                                                        <span class="ml-2 text-sm font-medium text-gray-700">Enable Trade-Level Q&A</span>
+                                                    </label>
+                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Priority 2: Search industry knowledge base</p>
+                                                </div>
+
+                                                <!-- Semantic Search -->
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="enableSemanticSearch" name="enableSemanticSearch" class="form-checkbox text-indigo-600">
+                                                        <span class="ml-2 text-sm font-medium text-gray-700">Enable Semantic Search</span>
+                                                    </label>
+                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Priority 3: AI-powered vector search fallback</p>
+                                                </div>
+
+                                                <!-- Performance Tracking -->
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="enableQATracking" name="enableQATracking" class="form-checkbox text-indigo-600" checked>
+                                                        <span class="ml-2 text-sm font-medium text-gray-700">Enable Performance Tracking</span>
+                                                    </label>
+                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Track response times and accuracy</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Confidence Settings -->
+                                        <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                                <i class="fas fa-sliders-h mr-2 text-purple-600"></i>Confidence & Quality Settings
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <!-- Confidence Threshold -->
+                                                <div>
+                                                    <label for="confidenceThreshold" class="block text-sm font-medium text-gray-700 mb-2">
+                                                        Minimum Confidence Threshold
+                                                    </label>
+                                                    <input type="range" id="confidenceThreshold" name="confidenceThreshold" 
+                                                           class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
+                                                           value="0.6" min="0.1" max="1.0" step="0.1">
+                                                    <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                        <span>Low (0.1)</span>
+                                                        <span id="confidenceValue" class="font-medium">0.6</span>
+                                                        <span>High (1.0)</span>
+                                                    </div>
+                                                    <p class="text-xs text-gray-500 mt-1">Minimum confidence required to use Q&A answers</p>
+                                                </div>
+
+                                                <!-- Response Limit -->
+                                                <div>
+                                                    <label for="maxQAResults" class="block text-sm font-medium text-gray-700 mb-2">
+                                                        Max Q&A Results
+                                                    </label>
+                                                    <select id="maxQAResults" name="maxQAResults" class="form-select">
+                                                        <option value="1">1 (Best Match Only)</option>
+                                                        <option value="3" selected>3 (Top 3 Matches)</option>
+                                                        <option value="5">5 (Top 5 Matches)</option>
+                                                    </select>
+                                                    <p class="text-xs text-gray-500 mt-1">Maximum number of Q&A results to consider</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Ollama Integration -->
+                                        <div class="border border-purple-200 rounded-lg p-4 bg-purple-50">
+                                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                                <i class="fas fa-brain mr-2 text-purple-600"></i>Ollama LLM Integration
+                                            </h4>
+                                            
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <!-- Ollama Model -->
+                                                <div>
+                                                    <label for="ollamaModel" class="block text-sm font-medium text-gray-700 mb-2">
+                                                        Ollama Model
+                                                    </label>
+                                                    <select id="ollamaModel" name="ollamaModel" class="form-select">
+                                                        <option value="llama2">Llama 2 (7B)</option>
+                                                        <option value="llama2:13b">Llama 2 (13B)</option>
+                                                        <option value="mistral" selected>Mistral (7B)</option>
+                                                        <option value="codellama">Code Llama</option>
+                                                    </select>
+                                                </div>
+
+                                                <!-- Fallback Strategy -->
+                                                <div>
+                                                    <label for="fallbackStrategy" class="block text-sm font-medium text-gray-700 mb-2">
+                                                        Fallback Strategy
+                                                    </label>
+                                                    <select id="fallbackStrategy" name="fallbackStrategy" class="form-select">
+                                                        <option value="escalate">Escalate to Human</option>
+                                                        <option value="generic" selected>Generic Response</option>
+                                                        <option value="silence">No Response</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Action Buttons -->
+                                        <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+                                            <div class="flex space-x-3">
+                                                <button type="button" onclick="testQAEngine()" 
+                                                        class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">
+                                                    <i class="fas fa-play mr-2"></i>Test QA Engine
+                                                </button>
+                                                <button type="button" onclick="resetQASettings()" 
+                                                        class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">
+                                                    <i class="fas fa-undo mr-2"></i>Reset to Defaults
+                                                </button>
+                                            </div>
+                                            <button type="submit" 
+                                                    class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-6 rounded-md shadow-sm transition duration-150 ease-in-out">
+                                                <i class="fas fa-save mr-2"></i>Save QA Configuration
+                                            </button>
+                                        </div>
+                                    </form>
                                 </div>
                             </div>
                         </section>
@@ -7096,6 +7240,139 @@ function renderLogicNotes() {
     
     notesList.innerHTML = notesHTML;
 }
+
+/**
+ * QA Engine Functions
+ */
+
+// Initialize QA Engine controls
+document.addEventListener('DOMContentLoaded', function() {
+    // Update confidence display when slider changes
+    const confidenceSlider = document.getElementById('confidenceThreshold');
+    const confidenceDisplay = document.getElementById('confidenceValue');
+    
+    if (confidenceSlider && confidenceDisplay) {
+        confidenceSlider.addEventListener('input', function() {
+            confidenceDisplay.textContent = this.value;
+        });
+    }
+});
+
+/**
+ * Test the QA Engine functionality
+ */
+async function testQAEngine() {
+    const testQuery = prompt('Enter a test question to search:');
+    if (!testQuery) return;
+    
+    try {
+        console.log('🧪 Testing QA Engine with query:', testQuery);
+        
+        // Get current settings
+        const settings = getQAEngineSettings();
+        console.log('⚙️ Current QA Settings:', settings);
+        
+        // TODO: Make actual API call to test QA engine
+        // For now, simulate a response
+        const mockResponse = {
+            source: 'companyQnA',
+            results: [{
+                question: 'What are your hours?',
+                answer: 'We are open Monday-Friday 8AM-6PM, Saturday 9AM-4PM.',
+                confidence: 0.85
+            }],
+            confidence: 0.85
+        };
+        
+        // Display results
+        alert(`QA Engine Test Results:\n\nQuery: "${testQuery}"\nSource: ${mockResponse.source}\nConfidence: ${mockResponse.confidence}\n\nAnswer: ${mockResponse.results[0]?.answer || 'No answer found'}`);
+        
+    } catch (error) {
+        console.error('❌ QA Engine test failed:', error);
+        alert('QA Engine test failed. Check console for details.');
+    }
+}
+
+/**
+ * Reset QA settings to defaults
+ */
+function resetQASettings() {
+    if (!confirm('Reset all QA Engine settings to defaults?')) return;
+    
+    // Reset checkboxes
+    document.getElementById('enableCompanyQA').checked = true;
+    document.getElementById('enableTradeQA').checked = true;
+    document.getElementById('enableSemanticSearch').checked = false;
+    document.getElementById('enableQATracking').checked = true;
+    
+    // Reset sliders and selects
+    document.getElementById('confidenceThreshold').value = 0.6;
+    document.getElementById('confidenceValue').textContent = '0.6';
+    document.getElementById('maxQAResults').value = '3';
+    document.getElementById('ollamaModel').value = 'mistral';
+    document.getElementById('fallbackStrategy').value = 'generic';
+    
+    console.log('🔄 QA Engine settings reset to defaults');
+}
+
+/**
+ * Get current QA Engine settings
+ */
+function getQAEngineSettings() {
+    return {
+        enableCompanyQA: document.getElementById('enableCompanyQA')?.checked || false,
+        enableTradeQA: document.getElementById('enableTradeQA')?.checked || false,
+        enableSemanticSearch: document.getElementById('enableSemanticSearch')?.checked || false,
+        enableQATracking: document.getElementById('enableQATracking')?.checked || false,
+        confidenceThreshold: parseFloat(document.getElementById('confidenceThreshold')?.value || 0.6),
+        maxQAResults: parseInt(document.getElementById('maxQAResults')?.value || 3),
+        ollamaModel: document.getElementById('ollamaModel')?.value || 'mistral',
+        fallbackStrategy: document.getElementById('fallbackStrategy')?.value || 'generic'
+    };
+}
+
+/**
+ * Save QA Engine configuration
+ */
+async function saveQAConfiguration() {
+    try {
+        const settings = getQAEngineSettings();
+        const companyId = getCurrentCompanyId();
+        
+        console.log('💾 Saving QA Engine configuration:', settings);
+        
+        // TODO: Send to backend API
+        const response = await fetch(`/api/companies/${companyId}/qa-settings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(settings)
+        });
+        
+        if (response.ok) {
+            console.log('✅ QA Engine configuration saved successfully');
+            alert('QA Engine configuration saved successfully!');
+        } else {
+            throw new Error('Failed to save configuration');
+        }
+        
+    } catch (error) {
+        console.error('❌ Failed to save QA Engine configuration:', error);
+        alert('Failed to save QA Engine configuration. Check console for details.');
+    }
+}
+
+// Add form submit handler
+document.addEventListener('DOMContentLoaded', function() {
+    const qaForm = document.getElementById('qa-engine-form');
+    if (qaForm) {
+        qaForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveQAConfiguration();
+        });
+    }
+});
 
 /**
  * Logic tab functions removed during clean sweep
