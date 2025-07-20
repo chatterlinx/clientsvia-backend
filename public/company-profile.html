@@ -201,6 +201,9 @@
                             <button class="tab-button tab-button-inactive" id="tab-personality-responses" data-tab="personality-responses">
                                 <i class="fas fa-comment-dots mr-1"></i>Agent Personality Responses
                             </button>
+                            <button class="tab-button tab-button-inactive" id="tab-ai-agent-logic" data-tab="ai-agent-logic">
+                                <i class="fas fa-brain mr-1"></i>AI Agent Logic
+                            </button>
                             <button class="tab-button tab-button-inactive" id="tab-agent-setup" data-tab="agent-setup">
                                 <i class="fas fa-user-cog mr-1"></i>Agent Setup
                             </button>
@@ -669,6 +672,49 @@
                                     </button>
                                 </div>
                             </form>
+                        </section>
+                    </div>
+
+                    <div id="ai-agent-logic-content" class="tab-content-item hidden">
+                        <section class="profile-section bg-transparent shadow-none p-0">
+                            <h2 class="profile-section-title"><i class="fas fa-brain mr-2 text-indigo-600"></i>AI Agent Logic</h2>
+                            
+                            <!-- Notepad Section -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gray-50 px-4 py-3 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800">
+                                        <i class="fas fa-sticky-note mr-2 text-yellow-600"></i>Logic Notes
+                                    </h3>
+                                    <p class="text-sm text-gray-600 mt-1">Keep track of AI logic decisions, rules, and implementation notes</p>
+                                </div>
+                                
+                                <div class="p-4">
+                                    <!-- Add New Note Form -->
+                                    <div class="mb-4 pb-4 border-b border-gray-200">
+                                        <label for="new-logic-note" class="form-label">Add New Note</label>
+                                        <textarea 
+                                            id="new-logic-note" 
+                                            class="form-textarea w-full" 
+                                            rows="3" 
+                                            placeholder="Enter your AI logic note here..."
+                                        ></textarea>
+                                        <div class="mt-2 flex justify-end">
+                                            <button 
+                                                type="button" 
+                                                onclick="addLogicNote()" 
+                                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out"
+                                            >
+                                                <i class="fas fa-plus mr-2"></i>Add Note
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Notes List -->
+                                    <div id="logic-notes-list" class="space-y-3">
+                                        <p class="text-gray-500 italic text-center py-4">No notes yet. Add your first note above.</p>
+                                    </div>
+                                </div>
+                            </div>
                         </section>
                     </div>
 
@@ -6841,6 +6887,194 @@ function initializeTabSwitching() {
             }
         });
     });
+}
+
+/**
+ * AI Agent Logic Notes Functions
+ */
+
+// Store logic notes (in a real app, this would be stored in database)
+let logicNotes = [];
+
+/**
+ * Add a new logic note
+ */
+function addLogicNote() {
+    const noteTextarea = document.getElementById('new-logic-note');
+    const noteText = noteTextarea.value.trim();
+    
+    if (!noteText) {
+        alert('Please enter a note before adding.');
+        return;
+    }
+    
+    // Create new note object
+    const newNote = {
+        id: Date.now(),
+        text: noteText,
+        timestamp: new Date(),
+        isEditing: false
+    };
+    
+    // Add to beginning of array (newest first)
+    logicNotes.unshift(newNote);
+    
+    // Clear the textarea
+    noteTextarea.value = '';
+    
+    // Update display
+    renderLogicNotes();
+    
+    // TODO: Save to database
+    console.log('Added logic note:', newNote);
+}
+
+/**
+ * Edit a logic note
+ */
+function editLogicNote(noteId) {
+    const note = logicNotes.find(n => n.id === noteId);
+    if (note) {
+        note.isEditing = true;
+        renderLogicNotes();
+    }
+}
+
+/**
+ * Save an edited logic note
+ */
+function saveLogicNote(noteId) {
+    const note = logicNotes.find(n => n.id === noteId);
+    if (note) {
+        const editTextarea = document.getElementById(`edit-note-${noteId}`);
+        const newText = editTextarea.value.trim();
+        
+        if (!newText) {
+            alert('Note cannot be empty.');
+            return;
+        }
+        
+        note.text = newText;
+        note.isEditing = false;
+        note.lastModified = new Date();
+        
+        renderLogicNotes();
+        
+        // TODO: Save to database
+        console.log('Updated logic note:', note);
+    }
+}
+
+/**
+ * Cancel editing a logic note
+ */
+function cancelEditLogicNote(noteId) {
+    const note = logicNotes.find(n => n.id === noteId);
+    if (note) {
+        note.isEditing = false;
+        renderLogicNotes();
+    }
+}
+
+/**
+ * Delete a logic note
+ */
+function deleteLogicNote(noteId) {
+    if (confirm('Are you sure you want to delete this note?')) {
+        const index = logicNotes.findIndex(n => n.id === noteId);
+        if (index !== -1) {
+            logicNotes.splice(index, 1);
+            renderLogicNotes();
+            
+            // TODO: Delete from database
+            console.log('Deleted logic note:', noteId);
+        }
+    }
+}
+
+/**
+ * Format timestamp for display
+ */
+function formatTimestamp(date) {
+    return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+/**
+ * Render all logic notes
+ */
+function renderLogicNotes() {
+    const notesList = document.getElementById('logic-notes-list');
+    
+    if (logicNotes.length === 0) {
+        notesList.innerHTML = '<p class="text-gray-500 italic text-center py-4">No notes yet. Add your first note above.</p>';
+        return;
+    }
+    
+    const notesHTML = logicNotes.map(note => {
+        if (note.isEditing) {
+            return `
+                <div class="note-card bg-blue-50 border-blue-200">
+                    <div class="mb-3">
+                        <textarea 
+                            id="edit-note-${note.id}" 
+                            class="form-textarea w-full" 
+                            rows="3"
+                        >${note.text}</textarea>
+                    </div>
+                    <div class="note-timestamps">
+                        Created: ${formatTimestamp(note.timestamp)}
+                        ${note.lastModified ? ` • Modified: ${formatTimestamp(note.lastModified)}` : ''}
+                    </div>
+                    <div class="note-actions">
+                        <button 
+                            onclick="saveLogicNote(${note.id})" 
+                            class="note-action-button text-green-600 hover:text-green-800"
+                        >
+                            <i class="fas fa-check mr-1"></i>Save
+                        </button>
+                        <button 
+                            onclick="cancelEditLogicNote(${note.id})" 
+                            class="note-action-button text-gray-600 hover:text-gray-800"
+                        >
+                            <i class="fas fa-times mr-1"></i>Cancel
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else {
+            return `
+                <div class="note-card">
+                    <div class="note-content">${note.text.replace(/\n/g, '<br>')}</div>
+                    <div class="note-timestamps">
+                        Created: ${formatTimestamp(note.timestamp)}
+                        ${note.lastModified ? ` • Modified: ${formatTimestamp(note.lastModified)}` : ''}
+                    </div>
+                    <div class="note-actions">
+                        <button 
+                            onclick="editLogicNote(${note.id})" 
+                            class="note-action-button"
+                        >
+                            <i class="fas fa-edit mr-1"></i>Edit
+                        </button>
+                        <button 
+                            onclick="deleteLogicNote(${note.id})" 
+                            class="note-action-button text-red-600 hover:text-red-800"
+                        >
+                            <i class="fas fa-trash mr-1"></i>Delete
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+    }).join('');
+    
+    notesList.innerHTML = notesHTML;
 }
 
 /**
