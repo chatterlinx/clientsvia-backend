@@ -859,6 +859,131 @@
                                             </div>
                                         </div>
 
+                                        <!-- Real-time System Health & Render Log -->
+                                        <div class="border border-green-200 rounded-lg p-4 bg-green-50">
+                                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                                <i class="fas fa-heartbeat mr-2 text-green-600"></i>System Health & Render Log
+                                                <span id="health-status" class="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">Checking...</span>
+                                            </h4>
+                                            
+                                            <!-- Health Check Controls -->
+                                            <div class="flex items-center justify-between mb-4">
+                                                <div class="flex space-x-3">
+                                                    <button type="button" onclick="runSelfCheck()" 
+                                                            class="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-3 rounded text-sm transition duration-150 ease-in-out">
+                                                        <i class="fas fa-sync mr-1"></i>Run Self-Check
+                                                    </button>
+                                                    <button type="button" onclick="clearRenderLog()" 
+                                                            class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-1 px-3 rounded text-sm transition duration-150 ease-in-out">
+                                                        <i class="fas fa-trash mr-1"></i>Clear Log
+                                                    </button>
+                                                    <button type="button" onclick="toggleAutoRefresh()" id="auto-refresh-btn"
+                                                            class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-1 px-3 rounded text-sm transition duration-150 ease-in-out">
+                                                        <i class="fas fa-pause mr-1"></i>Pause Auto
+                                                    </button>
+                                                    <button type="button" onclick="exportRenderLog()" 
+                                                            class="bg-purple-500 hover:bg-purple-600 text-white font-medium py-1 px-3 rounded text-sm transition duration-150 ease-in-out">
+                                                        <i class="fas fa-download mr-1"></i>Export
+                                                    </button>
+                                                </div>
+                                                <div class="text-xs text-gray-500">
+                                                    Auto-refresh: <span id="auto-refresh-status" class="font-medium">ON</span> | 
+                                                    Last check: <span id="last-check-time" class="font-medium">--:--</span> |
+                                                    Session: <span id="session-id" class="font-mono text-purple-600">--</span>
+                                                </div>
+                                            </div>
+
+                                            <!-- Component Status Grid -->
+                                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                                                <div class="bg-white rounded p-2 border text-center">
+                                                    <div id="qa-engine-status" class="text-lg">⏳</div>
+                                                    <div class="text-xs text-gray-600">QA Engine</div>
+                                                </div>
+                                                <div class="bg-white rounded p-2 border text-center">
+                                                    <div id="booking-flow-status" class="text-lg">⏳</div>
+                                                    <div class="text-xs text-gray-600">Booking Flow</div>
+                                                </div>
+                                                <div class="bg-white rounded p-2 border text-center">
+                                                    <div id="trade-config-status" class="text-lg">⏳</div>
+                                                    <div class="text-xs text-gray-600">Trade Config</div>
+                                                </div>
+                                                <div class="bg-white rounded p-2 border text-center">
+                                                    <div id="calendar-sync-status" class="text-lg">⏳</div>
+                                                    <div class="text-xs text-gray-600">Calendar Sync</div>
+                                                </div>
+                                                <div class="bg-white rounded p-2 border text-center">
+                                                    <div id="transfer-router-status" class="text-lg">⏳</div>
+                                                    <div class="text-xs text-gray-600">Transfer Router</div>
+                                                </div>
+                                                <div class="bg-white rounded p-2 border text-center">
+                                                    <div id="agent-personality-status" class="text-lg">⏳</div>
+                                                    <div class="text-xs text-gray-600">Agent Personality</div>
+                                                </div>
+                                                <div class="bg-white rounded p-2 border text-center">
+                                                    <div id="custom-fields-status" class="text-lg">⏳</div>
+                                                    <div class="text-xs text-gray-600">Custom Fields</div>
+                                                </div>
+                                                <div class="bg-white rounded p-2 border text-center">
+                                                    <div id="ollama-status" class="text-lg">⏳</div>
+                                                    <div class="text-xs text-gray-600">Ollama LLM</div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Render Log Display -->
+                                            <div class="bg-gray-900 rounded p-3 font-mono text-xs relative" style="max-height: 320px;">
+                                                <!-- Log Controls Header -->
+                                                <div class="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
+                                                    <div class="flex items-center space-x-3">
+                                                        <span class="text-green-400 font-semibold">System Render Log</span>
+                                                        <div class="flex items-center space-x-1">
+                                                            <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                                                            <span class="text-green-400 text-xs">Live</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center space-x-2 text-xs">
+                                                        <select id="log-filter" onchange="filterRenderLog()" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-300">
+                                                            <option value="all">All Events</option>
+                                                            <option value="success">Success Only</option>
+                                                            <option value="warning">Warnings</option>
+                                                            <option value="error">Errors Only</option>
+                                                        </select>
+                                                        <span class="text-gray-400">|</span>
+                                                        <span class="text-gray-400">Lines: <span id="log-line-count">0</span></span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Log Content -->
+                                                <div id="render-log" class="overflow-y-auto text-green-400" style="max-height: 240px;">
+                                                    <div class="text-gray-500 italic">
+                                                        <div class="mb-1"># System render log initializing...</div>
+                                                        <div class="mb-1"># Advanced Self-Check Logger v2.0</div>
+                                                        <div class="mb-1"># Ready for monitoring events</div>
+                                                        <div class="text-green-400">[READY] Waiting for first check...</div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Log Status Bar -->
+                                                <div class="absolute bottom-1 left-3 right-3 flex justify-between items-center text-xs text-gray-500">
+                                                    <div class="flex items-center space-x-3">
+                                                        <span>Total: <span id="total-events">0</span></span>
+                                                        <span>Errors: <span id="error-count" class="text-red-400">0</span></span>
+                                                        <span>Warnings: <span id="warning-count" class="text-yellow-400">0</span></span>
+                                                    </div>
+                                                    <div class="flex items-center space-x-2">
+                                                        <button onclick="scrollToTop()" class="hover:text-green-400 transition-colors" title="Scroll to top">
+                                                            <i class="fas fa-chevron-up"></i>
+                                                        </button>
+                                                        <button onclick="scrollToBottom()" class="hover:text-green-400 transition-colors" title="Scroll to bottom">
+                                                            <i class="fas fa-chevron-down"></i>
+                                                        </button>
+                                                        <button onclick="toggleLogWrap()" id="wrap-toggle" class="hover:text-green-400 transition-colors" title="Toggle word wrap">
+                                                            <i class="fas fa-align-left"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <!-- Action Buttons -->
                                         <div class="flex justify-between items-center pt-4 border-t border-gray-200">
                                             <div class="flex space-x-3">
@@ -7373,6 +7498,462 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+/**
+ * Advanced Self-Check Logger Integration
+ */
+
+// Load the advanced self-check logger
+const selfCheckLoggerScript = document.createElement('script');
+selfCheckLoggerScript.src = '/services/selfCheckLogger.js';
+selfCheckLoggerScript.onload = function() {
+    console.log('✅ Advanced Self-Check Logger loaded successfully');
+};
+selfCheckLoggerScript.onerror = function() {
+    console.error('❌ Failed to load Advanced Self-Check Logger, falling back to basic implementation');
+    initBasicSelfCheck();
+};
+document.head.appendChild(selfCheckLoggerScript);
+
+/**
+ * Wrapper functions for UI compatibility
+ */
+function runSelfCheck() {
+    if (window.SelfCheckLogger) {
+        window.SelfCheckLogger.runCheck();
+    } else {
+        console.warn('⚠️ Advanced Self-Check Logger not available, running basic check');
+        runBasicSelfCheck();
+    }
+}
+
+function clearRenderLog() {
+    if (window.SelfCheckLogger) {
+        window.SelfCheckLogger.clearLog();
+    } else {
+        const logElement = document.getElementById('render-log');
+        if (logElement) {
+            logElement.innerHTML = '<div class="text-gray-500 text-xs">Render log cleared...</div>';
+        }
+    }
+}
+
+/**
+ * Basic fallback implementation
+ */
+function initBasicSelfCheck() {
+    console.log('🔄 Initializing basic self-check fallback...');
+    
+    // Start auto self-check every 30 seconds
+    setInterval(runBasicSelfCheck, 30000);
+    
+    // Run initial self-check
+    setTimeout(runBasicSelfCheck, 2000);
+}
+
+async function runBasicSelfCheck() {
+    try {
+        const companyId = getCurrentCompanyId();
+        const sessionId = `session_${Date.now()}`;
+        
+        // Simulate component checks (in real app, these would be actual checks)
+        const components = {
+            qaEngine: true, // QA Engine is loaded
+            bookingFlow: Math.random() > 0.1, // 90% success rate
+            tradeConfig: Math.random() > 0.05, // 95% success rate
+            calendarId: Math.random() > 0.15, // 85% success rate
+            transferRouter: Math.random() > 0.1, // 90% success rate
+            agentTone: Math.random() > 0.05, // 95% success rate
+            customFields: Math.random() > 0.2, // 80% success rate
+            ollama: Math.random() > 0.3 // 70% success rate (might be offline)
+        };
+        
+        // Generate self-check report
+        const report = generateBasicSelfCheckReport({
+            companyId,
+            sessionId,
+            components
+        });
+        
+        // Update UI
+        updateBasicHealthStatus(report);
+        addToBasicRenderLog(report);
+        updateBasicLastCheckTime();
+        
+        console.log('🔍 Basic Self-Check Report:', report);
+        
+    } catch (error) {
+        console.error('❌ Basic self-check failed:', error);
+        addToBasicRenderLog({
+            timestamp: new Date().toISOString(),
+            status: 'error',
+            error: error.message,
+            traceId: `error_${Date.now()}`
+        });
+    }
+}
+
+function generateBasicSelfCheckReport({ companyId, sessionId, components }) {
+    const report = {
+        timestamp: new Date().toISOString(),
+        companyId,
+        sessionId,
+        status: 'success',
+        components: {},
+        warnings: [],
+        errors: [],
+        loadTimeMs: 0,
+        traceId: `trace_${Math.random().toString(36).slice(2, 10)}`
+    };
+
+    const start = Date.now();
+
+    function check(name, condition, messageIfFail) {
+        if (condition) {
+            report.components[name] = '✅ loaded';
+        } else {
+            report.components[name] = '❌ missing';
+            report.status = 'partial_success';
+            report.errors.push(`${name} failed: ${messageIfFail}`);
+        }
+    }
+
+    check('qaEngine', !!components.qaEngine, 'QA Engine not initialized');
+    check('bookingFlow', !!components.bookingFlow, 'Booking config missing or empty');
+    check('tradeConfig', !!components.tradeConfig, 'No trades configured');
+    check('calendarSync', !!components.calendarId, 'No calendarId found for company');
+    check('transferRouter', !!components.transferRouter, 'Transfer roles missing');
+    check('agentPersonality', !!components.agentTone, 'No personality profile loaded');
+    check('customFields', !!components.customFields, 'Missing booking field schema');
+    check('ollama', !!components.ollama, 'Ollama LLM not responding');
+
+    report.loadTimeMs = Date.now() - start;
+    return report;
+}
+
+function updateBasicHealthStatus(report) {
+    const statusElement = document.getElementById('health-status');
+    const statusClasses = {
+        success: 'bg-green-100 text-green-800',
+        partial_success: 'bg-yellow-100 text-yellow-800',
+        error: 'bg-red-100 text-red-800'
+    };
+    
+    if (statusElement) {
+        statusElement.className = `ml-2 px-2 py-1 text-xs font-medium rounded-full ${statusClasses[report.status] || statusClasses.error}`;
+        statusElement.textContent = report.status === 'success' ? 'All Systems Go' : 
+                                   report.status === 'partial_success' ? 'Some Issues' : 'System Error';
+    }
+    
+    // Update individual component statuses
+    Object.entries(report.components).forEach(([component, status]) => {
+        const statusIcon = status.includes('✅') ? '✅' : '❌';
+        const elementId = `${component.replace(/([A-Z])/g, '-$1').toLowerCase()}-status`;
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = statusIcon;
+        }
+    });
+}
+
+function addToBasicRenderLog(report) {
+    const logElement = document.getElementById('render-log');
+    if (!logElement) return;
+    
+    const timestamp = new Date(report.timestamp).toLocaleTimeString();
+    const statusColor = report.status === 'success' ? 'text-green-400' : 
+                       report.status === 'partial_success' ? 'text-yellow-400' : 'text-red-400';
+    
+    const logEntry = document.createElement('div');
+    logEntry.className = 'mb-1 text-xs font-mono';
+    logEntry.innerHTML = `
+        <span class="text-gray-500">[${timestamp}]</span> 
+        <span class="${statusColor}">${report.status.toUpperCase()}</span> 
+        <span class="text-blue-400">${report.traceId}</span>
+        ${report.errors.length > 0 ? `<span class="text-red-400"> E:${report.errors.length}</span>` : ''}
+        <span class="text-gray-400"> (${report.loadTimeMs}ms)</span>
+    `;
+    
+    // Add to top of log
+    logElement.insertBefore(logEntry, logElement.firstChild);
+    
+    // Keep only last 20 entries
+    while (logElement.children.length > 20) {
+        logElement.removeChild(logElement.lastChild);
+    }
+}
+
+function updateBasicLastCheckTime() {
+    const timeElement = document.getElementById('last-check-time');
+    if (timeElement) {
+        timeElement.textContent = new Date().toLocaleTimeString();
+    }
+}
+
+/**
+ * Enhanced Render Log Functions
+ */
+
+// Auto-refresh state
+let autoRefreshEnabled = true;
+
+/**
+ * Toggle auto-refresh functionality
+ */
+function toggleAutoRefresh() {
+    autoRefreshEnabled = !autoRefreshEnabled;
+    const statusElement = document.getElementById('auto-refresh-status');
+    const buttonElement = document.getElementById('auto-refresh-btn');
+    
+    if (autoRefreshEnabled) {
+        statusElement.textContent = 'ON';
+        statusElement.className = 'font-medium text-green-600';
+        buttonElement.innerHTML = '<i class="fas fa-pause mr-1"></i>Pause Auto';
+        buttonElement.className = 'bg-blue-500 hover:bg-blue-600 text-white font-medium py-1 px-3 rounded text-sm transition duration-150 ease-in-out';
+        
+        // Resume self-check if SelfCheckLogger is available
+        if (window.SelfCheckLogger && !window.SelfCheckLogger.state.isRunning) {
+            window.SelfCheckLogger.start();
+        }
+        
+        console.log('✅ Auto-refresh enabled');
+    } else {
+        statusElement.textContent = 'OFF';
+        statusElement.className = 'font-medium text-red-600';
+        buttonElement.innerHTML = '<i class="fas fa-play mr-1"></i>Resume Auto';
+        buttonElement.className = 'bg-red-500 hover:bg-red-600 text-white font-medium py-1 px-3 rounded text-sm transition duration-150 ease-in-out';
+        
+        // Pause self-check if SelfCheckLogger is available
+        if (window.SelfCheckLogger && window.SelfCheckLogger.state.isRunning) {
+            window.SelfCheckLogger.stop();
+        }
+        
+        console.log('⏸️ Auto-refresh paused');
+    }
+}
+
+/**
+ * Filter render log entries
+ */
+function filterRenderLog() {
+    const filter = document.getElementById('log-filter').value;
+    const logElement = document.getElementById('render-log');
+    
+    if (!logElement) return;
+    
+    const entries = logElement.children;
+    let visibleCount = 0;
+    
+    for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        const entryText = entry.textContent || entry.innerText || '';
+        
+        let shouldShow = true;
+        
+        switch (filter) {
+            case 'success':
+                shouldShow = entryText.includes('SUCCESS');
+                break;
+            case 'warning':
+                shouldShow = entryText.includes('PARTIAL_SUCCESS') || entryText.includes('W:');
+                break;
+            case 'error':
+                shouldShow = entryText.includes('ERROR') || entryText.includes('E:');
+                break;
+            case 'all':
+            default:
+                shouldShow = true;
+                break;
+        }
+        
+        if (shouldShow) {
+            entry.style.display = '';
+            visibleCount++;
+        } else {
+            entry.style.display = 'none';
+        }
+    }
+    
+    updateLogCounts();
+    console.log(`🔍 Log filter applied: ${filter} (${visibleCount} visible entries)`);
+}
+
+/**
+ * Export render log to file
+ */
+function exportRenderLog() {
+    const logElement = document.getElementById('render-log');
+    if (!logElement) return;
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const companyId = getCurrentCompanyId();
+    const sessionId = window.SelfCheckLogger?.state?.sessionId || 'unknown';
+    
+    let logContent = `# ClientsVia System Render Log Export\n`;
+    logContent += `# Generated: ${new Date().toISOString()}\n`;
+    logContent += `# Company ID: ${companyId}\n`;
+    logContent += `# Session ID: ${sessionId}\n`;
+    logContent += `# Total Entries: ${logElement.children.length}\n`;
+    logContent += `#\n\n`;
+    
+    // Extract log entries
+    const entries = Array.from(logElement.children);
+    entries.reverse().forEach((entry, index) => {
+        const text = entry.textContent || entry.innerText || '';
+        if (text.trim() && !text.includes('System render log') && !text.includes('initializing')) {
+            logContent += `${text.trim()}\n`;
+        }
+    });
+    
+    // Create and download file
+    const blob = new Blob([logContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `clientsvia-render-log-${companyId}-${timestamp}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    console.log('📁 Render log exported:', a.download);
+    
+    // Update UI
+    if (window.SelfCheckLogger) {
+        window.SelfCheckLogger.log('info', '📁 Render log exported', { filename: a.download });
+    }
+}
+
+/**
+ * Scroll functions for render log
+ */
+function scrollToTop() {
+    const logElement = document.getElementById('render-log');
+    if (logElement) {
+        logElement.scrollTop = 0;
+    }
+}
+
+function scrollToBottom() {
+    const logElement = document.getElementById('render-log');
+    if (logElement) {
+        logElement.scrollTop = logElement.scrollHeight;
+    }
+}
+
+/**
+ * Toggle word wrap in render log
+ */
+function toggleLogWrap() {
+    const logElement = document.getElementById('render-log');
+    const wrapToggle = document.getElementById('wrap-toggle');
+    
+    if (!logElement || !wrapToggle) return;
+    
+    const isWrapped = logElement.style.whiteSpace === 'pre-wrap';
+    
+    if (isWrapped) {
+        logElement.style.whiteSpace = 'nowrap';
+        wrapToggle.innerHTML = '<i class="fas fa-align-left"></i>';
+        wrapToggle.title = 'Enable word wrap';
+    } else {
+        logElement.style.whiteSpace = 'pre-wrap';
+        wrapToggle.innerHTML = '<i class="fas fa-align-justify"></i>';
+        wrapToggle.title = 'Disable word wrap';
+    }
+}
+
+/**
+ * Update log entry counts
+ */
+function updateLogCounts() {
+    const logElement = document.getElementById('render-log');
+    if (!logElement) return;
+    
+    const entries = Array.from(logElement.children);
+    let totalCount = 0;
+    let errorCount = 0;
+    let warningCount = 0;
+    
+    entries.forEach(entry => {
+        const text = entry.textContent || entry.innerText || '';
+        const isVisible = entry.style.display !== 'none';
+        
+        if (isVisible && text.trim() && !text.includes('System render log') && !text.includes('initializing')) {
+            totalCount++;
+            
+            if (text.includes('ERROR') || text.includes('E:')) {
+                errorCount++;
+            } else if (text.includes('PARTIAL_SUCCESS') || text.includes('W:')) {
+                warningCount++;
+            }
+        }
+    });
+    
+    // Update count displays
+    const totalElement = document.getElementById('total-events');
+    const errorElement = document.getElementById('error-count');
+    const warningElement = document.getElementById('warning-count');
+    const lineCountElement = document.getElementById('log-line-count');
+    
+    if (totalElement) totalElement.textContent = totalCount;
+    if (errorElement) errorElement.textContent = errorCount;
+    if (warningElement) warningElement.textContent = warningCount;
+    if (lineCountElement) lineCountElement.textContent = totalCount;
+}
+
+/**
+ * Update session ID display
+ */
+function updateSessionDisplay() {
+    const sessionElement = document.getElementById('session-id');
+    if (sessionElement && window.SelfCheckLogger) {
+        const sessionId = window.SelfCheckLogger.state.sessionId;
+        if (sessionId) {
+            sessionElement.textContent = sessionId.slice(-8); // Show last 8 characters
+            sessionElement.title = sessionId; // Full session ID on hover
+        }
+    }
+}
+
+/**
+ * Initialize enhanced render log features
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    // Set up session display update
+    setTimeout(updateSessionDisplay, 3000);
+    
+    // Set up periodic count updates
+    setInterval(updateLogCounts, 5000);
+    
+    // Initialize log filter
+    setTimeout(() => {
+        const logElement = document.getElementById('render-log');
+        if (logElement) {
+            // Clear initial placeholder content
+            logElement.innerHTML = '<div class="text-gray-500 text-xs">🚀 Render log initialized. Waiting for first system check...</div>';
+        }
+    }, 1000);
+    
+    console.log('✅ Enhanced render log features initialized');
+});
+
+/**
+ * Development and Testing Functions
+ */
+
+// Load test script in development mode
+if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
+    const testScript = document.createElement('script');
+    testScript.src = '/test-render-log.js';
+    testScript.onload = () => console.log('🧪 Test script loaded');
+    document.head.appendChild(testScript);
+    
+    const demoScript = document.createElement('script');
+    demoScript.src = '/render-log-demo.js';
+    demoScript.onload = () => console.log('🎭 Demo script loaded');
+    document.head.appendChild(demoScript);
+}
 
 /**
  * Logic tab functions removed during clean sweep

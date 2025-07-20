@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const mongoose = require('mongoose');
@@ -78,6 +79,26 @@ console.log('✅ Ollama routes registered at /api/ollama');
 console.log('✅ LLM routes registered at /api/llm');
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
+
+// Development routes
+if (process.env.NODE_ENV !== 'production') {
+    // Serve test script for development
+    app.get('/test-render-log.js', (req, res) => {
+        res.sendFile(path.join(__dirname, 'test-render-log.js'));
+    });
+    
+    // Serve render log demo script
+    app.get('/render-log-demo.js', (req, res) => {
+        res.sendFile(path.join(__dirname, 'render-log-demo.js'));
+    });
+    
+    // Serve selfCheckLogger service
+    app.get('/services/selfCheckLogger.js', (req, res) => {
+        res.sendFile(path.join(__dirname, 'services', 'selfCheckLogger.js'));
+    });
+    
+    console.log('🧪 Development test routes enabled');
+}
 
 app.get('/healthz', (req, res) => res.json({ ok: true }));
 

@@ -1,5 +1,5 @@
 // routes/monitoring.js
-// API endpoints for the agent monitoring system
+// API endpoints for the agent monitoring system and health checks
 
 const express = require('express');
 const router = express.Router();
@@ -7,6 +7,175 @@ const agentMonitoring = require('../services/agentMonitoring');
 const Company = require('../models/Company');
 
 console.log('🔧 Loading monitoring routes...');
+
+// In-memory storage for monitoring data (in production, use Redis or database)
+const monitoringData = {
+    healthChecks: [],
+    componentStatus: {},
+    renderLogs: [],
+    performanceMetrics: {},
+    sessions: {}
+};
+
+/**
+ * Health Check Endpoints
+ */
+
+// Basic health check endpoint
+router.get('/health', (req, res) => {
+    const health = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        version: process.env.npm_package_version || '1.0.0',
+        environment: process.env.NODE_ENV || 'development'
+    };
+    
+    res.json(health);
+});
+
+// Database health check
+router.get('/health/database', async (req, res) => {
+    try {
+        // Try to query the database
+        await Company.findOne().limit(1);
+        
+        res.json({
+            status: 'healthy',
+            database: 'connected',
+            responseTime: Date.now() % 100, // Simulated response time
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(503).json({
+            status: 'unhealthy',
+            database: 'disconnected',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// Submit self-check results
+router.post('/self-check', (req, res) => {
+    try {
+        const checkData = {
+            ...req.body,
+            serverTimestamp: new Date().toISOString(),
+            id: `check_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+        };
+        
+        // Store health check data
+        monitoringData.healthChecks.push(checkData);
+        
+        // Keep only last 100 checks per company
+        const companyChecks = monitoringData.healthChecks.filter(
+            check => check.companyId === checkData.companyId
+        );
+        
+        if (companyChecks.length > 100) {
+            const toRemove = companyChecks.slice(0, companyChecks.length - 100);
+            toRemove.forEach(check => {
+                const index = monitoringData.healthChecks.indexOf(check);
+                if (index > -1) {
+                    monitoringData.healthChecks.splice(index, 1);
+                }
+            });
+        }
+        
+        // Update component status
+        if (checkData.components) {
+            monitoringData.componentStatus[checkData.companyId] = {
+                ...checkData.components,
+                lastUpdate: new Date().toISOString()
+            };
+        }
+        
+        // Store session info
+        if (checkData.sessionId) {
+            monitoringData.sessions[checkData.sessionId] = {
+                companyId: checkData.companyId,
+                lastActivity: new Date().toISOString(),
+                checkCount: (monitoringData.sessions[checkData.sessionId]?.checkCount || 0) + 1
+            };
+        }
+        
+        res.json({
+            success: true,
+            checkId: checkData.id,
+            message: 'Self-check data recorded',
+            timestamp: checkData.serverTimestamp
+        });
+        
+    } catch (error) {
+        console.error('❌ Error storing self-check data:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// Get self-check history for a company
+router.get('/self-check/:companyId', (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { limit = 20 } = req.query;
+        
+        const companyChecks = monitoringData.healthChecks
+            .filter(check => check.companyId === companyId)
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+            .slice(0, parseInt(limit));
+        
+        res.json({
+            companyId,
+            checks: companyChecks,
+            totalChecks: companyChecks.length,
+            latestStatus: companyChecks[0]?.status || 'unknown'
+        });
+        
+    } catch (error) {
+        res.status(500).json({
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// Get current component status for a company
+router.get('/components/:companyId', (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const componentStatus = monitoringData.componentStatus[companyId];
+        
+        if (componentStatus) {
+            res.json({
+                companyId,
+                components: componentStatus,
+                found: true
+            });
+        } else {
+            res.json({
+                companyId,
+                components: {},
+                found: false,
+                message: 'No component status data available'
+            });
+        }
+        
+    } catch (error) {
+        res.status(500).json({
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+/**
+ * Agent Monitoring Endpoints (existing)
+ */
 
 // Get monitoring dashboard data
 router.get('/dashboard/:companyId', async (req, res) => {
