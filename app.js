@@ -27,6 +27,7 @@ const aiAgentHandlerRoutes = require('./routes/aiAgentHandler');
 const monitoringRoutes = require('./routes/monitoring');
 const ollamaRoutes = require('./routes/ollama');
 const llmRoutes = require('./routes/llm');
+const bookingRoutes = require('./routes/booking');
 
 const app = express();
 
@@ -74,9 +75,11 @@ app.use('/api/ai-agent', aiAgentHandlerRoutes);
 app.use('/api/monitoring', monitoringRoutes);
 app.use('/api/ollama', ollamaRoutes);
 app.use('/api/llm', llmRoutes);
+app.use('/api/booking', bookingRoutes);
 console.log('✅ Monitoring routes registered at /api/monitoring');
 console.log('✅ Ollama routes registered at /api/ollama');
 console.log('✅ LLM routes registered at /api/llm');
+console.log('✅ Booking routes registered at /api/booking');
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 
@@ -92,6 +95,11 @@ if (process.env.NODE_ENV !== 'production') {
         res.sendFile(path.join(__dirname, 'render-log-demo.js'));
     });
     
+    // Serve booking flow engine test
+    app.get('/test-booking-flow-engine.js', (req, res) => {
+        res.sendFile(path.join(__dirname, 'test-booking-flow-engine.js'));
+    });
+    
     // Serve selfCheckLogger service
     app.get('/services/selfCheckLogger.js', (req, res) => {
         res.sendFile(path.join(__dirname, 'services', 'selfCheckLogger.js'));
@@ -100,6 +108,11 @@ if (process.env.NODE_ENV !== 'production') {
     // Serve advanced AI engine
     app.get('/services/advancedAIEngine.js', (req, res) => {
         res.sendFile(path.join(__dirname, 'services', 'advancedAIEngine.js'));
+    });
+    
+    // Serve booking flow engine
+    app.get('/services/bookingFlowEngine.js', (req, res) => {
+        res.sendFile(path.join(__dirname, 'services', 'bookingFlowEngine.js'));
     });
     
     console.log('🧪 Development test routes enabled');
