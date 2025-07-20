@@ -1,0 +1,38 @@
+{
+  "bookingConfirmation": {
+    "sms": "✅ {{companyName}}: Your {{serviceType}} appointment is confirmed for {{appointmentTime}} at {{address}}. Questions? Call {{phone}}",
+    "email": "Hello {{customerName}},\n\nYour {{serviceType}} appointment with {{companyName}} is confirmed!\n\n📅 Date & Time: {{appointmentTime}}\n📍 Location: {{address}}\n📞 Contact: {{phone}}\n\nWe'll send a reminder 24 hours before your appointment.\n\nBest regards,\n{{companyName}} Team"
+  },
+  "bookingReminder": {
+    "sms": "⏰ Reminder: Your {{serviceType}} appointment with {{companyName}} is tomorrow at {{appointmentTime}}. See you then!",
+    "email": "Hello {{customerName}},\n\nThis is a friendly reminder that you have a {{serviceType}} appointment scheduled for tomorrow.\n\n📅 Date & Time: {{appointmentTime}}\n📍 Location: {{address}}\n📞 Contact: {{phone}}\n\nWe look forward to serving you!\n\nBest regards,\n{{companyName}} Team"
+  },
+  "bookingCancellation": {
+    "sms": "❌ {{companyName}}: Your {{appointmentTime}} appointment has been cancelled. Need to reschedule? Call {{phone}}",
+    "email": "Hello {{customerName}},\n\nWe're writing to inform you that your {{serviceType}} appointment scheduled for {{appointmentTime}} has been cancelled.\n\n{{cancellationReason}}\n\nTo reschedule or if you have any questions, please contact us at {{phone}}.\n\nWe apologize for any inconvenience.\n\nBest regards,\n{{companyName}} Team"
+  },
+  "fallbackMessage": {
+    "sms": "📩 New customer message for {{recipientName}}: \"{{customerMessage}}\" - From: {{customerPhone}}",
+    "email": "New Customer Message\n\nTo: {{recipientName}}\nFrom: {{customerName}} ({{customerPhone}})\nReceived: {{timestamp}}\n\nMessage:\n{{customerMessage}}\n\nPlease follow up with the customer as soon as possible."
+  },
+  "quoteRequest": {
+    "sms": "💰 New quote request from {{customerName}} for {{serviceType}} at {{address}}. Details: {{description}}",
+    "email": "New Service Quote Request\n\nCustomer: {{customerName}}\nPhone: {{customerPhone}}\nEmail: {{customerEmail}}\nService: {{serviceType}}\nLocation: {{address}}\nUrgency: {{urgency}}\n\nDescription:\n{{description}}\n\nPlease contact the customer within 24 hours to provide a quote."
+  },
+  "emergencyAlert": {
+    "sms": "🚨 EMERGENCY: {{serviceType}} needed at {{address}}. Customer: {{customerPhone}}. Immediate response required!",
+    "email": "EMERGENCY SERVICE REQUEST\n\nService: {{serviceType}}\nLocation: {{address}}\nCustomer: {{customerName}} ({{customerPhone}})\nTime: {{timestamp}}\n\nDescription:\n{{description}}\n\nIMMEDIATE RESPONSE REQUIRED"
+  },
+  "welcomeMessage": {
+    "sms": "👋 Welcome to {{companyName}}! We're excited to serve you. For questions, call {{phone}}",
+    "email": "Welcome to {{companyName}}!\n\nThank you for choosing us for your {{serviceType}} needs. We're committed to providing you with excellent service.\n\nOur team is available to help:\n📞 Phone: {{phone}}\n📧 Email: {{email}}\n🌐 Website: {{website}}\n\nWe look forward to serving you!\n\nBest regards,\n{{companyName}} Team"
+  },
+  "paymentReminder": {
+    "sms": "💳 {{companyName}}: Payment of ${{amount}} is due for invoice #{{invoiceNumber}}. Pay online at {{paymentLink}}",
+    "email": "Payment Reminder\n\nDear {{customerName}},\n\nThis is a friendly reminder that payment for the following invoice is due:\n\nInvoice #{{invoiceNumber}}\nAmount Due: ${{amount}}\nDue Date: {{dueDate}}\nService: {{serviceDescription}}\n\nYou can make a payment online at: {{paymentLink}}\n\nIf you have any questions, please contact us at {{phone}}.\n\nThank you for your business!\n\n{{companyName}} Team"
+  },
+  "serviceComplete": {
+    "sms": "✅ {{companyName}}: Your {{serviceType}} is complete! Please rate your experience: {{reviewLink}}",
+    "email": "Service Completed\n\nHello {{customerName}},\n\nWe're pleased to inform you that your {{serviceType}} service has been completed successfully.\n\nService Details:\n- Date: {{serviceDate}}\n- Technician: {{technicianName}}\n- Service: {{serviceDescription}}\n\nWe'd love to hear about your experience! Please take a moment to leave a review: {{reviewLink}}\n\nIf you need any follow-up service, don't hesitate to contact us at {{phone}}.\n\nThank you for choosing {{companyName}}!\n\nBest regards,\n{{companyName}} Team"
+  }
+}
