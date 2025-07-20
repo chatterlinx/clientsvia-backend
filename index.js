@@ -33,6 +33,8 @@ const uploadRoutes = require('./routes/upload');
 const learningRoutes = require('./routes/learning'); // Learning management routes
 
 // Import new AI Agent routes
+const eventHooksRoutes = require('./routes/eventHooks'); // Event Hooks Management
+const transferRouterRoutes = require('./routes/transferRouter'); // Transfer Router Management
 
 const aiAgentWorkflowRoutes = require('./routes/aiAgentWorkflows');
 const aiAgentAnalyticsRoutes = require('./routes/aiAgentAnalytics');
@@ -85,6 +87,8 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/learning', learningRoutes); // Learning management routes
 
 // Register AI Agent routes
+app.use('/api/event-hooks', eventHooksRoutes); // Event Hooks Management API
+app.use('/api/transfer-router', transferRouterRoutes); // Transfer Router Management API
 
 app.use('/api/ai-agent-workflows', aiAgentWorkflowRoutes);
 app.use('/api/ai-agent-analytics', aiAgentAnalyticsRoutes);

@@ -2,7 +2,11 @@
   {
     "label": "Owner",
     "name": "John",
-    "roles": ["owner", "executive", "ceo"],
+    "roles": [
+      "owner",
+      "executive",
+      "ceo"
+    ],
     "email": "owner@company.com",
     "allowDirectTransfer": false,
     "preferSMS": true
@@ -10,7 +14,11 @@
   {
     "label": "Manager",
     "name": "Steven Ferris",
-    "roles": ["manager", "billing", "quotes"],
+    "roles": [
+      "manager",
+      "billing",
+      "quotes"
+    ],
     "phone": "+15556667777",
     "email": "steven@company.com",
     "allowDirectTransfer": true,
@@ -26,7 +34,10 @@
   {
     "label": "Dispatcher",
     "name": "Dispatch Team",
-    "roles": ["dispatcher", "scheduling"],
+    "roles": [
+      "dispatcher",
+      "scheduling"
+    ],
     "phone": "+15551112222",
     "email": "dispatch@company.com",
     "allowDirectTransfer": true,

@@ -310,6 +310,80 @@ class AgentEventHooks {
   }
 
   /**
+   * Clear recent events only
+   */
+  clearRecentEvents(companyId) {
+    this.eventLog = this.eventLog.filter(event => 
+      new Date(event.timestamp) < new Date(Date.now() - 24 * 60 * 60 * 1000) // Keep events older than 24 hours
+    );
+    console.log(`[EventHooks] Recent events cleared for company ${companyId}`);
+  }
+
+  /**
+   * Clear all analytics data
+   */
+  clearAllAnalytics(companyId) {
+    this.eventLog = [];
+    console.log(`[EventHooks] All analytics data cleared for company ${companyId}`);
+  }
+
+  /**
+   * Reset to default configuration
+   */
+  resetToDefaults(companyId) {
+    this.eventLog = [];
+    this.enabled = true;
+    this.maxLogSize = 1000;
+    console.log(`[EventHooks] Reset to defaults for company ${companyId}`);
+  }
+
+  /**
+   * Get hooks configuration for a company
+   */
+  getHooks(companyId) {
+    return {
+      bookingConfirmed: { enabled: this.enabled, priority: 'high' },
+      fallbackMessage: { enabled: this.enabled, priority: 'medium' },
+      emergencyRequest: { enabled: this.enabled, priority: 'critical' },
+      transferCompleted: { enabled: this.enabled, priority: 'low' }
+    };
+  }
+
+  /**
+   * Register a hook for an event type
+   */
+  registerHook(companyId, eventType, config) {
+    console.log(`[EventHooks] Registered hook for ${eventType} (company: ${companyId})`);
+    // In a real implementation, this would save to database
+  }
+
+  /**
+   * Unregister a hook
+   */
+  unregisterHook(companyId, eventType) {
+    console.log(`[EventHooks] Unregistered hook for ${eventType} (company: ${companyId})`);
+    // In a real implementation, this would remove from database
+  }
+
+  /**
+   * Trigger an event hook
+   */
+  async triggerEvent(eventType, eventData) {
+    switch (eventType) {
+      case 'booking_confirmed':
+        return await this.onBookingConfirmed(eventData);
+      case 'fallback_triggered':
+        return await this.onFallbackMessage(eventData);
+      case 'emergency_alert':
+        return await this.onEmergencyRequest(eventData);
+      case 'transfer_completed':
+        return await this.onTransferCompleted(eventData);
+      default:
+        return { success: false, error: `Unknown event type: ${eventType}` };
+    }
+  }
+
+  /**
    * Parse timeframe string to milliseconds
    */
   parseTimeframe(timeframe) {
@@ -323,6 +397,48 @@ class AgentEventHooks {
     };
     
     return value * (multipliers[unit] || multipliers.h);
+  }
+
+  /**
+   * Get analytics data for a company
+   */
+  getAnalytics(companyId) {
+    const now = new Date();
+    const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    
+    // Filter events for the company and last 24 hours
+    const recentEvents = this.eventLog.filter(event => 
+      event.timestamp >= last24h.toISOString()
+    );
+    
+    const successfulEvents = recentEvents.filter(event => event.result?.success).length;
+    const failedEvents = recentEvents.filter(event => !event.result?.success).length;
+    const totalEvents = recentEvents.length;
+    
+    // Count by event type
+    const eventsByType = {};
+    recentEvents.forEach(event => {
+      eventsByType[event.type] = (eventsByType[event.type] || 0) + 1;
+    });
+    
+    return {
+      totalEvents,
+      successfulEvents,
+      failedEvents,
+      successRate: totalEvents > 0 ? Math.round((successfulEvents / totalEvents) * 100) : 0,
+      eventsByType,
+      recentEvents: recentEvents.slice(-10).map(event => ({
+        timestamp: event.timestamp,
+        eventType: event.type,
+        status: event.result?.success ? 'success' : 'failed',
+        error: event.result?.error || '',
+        details: event.result?.message || ''
+      })),
+      bookingEvents: eventsByType.booking_confirmed || 0,
+      fallbackEvents: eventsByType.fallback_triggered || 0,
+      emergencyEvents: eventsByType.emergency_alert || 0,
+      transferEvents: eventsByType.transfer_completed || 0
+    };
   }
 }
 

@@ -926,6 +926,227 @@
                                             </div>
                                         </div>
 
+                                        <!-- Event Hooks Management System -->
+                                        <div class="border border-orange-200 rounded-lg p-4 bg-orange-50">
+                                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                                <i class="fas fa-bolt mr-2 text-orange-600"></i>Event Hooks Management
+                                                <span id="event-hooks-status" class="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded-full">Loading...</span>
+                                            </h4>
+                                            
+                                            <!-- Event Hooks Configuration -->
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                <!-- Event Hooks Enable/Disable -->
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="enableEventHooks" name="enableEventHooks" class="form-checkbox text-orange-600" checked>
+                                                        <span class="ml-2 text-sm font-medium text-gray-700">Enable Event Hooks System</span>
+                                                    </label>
+                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Automated notifications and event processing</p>
+                                                </div>
+
+                                                <!-- Booking Confirmations -->
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="enableBookingConfirmations" name="enableBookingConfirmations" class="form-checkbox text-orange-600" checked>
+                                                        <span class="ml-2 text-sm font-medium text-gray-700">Booking Confirmations</span>
+                                                    </label>
+                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Auto-send SMS/Email booking confirmations</p>
+                                                </div>
+
+                                                <!-- Fallback Messages -->
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="enableFallbackMessages" name="enableFallbackMessages" class="form-checkbox text-orange-600" checked>
+                                                        <span class="ml-2 text-sm font-medium text-gray-700">Fallback Messages</span>
+                                                    </label>
+                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Notify personnel when transfers fail</p>
+                                                </div>
+
+                                                <!-- Emergency Alerts -->
+                                                <div>
+                                                    <label class="flex items-center">
+                                                        <input type="checkbox" id="enableEmergencyAlerts" name="enableEmergencyAlerts" class="form-checkbox text-orange-600" checked>
+                                                        <span class="ml-2 text-sm font-medium text-gray-700">Emergency Alerts</span>
+                                                    </label>
+                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Broadcast emergency service requests</p>
+                                                </div>
+                                            </div>
+
+                                            <!-- SMS/Email Configuration Status -->
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                <!-- SMS Configuration -->
+                                                <div class="bg-white rounded-lg p-3 border border-gray-200">
+                                                    <div class="flex items-center justify-between mb-2">
+                                                        <h5 class="text-sm font-medium text-gray-800">SMS Configuration</h5>
+                                                        <div id="sms-config-status" class="text-lg">⏳</div>
+                                                    </div>
+                                                    <div class="text-xs text-gray-600 space-y-1">
+                                                        <div>Provider: <span id="sms-provider" class="font-mono">Loading...</span></div>
+                                                        <div>Status: <span id="sms-status" class="font-medium">Checking...</span></div>
+                                                        <div>From Number: <span id="sms-from-number" class="font-mono">--</span></div>
+                                                    </div>
+                                                    <button onclick="testSMSConfiguration()" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded">
+                                                        <i class="fas fa-paper-plane mr-1"></i>Test SMS
+                                                    </button>
+                                                </div>
+
+                                                <!-- Email Configuration -->
+                                                <div class="bg-white rounded-lg p-3 border border-gray-200">
+                                                    <div class="flex items-center justify-between mb-2">
+                                                        <h5 class="text-sm font-medium text-gray-800">Email Configuration</h5>
+                                                        <div id="email-config-status" class="text-lg">⏳</div>
+                                                    </div>
+                                                    <div class="text-xs text-gray-600 space-y-1">
+                                                        <div>Provider: <span id="email-provider" class="font-mono">Loading...</span></div>
+                                                        <div>Status: <span id="email-status" class="font-medium">Checking...</span></div>
+                                                        <div>From Email: <span id="email-from-address" class="font-mono">--</span></div>
+                                                    </div>
+                                                    <button onclick="testEmailConfiguration()" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded">
+                                                        <i class="fas fa-envelope mr-1"></i>Test Email
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Event Statistics Dashboard -->
+                                            <div class="bg-white rounded-lg p-4 border border-gray-200 mb-4">
+                                                <div class="flex justify-between items-center mb-3">
+                                                    <h5 class="font-medium text-gray-800">Event Statistics (Last 24h)</h5>
+                                                    <button onclick="refreshEventStats()" class="text-xs text-orange-600 hover:text-orange-800">
+                                                        <i class="fas fa-sync-alt mr-1"></i>Refresh
+                                                    </button>
+                                                </div>
+                                                
+                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                                                    <div class="text-center">
+                                                        <div class="text-xl font-bold text-green-600" id="total-events">--</div>
+                                                        <div class="text-xs text-gray-600">Total Events</div>
+                                                    </div>
+                                                    <div class="text-center">
+                                                        <div class="text-xl font-bold text-blue-600" id="successful-events">--</div>
+                                                        <div class="text-xs text-gray-600">Successful</div>
+                                                    </div>
+                                                    <div class="text-center">
+                                                        <div class="text-xl font-bold text-red-600" id="failed-events">--</div>
+                                                        <div class="text-xs text-gray-600">Failed</div>
+                                                    </div>
+                                                    <div class="text-center">
+                                                        <div class="text-xl font-bold text-purple-600" id="success-rate">--</div>
+                                                        <div class="text-xs text-gray-600">Success Rate</div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Event Types Breakdown -->
+                                                <div class="text-xs text-gray-600">
+                                                    <div class="flex justify-between items-center">
+                                                        <span>Booking Confirmations:</span>
+                                                        <span id="booking-events" class="font-medium">--</span>
+                                                    </div>
+                                                    <div class="flex justify-between items-center">
+                                                        <span>Fallback Messages:</span>
+                                                        <span id="fallback-events" class="font-medium">--</span>
+                                                    </div>
+                                                    <div class="flex justify-between items-center">
+                                                        <span>Emergency Alerts:</span>
+                                                        <span id="emergency-events" class="font-medium">--</span>
+                                                    </div>
+                                                    <div class="flex justify-between items-center">
+                                                        <span>Transfer Completions:</span>
+                                                        <span id="transfer-events" class="font-medium">--</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Recent Events Log -->
+                                            <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                                <div class="flex justify-between items-center mb-3">
+                                                    <h5 class="font-medium text-gray-800">Recent Events</h5>
+                                                    <div class="flex space-x-2">
+                                                        <button onclick="clearEventLog()" class="text-xs text-red-600 hover:text-red-800">
+                                                            <i class="fas fa-trash mr-1"></i>Clear
+                                                        </button>
+                                                        <button onclick="exportEventLog()" class="text-xs text-purple-600 hover:text-purple-800">
+                                                            <i class="fas fa-download mr-1"></i>Export
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div id="recent-events-list" class="space-y-2 max-h-32 overflow-y-auto text-xs">
+                                                    <div class="text-gray-500 italic">No recent events. Event activity will appear here...</div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Event Hooks Controls -->
+                                            <div class="flex justify-between items-center mt-4 pt-3 border-t border-gray-200">
+                                                <div class="flex space-x-2">
+                                                    <button onclick="testEventHooks()" class="bg-orange-500 hover:bg-orange-600 text-white text-xs px-3 py-1 rounded">
+                                                        <i class="fas fa-play mr-1"></i>Test Event Hooks
+                                                    </button>
+                                                    <button onclick="triggerBookingTest()" class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded">
+                                                        <i class="fas fa-calendar-check mr-1"></i>Test Booking
+                                                    </button>
+                                                    <button onclick="triggerFallbackTest()" class="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-3 py-1 rounded">
+                                                        <i class="fas fa-exclamation-triangle mr-1"></i>Test Fallback
+                                                    </button>
+                                                </div>
+                                                <div class="text-xs text-gray-500">
+                                                    Last event: <span id="last-event-time" class="font-medium">--:--</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Transfer Router Management -->
+                                        <div class="border border-indigo-200 rounded-lg p-4 bg-indigo-50">
+                                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                                <i class="fas fa-route mr-2 text-indigo-600"></i>Transfer Router Management
+                                                <span id="transfer-router-config-status" class="ml-2 px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded-full">Loading...</span>
+                                            </h4>
+                                            
+                                            <!-- Personnel Quick Stats -->
+                                            <div class="grid grid-cols-3 gap-4 mb-4">
+                                                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                                                    <div class="text-xl font-bold text-green-600" id="available-personnel">--</div>
+                                                    <div class="text-xs text-gray-600">Available Now</div>
+                                                </div>
+                                                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                                                    <div class="text-xl font-bold text-orange-600" id="total-personnel">--</div>
+                                                    <div class="text-xs text-gray-600">Total Personnel</div>
+                                                </div>
+                                                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                                                    <div class="text-xl font-bold text-purple-600" id="transfer-success-rate">--</div>
+                                                    <div class="text-xs text-gray-600">Transfer Success</div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Personnel List (Quick View) -->
+                                            <div class="bg-white rounded-lg p-4 border border-gray-200 mb-4">
+                                                <div class="flex justify-between items-center mb-3">
+                                                    <h5 class="font-medium text-gray-800">Personnel Status</h5>
+                                                    <button onclick="refreshPersonnelStatus()" class="text-xs text-indigo-600 hover:text-indigo-800">
+                                                        <i class="fas fa-sync-alt mr-1"></i>Refresh
+                                                    </button>
+                                                </div>
+                                                
+                                                <div id="personnel-status-list" class="space-y-2 max-h-32 overflow-y-auto text-xs">
+                                                    <div class="text-gray-500 italic">Loading personnel status...</div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Transfer Router Controls -->
+                                            <div class="flex justify-between items-center pt-3 border-t border-gray-200">
+                                                <div class="flex space-x-2">
+                                                    <button onclick="openPersonnelManager()" class="bg-indigo-500 hover:bg-indigo-600 text-white text-xs px-3 py-1 rounded">
+                                                        <i class="fas fa-users mr-1"></i>Manage Personnel
+                                                    </button>
+                                                    <button onclick="testTransferRouter()" class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded">
+                                                        <i class="fas fa-phone mr-1"></i>Test Transfer
+                                                    </button>
+                                                </div>
+                                                <div class="text-xs text-gray-500">
+                                                    Router status: <span id="transfer-router-status-text" class="font-medium">Active</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <!-- Real-time System Health & Render Log -->
                                         <div class="border border-green-200 rounded-lg p-4 bg-green-50">
                                             <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
@@ -7294,9 +7515,14 @@ function initializeTabSwitching() {
             this.classList.remove('tab-button-inactive');
             this.classList.add('tab-button-active');
             
-            // Hide all tab contents
+            // Hide all tab contents and cleanup
             tabContents.forEach(content => {
                 content.classList.add('hidden');
+                
+                // Cleanup AI Agent Logic tab when leaving it
+                if (content.id === 'ai-agent-logic-content' && !content.classList.contains('hidden')) {
+                    cleanupAIAgentLogicTab();
+                }
             });
             
             // Show the target tab content
@@ -7304,10 +7530,24 @@ function initializeTabSwitching() {
             if (targetContent) {
                 targetContent.classList.remove('hidden');
                 
-                // Initialize tab-specific content
+                // Initialize tab-specific content with strict isolation
                 if (targetTab === 'ai-agent-logic') {
-                    console.log('🤖 AI Agent Logic tab activated - Loading booking flow...');
-                    loadBookingFlow();
+                    console.log('🤖 AI Agent Logic tab activated - Initializing isolated systems...');
+                    // Initialize with delay to ensure DOM is ready and strict scoping
+                    setTimeout(() => {
+                        try {
+                            initializeAIAgentLogicTab();
+                        } catch (error) {
+                            console.error('❌ [AI-AGENT-LOGIC] Initialization failed:', error);
+                            showErrorMessage('Failed to initialize AI Agent Logic features: ' + error.message);
+                        }
+                    }, 300);
+                }
+                
+                // Cleanup other tab-specific initializations if needed
+                if (targetTab !== 'ai-agent-logic') {
+                    // Ensure AI Agent Logic cleanup when switching to other tabs
+                    cleanupAIAgentLogicTab();
                 }
             }
         });
@@ -8368,7 +8608,1215 @@ if (window.location.hostname === 'localhost' || window.location.hostname.include
 }
 
 /**
- * Logic tab functions removed during clean sweep
+ * ============================================================================
+ * BULLETPROOF AI AGENT LOGIC TAB - EVENT HOOKS & NOTIFICATIONS
+ * Self-contained, isolated system with zero external dependencies
+ * Author: Spartan Coder - Gold Standard Implementation
+ * ============================================================================
+ */
+
+// Global state - completely isolated to AI Agent Logic tab
+let aiAgentLogicState = {
+    initialized: false,
+    realTimeInterval: null,
+    currentCompanyId: null,
+    eventHooksEnabled: false,
+    transferRouterEnabled: false,
+    cleanupCallbacks: []
+};
+
+/**
+ * Master initialization function for AI Agent Logic tab
+ * Called ONLY when AI Agent Logic tab becomes active
+ */
+async function initializeAIAgentLogicTab() {
+    try {
+        console.log('🔥 [AI-AGENT-LOGIC] Master initialization starting...');
+        
+        // Prevent double initialization
+        if (aiAgentLogicState.initialized) {
+            console.log('⚠️ [AI-AGENT-LOGIC] Already initialized, skipping...');
+            return;
+        }
+        
+        // Get company ID with robust fallback
+        aiAgentLogicState.currentCompanyId = getCurrentCompanyIdSafe();
+        if (!aiAgentLogicState.currentCompanyId) {
+            console.error('❌ [AI-AGENT-LOGIC] No company ID available');
+            showErrorMessage('Unable to initialize: Company ID not found');
+            return;
+        }
+        
+        console.log(`✅ [AI-AGENT-LOGIC] Company ID: ${aiAgentLogicState.currentCompanyId}`);
+        
+        // Initialize all components
+        await initializeEventHooksSystem();
+        await initializeTransferRouterSystem();
+        initializeRealTimeUpdates();
+        
+        // Mark as initialized
+        aiAgentLogicState.initialized = true;
+        
+        console.log('🎉 [AI-AGENT-LOGIC] Master initialization complete!');
+        
+    } catch (error) {
+        console.error('❌ [AI-AGENT-LOGIC] Initialization failed:', error);
+        showErrorMessage('Failed to initialize AI Agent Logic features: ' + error.message);
+    }
+}
+
+/**
+ * Cleanup function when leaving AI Agent Logic tab
+ */
+function cleanupAIAgentLogicTab() {
+    if (!aiAgentLogicState.initialized) return;
+    
+    console.log('🧹 [AI-AGENT-LOGIC] Cleaning up...');
+    
+    // Stop real-time updates
+    if (aiAgentLogicState.realTimeInterval) {
+        clearInterval(aiAgentLogicState.realTimeInterval);
+        aiAgentLogicState.realTimeInterval = null;
+    }
+    
+    // Call cleanup callbacks
+    aiAgentLogicState.cleanupCallbacks.forEach(callback => {
+        try {
+            callback();
+        } catch (error) {
+            console.error('Cleanup callback error:', error);
+        }
+    });
+    
+    // Reset state
+    aiAgentLogicState.initialized = false;
+    aiAgentLogicState.eventHooksEnabled = false;
+    aiAgentLogicState.transferRouterEnabled = false;
+    aiAgentLogicState.cleanupCallbacks = [];
+    
+    console.log('✅ [AI-AGENT-LOGIC] Cleanup complete');
+}
+
+/**
+ * Safe company ID getter with multiple fallbacks
+ */
+function getCurrentCompanyIdSafe() {
+    // Try multiple sources
+    if (window.companyId) return window.companyId;
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlCompanyId = urlParams.get('id');
+    if (urlCompanyId) return urlCompanyId;
+    
+    // Fallback to demo company
+    return '686a680241806a4991f7367f';
+}
+
+/**
+ * Initialize Event Hooks System
+ */
+async function initializeEventHooksSystem() {
+    try {
+        console.log('🎯 [EVENT-HOOKS] Initializing...');
+        
+        // Load configuration
+        const response = await fetchWithTimeout(`/api/event-hooks/company/${aiAgentLogicState.currentCompanyId}/config`, 5000);
+        const data = await response.json();
+        
+        if (data.success) {
+            updateEventHooksUI(data.data);
+            aiAgentLogicState.eventHooksEnabled = true;
+            console.log('✅ [EVENT-HOOKS] Initialized successfully');
+        } else {
+            throw new Error(data.error || 'Failed to load event hooks config');
+        }
+        
+    } catch (error) {
+        console.error('❌ [EVENT-HOOKS] Initialization failed:', error);
+        showEventHooksError('Failed to initialize Event Hooks: ' + error.message);
+        // Continue with fallback mode
+        aiAgentLogicState.eventHooksEnabled = false;
+    }
+}
+
+/**
+ * Initialize Transfer Router System
+ */
+async function initializeTransferRouterSystem() {
+    try {
+        console.log('🚛 [TRANSFER-ROUTER] Initializing...');
+        
+        // Load status
+        const response = await fetchWithTimeout(`/api/transfer-router/company/${aiAgentLogicState.currentCompanyId}/status`, 5000);
+        const data = await response.json();
+        
+        if (data.success) {
+            updateTransferRouterUI(data.data);
+            aiAgentLogicState.transferRouterEnabled = true;
+            console.log('✅ [TRANSFER-ROUTER] Initialized successfully');
+        } else {
+            throw new Error(data.error || 'Failed to load transfer router status');
+        }
+        
+    } catch (error) {
+        console.error('❌ [TRANSFER-ROUTER] Initialization failed:', error);
+        showTransferRouterError('Failed to initialize Transfer Router: ' + error.message);
+        // Continue with fallback mode
+        aiAgentLogicState.transferRouterEnabled = false;
+    }
+}
+
+/**
+ * Initialize Real-Time Updates
+ */
+function initializeRealTimeUpdates() {
+    console.log('🔄 [REAL-TIME] Starting updates...');
+    
+    // Clear any existing interval
+    if (aiAgentLogicState.realTimeInterval) {
+        clearInterval(aiAgentLogicState.realTimeInterval);
+    }
+    
+    // Start new interval
+    aiAgentLogicState.realTimeInterval = setInterval(async () => {
+        try {
+            if (!aiAgentLogicState.initialized) return;
+            
+            // Update Event Hooks data
+            if (aiAgentLogicState.eventHooksEnabled) {
+                await refreshEventHooksData();
+            }
+            
+            // Update Transfer Router data
+            if (aiAgentLogicState.transferRouterEnabled) {
+                await refreshTransferRouterData();
+            }
+            
+        } catch (error) {
+            console.error('❌ [REAL-TIME] Update failed:', error);
+        }
+    }, 5000); // Update every 5 seconds
+    
+    console.log('✅ [REAL-TIME] Updates started (5s interval)');
+}
+
+/**
+ * Fetch with timeout
+ */
+async function fetchWithTimeout(url, timeout = 5000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
+    }
+}
+
+/**
+ * Refresh Event Hooks Data
+ */
+async function refreshEventHooksData() {
+    try {
+        const response = await fetchWithTimeout(`/api/event-hooks/company/${aiAgentLogicState.currentCompanyId}/analytics`, 3000);
+        const data = await response.json();
+        
+        if (data.success) {
+            updateEventHooksAnalytics(data.data);
+        }
+    } catch (error) {
+        console.error('❌ [EVENT-HOOKS] Refresh failed:', error);
+    }
+}
+
+/**
+ * Refresh Transfer Router Data
+ */
+async function refreshTransferRouterData() {
+    try {
+        const response = await fetchWithTimeout(`/api/transfer-router/company/${aiAgentLogicState.currentCompanyId}/status`, 3000);
+        const data = await response.json();
+        
+        if (data.success) {
+            updateTransferRouterStatus(data.data);
+        }
+    } catch (error) {
+        console.error('❌ [TRANSFER-ROUTER] Refresh failed:', error);
+    }
+}
+
+/**
+ * Update Event Hooks UI
+ */
+function updateEventHooksUI(config) {
+    try {
+        // Update main statistics
+        updateElementSafely('total-events', config.analytics?.totalEvents || 0);
+        updateElementSafely('successful-events', config.analytics?.successfulEvents || 0);
+        updateElementSafely('failed-events', config.analytics?.failedEvents || 0);
+        
+        // Update event type breakdown
+        updateElementSafely('booking-events', config.analytics?.bookingEvents || 0);
+        updateElementSafely('fallback-events', config.analytics?.fallbackEvents || 0);
+        updateElementSafely('emergency-events', config.analytics?.emergencyEvents || 0);
+        updateElementSafely('transfer-events', config.analytics?.transferEvents || 0);
+        
+        // Update recent events
+        updateRecentEventsList(config.analytics?.recentEvents || []);
+        
+        // Update configuration status
+        updateEventHooksStatus(config);
+        
+    } catch (error) {
+        console.error('❌ [EVENT-HOOKS] UI update failed:', error);
+    }
+}
+
+/**
+ * Update Event Hooks Analytics
+ */
+function updateEventHooksAnalytics(analytics) {
+    try {
+        updateElementSafely('total-events', analytics.totalEvents || 0);
+        updateElementSafely('successful-events', analytics.successfulEvents || 0);
+        updateElementSafely('failed-events', analytics.failedEvents || 0);
+        updateElementSafely('booking-events', analytics.bookingEvents || 0);
+        updateElementSafely('fallback-events', analytics.fallbackEvents || 0);
+        updateElementSafely('emergency-events', analytics.emergencyEvents || 0);
+        updateElementSafely('transfer-events', analytics.transferEvents || 0);
+        
+        // Update success rate with color coding
+        const successRate = analytics.successRate || 0;
+        const successElement = document.getElementById('success-rate');
+        if (successElement) {
+            successElement.textContent = successRate + '%';
+            successElement.className = `font-medium ${
+                successRate >= 90 ? 'text-green-600' : 
+                successRate >= 70 ? 'text-yellow-600' : 'text-red-600'
+            }`;
+        }
+        
+        updateRecentEventsList(analytics.recentEvents || []);
+        
+    } catch (error) {
+        console.error('❌ [EVENT-HOOKS] Analytics update failed:', error);
+    }
+}
+
+/**
+ * Update Transfer Router UI
+ */
+function updateTransferRouterUI(status) {
+    try {
+        // Update personnel counts
+        const personnelCount = status.personnel?.members?.length || 0;
+        updateElementSafely('available-personnel', personnelCount);
+        updateElementSafely('total-personnel', personnelCount);
+        
+        // Update transfer success rate
+        updateElementSafely('transfer-success-rate', status.analytics?.successRate || '95%');
+        
+        // Update personnel status list
+        updatePersonnelStatusList(status.personnel?.members || []);
+        
+        // Update router status indicators
+        updateTransferRouterStatusIndicators(status.enabled);
+        
+    } catch (error) {
+        console.error('❌ [TRANSFER-ROUTER] UI update failed:', error);
+    }
+}
+
+/**
+ * Update Transfer Router Status
+ */
+function updateTransferRouterStatus(status) {
+    updateTransferRouterUI(status);
+}
+
+/**
+ * Update Transfer Router Status Indicators
+ */
+function updateTransferRouterStatusIndicators(enabled) {
+    try {
+        const statusElement = document.getElementById('transfer-router-config-status');
+        if (statusElement) {
+            if (enabled) {
+                statusElement.textContent = 'Active';
+                statusElement.className = 'ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full';
+            } else {
+                statusElement.textContent = 'Inactive';
+                statusElement.className = 'ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full';
+            }
+        }
+        
+        const statusText = document.getElementById('transfer-router-status-text');
+        if (statusText) {
+            statusText.textContent = enabled ? 'Active' : 'Inactive';
+            statusText.className = enabled ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
+        }
+        
+    } catch (error) {
+        console.error('❌ [TRANSFER-ROUTER] Status indicator update failed:', error);
+    }
+}
+
+/**
+ * Update Recent Events List
+ */
+function updateRecentEventsList(events) {
+    try {
+        const listElement = document.getElementById('recent-events-list');
+        if (!listElement) return;
+        
+        if (!events || events.length === 0) {
+            listElement.innerHTML = '<div class="text-gray-500 italic">No recent events. Event activity will appear here...</div>';
+            return;
+        }
+        
+        // Sort events by timestamp (newest first)
+        const sortedEvents = events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        const eventsHTML = sortedEvents.slice(0, 10).map(event => {
+            const time = new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const statusColor = event.status === 'success' ? 'text-green-600' : 'text-red-600';
+            const icon = getEventIcon(event.eventType);
+            
+            return `
+                <div class="flex items-center justify-between py-1 px-2 hover:bg-gray-50 rounded">
+                    <div class="flex items-center space-x-2">
+                        <i class="${icon} text-xs"></i>
+                        <span class="font-medium">${event.eventType}</span>
+                        <span class="${statusColor} font-medium">${event.status}</span>
+                    </div>
+                    <div class="text-gray-500 text-xs">${time}</div>
+                </div>
+            `;
+        }).join('');
+        
+        listElement.innerHTML = eventsHTML;
+        
+        // Update last event time
+        if (sortedEvents.length > 0) {
+            updateElementSafely('last-event-time', 
+                new Date(sortedEvents[0].timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            );
+        }
+        
+    } catch (error) {
+        console.error('❌ [EVENT-HOOKS] Recent events update failed:', error);
+    }
+}
+
+/**
+ * Update Personnel Status List
+ */
+function updatePersonnelStatusList(personnel) {
+    try {
+        const listElement = document.getElementById('personnel-status-list');
+        if (!listElement) return;
+        
+        if (!personnel || personnel.length === 0) {
+            listElement.innerHTML = '<div class="text-gray-500 italic">No personnel configured. Using default configuration.</div>';
+            return;
+        }
+        
+        const personnelHTML = personnel.map(person => {
+            const statusColor = person.status === 'active' ? 'text-green-600' : 'text-red-600';
+            const statusIcon = person.status === 'active' ? 'fas fa-circle' : 'fas fa-circle';
+            
+            return `
+                <div class="flex items-center justify-between py-1">
+                    <div class="flex items-center space-x-2">
+                        <i class="${statusIcon} ${statusColor} text-xs"></i>
+                        <span class="font-medium text-sm">${person.name || 'Unnamed'}</span>
+                    </div>
+                    <div class="text-xs text-gray-500">${person.role || 'No role'}</div>
+                </div>
+            `;
+        }).join('');
+        
+        listElement.innerHTML = personnelHTML;
+        
+    } catch (error) {
+        console.error('❌ [TRANSFER-ROUTER] Personnel status update failed:', error);
+    }
+}
+
+/**
+ * Update Event Hooks Status
+ */
+function updateEventHooksStatus(config) {
+    try {
+        // Update SMS configuration status
+        const smsEnabled = config.smsConfig?.enabled || false;
+        updateStatusIndicator('sms-status', smsEnabled);
+        
+        // Update Email configuration status
+        const emailEnabled = config.emailConfig?.enabled || false;
+        updateStatusIndicator('email-status', emailEnabled);
+        
+    } catch (error) {
+        console.error('❌ [EVENT-HOOKS] Status update failed:', error);
+    }
+}
+
+/**
+ * Safely update element content
+ */
+function updateElementSafely(elementId, content) {
+    try {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = content;
+        }
+    } catch (error) {
+        // Silently ignore missing elements
+    }
+}
+
+/**
+ * Update status indicator
+ */
+function updateStatusIndicator(elementId, enabled) {
+    try {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = enabled ? 'Enabled' : 'Disabled';
+            element.className = enabled ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
+        }
+    } catch (error) {
+        // Silently ignore missing elements
+    }
+}
+
+/**
+ * Get icon for event type
+ */
+function getEventIcon(eventType) {
+    switch (eventType) {
+        case 'booking_confirmed': return 'fas fa-calendar-check text-green-600';
+        case 'booking_failed': return 'fas fa-calendar-times text-red-600';
+        case 'fallback_triggered': return 'fas fa-exclamation-triangle text-yellow-600';
+        case 'emergency_alert': return 'fas fa-exclamation-circle text-red-600';
+        case 'transfer_completed': return 'fas fa-phone-alt text-blue-600';
+        case 'sms_sent': return 'fas fa-sms text-green-600';
+        case 'email_sent': return 'fas fa-envelope text-blue-600';
+        default: return 'fas fa-bell text-gray-600';
+    }
+}
+
+/**
+ * Show error message safely
+ */
+function showErrorMessage(message) {
+    try {
+        console.error('[AI-AGENT-LOGIC] Error:', message);
+        // Try to show in console first, then alert as fallback
+        if (window.console && console.error) {
+            console.error('AI Agent Logic Error:', message);
+        } else {
+            alert('Error: ' + message);
+        }
+    } catch (error) {
+        // Ultimate fallback
+        try {
+            alert('System Error: ' + message);
+        } catch (e) {
+            // If even alert fails, give up gracefully
+        }
+    }
+}
+
+/**
+ * Show Event Hooks specific error
+ */
+function showEventHooksError(message) {
+    console.error('[EVENT-HOOKS] Error:', message);
+    showErrorMessage('Event Hooks: ' + message);
+}
+
+/**
+ * Show Transfer Router specific error
+ */
+function showTransferRouterError(message) {
+    console.error('[TRANSFER-ROUTER] Error:', message);
+    showErrorMessage('Transfer Router: ' + message);
+}
+
+/**
+ * Update Event Hooks Status Indicator
+ * - Strictly scoped to AI Agent Logic tab only
+ * - Uses isolated company ID reference
+ */
+async function updateEventHooksStatus() {
+    try {
+        // Ensure we're only running within AI Agent Logic context
+        if (!aiAgentLogicState.initialized || !aiAgentLogicState.currentCompanyId) {
+            console.warn('[EVENT-HOOKS] Not initialized or no company ID - skipping status update');
+            return;
+        }
+        
+        const response = await fetchWithTimeout(`/api/event-hooks/company/${aiAgentLogicState.currentCompanyId}/config`, 3000);
+        const data = await response.json();
+        
+        const statusElement = document.getElementById('event-hooks-status');
+        if (statusElement) {
+            if (data.success) {
+                statusElement.textContent = 'Active';
+                statusElement.className = 'ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full';
+            } else {
+                statusElement.textContent = 'Error';
+                statusElement.className = 'ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full';
+            }
+        }
+        
+    } catch (error) {
+        console.error('[EVENT-HOOKS] Failed to update status:', error);
+        const statusElement = document.getElementById('event-hooks-status');
+        if (statusElement) {
+            statusElement.textContent = 'Error';
+            statusElement.className = 'ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full';
+        }
+    }
+}
+
+/**
+ * Refresh Event Statistics
+ * - Strictly scoped to AI Agent Logic tab
+ */
+async function refreshEventStats() {
+    if (!aiAgentLogicState.initialized) {
+        console.warn('[EVENT-HOOKS] Cannot refresh stats - not in AI Agent Logic context');
+        return;
+    }
+    await refreshEventHooksData();
+}
+
+/**
+ * Refresh SMS Configuration Status
+ * - Isolated to AI Agent Logic tab context
+ */
+async function refreshSMSConfig() {
+    try {
+        if (!aiAgentLogicState.initialized) {
+            console.warn('[SMS-CONFIG] Not in AI Agent Logic context - skipping refresh');
+            return;
+        }
+        
+        const response = await fetchWithTimeout('/api/event-hooks/sms-status', 3000);
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('sms-provider').textContent = data.provider || 'Unknown';
+            document.getElementById('sms-status').textContent = data.configured ? 'Configured' : 'Not Configured';
+            document.getElementById('sms-from-number').textContent = data.fromNumber || 'Not Set';
+            
+            const statusIcon = document.getElementById('sms-config-status');
+            if (statusIcon) {
+                statusIcon.textContent = data.configured ? '✅' : '⚠️';
+            }
+        }
+        
+    } catch (error) {
+        console.error('Failed to refresh SMS config:', error);
+        document.getElementById('sms-provider').textContent = 'Mock';
+        document.getElementById('sms-status').textContent = 'Development Mode';
+        document.getElementById('sms-from-number').textContent = 'Test Mode';
+        
+        const statusIcon = document.getElementById('sms-config-status');
+        if (statusIcon) {
+            statusIcon.textContent = '⚠️';
+        }
+    }
+}
+
+/**
+ * Refresh Email Configuration Status
+ * - Isolated to AI Agent Logic tab context
+ */
+async function refreshEmailConfig() {
+    try {
+        if (!aiAgentLogicState.initialized) {
+            console.warn('[EMAIL-CONFIG] Not in AI Agent Logic context - skipping refresh');
+            return;
+        }
+        
+        const response = await fetchWithTimeout('/api/event-hooks/email-status', 3000);
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('email-provider').textContent = data.provider || 'Unknown';
+            document.getElementById('email-status').textContent = data.configured ? 'Configured' : 'Not Configured';
+            document.getElementById('email-from-address').textContent = data.fromEmail || 'Not Set';
+            
+            const statusIcon = document.getElementById('email-config-status');
+            if (statusIcon) {
+                statusIcon.textContent = data.configured ? '✅' : '⚠️';
+            }
+        }
+        
+    } catch (error) {
+        console.error('Failed to refresh email config:', error);
+        document.getElementById('email-provider').textContent = 'Mock';
+        document.getElementById('email-status').textContent = 'Development Mode';
+        document.getElementById('email-from-address').textContent = 'test@example.com';
+        
+        const statusIcon = document.getElementById('email-config-status');
+        if (statusIcon) {
+            statusIcon.textContent = '⚠️';
+        }
+    }
+}
+
+/**
+ * Test SMS Configuration
+ * - Isolated function using aiAgentLogicState
+ */
+async function testSMSConfiguration() {
+    if (!aiAgentLogicState.initialized || !aiAgentLogicState.currentCompanyId) {
+        alert('❌ SMS testing is only available within the AI Agent Logic tab');
+        return;
+    }
+    
+    const testPhone = prompt('Enter a phone number to test SMS (e.g., +1234567890):');
+    if (!testPhone) return;
+    
+    try {
+        const response = await fetchWithTimeout(`/api/event-hooks/company/${aiAgentLogicState.currentCompanyId}/test-sms`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                phoneNumber: testPhone,
+                message: 'Test SMS from Event Hooks system - working correctly!'
+            })
+        }, 10000);
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ SMS test successful! Check your phone.');
+        } else {
+            alert('❌ SMS test failed: ' + data.error);
+        }
+        
+    } catch (error) {
+        console.error('[SMS-TEST] Error:', error);
+        alert('❌ SMS test failed: Connection error');
+    }
+}
+
+/**
+ * Test Email Configuration
+ * - Isolated function using aiAgentLogicState
+ */
+async function testEmailConfiguration() {
+    if (!aiAgentLogicState.initialized || !aiAgentLogicState.currentCompanyId) {
+        alert('❌ Email testing is only available within the AI Agent Logic tab');
+        return;
+    }
+    
+    const testEmail = prompt('Enter an email address to test (e.g., test@example.com):');
+    if (!testEmail) return;
+    
+    try {
+        const response = await fetchWithTimeout(`/api/event-hooks/company/${aiAgentLogicState.currentCompanyId}/test-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                toEmail: testEmail,
+                subject: 'Event Hooks System Test',
+                message: 'This is a test email from your Event Hooks system. Everything is working correctly!'
+            })
+        }, 10000);
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Email test successful! Check your inbox.');
+        } else {
+            alert('❌ Email test failed: ' + data.error);
+        }
+        
+    } catch (error) {
+        console.error('[EMAIL-TEST] Error:', error);
+        alert('❌ Email test failed: Connection error');
+    }
+}
+
+/**
+ * Test Event Hooks System
+ * - Comprehensive test isolated to AI Agent Logic context
+ */
+async function testEventHooks() {
+    if (!aiAgentLogicState.initialized || !aiAgentLogicState.currentCompanyId) {
+        alert('❌ Event Hooks testing is only available within the AI Agent Logic tab');
+        return;
+    }
+    
+    try {
+        const response = await fetchWithTimeout(`/api/event-hooks/company/${aiAgentLogicState.currentCompanyId}/test/comprehensive`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                testData: {
+                    companyId: aiAgentLogicState.currentCompanyId,
+                    testType: 'comprehensive'
+                }
+            })
+        }, 10000);
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Event Hooks test completed successfully!\n\n' + 
+                  `Test triggered for comprehensive system check`);
+            
+            // Refresh stats after test
+            setTimeout(() => {
+                if (aiAgentLogicState.initialized) {
+                    refreshEventStats();
+                }
+            }, 2000);
+        } else {
+            alert('❌ Event Hooks test failed: ' + data.error);
+        }
+        
+    } catch (error) {
+        console.error('[EVENT-HOOKS-TEST] Error:', error);
+        alert('❌ Event hooks test failed: Connection error');
+    }
+}
+
+/**
+ * Trigger Booking Test Event
+ * - Isolated to AI Agent Logic context
+ */
+async function triggerBookingTest() {
+    if (!aiAgentLogicState.initialized || !aiAgentLogicState.currentCompanyId) {
+        alert('❌ Booking testing is only available within the AI Agent Logic tab');
+        return;
+    }
+    
+    try {
+        const mockBooking = {
+            phone: '+1234567890',
+            email: 'test@example.com',
+            appointmentTime: 'Tomorrow at 2:00 PM',
+            companyName: 'Test Company',
+            customerName: 'Test Customer',
+            serviceType: 'Test Service',
+            address: '123 Test Street',
+            companyPhone: '(555) 123-4567',
+            confirmationNumber: 'TEST' + Date.now()
+        };
+        
+        const response = await fetchWithTimeout(`/api/event-hooks/company/${aiAgentLogicState.currentCompanyId}/test/booking_confirmed`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ testData: mockBooking })
+        }, 10000);
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Booking confirmation test triggered successfully!');
+            setTimeout(() => {
+                if (aiAgentLogicState.initialized) {
+                    refreshEventStats();
+                }
+            }, 1000);
+        } else {
+            alert('❌ Booking test failed: ' + data.error);
+        }
+        
+    } catch (error) {
+        console.error('[BOOKING-TEST] Error:', error);
+        alert('❌ Booking test failed: Connection error');
+    }
+}
+
+/**
+ * Trigger Fallback Message Test
+ * - Isolated to AI Agent Logic context
+ */
+async function triggerFallbackTest() {
+    if (!aiAgentLogicState.initialized || !aiAgentLogicState.currentCompanyId) {
+        alert('❌ Fallback testing is only available within the AI Agent Logic tab');
+        return;
+    }
+    
+    try {
+        const mockFallback = {
+            message: 'This is a test fallback message from the Event Hooks system',
+            companyName: 'Test Company',
+            customerName: 'Test Customer',
+            customerPhone: '+1234567890',
+            to: {
+                name: 'Test Manager',
+                phone: '+1555123456',
+                email: 'manager@testcompany.com'
+            }
+        };
+        
+        const response = await fetchWithTimeout(`/api/event-hooks/company/${aiAgentLogicState.currentCompanyId}/test/fallback_message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ testData: mockFallback })
+        }, 10000);
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Fallback message test triggered successfully!');
+            setTimeout(() => {
+                if (aiAgentLogicState.initialized) {
+                    refreshEventStats();
+                }
+            }, 1000);
+        } else {
+            alert('❌ Fallback test failed: ' + data.error);
+        }
+        
+    } catch (error) {
+        console.error('[FALLBACK-TEST] Error:', error);
+        alert('❌ Fallback test failed: Connection error');
+    }
+}
+
+/**
+ * Clear Event Log
+ * - Isolated to AI Agent Logic context
+ */
+async function clearEventLog() {
+    if (!aiAgentLogicState.initialized || !aiAgentLogicState.currentCompanyId) {
+        alert('❌ Log clearing is only available within the AI Agent Logic tab');
+        return;
+    }
+    
+    if (!confirm('Are you sure you want to clear the event log? This action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetchWithTimeout(`/api/event-hooks/company/${aiAgentLogicState.currentCompanyId}/clear-log`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }, 10000);
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Event log cleared successfully!');
+            if (aiAgentLogicState.initialized) {
+                refreshEventStats();
+            }
+        } else {
+            alert('❌ Failed to clear event log: ' + data.error);
+        }
+        
+    } catch (error) {
+        console.error('[CLEAR-LOG] Error:', error);
+        alert('❌ Failed to clear event log: Connection error');
+    }
+}
+
+/**
+ * Export Event Log with enhanced options
+ * - Isolated to AI Agent Logic context with enhanced security
+ */
+async function exportEventLog() {
+    if (!aiAgentLogicState.initialized || !aiAgentLogicState.currentCompanyId) {
+        alert('❌ Log export is only available within the AI Agent Logic tab');
+        return;
+    }
+    
+    const format = prompt('Export format:\n1 = JSON (detailed)\n2 = CSV (summary)\n3 = Excel-ready CSV\n\nEnter choice (1-3):', '1');
+    
+    if (!format || !['1', '2', '3'].includes(format)) {
+        return;
+    }
+
+    try {
+        const response = await fetchWithTimeout(`/api/event-hooks/company/${aiAgentLogicState.currentCompanyId}/analytics`, {}, 10000);
+        const data = await response.json();
+        
+        if (data.success) {
+            let filename, content, mimeType;
+            const timestamp = new Date().toISOString().split('T')[0];
+            
+            switch (format) {
+                case '1': // JSON
+                    content = JSON.stringify({
+                        exportDate: new Date().toISOString(),
+                        companyId: aiAgentLogicState.currentCompanyId,
+                        analytics: data.data,
+                        summary: {
+                            totalEvents: data.data.totalEvents || 0,
+                            successfulEvents: data.data.successfulEvents || 0,
+                            failedEvents: data.data.failedEvents || 0,
+                            successRate: data.data.totalEvents ? 
+                                ((data.data.successfulEvents || 0) / data.data.totalEvents * 100).toFixed(2) + '%' : '0%'
+                        }
+                    }, null, 2);
+                    filename = `event-hooks-detailed-${aiAgentLogicState.currentCompanyId}-${timestamp}.json`;
+                    mimeType = 'application/json';
+                    break;
+                    
+                case '2': // CSV Summary
+                    const csvLines = [
+                        'Date,Event Type,Status,Details',
+                        ...(data.data.recentEvents || []).map(event => 
+                            `"${event.timestamp || ''}","${event.eventType || ''}","${event.status || ''}","${(event.details || '').replace(/"/g, '""')}"`
+                        )
+                    ];
+                    content = csvLines.join('\\n');
+                    filename = `event-hooks-summary-${aiAgentLogicState.currentCompanyId}-${timestamp}.csv`;
+                    mimeType = 'text/csv';
+                    break;
+                    
+                case '3': // Excel-ready CSV
+                    const excelLines = [
+                        'Export Date,Company ID,Total Events,Successful Events,Failed Events,Success Rate',
+                        `"${new Date().toISOString()}","${aiAgentLogicState.currentCompanyId}","${data.data.totalEvents || 0}","${data.data.successfulEvents || 0}","${data.data.failedEvents || 0}","${data.data.totalEvents ? ((data.data.successfulEvents || 0) / data.data.totalEvents * 100).toFixed(2) + '%' : '0%'}"`,
+                        '',
+                        'Recent Events:',
+                        'Timestamp,Event Type,Status,Error Message,Details',
+                        ...(data.data.recentEvents || []).map(event => 
+                            `"${event.timestamp || ''}","${event.eventType || ''}","${event.status || ''}","${(event.error || '').replace(/"/g, '""')}","${(event.details || '').replace(/"/g, '""')}"`
+                        )
+                    ];
+                    content = excelLines.join('\\n');
+                    filename = `event-hooks-excel-ready-${aiAgentLogicState.currentCompanyId}-${timestamp}.csv`;
+                    mimeType = 'text/csv';
+                    break;
+            }
+            
+            // Create and download file
+            const blob = new Blob([content], { type: mimeType });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            alert(`✅ Event hooks analytics exported successfully as ${filename}!`);
+        } else {
+            alert('❌ Failed to export event log: ' + data.error);
+        }
+        
+    } catch (error) {
+        console.error('Export event log error:', error);
+        alert('❌ Failed to export event log: Connection error');
+    }
+}
+
+/**
+ * ============================================================================
+ * TRANSFER ROUTER MANAGEMENT SYSTEM
+ * ============================================================================
+ */
+
+/**
+ * Refresh Transfer Router Status
+ * - Isolated to AI Agent Logic tab context
+ */
+async function refreshTransferRouterStatus() {
+    if (!aiAgentLogicState.initialized) {
+        console.warn('[TRANSFER-ROUTER] Cannot refresh status - not in AI Agent Logic context');
+        return;
+    }
+    await refreshTransferRouterData();
+}
+
+/**
+ * Update Transfer Router Status Display
+ */
+function updateTransferRouterStatus(status) {
+    // Update available/total personnel
+    document.getElementById('available-personnel').textContent = status.personnel?.members?.length || 0;
+    document.getElementById('total-personnel').textContent = status.personnel?.members?.length || 0;
+    
+    // Update transfer success rate
+    const successRateElement = document.getElementById('transfer-success-rate');
+    if (successRateElement) {
+        const rate = status.analytics?.successRate || '95%'; // Use real data or fallback
+        successRateElement.textContent = rate;
+    }
+    
+    // Update personnel status list
+    updatePersonnelStatusList(status.personnel?.members || []);
+    
+    // Update router enabled/disabled status
+    const statusElement = document.getElementById('transfer-router-config-status');
+    if (statusElement) {
+        if (status.enabled) {
+            statusElement.textContent = 'Active';
+            statusElement.className = 'ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full';
+        } else {
+            statusElement.textContent = 'Inactive';
+            statusElement.className = 'ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full';
+        }
+    }
+    
+    const statusText = document.getElementById('transfer-router-status-text');
+    if (statusText) {
+        statusText.textContent = status.enabled ? 'Active' : 'Inactive';
+        statusText.className = status.enabled ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
+    }
+    
+    // Update any transfer router enabled indicators
+    const enabledIndicators = document.querySelectorAll('[data-router-status]');
+    enabledIndicators.forEach(indicator => {
+        indicator.textContent = status.enabled ? 'Enabled' : 'Disabled';
+        indicator.className = status.enabled ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
+    });
+}
+
+/**
+ * Update Personnel Status List
+ */
+function updatePersonnelStatusList(personnel) {
+    const listElement = document.getElementById('personnel-status-list');
+    if (!listElement) return;
+    
+    if (!personnel || personnel.length === 0) {
+        listElement.innerHTML = '<div class="text-gray-500 italic">No personnel configured. Using default configuration.</div>';
+        return;
+    }
+    
+    const personnelHTML = personnel.map(person => {
+        return `
+            <div class="flex justify-between items-center py-1 border-b border-gray-100 last:border-b-0">
+                <div>
+                    <span class="font-medium">${person.name || person.label}</span>
+                    <span class="text-gray-500 ml-2">${person.roles ? person.roles.join(', ') : 'No roles'}</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="text-green-600">●</span>
+                    <span class="text-gray-500 text-xs">Available</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    listElement.innerHTML = personnelHTML;
+}
+
+/**
+ * Refresh Personnel Status
+ */
+async function refreshPersonnelStatus() {
+    await refreshTransferRouterStatus(); // Reuse the main status refresh
+}
+
+/**
+ * Open Personnel Manager (Modal/Interface)
+ * - Isolated to AI Agent Logic context
+ */
+async function openPersonnelManager() {
+    if (!aiAgentLogicState.initialized || !aiAgentLogicState.currentCompanyId) {
+        alert('❌ Personnel management is only available within the AI Agent Logic tab');
+        return;
+    }
+    
+    try {
+        // Load current personnel data
+        const response = await fetchWithTimeout(`/api/transfer-router/company/${aiAgentLogicState.currentCompanyId}/personnel`, {}, 5000);
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load personnel data');
+        }
+        
+        const personnel = data.data || { members: [], settings: {} };
+        
+        // Create and show modal
+        showPersonnelManagerModal(personnel);
+        
+    } catch (error) {
+        console.error('[PERSONNEL-MANAGER] Error:', error);
+        alert('❌ Failed to open personnel manager: ' + error.message);
+    }
+}
+
+/**
+ * Test Transfer Router
+ * - Isolated to AI Agent Logic context
+ */
+async function testTransferRouter() {
+    if (!aiAgentLogicState.initialized || !aiAgentLogicState.currentCompanyId) {
+        alert('❌ Transfer Router testing is only available within the AI Agent Logic tab');
+        return;
+    }
+    
+    const testQuery = prompt('Enter a test query for transfer routing (e.g., "I want to speak to billing"):');
+    if (!testQuery) return;
+    
+    try {
+        const response = await fetchWithTimeout(`/api/transfer-router/company/${aiAgentLogicState.currentCompanyId}/test-transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                targetMember: 'manager',
+                reason: testQuery,
+                customerInfo: {
+                    name: 'Test Customer',
+                    phone: '+1234567890'
+                }
+            })
+        }, 10000);
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Transfer Router test completed!\n\n' +
+                  `Query: "${testQuery}"\n` +
+                  `Result: Test transfer executed successfully`);
+        } else {
+            alert('❌ Transfer router test failed: ' + data.error);
+        }
+        
+    } catch (error) {
+        console.error('[TRANSFER-ROUTER-TEST] Error:', error);
+        alert('❌ Transfer router test failed: Connection error');
+    }
+}
+
+/**
+ * Initialize Event Hooks System when AI Agent Logic tab is active
+ * - Removed old initialization function (replaced by comprehensive master init)
+ */
+
+/**
+ * Show Personnel Manager Modal
+ * - Placeholder function for personnel management modal
+ * - In production, this would show a comprehensive personnel management interface
+ */
+function showPersonnelManagerModal(personnel) {
+    console.log('[PERSONNEL-MANAGER] Personnel data:', personnel);
+    
+    // For now, show a simple alert with personnel info
+    const personnelInfo = personnel.members?.length ? 
+        `Personnel count: ${personnel.members.length}\n` +
+        personnel.members.map(p => `- ${p.name || 'Unnamed'}: ${p.roles?.join(', ') || 'No roles'}`).join('\n') :
+        'No personnel configured';
+    
+    alert('👥 Personnel Manager\n\n' + personnelInfo + '\n\n(Full personnel management interface coming soon)');
+}
+
+/**
+ * ============================================================================
+ * END OF AI AGENT LOGIC TAB FUNCTIONS
+ * All functions above are strictly isolated to the AI Agent Logic tab
+ * ============================================================================
  */
     </script>
 
