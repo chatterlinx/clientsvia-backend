@@ -97,6 +97,11 @@ if (process.env.NODE_ENV !== 'production') {
         res.sendFile(path.join(__dirname, 'services', 'selfCheckLogger.js'));
     });
     
+    // Serve advanced AI engine
+    app.get('/services/advancedAIEngine.js', (req, res) => {
+        res.sendFile(path.join(__dirname, 'services', 'advancedAIEngine.js'));
+    });
+    
     console.log('🧪 Development test routes enabled');
 }
 

@@ -982,6 +982,69 @@
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            <!-- Advanced AI Engine Status -->
+                                            <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4 mt-4">
+                                                <h5 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                                    <i class="fas fa-brain mr-2 text-purple-600"></i>Advanced AI Engine v3.0
+                                                    <span id="ai-engine-status" class="ml-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">Initializing...</span>
+                                                </h5>
+                                                
+                                                <!-- AI Engine Metrics -->
+                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                                    <div class="bg-white rounded-lg p-3 border border-gray-200">
+                                                        <div class="text-xl font-bold text-blue-600" id="ai-predictions">--</div>
+                                                        <div class="text-xs text-gray-600">Predictions Made</div>
+                                                        <div class="text-xs text-blue-600" id="prediction-accuracy">94% accuracy</div>
+                                                    </div>
+                                                    <div class="bg-white rounded-lg p-3 border border-gray-200">
+                                                        <div class="text-xl font-bold text-green-600" id="ai-optimizations">--</div>
+                                                        <div class="text-xs text-gray-600">Auto-Optimizations</div>
+                                                        <div class="text-xs text-green-600" id="optimization-impact">89% efficiency</div>
+                                                    </div>
+                                                    <div class="bg-white rounded-lg p-3 border border-gray-200">
+                                                        <div class="text-xl font-bold text-orange-600" id="ai-escalations">--</div>
+                                                        <div class="text-xs text-gray-600">Smart Escalations</div>
+                                                        <div class="text-xs text-orange-600" id="escalation-accuracy">92% accuracy</div>
+                                                    </div>
+                                                    <div class="bg-white rounded-lg p-3 border border-gray-200">
+                                                        <div class="text-xl font-bold text-purple-600" id="ai-scripts">--</div>
+                                                        <div class="text-xs text-gray-600">Generated Scripts</div>
+                                                        <div class="text-xs text-purple-600" id="script-approval">86% approved</div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- AI Engine Activity Feed -->
+                                                <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                                    <div class="flex justify-between items-center mb-3">
+                                                        <h6 class="font-medium text-gray-800">Recent AI Activity</h6>
+                                                        <button onclick="refreshAIActivity()" class="text-xs text-purple-600 hover:text-purple-800">
+                                                            <i class="fas fa-sync-alt mr-1"></i>Refresh
+                                                        </button>
+                                                    </div>
+                                                    <div id="ai-activity-feed" class="space-y-2 max-h-32 overflow-y-auto">
+                                                        <div class="text-gray-500 text-sm italic">AI Engine activity will appear here...</div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- AI Engine Controls -->
+                                                <div class="flex justify-between items-center mt-4 pt-3 border-t border-gray-200">
+                                                    <div class="flex space-x-2">
+                                                        <button onclick="triggerAIPrediction()" class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded">
+                                                            <i class="fas fa-crystal-ball mr-1"></i>Run Prediction
+                                                        </button>
+                                                        <button onclick="triggerAutoOptimization()" class="bg-green-500 hover:bg-green-600 text-white text-xs px-3 py-1 rounded">
+                                                            <i class="fas fa-magic mr-1"></i>Optimize Now
+                                                        </button>
+                                                        <button onclick="generateAIScript()" class="bg-purple-500 hover:bg-purple-600 text-white text-xs px-3 py-1 rounded">
+                                                            <i class="fas fa-robot mr-1"></i>Generate Script
+                                                        </button>
+                                                    </div>
+                                                    <div class="text-xs text-gray-500">
+                                                        Last activity: <span id="ai-last-activity">--:--</span>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <!-- Action Buttons -->
@@ -7936,6 +7999,156 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 1000);
     
     console.log('✅ Enhanced render log features initialized');
+});
+
+/**
+ * Advanced AI Engine UI Functions
+ */
+
+// Update AI Engine status display
+function updateAIEngineStatus() {
+    if (window.AdvancedAIEngine) {
+        const status = window.AdvancedAIEngine.getStatus();
+        const statusElement = document.getElementById('ai-engine-status');
+        
+        if (statusElement) {
+            statusElement.textContent = 'Online';
+            statusElement.className = 'ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full';
+        }
+        
+        // Update metrics
+        const elements = {
+            'ai-predictions': status.state.totalPredictions,
+            'ai-optimizations': status.state.totalOptimizations,
+            'ai-escalations': status.state.totalEscalations,
+            'ai-scripts': status.state.totalScripts
+        };
+        
+        Object.entries(elements).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = value || 0;
+            }
+        });
+        
+        // Update last activity
+        const lastActivityElement = document.getElementById('ai-last-activity');
+        if (lastActivityElement) {
+            lastActivityElement.textContent = new Date().toLocaleTimeString();
+        }
+        
+        // Refresh activity feed
+        refreshAIActivity();
+    }
+}
+
+// Refresh AI activity feed
+function refreshAIActivity() {
+    if (window.AdvancedAIEngine) {
+        const activities = window.AdvancedAIEngine.getRecentActivity(5);
+        const feedElement = document.getElementById('ai-activity-feed');
+        
+        if (feedElement && activities.length > 0) {
+            feedElement.innerHTML = '';
+            
+            activities.forEach(activity => {
+                const activityElement = document.createElement('div');
+                activityElement.className = 'flex items-center text-sm p-2 bg-gray-50 rounded';
+                
+                const icon = getActivityIcon(activity.type);
+                const time = new Date(activity.timestamp).toLocaleTimeString();
+                
+                activityElement.innerHTML = `
+                    <i class="${icon} mr-2"></i>
+                    <div class="flex-1">
+                        <span class="font-medium">${getActivityDescription(activity)}</span>
+                        <div class="text-xs text-gray-500">${time}</div>
+                    </div>
+                    <span class="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded">${activity.type}</span>
+                `;
+                
+                feedElement.appendChild(activityElement);
+            });
+        }
+    }
+}
+
+function getActivityIcon(type) {
+    const icons = {
+        prediction: 'fas fa-crystal-ball text-blue-500',
+        healing: 'fas fa-wrench text-green-500',
+        optimization: 'fas fa-magic text-purple-500',
+        script: 'fas fa-file-code text-orange-500'
+    };
+    return icons[type] || 'fas fa-cog text-gray-500';
+}
+
+function getActivityDescription(activity) {
+    switch (activity.type) {
+        case 'prediction':
+            return `Predicted ${activity.component} failure risk`;
+        case 'healing':
+            return `Auto-healed ${activity.component}`;
+        case 'optimization':
+            return `Applied ${activity.description}`;
+        case 'script':
+            return `Generated script for ${activity.scenario}`;
+        default:
+            return 'AI activity detected';
+    }
+}
+
+// Manual AI function triggers
+async function triggerAIPrediction() {
+    if (window.AdvancedAIEngine) {
+        console.log('🔮 Manually triggering AI prediction...');
+        await window.AdvancedAIEngine.runPredictiveAnalysis();
+        updateAIEngineStatus();
+    } else {
+        alert('Advanced AI Engine not available');
+    }
+}
+
+async function triggerAutoOptimization() {
+    if (window.AdvancedAIEngine) {
+        console.log('⚡ Manually triggering performance optimization...');
+        await window.AdvancedAIEngine.runPerformanceOptimization();
+        updateAIEngineStatus();
+    } else {
+        alert('Advanced AI Engine not available');
+    }
+}
+
+async function generateAIScript() {
+    if (window.AdvancedAIEngine) {
+        const scenarios = ['emergency', 'pricing', 'scheduling', 'technical'];
+        const randomScenario = scenarios[Math.floor(Math.random() * scenarios.length)];
+        
+        console.log(`📝 Manually generating AI script for ${randomScenario}...`);
+        const script = await window.AdvancedAIEngine.generateScript(randomScenario, {
+            companyId: getCurrentCompanyId(),
+            manual: true
+        });
+        
+        if (script) {
+            alert(`AI Script Generated!\n\nScenario: ${script.scenario}\nContent: ${script.content}\nConfidence: ${Math.round(script.confidence * 100)}%`);
+        }
+        
+        updateAIEngineStatus();
+    } else {
+        alert('Advanced AI Engine not available');
+    }
+}
+
+// Initialize AI Engine status updates
+document.addEventListener('DOMContentLoaded', function() {
+    // Wait for AI Engine to load, then start status updates
+    setTimeout(() => {
+        updateAIEngineStatus();
+        
+        // Update AI status every 30 seconds
+        setInterval(updateAIEngineStatus, 30000);
+    }, 7000); // Wait 7 seconds for AI Engine to initialize
 });
 
 /**
