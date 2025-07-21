@@ -48,6 +48,16 @@ try {
   process.exit(1);
 }
 
+// Q&A Learning System Routes with error handling
+let qnaLearningRoutes;
+try {
+  qnaLearningRoutes = require('./routes/qna-learning');
+  console.log('✅ Q&A Learning routes loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load Q&A Learning routes:', error.message);
+  process.exit(1);
+}
+
 const app = express();
 
 // Parse cookies before any middleware that relies on them
@@ -108,6 +118,7 @@ app.use('/api/booking', bookingRoutes);
 app.use('/api/transfer', transferRoutes);
 app.use('/api/event-hooks', eventHooksRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/qna-learning', qnaLearningRoutes);
 console.log('✅ Monitoring routes registered at /api/monitoring');
 console.log('✅ Ollama routes registered at /api/ollama');
 console.log('✅ LLM routes registered at /api/llm');
@@ -115,6 +126,7 @@ console.log('✅ Booking routes registered at /api/booking');
 console.log('✅ Transfer routes registered at /api/transfer');
 console.log('✅ Event Hooks routes registered at /api/event-hooks');
 console.log('✅ Notification routes registered at /api/notifications');
+console.log('✅ Q&A Learning routes registered at /api/qna-learning');
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 
