@@ -1333,8 +1333,118 @@
                                                     </div>
                                                 </div>
                                             </div>
+                                            <!-- Notification Log Viewer System -->
+                                            <div class="border border-blue-200 rounded-lg p-4 bg-blue-50 mt-6">
+                                                <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                                    <i class="fas fa-list-alt mr-2 text-blue-600"></i>Notification Log Viewer
+                                                    <span id="notification-log-status" class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">Ready</span>
+                                                </h4>
+                                                
+                                                <!-- Log Statistics Dashboard -->
+                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                                                    <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                                                        <div class="text-xl font-bold text-green-600" id="total-notifications">--</div>
+                                                        <div class="text-xs text-gray-600">Total Notifications</div>
+                                                    </div>
+                                                    <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                                                        <div class="text-xl font-bold text-blue-600" id="sent-notifications">--</div>
+                                                        <div class="text-xs text-gray-600">Sent Successfully</div>
+                                                    </div>
+                                                    <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                                                        <div class="text-xl font-bold text-red-600" id="failed-notifications">--</div>
+                                                        <div class="text-xs text-gray-600">Failed</div>
+                                                    </div>
+                                                    <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                                                        <div class="text-xl font-bold text-purple-600" id="notification-success-rate">--</div>
+                                                        <div class="text-xs text-gray-600">Success Rate</div>
+                                                    </div>
+                                                </div>
+                
+                                                <!-- Filter Controls -->
+                                                <div class="bg-white rounded-lg p-4 border border-gray-200 mb-4">
+                                                    <div class="flex flex-wrap items-center gap-3">
+                                                        <div class="flex items-center gap-2">
+                                                            <label class="text-sm font-medium text-gray-700">Type:</label>
+                                                            <select id="notification-type-filter" class="form-select text-sm">
+                                                                <option value="all">All Types</option>
+                                                                <option value="sms">SMS</option>
+                                                                <option value="email">Email</option>
+                                                                <option value="event_hook">Event Hook</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="flex items-center gap-2">
+                                                            <label class="text-sm font-medium text-gray-700">Status:</label>
+                                                            <select id="notification-status-filter" class="form-select text-sm">
+                                                                <option value="all">All Status</option>
+                                                                <option value="sent">Sent</option>
+                                                                <option value="failed">Failed</option>
+                                                                <option value="pending">Pending</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="flex items-center gap-2">
+                                                            <label class="text-sm font-medium text-gray-700">Timeframe:</label>
+                                                            <select id="notification-timeframe-filter" class="form-select text-sm">
+                                                                <option value="1h">Last Hour</option>
+                                                                <option value="24h" selected>Last 24 Hours</option>
+                                                                <option value="7d">Last 7 Days</option>
+                                                                <option value="30d">Last 30 Days</option>
+                                                            </select>
+                                                        </div>
+                                                        <button onclick="refreshNotificationLogs()" class="bg-blue-500 hover:bg-blue-600 text-white text-sm px-3 py-1 rounded">
+                                                            <i class="fas fa-sync-alt mr-1"></i>Refresh
+                                                        </button>
+                                                        <button onclick="generateSampleNotificationData()" class="bg-green-500 hover:bg-green-600 text-white text-sm px-3 py-1 rounded">
+                                                            <i class="fas fa-plus mr-1"></i>Generate Sample Data
+                                                        </button>
+                                                    </div>
+                                                </div>
+                
+                                                <!-- Notification Logs Table -->
+                                                <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                                                    <div class="max-h-80 overflow-y-auto">
+                                                        <table class="min-w-full divide-y divide-gray-200">
+                                                            <thead class="bg-gray-50 sticky top-0">
+                                                                <tr>
+                                                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                                                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipient</th>
+                                                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event Type</th>
+                                                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody id="notification-logs-table-body" class="bg-white divide-y divide-gray-200">
+                                                                <tr>
+                                                                    <td colspan="6" class="px-3 py-8 text-center text-gray-500 italic">
+                                                                        Loading notification logs...
+                                                                    </td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                
+                                                <!-- Pagination Controls -->
+                                                <div class="flex justify-between items-center mt-4">
+                                                    <div class="text-sm text-gray-600">
+                                                        Showing <span id="logs-showing-start">0</span> to <span id="logs-showing-end">0</span> of <span id="logs-total-count">0</span> notifications
+                                                    </div>
+                                                    <div class="flex items-center space-x-2">
+                                                        <button onclick="loadPreviousNotificationPage()" id="prev-page-btn" class="bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm" disabled>
+                                                            <i class="fas fa-chevron-left mr-1"></i>Previous
+                                                        </button>
+                                                        <span class="text-sm text-gray-600">
+                                                            Page <span id="current-page-number">1</span>
+                                                        </span>
+                                                        <button onclick="loadNextNotificationPage()" id="next-page-btn" class="bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm" disabled>
+                                                            Next<i class="fas fa-chevron-right ml-1"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                
                                         </div>
-
+                
                                         <!-- Action Buttons -->
                                         <div class="flex justify-between items-center pt-4 border-t border-gray-200">
                                             <div class="flex space-x-3">
@@ -8608,6 +8718,35 @@ if (window.location.hostname === 'localhost' || window.location.hostname.include
 }
 
 /**
+ * Helper functions for user feedback messages
+ */
+function showSuccessMessage(message) {
+    console.log('✅ [SUCCESS]', message);
+    try {
+        // You could implement a toast notification system here
+        // For now, we'll use console and a simple alert fallback
+        if (window.console && console.log) {
+            console.log('Success:', message);
+        }
+        // Could add a toast library integration here
+    } catch (error) {
+        console.error('Error showing success message:', error);
+    }
+}
+
+function showInfoMessage(message) {
+    console.log('ℹ️ [INFO]', message);
+    try {
+        if (window.console && console.info) {
+            console.info('Info:', message);
+        }
+        // Could add a toast library integration here
+    } catch (error) {
+        console.error('Error showing info message:', error);
+    }
+}
+
+/**
  * ============================================================================
  * BULLETPROOF AI AGENT LOGIC TAB - EVENT HOOKS & NOTIFICATIONS
  * Self-contained, isolated system with zero external dependencies
@@ -8652,6 +8791,7 @@ async function initializeAIAgentLogicTab() {
         // Initialize all components
         await initializeEventHooksSystem();
         await initializeTransferRouterSystem();
+        await initializeNotificationLogViewer();
         initializeRealTimeUpdates();
         
         // Mark as initialized
@@ -8792,6 +8932,9 @@ function initializeRealTimeUpdates() {
                 await refreshTransferRouterData();
             }
             
+            // Update Notification Logs data
+            await refreshNotificationStats();
+            
         } catch (error) {
             console.error('❌ [REAL-TIME] Update failed:', error);
         }
@@ -8822,14 +8965,42 @@ async function fetchWithTimeout(url, timeout = 5000) {
  */
 async function refreshEventHooksData() {
     try {
-        const response = await fetchWithTimeout(`/api/event-hooks/company/${aiAgentLogicState.currentCompanyId}/analytics`, 3000);
-        const data = await response.json();
+        // Get AI Agent Logic specific analytics
+        const [aiAnalytics, deliveryAnalytics, notificationLogs] = await Promise.all([
+            fetchWithTimeout(`/api/event-hooks/analytics/ai-agent/24h`, 3000),
+            fetchWithTimeout(`/api/event-hooks/analytics/delivery/24h`, 3000),
+            fetchWithTimeout(`/api/event-hooks/logs/24h?limit=10`, 3000)
+        ]);
         
-        if (data.success) {
-            updateEventHooksAnalytics(data.data);
+        const aiData = await aiAnalytics.json();
+        const deliveryData = await deliveryAnalytics.json();
+        const logsData = await notificationLogs.json();
+        
+        if (aiData.success) {
+            updateAIAgentAnalytics(aiData.data);
         }
+        
+        if (deliveryData.success) {
+            updateDeliveryAnalytics(deliveryData.data);
+        }
+        
+        if (logsData.success) {
+            updateNotificationLogs(logsData.data);
+        }
+        
     } catch (error) {
         console.error('❌ [EVENT-HOOKS] Refresh failed:', error);
+        // Fallback to legacy endpoint
+        try {
+            const response = await fetchWithTimeout(`/api/event-hooks/company/${aiAgentLogicState.currentCompanyId}/analytics`, 3000);
+            const data = await response.json();
+            
+            if (data.success) {
+                updateEventHooksAnalytics(data.data);
+            }
+        } catch (fallbackError) {
+            console.error('❌ [EVENT-HOOKS] Fallback refresh failed:', fallbackError);
+        }
     }
 }
 
@@ -9914,5 +10085,8 @@ function showPersonnelManagerModal(personnel) {
             }
         });
     </script>
+    
+    <!-- AI Agent Logic Notification Log Viewer -->
+    <script src="/js/notification_log_ui.js"></script>
 </body>
 </html>

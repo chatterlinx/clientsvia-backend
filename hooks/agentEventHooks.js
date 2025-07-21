@@ -3,6 +3,7 @@
 // Spartan Coder - Gold Standard Implementation
 
 const NotificationService = require('../services/notificationService');
+const NotificationLog = require('../models/NotificationLog');
 const templates = require('../config/messageTemplates.json');
 const smsClient = require('../clients/smsClient');
 const emailClient = require('../clients/emailClient');
@@ -23,7 +24,9 @@ class AgentEventHooks {
   /**
    * Log event for monitoring and analytics
    */
-  logEvent(eventType, data, result) {
+  async logEvent(eventType, data, result) {
+    const startTime = Date.now();
+    
     const event = {
       timestamp: new Date().toISOString(),
       type: eventType,
@@ -40,6 +43,51 @@ class AgentEventHooks {
     }
 
     console.log(`[EventHooks] ${eventType}:`, result.success ? '✅' : '❌', result.message || result.error);
+
+    // Log event to database for AI Agent Logic analytics
+    try {
+      // Ensure we have company context for AI Agent Logic isolation
+      const companyId = data.companyId || process.env.DEFAULT_COMPANY_ID || null;
+      if (!companyId) {
+        console.warn('[AI-AGENT-LOGIC] No company ID available for event hook logging');
+      }
+      
+      const endTime = Date.now();
+      
+      // Create a comprehensive notification log for the event hook execution
+      await NotificationLog.create({
+        type: 'event_hook',
+        recipient: data.phone || data.email || data.customerName || 'system',
+        subject: `AI Agent Event: ${eventType}`,
+        message: result.message || result.error || 'AI Agent event hook executed',
+        templateKey: eventType,
+        status: result.success ? 'completed' : 'failed',
+        errorMessage: result.success ? null : (result.error || 'Unknown error'),
+        metadata: {
+          eventData: data,
+          result: result,
+          eventType: eventType,
+          channels: result.channels || [],
+          fromAgent: true, // Always true for AI Agent Logic
+          companyId: companyId,
+          sessionId: data.sessionId || `event_${Date.now()}`,
+          traceId: data.traceId || `trace_${Date.now()}`
+        },
+        aiAgentContext: {
+          source: 'agent_event_hooks',
+          eventType: eventType,
+          processingTime: endTime - startTime,
+          success: result.success,
+          sessionId: data.sessionId || `event_${Date.now()}`,
+          conversationStep: data.conversationStep || 'event_execution',
+          confidenceScore: data.confidenceScore || null,
+          intentDetected: data.intentDetected || null
+        }
+      });
+    } catch (error) {
+      console.error('[AI-AGENT-LOGIC] Failed to log event to database:', error);
+      // Don't fail the event hook if logging fails
+    }
   }
 
   /**
@@ -88,7 +136,7 @@ class AgentEventHooks {
         booking: booking
       };
 
-      this.logEvent('booking_confirmed', booking, result);
+      await this.logEvent('booking_confirmed', booking, result);
       return result;
 
     } catch (error) {
@@ -98,7 +146,7 @@ class AgentEventHooks {
         booking: booking
       };
       
-      this.logEvent('booking_confirmed', booking, result);
+      await this.logEvent('booking_confirmed', booking, result);
       return result;
     }
   }
@@ -148,7 +196,7 @@ class AgentEventHooks {
         fallback: fallback
       };
 
-      this.logEvent('fallback_message', fallback, result);
+      await this.logEvent('fallback_message', fallback, result);
       return result;
 
     } catch (error) {
@@ -158,7 +206,7 @@ class AgentEventHooks {
         fallback: fallback
       };
       
-      this.logEvent('fallback_message', fallback, result);
+      await this.logEvent('fallback_message', fallback, result);
       return result;
     }
   }
@@ -179,7 +227,7 @@ class AgentEventHooks {
         timestamp: new Date().toISOString()
       };
 
-      this.logEvent('transfer_completed', transfer, result);
+      await this.logEvent('transfer_completed', transfer, result);
       return result;
 
     } catch (error) {
@@ -189,7 +237,7 @@ class AgentEventHooks {
         transfer: transfer
       };
       
-      this.logEvent('transfer_completed', transfer, result);
+      await this.logEvent('transfer_completed', transfer, result);
       return result;
     }
   }
@@ -242,7 +290,7 @@ class AgentEventHooks {
         emergency: emergency
       };
 
-      this.logEvent('emergency_request', emergency, result);
+      await this.logEvent('emergency_request', emergency, result);
       return result;
 
     } catch (error) {
@@ -253,7 +301,7 @@ class AgentEventHooks {
         emergency: emergency
       };
       
-      this.logEvent('emergency_request', emergency, result);
+      await this.logEvent('emergency_request', emergency, result);
       return result;
     }
   }
@@ -439,6 +487,120 @@ class AgentEventHooks {
       emergencyEvents: eventsByType.emergency_alert || 0,
       transferEvents: eventsByType.transfer_completed || 0
     };
+  }
+
+  /**
+   * Get AI Agent Logic specific analytics from database
+   */
+  async getAIAgentAnalytics(timeframe = '24h') {
+    try {
+      const hours = this.parseTimeframe(timeframe) / (1000 * 60 * 60);
+      const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+      
+      // Use NotificationLog analytics methods
+      const [
+        totalStats,
+        eventBreakdown,
+        performanceMetrics,
+        recentActivity
+      ] = await Promise.all([
+        NotificationLog.getAIAgentStats(since),
+        NotificationLog.getEventBreakdown(since),
+        NotificationLog.getPerformanceMetrics(since),
+        NotificationLog.find({
+          'aiAgentContext.source': { $in: ['agent_event_hooks', 'notification_service'] },
+          createdAt: { $gte: since }
+        })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean()
+      ]);
+
+      return {
+        timeframe,
+        totalStats,
+        eventBreakdown,
+        performanceMetrics,
+        recentActivity: recentActivity.map(log => ({
+          timestamp: log.createdAt,
+          type: log.type,
+          eventType: log.templateKey,
+          status: log.status,
+          recipient: log.recipient,
+          success: log.status === 'sent' || log.status === 'completed',
+          processingTime: log.aiAgentContext?.processingTime || 0,
+          source: log.aiAgentContext?.source || 'unknown'
+        })),
+        summary: {
+          totalNotifications: totalStats.totalNotifications,
+          successRate: totalStats.successRate,
+          avgProcessingTime: performanceMetrics.avgProcessingTime,
+          mostActiveEvent: eventBreakdown[0]?.eventType || 'none',
+          emergencyAlerts: eventBreakdown.find(e => e.eventType === 'emergency_request')?.count || 0
+        }
+      };
+    } catch (error) {
+      console.error('Error getting AI Agent analytics:', error);
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * Get notification delivery analytics for AI Agent Logic tab
+   */
+  async getDeliveryAnalytics(timeframe = '24h') {
+    try {
+      const hours = this.parseTimeframe(timeframe) / (1000 * 60 * 60);
+      const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+      
+      const pipeline = [
+        {
+          $match: {
+            'metadata.fromAgent': true,
+            createdAt: { $gte: since }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              type: '$type',
+              status: '$status'
+            },
+            count: { $sum: 1 },
+            avgProcessingTime: { $avg: '$aiAgentContext.processingTime' }
+          }
+        }
+      ];
+
+      const results = await NotificationLog.aggregate(pipeline);
+      
+      const analytics = {
+        sms: { sent: 0, failed: 0, pending: 0, avgTime: 0 },
+        email: { sent: 0, failed: 0, pending: 0, avgTime: 0 },
+        event_hook: { completed: 0, failed: 0, pending: 0, avgTime: 0 }
+      };
+
+      results.forEach(result => {
+        const { type, status } = result._id;
+        if (analytics[type]) {
+          analytics[type][status] = result.count;
+          analytics[type].avgTime = Math.round(result.avgProcessingTime || 0);
+        }
+      });
+
+      return {
+        timeframe,
+        channels: analytics,
+        total: {
+          sent: analytics.sms.sent + analytics.email.sent + analytics.event_hook.completed,
+          failed: analytics.sms.failed + analytics.email.failed + analytics.event_hook.failed,
+          pending: analytics.sms.pending + analytics.email.pending + analytics.event_hook.pending
+        }
+      };
+    } catch (error) {
+      console.error('Error getting delivery analytics:', error);
+      return { error: error.message };
+    }
   }
 }
 

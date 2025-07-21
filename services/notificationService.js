@@ -1,6 +1,7 @@
 // services/notificationService.js
 
 const mustache = require('mustache');
+const NotificationLog = require('../models/NotificationLog');
 
 class NotificationService {
   constructor({ smsClient, emailClient, templates }) {
@@ -46,7 +47,7 @@ class NotificationService {
       });
 
       // Track sent message
-      this.trackMessage({
+      await this.trackMessage({
         type: 'sms',
         to,
         templateKey,
@@ -62,7 +63,7 @@ class NotificationService {
       console.error('SMS send error:', error);
       
       // Track failed message
-      this.trackMessage({
+      await this.trackMessage({
         type: 'sms',
         to,
         templateKey,
@@ -95,7 +96,7 @@ class NotificationService {
       });
 
       // Track sent message
-      this.trackMessage({
+      await this.trackMessage({
         type: 'email',
         to,
         subject,
@@ -112,7 +113,7 @@ class NotificationService {
       console.error('Email send error:', error);
       
       // Track failed message
-      this.trackMessage({
+      await this.trackMessage({
         type: 'email',
         to,
         subject,
@@ -236,14 +237,59 @@ class NotificationService {
   }
 
   /**
-   * Track sent messages for analytics
+   * Track sent messages for analytics and log to database
    */
-  trackMessage(messageData) {
+  async trackMessage(messageData) {
+    // Keep in memory for immediate access
     this.sentMessages.push(messageData);
     
     // Keep only last 1000 messages in memory
     if (this.sentMessages.length > 1000) {
       this.sentMessages = this.sentMessages.slice(-1000);
+    }
+
+    // Log to database with enhanced AI Agent Logic schema
+    try {
+      // Ensure we have a company ID for AI Agent Logic isolation
+      const companyId = messageData.companyId || this.getDefaultCompanyId();
+      if (!companyId) {
+        console.warn('[AI-AGENT-LOGIC] No company ID available for notification logging');
+      }
+      
+      const logData = {
+        type: messageData.type, // 'sms' or 'email'
+        recipient: messageData.to,
+        subject: messageData.subject || null,
+        message: messageData.message || messageData.body,
+        templateKey: messageData.templateKey,
+        status: messageData.success ? 'sent' : 'failed',
+        errorMessage: messageData.error || null,
+        metadata: {
+          templateData: messageData.data || {},
+          result: messageData.result || {},
+          channel: messageData.type,
+          fromAgent: true, // Always true for AI Agent Logic tab
+          companyId: companyId,
+          sessionId: messageData.sessionId || 'unknown',
+          traceId: messageData.traceId || `trace_${Date.now()}`
+        },
+        aiAgentContext: {
+          source: 'notification_service',
+          eventType: messageData.templateKey || 'unknown',
+          processingTime: Math.max(0, Date.now() - (messageData.timestamp || Date.now())),
+          success: messageData.success || false,
+          sessionId: messageData.sessionId || 'unknown',
+          conversationStep: messageData.conversationStep || 'notification_sent',
+          confidenceScore: messageData.confidenceScore || null,
+          intentDetected: messageData.intentDetected || null
+        }
+      };
+
+      await NotificationLog.create(logData);
+      console.log(`[AI-AGENT-LOGIC] Notification logged: ${messageData.type} to ${messageData.to}`);
+    } catch (error) {
+      console.error('[AI-AGENT-LOGIC] Failed to log notification to database:', error);
+      // Don't fail the notification send if logging fails
     }
   }
 
@@ -321,6 +367,21 @@ class NotificationService {
     return this.sentMessages
       .slice(-limit)
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  }
+
+  /**
+   * Get default company ID for AI Agent Logic isolation
+   */
+  getDefaultCompanyId() {
+    // This should be set by the AI Agent Logic tab context
+    return this.currentCompanyId || process.env.DEFAULT_COMPANY_ID || null;
+  }
+
+  /**
+   * Set company ID for AI Agent Logic context
+   */
+  setCompanyId(companyId) {
+    this.currentCompanyId = companyId;
   }
 }
 
