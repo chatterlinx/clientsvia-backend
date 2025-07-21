@@ -8,6 +8,8 @@ const router = express.Router();
 const NotificationLog = require('../models/NotificationLog');
 const notificationService = require('../services/notificationService');
 const mongoose = require('mongoose');
+const { Parser } = require('json2csv');
+const moment = require('moment');
 
 /**
  * GET /api/notifications/logs
@@ -620,6 +622,188 @@ router.get('/health', (req, res) => {
       success: false,
       status: 'unhealthy',
       error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/notifications/logs/export
+ * Enterprise CSV export with advanced filtering and company isolation
+ */
+router.get('/logs/export', async (req, res) => {
+  try {
+    const { 
+      range = '24h',
+      companyId,
+      type,
+      status,
+      search
+    } = req.query;
+
+    // Build time range filter with enhanced options
+    const timeRanges = {
+      '1h': moment().subtract(1, 'hours'),
+      '6h': moment().subtract(6, 'hours'),
+      '24h': moment().subtract(24, 'hours'),
+      '7d': moment().subtract(7, 'days'),
+      '30d': moment().subtract(30, 'days'),
+      '90d': moment().subtract(90, 'days'),
+      'all': moment().subtract(1, 'years') // Reasonable limit for exports
+    };
+
+    const startDate = timeRanges[range] || timeRanges['24h'];
+
+    // Build query with AI Agent Logic isolation and filters
+    const query = {
+      'metadata.fromAgent': true, // Ensure AI Agent Logic isolation
+      createdAt: { $gte: startDate.toDate() }
+    };
+
+    // Add company filter for multi-tenant security
+    if (companyId) {
+      query['metadata.companyId'] = new mongoose.Types.ObjectId(companyId);
+    }
+
+    // Add additional filters
+    if (type && type !== 'all') {
+      query.type = type;
+    }
+
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    // Add search functionality
+    if (search && search.trim()) {
+      const searchRegex = { $regex: search.trim(), $options: 'i' };
+      query.$or = [
+        { recipient: searchRegex },
+        { subject: searchRegex },
+        { message: searchRegex },
+        { 'aiAgentContext.eventType': searchRegex }
+      ];
+    }
+
+    console.log(`[NOTIFICATION-EXPORT] Exporting logs for range: ${range}, filters:`, {
+      companyId,
+      type,
+      status,
+      hasSearch: !!search
+    });
+
+    // Fetch logs with selected fields for export
+    const logs = await NotificationLog.find(query)
+      .sort({ createdAt: -1 })
+      .limit(10000) // Reasonable export limit
+      .select('createdAt type recipient subject message status templateKey errorMessage aiAgentContext metadata')
+      .lean();
+
+    if (!logs.length) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'No notification logs found in selected range and filters.',
+        filters: { range, companyId, type, status, search }
+      });
+    }
+
+    // Define enhanced CSV fields for comprehensive export
+    const fields = [
+      { 
+        label: 'Timestamp', 
+        value: row => moment(row.createdAt).format('YYYY-MM-DD HH:mm:ss UTC')
+      },
+      { 
+        label: 'Date', 
+        value: row => moment(row.createdAt).format('YYYY-MM-DD')
+      },
+      { 
+        label: 'Time', 
+        value: row => moment(row.createdAt).format('HH:mm:ss')
+      },
+      { label: 'Type', value: 'type' },
+      { label: 'Status', value: 'status' },
+      { label: 'Recipient', value: 'recipient' },
+      { label: 'Subject', value: 'subject' },
+      { 
+        label: 'Message', 
+        value: row => row.message ? row.message.substring(0, 500) + (row.message.length > 500 ? '...' : '') : ''
+      },
+      { label: 'Template', value: 'templateKey' },
+      { label: 'Error', value: 'errorMessage' },
+      { 
+        label: 'Event Type', 
+        value: row => row.aiAgentContext?.eventType || ''
+      },
+      { 
+        label: 'Processing Time (ms)', 
+        value: row => row.aiAgentContext?.processingTime || ''
+      },
+      { 
+        label: 'Source', 
+        value: row => row.aiAgentContext?.source || ''
+      },
+      { 
+        label: 'Session ID', 
+        value: row => row.metadata?.sessionId || ''
+      },
+      { 
+        label: 'Trace ID', 
+        value: row => row.metadata?.traceId || ''
+      },
+      { 
+        label: 'Company ID', 
+        value: row => row.metadata?.companyId || ''
+      }
+    ];
+
+    // Generate CSV with enhanced error handling
+    const parser = new Parser({ 
+      fields,
+      header: true,
+      delimiter: ',',
+      quote: '"',
+      escapedQuote: '""'
+    });
+
+    const csv = parser.parse(logs);
+
+    // Generate descriptive filename with filters and sanitization
+    const timestamp = moment().format('YYYY-MM-DD_HH-mm-ss');
+    const filters = [range];
+    if (companyId) filters.push(`company-${companyId.slice(-6)}`);
+    if (type && type !== 'all') {
+      // Sanitize type field for filename safety
+      const safeType = type.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 20);
+      if (safeType) filters.push(safeType);
+    }
+    if (status && status !== 'all') {
+      // Sanitize status field for filename safety
+      const safeStatus = status.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 20);
+      if (safeStatus) filters.push(safeStatus);
+    }
+    
+    const filename = `notification_logs_${filters.join('_')}_${timestamp}.csv`;
+
+    // Set response headers for file download
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    // Add UTF-8 BOM for Excel compatibility
+    const csvWithBOM = '\uFEFF' + csv;
+
+    console.log(`[NOTIFICATION-EXPORT] Successfully exported ${logs.length} logs to ${filename}`);
+
+    res.status(200).send(csvWithBOM);
+
+  } catch (error) {
+    console.error('[NOTIFICATION-EXPORT] Export failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to export notification logs',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

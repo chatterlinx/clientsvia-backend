@@ -1388,10 +1388,15 @@
                                                                 <option value="24h" selected>Last 24 Hours</option>
                                                                 <option value="7d">Last 7 Days</option>
                                                                 <option value="30d">Last 30 Days</option>
+                                                                <option value="90d">Last 90 Days</option>
+                                                                <option value="all">All Time</option>
                                                             </select>
                                                         </div>
                                                         <button onclick="refreshNotificationLogs()" class="bg-blue-500 hover:bg-blue-600 text-white text-sm px-3 py-1 rounded">
                                                             <i class="fas fa-sync-alt mr-1"></i>Refresh
+                                                        </button>
+                                                        <button onclick="exportNotificationLogs()" class="bg-purple-500 hover:bg-purple-600 text-white text-sm px-3 py-1 rounded">
+                                                            <i class="fas fa-download mr-1"></i>Export CSV
                                                         </button>
                                                         <button onclick="generateSampleNotificationData()" class="bg-green-500 hover:bg-green-600 text-white text-sm px-3 py-1 rounded">
                                                             <i class="fas fa-plus mr-1"></i>Generate Sample Data

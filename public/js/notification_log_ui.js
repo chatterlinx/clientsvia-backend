@@ -591,6 +591,99 @@ async function generateSampleNotificationData() {
 }
 
 /**
+ * Export notification logs to CSV with current filters
+ */
+async function exportNotificationLogs() {
+    try {
+        console.log('📊 [NOTIFICATION-LOG] Starting CSV export...');
+        
+        // Get current filter values
+        const typeFilter = document.getElementById('notification-type-filter');
+        const statusFilter = document.getElementById('notification-status-filter');
+        const timeframeFilter = document.getElementById('notification-timeframe-filter');
+        
+        const exportParams = new URLSearchParams({
+            range: timeframeFilter?.value || '24h',
+            type: typeFilter?.value || 'all',
+            status: statusFilter?.value || 'all'
+        });
+
+        // Add company isolation if available
+        const companyId = getCompanyId();
+        if (companyId) {
+            exportParams.append('companyId', companyId);
+        }
+
+        console.log('📊 [NOTIFICATION-LOG] Export parameters:', Object.fromEntries(exportParams));
+
+        // Build download URL
+        const downloadUrl = `/api/notifications/logs/export?${exportParams.toString()}`;
+        
+        // Show loading state
+        const exportButton = document.querySelector('button[onclick="exportNotificationLogs()"]');
+        const originalText = exportButton?.innerHTML;
+        if (exportButton) {
+            exportButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Exporting...';
+            exportButton.disabled = true;
+        }
+
+        // Trigger download
+        try {
+            const response = await fetch(downloadUrl);
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            // Get the CSV content
+            const csvContent = await response.text();
+            
+            // Extract filename from Content-Disposition header
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = 'notification_logs.csv';
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+                if (filenameMatch) {
+                    filename = filenameMatch[1];
+                }
+            }
+
+            // Create and trigger download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            console.log(`✅ [NOTIFICATION-LOG] CSV export completed: ${filename}`);
+            showNotificationMessage(`Successfully exported notification logs to ${filename}`, 'success');
+
+        } catch (fetchError) {
+            console.error('❌ [NOTIFICATION-LOG] Export download failed:', fetchError);
+            showNotificationMessage('Failed to download export: ' + fetchError.message, 'error');
+        }
+
+    } catch (error) {
+        console.error('❌ [NOTIFICATION-LOG] CSV export failed:', error);
+        showNotificationMessage('Failed to export notification logs: ' + error.message, 'error');
+    } finally {
+        // Restore button state
+        const exportButton = document.querySelector('button[onclick="exportNotificationLogs()"]');
+        if (exportButton) {
+            exportButton.innerHTML = '<i class="fas fa-download mr-1"></i>Export CSV';
+            exportButton.disabled = false;
+        }
+    }
+}
+
+/**
  * Show notification message to user
  */
 function showNotificationMessage(message, type = 'info') {
@@ -693,5 +786,6 @@ window.refreshNotificationLogs = refreshNotificationLogs;
 window.showLogDetails = showLogDetails;
 window.closeLogDetails = closeLogDetails;
 window.generateSampleNotificationData = generateSampleNotificationData;
+window.exportNotificationLogs = exportNotificationLogs;
 
 console.log('📊 [NOTIFICATION-LOG] UI module loaded successfully');
