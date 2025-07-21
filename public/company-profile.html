@@ -8794,6 +8794,9 @@ async function initializeAIAgentLogicTab() {
         await initializeNotificationLogViewer();
         initializeRealTimeUpdates();
         
+        // Register cleanup callbacks
+        aiAgentLogicState.cleanupCallbacks.push(cleanupNotificationLogViewer);
+        
         // Mark as initialized
         aiAgentLogicState.initialized = true;
         

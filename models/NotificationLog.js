@@ -38,6 +38,7 @@ const NotificationLogSchema = new mongoose.Schema({
   message: {
     type: String,
     required: [true, 'Message is required'],
+    maxlength: [10000, 'Message cannot exceed 10,000 characters'],
     validate: {
       validator: function(v) {
         return v && v.length > 0;
@@ -140,6 +141,20 @@ NotificationLogSchema.index({ 'aiAgentContext.source': 1, createdAt: -1 });
 NotificationLogSchema.index({ type: 1, status: 1, createdAt: -1 });
 NotificationLogSchema.index({ 'aiAgentContext.eventType': 1, createdAt: -1 });
 NotificationLogSchema.index({ 'aiAgentContext.success': 1, createdAt: -1 });
+
+// Text search index for message content and recipient search
+NotificationLogSchema.index({ 
+  message: 'text', 
+  recipient: 'text', 
+  subject: 'text' 
+}, {
+  name: 'notification_search_index',
+  weights: { 
+    message: 10, 
+    recipient: 5, 
+    subject: 3 
+  }
+});
 
 // Compound indexes for complex AI Agent Logic queries
 NotificationLogSchema.index({ 

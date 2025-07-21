@@ -1,45 +1,307 @@
 // routes/notifications.js
-// API routes for notification management
+// Enhanced Notification Log API Routes
+// Spartan Coder - Bulletproof Gold Standard Implementation
+// STRICTLY CONFINED TO AI AGENT LOGIC TAB
 
 const express = require('express');
 const router = express.Router();
-const NotificationService = require('../services/notificationService');
-const templates = require('../config/messageTemplates.json');
+const NotificationLog = require('../models/NotificationLog');
+const notificationService = require('../services/notificationService');
+const mongoose = require('mongoose');
 
-// Mock clients for development (replace with Twilio/SendGrid in production)
-const mockSMS = {
-  send: ({ to, body }) => {
-    console.log(`[SMS] To: ${to}, Message: ${body.substring(0, 50)}...`);
-    return Promise.resolve({ 
-      messageId: 'sms_' + Date.now(), 
-      status: 'sent',
-      to,
-      timestamp: new Date().toISOString()
-    });
-  }
-};
+/**
+ * GET /api/notifications/logs
+ * Enhanced notification logs with advanced filtering, pagination, and company isolation
+ */
+router.get('/logs', async (req, res) => {
+    try {
+        const { 
+            search, 
+            status, 
+            type, 
+            timeframe = '24h',
+            companyId,
+            limit = 50,
+            offset = 0,
+            sortBy = 'createdAt',
+            sortOrder = 'desc'
+        } = req.query;
 
-const mockEmail = {
-  send: ({ to, subject, body }) => {
-    console.log(`[Email] To: ${to}, Subject: ${subject}`);
-    return Promise.resolve({ 
-      messageId: 'email_' + Date.now(), 
-      status: 'sent',
-      to,
-      subject,
-      timestamp: new Date().toISOString()
-    });
-  }
-};
+        // Build query with AI Agent Logic isolation
+        const query = {
+            'metadata.fromAgent': true // Ensure AI Agent Logic isolation
+        };
 
-// Initialize notification service
-const notificationService = new NotificationService({
-  smsClient: mockSMS,
-  emailClient: mockEmail,
-  templates
+        // Company isolation for multi-tenant security
+        if (companyId) {
+            query['metadata.companyId'] = new mongoose.Types.ObjectId(companyId);
+        }
+
+        // Status filter
+        if (status && status !== 'all') {
+            query.status = status;
+        }
+
+        // Type filter (sms, email, event_hook)
+        if (type && type !== 'all') {
+            query.type = type;
+        }
+
+        // Timeframe filter
+        if (timeframe) {
+            const timeframes = {
+                '1h': 1 * 60 * 60 * 1000,
+                '6h': 6 * 60 * 60 * 1000,
+                '24h': 24 * 60 * 60 * 1000,
+                '7d': 7 * 24 * 60 * 60 * 1000,
+                '30d': 30 * 24 * 60 * 60 * 1000
+            };
+            
+            const milliseconds = timeframes[timeframe];
+            if (milliseconds) {
+                query.createdAt = { $gte: new Date(Date.now() - milliseconds) };
+            }
+        }
+
+        // Search functionality with multiple fields
+        if (search && search.trim()) {
+            const searchRegex = { $regex: search.trim(), $options: 'i' };
+            query.$or = [
+                { recipient: searchRegex },
+                { subject: searchRegex },
+                { message: searchRegex },
+                { 'aiAgentContext.eventType': searchRegex }
+            ];
+        }
+
+        // Pagination settings
+        const limitNum = Math.min(parseInt(limit) || 50, 100); // Cap at 100
+        const offsetNum = Math.max(parseInt(offset) || 0, 0);
+
+        // Sort settings
+        const sortObj = {};
+        sortObj[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+        // Execute query with pagination
+        const [logs, total] = await Promise.all([
+            NotificationLog.find(query)
+                .sort(sortObj)
+                .skip(offsetNum)
+                .limit(limitNum)
+                .select('createdAt type recipient subject message status templateKey errorMessage aiAgentContext.processingTime aiAgentContext.source aiAgentContext.eventType')
+                .lean(),
+            NotificationLog.countDocuments(query)
+        ]);
+
+        // Format response for frontend
+        const formattedLogs = logs.map(log => ({
+            id: log._id,
+            timestamp: log.createdAt,
+            type: log.type,
+            recipient: log.recipient,
+            subject: log.subject,
+            message: log.message,
+            status: log.status,
+            templateKey: log.templateKey,
+            errorMessage: log.errorMessage,
+            processingTime: log.aiAgentContext?.processingTime || 0,
+            source: log.aiAgentContext?.source || 'unknown',
+            eventType: log.aiAgentContext?.eventType || 'unknown'
+        }));
+
+        res.json({
+            success: true,
+            data: {
+                logs: formattedLogs,
+                pagination: {
+                    total,
+                    limit: limitNum,
+                    offset: offsetNum,
+                    hasMore: (offsetNum + limitNum) < total,
+                    currentPage: Math.floor(offsetNum / limitNum) + 1,
+                    totalPages: Math.ceil(total / limitNum)
+                },
+                filters: {
+                    search,
+                    status,
+                    type,
+                    timeframe,
+                    companyId
+                }
+            },
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('[NOTIFICATION-API] Error fetching notification logs:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch notification logs',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
 });
 
-// Send SMS notification
+/**
+ * GET /api/notifications/stats
+ * Get notification statistics for AI Agent Logic dashboard
+ */
+router.get('/stats', async (req, res) => {
+    try {
+        const { timeframe = '24h', companyId } = req.query;
+        
+        // Parse timeframe
+        const timeframes = {
+            '1h': 1 * 60 * 60 * 1000,
+            '6h': 6 * 60 * 60 * 1000,
+            '24h': 24 * 60 * 60 * 1000,
+            '7d': 7 * 24 * 60 * 60 * 1000,
+            '30d': 30 * 24 * 60 * 60 * 1000
+        };
+        
+        const milliseconds = timeframes[timeframe];
+        if (!milliseconds) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid timeframe. Use: 1h, 6h, 24h, 7d, 30d'
+            });
+        }
+        
+        const since = new Date(Date.now() - milliseconds);
+        
+        // Get AI Agent Logic specific stats
+        const stats = await NotificationLog.getAIAgentStats(since, companyId);
+        
+        res.json({
+            success: true,
+            data: {
+                timeframe,
+                companyId: companyId || 'all',
+                stats,
+                timestamp: new Date().toISOString()
+            }
+        });
+
+    } catch (error) {
+        console.error('[NOTIFICATION-API] Error fetching notification stats:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch notification statistics',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+/**
+ * POST /api/notifications/test/sample-data
+ * Generate sample notification data for testing
+ */
+router.post('/test/sample-data', async (req, res) => {
+    try {
+        const { companyId = '686a680241806a4991f7367f' } = req.body;
+        
+        // Generate sample notification logs
+        const sampleLogs = [
+            {
+                type: 'sms',
+                recipient: '+1234567890',
+                subject: null,
+                message: 'Your AC repair appointment is confirmed for tomorrow at 2 PM.',
+                templateKey: 'booking_confirmed',
+                status: 'sent',
+                metadata: {
+                    fromAgent: true,
+                    companyId: new mongoose.Types.ObjectId(companyId),
+                    sessionId: `test-session-${Date.now()}-1`
+                },
+                aiAgentContext: {
+                    source: 'agent_event_hooks',
+                    eventType: 'booking_confirmed',
+                    processingTime: Math.floor(Math.random() * 1000) + 500,
+                    success: true,
+                    sessionId: `test-session-${Date.now()}-1`,
+                    conversationStep: 'booking_completion',
+                    confidenceScore: 0.95,
+                    intentDetected: 'schedule_service'
+                }
+            },
+            {
+                type: 'email',
+                recipient: 'customer@example.com',
+                subject: 'Booking Confirmation - Your Service Company',
+                message: 'Your appointment has been scheduled. We will arrive tomorrow at 2 PM.',
+                templateKey: 'booking_confirmed',
+                status: 'sent',
+                metadata: {
+                    fromAgent: true,
+                    companyId: new mongoose.Types.ObjectId(companyId),
+                    sessionId: `test-session-${Date.now()}-2`
+                },
+                aiAgentContext: {
+                    source: 'notification_service',
+                    eventType: 'booking_confirmed',
+                    processingTime: Math.floor(Math.random() * 1500) + 800,
+                    success: true,
+                    sessionId: `test-session-${Date.now()}-2`,
+                    conversationStep: 'email_confirmation',
+                    confidenceScore: 0.88,
+                    intentDetected: 'schedule_service'
+                }
+            },
+            {
+                type: 'event_hook',
+                recipient: 'system',
+                subject: 'AI Agent Event: fallback_message',
+                message: 'Customer inquiry escalated to human agent due to complex pricing question.',
+                templateKey: 'fallback_message',
+                status: 'completed',
+                metadata: {
+                    fromAgent: true,
+                    companyId: new mongoose.Types.ObjectId(companyId),
+                    sessionId: `test-session-${Date.now()}-3`
+                },
+                aiAgentContext: {
+                    source: 'agent_event_hooks',
+                    eventType: 'fallback_message',
+                    processingTime: Math.floor(Math.random() * 800) + 300,
+                    success: true,
+                    sessionId: `test-session-${Date.now()}-3`,
+                    conversationStep: 'escalation',
+                    confidenceScore: 0.45,
+                    intentDetected: 'pricing_inquiry'
+                }
+            }
+        ];
+        
+        // Insert sample data
+        const insertedLogs = await NotificationLog.insertMany(sampleLogs);
+        
+        res.json({
+            success: true,
+            message: `Generated ${insertedLogs.length} sample notification logs`,
+            data: insertedLogs.map(log => ({
+                id: log._id,
+                type: log.type,
+                status: log.status,
+                eventType: log.aiAgentContext?.eventType,
+                timestamp: log.createdAt
+            }))
+        });
+        
+    } catch (error) {
+        console.error('[NOTIFICATION-API] Error generating sample data:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to generate sample data',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+/**
+ * POST /api/notifications/sms
+ * Send SMS notification via Twilio
+ */
 router.post('/sms', async (req, res) => {
   try {
     const { to, templateKey, data, options } = req.body;

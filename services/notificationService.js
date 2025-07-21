@@ -9,6 +9,58 @@ class NotificationService {
     this.emailClient = emailClient;
     this.templates = templates || {};
     this.sentMessages = []; // Track sent messages for analytics
+    this.rateLimiter = new Map(); // Track sending rates per recipient
+  }
+
+  /**
+   * Check rate limits for a recipient
+   */
+  checkRateLimit(recipient, type = 'sms', windowMs = 60000, maxAttempts = 5) {
+    const key = `${type}:${recipient}`;
+    const now = Date.now();
+    
+    if (!this.rateLimiter.has(key)) {
+      this.rateLimiter.set(key, []);
+    }
+    
+    const attempts = this.rateLimiter.get(key);
+    
+    // Remove attempts outside the window
+    const validAttempts = attempts.filter(time => now - time < windowMs);
+    
+    // Check if we're within limits
+    if (validAttempts.length >= maxAttempts) {
+      console.warn(`[RATE-LIMIT] ${type.toUpperCase()} rate limit exceeded for ${recipient}`);
+      return false;
+    }
+    
+    // Record this attempt
+    validAttempts.push(now);
+    this.rateLimiter.set(key, validAttempts);
+    
+    // Clean up old entries periodically
+    if (this.rateLimiter.size > 1000) {
+      this.cleanupRateLimiter();
+    }
+    
+    return true;
+  }
+
+  /**
+   * Clean up old rate limiter entries
+   */
+  cleanupRateLimiter() {
+    const now = Date.now();
+    const windowMs = 60000; // 1 minute
+    
+    for (const [key, attempts] of this.rateLimiter.entries()) {
+      const validAttempts = attempts.filter(time => now - time < windowMs);
+      if (validAttempts.length === 0) {
+        this.rateLimiter.delete(key);
+      } else {
+        this.rateLimiter.set(key, validAttempts);
+      }
+    }
   }
 
   /**
@@ -34,6 +86,20 @@ class NotificationService {
    */
   async sendSMS(to, templateKey, data, options = {}) {
     try {
+      // Check rate limits first
+      if (!this.checkRateLimit(to, 'sms')) {
+        await this.trackMessage({
+          type: 'sms',
+          to,
+          templateKey,
+          data,
+          timestamp: new Date(),
+          success: false,
+          error: 'Rate limit exceeded'
+        });
+        return { success: false, error: 'Rate limit exceeded. Please wait before sending again.' };
+      }
+
       const message = this.formatMessage(templateKey, data, 'sms');
       if (!message || !to) {
         console.warn('Invalid SMS parameters:', { to, templateKey, hasMessage: !!message });
@@ -82,6 +148,21 @@ class NotificationService {
    */
   async sendEmail(to, subject, templateKey, data, options = {}) {
     try {
+      // Check rate limits first
+      if (!this.checkRateLimit(to, 'email')) {
+        await this.trackMessage({
+          type: 'email',
+          to,
+          templateKey,
+          data,
+          subject,
+          timestamp: new Date(),
+          success: false,
+          error: 'Rate limit exceeded'
+        });
+        return { success: false, error: 'Rate limit exceeded. Please wait before sending again.' };
+      }
+
       const body = this.formatMessage(templateKey, data, 'email');
       if (!body || !to || !subject) {
         console.warn('Invalid email parameters:', { to, subject, templateKey, hasBody: !!body });

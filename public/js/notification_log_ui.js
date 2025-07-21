@@ -4,6 +4,37 @@
  * STRICTLY CONFINED TO AI AGENT LOGIC TAB
  */
 
+/**
+ * Cleanup notification log viewer - Called when leaving AI Agent Logic tab
+ */
+function cleanupNotificationLogViewer() {
+    try {
+        console.log('🧹 [NOTIFICATION-LOG] Cleaning up log viewer...');
+        
+        // Clear refresh interval
+        if (notificationLogState.refreshInterval) {
+            clearInterval(notificationLogState.refreshInterval);
+            notificationLogState.refreshInterval = null;
+        }
+        
+        // Clear any pending timeouts
+        if (window.notificationLogSearchTimeout) {
+            clearTimeout(window.notificationLogSearchTimeout);
+            window.notificationLogSearchTimeout = null;
+        }
+        
+        // Reset state
+        notificationLogState.initialized = false;
+        notificationLogState.isRefreshing = false;
+        notificationLogState.currentLogs = [];
+        
+        console.log('✅ [NOTIFICATION-LOG] Cleanup complete');
+        
+    } catch (error) {
+        console.error('❌ [NOTIFICATION-LOG] Cleanup failed:', error);
+    }
+}
+
 // Notification Log Viewer State - Isolated to AI Agent Logic tab
 const notificationLogState = {
     initialized: false,
@@ -125,13 +156,17 @@ function setupNotificationLogFilters() {
             });
         }
         
-        // Search functionality
+        // Search functionality with improved timeout handling
         const searchInput = document.getElementById('log-search-input');
         if (searchInput) {
-            let searchTimeout;
             searchInput.addEventListener('input', (e) => {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
+                // Clear existing timeout
+                if (window.notificationLogSearchTimeout) {
+                    clearTimeout(window.notificationLogSearchTimeout);
+                }
+                
+                // Set new timeout with global reference for cleanup
+                window.notificationLogSearchTimeout = setTimeout(() => {
                     notificationLogState.filters.search = e.target.value.trim();
                     notificationLogState.pagination.offset = 0; // Reset pagination
                     refreshNotificationLogs();

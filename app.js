@@ -30,6 +30,24 @@ const llmRoutes = require('./routes/llm');
 const bookingRoutes = require('./routes/booking');
 const transferRoutes = require('./routes/transfer');
 
+// Event Hooks and Notification System Routes with error handling
+let eventHooksRoutes, notificationRoutes;
+try {
+  eventHooksRoutes = require('./routes/eventHooks');
+  console.log('✅ Event Hooks routes loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load Event Hooks routes:', error.message);
+  process.exit(1);
+}
+
+try {
+  notificationRoutes = require('./routes/notifications');
+  console.log('✅ Notification routes loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load Notification routes:', error.message);
+  process.exit(1);
+}
+
 const app = express();
 
 // Parse cookies before any middleware that relies on them
@@ -40,6 +58,16 @@ app.use(apiLimiter);              // Rate limiting
 app.use(express.json());          // Body parsing
 
 const redisClient = redis.createClient({ url: process.env.REDIS_URL });
+
+// Handle Redis connection errors gracefully
+redisClient.on('error', (err) => {
+  console.error('Redis Client Error:', err);
+});
+
+redisClient.on('connect', () => {
+  console.log('✅ Redis connected successfully');
+});
+
 const redisStore = new RedisStore({ client: redisClient });
 app.use(session({
   store: redisStore,
@@ -78,11 +106,15 @@ app.use('/api/ollama', ollamaRoutes);
 app.use('/api/llm', llmRoutes);
 app.use('/api/booking', bookingRoutes);
 app.use('/api/transfer', transferRoutes);
+app.use('/api/event-hooks', eventHooksRoutes);
+app.use('/api/notifications', notificationRoutes);
 console.log('✅ Monitoring routes registered at /api/monitoring');
 console.log('✅ Ollama routes registered at /api/ollama');
 console.log('✅ LLM routes registered at /api/llm');
 console.log('✅ Booking routes registered at /api/booking');
 console.log('✅ Transfer routes registered at /api/transfer');
+console.log('✅ Event Hooks routes registered at /api/event-hooks');
+console.log('✅ Notification routes registered at /api/notifications');
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 
