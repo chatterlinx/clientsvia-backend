@@ -1514,57 +1514,6 @@
 
 
 
-
-
-                                                <div class="mt-6 pt-4 border-t border-purple-200">
-                                                    <h5 class="font-semibold text-purple-900 mb-3">Test Behavior Detection</h5>
-                                                    <div class="flex gap-3">
-                                                        <input type="text" id="behavior-test-input" class="form-input flex-1" placeholder="Test phrase: 'I'm so frustrated with this service'">
-                                                        <button type="button" id="test-behavior-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg">
-                                                            <i class="fas fa-flask mr-2"></i>Test
-                                                        </button>
-                                                    </div>
-                                                    <div id="behavior-test-result" class="mt-3 hidden p-3 bg-purple-50 rounded-lg">
-                                                        <div class="text-sm">
-                                                            <strong>Detection Result:</strong> <span id="behavior-detection-type"></span><br>
-                                                            <strong>Response:</strong> <span id="behavior-response-text"></span><br>
-                                                            <strong>Action:</strong> <span id="behavior-action"></span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-    <script>
-        // Global function to get current company ID
-        function getCurrentCompanyId() {
-            // First try to get from global variable
-            if (window.currentCompanyId) {
-                return window.currentCompanyId;
-            }
-            
-            // Fallback: extract from URL parameters
-            const urlParams = new URLSearchParams(window.location.search);
-            const companyId = urlParams.get('id');
-            
-            if (!companyId) {
-                console.error('Company ID not found in URL or global variable');
-                return null;
-            }
-            
-            return companyId;
-        }
-
-        // Basic mobile menu toggle
-        document.getElementById('mobile-menu-button')?.addEventListener('click', () => {
-            document.getElementById('mobile-menu')?.classList.toggle('hidden');
-        });
-
         // Active Nav Link Highlighting & Main Page Tab Logic
         document.addEventListener('DOMContentLoaded', function() {
             // --- Navigation Link Highlighting ---
