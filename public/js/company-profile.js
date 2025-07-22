@@ -322,8 +322,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Note: Google TTS functionality has been removed - using ElevenLabs only
     
     async function fetchCompanyData() {
-        // Use local companyId if available, otherwise use global window.companyId
-        const currentCompanyId = companyId || window.companyId;
+        // Use multiple fallback methods to get company ID
+        let currentCompanyId = companyId || window.companyId || window.currentCompanyId;
+        
+        // If still no company ID, extract directly from URL as final fallback
+        if (!currentCompanyId) {
+            const urlParams = new URLSearchParams(window.location.search);
+            currentCompanyId = urlParams.get('id');
+            console.log('🔍 Extracted company ID from URL as fallback:', currentCompanyId);
+        }
+        
         console.log('📡 fetchCompanyData called, companyId:', currentCompanyId);
         
         if (!currentCompanyId) {
