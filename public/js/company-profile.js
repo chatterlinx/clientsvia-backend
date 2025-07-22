@@ -3278,7 +3278,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize monitoring system
     // Note: Monitoring will be initialized after company data is loaded in fetchCompanyData()
-    console.log('Monitoring system found:', !!agentSetupPageContainer);
     console.log('Company ID from URL:', companyId);
 
     // We need to call these setup functions.
@@ -3294,45 +3293,10 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn('⚠️ Personality responses form not found - will try again after data load');
     }
     
-    // *** CRITICAL: Set up accordion functionality ***
-    // This needs to run immediately when page loads, not just when company data is fetched
-    if (agentSetupPageContainer) {
-        const sectionHeaders = agentSetupPageContainer.querySelectorAll('.agent-setup-section-header');
-        console.log(`🔧 Setting up ${sectionHeaders.length} accordion sections...`);
-        
-        sectionHeaders.forEach(header => {
-            const sectionContent = header.nextElementSibling;
-            const chevron = header.querySelector('i.fas.fa-chevron-up, i.fas.fa-chevron-down');
-            if (sectionContent && chevron) { 
-                // Initialize collapsed state (except for categories which should be open by default)
-                if (header.parentElement?.dataset.sectionName !== 'categories') { 
-                    sectionContent.classList.add('collapsed');
-                    chevron.classList.remove('fa-chevron-up'); 
-                    chevron.classList.add('fa-chevron-down'); 
-                } else { 
-                    sectionContent.classList.remove('collapsed');
-                    chevron.classList.remove('fa-chevron-down'); 
-                    chevron.classList.add('fa-chevron-up'); 
-                }
-                
-                // Add click event listener for accordion functionality
-                header.addEventListener('click', () => {
-                    console.log('🖱️ Accordion section clicked:', header.parentElement?.dataset.sectionName);
+    // Agent Setup accordion functionality removed - UI no longer exists
                     sectionContent.classList.toggle('collapsed');
                     chevron.classList.toggle('fa-chevron-up');
                     chevron.classList.toggle('fa-chevron-down');
-                });
-                
-                console.log('✅ Accordion setup for section:', header.parentElement?.dataset.sectionName);
-            } else {
-                console.warn('⚠️ Missing content or chevron for accordion section:', header.parentElement?.dataset.sectionName);
-            }
-        });
-        
-        console.log('🎯 Accordion initialization complete');
-    } else {
-        console.warn('⚠️ Container not found - accordion setup skipped');
-    }
     
     // Initialize behavior engine configuration
     initializeBehaviorEngine();
