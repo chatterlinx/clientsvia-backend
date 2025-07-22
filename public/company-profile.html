@@ -1425,35 +1425,63 @@
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-                                    <!-- SERVICE ISSUE DETECTION AND BOOKING FLOW -->
-                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="service-issue-flow">
-                                        <h3 class="agent-setup-section-header">
-                                            <span><i class="fas fa-route mr-2"></i>Service Issue Detection & Booking Flow</span>
-                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
-                                        </h3>
-                                        <div class="section-content collapsed">
-                                            <div class="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl p-6 mb-6">
-                                                <div class="flex items-center mb-4">
-                                                    <i class="fas fa-tools text-2xl text-orange-600 mr-3"></i>
-                                                    <div>
-                                                        <h4 class="text-lg font-semibold text-orange-900">Intelligent Service Issue Routing</h4>
-                                                        <p class="text-orange-700 text-sm">Automatically detects AC/heating issues and routes to booking flow</p>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Flow Overview -->
-                                                <div class="bg-white rounded-lg p-4 mb-4 border border-orange-100">
-                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
-                                                        <i class="fas fa-diagram-project text-blue-600 mr-2"></i>Flow Process
-                                                    </h5>
-                                                    <div class="space-y-3">
-                                                        <div class="flex items-center text-sm">
-                                                            <div class="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3">1</div>
-                                                            <div class="flex-1">
-                                                                <span class="font-medium">Issue Detection:</span> "My AC stopped working this morning"
-                                                            </div>
-                                                        </div>
+                    <!-- End of AI Agent Logic content -->
+                </div>
+            </div>
+        </div>
+    </body>
+
+    <script>
+        // Global function to get current company ID
+        function getCurrentCompanyId() {
+            // First try to get from global variable
+            if (window.currentCompanyId) {
+                return window.currentCompanyId;
+            }
+            
+            // Fallback: extract from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const companyId = urlParams.get('id');
+            
+            if (!companyId) {
+                console.error('Company ID not found in URL or global variable');
+                return null;
+            }
+            
+            return companyId;
+        }
+
+        // Basic mobile menu toggle
+        document.getElementById('mobile-menu-button')?.addEventListener('click', () => {
+            document.getElementById('mobile-menu')?.classList.toggle('hidden');
+        });
+
+        // Active Nav Link Highlighting & Main Page Tab Logic
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- Navigation Link Highlighting ---
+            let currentPath = window.location.pathname.replace(/\/$/, "") || "/index.html";
+            document.querySelectorAll('header nav a.nav-link, #mobile-menu a.nav-link').forEach(link => {
+                let linkPath = new URL(link.href).pathname.replace(/\/$/, "") || "/index.html";
+                link.classList.remove('active-tab', 'text-gray-700');
+                if (linkPath === currentPath || (link.href.includes("company-profile.html") && window.location.href.includes("company-profile.html"))) {
+                    link.classList.add('active-tab');
+                } else {
+                    link.classList.add('text-gray-700');
+                }
+            });
+            
+            return companyId;
+        }
+
+        // Basic mobile menu toggle
+        document.getElementById('mobile-menu-button')?.addEventListener('click', () => {
+            document.getElementById('mobile-menu')?.classList.toggle('hidden');
+        });
                                                         <div class="flex items-center text-sm">
                                                             <div class="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-xs font-bold mr-3">2</div>
                                                             <div class="flex-1">
