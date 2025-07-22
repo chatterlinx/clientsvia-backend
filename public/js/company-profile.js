@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const agentSetupPageContainer = document.getElementById('agent-setup-content');
     const agentSetupForm = agentSetupPageContainer?.querySelector('#agent-setup-form');
     const agentModeSelect = agentSetupPageContainer?.querySelector('#agentModeSelect');
-    const companySpecialtiesInputAgentSetup = agentSetupPageContainer?.querySelector('#companySpecialties');
+    // Company Specialties input removed
     const timezoneSelectAgentSetup = agentSetupPageContainer?.querySelector('#agentSetupTimezoneSelect'); 
     const currentTimeDisplayAgentSetup = agentSetupPageContainer?.querySelector('#agentSetupCurrentTimeDisplay');
     const categoryQAsTextarea = agentSetupPageContainer?.querySelector('#categoryQAs');
@@ -562,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentCompanyData.agentSetup.timezone = currentCompanyData.agentSetup.timezone || currentCompanyData.timezone || 'America/New_York';
             currentCompanyData.tradeTypes = currentCompanyData.agentSetup.categories; 
             currentCompanyData.timezone = currentCompanyData.agentSetup.timezone; 
-            currentCompanyData.agentSetup.companySpecialties = currentCompanyData.agentSetup.companySpecialties || '';
+            // Company Specialties default removed
             currentCompanyData.agentSetup.operatingHours = currentCompanyData.agentSetup.operatingHours?.length === 7
                 ? currentCompanyData.agentSetup.operatingHours
                 : daysOfWeekForOperatingHours.map(day => ({ day: day, enabled: !['Saturday', 'Sunday'].includes(day), start: '09:00', end: '17:00' }));
@@ -1734,7 +1734,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Business Categories section removed - related JavaScript code disabled
         
         if (agentModeSelect) agentModeSelect.value = agentSetup.agentMode || 'full';
-        if (companySpecialtiesInputAgentSetup) companySpecialtiesInputAgentSetup.value = agentSetup.companySpecialties || '';
+        // Company Specialties input removed
         if (timezoneSelectAgentSetup) {
             timezoneSelectAgentSetup.value = agentSetup.timezone || currentCompanyData?.timezone || 'America/New_York';
             if(currentTimeDisplayAgentSetup || currentTimeDisplaySpan) { 
@@ -1852,7 +1852,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const agentSetupData = {
             agentMode: agentSetupPageContainer.querySelector('#agentModeSelect')?.value || 'full',
             categories: Array.from(agentSetupPageContainer.querySelectorAll('input[name="category"]:checked')).map(cb => cb.value),
-            companySpecialties: agentSetupPageContainer.querySelector('#companySpecialties')?.value.trim() || '',
+            // Company Specialties field removed
             timezone: agentSetupPageContainer.querySelector('#agentSetupTimezoneSelect')?.value || 'America/New_York',
             operatingHours: daysOfWeekForOperatingHours.map(day => {
                 const dayLC = day.toLowerCase().substring(0, 3); 
