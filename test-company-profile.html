@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Company Profile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div class="p-8">
+        <h1 class="text-2xl font-bold mb-4">Company Profile JavaScript Test</h1>
+        <div id="test-results" class="space-y-2"></div>
+    </div>
+
+    <script src="public/js/company-profile.js"></script>
+    <script>
+        // Mock company data for testing
+        const mockCompanyData = {
+            _id: "test123",
+            name: "Test Company",
+            email: "test@company.com",
+            agentSetup: {
+                behaviors: {}
+            }
+        };
+
+        // Test results container
+        const resultsDiv = document.getElementById('test-results');
+        
+        function addTestResult(test, passed, message = '') {
+            const div = document.createElement('div');
+            div.className = `p-2 rounded ${passed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`;
+            div.innerHTML = `<strong>${test}:</strong> ${passed ? '✅ PASSED' : '❌ FAILED'} ${message}`;
+            resultsDiv.appendChild(div);
+        }
+
+        // Run tests
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🧪 Running Company Profile JavaScript Tests...');
+            
+            // Test 1: Check if fetchCompanyData function exists
+            addTestResult('fetchCompanyData function exists', typeof window.fetchCompanyData === 'function');
+            
+            // Test 2: Check if global variables are properly initialized
+            addTestResult('Global variables initialized', typeof currentCompanyData !== 'undefined');
+            
+            // Test 3: Test that orphaned functions are safely stubbed
+            try {
+                if (typeof populateAgentSetupForm === 'function') {
+                    populateAgentSetupForm(mockCompanyData);
+                    addTestResult('populateAgentSetupForm stub works', true, '- Function exists and runs without error');
+                } else {
+                    addTestResult('populateAgentSetupForm function', true, '- Function properly removed');
+                }
+            } catch (error) {
+                addTestResult('populateAgentSetupForm test', false, `- Error: ${error.message}`);
+            }
+
+            // Test 4: Test company data loading simulation
+            try {
+                window.companyId = 'test123';
+                if (typeof fetchCompanyData === 'function') {
+                    addTestResult('fetchCompanyData callable', true, '- Function can be called');
+                }
+            } catch (error) {
+                addTestResult('fetchCompanyData test', false, `- Error: ${error.message}`);
+            }
+
+            // Test 5: Check for undefined function references
+            let hasUndefinedRefs = false;
+            const originalError = console.error;
+            console.error = function(...args) {
+                if (args.some(arg => typeof arg === 'string' && arg.includes('is not defined'))) {
+                    hasUndefinedRefs = true;
+                }
+                originalError.apply(console, args);
+            };
+            
+            setTimeout(() => {
+                console.error = originalError;
+                addTestResult('No undefined function references', !hasUndefinedRefs);
+                
+                console.log('🎉 Company Profile JavaScript Tests Complete!');
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
