@@ -794,10 +794,52 @@
     <script src="/js/company-profile.js"></script>
     
     <script>
-        // Additional page-specific functionality
+        // 🎯 CRITICAL: Main Page Initialization Script - Company ID Extraction & Data Loading
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize any additional functionality here
-            console.log('Company profile page loaded successfully');
+            console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
+            
+            // Get company ID from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const companyId = urlParams.get('id');
+            
+            if (companyId) {
+                console.log('✅ Company ID found in URL:', companyId);
+                
+                // Set global company ID variables for cross-script access
+                window.companyId = companyId;
+                window.currentCompanyId = companyId;
+                
+                // Wait for fetchCompanyData function to be available from company-profile.js
+                const initializeData = () => {
+                    if (typeof fetchCompanyData === 'function') {
+                        console.log('📡 Calling fetchCompanyData to load company data...');
+                        fetchCompanyData()
+                            .then(() => {
+                                console.log('✅ Company data fetch completed successfully');
+                            })
+                            .catch(error => {
+                                console.error('❌ Error fetching company data:', error);
+                                // Show user-friendly error message
+                                document.querySelector('.loading-container')?.innerHTML = 
+                                    '<div class="p-8 text-center"><h1 class="text-xl font-bold text-red-600">Error Loading Company Data</h1><p class="text-gray-600 mt-2">Please refresh the page or contact support.</p></div>';
+                            });
+                    } else {
+                        console.log('⏳ fetchCompanyData not yet available, retrying...');
+                        setTimeout(initializeData, 100); // Retry every 100ms until function is available
+                    }
+                };
+                
+                // Start initialization
+                initializeData();
+                
+            } else {
+                console.error('❌ No company ID found in URL parameters');
+                // Show error message for missing company ID
+                document.body.innerHTML = 
+                    '<div class="p-8 text-center"><h1 class="text-2xl font-bold text-red-600">Error: No Company ID</h1><p class="text-gray-600 mt-2">Please access this page with a valid company ID parameter (?id=COMPANY_ID).</p></div>';
+            }
+            
+            console.log('Company profile page initialization completed');
         });
     </script>
 </body>
