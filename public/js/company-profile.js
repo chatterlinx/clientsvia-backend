@@ -339,8 +339,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (companyNameHeader) companyNameHeader.textContent = "Company Profile (No ID)";
             if (companyIdSubheader) companyIdSubheader.textContent = "ID: Not available";
             if (editProfileButton) editProfileButton.style.display = 'none';
-            initializeAgentSetupInteractivity();
-            populateAgentSetupForm({}, []);
             populatePersonalityResponses({});
             return;
         }
@@ -364,22 +362,10 @@ document.addEventListener('DOMContentLoaded', () => {
             currentCompanyData.notes = currentCompanyData.notes || [];
             currentCompanyData.twilioConfig = currentCompanyData.twilioConfig || {};
             currentCompanyData.aiSettings = currentCompanyData.aiSettings || {};
+            // Preserve agentSetup data but don't initialize UI elements that no longer exist
             currentCompanyData.agentSetup = currentCompanyData.agentSetup || {};
             currentCompanyData.integrations = currentCompanyData.integrations || {};
             currentCompanyData.integrations.googleOAuth = currentCompanyData.integrations.googleOAuth || {};
-            
-            currentCompanyData.agentSetup.agentMode = currentCompanyData.agentSetup.agentMode || 'full';
-            currentCompanyData.agentSetup.categories = currentCompanyData.agentSetup.categories || (currentCompanyData.tradeTypes || []);
-            currentCompanyData.agentSetup.timezone = currentCompanyData.agentSetup.timezone || currentCompanyData.timezone || 'America/New_York';
-            currentCompanyData.tradeTypes = currentCompanyData.agentSetup.categories; 
-            currentCompanyData.timezone = currentCompanyData.agentSetup.timezone; 
-            // Company Specialties default removed
-            currentCompanyData.agentSetup.operatingHours = currentCompanyData.agentSetup.operatingHours?.length === 7
-                ? currentCompanyData.agentSetup.operatingHours
-                : daysOfWeekForOperatingHours.map(day => ({ day: day, enabled: !['Saturday', 'Sunday'].includes(day), start: '09:00', end: '17:00' }));
-            currentCompanyData.agentSetup.use247Routing = typeof currentCompanyData.agentSetup.use247Routing === 'boolean' ? currentCompanyData.agentSetup.use247Routing : false;
-            currentCompanyData.agentSetup.protocols = { ...defaultProtocols, ...(currentCompanyData.agentSetup.protocols || {}) };
-            currentCompanyData.agentSetup.textToPayPhoneSource = currentCompanyData.agentSetup.textToPayPhoneSource || 'callerID';
             currentCompanyData.agentSetup.schedulingRules = currentCompanyData.agentSetup.schedulingRules || []; 
             currentCompanyData.agentSetup.callRouting = currentCompanyData.agentSetup.callRouting || [];
             currentCompanyData.agentSetup.afterHoursRouting = currentCompanyData.agentSetup.afterHoursRouting || [];
@@ -400,7 +386,6 @@ document.addEventListener('DOMContentLoaded', () => {
             renderCalendarSettings(currentCompanyData);
 
             populateAiSettingsForm(currentCompanyData.aiSettings);
-            populateAgentSetupForm(currentCompanyData.agentSetup, currentCompanyData.tradeTypes);
             // --- ADD THIS BLOCK TO POPULATE THE NEW VOICE TAB ---
             if (currentCompanyData) {
                 const voiceSettings = {
@@ -418,10 +403,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- END OF NEW BLOCK ---
             populatePersonalityResponses(currentCompanyData.personalityResponses || {});
             renderNotes();
-            initializeAgentSetupInteractivity();
             
             // Initialize monitoring system after company data is loaded
-            if (agentSetupPageContainer && currentCompanyData) {
+            if (currentCompanyData) {
                 console.log('✅ Company data loaded successfully, initializing monitoring system for:', companyId);
                 console.log('✅ Monitoring system initialized');
                 console.log('✅ Company data available:', !!currentCompanyData);
