@@ -408,15 +408,13 @@ document.addEventListener('DOMContentLoaded', () => {
             populatePersonalityResponses(currentCompanyData.personalityResponses || {});
             renderNotes();
             
-            // Initialize monitoring system after company data is loaded
+            // Monitoring system initialization removed - legacy Agent Setup functionality
             if (currentCompanyData) {
-                console.log('✅ Company data loaded successfully, initializing monitoring system for:', companyId);
-                console.log('✅ Monitoring system initialized');
+                console.log('✅ Company data loaded successfully for:', companyId);
                 console.log('✅ Company data available:', !!currentCompanyData);
-                initializeMonitoringSystem();
+                // initializeMonitoringSystem() call removed - function no longer exists
             } else {
-                console.warn('⚠️ Monitoring system NOT initialized:');
-                console.warn('  - Monitoring system not available');
+                console.warn('⚠️ Company data not loaded:');
                 console.warn('  - Company data:', !!currentCompanyData);
                 console.warn('  - Company ID:', companyId);
             }
