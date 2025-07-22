@@ -92,29 +92,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const timezoneSelectAgentSetup = agentSetupPageContainer?.querySelector('#agentSetupTimezoneSelect'); 
     const currentTimeDisplayAgentSetup = agentSetupPageContainer?.querySelector('#agentSetupCurrentTimeDisplay');
     const categoryQAsTextarea = agentSetupPageContainer?.querySelector('#categoryQAs');
-    const companyQnaForm = agentSetupPageContainer?.querySelector('#companyQnaForm');
-    const companyQnaQuestion = agentSetupPageContainer?.querySelector('#companyQnaQuestion');
-    const companyQnaAnswer = agentSetupPageContainer?.querySelector('#companyQnaAnswer');
-    const companyQnaKeywords = agentSetupPageContainer?.querySelector('#companyQnaKeywords');
-    const companyQnaPreview = agentSetupPageContainer?.querySelector('#companyQnaPreview');
-    const placeholderSelect = agentSetupPageContainer?.querySelector('#placeholderSelect');
-    const insertPlaceholderBtn = agentSetupPageContainer?.querySelector('#insertPlaceholderBtn');
-    const companyQnaSaveBtn = agentSetupPageContainer?.querySelector('#companyQnaSaveBtn');
-    const companyQnaCancelBtn = agentSetupPageContainer?.querySelector('#companyQnaCancelBtn');
-    const companyQnaList = agentSetupPageContainer?.querySelector('#companyQnaList');
-    const companyQnaFormError = agentSetupPageContainer?.querySelector('#companyQnaFormError');
+    // Company Q&A form elements removed
 
-    function updateQnaSaveBtnState() {
-        if (!companyQnaSaveBtn) return;
-        const q = companyQnaQuestion?.value.trim();
-        const a = companyQnaAnswer?.value.trim();
+    // Company Q&A functions removed
         companyQnaSaveBtn.disabled = !q || !a;
     }
 
-    if (companyQnaQuestion) companyQnaQuestion.addEventListener('input', updateQnaSaveBtnState);
-    if (companyQnaAnswer) {
-        companyQnaAnswer.addEventListener('input', () => { updateQnaSaveBtnState(); updateAllPreviews(); });
-    }
+    // Company Q&A event listeners removed
 
     // Add Edit Profile button event listener
     if (editProfileButton) {
@@ -218,33 +202,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return result;
     }
 
-    function updatePlaceholderSelectOptions() {
-        if (!placeholderSelect) return;
-        const placeholders = getCurrentPlaceholders();
-        placeholderSelect.innerHTML = '';
-        placeholders.forEach(ph => {
-            const opt = document.createElement('option');
-            opt.value = ph.name;
-            opt.textContent = ph.name;
-            placeholderSelect.appendChild(opt);
-        });
-    }
+    // Placeholder functions removed - Company Q&A section deleted
 
-    function updateAllPreviews() {
-        const placeholders = getCurrentPlaceholders();
-        if (companyQnaPreview && companyQnaAnswer) {
-            companyQnaPreview.textContent = applyPlaceholdersToText(companyQnaAnswer.value, placeholders);
-        }
-        if (personalityResponsesList) {
-            personalityResponsesList.querySelectorAll('.response-item').forEach(item => {
-                const input = item.querySelector('input.response-text');
-                const preview = item.querySelector('.response-preview');
-                if (input && preview) {
-                    preview.textContent = applyPlaceholdersToText(input.value, placeholders);
-                }
-            });
-        }
-    }
+    // Company Q&A preview functions removed
 
     const handleDynamicItemRemove = (e) => {
         const itemToRemove = e.target.closest('.dynamic-list-item, .additional-contact-edit-block, .scheduling-rule-item'); 
@@ -254,10 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (itemToRemove.classList.contains('scheduling-rule-item')) {
                  refreshInterpreterForRule(serviceSchedulingRulesContainer?.querySelector('.scheduling-rule-item'));
             }
-            if (itemToRemove.parentElement?.id === 'placeholders-list') {
-                updatePlaceholderSelectOptions();
-                updateAllPreviews();
-            }
+            // Placeholder function calls removed
         }
     };
     
@@ -391,120 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function fetchCompanyQnA() {
-        if (!companyId || !companyQnaList) return;
-        companyQnaList.innerHTML = '<p class="text-gray-500 italic">Loading...</p>';
-        try {
-            const res = await fetch(`/api/company/${companyId}/qna`);
-            if (!res.ok) throw new Error('Failed to load Q&A');
-            const data = await res.json();
-            companyQnaListData = Array.isArray(data) ? data : [];
-            renderCompanyQnA(companyQnaListData);
-        } catch (err) {
-            companyQnaList.innerHTML = `<p class="text-red-500">${err.message}</p>`;
-        }
-    }
-
-    function renderCompanyQnA(entries) {
-        if (!companyQnaList) return;
-        companyQnaList.innerHTML = '';
-        if (!entries || entries.length === 0) {
-            companyQnaList.innerHTML = '<p class="text-gray-500 italic">No Q&A defined.</p>';
-            return;
-        }
-        entries.forEach(e => {
-            const row = document.createElement('div');
-            row.className = 'flex items-start justify-between border p-3 rounded';
-            const keywordsHTML = (e.keywords && e.keywords.length)
-                ? `<div class="mt-1 text-xs text-gray-500">${e.keywords.map(k => `<span class='inline-block bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded mr-1'>${escapeHTML(k)}</span>`).join('')}</div>`
-                : '';
-            row.innerHTML =
-                `<div class="flex-1"><p class="font-semibold">${escapeHTML(e.question)}</p>${keywordsHTML}</div>` +
-                `<div class="flex-1 ml-4">${escapeHTML(e.answer)}</div>` +
-                `<div class="ml-4 flex-none text-right"><button class="text-sm text-blue-600 mr-2" data-id="${e._id}" data-action="edit">Edit</button><button class="text-sm text-red-600" data-id="${e._id}" data-action="delete">Delete</button></div>`;
-            companyQnaList.appendChild(row);
-        });
-        companyQnaList.querySelectorAll('button[data-action="edit"]').forEach(btn => {
-            btn.addEventListener('click', () => startEditQna(btn.dataset.id));
-        });
-        companyQnaList.querySelectorAll('button[data-action="delete"]').forEach(btn => {
-            btn.addEventListener('click', () => deleteQna(btn.dataset.id));
-        });
-    }
-
-    function resetQnaForm() {
-        if (!companyQnaForm) return;
-        companyQnaForm.reset();
-        companyQnaForm.dataset.editing = '';
-        if (companyQnaCancelBtn) companyQnaCancelBtn.classList.add('hidden');
-        if (companyQnaSaveBtn) companyQnaSaveBtn.textContent = 'Add';
-        updateQnaSaveBtnState();
-        if (companyQnaQuestion) companyQnaQuestion.focus();
-    }
-
-    function startEditQna(id) {
-        const entry = (companyQnaListData || []).find(e => e._id === id);
-        if (!entry) return;
-        if (companyQnaQuestion) companyQnaQuestion.value = entry.question;
-        if (companyQnaAnswer) companyQnaAnswer.value = entry.answer;
-        if (companyQnaKeywords) companyQnaKeywords.value = (entry.keywords || []).join(', ');
-        if (companyQnaForm) companyQnaForm.dataset.editing = id;
-        if (companyQnaCancelBtn) companyQnaCancelBtn.classList.remove('hidden');
-        if (companyQnaSaveBtn) companyQnaSaveBtn.textContent = 'Save';
-        updateQnaSaveBtnState();
-    }
-
-    async function deleteQna(id) {
-        if (!companyId) return;
-        if (!confirm('Delete entry?')) return;
-        const res = await fetch(`/api/company/${companyId}/qna/${id}`, { method: 'DELETE' });
-        if (res.ok) {
-            companyQnaListData = companyQnaListData.filter(e => e._id !== id);
-            renderCompanyQnA(companyQnaListData);
-        }
-    }
-
-    async function handleQnaSubmit(ev) {
-        ev.preventDefault();
-        if (!companyId) return;
-        const q = companyQnaQuestion?.value.trim();
-        const a = companyQnaAnswer?.value.trim();
-        const k = companyQnaKeywords?.value.split(',').map(t => t.trim()).filter(Boolean);
-        if (!q || !a) {
-            updateQnaSaveBtnState();
-            return;
-        }
-        const id = companyQnaForm?.dataset.editing;
-        const method = id ? 'PUT' : 'POST';
-        const url = id ? `/api/company/${companyId}/qna/${id}` : `/api/company/${companyId}/qna`;
-        try {
-            const res = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question: q, answer: a, keywords: k })
-            });
-            if (!res.ok) throw new Error('Failed to save');
-            const data = await res.json();
-            if (method === 'POST') {
-                companyQnaListData = Array.isArray(data) ? data : [];
-            } else {
-                if (id) {
-                    const idx = companyQnaListData.findIndex(e => e._id === id);
-                    if (idx !== -1) companyQnaListData[idx] = data;
-                }
-            }
-            renderCompanyQnA(companyQnaListData);
-            resetQnaForm();
-            if (companyQnaFormError) companyQnaFormError.classList.add('hidden');
-        } catch (err) {
-            if (companyQnaFormError) {
-                companyQnaFormError.textContent = 'Could not save Q&A. Please check all fields and try again.';
-                companyQnaFormError.classList.remove('hidden');
-            }
-            console.error('Error saving Q&A', err);
-        }
-        updateQnaSaveBtnState();
-    }
+    // Company Q&A functions removed - section deleted
     
     async function fetchAvailableTradeCategories() {
         try {
