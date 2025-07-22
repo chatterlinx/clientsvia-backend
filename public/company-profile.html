@@ -1511,68 +1511,11 @@
                                     
 
                                                     <!-- Frustration Detection -->
-                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
-                                                        <label class="form-label mb-1 flex items-center">
-                                                            <i class="fas fa-angry text-red-600 mr-2"></i>
-                                                            Frustration Keywords
-                                                        </label>
-                                                        <p class="text-xs text-gray-500 mb-2">Words that indicate customer frustration (comma-separated)</p>
-                                                        <input type="text" id="frustration-keywords" class="form-input w-full" placeholder="frustrated, annoyed, upset, ridiculous, terrible">
-                                                    </div>
-                                                    
-                                                    <!-- Silence Handling -->
-                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
-                                                        <label class="form-label mb-1 flex items-center">
-                                                            <i class="fas fa-volume-mute text-blue-600 mr-2"></i>
-                                                            Silence Threshold
-                                                        </label>
-                                                        <p class="text-xs text-gray-500 mb-2">Seconds of silence before prompting customer</p>
-                                                        <input type="number" id="silence-threshold" class="form-input w-full" min="3" max="30" value="8">
-                                                    </div>
-                                                    
-                                                    <!-- Repetition Detection -->
-                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
-                                                        <label class="form-label mb-1 flex items-center">
-                                                            <i class="fas fa-redo text-yellow-600 mr-2"></i>
-                                                            Repetition Limit
-                                                        </label>
-                                                        <p class="text-xs text-gray-500 mb-2">How many times customer can repeat same question</p>
-                                                        <input type="number" id="repetition-limit" class="form-input w-full" min="2" max="10" value="3">
-                                                    </div>
-                                                    
-                                                    <!-- Off-Topic Detection -->
-                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
-                                                        <label class="form-label mb-1 flex items-center">
-                                                            <i class="fas fa-ban text-gray-600 mr-2"></i>
-                                                            Off-Topic Keywords
-                                                        </label>
-                                                        <p class="text-xs text-gray-500 mb-2">Words that indicate off-topic conversation (comma-separated)</p>
-                                                        <input type="text" id="off-topic-keywords" class="form-input w-full" placeholder="spam, unrelated, politics, weather">
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Advanced Settings -->
-                                                <div class="mt-6 pt-4 border-t border-purple-200">
-                                                    <h5 class="font-semibold text-purple-900 mb-3">Advanced Settings</h5>
-                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div class="flex items-center">
-                                                            <input type="checkbox" id="use-llm-sentiment" class="form-checkbox mr-3">
-                                                            <label for="use-llm-sentiment" class="text-sm">
-                                                                Use AI for sentiment confirmation
-                                                                <span class="text-xs text-gray-500 block">More accurate but slower</span>
-                                                            </label>
-                                                        </div>
-                                                        <div class="flex items-center">
-                                                            <input type="checkbox" id="enable-empathy-responses" class="form-checkbox mr-3" checked>
-                                                            <label for="enable-empathy-responses" class="text-sm">
-                                                                Enable empathetic responses
-                                                                <span class="text-xs text-gray-500 block">Human-like emotional responses</span>
-                                                            </label>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Test Behavior Engine -->
+
+
+
+
+
                                                 <div class="mt-6 pt-4 border-t border-purple-200">
                                                     <h5 class="font-semibold text-purple-900 mb-3">Test Behavior Detection</h5>
                                                     <div class="flex gap-3">
