@@ -459,7 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm('Delete entry?')) return;
         const res = await fetch(`/api/company/${companyId}/qna/${id}`, { method: 'DELETE' });
         if (res.ok) {
-            companyQnaListData = companyQnaListData.filter e => e._id !== id);
+            companyQnaListData = companyQnaListData.filter(e => e._id !== id);
             renderCompanyQnA(companyQnaListData);
         }
     }
@@ -508,17 +508,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function fetchAvailableTradeCategories() {
         try {
-            const response = await fetch('/api/trade-categories');
-            if (!response.ok) throw new Error(`Failed to fetch trade categories (Status: ${response.status} ${response.statusText})`);
-            availableTradeCategories = await response.json();
-            const categoriesContainer = agentSetupPageContainer?.querySelector('#agentSetupCategoriesContainer');
-            const savedCats = currentCompanyData?.agentSetup?.categories || (currentCompanyData?.tradeTypes || []);
-            renderTradeCategories(availableTradeCategories, categoriesContainer, savedCats);
+            // Business Categories functionality disabled - section removed
+            availableTradeCategories = [];
         } catch (error) {
             console.error('Error fetching trade categories:', error);
             availableTradeCategories = [];
-            const categoriesContainer = agentSetupPageContainer?.querySelector('#agentSetupCategoriesContainer');
-            if(categoriesContainer) categoriesContainer.innerHTML = `<p class="text-sm text-red-500">Error loading categories: ${error.message}</p>`;
         }
     }
 
@@ -1668,7 +1662,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         output.push(`Appointment slots configured as: ${ruleConfig.appointmentSlotIncrementMinutes || 60} minutes.`);
-        output.push(`Agent prompt: "Based on settings for ${escapeHTML(ruleConfig.serviceName), the first available time I see is around ${finalCalculatedSlotStartTimeStr}. Would that work for you, or do you have another time in mind?"`);
+        output.push(`Agent prompt: "Based on settings for ${escapeHTML(ruleConfig.serviceName)}, the first available time I see is around ${finalCalculatedSlotStartTimeStr}. Would that work for you, or do you have another time in mind?"`);
 
         displayElement.innerHTML = output.join('<br>');
     }
@@ -1730,32 +1724,50 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        const agentModeSelectElement = agentSetupPageContainer.querySelector('#agentModeSelect'); 
-        const mainAgentScriptOuterDiv = agentSetupPageContainer.querySelector('div[data-section-name="agent-script"] div[data-section-type="full"]');
-        function toggleAgentSetupSectionsVisibility(mode) {
-            agentSetupPageContainer.querySelectorAll('.agent-setup-section-container').forEach(section => {
-                const sectionType = section.getAttribute('data-section-type');
-                let shouldBeHidden = false;
-                if (mode === 'receptionist' && sectionType && sectionType.includes('full') && !sectionType.includes('receptionist')) {
-                    shouldBeHidden = true;
-                }
-                section.classList.toggle('hidden-by-mode', shouldBeHidden);
+        const categoryCheckboxes = agentSetupPageContainer.querySelectorAll('input[name="category"]');
+        if (categoryCheckboxes.length > 0) { 
+            categoryCheckboxes.forEach(cb => {
+                cb.checked = (companyTradeTypes || []).includes(cb.value);
             });
-            if (mainAgentScriptOuterDiv) {
-                mainAgentScriptOuterDiv.classList.toggle('hidden-by-mode', mode === 'receptionist');
-            }
-        }
-        if (agentModeSelectElement) { 
-            agentModeSelectElement.addEventListener('change', (event) => toggleAgentSetupSectionsVisibility(event.target.value));
-             if(currentCompanyData?.agentSetup?.agentMode) {
-                 toggleAgentSetupSectionsVisibility(currentCompanyData.agentSetup.agentMode);
-            } else if (agentModeSelectElement.value) { 
-                 toggleAgentSetupSectionsVisibility(agentModeSelectElement.value);
-            } else {
-                 toggleAgentSetupSectionsVisibility('full'); 
-            }
         }
         
+        // Business Categories section removed - related JavaScript code disabled
+        
+        if (agentModeSelect) agentModeSelect.value = agentSetup.agentMode || 'full';
+        if (companySpecialtiesInputAgentSetup) companySpecialtiesInputAgentSetup.value = agentSetup.companySpecialties || '';
+        if (timezoneSelectAgentSetup) {
+            timezoneSelectAgentSetup.value = agentSetup.timezone || currentCompanyData?.timezone || 'America/New_York';
+            if(currentTimeDisplayAgentSetup || currentTimeDisplaySpan) { 
+                 setTimeout(updateCurrentTimeForInterpreter, 0); 
+                 if (timezoneSelectAgentSetup.dispatchEvent) { 
+                     timezoneSelectAgentSetup.dispatchEvent(new Event('change'));
+                 }
+            }
+        }
+
+        if (operatingHoursListContainer) { 
+            operatingHoursListContainer.innerHTML = `<div class="grid grid-cols-4 gap-x-3 mb-1 px-2"><span class="text-xs font-medium text-gray-500">Day</span><span class="text-xs font-medium text-gray-500 text-center">Enabled</span><span class="text-xs font-medium text-gray-500">Open From</span><span class="text-xs font-medium text-gray-500">Open To</span></div>`;
+            const hoursData = agentSetup.operatingHours?.length === 7 ? agentSetup.operatingHours :
+                daysOfWeekForOperatingHours.map(day => ({ day: day, enabled: !['Saturday', 'Sunday'].includes(day), start: '09:00', end: '17:00' }));
+            hoursData.forEach(daySetting => {
+                const dayLC = daySetting.day.toLowerCase().substring(0, 3);
+                const row = document.createElement('div');
+                row.className = 'grid grid-cols-4 gap-x-3 items-center p-2 hover:bg-gray-100 rounded-md';
+                row.innerHTML = `
+                    <label class="form-label">${daySetting.day}</label>
+                    <input type="checkbox" id="opHours_${dayLC}_enabled" name="operatingHours_${dayLC}_enabled" class="form-checkbox justify-self-center" ${daySetting.enabled ? 'checked' : ''}>
+                    <input type="time" name="operatingHours_${dayLC}_start" value="${daySetting.start || '09:00'}" class="form-input ${dayLC}-time">
+                    <input type="time" name="operatingHours_${dayLC}_end" value="${daySetting.end || '17:00'}" class="form-input ${dayLC}-time">`;
+                operatingHoursListContainer.appendChild(row);
+            });
+        }
+        if (toggle24HoursCheckbox) {
+            toggle24HoursCheckbox.checked = !!agentSetup.use247Routing;
+            if(operatingHoursListContainer && toggle24HoursCheckbox.dispatchEvent) {
+                toggle24HoursCheckbox.dispatchEvent(new Event('change'));
+            }
+         }
+
         const gType = agentSetup.greetingType || 'tts';
         if (greetingTypeTtsRadio) greetingTypeTtsRadio.checked = gType === 'tts';
         if (greetingTypeAudioRadio) greetingTypeAudioRadio.checked = gType === 'audio';
@@ -1839,6 +1851,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const agentSetupData = {
             agentMode: agentSetupPageContainer.querySelector('#agentModeSelect')?.value || 'full',
+            categories: Array.from(agentSetupPageContainer.querySelectorAll('input[name="category"]:checked')).map(cb => cb.value),
             companySpecialties: agentSetupPageContainer.querySelector('#companySpecialties')?.value.trim() || '',
             timezone: agentSetupPageContainer.querySelector('#agentSetupTimezoneSelect')?.value || 'America/New_York',
             operatingHours: daysOfWeekForOperatingHours.map(day => {
@@ -2155,76 +2168,41 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        const gType = agentSetup.greetingType || 'tts';
-        if (greetingTypeTtsRadio) greetingTypeTtsRadio.checked = gType === 'tts';
-        if (greetingTypeAudioRadio) greetingTypeAudioRadio.checked = gType === 'audio';
-        uploadedGreetingAudioUrl = agentSetup.greetingAudioUrl || '';
-        if (greetingAudioPreview) {
-            if (uploadedGreetingAudioUrl) {
-                greetingAudioPreview.src = uploadedGreetingAudioUrl;
-                greetingAudioPreview.classList.remove('hidden');
-            } else {
-                greetingAudioPreview.classList.add('hidden');
-                greetingAudioPreview.src = '';
+        // Business Categories event listener removed - section deleted
+        
+        const timezoneSelectElement = agentSetupPageContainer.querySelector('#agentSetupTimezoneSelect'); 
+        const currentTimeDisplayElement = agentSetupPageContainer.querySelector('#agentSetupCurrentTimeDisplay'); 
+
+        function updateCurrentTimeAgentSetup() {
+            if (!timezoneSelectElement || !currentTimeDisplayElement) return;
+            const selectedTimezone = timezoneSelectElement.value;
+            try {
+                const timeString = new Date().toLocaleTimeString('en-US', { timeZone: selectedTimezone, hour: '2-digit', minute: '2-digit', hour12: true });
+                const tzData = ianaTimeZones.find(tz => tz.value === selectedTimezone);
+                const tzLabel = tzData ? tzData.label : selectedTimezone;
+                currentTimeDisplayElement.textContent = `Current Agent Time: ${timeString} ${tzLabel}`;
+            } catch (e) {
+                currentTimeDisplayElement.textContent = 'Could not display time for selected zone.';
             }
         }
-        updateGreetingTypeUI();
-
-        if (agentGreetingTextareaAgentSetup) agentGreetingTextareaAgentSetup.value = agentSetup.agentGreeting || '';
-        if (mainAgentScriptTextarea) mainAgentScriptTextarea.value = agentSetup.mainAgentScript || defaultProtocols.mainAgentScript || '';
-        if (agentClosingTextareaAgentSetup) agentClosingTextareaAgentSetup.value = agentSetup.agentClosing || '';
-        
-        agentSetupPageContainer.querySelectorAll('.protocol-section textarea').forEach(textarea => {
-            const protocolName = textarea.name;
-            if (protocolName) {
-                const key = protocolName.replace(/^protocol/, '');
-                const camelCaseKey = key.charAt(0).toLowerCase() + key.slice(1);
-                textarea.value = (agentSetup.protocols || {})[camelCaseKey] || defaultProtocols[camelCaseKey] || '';
-            }
-        });
-        const textToPaySelect = agentSetupPageContainer.querySelector('select[name="textToPayPhoneSource"]');
-        if (textToPaySelect) textToPaySelect.value = agentSetup.textToPayPhoneSource || 'callerID';
-
-        if (serviceSchedulingRulesContainer) {
-            serviceSchedulingRulesContainer.innerHTML = ''; 
-            const rules = agentSetup.schedulingRules || [];
-            if (rules.length > 0) {
-                rules.forEach((rule, index) => {
-                    const ruleHTML = createSchedulingRuleHTML(rule, `rule_${index}`); 
-                    const tempDiv = document.createElement('div'); tempDiv.innerHTML = ruleHTML; const ruleElement = tempDiv.firstElementChild;
-
-                    if (ruleElement) {
-                        serviceSchedulingRulesContainer.appendChild(ruleElement);
-                        attachSchedulingRuleEventListeners(ruleElement);
-                        const serviceNameInput = ruleElement.querySelector('.rule-service-name-input');
-                        const displayName = ruleElement.querySelector('.rule-service-name-display');
-                        if(serviceNameInput && displayName && serviceNameInput.value) {
-                             displayName.textContent = escapeHTML(serviceNameInput.value);
-                        }
-                        const schedulingTypeSelect = ruleElement.querySelector('.rule-scheduling-type-select');
-                        if(schedulingTypeSelect) handleSchedulingTypeChange({target: schedulingTypeSelect});
-                    }
-                });
-            }
-            refreshInterpreterForRule(serviceSchedulingRulesContainer.querySelector('.scheduling-rule-item'));
+        if (timezoneSelectElement) timezoneSelectElement.addEventListener('change', updateCurrentTimeAgentSetup);
+        if (currentTimeDisplayElement && timezoneSelectElement) { 
+            if(timezoneSelectElement.value) updateCurrentTimeAgentSetup(); 
+            setInterval(updateCurrentTimeAgentSetup, 60000); 
         }
-        
-        renderDynamicListItems(callRoutingListContainer, agentSetup.callRouting, (idx, item) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="callRoutingName_${idx}" placeholder="Department / Name" class="form-input flex-1" value="${escapeHTML(item.name || '')}"><input type="tel" name="callRoutingPhone_${idx}" placeholder="Phone Number (E.164)" class="form-input flex-1" value="${escapeHTML(item.phoneNumber || '')}"><button type="button" class="remove-call-routing form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-call-routing');
-        renderDynamicListItems(afterHoursRoutingListContainer, agentSetup.afterHoursRouting, (idx, item) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="ahRoutingName_${idx}" placeholder="e.g., On-Call Tech" class="form-input flex-1" value="${escapeHTML(item.name || '')}"><input type="tel" name="ahRoutingPhone_${idx}" placeholder="Phone Number (E.164)" class="form-input flex-1" value="${escapeHTML(item.phoneNumber || '')}"><button type="button" class="remove-ah-route form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-ah-route');
-        renderDynamicListItems(callSummariesListContainer, agentSetup.summaryRecipients, (idx, item) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="summaryRecipient_${idx}" placeholder="Email or Phone Number" class="form-input flex-1" value="${escapeHTML(item.contact || '')}"><button type="button" class="remove-summary-recipient form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-summary-recipient');
-        renderDynamicListItems(afterHoursNotificationsListContainer, agentSetup.afterHoursRecipients, (idx, item) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="ahNotificationRecipient_${idx}" placeholder="Email or Phone Number" class="form-input flex-1" value="${escapeHTML(item.contact || '')}"><button type="button" class="remove-ah-notification form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-ah-notification');
-        renderDynamicListItems(malfunctionForwardingListContainer, agentSetup.malfunctionForwarding, (idx, item) => `<div class="flex items-end space-x-2 mt-2"><input type="tel" name="mfForwardingPhone_${idx}" placeholder="Phone Number (E.164)" class="form-input flex-1" value="${escapeHTML(item.phoneNumber || '')}"><button type="button" class="remove-mf-forward form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-mf-forward');
-        renderDynamicListItems(malfunctionNotificationsListContainer, agentSetup.malfunctionRecipients, (idx, item) => `<div class="flex items-end space-x-2 mt-2"><input type="tel" name="mfNotificationRecipient_${idx}" placeholder="Phone Number (E.164) for SMS" class="form-input flex-1" value="${escapeHTML(item.phoneNumber || item.contact || '')}"><button type="button" class="remove-mf-notify form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-mf-notify');
-        renderDynamicListItems(placeholdersListContainer, agentSetup.placeholders, (idx, item) => `<div class="flex items-end space-x-2 mt-1"><input type="text" name="placeholderName_${idx}" placeholder="Name" class="form-input flex-1" value="${escapeHTML(item.name || '')}"><input type="text" name="placeholderValue_${idx}" placeholder="Value" class="form-input flex-1" value="${escapeHTML(item.value || '')}"><button type="button" class="remove-placeholder form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-placeholder');
 
-        loadAndDisplayCategoryQAs();
-        fetchCompanyQnA();
-        updatePlaceholderSelectOptions();
-        updateAllPreviews();
-        
-        // Populate behavior configuration
-        if (agentSetup.behaviors) {
-            console.log('🧠 Populating behavior configuration from agent setup:', agentSetup.behaviors);
+        const protocolToggles = agentSetupPageContainer.querySelectorAll('.protocol-toggle');
+        protocolToggles.forEach(toggle => { 
+            const targetId = toggle.getAttribute('data-protocol-target');
+            const section = agentSetupPageContainer.querySelector(`#${targetId}`);
+            const chevron = toggle.querySelector('i.fas');
+            if (section && chevron) {
+                section.classList.add('collapsed');
+                chevron.classList.remove('fa-chevron-down'); 
+                chevron.classList.add('fa-chevron-right');
+                toggle.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const isCollapsed = section.classList.contains('collapsed');
                     section.classList.toggle('collapsed', !isCollapsed);
                     chevron.classList.toggle('fa-chevron-right', !isCollapsed);
                     chevron.classList.toggle('fa-chevron-down', isCollapsed);
