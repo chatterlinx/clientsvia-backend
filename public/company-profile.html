@@ -809,18 +809,38 @@
                 // Set global company ID
                 window.companyId = companyId;
                 
-                // Start fetching company data immediately
-                if (typeof fetchCompanyData === 'function') {
-                    console.log('📡 Calling fetchCompanyData...');
-                    fetchCompanyData()
-                        .then(() => {
-                            console.log('✅ Company data fetch completed successfully');
-                        })
-                        .catch(error => {
-                            console.error('❌ Error fetching company data:', error);
-                        });
-                } else {
-                    console.error('❌ fetchCompanyData function not found');
+                // Function to try calling fetchCompanyData
+                const tryFetchData = () => {
+                    if (typeof fetchCompanyData === 'function') {
+                        console.log('📡 Calling fetchCompanyData...');
+                        fetchCompanyData()
+                            .then(() => {
+                                console.log('✅ Company data fetch completed successfully');
+                            })
+                            .catch(error => {
+                                console.error('❌ Error fetching company data:', error);
+                            });
+                        return true;
+                    }
+                    return false;
+                };
+                
+                // Try immediately
+                if (!tryFetchData()) {
+                    console.log('⏳ fetchCompanyData not ready yet, waiting...');
+                    
+                    // Try again every 100ms for up to 5 seconds
+                    let attempts = 0;
+                    const maxAttempts = 50;
+                    const retryInterval = setInterval(() => {
+                        attempts++;
+                        if (tryFetchData()) {
+                            clearInterval(retryInterval);
+                        } else if (attempts >= maxAttempts) {
+                            clearInterval(retryInterval);
+                            console.error('❌ fetchCompanyData function not found after 5 seconds');
+                        }
+                    }, 100);
                 }
             } else {
                 console.error('❌ No company ID found in URL');

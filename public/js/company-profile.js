@@ -3468,14 +3468,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn('⚠️ Container not found - accordion setup skipped');
     }
     
-    // *** CRITICAL: Fetch company data on page load ***
-    console.log('🚀 Starting initial company data fetch...');
-    fetchCompanyData().then(() => {
-        console.log('✅ Initial company data fetch completed');
-    }).catch(error => {
-        console.error('❌ Initial company data fetch failed:', error);
-    });
-    
     // Initialize behavior engine configuration
     initializeBehaviorEngine();
     
