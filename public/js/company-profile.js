@@ -104,6 +104,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let availableGoogleCalendars = []; // To store fetched Google Calendars for use in scheduling rules
     let companyQnaListData = [];
     let uploadedGreetingAudioUrl = '';
+    
+    // ORPHANED VARIABLES - Agent Setup UI was removed but variables still referenced
+    const agentSetupPageContainer = null; // Was: document.getElementById('agent-setup-content')
+    
     const daysOfWeekForOperatingHours = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const ianaTimeZones = [
         { value: "America/New_York", label: "(GMT-05:00) Eastern Time (US & Canada)" }, { value: "America/Chicago", label: "(GMT-06:00) Central Time (US & Canada)" }, { value: "America/Denver", label: "(GMT-07:00) Mountain Time (US & Canada)" }, { value: "America/Los_Angeles", label: "(GMT-08:00) Pacific Time (US & Canada)" }, { value: "America/Phoenix", label: "(GMT-07:00) Arizona (MST - no DST)" }, { value: "America/Anchorage", label: "(GMT-09:00) Alaska" }, { value: "Pacific/Honolulu", label: "(GMT-10:00) Hawaii" }, { value: "Europe/London", label: "(GMT+00:00) London, Dublin, Lisbon" }, { value: "Europe/Berlin", label: "(GMT+01:00) Amsterdam, Berlin, Paris, Rome, Madrid" }, { value: "Europe/Moscow", label: "(GMT+03:00) Moscow, St. Petersburg" }, { value: "Asia/Dubai", label: "(GMT+04:00) Abu Dhabi, Muscat" }, { value: "Asia/Karachi", label: "(GMT+05:00) Islamabad, Karachi" }, { value: "Asia/Kolkata", label: "(GMT+05:30) Mumbai, New Delhi" }, { value: "Asia/Singapore", label: "(GMT+08:00) Singapore, Hong Kong, Beijing" }, { value: "Asia/Tokyo", label: "(GMT+09:00) Tokyo, Seoul" }, { value: "Australia/Sydney", label: "(GMT+10:00) Sydney, Melbourne, Canberra" }, { value: "Australia/Perth", label: "(GMT+08:00) Perth" }, { value: "Pacific/Auckland", label: "(GMT+12:00) Auckland, Wellington" }, { value: "Etc/GMT", label: "(GMT+00:00) Coordinated Universal Time (UTC)" }
@@ -1512,132 +1516,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
-    
+     // populateAgentSetupForm removed - Agent Setup UI no longer exists
     function populateAgentSetupForm(agentSetup = {}, companyTradeTypes = []) {
-        if (!agentSetupPageContainer) {
-            console.warn("Configuration container not found, cannot populate form.");
-            return;
-        }
-        
-        const categoryCheckboxes = agentSetupPageContainer.querySelectorAll('input[name="category"]');
-        if (categoryCheckboxes.length > 0) { 
-            categoryCheckboxes.forEach(cb => {
-                cb.checked = (companyTradeTypes || []).includes(cb.value);
-            });
-        }
-        
-        // Business Categories section removed - related JavaScript code disabled
-        
-        if (agentModeSelect) agentModeSelect.value = agentSetup.agentMode || 'full';
-        // Company Specialties input removed
-        if (timezoneSelectAgentSetup) {
-            timezoneSelectAgentSetup.value = agentSetup.timezone || currentCompanyData?.timezone || 'America/New_York';
-            if(currentTimeDisplayAgentSetup || currentTimeDisplaySpan) { 
-                 setTimeout(updateCurrentTimeForInterpreter, 0); 
-                 if (timezoneSelectAgentSetup.dispatchEvent) { 
-                     timezoneSelectAgentSetup.dispatchEvent(new Event('change'));
-                 }
-            }
-        }
-
-        if (operatingHoursListContainer) { 
-            operatingHoursListContainer.innerHTML = `<div class="grid grid-cols-4 gap-x-3 mb-1 px-2"><span class="text-xs font-medium text-gray-500">Day</span><span class="text-xs font-medium text-gray-500 text-center">Enabled</span><span class="text-xs font-medium text-gray-500">Open From</span><span class="text-xs font-medium text-gray-500">Open To</span></div>`;
-            const hoursData = agentSetup.operatingHours?.length === 7 ? agentSetup.operatingHours :
-                daysOfWeekForOperatingHours.map(day => ({ day: day, enabled: !['Saturday', 'Sunday'].includes(day), start: '09:00', end: '17:00' }));
-            hoursData.forEach(daySetting => {
-                const dayLC = daySetting.day.toLowerCase().substring(0, 3);
-                const row = document.createElement('div');
-                row.className = 'grid grid-cols-4 gap-x-3 items-center p-2 hover:bg-gray-100 rounded-md';
-                row.innerHTML = `
-                    <label class="form-label">${daySetting.day}</label>
-                    <input type="checkbox" id="opHours_${dayLC}_enabled" name="operatingHours_${dayLC}_enabled" class="form-checkbox justify-self-center" ${daySetting.enabled ? 'checked' : ''}>
-                    <input type="time" name="operatingHours_${dayLC}_start" value="${daySetting.start || '09:00'}" class="form-input ${dayLC}-time">
-                    <input type="time" name="operatingHours_${dayLC}_end" value="${daySetting.end || '17:00'}" class="form-input ${dayLC}-time">`;
-                operatingHoursListContainer.appendChild(row);
-            });
-        }
-        if (toggle24HoursCheckbox) {
-            toggle24HoursCheckbox.checked = !!agentSetup.use247Routing;
-            if(operatingHoursListContainer && toggle24HoursCheckbox.dispatchEvent) {
-                toggle24HoursCheckbox.dispatchEvent(new Event('change'));
-            }
-         }
-
-        const gType = agentSetup.greetingType || 'tts';
-        if (greetingTypeTtsRadio) greetingTypeTtsRadio.checked = gType === 'tts';
-        if (greetingTypeAudioRadio) greetingTypeAudioRadio.checked = gType === 'audio';
-        uploadedGreetingAudioUrl = agentSetup.greetingAudioUrl || '';
-        if (greetingAudioPreview) {
-            if (uploadedGreetingAudioUrl) {
-                greetingAudioPreview.src = uploadedGreetingAudioUrl;
-                greetingAudioPreview.classList.remove('hidden');
-            } else {
-                greetingAudioPreview.classList.add('hidden');
-                greetingAudioPreview.src = '';
-            }
-        }
-        updateGreetingTypeUI();
-
-        if (agentGreetingTextareaAgentSetup) agentGreetingTextareaAgentSetup.value = agentSetup.agentGreeting || '';
-        if (mainAgentScriptTextarea) mainAgentScriptTextarea.value = agentSetup.mainAgentScript || defaultProtocols.mainAgentScript || '';
-        if (agentClosingTextareaAgentSetup) agentClosingTextareaAgentSetup.value = agentSetup.agentClosing || '';
-        
-        agentSetupPageContainer.querySelectorAll('.protocol-section textarea').forEach(textarea => {
-            const protocolName = textarea.name;
-            if (protocolName) {
-                const key = protocolName.replace(/^protocol/, '');
-                const camelCaseKey = key.charAt(0).toLowerCase() + key.slice(1);
-                textarea.value = (agentSetup.protocols || {})[camelCaseKey] || defaultProtocols[camelCaseKey] || '';
-            }
-        });
-        const textToPaySelect = agentSetupPageContainer.querySelector('select[name="textToPayPhoneSource"]');
-        if (textToPaySelect) textToPaySelect.value = agentSetup.textToPayPhoneSource || 'callerID';
-
-        if (serviceSchedulingRulesContainer) {
-            serviceSchedulingRulesContainer.innerHTML = ''; 
-            const rules = agentSetup.schedulingRules || [];
-            if (rules.length > 0) {
-                rules.forEach((rule, index) => {
-                    const ruleHTML = createSchedulingRuleHTML(rule, `rule_${index}`); 
-                    const tempDiv = document.createElement('div'); tempDiv.innerHTML = ruleHTML; const ruleElement = tempDiv.firstElementChild;
-
-                    if (ruleElement) {
-                        serviceSchedulingRulesContainer.appendChild(ruleElement);
-                        attachSchedulingRuleEventListeners(ruleElement);
-                        const serviceNameInput = ruleElement.querySelector('.rule-service-name-input');
-                        const displayName = ruleElement.querySelector('.rule-service-name-display');
-                        if(serviceNameInput && displayName && serviceNameInput.value) {
-                             displayName.textContent = escapeHTML(serviceNameInput.value);
-                        }
-                        const schedulingTypeSelect = ruleElement.querySelector('.rule-scheduling-type-select');
-                        if(schedulingTypeSelect) handleSchedulingTypeChange({target: schedulingTypeSelect});
-                    }
-                });
-            }
-            refreshInterpreterForRule(serviceSchedulingRulesContainer.querySelector('.scheduling-rule-item'));
-        }
-        
-        renderDynamicListItems(callRoutingListContainer, agentSetup.callRouting, (idx, item) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="callRoutingName_${idx}" placeholder="Department / Name" class="form-input flex-1" value="${escapeHTML(item.name || '')}"><input type="tel" name="callRoutingPhone_${idx}" placeholder="Phone Number (E.164)" class="form-input flex-1" value="${escapeHTML(item.phoneNumber || '')}"><button type="button" class="remove-call-routing form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-call-routing');
-        renderDynamicListItems(afterHoursRoutingListContainer, agentSetup.afterHoursRouting, (idx, item) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="ahRoutingName_${idx}" placeholder="e.g., On-Call Tech" class="form-input flex-1" value="${escapeHTML(item.name || '')}"><input type="tel" name="ahRoutingPhone_${idx}" placeholder="Phone Number (E.164)" class="form-input flex-1" value="${escapeHTML(item.phoneNumber || '')}"><button type="button" class="remove-ah-route form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-ah-route');
-        renderDynamicListItems(callSummariesListContainer, agentSetup.summaryRecipients, (idx, item) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="summaryRecipient_${idx}" placeholder="Email or Phone Number" class="form-input flex-1" value="${escapeHTML(item.contact || '')}"><button type="button" class="remove-summary-recipient form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-summary-recipient');
-        renderDynamicListItems(afterHoursNotificationsListContainer, agentSetup.afterHoursRecipients, (idx, item) => `<div class="flex items-end space-x-2 mt-2"><input type="text" name="ahNotificationRecipient_${idx}" placeholder="Email or Phone Number" class="form-input flex-1" value="${escapeHTML(item.contact || '')}"><button type="button" class="remove-ah-notification form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-ah-notification');
-        renderDynamicListItems(malfunctionForwardingListContainer, agentSetup.malfunctionForwarding, (idx, item) => `<div class="flex items-end space-x-2 mt-2"><input type="tel" name="mfForwardingPhone_${idx}" placeholder="Phone Number (E.164)" class="form-input flex-1" value="${escapeHTML(item.phoneNumber || '')}"><button type="button" class="remove-mf-forward form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-mf-forward');
-        renderDynamicListItems(malfunctionNotificationsListContainer, agentSetup.malfunctionRecipients, (idx, item) => `<div class="flex items-end space-x-2 mt-2"><input type="tel" name="mfNotificationRecipient_${idx}" placeholder="Phone Number (E.164) for SMS" class="form-input flex-1" value="${escapeHTML(item.phoneNumber || item.contact || '')}"><button type="button" class="remove-mf-notify form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-mf-notify');
-        renderDynamicListItems(placeholdersListContainer, agentSetup.placeholders, (idx, item) => `<div class="flex items-end space-x-2 mt-1"><input type="text" name="placeholderName_${idx}" placeholder="Name" class="form-input flex-1" value="${escapeHTML(item.name || '')}"><input type="text" name="placeholderValue_${idx}" placeholder="Value" class="form-input flex-1" value="${escapeHTML(item.value || '')}"><button type="button" class="remove-placeholder form-button-agent-setup remove-button-agent-setup text-xs h-9">Remove</button></div>`, 'remove-placeholder');
-
-        loadAndDisplayCategoryQAs();
-        fetchCompanyQnA();
-        updatePlaceholderSelectOptions();
-        updateAllPreviews();
-        
-        // Populate behavior configuration
-        if (agentSetup.behaviors) {
-            console.log('🧠 Populating behavior configuration:', agentSetup.behaviors);
-            populateBehaviorConfiguration(agentSetup.behaviors);
-        } else {
-            console.log('🧠 No behavior configuration found, using defaults');
-            populateBehaviorConfiguration({});
-        }
+        console.log('⚠️ populateAgentSetupForm: Agent Setup UI removed, skipping form population');
+        return;
     }
 
     async function handleSaveAgentSetup(event) {
