@@ -212,20 +212,20 @@ async function fetchCompanyData() {
 function populateCompanyData(data) {
     if (!data) return;
     
-    console.log('📝 Populating company data');
+    console.log('📝 Populating company data', data);
     
-    // Header information
+    // Header information - using actual API field names
     if (window.companyNameHeader) {
-        window.companyNameHeader.textContent = data.name || 'Unknown Company';
+        window.companyNameHeader.textContent = data.companyName || data.name || 'Unknown Company';
     }
     if (window.companyIdSubheader) {
         window.companyIdSubheader.textContent = `ID: ${data._id || 'Unknown'}`;
     }
     
-    // Basic company information
-    if (window.companyNameInput) window.companyNameInput.value = data.name || '';
-    if (window.companyEmailInput) window.companyEmailInput.value = data.email || '';
-    if (window.companyPhoneInput) window.companyPhoneInput.value = data.phone || '';
+    // Basic company information - mapping API fields to form fields
+    if (window.companyNameInput) window.companyNameInput.value = data.companyName || data.name || '';
+    if (window.companyEmailInput) window.companyEmailInput.value = data.email || data.ownerEmail || '';
+    if (window.companyPhoneInput) window.companyPhoneInput.value = data.phone || data.ownerPhone || '';
     if (window.companyWebsiteInput) window.companyWebsiteInput.value = data.website || '';
     
     // Address information
@@ -238,7 +238,7 @@ function populateCompanyData(data) {
     }
     
     // Populate agent personality responses
-    populatePersonalityResponses(data.agentSetup?.personalityResponses || {});
+    populatePersonalityResponses(data.agentSetup?.personalityResponses || data.aiAgentSetup?.personalityResponses || {});
     
     // Populate trade categories
     populateTradeCategories(data.tradeTypes || []);
@@ -357,7 +357,7 @@ async function loadTradeCategorySelector() {
     try {
         console.log('📋 Loading trade categories...');
         
-        const response = await fetch('/api/tradeCategories');
+        const response = await fetch('/api/trade-categories');
         const categories = await response.json();
         
         const select = document.getElementById('trade-category-select');
