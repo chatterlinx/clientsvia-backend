@@ -1602,7 +1602,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentCompanyData.tradeTypes = updatedCompany.tradeTypes || agentSetupData.categories;
             currentCompanyData.timezone = updatedCompany.timezone || agentSetupData.timezone;
 
-            populateAgentSetupForm(currentCompanyData.agentSetup, currentCompanyData.tradeTypes);
+            // populateAgentSetupForm call removed - Agent Setup UI no longer exists
             populateCompanyData(currentCompanyData); 
             hasUnsavedChanges = false;
             alert('Configuration saved successfully!'); 
@@ -3484,43 +3484,7 @@ async function testBehaviorDetection() {
 function setupBehaviorSaveHandler() {
     console.log('🔧 Setting up behavior save handler...');
     
-    // Add behavior configuration to the main save handler
-    const originalSaveHandler = window.handleSaveAgentSetup;
-    if (originalSaveHandler) {
-        window.handleSaveAgentSetup = function(event) {
-            console.log('💾 Enhanced save handler called - including behavior configuration');
-            
-            // Add behavior configuration to the save data
-            const behaviorConfig = collectBehaviorConfiguration();
-            
-            // Store in global currentCompanyData for saving
-            if (currentCompanyData && currentCompanyData.agentSetup) {
-                currentCompanyData.agentSetup.behaviors = behaviorConfig;
-                console.log('✅ Behavior configuration added to save data');
-            }
-            
-            // Call original save handler
-            return originalSaveHandler.call(this, event);
-        };
-    }
-    
-    // Also add to the populateAgentSetupForm function
-    const originalPopulateHandler = window.populateAgentSetupForm;
-    if (originalPopulateHandler) {
-        window.populateAgentSetupForm = function(companyData) {
-            console.log('📋 Enhanced populate handler called - including behavior configuration');
-            
-            // Call original populate handler
-            const result = originalPopulateHandler.call(this, companyData);
-            
-            // Add behavior configuration population
-            if (companyData && companyData.agentSetup && companyData.agentSetup.behaviors) {
-                populateBehaviorConfiguration(companyData.agentSetup.behaviors);
-            }
-            
-            return result;
-        };
-    }
-    
+    // handleSaveAgentSetup handler removed - Agent Setup UI no longer exists
+    // populateAgentSetupForm handler removed - Agent Setup UI no longer exists
     console.log('✅ Behavior save handler setup complete');
 }
