@@ -54,66 +54,10 @@
         .status-badge { @apply px-2.5 py-0.5 rounded-full text-xs font-medium; }
         .status-active { @apply bg-green-100 text-green-800; }
         .status-inactive { @apply bg-red-100 text-red-800; }
-        #agent-setup-content .form-input, #agent-setup-content .form-select, #agent-setup-content .form-textarea { @apply rounded-xl border-gray-200 shadow-sm focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 transition-all duration-200 wider-textbox; }
-        #agent-setup-content .form-input:focus, #agent-setup-content .form-select:focus, #agent-setup-content .form-textarea:focus { box-shadow: 0 0 10px rgba(99, 102, 241, 0.5); }
-        #agent-setup-content .form-button-agent-setup { @apply px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-indigo-600 text-white hover:from-indigo-600 hover:to-indigo-700 transition-all duration-200; }
-        #agent-setup-content .remove-button-agent-setup { @apply bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700; }
-        #agent-setup-content .agent-setup-section-container { transition: max-height 0.4s ease-in-out, opacity 0.3s ease-in-out .1s, padding 0.3s ease-in-out, margin 0.3s ease-in-out; overflow: hidden; border: 1px solid #e5e7eb; border-radius: 0.75rem; background-color: #f9fafb; margin-bottom: 1.5rem; }
-        #agent-setup-content .agent-setup-section-container.hidden-by-mode { max-height: 0 !important; opacity: 0 !important; padding: 0 !important; margin: 0 !important; border: none !important; overflow: hidden; }
-        #agent-setup-content .agent-setup-section-header { @apply text-lg font-semibold text-gray-700 p-4 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors duration-200 rounded-t-xl; }
-        #agent-setup-content .agent-setup-section-header i.fa-chevron-down, #agent-setup-content .agent-setup-section-header i.fa-chevron-up { transition: transform 0.3s ease-in-out; }
-        #agent-setup-content .agent-setup-section-header i.fa-chevron-up { transform: rotate(180deg); }
-        #agent-setup-content .section-content { @apply p-4 pt-0 transition-all duration-300 ease-in-out; max-height: 2000px; opacity: 1; overflow-y: auto; }
-        #agent-setup-content .section-content.collapsed { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-top: 0; }
-        #agent-setup-content .protocol-section { transition: max-height 0.3s ease-in-out, opacity 0.2s ease-in-out, padding-top 0.3s ease-in-out, padding-bottom 0.3s ease-in-out; overflow: hidden; max-height: 500px; padding-top: 0.5rem; padding-bottom: 0.5rem; }
-        #agent-setup-content .protocol-section.collapsed { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; margin-top:0; }
-        #agent-setup-content .disabled-input { @apply opacity-50 cursor-not-allowed bg-gray-200; }
-        
-        /* Blue placeholder text for default content vs black for developer-edited content */
-        .default-placeholder-text {
-            color: #3B82F6 !important; /* Blue color for default/placeholder text */
-            font-style: italic;
-        }
-        .developer-edited-text {
-            color: #1F2937 !important; /* Black color for developer-customized text */
-            font-style: normal;
-        }
-        #agent-setup-content .form-input.has-default-content,
-        #agent-setup-content .form-textarea.has-default-content {
-            color: #3B82F6 !important;
-            font-style: italic;
-        }
-        #agent-setup-content .form-input.has-edited-content,
-        #agent-setup-content .form-textarea.has-edited-content {
-            color: #1F2937 !important;
-            font-style: normal;
-            font-weight: 500;
-        }
-        /* Placeholder text styling for inputs */
-        #agent-setup-content .form-input::placeholder,
-        #agent-setup-content .form-textarea::placeholder {
-            color: #3B82F6 !important;
-            font-style: italic;
-            opacity: 0.8;
-        }
 
-        /* Intent Routing Styles */
-        #agent-setup-content .intent-flow-step { @apply flex items-center p-3 bg-white border border-gray-200 rounded-lg mb-2 cursor-move; }
-        #agent-setup-content .intent-flow-step.active { @apply border-teal-400 bg-teal-50; }
-        #agent-setup-content .intent-flow-step:hover { @apply bg-gray-50 border-gray-300; }
-        #agent-setup-content .intent-priority-badge { @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium; }
-        #agent-setup-content .intent-priority-high { @apply bg-red-100 text-red-800; }
-        #agent-setup-content .intent-priority-medium { @apply bg-yellow-100 text-yellow-800; }
-        #agent-setup-content .intent-priority-low { @apply bg-green-100 text-green-800; }
-        #agent-setup-content .intent-flow-connector { @apply flex items-center justify-center w-8 h-8 bg-teal-100 text-teal-600 rounded-full; }
-        #agent-setup-content .intent-drag-handle { @apply cursor-move text-gray-400 hover:text-gray-600; }
-        #agent-setup-content .intent-config-toggle { @apply ml-auto; }
-        #agent-setup-content .intent-config-panel { @apply mt-3 p-3 bg-gray-50 border border-gray-200 rounded; }
-        #agent-setup-content .intent-test-result { @apply p-3 bg-blue-50 border border-blue-200 rounded-lg; }
-        #agent-setup-content .intent-test-step { @apply text-sm text-gray-700 py-1; }
-        #agent-setup-content .intent-test-step.success { @apply text-green-700; }
-        #agent-setup-content .intent-test-step.warning { @apply text-yellow-700; }
-        #agent-setup-content .intent-test-step.error { @apply text-red-700; }
+        
+
+
         
         .contact-block-view { @apply mt-3 pt-3 border-t border-gray-200; }
         .contact-block-view .detail-item:last-child { padding-bottom: 0; }
@@ -204,9 +148,7 @@
                             <button class="tab-button tab-button-inactive" id="tab-ai-agent-logic" data-tab="ai-agent-logic">
                                 <i class="fas fa-brain mr-1"></i>AI Agent Logic
                             </button>
-                            <button class="tab-button tab-button-inactive" id="tab-agent-setup" data-tab="agent-setup">
-                                <i class="fas fa-user-cog mr-1"></i>Agent Setup
-                            </button>
+
                         </nav>
                     </div>
                 </div>
@@ -444,7 +386,7 @@
 
                             <div id="gcal-calendars-list-container" class="hidden">
                                 <h3 class="text-lg font-semibold text-gray-700 mb-2">Available Calendars</h3>
-                                <p class="text-sm text-gray-500 mb-4">These calendars can be selected within the 'Service Scheduling Rules' in the Agent Setup tab. Only calendars you have 'write' access to are shown.</p>
+                                <p class="text-sm text-gray-500 mb-4">These calendars can be selected within the 'Service Scheduling Rules'. Only calendars you have 'write' access to are shown.</p>
                                 <div id="gcal-calendars-list" class="space-y-3 border rounded-lg p-4 bg-white max-h-96 overflow-y-auto">
                                     <!-- Calendar list will be dynamically inserted here -->
                                     <p class="text-gray-500">Loading calendars...</p>
@@ -456,7 +398,7 @@
                     <div id="ai-settings-content" class="tab-content-item hidden">
                         <section class="profile-section bg-transparent shadow-none p-0">
                             <h2 class="profile-section-title"><i class="fas fa-robot mr-2 text-indigo-600"></i>AI Core Parameters</h2>
-                            <p class="text-sm text-gray-500 mb-4">High-level AI settings. More detailed scripting is in "Agent Setup".</p>
+                            <p class="text-sm text-gray-500 mb-4">High-level AI settings for core functionality.</p>
                             <form id="ai-settings-form">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                                     <div>
@@ -782,959 +724,84 @@
                                     </div>
                                 </div>
                             </div>
-
-                            <!-- AI Agent Setup Section -->
-                            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-                                <div class="border-b border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50 px-6 py-4 rounded-t-lg">
-                                    <h3 class="text-xl font-bold text-gray-800 flex items-center">
-                                        <i class="fas fa-robot mr-3 text-purple-600"></i>Gold Standard AI Agent Setup
-                                        <span class="ml-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">Ollama LLM</span>
-                                    </h3>
-                                    <p class="text-sm text-gray-600 mt-2">Configure your top-tier AI agent with advanced Ollama LLM capabilities</p>
-                                </div>
-                                
-                                <div class="p-6">
-                                    <!-- QA Engine Configuration -->
-                                    <form id="qa-engine-form" class="space-y-6">
-                                        <!-- QA Engine Status -->
-                                        <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
-                                            <div class="flex items-center">
-                                                <div class="flex-shrink-0">
-                                                    <i class="fas fa-check-circle text-green-600 text-xl"></i>
-                                                </div>
-                                                <div class="ml-3">
-                                                    <h4 class="text-sm font-medium text-green-800">QA Engine Ready</h4>
-                                                    <p class="text-sm text-green-700">Advanced Q&A system with Ollama LLM integration</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- QA Search Configuration -->
-                                        <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                                                <i class="fas fa-search mr-2 text-blue-600"></i>Q&A Search Configuration
-                                            </h4>
-                                            
-                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <!-- Company Q&A -->
-                                                <div>
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="enableCompanyQA" name="enableCompanyQA" class="form-checkbox text-indigo-600" checked>
-                                                        <span class="ml-2 text-sm font-medium text-gray-700">Enable Company-Specific Q&A</span>
-                                                    </label>
-                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Priority 1: Search company knowledge base first</p>
-                                                </div>
-
-                                                <!-- Trade Q&A -->
-                                                <div>
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="enableTradeQA" name="enableTradeQA" class="form-checkbox text-indigo-600" checked>
-                                                        <span class="ml-2 text-sm font-medium text-gray-700">Enable Trade-Level Q&A</span>
-                                                    </label>
-                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Priority 2: Search industry knowledge base</p>
-                                                </div>
-
-                                                <!-- Semantic Search -->
-                                                <div>
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="enableSemanticSearch" name="enableSemanticSearch" class="form-checkbox text-indigo-600">
-                                                        <span class="ml-2 text-sm font-medium text-gray-700">Enable Semantic Search</span>
-                                                    </label>
-                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Priority 3: AI-powered vector search fallback</p>
-                                                </div>
-
-                                                <!-- Performance Tracking -->
-                                                <div>
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="enableQATracking" name="enableQATracking" class="form-checkbox text-indigo-600" checked>
-                                                        <span class="ml-2 text-sm font-medium text-gray-700">Enable Performance Tracking</span>
-                                                    </label>
-                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Track response times and accuracy</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Confidence Settings -->
-                                        <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                                                <i class="fas fa-sliders-h mr-2 text-purple-600"></i>Confidence & Quality Settings
-                                            </h4>
-                                            
-                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <!-- Confidence Threshold -->
-                                                <div>
-                                                    <label for="confidenceThreshold" class="block text-sm font-medium text-gray-700 mb-2">
-                                                        Minimum Confidence Threshold
-                                                    </label>
-                                                    <input type="range" id="confidenceThreshold" name="confidenceThreshold" 
-                                                           class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
-                                                           value="0.6" min="0.1" max="1.0" step="0.1">
-                                                    <div class="flex justify-between text-xs text-gray-500 mt-1">
-                                                        <span>Low (0.1)</span>
-                                                        <span id="confidenceValue" class="font-medium">0.6</span>
-                                                        <span>High (1.0)</span>
-                                                    </div>
-                                                    <p class="text-xs text-gray-500 mt-1">Minimum confidence required to use Q&A answers</p>
-                                                </div>
-
-                                                <!-- Response Limit -->
-                                                <div>
-                                                    <label for="maxQAResults" class="block text-sm font-medium text-gray-700 mb-2">
-                                                        Max Q&A Results
-                                                    </label>
-                                                    <select id="maxQAResults" name="maxQAResults" class="form-select">
-                                                        <option value="1">1 (Best Match Only)</option>
-                                                        <option value="3" selected>3 (Top 3 Matches)</option>
-                                                        <option value="5">5 (Top 5 Matches)</option>
-                                                    </select>
-                                                    <p class="text-xs text-gray-500 mt-1">Maximum number of Q&A results to consider</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Ollama Integration -->
-                                        <div class="border border-purple-200 rounded-lg p-4 bg-purple-50">
-                                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                                                <i class="fas fa-brain mr-2 text-purple-600"></i>Ollama LLM Integration
-                                            </h4>
-                                            
-                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <!-- Ollama Model -->
-                                                <div>
-                                                    <label for="ollamaModel" class="block text-sm font-medium text-gray-700 mb-2">
-                                                        Ollama Model
-                                                    </label>
-                                                    <select id="ollamaModel" name="ollamaModel" class="form-select">
-                                                        <option value="llama2">Llama 2 (7B)</option>
-                                                        <option value="llama2:13b">Llama 2 (13B)</option>
-                                                        <option value="mistral" selected>Mistral (7B)</option>
-                                                        <option value="codellama">Code Llama</option>
-                                                    </select>
-                                                </div>
-
-                                                <!-- Fallback Strategy -->
-                                                <div>
-                                                    <label for="fallbackStrategy" class="block text-sm font-medium text-gray-700 mb-2">
-                                                        Fallback Strategy
-                                                    </label>
-                                                    <select id="fallbackStrategy" name="fallbackStrategy" class="form-select">
-                                                        <option value="escalate">Escalate to Human</option>
-                                                        <option value="generic" selected>Generic Response</option>
-                                                        <option value="silence">No Response</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Event Hooks Management System -->
-                                        <div class="border border-orange-200 rounded-lg p-4 bg-orange-50">
-                                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                                                <i class="fas fa-bolt mr-2 text-orange-600"></i>Event Hooks Management
-                                                <span id="event-hooks-status" class="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded-full">Loading...</span>
-                                            </h4>
-                                            
-                                            <!-- Event Hooks Configuration -->
-                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                <!-- Event Hooks Enable/Disable -->
-                                                <div>
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="enableEventHooks" name="enableEventHooks" class="form-checkbox text-orange-600" checked>
-                                                        <span class="ml-2 text-sm font-medium text-gray-700">Enable Event Hooks System</span>
-                                                    </label>
-                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Automated notifications and event processing</p>
-                                                </div>
-
-                                                <!-- Booking Confirmations -->
-                                                <div>
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="enableBookingConfirmations" name="enableBookingConfirmations" class="form-checkbox text-orange-600" checked>
-                                                        <span class="ml-2 text-sm font-medium text-gray-700">Booking Confirmations</span>
-                                                    </label>
-                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Auto-send SMS/Email booking confirmations</p>
-                                                </div>
-
-                                                <!-- Fallback Messages -->
-                                                <div>
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="enableFallbackMessages" name="enableFallbackMessages" class="form-checkbox text-orange-600" checked>
-                                                        <span class="ml-2 text-sm font-medium text-gray-700">Fallback Messages</span>
-                                                    </label>
-                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Notify personnel when transfers fail</p>
-                                                </div>
-
-                                                <!-- Emergency Alerts -->
-                                                <div>
-                                                    <label class="flex items-center">
-                                                        <input type="checkbox" id="enableEmergencyAlerts" name="enableEmergencyAlerts" class="form-checkbox text-orange-600" checked>
-                                                        <span class="ml-2 text-sm font-medium text-gray-700">Emergency Alerts</span>
-                                                    </label>
-                                                    <p class="text-xs text-gray-500 mt-1 ml-6">Broadcast emergency service requests</p>
-                                                </div>
-                                            </div>
-
-                                            <!-- SMS/Email Configuration Status -->
-                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                <!-- SMS Configuration -->
-                                                <div class="bg-white rounded-lg p-3 border border-gray-200">
-                                                    <div class="flex items-center justify-between mb-2">
-                                                        <h5 class="text-sm font-medium text-gray-800">SMS Configuration</h5>
-                                                        <div id="sms-config-status" class="text-lg">⏳</div>
-                                                    </div>
-                                                    <div class="text-xs text-gray-600 space-y-1">
-                                                        <div>Provider: <span id="sms-provider" class="font-mono">Loading...</span></div>
-                                                        <div>Status: <span id="sms-status" class="font-medium">Checking...</span></div>
-                                                        <div>From Number: <span id="sms-from-number" class="font-mono">--</span></div>
-                                                    </div>
-                                                    <button onclick="testSMSConfiguration()" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded">
-                                                        <i class="fas fa-paper-plane mr-1"></i>Test SMS
-                                                    </button>
-                                                </div>
-
-                                                <!-- Email Configuration -->
-                                                <div class="bg-white rounded-lg p-3 border border-gray-200">
-                                                    <div class="flex items-center justify-between mb-2">
-                                                        <h5 class="text-sm font-medium text-gray-800">Email Configuration</h5>
-                                                        <div id="email-config-status" class="text-lg">⏳</div>
-                                                    </div>
-                                                    <div class="text-xs text-gray-600 space-y-1">
-                                                        <div>Provider: <span id="email-provider" class="font-mono">Loading...</span></div>
-                                                        <div>Status: <span id="email-status" class="font-medium">Checking...</span></div>
-                                                        <div>From Email: <span id="email-from-address" class="font-mono">--</span></div>
-                                                    </div>
-                                                    <button onclick="testEmailConfiguration()" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded">
-                                                        <i class="fas fa-envelope mr-1"></i>Test Email
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <!-- Event Statistics Dashboard -->
-                                            <div class="bg-white rounded-lg p-4 border border-gray-200 mb-4">
-                                                <div class="flex justify-between items-center mb-3">
-                                                    <h5 class="font-medium text-gray-800">Event Statistics (Last 24h)</h5>
-                                                    <button onclick="refreshEventStats()" class="text-xs text-orange-600 hover:text-orange-800">
-                                                        <i class="fas fa-sync-alt mr-1"></i>Refresh
-                                                    </button>
-                                                </div>
-                                                
-                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                                                    <div class="text-center">
-                                                        <div class="text-xl font-bold text-green-600" id="total-events">--</div>
-                                                        <div class="text-xs text-gray-600">Total Events</div>
-                                                    </div>
-                                                    <div class="text-center">
-                                                        <div class="text-xl font-bold text-blue-600" id="successful-events">--</div>
-                                                        <div class="text-xs text-gray-600">Successful</div>
-                                                    </div>
-                                                    <div class="text-center">
-                                                        <div class="text-xl font-bold text-red-600" id="failed-events">--</div>
-                                                        <div class="text-xs text-gray-600">Failed</div>
-                                                    </div>
-                                                    <div class="text-center">
-                                                        <div class="text-xl font-bold text-purple-600" id="success-rate">--</div>
-                                                        <div class="text-xs text-gray-600">Success Rate</div>
-                                                    </div>
-                                                </div>
-
-                                                <!-- Event Types Breakdown -->
-                                                <div class="text-xs text-gray-600">
-                                                    <div class="flex justify-between items-center">
-                                                        <span>Booking Confirmations:</span>
-                                                        <span id="booking-events" class="font-medium">--</span>
-                                                    </div>
-                                                    <div class="flex justify-between items-center">
-                                                        <span>Fallback Messages:</span>
-                                                        <span id="fallback-events" class="font-medium">--</span>
-                                                    </div>
-                                                    <div class="flex justify-between items-center">
-                                                        <span>Emergency Alerts:</span>
-                                                        <span id="emergency-events" class="font-medium">--</span>
-                                                    </div>
-                                                    <div class="flex justify-between items-center">
-                                                        <span>Transfer Completions:</span>
-                                                        <span id="transfer-events" class="font-medium">--</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Recent Events Log -->
-                                            <div class="bg-white rounded-lg p-4 border border-gray-200">
-                                                <div class="flex justify-between items-center mb-3">
-                                                    <h5 class="font-medium text-gray-800">Recent Events</h5>
-                                                    <div class="flex space-x-2">
-                                                        <button onclick="clearEventLog()" class="text-xs text-red-600 hover:text-red-800">
-                                                            <i class="fas fa-trash mr-1"></i>Clear
-                                                        </button>
-                                                        <button onclick="exportEventLog()" class="text-xs text-purple-600 hover:text-purple-800">
-                                                            <i class="fas fa-download mr-1"></i>Export
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                
-                                                <div id="recent-events-list" class="space-y-2 max-h-32 overflow-y-auto text-xs">
-                                                    <div class="text-gray-500 italic">No recent events. Event activity will appear here...</div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Event Hooks Controls -->
-                                            <div class="flex justify-between items-center mt-4 pt-3 border-t border-gray-200">
-                                                <div class="flex space-x-2">
-                                                    <button onclick="testEventHooks()" class="bg-orange-500 hover:bg-orange-600 text-white text-xs px-3 py-1 rounded">
-                                                        <i class="fas fa-play mr-1"></i>Test Event Hooks
-                                                    </button>
-                                                    <button onclick="triggerBookingTest()" class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded">
-                                                        <i class="fas fa-calendar-check mr-1"></i>Test Booking
-                                                    </button>
-                                                    <button onclick="triggerFallbackTest()" class="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-3 py-1 rounded">
-                                                        <i class="fas fa-exclamation-triangle mr-1"></i>Test Fallback
-                                                    </button>
-                                                </div>
-                                                <div class="text-xs text-gray-500">
-                                                    Last event: <span id="last-event-time" class="font-medium">--:--</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Transfer Router Management -->
-                                        <div class="border border-indigo-200 rounded-lg p-4 bg-indigo-50">
-                                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                                                <i class="fas fa-route mr-2 text-indigo-600"></i>Transfer Router Management
-                                                <span id="transfer-router-config-status" class="ml-2 px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded-full">Loading...</span>
-                                            </h4>
-                                            
-                                            <!-- Personnel Quick Stats -->
-                                            <div class="grid grid-cols-3 gap-4 mb-4">
-                                                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
-                                                    <div class="text-xl font-bold text-green-600" id="available-personnel">--</div>
-                                                    <div class="text-xs text-gray-600">Available Now</div>
-                                                </div>
-                                                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
-                                                    <div class="text-xl font-bold text-orange-600" id="total-personnel">--</div>
-                                                    <div class="text-xs text-gray-600">Total Personnel</div>
-                                                </div>
-                                                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
-                                                    <div class="text-xl font-bold text-purple-600" id="transfer-success-rate">--</div>
-                                                    <div class="text-xs text-gray-600">Transfer Success</div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Personnel List (Quick View) -->
-                                            <div class="bg-white rounded-lg p-4 border border-gray-200 mb-4">
-                                                <div class="flex justify-between items-center mb-3">
-                                                    <h5 class="font-medium text-gray-800">Personnel Status</h5>
-                                                    <button onclick="refreshPersonnelStatus()" class="text-xs text-indigo-600 hover:text-indigo-800">
-                                                        <i class="fas fa-sync-alt mr-1"></i>Refresh
-                                                    </button>
-                                                </div>
-                                                
-                                                <div id="personnel-status-list" class="space-y-2 max-h-32 overflow-y-auto text-xs">
-                                                    <div class="text-gray-500 italic">Loading personnel status...</div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Transfer Router Controls -->
-                                            <div class="flex justify-between items-center pt-3 border-t border-gray-200">
-                                                <div class="flex space-x-2">
-                                                    <button onclick="openPersonnelManager()" class="bg-indigo-500 hover:bg-indigo-600 text-white text-xs px-3 py-1 rounded">
-                                                        <i class="fas fa-users mr-1"></i>Manage Personnel
-                                                    </button>
-                                                    <button onclick="testTransferRouter()" class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded">
-                                                        <i class="fas fa-phone mr-1"></i>Test Transfer
-                                                    </button>
-                                                </div>
-                                                <div class="text-xs text-gray-500">
-                                                    Router status: <span id="transfer-router-status-text" class="font-medium">Active</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Real-time System Health & Render Log -->
-                                        <div class="border border-green-200 rounded-lg p-4 bg-green-50">
-                                            <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                                                <i class="fas fa-heartbeat mr-2 text-green-600"></i>System Health & Render Log
-                                                <span id="health-status" class="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">Checking...</span>
-                                            </h4>
-                                            
-                                            <!-- Health Check Controls -->
-                                            <div class="flex items-center justify-between mb-4">
-                                                <div class="flex space-x-3">
-                                                    <button type="button" onclick="runSelfCheck()" 
-                                                            class="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-3 rounded text-sm transition duration-150 ease-in-out">
-                                                        <i class="fas fa-sync mr-1"></i>Run Self-Check
-                                                    </button>
-                                                    <button type="button" onclick="clearRenderLog()" 
-                                                            class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-1 px-3 rounded text-sm transition duration-150 ease-in-out">
-                                                        <i class="fas fa-trash mr-1"></i>Clear Log
-                                                    </button>
-                                                    <button type="button" onclick="toggleAutoRefresh()" id="auto-refresh-btn"
-                                                            class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-1 px-3 rounded text-sm transition duration-150 ease-in-out">
-                                                        <i class="fas fa-pause mr-1"></i>Pause Auto
-                                                    </button>
-                                                    <button type="button" onclick="exportRenderLog()" 
-                                                            class="bg-purple-500 hover:bg-purple-600 text-white font-medium py-1 px-3 rounded text-sm transition duration-150 ease-in-out">
-                                                        <i class="fas fa-download mr-1"></i>Export
-                                                    </button>
-                                                </div>
-                                                <div class="text-xs text-gray-500">
-                                                    Auto-refresh: <span id="auto-refresh-status" class="font-medium">ON</span> | 
-                                                    Last check: <span id="last-check-time" class="font-medium">--:--</span> |
-                                                    Session: <span id="session-id" class="font-mono text-purple-600">--</span>
-                                                </div>
-                                            </div>
-
-                                            <!-- Component Status Grid -->
-                                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                                                <div class="bg-white rounded p-2 border text-center">
-                                                    <div id="qa-engine-status" class="text-lg">⏳</div>
-                                                    <div class="text-xs text-gray-600">QA Engine</div>
-                                                </div>
-                                                <div class="bg-white rounded p-2 border text-center">
-                                                    <div id="booking-flow-status" class="text-lg">⏳</div>
-                                                    <div class="text-xs text-gray-600">Booking Flow</div>
-                                                </div>
-                                                <div class="bg-white rounded p-2 border text-center">
-                                                    <div id="trade-config-status" class="text-lg">⏳</div>
-                                                    <div class="text-xs text-gray-600">Trade Config</div>
-                                                </div>
-                                                <div class="bg-white rounded p-2 border text-center">
-                                                    <div id="calendar-sync-status" class="text-lg">⏳</div>
-                                                    <div class="text-xs text-gray-600">Calendar Sync</div>
-                                                </div>
-                                                <div class="bg-white rounded p-2 border text-center">
-                                                    <div id="transfer-router-status" class="text-lg">⏳</div>
-                                                    <div class="text-xs text-gray-600">Transfer Router</div>
-                                                </div>
-                                                <div class="bg-white rounded p-2 border text-center">
-                                                    <div id="agent-personality-status" class="text-lg">⏳</div>
-                                                    <div class="text-xs text-gray-600">Agent Personality</div>
-                                                </div>
-                                                <div class="bg-white rounded p-2 border text-center">
-                                                    <div id="custom-fields-status" class="text-lg">⏳</div>
-                                                    <div class="text-xs text-gray-600">Custom Fields</div>
-                                                </div>
-                                                <div class="bg-white rounded p-2 border text-center">
-                                                    <div id="ollama-status" class="text-lg">⏳</div>
-                                                    <div class="text-xs text-gray-600">Ollama LLM</div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Render Log Display -->
-                                            <div class="bg-gray-900 rounded p-3 font-mono text-xs relative" style="max-height: 320px;">
-                                                <!-- Log Controls Header -->
-                                                <div class="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
-                                                    <div class="flex items-center space-x-3">
-                                                        <span class="text-green-400 font-semibold">System Render Log</span>
-                                                        <div class="flex items-center space-x-1">
-                                                            <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                                                            <span class="text-green-400 text-xs">Live</span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex items-center space-x-2 text-xs">
-                                                        <select id="log-filter" onchange="filterRenderLog()" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-300">
-                                                            <option value="all">All Events</option>
-                                                            <option value="success">Success Only</option>
-                                                            <option value="warning">Warnings</option>
-                                                            <option value="error">Errors Only</option>
-                                                        </select>
-                                                        <span class="text-gray-400">|</span>
-                                                        <span class="text-gray-400">Lines: <span id="log-line-count">0</span></span>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Log Content -->
-                                                <div id="render-log" class="overflow-y-auto text-green-400" style="max-height: 240px;">
-                                                    <div class="text-gray-500 italic">
-                                                        <div class="mb-1"># System render log initializing...</div>
-                                                        <div class="mb-1"># Advanced Self-Check Logger v2.0</div>
-                                                        <div class="mb-1"># Ready for monitoring events</div>
-                                                        <div class="text-green-400">[READY] Waiting for first check...</div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Log Status Bar -->
-                                                <div class="absolute bottom-1 left-3 right-3 flex justify-between items-center text-xs text-gray-500">
-                                                    <div class="flex items-center space-x-3">
-                                                        <span>Total: <span id="total-events">0</span></span>
-                                                        <span>Errors: <span id="error-count" class="text-red-400">0</span></span>
-                                                        <span>Warnings: <span id="warning-count" class="text-yellow-400">0</span></span>
-                                                    </div>
-                                                    <div class="flex items-center space-x-2">
-                                                        <button onclick="scrollToTop()" class="hover:text-green-400 transition-colors" title="Scroll to top">
-                                                            <i class="fas fa-chevron-up"></i>
-                                                        </button>
-                                                        <button onclick="scrollToBottom()" class="hover:text-green-400 transition-colors" title="Scroll to bottom">
-                                                            <i class="fas fa-chevron-down"></i>
-                                                        </button>
-                                                        <button onclick="toggleLogWrap()" id="wrap-toggle" class="hover:text-green-400 transition-colors" title="Toggle word wrap">
-                                                            <i class="fas fa-align-left"></i>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Advanced AI Engine Status -->
-                                            <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4 mt-4">
-                                                <h5 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                                                    <i class="fas fa-brain mr-2 text-purple-600"></i>Advanced AI Engine v3.0
-                                                    <span id="ai-engine-status" class="ml-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">Initializing...</span>
-                                                </h5>
-                                                
-                                                <!-- AI Engine Metrics -->
-                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                                                    <div class="bg-white rounded-lg p-3 border border-gray-200">
-                                                        <div class="text-xl font-bold text-blue-600" id="ai-predictions">--</div>
-                                                        <div class="text-xs text-gray-600">Predictions Made</div>
-                                                        <div class="text-xs text-blue-600" id="prediction-accuracy">94% accuracy</div>
-                                                    </div>
-                                                    <div class="bg-white rounded-lg p-3 border border-gray-200">
-                                                        <div class="text-xl font-bold text-green-600" id="ai-optimizations">--</div>
-                                                        <div class="text-xs text-gray-600">Auto-Optimizations</div>
-                                                        <div class="text-xs text-green-600" id="optimization-impact">89% efficiency</div>
-                                                    </div>
-                                                    <div class="bg-white rounded-lg p-3 border border-gray-200">
-                                                        <div class="text-xl font-bold text-orange-600" id="ai-escalations">--</div>
-                                                        <div class="text-xs text-gray-600">Smart Escalations</div>
-                                                        <div class="text-xs text-orange-600" id="escalation-accuracy">92% accuracy</div>
-                                                    </div>
-                                                    <div class="bg-white rounded-lg p-3 border border-gray-200">
-                                                        <div class="text-xl font-bold text-purple-600" id="ai-scripts">--</div>
-                                                        <div class="text-xs text-gray-600">Generated Scripts</div>
-                                                        <div class="text-xs text-purple-600" id="script-approval">86% approved</div>
-                                                    </div>
-                                                </div>
-
-                                                <!-- AI Engine Activity Feed -->
-                                                <div class="bg-white rounded-lg p-4 border border-gray-200">
-                                                    <div class="flex justify-between items-center mb-3">
-                                                        <h6 class="font-medium text-gray-800">Recent AI Activity</h6>
-                                                        <button onclick="refreshAIActivity()" class="text-xs text-purple-600 hover:text-purple-800">
-                                                            <i class="fas fa-sync-alt mr-1"></i>Refresh
-                                                        </button>
-                                                    </div>
-                                                    <div id="ai-activity-feed" class="space-y-2 max-h-32 overflow-y-auto">
-                                                        <div class="text-gray-500 text-sm italic">AI Engine activity will appear here...</div>
-                                                    </div>
-                                                </div>
-
-                                                <!-- AI Engine Controls -->
-                                                <div class="flex justify-between items-center mt-4 pt-3 border-t border-gray-200">
-                                                    <div class="flex space-x-2">
-                                                        <button onclick="triggerAIPrediction()" class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded">
-                                                            <i class="fas fa-crystal-ball mr-1"></i>Run Prediction
-                                                        </button>
-                                                        <button onclick="triggerAutoOptimization()" class="bg-green-500 hover:bg-green-600 text-white text-xs px-3 py-1 rounded">
-                                                            <i class="fas fa-magic mr-1"></i>Optimize Now
-                                                        </button>
-                                                        <button onclick="generateAIScript()" class="bg-purple-500 hover:bg-purple-600 text-white text-xs px-3 py-1 rounded">
-                                                            <i class="fas fa-robot mr-1"></i>Generate Script
-                                                        </button>
-                                                    </div>
-                                                    <div class="text-xs text-gray-500">
-                                                        Last activity: <span id="ai-last-activity">--:--</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <!-- Notification Log Viewer System -->
-                                            <div class="border border-blue-200 rounded-lg p-4 bg-blue-50 mt-6">
-                                                <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                                                    <i class="fas fa-list-alt mr-2 text-blue-600"></i>Notification Log Viewer
-                                                    <span id="notification-log-status" class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">Ready</span>
-                                                </h4>
-                                                
-                                                <!-- Log Statistics Dashboard -->
-                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                                                    <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
-                                                        <div class="text-xl font-bold text-green-600" id="total-notifications">--</div>
-                                                        <div class="text-xs text-gray-600">Total Notifications</div>
-                                                    </div>
-                                                    <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
-                                                        <div class="text-xl font-bold text-blue-600" id="sent-notifications">--</div>
-                                                        <div class="text-xs text-gray-600">Sent Successfully</div>
-                                                    </div>
-                                                    <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
-                                                        <div class="text-xl font-bold text-red-600" id="failed-notifications">--</div>
-                                                        <div class="text-xs text-gray-600">Failed</div>
-                                                    </div>
-                                                    <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
-                                                        <div class="text-xl font-bold text-purple-600" id="notification-success-rate">--</div>
-                                                        <div class="text-xs text-gray-600">Success Rate</div>
-                                                    </div>
-                                                </div>
-                
-                                                <!-- Filter Controls -->
-                                                <div class="bg-white rounded-lg p-4 border border-gray-200 mb-4">
-                                                    <div class="flex flex-wrap items-center gap-3">
-                                                        <div class="flex items-center gap-2">
-                                                            <label class="text-sm font-medium text-gray-700">Type:</label>
-                                                            <select id="notification-type-filter" class="form-select text-sm">
-                                                                <option value="all">All Types</option>
-                                                                <option value="sms">SMS</option>
-                                                                <option value="email">Email</option>
-                                                                <option value="event_hook">Event Hook</option>
-                                                            </select>
-                                                        </div>
-                                                        <div class="flex items-center gap-2">
-                                                            <label class="text-sm font-medium text-gray-700">Status:</label>
-                                                            <select id="notification-status-filter" class="form-select text-sm">
-                                                                <option value="all">All Status</option>
-                                                                <option value="sent">Sent</option>
-                                                                <option value="failed">Failed</option>
-                                                                <option value="pending">Pending</option>
-                                                            </select>
-                                                        </div>
-                                                        <div class="flex items-center gap-2">
-                                                            <label class="text-sm font-medium text-gray-700">Timeframe:</label>
-                                                            <select id="notification-timeframe-filter" class="form-select text-sm">
-                                                                <option value="1h">Last Hour</option>
-                                                                <option value="24h" selected>Last 24 Hours</option>
-                                                                <option value="7d">Last 7 Days</option>
-                                                                <option value="30d">Last 30 Days</option>
-                                                                <option value="90d">Last 90 Days</option>
-                                                                <option value="all">All Time</option>
-                                                            </select>
-                                                        </div>
-                                                        <button onclick="refreshNotificationLogs()" class="bg-blue-500 hover:bg-blue-600 text-white text-sm px-3 py-1 rounded">
-                                                            <i class="fas fa-sync-alt mr-1"></i>Refresh
-                                                        </button>
-                                                        <button onclick="exportNotificationLogs()" class="bg-purple-500 hover:bg-purple-600 text-white text-sm px-3 py-1 rounded">
-                                                            <i class="fas fa-download mr-1"></i>Export CSV
-                                                        </button>
-                                                        <button onclick="generateSampleNotificationData()" class="bg-green-500 hover:bg-green-600 text-white text-sm px-3 py-1 rounded">
-                                                            <i class="fas fa-plus mr-1"></i>Generate Sample Data
-                                                        </button>
-                                                    </div>
-                                                </div>
-                
-                                                <!-- Notification Logs Table -->
-                                                <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                                                    <div class="max-h-80 overflow-y-auto">
-                                                        <table class="min-w-full divide-y divide-gray-200">
-                                                            <thead class="bg-gray-50 sticky top-0">
-                                                                <tr>
-                                                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
-                                                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recipient</th>
-                                                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event Type</th>
-                                                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody id="notification-logs-table-body" class="bg-white divide-y divide-gray-200">
-                                                                <tr>
-                                                                    <td colspan="6" class="px-3 py-8 text-center text-gray-500 italic">
-                                                                        Loading notification logs...
-                                                                    </td>
-                                                                </tr>
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                </div>
-                
-                                                <!-- Pagination Controls -->
-                                                <div class="flex justify-between items-center mt-4">
-                                                    <div class="text-sm text-gray-600">
-                                                        Showing <span id="logs-showing-start">0</span> to <span id="logs-showing-end">0</span> of <span id="logs-total-count">0</span> notifications
-                                                    </div>
-                                                    <div class="flex items-center space-x-2">
-                                                        <button onclick="loadPreviousNotificationPage()" id="prev-page-btn" class="bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm" disabled>
-                                                            <i class="fas fa-chevron-left mr-1"></i>Previous
-                                                        </button>
-                                                        <span class="text-sm text-gray-600">
-                                                            Page <span id="current-page-number">1</span>
-                                                        </span>
-                                                        <button onclick="loadNextNotificationPage()" id="next-page-btn" class="bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm" disabled>
-                                                            Next<i class="fas fa-chevron-right ml-1"></i>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                
-                                        </div>
-                
-                                        <!-- Action Buttons -->
-                                        <div class="flex justify-between items-center pt-4 border-t border-gray-200">
-                                            <div class="flex space-x-3">
-                                                <button type="button" onclick="testQAEngine()" 
-                                                        class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">
-                                                    <i class="fas fa-play mr-2"></i>Test QA Engine
-                                                </button>
-                                                <button type="button" onclick="resetQASettings()" 
-                                                        class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">
-                                                    <i class="fas fa-undo mr-2"></i>Reset to Defaults
-                                                </button>
-                                            </div>
-                                            <button type="submit" 
-                                                    class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 px-6 rounded-md shadow-sm transition duration-150 ease-in-out">
-                                                <i class="fas fa-save mr-2"></i>Save QA Configuration
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
                         </section>
                     </div>
 
-                    <div id="agent-setup-content" class="tab-content-item hidden">
-                        <div class="bg-white py-6 md:py-8 rounded-xl"> 
-                            <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center px-6 md:px-8"> 
-                                <i class="fas fa-user-cog mr-3 text-indigo-600 text-2xl"></i>AI Agent Detailed Configuration
-                            </h2>
-                            <div id="agent-setup-form" class="space-y-0">
-                                <div class="px-6 md:px-8 mb-6"> 
-                                    <div class="p-4 border border-indigo-200 rounded-xl bg-indigo-50 shadow-sm">
-                                        <label for="agentModeSelect" class="form-label text-base font-semibold text-indigo-800">Agent Operating Mode</label>
-                                        <p class="text-xs text-indigo-700 mb-2">Choose how the AI agent should primarily function.</p>
-                                        <select id="agentModeSelect" name="agentMode" class="form-select">
-                                            <option value="full">Full Knowledge & Booking Agent</option>
-                                            <option value="receptionist">Simple Receptionist (Greet & Route Calls Only)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="px-6 md:px-8"> 
-                                    <!-- Business Categories section removed -->
-                                    <!-- Company Specialties section removed -->
-                                    <!-- Company Q&A section removed -->
+                </div>
+            </div>
+        </div>
+    </body>
 
-                                    <!-- AGENT MONITORING & OVERSIGHT SYSTEM -->
-                                    <div id="agent-monitoring-section" class="agent-setup-section-container" data-section-type="full" data-section-name="agent-monitoring">
-                                        <h3 class="agent-setup-section-header">
-                                            <span><i class="fas fa-shield-alt mr-2"></i>Agent Monitoring & Oversight</span>
-                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
-                                        </h3>
-                                        <div class="section-content collapsed">
-                                            <div class="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl p-6 mb-6">
-                                                <div class="flex items-center mb-4">
-                                                    <i class="fas fa-eye text-2xl text-orange-600 mr-3"></i>
-                                                    <div>
-                                                        <h4 class="text-lg font-semibold text-orange-900">Gold-Standard Monitoring System</h4>
-                                                        <p class="text-orange-700 text-sm">Complete traceability and human oversight for every agent interaction</p>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Monitoring Status & Controls -->
-                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
-                                                        <div class="text-2xl font-bold text-green-600" id="monitoring-status">ACTIVE</div>
-                                                        <div class="text-xs text-gray-600">System Status</div>
-                                                        <div class="text-xs text-green-600">✓ Recording all calls</div>
-                                                    </div>
-                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
-                                                        <div class="text-2xl font-bold text-blue-600" id="pending-reviews">24</div>
-                                                        <div class="text-xs text-gray-600">Pending Reviews</div>
-                                                        <div class="text-xs text-orange-600">⚠️ Needs attention</div>
-                                                    </div>
-                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
-                                                        <div class="text-2xl font-bold text-purple-600" id="flagged-interactions">3</div>
-                                                        <div class="text-xs text-gray-600">Flagged Repeats</div>
-                                                        <div class="text-xs text-red-600">🚩 Requires review</div>
-                                                    </div>
-                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
-                                                        <div class="text-2xl font-bold text-gray-600" id="approval-rate">89%</div>
-                                                        <div class="text-xs text-gray-600">Approval Rate</div>
-                                                        <div class="text-xs text-green-600">✓ Good performance</div>
-                                                    </div>
-                                                </div>
+    <script>
+        // Global function to get current company ID
+        function getCurrentCompanyId() {
+            // First try to get from global variable
+            if (window.currentCompanyId) {
+                return window.currentCompanyId;
+            }
+            
+            // Fallback: extract from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const companyId = urlParams.get('id');
+            
+            if (!companyId) {
+                console.error('Company ID not found in URL or global variable');
+                return null;
+            }
+            
+            return companyId;
+        }
 
-                                                <!-- Quick Actions -->
-                                                <div class="flex flex-wrap gap-3 mb-6">
-                                                    <button id="open-monitoring-dashboard" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                                                        <i class="fas fa-tachometer-alt mr-2"></i>Open Dashboard
-                                                    </button>
-                                                    <button id="review-pending-interactions" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                                                        <i class="fas fa-clipboard-check mr-2"></i>Review Pending
-                                                    </button>
-                                                    <button id="view-flagged-items" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                                                        <i class="fas fa-flag mr-2"></i>View Flagged
-                                                    </button>
-                                                    <button id="export-monitoring-data" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                                                        <i class="fas fa-download mr-2"></i>Export Data
-                                                    </button>
-                                                </div>
+        // Basic mobile menu toggle
+        document.getElementById('mobile-menu-button')?.addEventListener('click', () => {
+            document.getElementById('mobile-menu')?.classList.toggle('hidden');
+        });
 
-                                                <!-- Monitoring Configuration -->
-                                                <div class="bg-white rounded-lg p-4 border">
-                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
-                                                        <i class="fas fa-cogs text-gray-500 mr-2"></i>Monitoring Settings
-                                                    </h5>
-                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div>
-                                                            <label class="flex items-center">
-                                                                <input type="checkbox" id="auto-flag-repeats" class="form-checkbox" checked>
-                                                                <span class="form-check-label">Auto-flag repeated interactions</span>
-                                                            </label>
-                                                        </div>
-                                                        <div>
-                                                            <label class="flex items-center">
-                                                                <input type="checkbox" id="require-approval" class="form-checkbox">
-                                                                <span class="form-check-label">Require approval for new responses</span>
-                                                            </label>
-                                                        </div>
-                                                        <div>
-                                                            <label class="flex items-center">
-                                                                <input type="checkbox" id="alert-on-flags" class="form-checkbox" checked>
-                                                                <span class="form-check-label">Real-time alerts for flags</span>
-                                                            </label>
-                                                        </div>
-                                                        <div>
-                                                            <label class="flex items-center">
-                                                                <input type="checkbox" id="detailed-logging" class="form-checkbox" checked>
-                                                                <span class="form-check-label">Detailed interaction logging</span>
-                                                            </label>
-                                                        </div>
-                                                    </div>
-                                                    <div class="mt-4">
-                                                        <label for="repeat-threshold" class="form-label">Repeat Detection Threshold</label>
-                                                        <select id="repeat-threshold" class="form-select">
-                                                            <option value="3">3+ occurrences</option>
-                                                            <option value="5" selected>5+ occurrences</option>
-                                                            <option value="10">10+ occurrences</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                            </div>
+        // Active Nav Link Highlighting & Main Page Tab Logic
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- Navigation Link Highlighting ---
+            let currentPath = window.location.pathname.replace(/\/$/, "") || "/index.html";
+            document.querySelectorAll('header nav a.nav-link, #mobile-menu a.nav-link').forEach(link => {
+                let linkPath = new URL(link.href).pathname.replace(/\/$/, "") || "/index.html";
+                link.classList.remove('active-tab', 'text-gray-700');
+                if (linkPath === currentPath) {
+                    link.classList.add('active-tab');
+                } else {
+                    link.classList.add('text-gray-700');
+                }
+            });
 
-                                            <!-- Recent Activity Feed -->
-                                            <div class="mb-6">
-                                                <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
-                                                    <i class="fas fa-clock text-blue-500 mr-2"></i>Recent Monitoring Activity
-                                                </h5>
-                                                <div id="monitoring-activity-feed" class="space-y-3 max-h-64 overflow-y-auto">
-                                                    <div class="flex items-center text-sm text-gray-700 bg-white rounded-lg p-3 border-l-4 border-orange-400">
-                                                        <i class="fas fa-flag text-orange-500 mr-3"></i>
-                                                        <div class="flex-1">
-                                                            <span class="font-medium">Repeated question flagged:</span> "What are your hours?"
-                                                            <div class="text-xs text-gray-500">5 identical interactions in past 2 hours</div>
-                                                        </div>
-                                                        <span class="text-xs text-gray-400">2m ago</span>
-                                                    </div>
-                                                    <div class="flex items-center text-sm text-gray-700 bg-white rounded-lg p-3 border-l-4 border-green-400">
-                                                        <i class="fas fa-check text-green-500 mr-3"></i>
-                                                        <div class="flex-1">
-                                                            <span class="font-medium">Response approved:</span> Emergency HVAC protocol
-                                                            <div class="text-xs text-gray-500">Reviewed by admin@company.com</div>
-                                                        </div>
-                                                        <span class="text-xs text-gray-400">15m ago</span>
-                                                    </div>
-                                                    <div class="flex items-center text-sm text-gray-700 bg-white rounded-lg p-3 border-l-4 border-red-400">
-                                                        <i class="fas fa-times text-red-500 mr-3"></i>
-                                                        <div class="flex-1">
-                                                            <span class="font-medium">Response blacklisted:</span> Pricing discussion
-                                                            <div class="text-xs text-gray-500">Added to never-answer list</div>
-                                                        </div>
-                                                        <span class="text-xs text-gray-400">1h ago</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Monitoring Analytics Preview -->
-                                            <div class="bg-gray-50 rounded-lg p-4">
-                                                <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
-                                                    <i class="fas fa-chart-bar text-purple-500 mr-2"></i>Monitoring Analytics (Last 7 Days)
-                                                </h5>
-                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                                                    <div>
-                                                        <div class="text-lg font-bold text-blue-600">1,247</div>
-                                                        <div class="text-xs text-gray-600">Total Interactions</div>
-                                                    </div>
-                                                    <div>
-                                                        <div class="text-lg font-bold text-orange-600">18</div>
-                                                        <div class="text-xs text-gray-600">Flagged Items</div>
-                                                    </div>
-                                                    <div>
-                                                        <div class="text-lg font-bold text-green-600">15</div>
-                                                        <div class="text-xs text-gray-600">Approved</div>
-                                                    </div>
-                                                    <div>
-                                                        <div class="text-lg font-bold text-red-600">3</div>
-                                                        <div class="text-xs text-gray-600">Disapproved</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- SMART AGENT INTELLIGENCE SYSTEM -->
-                                    <div class="agent-setup-section-container" data-section-type="full" data-section-name="agent-intelligence">
-                                        <h3 class="agent-setup-section-header">
-                                            <span><i class="fas fa-brain mr-2"></i>Agent Intelligence & Learning</span>
-                                            <i class="fas fa-chevron-down transition-transform duration-200"></i>
-                                        </h3>
-                                        <div class="section-content collapsed">
-                                            <div class="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-6 mb-6">
-                                                <div class="flex items-center mb-4">
-                                                    <i class="fas fa-rocket text-2xl text-blue-600 mr-3"></i>
-                                                    <div>
-                                                        <h4 class="text-lg font-semibold text-blue-900">Smart Learning Engine</h4>
-                                                        <p class="text-blue-700 text-sm">AI-powered system that makes your agent smarter with every conversation</p>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- Performance Metrics -->
-                                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
-                                                        <div class="text-2xl font-bold text-green-600" id="booking-rate">87%</div>
-                                                        <div class="text-xs text-gray-600">Booking Rate</div>
-                                                        <div class="text-xs text-green-600">↗️ +3% this week</div>
-                                                    </div>
-                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
-                                                        <div class="text-2xl font-bold text-blue-600" id="avg-response-time">2.1s</div>
-                                                        <div class="text-xs text-gray-600">Avg Response</div>
-                                                        <div class="text-xs text-blue-600">⚡ -0.3s optimized</div>
-                                                    </div>
-                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
-                                                        <div class="text-2xl font-bold text-orange-600" id="transfer-rate">12%</div>
-                                                        <div class="text-xs text-gray-600">Transfer Rate</div>
-                                                        <div class="text-xs text-green-600">↘️ -2% improved</div>
-                                                    </div>
-                                                    <div class="bg-white rounded-lg p-4 shadow-sm">
-                                                        <div class="text-2xl font-bold text-purple-600" id="satisfaction-score">4.3</div>
-                                                        <div class="text-xs text-gray-600">Satisfaction</div>
-                                                        <div class="text-xs text-purple-600">⭐ +0.1 this week</div>
-                                                    </div>
-                                                </div>
-
-                                                <!-- AI Insights -->
-                                                <div class="mb-6">
-                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
-                                                        <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>AI Learning Insights
-                                                    </h5>
-                                                    <div id="ai-insights" class="space-y-2">
-                                                        <div class="flex items-center text-sm text-gray-700 bg-white rounded-lg p-3">
-                                                            <i class="fas fa-chart-line text-green-500 mr-2"></i>
-                                                            Emergency keyword detection improved transfers by 23%
-                                                        </div>
-                                                        <div class="flex items-center text-sm text-gray-700 bg-white rounded-lg p-3">
-                                                            <i class="fas fa-clock text-blue-500 mr-2"></i>
-                                                            Shorter greetings increased booking rate by 12%
-                                                        </div>
-                                                        <div class="flex items-center text-sm text-gray-700 bg-white rounded-lg p-3">
-                                                            <i class="fas fa-target text-purple-500 mr-2"></i>
-                                                            Customer name usage improved satisfaction by 15%
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <!-- Smart Suggestions -->
-                                                <div class="mb-6">
-                                                    <h5 class="font-semibold text-gray-800 mb-3 flex items-center">
-                                                        <i class="fas fa-magic text-indigo-500 mr-2"></i>Smart Optimization Suggestions
-                                                    </h5>
-                                                    <div id="smart-suggestions" class="space-y-3">
-                                                        <div class="bg-white rounded-lg p-4 border-l-4 border-blue-500">
-                                                            <div class="flex justify-between items-start">
-                                                                <div class="flex-1 mr-4">
-                                                                    <h6 class="font-medium text-gray-800">Add Q&A: "Do you work on weekends?"</h6>
-                                                                    <p class="text-sm text-gray-600">Asked 31 times recently • 87% escalation rate</p>
-                                                                    <div class="mt-2">
-                                                                        <p class="text-sm font-medium text-blue-700">Suggested Answer:</p>
-                                                                        <div class="bg-blue-50 border border-blue-200 rounded p-3 mt-1">
-                                                                            <p class="text-sm text-blue-800" id="suggestion-1-text">"We offer emergency service on weekends. Let me check our availability for you."</p>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                                <div class="flex flex-col gap-2">
-                                                                    <button class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded flex items-center" onclick="applySuggestion(1)">
-                                                                        <i class="fas fa-check mr-1"></i>Apply
-                                                                    </button>
+            // --- Tab Content Management ---
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content-item');
+            
+            tabButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const targetTab = this.getAttribute('data-tab');
+                    
+                    // Remove active class from all buttons and content
+                    tabButtons.forEach(btn => btn.classList.remove('active-tab'));
+                    tabContents.forEach(content => content.classList.add('hidden'));
+                    
+                    // Add active class to clicked button and show corresponding content
+                    this.classList.add('active-tab');
+                    document.getElementById(targetTab + '-content')?.classList.remove('hidden');
+                });
+            });
+        });
+    </script>
+    
+    <script src="/js/company-profile.js"></script>
+    
+    <script>
+        // Additional page-specific functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize any additional functionality here
+            console.log('Company profile page loaded successfully');
+        });
+    </script>
+</body>
+</html>
                                                                     <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded flex items-center" onclick="editSuggestion(1)">
                                                                         <i class="fas fa-edit mr-1"></i>Edit
                                                                     </button>
@@ -3360,12 +2427,6 @@
                                             </div>
                                         </div>
                                     </div>
-                                    
-                                    <div class="mt-10 pt-6 border-t border-gray-300 flex justify-end">
-                                        <button type="submit" id="save-agent-setup-button" class="form-button-agent-setup text-base py-3 px-6 inline-flex items-center">
-                                            <i class="fas fa-save mr-2"></i>Save Agent Setup
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -3458,7 +2519,7 @@
                 }
             }
     
-            // Initialize Smart Learning connections when AI Agent Setup is ready
+            // Initialize Smart Learning connections when AI system is ready
             function initializeSmartLearningConnections() {
                 // Connect auto-apply threshold slider
                 const thresholdSlider = document.getElementById('autoApplyThreshold');
@@ -5355,7 +4416,7 @@
     }
 
     /**
-     * Update phone number options in AI Agent Setup tab
+     * Update phone number options in AI configuration
      */
     function updateAIAgentPhoneOptions() {
         const phoneNumbers = getConfiguredPhoneNumbers();
@@ -5453,7 +4514,7 @@
     }
 
     /**
-     * Switch to configuration tab from AI Agent Setup
+     * Switch to configuration tab
      */
     function switchToConfigTab() {
         // Switch to Configuration tab
@@ -5513,10 +4574,10 @@
             addPhoneBtn.addEventListener('click', addPhoneNumber);
         }
         
-        // Update AI Agent Setup options when page loads
+        // Update AI options when page loads
         updateAIAgentPhoneOptions();
         
-        // Listen for changes in phone number inputs to update AI Agent Setup
+        // Listen for changes in phone number inputs to update AI configuration
         document.addEventListener('input', function(e) {
             if (e.target.matches('.phone-number-item input, .phone-number-item select')) {
                 // Debounce the update
@@ -5525,7 +4586,7 @@
             }
         });
 
-        // --- AI Agent Setup Greeting Type Toggle ---
+        // --- AI Greeting Type Toggle ---
         function toggleAIGreetingType(greetingType) {
             const audioContainer = document.getElementById('aiGreetingAudioUploadContainer');
             const textContainer = document.getElementById('aiGreetingTextContainer');
@@ -5576,7 +4637,7 @@
             });
         }
 
-        // --- Original Agent Setup Greeting Type Toggle ---
+        // --- Original Greeting Type Toggle ---
         function toggleGreetingType(greetingType) {
             const audioContainer = document.getElementById('greetingAudioUploadContainer');
             const textContainer = document.getElementById('greetingTextContainer');
@@ -5992,7 +5053,7 @@ function addToScript(questionType) {
     
     if (confirm(`Add this to your main agent script?\n\nQuestion: ${script.question}\n\nSuggested script section:\n${script.suggestedScript}`)) {
         // TODO: Add to actual script
-        showToast('Script section added! Remember to save your agent setup.', 'success');
+        showToast('Script section added! Remember to save your configuration.', 'success');
         
         // Update the gap analysis to show it's resolved
         const gapElement = event.target.closest('.border-red-200');
@@ -6433,7 +5494,7 @@ document.addEventListener('DOMContentLoaded', function() {
         function refreshPerformanceMetrics() {
             console.log('Refreshing performance metrics...');
             
-            // Delegate to AI Agent Setup if available
+            // Delegate to AI configuration if available
             if (window.aiAgentSetup && window.aiAgentSetup.refreshPerformanceMetrics) {
                 window.aiAgentSetup.refreshPerformanceMetrics();
             } else {

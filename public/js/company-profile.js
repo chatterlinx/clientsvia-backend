@@ -84,19 +84,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const gcalStatusContainer = document.getElementById('gcal-status-container');
     const gcalCalendarsListContainer = document.getElementById('gcal-calendars-list-container');
     const gcalCalendarsList = document.getElementById('gcal-calendars-list');
-    
-    const agentSetupPageContainer = document.getElementById('agent-setup-content');
-    const agentSetupForm = agentSetupPageContainer?.querySelector('#agent-setup-form');
-    const agentModeSelect = agentSetupPageContainer?.querySelector('#agentModeSelect');
-    // Company Specialties input removed
-    const timezoneSelectAgentSetup = agentSetupPageContainer?.querySelector('#agentSetupTimezoneSelect'); 
-    const currentTimeDisplayAgentSetup = agentSetupPageContainer?.querySelector('#agentSetupCurrentTimeDisplay');
-    const categoryQAsTextarea = agentSetupPageContainer?.querySelector('#categoryQAs');
-    // Company Q&A form elements removed
-
-    // Company Q&A functions removed
-        companyQnaSaveBtn.disabled = !q || !a;
-    }
 
     // Company Q&A event listeners removed
 
@@ -110,34 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    const toggle24HoursCheckbox = agentSetupPageContainer?.querySelector('#toggle24Hours');
-    const operatingHoursListContainer = agentSetupPageContainer?.querySelector('#operating-hours-list');
-    const agentGreetingTextareaAgentSetup = agentSetupPageContainer?.querySelector('#agentGreeting');
-    const greetingTypeTtsRadio = agentSetupPageContainer?.querySelector('#greetingTypeTTS');
-    const greetingTypeAudioRadio = agentSetupPageContainer?.querySelector('#greetingTypeAudio');
-    const greetingAudioFileInput = agentSetupPageContainer?.querySelector('#greetingAudioFile');
-    const greetingAudioUploadContainer = agentSetupPageContainer?.querySelector('#greetingAudioUploadContainer');
-    const greetingTextContainer = agentSetupPageContainer?.querySelector('#greetingTextContainer');
-    const greetingAudioPreview = agentSetupPageContainer?.querySelector('#greetingAudioPreview');
-    const mainAgentScriptTextarea = agentSetupPageContainer?.querySelector('#mainAgentScript');
-    const agentClosingTextareaAgentSetup = agentSetupPageContainer?.querySelector('#agentClosing');
-    
-    const serviceSchedulingRulesContainer = agentSetupPageContainer?.querySelector('#serviceSchedulingRulesContainer'); 
-    const addSchedulingRuleButton = agentSetupPageContainer?.querySelector('#add-new-scheduling-rule-btn'); 
-
-    const callRoutingListContainer = agentSetupPageContainer?.querySelector('#call-routing-list');
-    const afterHoursRoutingListContainer = agentSetupPageContainer?.querySelector('#after-hours-routing-list');
-    const callSummariesListContainer = agentSetupPageContainer?.querySelector('#call-summaries-list');
-    const afterHoursNotificationsListContainer = agentSetupPageContainer?.querySelector('#after-hours-notifications-list');
-    const malfunctionForwardingListContainer = agentSetupPageContainer?.querySelector('#malfunction-forwarding-list');
-    const malfunctionNotificationsListContainer = agentSetupPageContainer?.querySelector('#malfunction-notifications-list');
-    const placeholdersListContainer = agentSetupPageContainer?.querySelector('#placeholders-list');
-    const addPlaceholderBtn = agentSetupPageContainer?.querySelector('#add-placeholder-btn');
-    const saveAgentSetupButton = agentSetupPageContainer?.querySelector('#save-agent-setup-button');
-
-    const currentTimeDisplaySpan = agentSetupPageContainer?.querySelector('#current-time-display span'); 
-    const schedulingInterpreterOutputDiv = agentSetupPageContainer?.querySelector('#scheduling-interpreter-output');
-
 
     // --- STATE AND DATA --- //
     let currentCompanyData = null;
@@ -456,12 +415,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Initialize monitoring system after company data is loaded
             if (agentSetupPageContainer && currentCompanyData) {
                 console.log('✅ Company data loaded successfully, initializing monitoring system for:', companyId);
-                console.log('✅ Agent setup container found:', !!agentSetupPageContainer);
+                console.log('✅ Monitoring system initialized');
                 console.log('✅ Company data available:', !!currentCompanyData);
                 initializeMonitoringSystem();
             } else {
                 console.warn('⚠️ Monitoring system NOT initialized:');
-                console.warn('  - Agent setup container:', !!agentSetupPageContainer);
+                console.warn('  - Monitoring system not available');
                 console.warn('  - Company data:', !!currentCompanyData);
                 console.warn('  - Company ID:', companyId);
             }
@@ -905,7 +864,7 @@ document.addEventListener('DOMContentLoaded', () => {
             addPhoneNumberWithData(phone);
         });
 
-        // Update AI Agent Setup options
+        // Update AI options
         setTimeout(() => {
             if (typeof updateAIAgentPhoneOptions === 'function') {
                 updateAIAgentPhoneOptions();
@@ -1564,7 +1523,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function populateAgentSetupForm(agentSetup = {}, companyTradeTypes = []) {
         if (!agentSetupPageContainer) {
-            console.warn("Agent Setup Page Container not found, cannot populate form.");
+            console.warn("Configuration container not found, cannot populate form.");
             return;
         }
         
@@ -1681,10 +1640,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Populate behavior configuration
         if (agentSetup.behaviors) {
-            console.log('🧠 Populating behavior configuration from agent setup:', agentSetup.behaviors);
+            console.log('🧠 Populating behavior configuration:', agentSetup.behaviors);
             populateBehaviorConfiguration(agentSetup.behaviors);
         } else {
-            console.log('🧠 No behavior configuration found in agent setup, using defaults');
+            console.log('🧠 No behavior configuration found, using defaults');
             populateBehaviorConfiguration({});
         }
     }
@@ -1759,7 +1718,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
             });
             if (!response.ok) { 
-                const errData = await response.json().catch(() => ({message: `Failed to save Agent Setup. Status: ${response.status}, Response: ${response.statusText}` })); 
+                const errData = await response.json().catch(() => ({message: `Failed to save configuration. Status: ${response.status}, Response: ${response.statusText}` })); 
                 console.error("Server error data:", errData);
                 throw new Error(errData.message || `HTTP error! status: ${response.status}`); 
             }
@@ -1772,12 +1731,12 @@ document.addEventListener('DOMContentLoaded', () => {
             populateAgentSetupForm(currentCompanyData.agentSetup, currentCompanyData.tradeTypes);
             populateCompanyData(currentCompanyData); 
             hasUnsavedChanges = false;
-            alert('Agent Setup saved successfully!'); 
+            alert('Configuration saved successfully!'); 
         } catch (error) {
-            console.error('Error saving Agent Setup:', error);
-            alert(`Error saving Agent Setup: ${error.message}`); 
+            console.error('Error saving configuration:', error);
+            alert(`Error saving configuration: ${error.message}`); 
         } finally {
-            if (saveBtnLocal) { saveBtnLocal.disabled = false; saveBtnLocal.innerHTML = '<i class="fas fa-save mr-2"></i>Save Agent Setup'; }
+            if (saveBtnLocal) { saveBtnLocal.disabled = false; saveBtnLocal.innerHTML = '<i class="fas fa-save mr-2"></i>Save Configuration'; }
         }
     }
 
@@ -2073,7 +2032,7 @@ document.addEventListener('DOMContentLoaded', () => {
              const addButton = agentSetupPageContainer?.querySelector(`#${addButtonId}`);
             const container = agentSetupPageContainer?.querySelector(`#${containerId}`);
             if (!addButton || !container) {
-                console.warn(`Dynamic list setup missing elements for: Button ID '${addButtonId}' or Container ID '${containerId}' within Agent Setup tab.`);
+                console.warn(`Dynamic list setup missing elements for: Button ID '${addButtonId}' or Container ID '${containerId}'.`);
                 return;
             }
             addButton.addEventListener('click', () => {
@@ -2148,49 +2107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add voice-related initialization here if needed
     }
 
-    // --- AGENT MONITORING & OVERSIGHT SYSTEM --- //
-    
-    // Monitoring system state
-    let monitoringData = {
-        pendingReviews: 0,
-        flaggedInteractions: 0,
-        approvalRate: 0,
-        recentActivity: []
-    };
-
-    // Initialize monitoring system
-    function initializeMonitoringSystem() {
-        console.log('🎯 initializeMonitoringSystem called');
-        console.log('🎯 Company ID available:', !!companyId, companyId);
-        console.log('🎯 Company data available:', !!currentCompanyData);
-        console.log('🎯 Agent setup container:', !!agentSetupPageContainer);
-        
-        if (!companyId) {
-            console.error('❌ Cannot initialize monitoring: No company ID available');
-            showMonitoringNotification('Company ID not found - monitoring disabled', 'warning');
-            return;
-        }
-        
-        if (!currentCompanyData) {
-            console.error('❌ Cannot initialize monitoring: Company data not loaded');
-            showMonitoringNotification('Company data not loaded - monitoring disabled', 'warning');
-            return;
-        }
-        
-        // Check if monitoring UI elements exist before setting up
-        const monitoringSection = document.getElementById('agent-monitoring-section');
-        if (!monitoringSection) {
-            console.warn('⚠️ Monitoring UI section not found - monitoring system available but UI not loaded');
-            return;
-        }
-        
-        console.log('✅ Initializing monitoring for company:', currentCompanyData.name || companyId);
-        setupMonitoringEventListeners();
-        loadMonitoringData();
-        startRealTimeUpdates();
-        
-        showMonitoringNotification('Monitoring system initialized', 'success');
-    }
+    // Agent Monitoring & Oversight System section removed
 
     // Setup event listeners for monitoring interface - ENHANCED LINE BY LINE
     function setupMonitoringEventListeners() {
@@ -3485,9 +3402,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add voice-related initialization here if needed
     }
 
-    // Initialize monitoring system if on agent setup tab
+    // Initialize monitoring system
     // Note: Monitoring will be initialized after company data is loaded in fetchCompanyData()
-    console.log('Agent setup container found:', !!agentSetupPageContainer);
+    console.log('Monitoring system found:', !!agentSetupPageContainer);
     console.log('Company ID from URL:', companyId);
 
     // We need to call these setup functions.
@@ -3503,7 +3420,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn('⚠️ Personality responses form not found - will try again after data load');
     }
     
-    // *** CRITICAL: Set up agent setup accordion functionality ***
+    // *** CRITICAL: Set up accordion functionality ***
     // This needs to run immediately when page loads, not just when company data is fetched
     if (agentSetupPageContainer) {
         const sectionHeaders = agentSetupPageContainer.querySelectorAll('.agent-setup-section-header');
@@ -3538,9 +3455,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        console.log('🎯 Agent setup accordion initialization complete');
+        console.log('🎯 Accordion initialization complete');
     } else {
-        console.warn('⚠️ Agent setup container not found - accordion setup skipped');
+        console.warn('⚠️ Container not found - accordion setup skipped');
     }
     
     // *** CRITICAL: Fetch company data on page load ***
