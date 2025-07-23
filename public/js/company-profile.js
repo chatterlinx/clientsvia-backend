@@ -232,12 +232,6 @@ async function fetchCompanyData() {
         // Populate all forms with company data
         populateCompanyData(companyData);
         
-        // Configuration tab data
-        populateConfigurationData(companyData);
-        
-        // AI Settings data
-        populateAISettings(companyData.aiSettings || {});
-        
         return companyData;
     } catch (error) {
         console.error('❌ Error fetching company data:', error);
