@@ -74,14 +74,22 @@ function showNotification(message, type = 'success') {
     notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 ${
         type === 'success' ? 'bg-green-100 border border-green-400 text-green-700' :
         type === 'error' ? 'bg-red-100 border border-red-400 text-red-700' :
+        type === 'warning' ? 'bg-yellow-100 border border-yellow-400 text-yellow-700' :
         'bg-blue-100 border border-blue-400 text-blue-700'
     }`;
-    notification.textContent = message;
+    notification.innerHTML = `
+        <div class="flex items-center justify-between">
+            <span>${message}</span>
+            <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-lg font-bold hover:opacity-75">×</button>
+        </div>
+    `;
     
     document.body.appendChild(notification);
     
     setTimeout(() => {
-        notification.remove();
+        if (notification.parentNode) {
+            notification.remove();
+        }
     }, 5000);
 }
 
@@ -98,15 +106,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize tab system
     initializeTabSystem();
     
-    // Load company data if ID is available
-    if (companyId) {
-        await fetchCompanyData();
-    } else {
-        showError('No company ID provided in URL');
-    }
-    
-    // Initialize all components
+    // Initialize all platform components (ALWAYS works)
     initializeEventListeners();
+    
+    // Initialize platform features that don't depend on company data
+    initializePlatformFeatures();
+    
+    // Load company data if ID is available (OPTIONAL for platform functionality)
+    if (companyId) {
+        try {
+            await fetchCompanyData();
+        } catch (error) {
+            console.error('❌ Failed to load company data:', error);
+            showNotification('Failed to load company data, but platform features still work', 'warning');
+        }
+    } else {
+        // Platform should still work without company data
+        console.log('⚠️ No company ID - platform features available, company data not loaded');
+        showNotification('Platform loaded successfully. Add company ID to URL to load company data.', 'info');
+    }
     
     console.log('✅ Company Profile initialization complete');
 });
@@ -137,7 +155,8 @@ function initializeDOMReferences() {
     // Configuration Tab - Twilio
     window.twilioAccountSidInput = document.getElementById('twilioAccountSid');
     window.twilioAuthTokenInput = document.getElementById('twilioAuthToken');
-    window.twilioPhoneNumberInput = document.getElementById('twilioPhoneNumber');
+    window.primaryPhoneNumberInput = document.querySelector('input[name="phoneNumber"]');
+    window.phoneNumbersList = document.getElementById('phoneNumbersList');
     
     // Configuration Tab - Trade Categories  
     window.tradeCategoriesContainer = document.getElementById('trade-categories-container');
@@ -306,7 +325,18 @@ function populateCompanyData(data) {
     if (data.twilioConfig) {
         if (window.twilioAccountSidInput) window.twilioAccountSidInput.value = data.twilioConfig.accountSid || '';
         if (window.twilioAuthTokenInput) window.twilioAuthTokenInput.value = data.twilioConfig.authToken || '';
-        if (window.twilioPhoneNumberInput) window.twilioPhoneNumberInput.value = data.twilioConfig.phoneNumber || '';
+        if (window.primaryPhoneNumberInput) window.primaryPhoneNumberInput.value = data.twilioConfig.phoneNumber || '';
+        
+        // Populate additional phone numbers if available
+        if (data.twilioConfig.phoneNumbers && data.twilioConfig.phoneNumbers.length > 0) {
+            populateAdditionalPhoneNumbers(data.twilioConfig.phoneNumbers);
+        }
+        
+        console.log('📞 Twilio settings populated:', {
+            accountSid: data.twilioConfig.accountSid,
+            phoneNumber: data.twilioConfig.phoneNumber,
+            additionalNumbers: data.twilioConfig.phoneNumbers?.length || 0
+        });
     }
     
     // AI Settings
@@ -725,6 +755,122 @@ async function saveBookingFlow() {
 }
 
 // =============================================
+// PLATFORM FEATURES (Independent of company data)
+// =============================================
+
+function initializePlatformFeatures() {
+    console.log('🔧 Initializing platform features...');
+    
+    // Google Calendar Connection (platform feature)
+    initializeGoogleCalendarFeatures();
+    
+    // ElevenLabs Platform Integration (not customer preferences)
+    initializeElevenLabsPlatformFeatures();
+    
+    // Copy webhook buttons (platform feature)
+    initializeWebhookCopyButtons();
+    
+    // Edit Profile modal (platform feature)
+    initializeEditProfileFeatures();
+    
+    // Save buttons and forms (platform feature)
+    initializeSaveFeatures();
+    
+    console.log('✅ Platform features initialized');
+}
+
+function initializeGoogleCalendarFeatures() {
+    // Google Calendar connection should always be available
+    const googleCalendarBtn = document.getElementById('connect-google-calendar');
+    if (googleCalendarBtn) {
+        googleCalendarBtn.addEventListener('click', () => {
+            console.log('🗓️ Google Calendar connection initiated');
+            // This should work regardless of company data
+            alert('Google Calendar connection feature - works independently of company data');
+        });
+    }
+    
+    const googleCalendarDisconnectBtn = document.getElementById('disconnect-google-calendar');
+    if (googleCalendarDisconnectBtn) {
+        googleCalendarDisconnectBtn.addEventListener('click', () => {
+            console.log('🗓️ Google Calendar disconnection initiated');
+            alert('Google Calendar disconnection feature');
+        });
+    }
+}
+
+function initializeElevenLabsPlatformFeatures() {
+    // ElevenLabs API testing (platform feature, not customer data)
+    if (window.testElevenLabsVoiceBtn) {
+        window.testElevenLabsVoiceBtn.addEventListener('click', () => {
+            testElevenLabsVoice();
+        });
+    }
+    
+    // Voice selection (platform feature)
+    if (window.elevenlabsVoiceSelect) {
+        window.elevenlabsVoiceSelect.addEventListener('change', () => {
+            console.log('🎵 Voice selection changed:', window.elevenlabsVoiceSelect.value);
+        });
+    }
+}
+
+function initializeWebhookCopyButtons() {
+    // Webhook copying (platform feature)
+    const copyWebhookBtns = document.querySelectorAll('.copy-webhook-btn');
+    copyWebhookBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const webhookUrl = btn.getAttribute('data-webhook');
+            navigator.clipboard.writeText(webhookUrl).then(() => {
+                showNotification('Webhook URL copied to clipboard!', 'success');
+            }).catch(() => {
+                showNotification('Failed to copy webhook URL', 'error');
+            });
+        });
+    });
+}
+
+function initializeEditProfileFeatures() {
+    // Edit Profile (platform feature)
+    if (window.editProfileButton) {
+        window.editProfileButton.addEventListener('click', () => {
+            console.log('✏️ Edit Profile clicked');
+            showNotification('Edit Profile modal would open here', 'info');
+        });
+    }
+}
+
+function initializeSaveFeatures() {
+    // All save buttons (platform features)
+    const saveButtons = document.querySelectorAll('[data-save-type]');
+    saveButtons.forEach(button => {
+        button.addEventListener('click', async () => {
+            const saveType = button.getAttribute('data-save-type');
+            console.log(`💾 Save ${saveType} clicked`);
+            
+            try {
+                switch(saveType) {
+                    case 'configuration':
+                        await saveCompanyData();
+                        break;
+                    case 'elevenlabs':
+                        await saveElevenLabsSettings();
+                        break;
+                    case 'personality':
+                        await savePersonalityResponses();
+                        break;
+                    default:
+                        console.log(`Save type ${saveType} not implemented yet`);
+                }
+                showNotification(`${saveType} saved successfully!`, 'success');
+            } catch (error) {
+                showNotification(`Failed to save ${saveType}`, 'error');
+            }
+        });
+    });
+}
+
+// =============================================
 // ADDITIONAL MISSING FUNCTIONS
 // =============================================
 
@@ -791,22 +937,74 @@ function populateOperatingHours(operatingHours) {
     });
 }
 
+// Google Calendar disconnection functionality
+function disconnectGoogleCalendar() {
+    // Platform functionality to disconnect Google Calendar
+    if (!companyId) {
+        showNotification('No company selected', 'error');
+        return;
+    }
+    
+    fetch(`/api/company/${companyId}/disconnect-google`, { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            showNotification('Google Calendar disconnected', 'success');
+            // Refresh company data to update UI
+            if (typeof fetchCompanyData === 'function') {
+                fetchCompanyData();
+            }
+        })
+        .catch(error => {
+            showNotification('Error disconnecting Google Calendar', 'error');
+        });
+}
+
+// Load ElevenLabs voices functionality
+function loadElevenLabsVoices() {
+    // Platform functionality - load available voices
+    const voiceSelect = document.getElementById('elevenlabsVoice');
+    if (!voiceSelect) return;
+    
+    // Default voices that should always be available
+    const defaultVoices = [
+        { id: 'rachel', name: 'Rachel (Default)' },
+        { id: 'domi', name: 'Domi' },
+        { id: 'bella', name: 'Bella' },
+        { id: 'antoni', name: 'Antoni' },
+        { id: 'elli', name: 'Elli' },
+        { id: 'josh', name: 'Josh' },
+        { id: 'arnold', name: 'Arnold' },
+        { id: 'adam', name: 'Adam' },
+        { id: 'sam', name: 'Sam' }
+    ];
+    
+    voiceSelect.innerHTML = defaultVoices.map(voice => 
+        `<option value="${voice.id}">${voice.name}</option>`
+    ).join('');
+}
+
 // =============================================
 // ENHANCED EVENT LISTENERS
 // =============================================
 
 function initializeEventListeners() {
-    // Edit Profile Button
+    console.log('🎯 Initializing form event listeners...');
+    
+    // Edit Profile Button (platform functionality)
     if (window.editProfileButton) {
         window.editProfileButton.addEventListener('click', () => {
             alert('Edit Profile functionality would open a modal or navigate to edit mode');
         });
     }
     
-    // Configuration Form Submission
+    // Configuration Form Submission (requires company data)
     if (window.configurationForm) {
         window.configurationForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (!companyId) {
+                showNotification('No company selected', 'error');
+                return;
+            }
             try {
                 await saveCompanyData();
                 showNotification('Configuration saved successfully!', 'success');
@@ -816,10 +1014,14 @@ function initializeEventListeners() {
         });
     }
     
-    // ElevenLabs Form Submission
+    // ElevenLabs Form Submission (requires company data for preferences)
     if (window.elevenlabsSettingsForm) {
         window.elevenlabsSettingsForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (!companyId) {
+                showNotification('No company selected', 'error');
+                return;
+            }
             try {
                 await saveElevenLabsSettings();
                 showNotification('ElevenLabs settings saved!', 'success');
@@ -829,14 +1031,7 @@ function initializeEventListeners() {
         });
     }
     
-    // ElevenLabs Test Voice Button
-    if (window.testElevenLabsVoiceBtn) {
-        window.testElevenLabsVoiceBtn.addEventListener('click', () => {
-            testElevenLabsVoice();
-        });
-    }
-    
-    // Trade Categories Change Handler
+    // Trade Categories Change Handler (requires company data to save)
     const tradeCategoryCheckboxes = document.querySelectorAll('input[name="tradeCategories"]');
     tradeCategoryCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', () => {
@@ -847,17 +1042,6 @@ function initializeEventListeners() {
         });
     });
     
-    // Copy Webhook Buttons
-    const copyWebhookBtns = document.querySelectorAll('.copy-webhook-btn');
-    copyWebhookBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const webhookUrl = btn.getAttribute('data-webhook');
-            navigator.clipboard.writeText(webhookUrl).then(() => {
-                showNotification('Webhook URL copied to clipboard!', 'success');
-            });
-        });
-    });
-    
     // Form change tracking
     document.addEventListener('input', (e) => {
         if (e.target.matches('input, textarea, select')) {
@@ -865,16 +1049,17 @@ function initializeEventListeners() {
         }
     });
     
-    // Save buttons
+    // Save buttons (require company data)
     const saveButtons = document.querySelectorAll('[onclick*="save"]');
     saveButtons.forEach(button => {
-        button.addEventListener('click', clearUnsavedChanges);
+        button.addEventListener('click', () => {
+            if (!companyId) {
+                showNotification('No company selected', 'error');
+                return;
+            }
+            clearUnsavedChanges();
+        });
     });
-    
-    // Load trade categories when needed
-    if (document.getElementById('trade-category-select')) {
-        loadTradeCategorySelector();
-    }
     
     // Operating hours toggles
     const operatingHourToggles = document.querySelectorAll('input[type="checkbox"][id$="-enabled"]');
@@ -898,7 +1083,7 @@ function initializeEventListeners() {
         input.addEventListener('input', setUnsavedChanges);
     });
     
-    console.log('🎯 Event listeners initialized');
+    console.log('✅ Form event listeners initialized');
 }
 
 // =============================================
