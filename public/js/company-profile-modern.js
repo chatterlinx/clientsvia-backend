@@ -1353,9 +1353,15 @@ class CompanyProfileManager {
             const useDefaultBtn = fieldContainer.querySelector('.use-default-btn');
             
             if (textarea) {
+                // Show initial preview if there's content with placeholders
+                this.showPlaceholderPreview(textarea);
+                
                 textarea.addEventListener('input', () => {
                     this.setUnsavedChanges(true);
                     console.log(`🎭 Personality ${field.key} updated`);
+                    
+                    // Show placeholder preview
+                    this.showPlaceholderPreview(textarea);
                     
                     // Show/hide default button based on content
                     if (useDefaultBtn) {
@@ -1370,6 +1376,9 @@ class CompanyProfileManager {
                         textarea.value = defaultValue;
                         textarea.dispatchEvent(new Event('input'));
                         useDefaultBtn.style.display = 'none';
+                        
+                        // Show placeholder preview for default content
+                        this.showPlaceholderPreview(textarea);
                     }
                 });
             }
@@ -2108,6 +2117,52 @@ class CompanyProfileManager {
         }
 
         console.log('✅ Header elements updated');
+    }
+
+    /**
+     * Process placeholders in response text
+     */
+    processPlaceholders(text) {
+        if (!text) return text;
+        
+        const companyName = this.currentData?.companyName || 'our company';
+        const agentName = this.currentData?.agentSettings?.name || 'The Agent';
+        
+        return text
+            .replace(/{companyname}/gi, companyName)
+            .replace(/{agentname}/gi, agentName);
+    }
+
+    /**
+     * Show placeholder preview for a response field
+     */
+    showPlaceholderPreview(fieldElement) {
+        if (!fieldElement || !fieldElement.value) return;
+        
+        const processedText = this.processPlaceholders(fieldElement.value);
+        
+        // Find or create preview element
+        let previewElement = fieldElement.parentNode.querySelector('.placeholder-preview');
+        if (!previewElement) {
+            previewElement = document.createElement('div');
+            previewElement.className = 'placeholder-preview mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-800';
+            fieldElement.parentNode.appendChild(previewElement);
+        }
+        
+        if (processedText !== fieldElement.value) {
+            previewElement.innerHTML = `
+                <div class="flex items-start space-x-2">
+                    <i class="fas fa-eye text-green-600 mt-0.5"></i>
+                    <div>
+                        <div class="font-medium text-xs mb-1">Preview with placeholders:</div>
+                        <div class="italic">"${processedText}"</div>
+                    </div>
+                </div>
+            `;
+            previewElement.style.display = 'block';
+        } else {
+            previewElement.style.display = 'none';
+        }
     }
 }
 
