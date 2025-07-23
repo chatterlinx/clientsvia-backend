@@ -1273,6 +1273,9 @@ class CompanyProfileManager {
     populatePersonalityTab() {
         console.log('🎭 Populating Personality tab...');
         
+        // Setup placeholder management
+        this.setupPlaceholderManagement();
+        
         // Setup personality response fields
         this.setupPersonalityResponses();
         
@@ -1280,6 +1283,275 @@ class CompanyProfileManager {
         this.setupPersonalityFormHandlers();
         
         console.log('✅ Personality tab configured');
+    }
+
+    /**
+     * Setup placeholder management functionality
+     */
+    setupPlaceholderManagement() {
+        // Initialize placeholders with default company placeholders
+        if (!this.currentData.placeholders) {
+            this.currentData.placeholders = this.getDefaultPlaceholders();
+        }
+
+        // Populate the placeholders table
+        this.populatePlaceholdersTable();
+
+        // Setup event listeners for placeholder management
+        this.setupPlaceholderEventListeners();
+    }
+
+    /**
+     * Get default placeholders based on company data
+     */
+    getDefaultPlaceholders() {
+        const defaultPlaceholders = {
+            companyname: {
+                value: this.currentData?.companyName || 'Your Company Name',
+                description: 'The name of your company',
+                type: 'system'
+            },
+            businessphone: {
+                value: this.currentData?.businessPhone || this.currentData?.ownerPhone || 'Your Business Phone',
+                description: 'Main business phone number',
+                type: 'system'
+            },
+            businessemail: {
+                value: this.currentData?.businessEmail || this.currentData?.ownerEmail || 'Your Business Email',
+                description: 'Main business email address',
+                type: 'system'
+            },
+            businesshours: {
+                value: this.currentData?.businessHours || 'Monday-Friday: 9 AM to 5 PM',
+                description: 'Standard business operating hours',
+                type: 'system'
+            }
+        };
+
+        return defaultPlaceholders;
+    }
+
+    /**
+     * Populate the placeholders table
+     */
+    populatePlaceholdersTable() {
+        const tableBody = document.getElementById('placeholders-table-body');
+        if (!tableBody) return;
+
+        tableBody.innerHTML = '';
+        const placeholders = this.currentData.placeholders || {};
+
+        Object.entries(placeholders).forEach(([key, placeholder]) => {
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50';
+            
+            const typeColor = placeholder.type === 'system' ? 'text-blue-600 bg-blue-100' : 'text-purple-600 bg-purple-100';
+            
+            row.innerHTML = `
+                <td class="px-4 py-3">
+                    <code class="bg-gray-100 px-2 py-1 rounded text-sm font-mono text-purple-700">{${key}}</code>
+                </td>
+                <td class="px-4 py-3">
+                    <div class="text-sm text-gray-900">${placeholder.value}</div>
+                    ${placeholder.description ? `<div class="text-xs text-gray-500">${placeholder.description}</div>` : ''}
+                </td>
+                <td class="px-4 py-3">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${typeColor}">
+                        ${placeholder.type}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <div class="flex justify-end space-x-2">
+                        <button class="edit-placeholder-btn text-indigo-600 hover:text-indigo-800 text-sm" data-key="${key}">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        ${placeholder.type === 'custom' ? `
+                            <button class="delete-placeholder-btn text-red-600 hover:text-red-800 text-sm" data-key="${key}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </td>
+            `;
+            
+            tableBody.appendChild(row);
+        });
+
+        // Add event listeners to the new buttons
+        this.setupPlaceholderRowEventListeners();
+    }
+
+    /**
+     * Setup event listeners for placeholder management
+     */
+    setupPlaceholderEventListeners() {
+        // Add placeholder button
+        const addBtn = document.getElementById('add-placeholder-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => this.openPlaceholderModal());
+        }
+
+        // Modal close buttons
+        const closeBtn = document.getElementById('close-placeholder-modal');
+        const cancelBtn = document.getElementById('cancel-placeholder');
+        const modal = document.getElementById('placeholder-modal');
+
+        if (closeBtn) closeBtn.addEventListener('click', () => this.closePlaceholderModal());
+        if (cancelBtn) cancelBtn.addEventListener('click', () => this.closePlaceholderModal());
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) this.closePlaceholderModal();
+            });
+        }
+
+        // Form submission
+        const form = document.getElementById('placeholder-form');
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.savePlaceholder();
+            });
+        }
+    }
+
+    /**
+     * Setup event listeners for placeholder table rows
+     */
+    setupPlaceholderRowEventListeners() {
+        // Edit buttons
+        document.querySelectorAll('.edit-placeholder-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const key = e.target.closest('button').dataset.key;
+                this.editPlaceholder(key);
+            });
+        });
+
+        // Delete buttons
+        document.querySelectorAll('.delete-placeholder-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const key = e.target.closest('button').dataset.key;
+                this.deletePlaceholder(key);
+            });
+        });
+    }
+
+    /**
+     * Open placeholder modal for adding/editing
+     */
+    openPlaceholderModal(placeholderKey = null) {
+        const modal = document.getElementById('placeholder-modal');
+        const title = document.getElementById('placeholder-modal-title');
+        const submitText = document.getElementById('placeholder-submit-text');
+        const form = document.getElementById('placeholder-form');
+
+        if (placeholderKey) {
+            // Edit mode
+            title.textContent = 'Edit Placeholder';
+            submitText.textContent = 'Update Placeholder';
+            const placeholder = this.currentData.placeholders[placeholderKey];
+            document.getElementById('placeholder-name').value = placeholderKey;
+            document.getElementById('placeholder-value').value = placeholder.value;
+            document.getElementById('placeholder-description').value = placeholder.description || '';
+            form.dataset.editKey = placeholderKey;
+        } else {
+            // Add mode
+            title.textContent = 'Add Placeholder';
+            submitText.textContent = 'Add Placeholder';
+            form.reset();
+            delete form.dataset.editKey;
+        }
+
+        modal.classList.remove('hidden');
+    }
+
+    /**
+     * Close placeholder modal
+     */
+    closePlaceholderModal() {
+        const modal = document.getElementById('placeholder-modal');
+        modal.classList.add('hidden');
+    }
+
+    /**
+     * Save placeholder (add or update)
+     */
+    savePlaceholder() {
+        const form = document.getElementById('placeholder-form');
+        const name = document.getElementById('placeholder-name').value.trim().toLowerCase();
+        const value = document.getElementById('placeholder-value').value.trim();
+        const description = document.getElementById('placeholder-description').value.trim();
+
+        if (!name || !value) {
+            this.showNotification('Please fill in required fields', 'error');
+            return;
+        }
+
+        // Validate placeholder name
+        if (!/^[a-z0-9_]+$/.test(name)) {
+            this.showNotification('Placeholder name can only contain lowercase letters, numbers, and underscores', 'error');
+            return;
+        }
+
+        const isEdit = form.dataset.editKey;
+        const placeholders = this.currentData.placeholders || {};
+
+        // Check if name already exists (only for new placeholders)
+        if (!isEdit && placeholders[name]) {
+            this.showNotification('A placeholder with this name already exists', 'error');
+            return;
+        }
+
+        // Save the placeholder
+        placeholders[name] = {
+            value: value,
+            description: description,
+            type: 'custom'
+        };
+
+        this.currentData.placeholders = placeholders;
+        this.setUnsavedChanges(true);
+        
+        // Refresh the table
+        this.populatePlaceholdersTable();
+        
+        // Close modal
+        this.closePlaceholderModal();
+        
+        this.showNotification(`Placeholder {${name}} ${isEdit ? 'updated' : 'added'} successfully!`, 'success');
+    }
+
+    /**
+     * Edit placeholder
+     */
+    editPlaceholder(key) {
+        this.openPlaceholderModal(key);
+    }
+
+    /**
+     * Delete placeholder
+     */
+    deletePlaceholder(key) {
+        if (confirm(`Are you sure you want to delete the placeholder {${key}}?`)) {
+            delete this.currentData.placeholders[key];
+            this.setUnsavedChanges(true);
+            this.populatePlaceholdersTable();
+            this.showNotification(`Placeholder {${key}} deleted successfully!`, 'success');
+        }
+    }
+
+    /**
+     * Process placeholders in text
+     */
+    processPlaceholders(text) {
+        if (!text || !this.currentData.placeholders) return text;
+
+        let processedText = text;
+        Object.entries(this.currentData.placeholders).forEach(([key, placeholder]) => {
+            const regex = new RegExp(`\\{${key}\\}`, 'gi');
+            processedText = processedText.replace(regex, placeholder.value);
+        });
+
+        return processedText;
     }
 
     /**
@@ -1353,15 +1625,9 @@ class CompanyProfileManager {
             const useDefaultBtn = fieldContainer.querySelector('.use-default-btn');
             
             if (textarea) {
-                // Show initial preview if there's content with placeholders
-                this.showPlaceholderPreview(textarea);
-                
                 textarea.addEventListener('input', () => {
                     this.setUnsavedChanges(true);
                     console.log(`🎭 Personality ${field.key} updated`);
-                    
-                    // Show placeholder preview
-                    this.showPlaceholderPreview(textarea);
                     
                     // Show/hide default button based on content
                     if (useDefaultBtn) {
@@ -1376,9 +1642,6 @@ class CompanyProfileManager {
                         textarea.value = defaultValue;
                         textarea.dispatchEvent(new Event('input'));
                         useDefaultBtn.style.display = 'none';
-                        
-                        // Show placeholder preview for default content
-                        this.showPlaceholderPreview(textarea);
                     }
                 });
             }
@@ -1397,7 +1660,7 @@ class CompanyProfileManager {
             hold: 'Please hold for just a moment while I check on that for you.',
             transfer: 'Let me transfer you to someone who can better assist you with that.',
             unavailable: 'I apologize, but that service is currently unavailable. Is there something else I can help you with?',
-            businessHours: 'Our business hours are Monday through Friday, 9 AM to 5 PM. We\'d be happy to help you during those times.',
+            businessHours: 'Our business hours are {businesshours}. We\'d be happy to help you during those times.',
             afterHours: `Thank you for calling {companyname}. We are currently closed. Please call back during business hours or leave a message.`,
             voicemail: 'Please leave your name, phone number, and a brief message after the tone, and we\'ll get back to you as soon as possible.',
             callback: 'I\'d be happy to have someone call you back. What\'s the best number to reach you at?'
@@ -1755,6 +2018,7 @@ class CompanyProfileManager {
         const container = document.getElementById('personality-responses-list');
         if (container && container.children.length === 0) {
             console.log('🎭 Lazy loading personality responses...');
+            this.setupPlaceholderManagement();
             this.setupPersonalityResponses();
         }
     }
@@ -2020,6 +2284,11 @@ class CompanyProfileManager {
         if (Object.keys(responses).length > 0) {
             data.personalityResponses = responses;
         }
+
+        // Include placeholders if they exist
+        if (this.currentData?.placeholders && Object.keys(this.currentData.placeholders).length > 0) {
+            data.placeholders = this.currentData.placeholders;
+        }
     }
 
     /**
@@ -2117,52 +2386,6 @@ class CompanyProfileManager {
         }
 
         console.log('✅ Header elements updated');
-    }
-
-    /**
-     * Process placeholders in response text
-     */
-    processPlaceholders(text) {
-        if (!text) return text;
-        
-        const companyName = this.currentData?.companyName || 'our company';
-        const agentName = this.currentData?.agentSettings?.name || 'The Agent';
-        
-        return text
-            .replace(/{companyname}/gi, companyName)
-            .replace(/{agentname}/gi, agentName);
-    }
-
-    /**
-     * Show placeholder preview for a response field
-     */
-    showPlaceholderPreview(fieldElement) {
-        if (!fieldElement || !fieldElement.value) return;
-        
-        const processedText = this.processPlaceholders(fieldElement.value);
-        
-        // Find or create preview element
-        let previewElement = fieldElement.parentNode.querySelector('.placeholder-preview');
-        if (!previewElement) {
-            previewElement = document.createElement('div');
-            previewElement.className = 'placeholder-preview mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-800';
-            fieldElement.parentNode.appendChild(previewElement);
-        }
-        
-        if (processedText !== fieldElement.value) {
-            previewElement.innerHTML = `
-                <div class="flex items-start space-x-2">
-                    <i class="fas fa-eye text-green-600 mt-0.5"></i>
-                    <div>
-                        <div class="font-medium text-xs mb-1">Preview with placeholders:</div>
-                        <div class="italic">"${processedText}"</div>
-                    </div>
-                </div>
-            `;
-            previewElement.style.display = 'block';
-        } else {
-            previewElement.style.display = 'none';
-        }
     }
 }
 

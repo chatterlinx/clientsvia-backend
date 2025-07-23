@@ -675,42 +675,6 @@
                     <div id="personality-responses-content" class="tab-content-item hidden">
                         <section class="profile-section bg-transparent shadow-none p-0">
                             <h2 class="profile-section-title"><i class="fas fa-comment-dots mr-2 text-indigo-600"></i>Agent Personality Responses</h2>
-                            
-                            <!-- Placeholder Information Section -->
-                            <div class="mb-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-                                <div class="flex items-start space-x-4">
-                                    <div class="flex-shrink-0">
-                                        <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                                            <i class="fas fa-magic text-blue-600 text-lg"></i>
-                                        </div>
-                                    </div>
-                                    <div class="flex-1">
-                                        <h3 class="text-lg font-semibold text-blue-900 mb-2">Dynamic Placeholders Available</h3>
-                                        <p class="text-sm text-blue-700 mb-3">
-                                            Use these placeholders in your responses to automatically insert company-specific information:
-                                        </p>
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <div class="bg-white rounded-md p-3 border border-blue-200">
-                                                <div class="flex items-center space-x-2">
-                                                    <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-mono">{companyname}</code>
-                                                    <span class="text-xs text-gray-600">→ Company Name</span>
-                                                </div>
-                                            </div>
-                                            <div class="bg-white rounded-md p-3 border border-blue-200">
-                                                <div class="flex items-center space-x-2">
-                                                    <code class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-mono">{agentname}</code>
-                                                    <span class="text-xs text-gray-600">→ Agent Name</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="mt-3 text-xs text-blue-600">
-                                            <i class="fas fa-lightbulb mr-1"></i>
-                                            <strong>Example:</strong> "Thank you for calling {companyname}!" becomes "Thank you for calling Penguin Air!"
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
                             <div class="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 rounded-r-lg">
                                 <div class="flex">
                                     <div class="flex-shrink-0">
@@ -724,15 +688,98 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Placeholder Management Section -->
+                            <div class="mb-8 bg-gray-50 border border-gray-200 rounded-lg p-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-semibold text-gray-900">
+                                        <i class="fas fa-tags mr-2 text-purple-600"></i>Response Placeholders
+                                    </h3>
+                                    <button type="button" id="add-placeholder-btn" class="bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition duration-150">
+                                        <i class="fas fa-plus mr-1"></i>Add Placeholder
+                                    </button>
+                                </div>
+                                <p class="text-sm text-gray-600 mb-4">
+                                    Use placeholders in your responses to automatically insert dynamic content. Placeholders are enclosed in curly braces like <code class="bg-gray-200 px-1 rounded text-purple-700">{companyname}</code>.
+                                </p>
+                                
+                                <!-- Placeholder Table -->
+                                <div class="overflow-hidden border border-gray-200 rounded-lg">
+                                    <table class="min-w-full bg-white">
+                                        <thead class="bg-gray-100">
+                                            <tr>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Placeholder</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value/Description</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="placeholders-table-body" class="bg-white divide-y divide-gray-200">
+                                            <!-- Placeholders will be populated here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                             <form id="personality-responses-form">
                                 <div id="personality-responses-list" class="space-y-4"></div>
                                 <div class="mt-8 pt-5 border-t border-gray-200">
-                                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
-                                        <i class="fas fa-save mr-2"></i>Save Responses
-                                    </button>
                                 </div>
                             </form>
                         </section>
+                    </div>
+
+                    <!-- Add/Edit Placeholder Modal -->
+                    <div id="placeholder-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+                        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                            <div class="mt-3">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-medium text-gray-900" id="placeholder-modal-title">Add Placeholder</h3>
+                                    <button type="button" class="text-gray-400 hover:text-gray-600" id="close-placeholder-modal">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <form id="placeholder-form">
+                                    <div class="mb-4">
+                                        <label for="placeholder-name" class="block text-sm font-medium text-gray-700 mb-2">
+                                            Placeholder Name
+                                        </label>
+                                        <div class="relative">
+                                            <span class="absolute left-3 top-2 text-gray-500">{</span>
+                                            <input type="text" id="placeholder-name" name="placeholder-name" 
+                                                   class="pl-8 pr-8 py-2 w-full border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                                                   placeholder="companyname" required>
+                                            <span class="absolute right-3 top-2 text-gray-500">}</span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-1">Use lowercase, no spaces (e.g., companyname, phonenumber)</p>
+                                    </div>
+                                    <div class="mb-4">
+                                        <label for="placeholder-value" class="block text-sm font-medium text-gray-700 mb-2">
+                                            Value
+                                        </label>
+                                        <input type="text" id="placeholder-value" name="placeholder-value" 
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                                               placeholder="Your Company Name" required>
+                                        <p class="text-xs text-gray-500 mt-1">The text that will replace this placeholder</p>
+                                    </div>
+                                    <div class="mb-6">
+                                        <label for="placeholder-description" class="block text-sm font-medium text-gray-700 mb-2">
+                                            Description (Optional)
+                                        </label>
+                                        <input type="text" id="placeholder-description" name="placeholder-description" 
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                                               placeholder="Brief description of this placeholder">
+                                    </div>
+                                    <div class="flex justify-end space-x-3">
+                                        <button type="button" id="cancel-placeholder" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">
+                                            Cancel
+                                        </button>
+                                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700">
+                                            <span id="placeholder-submit-text">Add Placeholder</span>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="ai-agent-logic-content" class="tab-content-item hidden">
