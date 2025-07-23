@@ -23,14 +23,10 @@ const ttsRoutes = require('./routes/tts');
 const companyQnaRoutes = require('./routes/companyQna');
 const suggestionRoutes = require('./routes/suggestions');
 const twilioRoutes = require('./routes/twilio');
-const aiRoutes = require('./routes/ai'); // New AI routes
-const testRoutes = require('./routes/test'); // New test routes
-const elevenLabsRoutes = require('./routes/elevenLabs'); // New ElevenLabs routes
+const aiRoutes = require('./routes/ai');
+const elevenLabsRoutes = require('./routes/elevenLabs');
 const uploadRoutes = require('./routes/upload');
-// Deprecated: Old workflows system - replaced by AI Agent Workflows
-// const workflowRoutes = require('./routes/workflows'); // New workflow routes
-// const testWorkflowRoutes = require('./routes/test-workflows'); // Test workflow routes
-const learningRoutes = require('./routes/learning'); // Learning management routes
+const learningRoutes = require('./routes/learning');
 
 // Import new AI Agent routes
 const eventHooksRoutes = require('./routes/eventHooks'); // Event Hooks Management
@@ -77,14 +73,10 @@ app.use('/api/integrations', integrationsRoutes);
 app.use('/api/tts', ttsRoutes);
 app.use('/api/suggestions', suggestionRoutes);
 app.use('/api/company/:companyId/qna', companyQnaRoutes);
-app.use('/api/ai', aiRoutes); // Registering the new /api/ai route
-app.use('/api/test', testRoutes); // Registering the new /api/test route
-app.use('/api/elevenlabs', elevenLabsRoutes); // Registering the new /api/elevenlabs route
+app.use('/api/ai', aiRoutes);
+app.use('/api/elevenlabs', elevenLabsRoutes);
 app.use('/api/upload', uploadRoutes);
-// Deprecated: Old workflows system - replaced by AI Agent Workflows
-// app.use('/api/workflows', workflowRoutes); // Registering the new /api/workflows route
-// app.use('/api/test-workflows', testWorkflowRoutes); // Test workflow routes
-app.use('/api/learning', learningRoutes); // Learning management routes
+app.use('/api/learning', learningRoutes);
 
 // Register AI Agent routes
 app.use('/api/event-hooks', eventHooksRoutes); // Event Hooks Management API
