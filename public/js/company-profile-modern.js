@@ -1280,9 +1280,6 @@ class CompanyProfileManager {
         // Setup personality response fields
         this.setupPersonalityResponses();
         
-        // Setup personality response form handlers
-        this.setupPersonalityFormHandlers();
-        
         console.log('✅ Personality tab configured');
     }
 
