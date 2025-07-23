@@ -155,20 +155,20 @@ document.addEventListener('DOMContentLoaded', () => {
         card.className = 'bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 ease-in-out flex flex-col justify-between';
 
         const companyName = company.companyName || 'N/A';
-        const ownerName = company.ownerName || 'N/A';
-        const displayPhone = company.contactPhone || company.ownerPhone || 'N/A';
-        const addressCity = company.address && company.address.city ? company.address.city : 'N/A';
-        const addressState = company.address && company.address.state ? company.address.state : 'N/A';
-
-        let tradeTypesDisplay = 'N/A';
-        if (Array.isArray(company.tradeTypes) && company.tradeTypes.length > 0) {
-            tradeTypesDisplay = company.tradeTypes.map(type => escapeHTML(type)).join(', ');
-        } else if (typeof company.tradeType === 'string' && company.tradeType) {
-            tradeTypesDisplay = escapeHTML(company.tradeType);
-        }
+        const companyPhone = company.companyPhone || 'N/A';
+        const companyAddress = company.companyAddress || 'N/A';
+        
+        // Check if additional details have been added
+        const hasOwnerInfo = company.ownerName && company.ownerEmail;
+        const hasContactInfo = company.contactName || company.contactEmail;
+        const profileStatus = hasOwnerInfo ? 'Complete' : 'Setup Needed';
+        const profileStatusClass = hasOwnerInfo ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
 
         const companyId = company._id || '#';
         const isActive = typeof company.isActive === 'boolean' ? company.isActive : true;
+
+        // Simplified address display - just show the first part if it's detailed
+        const displayAddress = companyAddress.length > 50 ? companyAddress.substring(0, 47) + '...' : companyAddress;
 
         card.innerHTML = `
             <div>
@@ -178,14 +178,29 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${isActive ? 'Active' : 'Inactive'}
                     </span>
                 </div>
-                <p class="text-xs text-gray-400 mb-1">ID: ${escapeHTML(companyId)}</p>
-                <p class="text-sm text-gray-600 mb-1"><i class="fas fa-user-tie mr-2 text-gray-500"></i>Owner: ${escapeHTML(ownerName)}</p>
-                <p class="text-sm text-gray-600 mb-1"><i class="fas fa-phone-alt mr-2 text-gray-500"></i>Contact: ${escapeHTML(displayPhone)}</p>
-                <p class="text-sm text-gray-600 mb-1"><i class="fas fa-map-marker-alt mr-2 text-gray-500"></i>Location: ${escapeHTML(addressCity)}, ${escapeHTML(addressState)}</p>
-                <p class="text-sm text-gray-600 mb-1"><i class="fas fa-tags mr-2 text-gray-500"></i>Trades: ${tradeTypesDisplay}</p>
+                <p class="text-xs text-gray-400 mb-2">ID: ${escapeHTML(companyId)}</p>
+                
+                <div class="space-y-1 mb-3">
+                    <p class="text-sm text-gray-600"><i class="fas fa-phone-alt mr-2 text-gray-500"></i>Phone: ${escapeHTML(companyPhone)}</p>
+                    <p class="text-sm text-gray-600"><i class="fas fa-map-marker-alt mr-2 text-gray-500"></i>Address: ${escapeHTML(displayAddress)}</p>
+                </div>
+                
+                <div class="mb-3">
+                    <span class="text-xs font-medium px-2 py-1 rounded-full ${profileStatusClass}">
+                        <i class="fas ${hasOwnerInfo ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-1"></i>
+                        Profile ${profileStatus}
+                    </span>
+                </div>
+                
+                ${!hasOwnerInfo ? 
+                    '<p class="text-xs text-amber-600 bg-amber-50 p-2 rounded"><i class="fas fa-info-circle mr-1"></i>Complete setup in company profile</p>' : 
+                    ''
+                }
             </div>
             <div class="mt-4 pt-3 border-t border-gray-200 actions flex justify-between items-center">
-                <a href="/company-profile.html?id=${companyId}" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"><i class="fas fa-eye mr-1"></i>View Profile</a>
+                <a href="/company-profile.html?id=${companyId}" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                    <i class="fas ${hasOwnerInfo ? 'fa-eye' : 'fa-edit'} mr-1"></i>${hasOwnerInfo ? 'View Profile' : 'Complete Setup'}
+                </a>
                 <button data-id="${companyId}" data-name="${escapeHTML(companyName)}" class="delete-company-btn text-red-500 hover:text-red-700 text-sm font-medium"><i class="fas fa-trash-alt mr-1"></i>Delete</button>
             </div>
         `;

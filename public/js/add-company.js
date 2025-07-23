@@ -21,30 +21,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const companyData = {
                 companyName: formData.get('companyName'),
-                // tradeTypes: selectedTradeTypes, // Removed from here
-                ownerName: formData.get('ownerName'),
-                ownerEmail: formData.get('ownerEmail'),
-                ownerPhone: formData.get('ownerPhone'),
-                contactName: formData.get('contactName') || null,
-                contactEmail: formData.get('contactEmail') || null,
-                contactPhone: formData.get('contactPhone'),
-                address: {
-                    street: formData.get('addressStreet'),
-                    city: formData.get('addressCity'),
-                    state: formData.get('addressState'),
-                    zip: formData.get('addressZip'),
-                    country: formData.get('addressCountry')
-                },
-                timezone: 'America/New_York', 
+                companyPhone: formData.get('companyPhone'),
+                companyAddress: formData.get('companyAddress'),
+                // Additional fields will be filled out later in the company profile
+                ownerName: null,
+                ownerEmail: null,
+                ownerPhone: null,
+                contactName: null,
+                contactEmail: null,
+                contactPhone: null,
+                timezone: 'America/New_York',
+                status: 'active'
             };
 
             console.log('[JS add-company] Full companyData being sent (JSON stringified):', JSON.stringify(companyData, null, 2));
 
-            const submitButton = addCompanyForm.querySelector('button[type="submit"]');
-            if(submitButton) {
-                submitButton.disabled = true;
-                submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
-            }
+            const submitButton = addCompanyForm.querySelector('button[type="submit"]');                if(submitButton) {
+                    submitButton.disabled = true;
+                    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating Account...';
+                }
 
             try {
                 const response = await fetch('/api/companies', { 
@@ -61,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
                 }
                 
-                alert('Company added successfully! Redirecting to directory...');
+                alert('Company account created successfully! You can now add additional details in the company profile.');
                 window.location.href = '/directory.html'; 
 
             } catch (error) {
@@ -70,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally {
                  if(submitButton) {
                     submitButton.disabled = false;
-                    submitButton.innerHTML = '<i class="fas fa-save mr-2"></i>Save Company';
+                    submitButton.innerHTML = '<i class="fas fa-plus mr-2"></i>Create Company Account';
                 }
             }
         });
