@@ -592,18 +592,6 @@ class CompanyProfileManager {
             twilioApiSecretInput.value = '••••••••••••••••'; // Mask for security
         }
 
-        // Look for ElevenLabs configuration fields
-        const elevenLabsApiKeyInput = document.getElementById('elevenLabsApiKey');
-        const elevenLabsVoiceIdInput = document.getElementById('elevenLabsVoiceId');
-        
-        if (elevenLabsApiKeyInput && this.currentData.elevenLabsApiKey) {
-            elevenLabsApiKeyInput.value = '••••••••••••••••'; // Mask for security
-        }
-        
-        if (elevenLabsVoiceIdInput && this.currentData.elevenLabsVoiceId) {
-            elevenLabsVoiceIdInput.value = this.currentData.elevenLabsVoiceId;
-        }
-
         // Setup phone numbers management
         this.setupPhoneNumbersManagement();
         
@@ -670,16 +658,85 @@ class CompanyProfileManager {
         const configForm = document.getElementById('config-settings-form');
         if (!configForm) return;
 
-        // Track changes in configuration inputs
-        const configInputs = configForm.querySelectorAll('input, select, textarea');
-        configInputs.forEach(input => {
-            input.addEventListener('input', () => {
-                this.setUnsavedChanges(true);
-                console.log(`⚙️ Config field changed: ${input.name || input.id}`);
+        // Setup webhook toggle functionality
+        const toggleWebhookBtn = document.getElementById('toggleWebhookInfo');
+        const webhookPanel = document.getElementById('webhookInfoPanel');
+        
+        if (toggleWebhookBtn && webhookPanel) {
+            toggleWebhookBtn.addEventListener('click', () => {
+                const isHidden = webhookPanel.classList.contains('hidden');
+                if (isHidden) {
+                    // Generate dynamic webhook content with companyId
+                    this.generateWebhookPanel();
+                    webhookPanel.classList.remove('hidden');
+                    toggleWebhookBtn.innerHTML = '<i class="fas fa-eye-slash mr-1"></i>Hide Webhook URLs';
+                } else {
+                    webhookPanel.classList.add('hidden');
+                    toggleWebhookBtn.innerHTML = '<i class="fas fa-info-circle mr-1"></i>Show Webhook URLs';
+                }
             });
+        }
+
+        // Setup webhook copy buttons (handled dynamically now)
+        // Copy functionality is now handled in generateWebhookPanel()
+
+        // Setup form submission
+        configForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.saveConfigurationChanges();
         });
 
-        console.log('✅ Config form listeners setup');
+        // Track changes for unsaved indicator
+        const inputs = configForm.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            input.addEventListener('input', () => {
+                this.setUnsavedChanges(true);
+            });
+        });
+    }
+
+    /**
+     * Save configuration changes
+     */
+    async saveConfigurationChanges() {
+        try {
+            console.log('💾 Saving configuration changes...');
+            
+            // Collect configuration data
+            const configData = this.collectConfigurationData();
+            
+            // Save via main save process
+            if (this.currentData) {
+                Object.assign(this.currentData, configData);
+            }
+            
+            await this.saveAllChanges(false);
+            this.showNotification('Configuration saved successfully!', 'success');
+            
+        } catch (error) {
+            console.error('❌ Error saving configuration:', error);
+            this.showNotification('Failed to save configuration', 'error');
+        }
+    }
+
+    /**
+     * Collect configuration data from form
+     */
+    collectConfigurationData() {
+        const data = {};
+        
+        // Twilio credentials
+        const twilioAccountSid = document.getElementById('twilioAccountSid')?.value.trim();
+        const twilioAuthToken = document.getElementById('twilioAuthToken')?.value.trim();
+        const twilioApiKey = document.getElementById('twilioApiKey')?.value.trim();
+        const twilioApiSecret = document.getElementById('twilioApiSecret')?.value.trim();
+        
+        if (twilioAccountSid) data.twilioAccountSid = twilioAccountSid;
+        if (twilioAuthToken && twilioAuthToken !== '••••••••••••••••') data.twilioAuthToken = twilioAuthToken;
+        if (twilioApiKey) data.twilioApiKey = twilioApiKey;
+        if (twilioApiSecret && twilioApiSecret !== '••••••••••••••••') data.twilioApiSecret = twilioApiSecret;
+        
+        return data;
     }
 
     /**
@@ -2089,7 +2146,7 @@ class CompanyProfileManager {
         // Notes functionality is already implemented in the notes system
         // This is just for separation of concerns
         console.log('📝 Agent logic notes initialized');
-    }
+       }
 
     /**
      * Initialize tab system
