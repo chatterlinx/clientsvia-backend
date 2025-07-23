@@ -317,6 +317,8 @@ class CompanyProfileManager {
     createModernEditableForm() {
         if (!this.domElements.editFormContainer) return;
 
+        console.log('🔧 Creating modern form with data:', this.currentData);
+
         const formHTML = `
             <div class="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
                 <div class="flex justify-between items-center mb-6">
