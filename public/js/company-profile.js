@@ -133,6 +133,37 @@ function initializeDOMReferences() {
     window.addressStateInput = document.getElementById('address-state');
     window.addressZipInput = document.getElementById('address-zip');
     window.addressCountryInput = document.getElementById('address-country');
+    
+    // Configuration Tab - Twilio
+    window.twilioAccountSidInput = document.getElementById('twilioAccountSid');
+    window.twilioAuthTokenInput = document.getElementById('twilioAuthToken');
+    window.twilioPhoneNumberInput = document.getElementById('twilioPhoneNumber');
+    
+    // Configuration Tab - Trade Categories  
+    window.tradeCategoriesContainer = document.getElementById('trade-categories-container');
+    window.tradeCategoriesSelect = document.getElementById('trade-categories-select');
+    
+    // AI Voice Settings - ElevenLabs
+    window.elevenlabsApiKeyInput = document.getElementById('elevenlabsApiKey');
+    window.elevenlabsVoiceSelect = document.getElementById('elevenlabsVoice');
+    window.elevenlabsTestPhraseInput = document.getElementById('elevenlabsTestPhrase');
+    window.testElevenLabsVoiceBtn = document.getElementById('testElevenLabsVoiceBtn');
+    
+    // AI Settings
+    window.aiModelSelect = document.getElementById('ai-model');
+    window.aiPersonalitySelect = document.getElementById('ai-personality');
+    window.ttsProviderSelect = document.getElementById('tts-provider');
+    
+    // Calendar Settings
+    window.timezoneSelect = document.getElementById('timezone');
+    window.operatingHoursContainer = document.getElementById('operating-hours-container');
+    
+    // Forms
+    window.configurationForm = document.getElementById('configuration-form');
+    window.elevenlabsSettingsForm = document.getElementById('elevenlabs-settings-form');
+    window.personalityResponsesForm = document.getElementById('personality-responses-form');
+    
+    console.log('📋 DOM references initialized');
 }
 
 // =============================================
@@ -200,6 +231,12 @@ async function fetchCompanyData() {
         
         // Populate all forms with company data
         populateCompanyData(companyData);
+        
+        // Configuration tab data
+        populateConfigurationData(companyData);
+        
+        // AI Settings data
+        populateAISettings(companyData.aiSettings || {});
         
         return companyData;
     } catch (error) {
@@ -269,6 +306,34 @@ function populateCompanyData(data) {
         if (window.addressStateInput) window.addressStateInput.value = data.address.state || '';
         if (window.addressZipInput) window.addressZipInput.value = data.address.zipCode || '';
         if (window.addressCountryInput) window.addressCountryInput.value = data.address.country || '';
+    }
+    
+    // Configuration Tab - Twilio Settings
+    if (data.twilioConfig) {
+        if (window.twilioAccountSidInput) window.twilioAccountSidInput.value = data.twilioConfig.accountSid || '';
+        if (window.twilioAuthTokenInput) window.twilioAuthTokenInput.value = data.twilioConfig.authToken || '';
+        if (window.twilioPhoneNumberInput) window.twilioPhoneNumberInput.value = data.twilioConfig.phoneNumber || '';
+    }
+    
+    // AI Settings
+    if (data.aiSettings) {
+        if (window.aiModelSelect) window.aiModelSelect.value = data.aiSettings.model || '';
+        if (window.aiPersonalitySelect) window.aiPersonalitySelect.value = data.aiSettings.personality || '';
+        if (window.ttsProviderSelect) window.ttsProviderSelect.value = data.aiSettings.ttsProvider || '';
+        
+        // ElevenLabs Settings
+        if (data.aiSettings.elevenLabs) {
+            if (window.elevenlabsApiKeyInput) window.elevenlabsApiKeyInput.value = data.aiSettings.elevenLabs.apiKey || '';
+            if (window.elevenlabsVoiceSelect) window.elevenlabsVoiceSelect.value = data.aiSettings.elevenLabs.voiceId || '';
+        }
+    }
+    
+    // Calendar Settings
+    if (window.timezoneSelect) window.timezoneSelect.value = data.timezone || '';
+    
+    // Populate operating hours if available
+    if (data.agentSetup && data.agentSetup.operatingHours) {
+        populateOperatingHours(data.agentSetup.operatingHours);
     }
     
     // Populate agent personality responses
@@ -429,22 +494,30 @@ async function loadTradeCategorySelector() {
 function populateTradeCategories(selectedCategories) {
     console.log('📋 Populating trade categories:', selectedCategories);
     
-    const select = document.getElementById('trade-category-select');
-    if (!select) return;
+    if (!Array.isArray(selectedCategories)) return;
     
     // Clear existing selections
-    for (const option of select.options) {
-        option.selected = false;
+    const checkboxes = document.querySelectorAll('input[name="tradeCategories"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectedCategories.includes(checkbox.value);
+    });
+    
+    // Update the display
+    updateTradeCategoriesDisplay(selectedCategories);
+}
+
+function updateTradeCategoriesDisplay(categories) {
+    const container = document.getElementById('selected-categories-display');
+    if (!container) return;
+    
+    if (categories.length === 0) {
+        container.innerHTML = '<span class="text-gray-500">No categories selected</span>';
+        return;
     }
     
-    // Select the categories for this company
-    selectedCategories.forEach(category => {
-        for (const option of select.options) {
-            if (option.value === category) {
-                option.selected = true;
-            }
-        }
-    });
+    container.innerHTML = categories.map(category => 
+        `<span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full mr-2 mb-2">${category}</span>`
+    ).join('');
 }
 
 async function saveTradeCategories() {
@@ -658,10 +731,139 @@ async function saveBookingFlow() {
 }
 
 // =============================================
-// EVENT LISTENERS INITIALIZATION
+// ADDITIONAL MISSING FUNCTIONS
+// =============================================
+
+async function saveElevenLabsSettings() {
+    const formData = new FormData(window.elevenlabsSettingsForm);
+    const data = Object.fromEntries(formData);
+    
+    try {
+        const response = await fetch(`/api/company/${companyId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                'aiSettings.elevenLabs': {
+                    apiKey: data.elevenlabsApiKey,
+                    voiceId: data.elevenlabsVoice
+                }
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to save: ${response.statusText}`);
+        }
+        
+        console.log('✅ ElevenLabs settings saved');
+        clearUnsavedChanges();
+    } catch (error) {
+        console.error('❌ Error saving ElevenLabs settings:', error);
+        throw error;
+    }
+}
+
+function testElevenLabsVoice() {
+    const testPhrase = window.elevenlabsTestPhraseInput?.value || 'Hello, this is a test from ElevenLabs!';
+    const apiKey = window.elevenlabsApiKeyInput?.value;
+    const voiceId = window.elevenlabsVoiceSelect?.value;
+    
+    if (!apiKey || !voiceId) {
+        showNotification('Please enter API key and select a voice first', 'error');
+        return;
+    }
+    
+    showNotification('Testing voice... (This would make an API call to ElevenLabs)', 'info');
+    console.log('🎵 Testing ElevenLabs voice:', { testPhrase, voiceId });
+}
+
+// =============================================
+// HELPER FUNCTIONS
+// =============================================
+
+function populateOperatingHours(operatingHours) {
+    if (!operatingHours || !Array.isArray(operatingHours)) return;
+    
+    operatingHours.forEach(daySchedule => {
+        const dayName = daySchedule.day.toLowerCase();
+        const enabledCheckbox = document.getElementById(`${dayName}-enabled`);
+        const startInput = document.getElementById(`${dayName}-start`);
+        const endInput = document.getElementById(`${dayName}-end`);
+        
+        if (enabledCheckbox) enabledCheckbox.checked = daySchedule.enabled || false;
+        if (startInput) startInput.value = daySchedule.start || '';
+        if (endInput) endInput.value = daySchedule.end || '';
+    });
+}
+
+// =============================================
+// ENHANCED EVENT LISTENERS
 // =============================================
 
 function initializeEventListeners() {
+    // Edit Profile Button
+    if (window.editProfileButton) {
+        window.editProfileButton.addEventListener('click', () => {
+            alert('Edit Profile functionality would open a modal or navigate to edit mode');
+        });
+    }
+    
+    // Configuration Form Submission
+    if (window.configurationForm) {
+        window.configurationForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                await saveCompanyData();
+                showNotification('Configuration saved successfully!', 'success');
+            } catch (error) {
+                showNotification('Failed to save configuration', 'error');
+            }
+        });
+    }
+    
+    // ElevenLabs Form Submission
+    if (window.elevenlabsSettingsForm) {
+        window.elevenlabsSettingsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                await saveElevenLabsSettings();
+                showNotification('ElevenLabs settings saved!', 'success');
+            } catch (error) {
+                showNotification('Failed to save ElevenLabs settings', 'error');
+            }
+        });
+    }
+    
+    // ElevenLabs Test Voice Button
+    if (window.testElevenLabsVoiceBtn) {
+        window.testElevenLabsVoiceBtn.addEventListener('click', () => {
+            testElevenLabsVoice();
+        });
+    }
+    
+    // Trade Categories Change Handler
+    const tradeCategoryCheckboxes = document.querySelectorAll('input[name="tradeCategories"]');
+    tradeCategoryCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+            const selectedCategories = Array.from(document.querySelectorAll('input[name="tradeCategories"]:checked'))
+                .map(cb => cb.value);
+            updateTradeCategoriesDisplay(selectedCategories);
+            setUnsavedChanges();
+        });
+    });
+    
+    // Copy Webhook Buttons
+    const copyWebhookBtns = document.querySelectorAll('.copy-webhook-btn');
+    copyWebhookBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const webhookUrl = btn.getAttribute('data-webhook');
+            navigator.clipboard.writeText(webhookUrl).then(() => {
+                showNotification('Webhook URL copied to clipboard!', 'success');
+            });
+        });
+    });
+    
     // Form change tracking
     document.addEventListener('input', (e) => {
         if (e.target.matches('input, textarea, select')) {
@@ -679,6 +881,28 @@ function initializeEventListeners() {
     if (document.getElementById('trade-category-select')) {
         loadTradeCategorySelector();
     }
+    
+    // Operating hours toggles
+    const operatingHourToggles = document.querySelectorAll('input[type="checkbox"][id$="-enabled"]');
+    operatingHourToggles.forEach(toggle => {
+        toggle.addEventListener('change', (e) => {
+            const dayName = e.target.id.replace('-enabled', '');
+            const startInput = document.getElementById(`${dayName}-start`);
+            const endInput = document.getElementById(`${dayName}-end`);
+            
+            if (startInput && endInput) {
+                startInput.disabled = !e.target.checked;
+                endInput.disabled = !e.target.checked;
+            }
+            setUnsavedChanges();
+        });
+    });
+    
+    // Operating hours time inputs
+    const operatingHourInputs = document.querySelectorAll('input[type="time"]');
+    operatingHourInputs.forEach(input => {
+        input.addEventListener('input', setUnsavedChanges);
+    });
     
     console.log('🎯 Event listeners initialized');
 }
