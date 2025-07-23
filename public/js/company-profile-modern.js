@@ -983,7 +983,74 @@ class CompanyProfileManager {
      */
     populateAISettingsTab() {
         console.log('🤖 Populating AI Settings tab...');
-        // TODO: Implement AI settings tab population
+        
+        // Setup AI model selection
+        this.setupAIModelSelection();
+        
+        // Setup AI personality configuration
+        this.setupAIPersonalityConfig();
+        
+        // Setup TTS provider selection
+        this.setupTTSProviderConfig();
+        
+        console.log('✅ AI Settings tab configured');
+    }
+
+    /**
+     * Setup AI model selection
+     */
+    setupAIModelSelection() {
+        const aiModelSelect = document.getElementById('ai-model');
+        if (!aiModelSelect) return;
+
+        // Set current AI model if available
+        if (this.currentData?.aiSettings?.model) {
+            aiModelSelect.value = this.currentData.aiSettings.model;
+        }
+
+        // Track AI model changes
+        aiModelSelect.addEventListener('change', () => {
+            this.setUnsavedChanges(true);
+            console.log('🤖 AI model changed to:', aiModelSelect.value);
+        });
+    }
+
+    /**
+     * Setup AI personality configuration
+     */
+    setupAIPersonalityConfig() {
+        const personalitySelect = document.getElementById('ai-personality');
+        if (!personalitySelect) return;
+
+        // Set current personality if available
+        if (this.currentData?.aiSettings?.personality) {
+            personalitySelect.value = this.currentData.aiSettings.personality;
+        }
+
+        // Track personality changes
+        personalitySelect.addEventListener('change', () => {
+            this.setUnsavedChanges(true);
+            console.log('🎭 AI personality changed to:', personalitySelect.value);
+        });
+    }
+
+    /**
+     * Setup TTS provider configuration
+     */
+    setupTTSProviderConfig() {
+        const ttsProviderSelect = document.getElementById('tts-provider');
+        if (!ttsProviderSelect) return;
+
+        // Set current TTS provider if available
+        if (this.currentData?.aiSettings?.ttsProvider) {
+            ttsProviderSelect.value = this.currentData.aiSettings.ttsProvider;
+        }
+
+        // Track TTS provider changes
+        ttsProviderSelect.addEventListener('change', () => {
+            this.setUnsavedChanges(true);
+            console.log('🎙️ TTS provider changed to:', ttsProviderSelect.value);
+        });
     }
 
     /**
@@ -991,7 +1058,156 @@ class CompanyProfileManager {
      */
     populateVoiceTab() {
         console.log('🎙️ Populating Voice tab...');
-        // TODO: Implement voice tab population
+        
+        // Setup ElevenLabs configuration
+        this.setupElevenLabsConfig();
+        
+        // Load available voices
+        this.loadElevenLabsVoices();
+        
+        // Setup voice testing
+        this.setupVoiceTesting();
+        
+        console.log('✅ Voice tab configured');
+    }
+
+    /**
+     * Setup ElevenLabs configuration
+     */
+    setupElevenLabsConfig() {
+        const apiKeyInput = document.getElementById('elevenlabsApiKey');
+        const voiceSelect = document.getElementById('elevenlabsVoice');
+        
+        // Set current ElevenLabs settings if available
+        if (this.currentData?.aiSettings?.elevenLabs) {
+            const settings = this.currentData.aiSettings.elevenLabs;
+            
+            if (apiKeyInput && settings.apiKey) {
+                apiKeyInput.value = settings.apiKey.substring(0, 8) + '••••••••••••••••';
+            }
+            
+            if (voiceSelect && settings.voiceId) {
+                voiceSelect.value = settings.voiceId;
+            }
+        }
+
+        // Track API key changes
+        if (apiKeyInput) {
+            apiKeyInput.addEventListener('input', () => {
+                this.setUnsavedChanges(true);
+                console.log('🔑 ElevenLabs API key updated');
+            });
+        }
+
+        // Track voice selection changes
+        if (voiceSelect) {
+            voiceSelect.addEventListener('change', () => {
+                this.setUnsavedChanges(true);
+                console.log('🎵 ElevenLabs voice changed to:', voiceSelect.value);
+            });
+        }
+    }
+
+    /**
+     * Load ElevenLabs voices
+     */
+    loadElevenLabsVoices() {
+        const voiceSelect = document.getElementById('elevenlabsVoice');
+        if (!voiceSelect) return;
+
+        // Default voices available in ElevenLabs
+        const defaultVoices = [
+            { id: 'rachel', name: 'Rachel (Default Female)' },
+            { id: 'domi', name: 'Domi (Young Female)' },
+            { id: 'bella', name: 'Bella (Soft Female)' },
+            { id: 'antoni', name: 'Antoni (Male)' },
+            { id: 'elli', name: 'Elli (Emotional Female)' },
+            { id: 'josh', name: 'Josh (Deep Male)' },
+            { id: 'arnold', name: 'Arnold (Crisp Male)' },
+            { id: 'adam', name: 'Adam (Deep Male)' },
+            { id: 'sam', name: 'Sam (Raspy Male)' }
+        ];
+
+        // Clear existing options
+        voiceSelect.innerHTML = '';
+
+        // Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select a voice...';
+        voiceSelect.appendChild(defaultOption);
+
+        // Add voice options
+        defaultVoices.forEach(voice => {
+            const option = document.createElement('option');
+            option.value = voice.id;
+            option.textContent = voice.name;
+            voiceSelect.appendChild(option);
+        });
+
+        console.log('✅ ElevenLabs voices loaded');
+    }
+
+    /**
+     * Setup voice testing functionality
+     */
+    setupVoiceTesting() {
+        const testBtn = document.getElementById('testElevenLabsVoiceBtn');
+        const testPhraseInput = document.getElementById('elevenlabsTestPhrase');
+        
+        if (!testBtn) return;
+
+        testBtn.addEventListener('click', () => {
+            this.testElevenLabsVoice();
+        });
+
+        // Set default test phrase if empty
+        if (testPhraseInput && !testPhraseInput.value) {
+            testPhraseInput.value = 'Hello, this is a test of the ElevenLabs voice synthesis. How does this sound?';
+        }
+    }
+
+    /**
+     * Test ElevenLabs voice
+     */
+    async testElevenLabsVoice() {
+        const apiKeyInput = document.getElementById('elevenlabsApiKey');
+        const voiceSelect = document.getElementById('elevenlabsVoice');
+        const testPhraseInput = document.getElementById('elevenlabsTestPhrase');
+        
+        const apiKey = apiKeyInput?.value;
+        const voiceId = voiceSelect?.value;
+        const testPhrase = testPhraseInput?.value || 'Hello, this is a test from ElevenLabs!';
+
+        if (!apiKey || apiKey.includes('••••')) {
+            this.showNotification('Please enter a valid ElevenLabs API key', 'error');
+            return;
+        }
+
+        if (!voiceId) {
+            this.showNotification('Please select a voice first', 'error');
+            return;
+        }
+
+        try {
+            this.showNotification('Generating voice sample...', 'info');
+            
+            // In a real implementation, this would make an API call to ElevenLabs
+            // For demo purposes, we'll simulate the test
+            console.log('🎵 Testing ElevenLabs voice:', { 
+                voiceId, 
+                testPhrase: testPhrase.substring(0, 50) + '...' 
+            });
+            
+            // Simulate API call delay
+            setTimeout(() => {
+                this.showNotification('Voice test completed! (Demo mode)', 'success');
+            }, 2000);
+            
+        } catch (error) {
+            console.error('❌ Voice test failed:', error);
+            this.showNotification('Voice test failed', 'error');
+        }
     }
 
     /**
@@ -999,7 +1215,126 @@ class CompanyProfileManager {
      */
     populatePersonalityTab() {
         console.log('🎭 Populating Personality tab...');
-        // TODO: Implement personality tab population
+        
+        // Setup personality response fields
+        this.setupPersonalityResponses();
+        
+        // Setup personality response form handlers
+        this.setupPersonalityFormHandlers();
+        
+        console.log('✅ Personality tab configured');
+    }
+
+    /**
+     * Setup personality response fields
+     */
+    setupPersonalityResponses() {
+        const responseFields = [
+            'greeting', 'farewell', 'hold', 'transfer', 'unavailable',
+            'businessHours', 'afterHours', 'voicemail', 'callback'
+        ];
+
+        const responses = this.currentData?.personalityResponses || {};
+
+        responseFields.forEach(field => {
+            const input = document.getElementById(`personality-${field}`);
+            if (input) {
+                // Set current value if available
+                if (responses[field]) {
+                    input.value = responses[field];
+                }
+                
+                // Set default placeholders for empty fields
+                if (!input.value) {
+                    input.placeholder = this.getDefaultPersonalityResponse(field);
+                }
+
+                // Track changes
+                input.addEventListener('input', () => {
+                    this.setUnsavedChanges(true);
+                    console.log(`🎭 Personality ${field} updated`);
+                });
+            }
+        });
+    }
+
+    /**
+     * Get default personality response for a field
+     */
+    getDefaultPersonalityResponse(field) {
+        const defaults = {
+            greeting: 'Hello! Thank you for calling. How can I help you today?',
+            farewell: 'Thank you for calling. Have a great day!',
+            hold: 'Please hold for just a moment while I check on that for you.',
+            transfer: 'Let me transfer you to someone who can better assist you.',
+            unavailable: 'I\'m sorry, but that service is currently unavailable.',
+            businessHours: 'Our business hours are Monday through Friday, 9 AM to 5 PM.',
+            afterHours: 'Thank you for calling. We are currently closed. Please call back during business hours.',
+            voicemail: 'Please leave your name, number, and a brief message, and we\'ll get back to you soon.',
+            callback: 'I\'d be happy to have someone call you back. What\'s the best number to reach you?'
+        };
+
+        return defaults[field] || 'Enter your custom response here...';
+    }
+
+    /**
+     * Setup personality form handlers
+     */
+    setupPersonalityFormHandlers() {
+        const personalityForm = document.getElementById('personality-responses-form');
+        if (!personalityForm) return;
+
+        // Find and setup save button
+        const saveBtn = personalityForm.querySelector('[data-save-type="personality"]') ||
+                       personalityForm.querySelector('button[type="submit"]');
+        
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.savePersonalityResponses();
+            });
+        }
+
+        // Setup form submission
+        personalityForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.savePersonalityResponses();
+        });
+    }
+
+    /**
+     * Save personality responses
+     */
+    async savePersonalityResponses() {
+        try {
+            console.log('💾 Saving personality responses...');
+            
+            const responses = {};
+            const responseFields = [
+                'greeting', 'farewell', 'hold', 'transfer', 'unavailable',
+                'businessHours', 'afterHours', 'voicemail', 'callback'
+            ];
+
+            responseFields.forEach(field => {
+                const input = document.getElementById(`personality-${field}`);
+                if (input && input.value.trim()) {
+                    responses[field] = input.value.trim();
+                }
+            });
+
+            // In a real implementation, this would be a separate API call
+            // For now, we'll include it in the main save
+            if (this.currentData) {
+                this.currentData.personalityResponses = responses;
+            }
+
+            this.showNotification('Personality responses saved successfully!', 'success');
+            console.log('✅ Personality responses saved:', responses);
+            
+        } catch (error) {
+            console.error('❌ Error saving personality responses:', error);
+            this.showNotification('Failed to save personality responses', 'error');
+        }
     }
 
     /**
@@ -1007,7 +1342,233 @@ class CompanyProfileManager {
      */
     populateAgentLogicTab() {
         console.log('🧠 Populating Agent Logic tab...');
-        // TODO: Implement agent logic tab population
+        
+        // Initialize booking flow management
+        this.initializeBookingFlowManagement();
+        
+        // Initialize agent logic notes (separate from general notes)
+        this.initializeAgentLogicNotes();
+        
+        console.log('✅ Agent Logic tab configured');
+    }
+
+    /**
+     * Initialize booking flow management
+     */
+    initializeBookingFlowManagement() {
+        // Initialize booking flow fields
+        this.bookingFlowFields = this.currentData?.bookingFlow || [];
+        
+        // Setup add booking field functionality
+        this.setupBookingFieldManagement();
+        
+        // Render existing booking flow
+        this.renderBookingFlowTable();
+    }
+
+    /**
+     * Setup booking field management
+     */
+    setupBookingFieldManagement() {
+        // Find add field button
+        const addFieldBtn = document.querySelector('[onclick*="addBookingField"]') ||
+                           document.getElementById('add-booking-field-btn');
+        
+        if (addFieldBtn) {
+            // Remove existing onclick and add modern event listener
+            addFieldBtn.removeAttribute('onclick');
+            addFieldBtn.addEventListener('click', () => {
+                this.addBookingField();
+            });
+        }
+
+        // Setup save booking flow button
+        const saveFlowBtn = document.querySelector('[onclick*="saveBookingFlow"]') ||
+                           document.getElementById('save-booking-flow-btn');
+        
+        if (saveFlowBtn) {
+            saveFlowBtn.removeAttribute('onclick');
+            saveFlowBtn.addEventListener('click', () => {
+                this.saveBookingFlow();
+            });
+        }
+    }
+
+    /**
+     * Add new booking field
+     */
+    addBookingField() {
+        const promptInput = document.getElementById('new-prompt');
+        const nameInput = document.getElementById('new-name');
+
+        if (!promptInput?.value.trim() || !nameInput?.value.trim()) {
+            this.showNotification('Please fill in both prompt and field name', 'error');
+            return;
+        }
+
+        const field = {
+            id: Date.now(),
+            prompt: promptInput.value.trim(),
+            name: nameInput.value.trim(),
+            order: this.bookingFlowFields.length
+        };
+
+        this.bookingFlowFields.push(field);
+
+        // Clear inputs
+        promptInput.value = '';
+        nameInput.value = '';
+
+        // Re-render table
+        this.renderBookingFlowTable();
+        
+        this.setUnsavedChanges(true);
+        this.showNotification('Booking field added successfully!', 'success');
+        console.log('📋 Booking field added:', field);
+    }
+
+    /**
+     * Delete booking field
+     */
+    deleteBookingField(fieldId) {
+        if (!confirm('Are you sure you want to delete this field?')) return;
+
+        this.bookingFlowFields = this.bookingFlowFields.filter(field => field.id !== fieldId);
+        this.renderBookingFlowTable();
+        
+        this.setUnsavedChanges(true);
+        this.showNotification('Field deleted', 'success');
+        console.log('🗑️ Booking field deleted:', fieldId);
+    }
+
+    /**
+     * Move booking field up or down
+     */
+    moveBookingField(fieldId, direction) {
+        const currentIndex = this.bookingFlowFields.findIndex(field => field.id === fieldId);
+        if (currentIndex === -1) return;
+
+        const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+        if (newIndex < 0 || newIndex >= this.bookingFlowFields.length) return;
+
+        // Swap fields
+        [this.bookingFlowFields[currentIndex], this.bookingFlowFields[newIndex]] = 
+        [this.bookingFlowFields[newIndex], this.bookingFlowFields[currentIndex]];
+
+        this.renderBookingFlowTable();
+        this.setUnsavedChanges(true);
+        console.log(`↕️ Booking field moved ${direction}:`, fieldId);
+    }
+
+    /**
+     * Render booking flow table
+     */
+    renderBookingFlowTable() {
+        const tbody = document.getElementById('booking-flow-body');
+        if (!tbody) {
+            console.warn('Booking flow table body not found');
+            return;
+        }
+
+        if (this.bookingFlowFields.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="3" class="text-center text-gray-500 py-8">
+                        <div class="flex flex-col items-center">
+                            <i class="fas fa-clipboard-list text-3xl mb-3 text-gray-300"></i>
+                            <p>No booking fields configured yet.</p>
+                            <p class="text-sm">Add your first field above to get started.</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = this.bookingFlowFields.map((field, index) => `
+            <tr class="hover:bg-gray-50">
+                <td class="p-3 border border-gray-200">
+                    <div class="max-w-xs">
+                        <p class="text-sm text-gray-900">${this.escapeHtml(field.prompt)}</p>
+                    </div>
+                </td>
+                <td class="p-3 border border-gray-200">
+                    <code class="bg-gray-100 px-2 py-1 rounded text-sm">${this.escapeHtml(field.name)}</code>
+                </td>
+                <td class="p-3 border border-gray-200">
+                    <div class="flex items-center space-x-2">
+                        ${index > 0 ? `
+                            <button onclick="companyProfileManager.moveBookingField(${field.id}, 'up')" 
+                                    class="text-blue-600 hover:text-blue-800 text-sm transition-colors" 
+                                    title="Move up">
+                                <i class="fas fa-arrow-up"></i>
+                            </button>
+                        ` : '<span class="w-4"></span>'}
+                        
+                        ${index < this.bookingFlowFields.length - 1 ? `
+                            <button onclick="companyProfileManager.moveBookingField(${field.id}, 'down')" 
+                                    class="text-blue-600 hover:text-blue-800 text-sm transition-colors" 
+                                    title="Move down">
+                                <i class="fas fa-arrow-down"></i>
+                            </button>
+                        ` : '<span class="w-4"></span>'}
+                        
+                        <button onclick="companyProfileManager.deleteBookingField(${field.id})" 
+                                class="text-red-600 hover:text-red-800 text-sm ml-2 transition-colors" 
+                                title="Delete field">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+
+        console.log(`✅ Rendered ${this.bookingFlowFields.length} booking flow fields`);
+    }
+
+    /**
+     * Save booking flow
+     */
+    async saveBookingFlow() {
+        try {
+            console.log('💾 Saving booking flow...');
+
+            // In a real implementation, this would be a separate API call
+            // For now, we'll include it in the main save
+            if (this.currentData) {
+                this.currentData.bookingFlow = this.bookingFlowFields;
+            }
+
+            // Show saved indicator
+            const savedElement = document.getElementById('booking-flow-saved');
+            if (savedElement) {
+                savedElement.classList.remove('hidden');
+                setTimeout(() => {
+                    savedElement.classList.add('hidden');
+                }, 3000);
+            }
+
+            this.showNotification('Booking flow saved successfully!', 'success');
+            console.log('✅ Booking flow saved:', this.bookingFlowFields);
+
+        } catch (error) {
+            console.error('❌ Error saving booking flow:', error);
+            this.showNotification('Failed to save booking flow', 'error');
+        }
+    }
+
+    /**
+     * Initialize agent logic notes (separate from general notes)
+     */
+    initializeAgentLogicNotes() {
+        // Agent logic notes are handled similarly to general notes
+        // but stored separately for organization
+        this.agentLogicNotes = this.currentData?.agentLogicNotes || [];
+        
+        // Notes functionality is already implemented in the notes system
+        // This is just for separation of concerns
+        console.log('📝 Agent logic notes initialized');
     }
 
     /**
@@ -1107,6 +1668,18 @@ class CompanyProfileManager {
         
         // Calendar tab data
         this.collectCalendarData(data);
+
+        // AI Settings tab data
+        this.collectAISettingsData(data);
+        
+        // Voice tab data
+        this.collectVoiceData(data);
+        
+        // Personality tab data
+        this.collectPersonalityData(data);
+        
+        // Agent Logic tab data
+        this.collectAgentLogicData(data);
 
         console.log('📤 Collected form data:', data);
         return data;
@@ -1208,6 +1781,80 @@ class CompanyProfileManager {
         });
 
         data.operatingHours = operatingHours;
+    }
+
+    /**
+     * Collect AI Settings tab data
+     */
+    collectAISettingsData(data) {
+        const aiSettings = {};
+        
+        const aiModelSelect = document.getElementById('ai-model');
+        const personalitySelect = document.getElementById('ai-personality');
+        const ttsProviderSelect = document.getElementById('tts-provider');
+        
+        if (aiModelSelect?.value) aiSettings.model = aiModelSelect.value;
+        if (personalitySelect?.value) aiSettings.personality = personalitySelect.value;
+        if (ttsProviderSelect?.value) aiSettings.ttsProvider = ttsProviderSelect.value;
+        
+        if (Object.keys(aiSettings).length > 0) {
+            data.aiSettings = { ...data.aiSettings, ...aiSettings };
+        }
+    }
+
+    /**
+     * Collect Voice tab data
+     */
+    collectVoiceData(data) {
+        const apiKeyInput = document.getElementById('elevenlabsApiKey');
+        const voiceSelect = document.getElementById('elevenlabsVoice');
+        
+        if (apiKeyInput?.value && !apiKeyInput.value.includes('••••')) {
+            data.aiSettings = data.aiSettings || {};
+            data.aiSettings.elevenLabs = data.aiSettings.elevenLabs || {};
+            data.aiSettings.elevenLabs.apiKey = apiKeyInput.value;
+        }
+        
+        if (voiceSelect?.value) {
+            data.aiSettings = data.aiSettings || {};
+            data.aiSettings.elevenLabs = data.aiSettings.elevenLabs || {};
+            data.aiSettings.elevenLabs.voiceId = voiceSelect.value;
+        }
+    }
+
+    /**
+     * Collect Personality tab data
+     */
+    collectPersonalityData(data) {
+        const responses = {};
+        const responseFields = [
+            'greeting', 'farewell', 'hold', 'transfer', 'unavailable',
+            'businessHours', 'afterHours', 'voicemail', 'callback'
+        ];
+
+        responseFields.forEach(field => {
+            const input = document.getElementById(`personality-${field}`);
+            if (input?.value.trim()) {
+                responses[field] = input.value.trim();
+            }
+        });
+
+        if (Object.keys(responses).length > 0) {
+            data.personalityResponses = responses;
+        }
+    }
+
+    /**
+     * Collect Agent Logic tab data
+     */
+    collectAgentLogicData(data) {
+        if (this.bookingFlowFields && this.bookingFlowFields.length > 0) {
+            data.bookingFlow = this.bookingFlowFields;
+        }
+        
+        if (this.agentLogicNotes && this.agentLogicNotes.length > 0) {
+            data.agentLogicNotes = this.agentLogicNotes;
+        }
     }
 
     /**
