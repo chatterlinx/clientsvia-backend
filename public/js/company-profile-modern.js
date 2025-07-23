@@ -2167,8 +2167,11 @@ class CompanyProfileManager {
      * Save all changes to the backend
      */
     async saveAllChanges(showNotification = true) {
-        const data = {};
-        this.collectOverviewData(data);
+        if (!this.companyId) {
+            console.error('❌ No company ID available for saving');
+            return;
+        }
+
         // Collect data from all tabs
         const updateData = this.collectAllFormData();
 
@@ -2191,7 +2194,8 @@ class CompanyProfileManager {
             const savedData = await response.json();
             console.log('✅ Changes saved successfully:', savedData);
 
-            this.currentData = { ...this.currentData, ...savedData.data || updateData };
+            // Update current data with the saved response
+            this.currentData = { ...this.currentData, ...savedData };
             this.setUnsavedChanges(false);
             
             // Refresh the display with updated data
@@ -2790,6 +2794,32 @@ class CompanyProfileManager {
      * Collect contacts data for saving
      */
     collectContactsData(data) {
+        // Collect additional contacts from the UI
+        const contactsContainer = document.querySelector('#additionalContactsContainer');
+        if (contactsContainer) {
+            const contacts = [];
+            const contactRows = contactsContainer.querySelectorAll('.contact-row');
+            
+            contactRows.forEach(row => {
+                const nameInput = row.querySelector('input[placeholder="Contact Name"]');
+                const roleInput = row.querySelector('input[placeholder="Role/Title"]');
+                const emailInput = row.querySelector('input[placeholder="Email"]');
+                const phoneInput = row.querySelector('input[placeholder="Phone"]');
+                
+                if (nameInput && nameInput.value.trim()) {
+                    contacts.push({
+                        name: nameInput.value.trim(),
+                        role: roleInput ? roleInput.value.trim() : '',
+                        email: emailInput ? emailInput.value.trim() : '',
+                        phone: phoneInput ? phoneInput.value.trim() : ''
+                    });
+                }
+            });
+            
+            data.additionalContacts = contacts;
+        }
+
+        // Legacy contacts support
         if (Array.isArray(this.currentData.contacts)) {
             // Deep copy to avoid mutation
             data.contacts = JSON.parse(JSON.stringify(this.currentData.contacts));

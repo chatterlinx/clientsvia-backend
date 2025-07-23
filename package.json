@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "test": "jest"
+    "test": "jest",
+    "build-css": "tailwindcss -i ./public/css/input.css -o ./public/css/output.css --watch",
+    "build-css-prod": "tailwindcss -i ./public/css/input.css -o ./public/css/output.css --minify"
   },
   "keywords": [],
   "author": "",
@@ -50,7 +52,10 @@
   "devDependencies": {
     "jest": "^29.7.0",
     "jsdom": "^26.1.0",
-    "supertest": "^6.3.3"
+    "supertest": "^6.3.3",
+    "tailwindcss": "^3.4.0",
+    "@tailwindcss/forms": "^0.5.7",
+    "nodemon": "^3.0.1"
   },
   "jest": {
     "testMatch": [

@@ -214,6 +214,15 @@ const companySchema = new mongoose.Schema({
     companyPhone: { type: String, trim: true, default: null }, // Primary company phone number
     companyAddress: { type: String, trim: true, default: null }, // Full address as single string
     
+    // Business details fields for Overview tab
+    businessPhone: { type: String, trim: true, default: null },
+    businessEmail: { type: String, trim: true, default: null, lowercase: true },
+    businessWebsite: { type: String, trim: true, default: null },
+    businessAddress: { type: String, trim: true, default: null },
+    description: { type: String, trim: true, default: null },
+    serviceArea: { type: String, trim: true, default: null },
+    businessHours: { type: String, trim: true, default: null },
+    
     // Legacy/detailed fields (now optional - filled in Overview tab)
     ownerName: { type: String, trim: true, default: null }, // Removed required validation
     ownerEmail: { type: String, trim: true, default: null, lowercase: true }, // Removed required validation
@@ -221,6 +230,17 @@ const companySchema = new mongoose.Schema({
     contactName: { type: String, trim: true, default: null },
     contactEmail: { type: String, trim: true, default: null, lowercase: true },
     contactPhone: { type: String, trim: true, default: null }, // Removed required validation
+    
+    // Additional contacts for Overview tab
+    additionalContacts: { 
+        type: [{
+            name: { type: String, trim: true },
+            role: { type: String, trim: true },
+            email: { type: String, trim: true, lowercase: true },
+            phone: { type: String, trim: true }
+        }], 
+        default: [] 
+    },
     
     address: { type: addressSchema, default: () => ({}) }, // Detailed address object (optional)
     tradeTypes: { type: [String], default: [] }, 

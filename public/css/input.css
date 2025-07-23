@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for the application */
+body { 
+  font-family: 'Inter', sans-serif; 
+  scroll-behavior: smooth; 
+}
+
+/* Global Navigation Styling */
+.nav-link-global { 
+  padding: 8px 16px;
+  margin: 0 4px;
+  border-radius: 6px;
+  color: #6b7280;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.15s ease-in-out;
+}
+
+.nav-link-global:hover { 
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.nav-link-global.active { 
+  background-color: #4f46e5;
+  color: white;
+}
+
+/* Button Styles */
+.btn-global { 
+  @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm transition duration-150 ease-in-out;
+}
+
+.btn-primary { 
+  @apply bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500;
+}
+
+.btn-secondary { 
+  @apply bg-gray-300 text-gray-700 hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500;
+}
+
+/* Form Styles */
+.form-input, .form-select, .form-textarea, .form-checkbox { 
+  @apply mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out; 
+}
+
+.form-checkbox { 
+  @apply w-auto h-4 text-indigo-600; 
+} 
+
+.form-label { 
+  @apply block text-sm font-medium text-gray-700; 
+}
+
+.form-check-label { 
+  @apply ml-2 text-sm text-gray-700; 
+}
+
+/* Tab Styles */
+.tab-button { 
+  padding: 0.5rem 1rem; 
+  font-weight: 500; 
+  font-size: 0.875rem; 
+  line-height: 1.25rem; 
+  border-top-left-radius: 0.5rem; 
+  border-top-right-radius: 0.5rem; 
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; 
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); 
+  transition-duration: 150ms; 
+  cursor: pointer; 
+}
+
+.tab-button:focus { 
+  outline: 2px solid transparent; 
+  outline-offset: 2px; 
+}
+
+.tab-button-active { 
+  background-color: #4F46E5; 
+  color: white; 
+}
+
+.tab-button-inactive { 
+  background-color: #E5E7EB; 
+  color: #374151; 
+}
+
+.tab-button-inactive:hover { 
+  background-color: #D1D5DB; 
+}
+
+.tab-content-item { 
+  @apply p-0 pt-6; 
+} 
+
+.tab-content-item.hidden { 
+  display: none; 
+}
+
+/* Note Styles */
+.notes-textarea { 
+  @apply w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out; 
+  min-height: 150px; 
+}
+
+.note-card { 
+  @apply bg-white p-4 rounded-lg shadow border border-gray-200 mb-4; 
+}
+
+.note-card.pinned { 
+  @apply bg-yellow-50 border-yellow-300; 
+}
+
+.note-content { 
+  @apply text-gray-800 whitespace-pre-wrap; 
+}
+
+.note-timestamps { 
+  @apply text-xs text-gray-500 mt-2; 
+}
+
+.note-actions { 
+  @apply mt-3 flex items-center space-x-3; 
+}
+
+.note-action-button { 
+  @apply text-xs text-indigo-600 hover:text-indigo-800 font-medium; 
+}
+
+.note-action-button .fa-thumbtack.pinned-icon { 
+  color: #F59E0B; 
+}
+
+/* Status Badges */
+.status-badge { 
+  @apply px-2.5 py-0.5 rounded-full text-xs font-medium; 
+}
+
+.status-active { 
+  @apply bg-green-100 text-green-800; 
+}
+
+.status-inactive { 
+  @apply bg-red-100 text-red-800; 
+}
+
+/* Miscellaneous */
+.wider-textbox { 
+  max-width: 800px; 
+  width: 100%; 
+}
+
+.contact-block-view { 
+  @apply mt-3 pt-3 border-t border-gray-200; 
+}
+
+.contact-block-view .detail-item:last-child { 
+  padding-bottom: 0; 
+}
