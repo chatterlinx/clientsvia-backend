@@ -82,18 +82,8 @@ class CompanyProfileManager {
      * Initialize DOM element references
      */
     initializeDOM() {
-        // Overview tab - VIEW elements (read-only display)
+        // Overview tab - Edit form container (modern approach)
         this.domElements = {
-            // View elements for display
-            companyNameView: document.getElementById('company-name-view'),
-            companyOwnerView: document.getElementById('company-owner-view'),
-            companyOwnerEmailView: document.getElementById('company-owner-email-view'),
-            companyOwnerPhoneView: document.getElementById('company-owner-phone-view'),
-            companyContactNameView: document.getElementById('company-contact-name-view'),
-            companyContactEmailView: document.getElementById('company-contact-email-view'),
-            companyContactPhoneView: document.getElementById('company-contact-phone-view'),
-            companyAddressView: document.getElementById('company-address-view'),
-            
             // Edit form container (will populate with inputs dynamically)
             editFormContainer: document.getElementById('company-details-edit-form'),
             editButton: document.getElementById('edit-profile-button'),
@@ -114,7 +104,7 @@ class CompanyProfileManager {
      * Validate that required DOM elements exist
      */
     validateDOMElements() {
-        const requiredElements = ['companyNameView', 'editFormContainer', 'editButton'];
+        const requiredElements = ['editFormContainer', 'editButton'];
         const missing = requiredElements.filter(key => !this.domElements[key]);
         
         if (missing.length > 0) {
@@ -138,10 +128,11 @@ class CompanyProfileManager {
             button.addEventListener('click', this.handleTabSwitch);
         });
 
-        // Edit button
+        // Edit button (legacy - now hidden since form is always editable)
         if (this.domElements.editButton) {
             this.domElements.editButton.addEventListener('click', () => {
-                this.showEditForm();
+                // No longer needed - form is always editable
+                console.log('Edit button clicked - form is already editable');
             });
         }
     }
@@ -305,36 +296,9 @@ class CompanyProfileManager {
 
         // Modern UX: Show editable form directly, no separate view/edit modes
         this.createModernEditableForm();
-        
-        // Still populate view elements for any legacy components that need them
-        this.populateViewElements();
 
         this.renderContactsSection();
         this.setupContactsHandlers();
-    }
-
-    /**
-     * Populate view elements (for legacy compatibility)
-     */
-    populateViewElements() {
-        const viewMappings = {
-            companyNameView: this.currentData.companyName || this.currentData.name || 'No name provided',
-            companyOwnerView: this.currentData.ownerName || 'No owner provided',
-            companyOwnerEmailView: this.currentData.ownerEmail || this.currentData.businessEmail || 'No email provided',
-            companyOwnerPhoneView: this.currentData.ownerPhone || this.currentData.businessPhone || 'No phone provided',
-            companyContactNameView: this.currentData.contactName || 'No contact provided',
-            companyContactEmailView: this.currentData.contactEmail || this.currentData.businessEmail || 'No contact email provided',
-            companyContactPhoneView: this.currentData.contactPhone || this.currentData.businessPhone || 'No contact phone provided',
-            companyAddressView: this.formatAddress(this.currentData)
-        };
-
-        Object.entries(viewMappings).forEach(([elementKey, value]) => {
-            const element = this.domElements[elementKey];
-            if (element) {
-                element.textContent = value;
-                console.log(`✅ ${elementKey}:`, value);
-            }
-        });
     }
 
     /**
@@ -365,7 +329,7 @@ class CompanyProfileManager {
                     <div class="space-y-1">
                         <label class="form-label text-gray-700 font-medium">Business Phone</label>
                         <input type="tel" id="edit-business-phone" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                               value="${this.escapeHtml(this.currentData.businessPhone || '')}"
+                               value="${this.escapeHtml(this.currentData.companyPhone || this.currentData.businessPhone || '')}"
                                placeholder="+1-555-123-4567">
                     </div>
                     <div class="space-y-1">
@@ -383,7 +347,7 @@ class CompanyProfileManager {
                     <div class="md:col-span-2 space-y-1">
                         <label class="form-label text-gray-700 font-medium">Business Address</label>
                         <input type="text" id="edit-business-address" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                               value="${this.escapeHtml(this.currentData.businessAddress || '')}"
+                               value="${this.escapeHtml(this.currentData.companyAddress || this.currentData.businessAddress || '')}"
                                placeholder="123 Main St, City, State 12345">
                     </div>
                     <div class="md:col-span-2 space-y-1">
@@ -416,12 +380,6 @@ class CompanyProfileManager {
         this.domElements.editFormContainer.innerHTML = formHTML;
         this.domElements.editFormContainer.classList.remove('hidden');
 
-        // Hide the static view elements since we're using the modern always-editable form
-        const staticViewContainer = document.getElementById('company-details-view');
-        if (staticViewContainer) {
-            staticViewContainer.style.display = 'none';
-        }
-
         // Hide the old edit button since form is always visible
         if (this.domElements.editButton) {
             this.domElements.editButton.style.display = 'none';
@@ -451,6 +409,11 @@ class CompanyProfileManager {
      * Format address data for display
      */
     formatAddress(data) {
+        // Check for new simplified field first, then legacy field
+        if (data.companyAddress) {
+            return data.companyAddress;
+        }
+        
         if (data.businessAddress) {
             return data.businessAddress;
         }
@@ -462,101 +425,6 @@ class CompanyProfileManager {
         }
         
         return 'No address provided';
-    }
-
-    /**
-     * Create editable form in the edit container
-     */
-    createEditForm() {
-        if (!this.domElements.editFormContainer) return;
-
-        const formHTML = `
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="form-label">Company Name</label>
-                    <input type="text" id="edit-company-name" class="form-input" 
-                           value="${this.escapeHtml(this.currentData.companyName || this.currentData.name || '')}">
-                </div>
-                <div>
-                    <label class="form-label">Business Phone</label>
-                    <input type="tel" id="edit-business-phone" class="form-input" 
-                           value="${this.escapeHtml(this.currentData.businessPhone || '')}">
-                </div>
-                <div>
-                    <label class="form-label">Business Email</label>
-                    <input type="email" id="edit-business-email" class="form-input" 
-                           value="${this.escapeHtml(this.currentData.businessEmail || '')}">
-                </div>
-                <div>
-                    <label class="form-label">Website</label>
-                    <input type="url" id="edit-business-website" class="form-input" 
-                           value="${this.escapeHtml(this.currentData.businessWebsite || '')}">
-                </div>
-                <div class="md:col-span-2">
-                    <label class="form-label">Business Address</label>
-                    <input type="text" id="edit-business-address" class="form-input" 
-                           value="${this.escapeHtml(this.currentData.businessAddress || '')}">
-                </div>
-                <div class="md:col-span-2">
-                    <label class="form-label">Description</label>
-                    <textarea id="edit-description" class="form-textarea wider-textbox" rows="3">${this.escapeHtml(this.currentData.description || '')}</textarea>
-                </div>
-                <div>
-                    <label class="form-label">Service Area</label>
-                    <input type="text" id="edit-service-area" class="form-input" 
-                           value="${this.escapeHtml(this.currentData.serviceArea || '')}">
-                </div>
-                <div>
-                    <label class="form-label">Business Hours</label>
-                    <input type="text" id="edit-business-hours" class="form-input" 
-                           value="${this.escapeHtml(this.currentData.businessHours || '')}">
-                </div>
-            </div>
-            <div class="flex justify-end space-x-3 mt-6">
-                <button type="button" id="cancel-edit-btn" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
-                    Cancel
-                </button>
-                <button type="button" id="save-edit-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
-                    <i class="fas fa-save mr-2"></i>Save Changes
-                </button>
-            </div>
-        `;
-
-        this.domElements.editFormContainer.innerHTML = formHTML;
-        this.domElements.editFormContainer.classList.remove('hidden');
-
-        // Add event listeners for edit form
-        this.setupEditFormListeners();
-    }
-
-    /**
-     * Setup event listeners for the edit form
-     */
-    setupEditFormListeners() {
-        const saveBtn = document.getElementById('save-edit-btn');
-        const cancelBtn = document.getElementById('cancel-edit-btn');
-
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => this.saveAllChanges());
-        }
-
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => this.cancelEdit());
-        }
-
-        // Track changes in edit form
-        const editInputs = this.domElements.editFormContainer.querySelectorAll('input, textarea');
-        editInputs.forEach(input => {
-            input.addEventListener('input', () => this.setUnsavedChanges(true));
-        });
-    }
-
-    /**
-     * Cancel editing and hide form
-     */
-    cancelEdit() {
-        this.domElements.editFormContainer.classList.add('hidden');
-        this.setUnsavedChanges(false);
     }
 
     /**
@@ -2397,6 +2265,14 @@ class CompanyProfileManager {
             const input = document.getElementById(inputId);
             if (input && input.value.trim()) {
                 data[dataKey] = input.value.trim();
+                
+                // For backward compatibility with simplified workflow,
+                // also set the corresponding company* field if it's phone or address
+                if (dataKey === 'businessPhone') {
+                    data['companyPhone'] = input.value.trim();
+                } else if (dataKey === 'businessAddress') {
+                    data['companyAddress'] = input.value.trim();
+                }
             }
         });
 
@@ -2630,25 +2506,6 @@ class CompanyProfileManager {
                 notification.style.opacity = '1';
             }, 300);
         }, 5000);
-    }
-
-    /**
-     * Show edit form for Overview tab
-     */
-    showEditForm() {
-        if (!this.currentData) {
-            this.showNotification('No company data loaded', 'error');
-            return;
-        }
-
-        // Create and show edit form
-        this.createEditForm();
-        
-        // Scroll to edit form
-        this.domElements.editFormContainer.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'nearest' 
-        });
     }
 
     /**
