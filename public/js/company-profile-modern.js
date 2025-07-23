@@ -240,7 +240,7 @@ class CompanyProfileManager {
             console.log('📥 Loading company data...');
             this.showLoading(true);
 
-            const response = await fetch(`${this.apiBaseUrl}/api/companies/${this.companyId}`);
+            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -1624,7 +1624,7 @@ class CompanyProfileManager {
             // Collect data from all tabs
             const updateData = this.collectAllFormData();
 
-            const response = await fetch(`${this.apiBaseUrl}/api/companies/${this.companyId}`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json'
