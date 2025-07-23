@@ -1287,32 +1287,95 @@ class CompanyProfileManager {
      */
     setupPersonalityResponses() {
         const responseFields = [
-            'greeting', 'farewell', 'hold', 'transfer', 'unavailable',
-            'businessHours', 'afterHours', 'voicemail', 'callback'
+            { key: 'greeting', label: 'Greeting Response', icon: 'fas fa-hand-wave', description: 'How the agent greets callers when they first connect' },
+            { key: 'farewell', label: 'Farewell Response', icon: 'fas fa-hand-peace', description: 'How the agent says goodbye to callers' },
+            { key: 'hold', label: 'Hold Response', icon: 'fas fa-pause-circle', description: 'What the agent says when placing callers on hold' },
+            { key: 'transfer', label: 'Transfer Response', icon: 'fas fa-phone-flip', description: 'What the agent says when transferring calls' },
+            { key: 'unavailable', label: 'Service Unavailable', icon: 'fas fa-exclamation-triangle', description: 'Response when a service is not available' },
+            { key: 'businessHours', label: 'Business Hours Info', icon: 'fas fa-clock', description: 'How the agent communicates business hours' },
+            { key: 'afterHours', label: 'After Hours Response', icon: 'fas fa-moon', description: 'Response when calling outside business hours' },
+            { key: 'voicemail', label: 'Voicemail Instructions', icon: 'fas fa-voicemail', description: 'Instructions for leaving a voicemail' },
+            { key: 'callback', label: 'Callback Request', icon: 'fas fa-phone-volume', description: 'How the agent handles callback requests' }
         ];
 
         const responses = this.currentData?.personalityResponses || {};
+        const container = document.getElementById('personality-responses-list');
+        
+        if (!container) {
+            console.warn('❌ Personality responses container not found');
+            return;
+        }
 
+        // Clear existing content
+        container.innerHTML = '';
+
+        // Build form fields
         responseFields.forEach(field => {
-            const input = document.getElementById(`personality-${field}`);
-            if (input) {
-                // Set current value if available
-                if (responses[field]) {
-                    input.value = responses[field];
-                }
-                
-                // Set default placeholders for empty fields
-                if (!input.value) {
-                    input.placeholder = this.getDefaultPersonalityResponse(field);
-                }
-
-                // Track changes
-                input.addEventListener('input', () => {
+            const fieldContainer = document.createElement('div');
+            fieldContainer.className = 'bg-white border border-gray-200 rounded-lg p-6 shadow-sm';
+            
+            const currentValue = responses[field.key] || '';
+            const defaultValue = this.getDefaultPersonalityResponse(field.key);
+            
+            fieldContainer.innerHTML = `
+                <div class="flex items-start space-x-4">
+                    <div class="flex-shrink-0">
+                        <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                            <i class="${field.icon} text-indigo-600"></i>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label for="personality-${field.key}" class="block text-sm font-medium text-gray-900 mb-1">
+                            ${field.label}
+                        </label>
+                        <p class="text-sm text-gray-600 mb-3">${field.description}</p>
+                        <textarea
+                            id="personality-${field.key}"
+                            name="personality-${field.key}"
+                            rows="3"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            placeholder="${defaultValue}"
+                        >${currentValue}</textarea>
+                        ${!currentValue ? `
+                        <div class="mt-2">
+                            <button type="button" class="text-xs text-indigo-600 hover:text-indigo-800 use-default-btn" data-field="${field.key}">
+                                <i class="fas fa-magic mr-1"></i>Use Default Response
+                            </button>
+                        </div>` : ''}
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(fieldContainer);
+            
+            // Setup event listeners for this field
+            const textarea = fieldContainer.querySelector(`#personality-${field.key}`);
+            const useDefaultBtn = fieldContainer.querySelector('.use-default-btn');
+            
+            if (textarea) {
+                textarea.addEventListener('input', () => {
                     this.setUnsavedChanges(true);
-                    console.log(`🎭 Personality ${field} updated`);
+                    console.log(`🎭 Personality ${field.key} updated`);
+                    
+                    // Show/hide default button based on content
+                    if (useDefaultBtn) {
+                        useDefaultBtn.style.display = textarea.value.trim() ? 'none' : 'inline-block';
+                    }
+                });
+            }
+            
+            if (useDefaultBtn) {
+                useDefaultBtn.addEventListener('click', () => {
+                    if (textarea) {
+                        textarea.value = defaultValue;
+                        textarea.dispatchEvent(new Event('input'));
+                        useDefaultBtn.style.display = 'none';
+                    }
                 });
             }
         });
+
+        console.log('✅ Personality response fields created');
     }
 
     /**
@@ -1373,17 +1436,20 @@ class CompanyProfileManager {
             ];
 
             responseFields.forEach(field => {
-                const input = document.getElementById(`personality-${field}`);
-                if (input && input.value.trim()) {
-                    responses[field] = input.value.trim();
+                const textarea = document.getElementById(`personality-${field}`);
+                if (textarea && textarea.value.trim()) {
+                    responses[field] = textarea.value.trim();
                 }
             });
 
-            // In a real implementation, this would be a separate API call
-            // For now, we'll include it in the main save
+            // Update current data
             if (this.currentData) {
                 this.currentData.personalityResponses = responses;
             }
+
+            // In a real implementation, this would make an API call to save just personality responses
+            // For now, we'll trigger the main save process to ensure data persistence
+            await this.saveAllChanges(false); // false = don't show duplicate notification
 
             this.showNotification('Personality responses saved successfully!', 'success');
             console.log('✅ Personality responses saved:', responses);
@@ -1671,7 +1737,7 @@ class CompanyProfileManager {
     /**
      * Save all changes to the backend
      */
-    async saveAllChanges() {
+    async saveAllChanges(showNotification = true) {
         try {
             console.log('💾 Saving all changes...');
             this.showLoading(true);
@@ -1700,7 +1766,9 @@ class CompanyProfileManager {
             // Refresh the display with updated data
             this.populateOverviewTab();
             
-            this.showNotification('All changes saved successfully!', 'success');
+            if (showNotification) {
+                this.showNotification('All changes saved successfully!', 'success');
+            }
 
         } catch (error) {
             console.error('❌ Failed to save changes:', error);
