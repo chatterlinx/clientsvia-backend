@@ -5,21 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Company Profile</title>
     <link rel="icon" href="/favicon.ico">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        // Suppress Tailwind CDN production warning
-        if (window.tailwindcss) {
-            window.tailwindcss.config = {
-                ...window.tailwindcss.config,
-                corePlugins: {
-                    ...window.tailwindcss.config?.corePlugins,
-                    preflight: false
-                }
-            };
-        }
-    </script>
+    
+    <!-- Production Tailwind CSS (CDN disabled for production) -->
+    <!-- <script src="https://cdn.tailwindcss.com"></script> -->
     <link rel="stylesheet" href="/css/tailwind-production.css">
-    <!-- Production-ready Tailwind CSS replacement -->
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -782,13 +772,13 @@
         }
 
         // Basic mobile menu toggle
+        // Mobile menu toggle
         document.getElementById('mobile-menu-button')?.addEventListener('click', () => {
             document.getElementById('mobile-menu')?.classList.toggle('hidden');
         });
 
-        // Active Nav Link Highlighting & Main Page Tab Logic
+        // Navigation link highlighting only
         document.addEventListener('DOMContentLoaded', function() {
-            // --- Navigation Link Highlighting ---
             let currentPath = window.location.pathname.replace(/\/$/, "") || "/index.html";
             document.querySelectorAll('header nav a.nav-link, #mobile-menu a.nav-link').forEach(link => {
                 let linkPath = new URL(link.href).pathname.replace(/\/$/, "") || "/index.html";
@@ -799,82 +789,10 @@
                     link.classList.add('text-gray-700');
                 }
             });
-
-            // --- Tab Content Management ---
-            const tabButtons = document.querySelectorAll('.tab-button');
-            const tabContents = document.querySelectorAll('.tab-content-item');
-            
-            tabButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const targetTab = this.getAttribute('data-tab');
-                    
-                    // Remove active class from all buttons and content
-                    tabButtons.forEach(btn => btn.classList.remove('active-tab'));
-                    tabContents.forEach(content => content.classList.add('hidden'));
-                    
-                    // Add active class to clicked button and show corresponding content
-                    this.classList.add('active-tab');
-                    document.getElementById(targetTab + '-content')?.classList.remove('hidden');
-                });
-            });
         });
     </script>
     
     <script src="/js/company-profile-modern.js"></script>
     
-    <!-- Main Page Initialization Script -->
-    <script>
-        // Main initialization when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
-            
-            // Get company ID from URL
-            const urlParams = new URLSearchParams(window.location.search);
-            const companyId = urlParams.get('id');
-            
-            if (companyId) {
-                console.log('✅ Company ID found in URL:', companyId);
-                
-                // Set global company ID
-                window.companyId = companyId;
-                
-                // Function to try calling fetchCompanyData
-                const tryFetchData = () => {
-                    if (typeof fetchCompanyData === 'function') {
-                        console.log('📡 Calling fetchCompanyData...');
-                        fetchCompanyData()
-                            .then(() => {
-                                console.log('✅ Company data fetch completed successfully');
-                            })
-                            .catch(error => {
-                                console.error('❌ Error fetching company data:', error);
-                            });
-                        return true;
-                    }
-                    return false;
-                };
-                
-                // Try immediately
-                if (!tryFetchData()) {
-                    console.log('⏳ fetchCompanyData not ready yet, waiting...');
-                    
-                    // Try again every 100ms for up to 5 seconds
-                    let attempts = 0;
-                    const maxAttempts = 50;
-                    const retryInterval = setInterval(() => {
-                        attempts++;
-                        if (tryFetchData()) {
-                            clearInterval(retryInterval);
-                        } else if (attempts >= maxAttempts) {
-                            clearInterval(retryInterval);
-                            console.error('❌ fetchCompanyData function not found after 5 seconds');
-                        }
-                    }, 100);
-                }
-            } else {
-                console.error('❌ No company ID found in URL');
-                document.body.innerHTML = '<div class="p-8 text-center"><h1 class="text-2xl font-bold text-red-600">Error: No company ID provided</h1><p class="text-gray-600 mt-2">Please access this page with a valid company ID.</p></div>';
-            }
-        });
-    </script>
+    <!-- Modern implementation handles all initialization -->
 </body>

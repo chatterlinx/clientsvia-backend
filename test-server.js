@@ -10,23 +10,70 @@ app.use(express.json());
 // Serve static files from public directory
 app.use(express.static('public'));
 
-// Mock company API endpoint for testing
+// Mock company API endpoint for testing - handles any company ID
 app.get('/api/companies/:id', (req, res) => {
     const companyId = req.params.id;
     console.log('📡 Mock API: Company data requested for ID:', companyId);
     
-    // Return mock company data with all needed fields
+    // Return mock company data that works with any ID
     const mockCompany = {
         _id: companyId,
-        companyName: "Penguin Air Solutions",
+        companyName: "Dynamic Test Company",
         businessPhone: "+1-555-123-4567",
-        businessEmail: "contact@penguinair.com",
-        businessAddress: "123 HVAC Street, Cool City, CA 90210",
-        businessWebsite: "https://penguinair.com",
-        description: "Professional HVAC services for residential and commercial properties",
-        serviceArea: "Greater Los Angeles Area",
-        businessHours: "Monday-Friday: 8:00 AM - 6:00 PM, Saturday: 9:00 AM - 4:00 PM",
-        tradeTypes: ["HVAC", "Air Conditioning", "Heating"],
+        businessEmail: "contact@testcompany.com",
+        businessAddress: "123 Business Street, Test City, TC 12345",
+        businessWebsite: "https://testcompany.com",
+        description: "Professional services for testing purposes - this company profile works with any ID",
+        serviceArea: "Global Test Area",
+        businessHours: "Monday-Friday: 9:00 AM - 5:00 PM",
+        
+        // Additional fields for comprehensive testing
+        timezone: "America/New_York",
+        tradeTypes: ["General Services", "Testing", "Development"],
+        
+        // Configuration data
+        twilioAccountSid: "ACtest123456789",
+        phoneNumbers: [
+            { number: "+1-555-123-4567", friendlyName: "Main Line", isPrimary: true }
+        ],
+        
+        // AI Settings
+        aiSettings: {
+            model: "gpt-4",
+            personality: "professional",
+            ttsProvider: "elevenlabs",
+            elevenLabs: {
+                voiceId: "rachel"
+            }
+        },
+        
+        // Sample notes
+        notes: [
+            {
+                id: 1,
+                content: "This is a sample note for testing purposes.",
+                timestamp: new Date().toISOString(),
+                author: "System"
+            }
+        ],
+        
+        // Operating hours
+        operatingHours: [
+            { day: "monday", enabled: true, start: "09:00", end: "17:00" },
+            { day: "tuesday", enabled: true, start: "09:00", end: "17:00" },
+            { day: "wednesday", enabled: true, start: "09:00", end: "17:00" },
+            { day: "thursday", enabled: true, start: "09:00", end: "17:00" },
+            { day: "friday", enabled: true, start: "09:00", end: "17:00" },
+            { day: "saturday", enabled: false, start: "09:00", end: "17:00" },
+            { day: "sunday", enabled: false, start: "09:00", end: "17:00" }
+        ],
+        
+        // Personality responses
+        personalityResponses: {
+            greeting: "Hello! Thank you for calling our test company. How can I help you today?",
+            farewell: "Thank you for calling. Have a great day!"
+        },
+        
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
     };
