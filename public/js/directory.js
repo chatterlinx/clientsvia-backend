@@ -266,30 +266,178 @@ document.addEventListener('DOMContentLoaded', () => {
      * Handles the deletion of a company.
      */
     async function handleDeleteCompany(companyId, companyName) {
-        if (!confirm(`Are you sure you want to delete "${companyName}" (ID: ${companyId})? This action cannot be undone.`)) {
-            return;
-        }
-        console.log(`[JS directory.js] Deleting company ID: ${companyId}`);
-        try {
-            const baseApiUrl = getBaseApiUrl();
-            // --- CHANGE #2 WAS HERE ---
-            const deleteApiUrl = `${baseApiUrl}/api/company/${companyId}`; // Path from routes/company.js
-            console.log('[JS directory.js] Deleting company from:', deleteApiUrl);
-
-            const response = await fetch(deleteApiUrl, {
-                method: 'DELETE',
+        // Use a modern confirmation dialog
+        const confirmationHtml = `
+            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; justify-content: center; align-items: center;">
+                <div style="background: white; padding: 2rem; border-radius: 8px; max-width: 500px; width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+                    <div style="display: flex; align-items: center; margin-bottom: 1rem;">
+                        <i class="fas fa-exclamation-triangle" style="color: #dc2626; font-size: 1.5rem; margin-right: 0.75rem;"></i>
+                        <h3 style="margin: 0; color: #1f2937; font-size: 1.25rem; font-weight: 600;">Confirm Company Deletion</h3>
+                    </div>
+                    <p style="color: #4b5563; margin-bottom: 1.5rem; line-height: 1.5;">
+                        Are you sure you want to permanently delete <strong>"${escapeHTML(companyName)}"</strong>?
+                        <br><br>
+                        <span style="color: #dc2626; font-weight: 500;">This action cannot be undone.</span> All company data, including:
+                        <br>• Company profile and settings
+                        <br>• AI personality responses
+                        <br>• Configuration data
+                        <br>• All cached information
+                        <br><br>will be permanently removed from the system.
+                    </p>
+                    <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                        <button id="cancel-delete" style="padding: 0.5rem 1rem; border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                            Cancel
+                        </button>
+                        <button id="confirm-delete" style="padding: 0.5rem 1rem; border: none; background: #dc2626; color: white; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                            <i class="fas fa-trash mr-1"></i>Delete Permanently
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add the dialog to the page
+        const dialogElement = document.createElement('div');
+        dialogElement.innerHTML = confirmationHtml;
+        document.body.appendChild(dialogElement);
+        
+        // Return a promise that resolves when user makes a choice
+        return new Promise((resolve) => {
+            const confirmButton = dialogElement.querySelector('#confirm-delete');
+            const cancelButton = dialogElement.querySelector('#cancel-delete');
+            
+            const cleanup = () => {
+                document.body.removeChild(dialogElement);
+            };
+            
+            confirmButton.addEventListener('click', () => {
+                cleanup();
+                resolve(true);
             });
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ message: 'Failed to delete company and could not parse error.' }));
-                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            
+            cancelButton.addEventListener('click', () => {
+                cleanup();
+                resolve(false);
+            });
+            
+            // Close on ESC key
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                    cleanup();
+                    resolve(false);
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            };
+            document.addEventListener('keydown', handleEscape);
+        }).then(async (confirmed) => {
+            if (!confirmed) {
+                return;
             }
-            allCompanies = allCompanies.filter(company => company._id !== companyId);
-            filterAndSearchCompanies();
-            alert(`Company "${companyName}" deleted successfully.`);
-        } catch (error) {
-            console.error('[JS directory.js] Error deleting company:', error);
-            alert(`Failed to delete company: ${error.message}`);
-        }
+            
+            console.log(`[JS directory.js] Deleting company ID: ${companyId}`);
+            
+            // Show loading indicator
+            const loadingHtml = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; justify-content: center; align-items: center;">
+                    <div style="background: white; padding: 2rem; border-radius: 8px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+                        <div style="display: inline-block; width: 32px; height: 32px; border: 3px solid #f3f4f6; border-top: 3px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1rem;"></div>
+                        <p style="margin: 0; color: #1f2937; font-weight: 500;">Deleting company...</p>
+                        <p style="margin: 0.5rem 0 0 0; color: #6b7280; font-size: 0.875rem;">Please wait while we remove all data</p>
+                    </div>
+                </div>
+                <style>
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+            `;
+            
+            const loadingElement = document.createElement('div');
+            loadingElement.innerHTML = loadingHtml;
+            document.body.appendChild(loadingElement);
+            
+            try {
+                const baseApiUrl = getBaseApiUrl();
+                const deleteApiUrl = `${baseApiUrl}/api/company/${companyId}`;
+                console.log('[JS directory.js] Deleting company from:', deleteApiUrl);
+
+                const response = await fetch(deleteApiUrl, {
+                    method: 'DELETE',
+                });
+                
+                // Remove loading indicator
+                document.body.removeChild(loadingElement);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ message: 'Failed to delete company and could not parse error.' }));
+                    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                console.log('[JS directory.js] Delete response:', result);
+                
+                // Update the UI
+                allCompanies = allCompanies.filter(company => company._id !== companyId);
+                filterAndSearchCompanies();
+                
+                // Show success message
+                const successHtml = `
+                    <div style="position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 10000; max-width: 400px;">
+                        <div style="display: flex; align-items: center;">
+                            <i class="fas fa-check-circle" style="margin-right: 0.75rem; font-size: 1.25rem;"></i>
+                            <div>
+                                <div style="font-weight: 600;">Company Deleted Successfully</div>
+                                <div style="font-size: 0.875rem; opacity: 0.9; margin-top: 0.25rem;">"${escapeHTML(companyName)}" has been permanently removed</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                const successElement = document.createElement('div');
+                successElement.innerHTML = successHtml;
+                document.body.appendChild(successElement);
+                
+                // Auto-remove success message after 5 seconds
+                setTimeout(() => {
+                    if (document.body.contains(successElement)) {
+                        document.body.removeChild(successElement);
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                // Remove loading indicator if it exists
+                if (document.body.contains(loadingElement)) {
+                    document.body.removeChild(loadingElement);
+                }
+                
+                console.error('[JS directory.js] Error deleting company:', error);
+                
+                // Show error message
+                const errorHtml = `
+                    <div style="position: fixed; top: 20px; right: 20px; background: #dc2626; color: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 10000; max-width: 400px;">
+                        <div style="display: flex; align-items: center;">
+                            <i class="fas fa-exclamation-circle" style="margin-right: 0.75rem; font-size: 1.25rem;"></i>
+                            <div>
+                                <div style="font-weight: 600;">Delete Failed</div>
+                                <div style="font-size: 0.875rem; opacity: 0.9; margin-top: 0.25rem;">${error.message}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                const errorElement = document.createElement('div');
+                errorElement.innerHTML = errorHtml;
+                document.body.appendChild(errorElement);
+                
+                // Auto-remove error message after 8 seconds
+                setTimeout(() => {
+                    if (document.body.contains(errorElement)) {
+                        document.body.removeChild(errorElement);
+                    }
+                }, 8000);
+            }
+        });
     }
 
     /** Utility function to escape HTML to prevent XSS. */
