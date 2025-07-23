@@ -569,6 +569,8 @@ class CompanyProfileManager {
         // Look for Twilio configuration fields
         const twilioSidInput = document.getElementById('twilioAccountSid');
         const twilioTokenInput = document.getElementById('twilioAuthToken');
+        const twilioApiKeyInput = document.getElementById('twilioApiKey');
+        const twilioApiSecretInput = document.getElementById('twilioApiSecret');
         
         if (twilioSidInput && this.currentData.twilioAccountSid) {
             twilioSidInput.value = this.currentData.twilioAccountSid;
@@ -576,6 +578,26 @@ class CompanyProfileManager {
         
         if (twilioTokenInput && this.currentData.twilioAuthToken) {
             twilioTokenInput.value = '••••••••••••••••'; // Mask for security
+        }
+        
+        if (twilioApiKeyInput && this.currentData.twilioApiKey) {
+            twilioApiKeyInput.value = this.currentData.twilioApiKey;
+        }
+        
+        if (twilioApiSecretInput && this.currentData.twilioApiSecret) {
+            twilioApiSecretInput.value = '••••••••••••••••'; // Mask for security
+        }
+
+        // Look for ElevenLabs configuration fields
+        const elevenLabsApiKeyInput = document.getElementById('elevenLabsApiKey');
+        const elevenLabsVoiceIdInput = document.getElementById('elevenLabsVoiceId');
+        
+        if (elevenLabsApiKeyInput && this.currentData.elevenLabsApiKey) {
+            elevenLabsApiKeyInput.value = '••••••••••••••••'; // Mask for security
+        }
+        
+        if (elevenLabsVoiceIdInput && this.currentData.elevenLabsVoiceId) {
+            elevenLabsVoiceIdInput.value = this.currentData.elevenLabsVoiceId;
         }
 
         // Setup phone numbers management
@@ -1097,16 +1119,31 @@ class CompanyProfileManager {
         const voiceSelect = document.getElementById('elevenlabsVoice');
         
         // Set current ElevenLabs settings if available
-        if (this.currentData?.aiSettings?.elevenLabs) {
-            const settings = this.currentData.aiSettings.elevenLabs;
-            
-            if (apiKeyInput && settings.apiKey) {
-                apiKeyInput.value = settings.apiKey.substring(0, 8) + '••••••••••••••••';
-            }
-            
-            if (voiceSelect && settings.voiceId) {
-                voiceSelect.value = settings.voiceId;
-            }
+        let apiKey = null;
+        let voiceId = null;
+        
+        // Check for API key in multiple locations
+        if (this.currentData?.elevenLabsApiKey) {
+            apiKey = this.currentData.elevenLabsApiKey;
+        } else if (this.currentData?.aiSettings?.elevenLabs?.apiKey) {
+            apiKey = this.currentData.aiSettings.elevenLabs.apiKey;
+        }
+        
+        // Check for voice ID in multiple locations
+        if (this.currentData?.elevenLabsVoiceId) {
+            voiceId = this.currentData.elevenLabsVoiceId;
+        } else if (this.currentData?.aiSettings?.elevenLabs?.voiceId) {
+            voiceId = this.currentData.aiSettings.elevenLabs.voiceId;
+        } else if (this.currentData?.voiceSettings?.voiceId) {
+            voiceId = this.currentData.voiceSettings.voiceId;
+        }
+        
+        if (apiKeyInput && apiKey) {
+            apiKeyInput.value = apiKey.substring(0, 8) + '••••••••••••••••';
+        }
+        
+        if (voiceSelect && voiceId) {
+            voiceSelect.value = voiceId;
         }
 
         // Track API key changes
@@ -1735,6 +1772,8 @@ class CompanyProfileManager {
         // Twilio credentials
         const twilioSid = document.getElementById('twilioAccountSid');
         const twilioToken = document.getElementById('twilioAuthToken');
+        const twilioApiKey = document.getElementById('twilioApiKey');
+        const twilioApiSecret = document.getElementById('twilioApiSecret');
         
         if (twilioSid?.value.trim()) {
             data.twilioAccountSid = twilioSid.value.trim();
@@ -1742,6 +1781,26 @@ class CompanyProfileManager {
         
         if (twilioToken?.value.trim() && twilioToken.value !== '••••••••••••••••') {
             data.twilioAuthToken = twilioToken.value.trim();
+        }
+        
+        if (twilioApiKey?.value.trim()) {
+            data.twilioApiKey = twilioApiKey.value.trim();
+        }
+        
+        if (twilioApiSecret?.value.trim() && twilioApiSecret.value !== '••••••••••••••••') {
+            data.twilioApiSecret = twilioApiSecret.value.trim();
+        }
+
+        // ElevenLabs credentials
+        const elevenLabsApiKey = document.getElementById('elevenLabsApiKey');
+        const elevenLabsVoiceId = document.getElementById('elevenLabsVoiceId');
+        
+        if (elevenLabsApiKey?.value.trim() && elevenLabsApiKey.value !== '••••••••••••••••') {
+            data.elevenLabsApiKey = elevenLabsApiKey.value.trim();
+        }
+        
+        if (elevenLabsVoiceId?.value.trim()) {
+            data.elevenLabsVoiceId = elevenLabsVoiceId.value.trim();
         }
 
         // Phone numbers
@@ -1830,12 +1889,16 @@ class CompanyProfileManager {
         const voiceSelect = document.getElementById('elevenlabsVoice');
         
         if (apiKeyInput?.value && !apiKeyInput.value.includes('••••')) {
+            // Save to both locations for consistency
+            data.elevenLabsApiKey = apiKeyInput.value;
             data.aiSettings = data.aiSettings || {};
             data.aiSettings.elevenLabs = data.aiSettings.elevenLabs || {};
             data.aiSettings.elevenLabs.apiKey = apiKeyInput.value;
         }
         
         if (voiceSelect?.value) {
+            // Save to both locations for consistency
+            data.elevenLabsVoiceId = voiceSelect.value;
             data.aiSettings = data.aiSettings || {};
             data.aiSettings.elevenLabs = data.aiSettings.elevenLabs || {};
             data.aiSettings.elevenLabs.voiceId = voiceSelect.value;

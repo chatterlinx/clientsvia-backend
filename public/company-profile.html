@@ -369,6 +369,38 @@
                                     </div>
                                 </div>
                                 
+                                <!-- ElevenLabs Configuration -->
+                                <div class="config-block mt-6">
+                                    <h3 class="font-semibold text-gray-700 mb-2">ElevenLabs Voice Integration</h3>
+                                    <p class="text-sm text-gray-500 mb-3">Configure ElevenLabs API for AI voice synthesis.</p>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label for="elevenLabsApiKey" class="form-label">ElevenLabs API Key</label>
+                                            <input type="password" id="elevenLabsApiKey" name="elevenLabsApiKey" class="form-input wider-textbox" placeholder="Enter ElevenLabs API Key">
+                                        </div>
+                                        <div>
+                                            <label for="elevenLabsVoiceId" class="form-label">Default Voice ID</label>
+                                            <input type="text" id="elevenLabsVoiceId" name="elevenLabsVoiceId" class="form-input wider-textbox" placeholder="e.g., rachel_21m00Tcm4TlvDq8ikWAM">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Additional API Configuration -->
+                                <div class="config-block mt-6">
+                                    <h3 class="font-semibold text-gray-700 mb-2">Additional API Keys</h3>
+                                    <p class="text-sm text-gray-500 mb-3">Configure additional integrations and services.</p>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label for="twilioApiKey" class="form-label">Twilio API Key (Optional)</label>
+                                            <input type="text" id="twilioApiKey" name="twilioApiKey" class="form-input wider-textbox" placeholder="SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                                        </div>
+                                        <div>
+                                            <label for="twilioApiSecret" class="form-label">Twilio API Secret (Optional)</label>
+                                            <input type="password" id="twilioApiSecret" name="twilioApiSecret" class="form-input wider-textbox" placeholder="Enter API Secret">
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 <div class="mt-8 pt-5 border-t border-gray-200">
                                     <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
                                         <i class="fas fa-save mr-2"></i>Save Configuration

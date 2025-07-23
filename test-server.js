@@ -11,7 +11,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Mock company API endpoint for testing - handles any company ID
-app.get('/api/companies/:id', (req, res) => {
+app.get('/api/company/:id', (req, res) => {
     const companyId = req.params.id;
     console.log('📡 Mock API: Company data requested for ID:', companyId);
     
@@ -32,19 +32,46 @@ app.get('/api/companies/:id', (req, res) => {
         tradeTypes: ["General Services", "Testing", "Development"],
         
         // Configuration data
-        twilioAccountSid: "ACtest123456789",
+        twilioAccountSid: "ACtest123456789abcdef",
+        twilioAuthToken: "test_auth_token_12345",
+        twilioApiKey: "SKtest_api_key_67890",
+        twilioApiSecret: "test_api_secret_xyz",
         phoneNumbers: [
-            { number: "+1-555-123-4567", friendlyName: "Main Line", isPrimary: true }
+            { number: "+1-555-123-4567", friendlyName: "Main Line", isPrimary: true },
+            { number: "+1-555-987-6543", friendlyName: "Support Line", isPrimary: false }
         ],
+        
+        // ElevenLabs Configuration
+        elevenLabsApiKey: "el_test_api_key_abcdef123456",
+        elevenLabsVoiceId: "rachel_21m00Tcm4TlvDq8ikWAM",
         
         // AI Settings
         aiSettings: {
             model: "gpt-4",
             personality: "professional",
             ttsProvider: "elevenlabs",
+            responseStyle: "conversational",
+            maxTokens: 150,
+            temperature: 0.7,
+            systemPrompt: "You are a helpful AI assistant for our test company.",
             elevenLabs: {
-                voiceId: "rachel"
+                voiceId: "rachel_21m00Tcm4TlvDq8ikWAM",
+                model: "eleven_monolingual_v1",
+                stability: 0.5,
+                similarityBoost: 0.75
             }
+        },
+        
+        // Voice Settings
+        voiceSettings: {
+            provider: "elevenlabs",
+            voiceId: "rachel_21m00Tcm4TlvDq8ikWAM",
+            speed: 1.0,
+            pitch: 1.0,
+            stability: 0.5,
+            similarityBoost: 0.75,
+            style: 0.0,
+            useSpeakerBoost: true
         },
         
         // Sample notes
@@ -68,6 +95,32 @@ app.get('/api/companies/:id', (req, res) => {
             { day: "sunday", enabled: false, start: "09:00", end: "17:00" }
         ],
         
+        // Calendar Settings
+        calendarSettings: {
+            bookingWindow: 30,
+            bufferTime: 15,
+            defaultDuration: 60,
+            timezone: "America/New_York",
+            allowWeekendBookings: false,
+            requireApproval: true,
+            sendConfirmations: true,
+            sendReminders: true,
+            reminderTime: 24
+        },
+        
+        // Agent Logic Settings
+        agentLogic: {
+            enabled: true,
+            automatedBooking: true,
+            requireHumanApproval: false,
+            transferToHuman: "complex_requests",
+            maxCallDuration: 10,
+            recordCalls: true,
+            transcribeCalls: true,
+            sentiment: "professional",
+            escalationKeywords: ["angry", "frustrated", "complaint", "supervisor"]
+        },
+        
         // Personality responses
         personalityResponses: {
             greeting: "Hello! Thank you for calling our test company. How can I help you today?",
@@ -82,7 +135,7 @@ app.get('/api/companies/:id', (req, res) => {
 });
 
 // Mock company update endpoint
-app.patch('/api/companies/:id', (req, res) => {
+app.patch('/api/company/:id', (req, res) => {
     const companyId = req.params.id;
     const updateData = req.body;
     
@@ -109,7 +162,7 @@ app.get('/', (req, res) => {
         <p>Available endpoints:</p>
         <ul>
             <li><a href="/company-profile?id=67759a35d7f4833f3e6ff3d8">Company Profile Test</a></li>
-            <li><a href="/api/companies/67759a35d7f4833f3e6ff3d8">Mock Company API</a></li>
+            <li><a href="/api/company/67759a35d7f4833f3e6ff3d8">Mock Company API</a></li>
         </ul>
     `);
 });
