@@ -17,15 +17,25 @@
         
         /* Global Navigation Styling */
         .nav-link-global { 
-            @apply px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-200 ease-in-out;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #6B7280;
+            text-decoration: none;
+            transition: all 0.2s ease-in-out;
             border: 1px solid transparent;
         }
         .nav-link-global:hover {
+            color: #4F46E5;
+            background-color: #EEF2FF;
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .nav-link-global.active { 
-            @apply bg-indigo-600 text-white font-semibold;
+            background-color: #4F46E5;
+            color: white;
+            font-weight: 600;
             box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
         }
         
@@ -88,7 +98,7 @@
                             <i class="fas fa-tachometer-alt mr-2"></i>Admin Dashboard
                         </a>
                     </div>
-                    <nav class="hidden md:flex space-x-8 items-center">
+                    <nav class="hidden md:flex items-center" style="gap: 20px;">
                         <a href="/index.html" class="nav-link-global" id="nav-home">Home</a>
                         <a href="/directory.html" class="nav-link-global" id="nav-directory">Directory</a>
                         <a href="/add-company.html" class="nav-link-global" id="nav-add-company">Add Company</a>
