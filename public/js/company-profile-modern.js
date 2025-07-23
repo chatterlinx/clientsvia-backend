@@ -1276,6 +1276,9 @@ class CompanyProfileManager {
         // Setup placeholder management
         this.setupPlaceholderManagement();
         
+        // Setup response category management
+        this.setupResponseCategoryManagement();
+        
         // Setup personality response fields
         this.setupPersonalityResponses();
         
@@ -1555,185 +1558,305 @@ class CompanyProfileManager {
     }
 
     /**
-     * Setup personality response fields
+     * Setup response category management functionality
      */
-    setupPersonalityResponses() {
-        const responseFields = [
-            { key: 'greeting', label: 'Greeting Response', icon: 'fas fa-hand-wave', description: 'How the agent greets callers when they first connect' },
-            { key: 'farewell', label: 'Farewell Response', icon: 'fas fa-hand-peace', description: 'How the agent says goodbye to callers' },
-            { key: 'hold', label: 'Hold Response', icon: 'fas fa-pause-circle', description: 'What the agent says when placing callers on hold' },
-            { key: 'transfer', label: 'Transfer Response', icon: 'fas fa-phone-flip', description: 'What the agent says when transferring calls' },
-            { key: 'unavailable', label: 'Service Unavailable', icon: 'fas fa-exclamation-triangle', description: 'Response when a service is not available' },
-            { key: 'businessHours', label: 'Business Hours Info', icon: 'fas fa-clock', description: 'How the agent communicates business hours' },
-            { key: 'afterHours', label: 'After Hours Response', icon: 'fas fa-moon', description: 'Response when calling outside business hours' },
-            { key: 'voicemail', label: 'Voicemail Instructions', icon: 'fas fa-voicemail', description: 'Instructions for leaving a voicemail' },
-            { key: 'callback', label: 'Callback Request', icon: 'fas fa-phone-volume', description: 'How the agent handles callback requests' }
-        ];
-
-        const responses = this.currentData?.personalityResponses || {};
-        const container = document.getElementById('personality-responses-list');
-        
-        if (!container) {
-            console.warn('❌ Personality responses container not found');
-            return;
+    setupResponseCategoryManagement() {
+        // Initialize response categories with defaults if not exists
+        if (!this.currentData.responseCategories) {
+            this.currentData.responseCategories = this.getDefaultResponseCategories();
         }
 
-        // Clear existing content
-        container.innerHTML = '';
+        // Populate the response categories
+        this.populateResponseCategories();
 
-        // Build form fields
-        responseFields.forEach(field => {
-            const fieldContainer = document.createElement('div');
-            fieldContainer.className = 'bg-white border border-gray-200 rounded-lg p-6 shadow-sm';
+        // Setup event listeners for response category management
+        this.setupResponseCategoryEventListeners();
+    }
+
+    /**
+     * Get default response categories
+     */
+    getDefaultResponseCategories() {
+        return {
+            greeting: {
+                label: 'Greeting Response',
+                icon: 'fas fa-hand-wave',
+                description: 'How the agent greets callers when they first connect',
+                defaultTemplate: 'Hello! Thank you for calling {companyname}. How can I help you today?'
+            },
+            farewell: {
+                label: 'Farewell Response',
+                icon: 'fas fa-hand-peace',
+                description: 'How the agent says goodbye to callers',
+                defaultTemplate: 'Thank you for choosing {companyname}. Have a wonderful day!'
+            },
+            hold: {
+                label: 'Hold Response',
+                icon: 'fas fa-pause-circle',
+                description: 'What the agent says when placing callers on hold',
+                defaultTemplate: 'Please hold for just a moment while I check on that for you.'
+            },
+            transfer: {
+                label: 'Transfer Response',
+                icon: 'fas fa-phone-flip',
+                description: 'What the agent says when transferring calls',
+                defaultTemplate: 'Let me transfer you to someone who can better assist you with that.'
+            },
+            unavailable: {
+                label: 'Service Unavailable',
+                icon: 'fas fa-exclamation-triangle',
+                description: 'Response when a service is not available',
+                defaultTemplate: 'I apologize, but that service is currently unavailable. Is there something else I can help you with?'
+            },
+            businessHours: {
+                label: 'Business Hours Info',
+                icon: 'fas fa-clock',
+                description: 'How the agent communicates business hours',
+                defaultTemplate: 'Our business hours are {businesshours}. We\'d be happy to help you during those times.'
+            },
+            afterHours: {
+                label: 'After Hours Response',
+                icon: 'fas fa-moon',
+                description: 'Response when calling outside business hours',
+                defaultTemplate: 'Thank you for calling {companyname}. We are currently closed. Please call back during business hours or leave a message.'
+            },
+            voicemail: {
+                label: 'Voicemail Instructions',
+                icon: 'fas fa-voicemail',
+                description: 'Instructions for leaving a voicemail',
+                defaultTemplate: 'Please leave your name, phone number, and a brief message after the tone, and we\'ll get back to you as soon as possible.'
+            },
+            callback: {
+                label: 'Callback Request',
+                icon: 'fas fa-phone-volume',
+                description: 'How the agent handles callback requests',
+                defaultTemplate: 'I\'d be happy to have someone call you back. What\'s the best number to reach you at?'
+            }
+        };
+    }
+
+    /**
+     * Populate response categories display
+     */
+    populateResponseCategories() {
+        const container = document.getElementById('response-categories-container');
+        if (!container) return;
+
+        container.innerHTML = '';
+        const categories = this.currentData.responseCategories || {};
+
+        Object.entries(categories).forEach(([key, category]) => {
+            const categoryCard = document.createElement('div');
+            categoryCard.className = 'bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow';
             
-            const currentValue = responses[field.key] || '';
-            const defaultValue = this.getDefaultPersonalityResponse(field.key);
-            
-            fieldContainer.innerHTML = `
-                <div class="flex items-start space-x-4">
-                    <div class="flex-shrink-0">
-                        <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-                            <i class="${field.icon} text-indigo-600"></i>
+            categoryCard.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                                <i class="${category.icon || 'fas fa-comment'} text-indigo-600 text-sm"></i>
+                            </div>
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="text-sm font-medium text-gray-900">${category.label}</h4>
+                            <p class="text-xs text-gray-500">${category.description || ''}</p>
+                            ${category.defaultTemplate ? `<p class="text-xs text-gray-400 mt-1 italic">Default: "${category.defaultTemplate.substring(0, 50)}${category.defaultTemplate.length > 50 ? '...' : ''}"</p>` : ''}
                         </div>
                     </div>
-                    <div class="flex-1">
-                        <label for="personality-${field.key}" class="block text-sm font-medium text-gray-900 mb-1">
-                            ${field.label}
-                        </label>
-                        <p class="text-sm text-gray-600 mb-3">${field.description}</p>
-                        <textarea
-                            id="personality-${field.key}"
-                            name="personality-${field.key}"
-                            rows="3"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                            placeholder="${defaultValue}"
-                        >${currentValue}</textarea>
-                        ${!currentValue ? `
-                        <div class="mt-2">
-                            <button type="button" class="text-xs text-indigo-600 hover:text-indigo-800 use-default-btn" data-field="${field.key}">
-                                <i class="fas fa-magic mr-1"></i>Use Default Response
-                            </button>
-                        </div>` : ''}
+                    <div class="flex items-center space-x-2">
+                        <button class="edit-response-category-btn text-indigo-600 hover:text-indigo-800 text-sm p-1" data-key="${key}" title="Edit Category">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="delete-response-category-btn text-red-600 hover:text-red-800 text-sm p-1" data-key="${key}" title="Delete Category">
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </div>
                 </div>
             `;
             
-            container.appendChild(fieldContainer);
-            
-            // Setup event listeners for this field
-            const textarea = fieldContainer.querySelector(`#personality-${field.key}`);
-            const useDefaultBtn = fieldContainer.querySelector('.use-default-btn');
-            
-            if (textarea) {
-                textarea.addEventListener('input', () => {
-                    this.setUnsavedChanges(true);
-                    console.log(`🎭 Personality ${field.key} updated`);
-                    
-                    // Show/hide default button based on content
-                    if (useDefaultBtn) {
-                        useDefaultBtn.style.display = textarea.value.trim() ? 'none' : 'inline-block';
-                    }
-                });
-            }
-            
-            if (useDefaultBtn) {
-                useDefaultBtn.addEventListener('click', () => {
-                    if (textarea) {
-                        textarea.value = defaultValue;
-                        textarea.dispatchEvent(new Event('input'));
-                        useDefaultBtn.style.display = 'none';
-                    }
-                });
-            }
+            container.appendChild(categoryCard);
         });
 
-        console.log('✅ Personality response fields created');
+        // Setup event listeners for the new buttons
+        this.setupResponseCategoryRowEventListeners();
     }
 
     /**
-     * Get default personality response for a field
+     * Setup event listeners for response category management
      */
-    getDefaultPersonalityResponse(field) {
-        const defaults = {
-            greeting: `Hello! Thank you for calling {companyname}. How can I help you today?`,
-            farewell: `Thank you for choosing {companyname}. Have a wonderful day!`,
-            hold: 'Please hold for just a moment while I check on that for you.',
-            transfer: 'Let me transfer you to someone who can better assist you with that.',
-            unavailable: 'I apologize, but that service is currently unavailable. Is there something else I can help you with?',
-            businessHours: 'Our business hours are {businesshours}. We\'d be happy to help you during those times.',
-            afterHours: `Thank you for calling {companyname}. We are currently closed. Please call back during business hours or leave a message.`,
-            voicemail: 'Please leave your name, phone number, and a brief message after the tone, and we\'ll get back to you as soon as possible.',
-            callback: 'I\'d be happy to have someone call you back. What\'s the best number to reach you at?'
+    setupResponseCategoryEventListeners() {
+        // Add response category button
+        const addBtn = document.getElementById('add-response-category-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => this.openResponseCategoryModal());
+        }
+
+        // Modal close buttons
+        const closeBtn = document.getElementById('close-response-category-modal');
+        const cancelBtn = document.getElementById('cancel-response-category');
+        const modal = document.getElementById('response-category-modal');
+
+        if (closeBtn) closeBtn.addEventListener('click', () => this.closeResponseCategoryModal());
+        if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeResponseCategoryModal());
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) this.closeResponseCategoryModal();
+            });
+        }
+
+        // Form submission
+        const form = document.getElementById('response-category-form');
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.saveResponseCategory();
+            });
+        }
+    }
+
+    /**
+     * Setup event listeners for response category cards
+     */
+    setupResponseCategoryRowEventListeners() {
+        // Edit buttons
+        document.querySelectorAll('.edit-response-category-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const key = e.target.closest('button').dataset.key;
+                this.editResponseCategory(key);
+            });
+        });
+
+        // Delete buttons
+        document.querySelectorAll('.delete-response-category-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const key = e.target.closest('button').dataset.key;
+                this.deleteResponseCategory(key);
+            });
+        });
+    }
+
+    /**
+     * Open response category modal for adding/editing
+     */
+    openResponseCategoryModal(categoryKey = null) {
+        const modal = document.getElementById('response-category-modal');
+        const title = document.getElementById('response-category-modal-title');
+        const submitText = document.getElementById('response-category-submit-text');
+        const form = document.getElementById('response-category-form');
+
+        if (categoryKey) {
+            // Edit mode
+            title.textContent = 'Edit Response Category';
+            submitText.textContent = 'Update Category';
+            const category = this.currentData.responseCategories[categoryKey];
+            document.getElementById('response-category-key').value = categoryKey;
+            document.getElementById('response-category-label').value = category.label;
+            document.getElementById('response-category-icon').value = category.icon || '';
+            document.getElementById('response-category-description').value = category.description || '';
+            document.getElementById('response-category-default').value = category.defaultTemplate || '';
+            form.dataset.editKey = categoryKey;
+        } else {
+            // Add mode
+            title.textContent = 'Add Response Category';
+            submitText.textContent = 'Add Category';
+            form.reset();
+            delete form.dataset.editKey;
+        }
+
+        modal.classList.remove('hidden');
+    }
+
+    /**
+     * Close response category modal
+     */
+    closeResponseCategoryModal() {
+        const modal = document.getElementById('response-category-modal');
+        modal.classList.add('hidden');
+    }
+
+    /**
+     * Save response category (add or update)
+     */
+    saveResponseCategory() {
+        const form = document.getElementById('response-category-form');
+        const key = document.getElementById('response-category-key').value.trim().toLowerCase();
+        const label = document.getElementById('response-category-label').value.trim();
+        const icon = document.getElementById('response-category-icon').value.trim();
+        const description = document.getElementById('response-category-description').value.trim();
+        const defaultTemplate = document.getElementById('response-category-default').value.trim();
+
+        if (!key || !label) {
+            this.showNotification('Please fill in required fields', 'error');
+            return;
+        }
+
+        // Validate category key
+        if (!/^[a-z0-9_]+$/.test(key)) {
+            this.showNotification('Category key can only contain lowercase letters, numbers, and underscores', 'error');
+            return;
+        }
+
+        const isEdit = form.dataset.editKey;
+        const categories = this.currentData.responseCategories || {};
+
+        // Check if key already exists (only for new categories)
+        if (!isEdit && categories[key]) {
+            this.showNotification('A category with this key already exists', 'error');
+            return;
+        }
+
+        // Save the category
+        categories[key] = {
+            label: label,
+            icon: icon || 'fas fa-comment',
+            description: description,
+            defaultTemplate: defaultTemplate
         };
 
-        return defaults[field] || 'Enter your custom response here...';
-    }
-
-    /**
-     * Setup personality form handlers
-     */
-    setupPersonalityFormHandlers() {
-        const personalityForm = document.getElementById('personality-responses-form');
-        if (!personalityForm) return;
-
-        // Find and setup save button
-        const saveBtn = personalityForm.querySelector('[data-save-type="personality"]') ||
-                       personalityForm.querySelector('button[type="submit"]');
+        this.currentData.responseCategories = categories;
+        this.setUnsavedChanges(true);
         
-        if (saveBtn) {
-            saveBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                await this.savePersonalityResponses();
-            });
-        }
-
-        // Setup form submission
-        personalityForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            await this.savePersonalityResponses();
-        });
+        // Refresh the display
+        this.populateResponseCategories();
+        
+        // Refresh the personality responses (they depend on categories)
+        this.setupPersonalityResponses();
+        
+        // Close modal
+        this.closeResponseCategoryModal();
+        
+        this.showNotification(`Response category "${label}" ${isEdit ? 'updated' : 'added'} successfully!`, 'success');
     }
 
     /**
-     * Save personality responses
+     * Edit response category
      */
-    async savePersonalityResponses() {
-        try {
-            console.log('💾 Saving personality responses...');
+    editResponseCategory(key) {
+        this.openResponseCategoryModal(key);
+    }
+
+    /**
+     * Delete response category
+     */
+    deleteResponseCategory(key) {
+        const category = this.currentData.responseCategories[key];
+        if (confirm(`Are you sure you want to delete the "${category.label}" response category? This will also remove any saved responses for this category.`)) {
+            delete this.currentData.responseCategories[key];
             
-            const responses = {};
-            const responseFields = [
-                'greeting', 'farewell', 'hold', 'transfer', 'unavailable',
-                'businessHours', 'afterHours', 'voicemail', 'callback'
-            ];
-
-            responseFields.forEach(field => {
-                const textarea = document.getElementById(`personality-${field}`);
-                if (textarea && textarea.value.trim()) {
-                    responses[field] = textarea.value.trim();
-                }
-            });
-
-            // Update current data
-            if (this.currentData) {
-                this.currentData.personalityResponses = responses;
+            // Also remove any saved responses for this category
+            if (this.currentData.personalityResponses && this.currentData.personalityResponses[key]) {
+                delete this.currentData.personalityResponses[key];
             }
-
-            // In a real implementation, this would make an API call to save just personality responses
-            // For now, we'll trigger the main save process to ensure data persistence
-            await this.saveAllChanges(false); // false = don't show duplicate notification
-
-            this.showNotification('Personality responses saved successfully!', 'success');
-            console.log('✅ Personality responses saved:', responses);
             
-        } catch (error) {
-            console.error('❌ Error saving personality responses:', error);
-            this.showNotification('Failed to save personality responses', 'error');
+            this.setUnsavedChanges(true);
+            this.populateResponseCategories();
+            this.setupPersonalityResponses(); // Refresh the response fields
+            this.showNotification(`Response category "${category.label}" deleted successfully!`, 'success');
         }
     }
 
     /**
-     * Populate AI Agent Logic tab with data
+     * Populate Agent Logic tab with data
      */
     populateAgentLogicTab() {
         console.log('🧠 Populating Agent Logic tab...');
@@ -2094,7 +2217,7 @@ class CompanyProfileManager {
         // Personality tab data
         this.collectPersonalityData(data);
         
-        // Agent Logic tab data
+        // // Agent Logic tab data
         this.collectAgentLogicData(data);
 
         console.log('📤 Collected form data:', data);
@@ -2269,12 +2392,10 @@ class CompanyProfileManager {
      */
     collectPersonalityData(data) {
         const responses = {};
-        const responseFields = [
-            'greeting', 'farewell', 'hold', 'transfer', 'unavailable',
-            'businessHours', 'afterHours', 'voicemail', 'callback'
-        ];
+        const responseCategories = this.currentData?.responseCategories || this.getDefaultResponseCategories();
 
-        responseFields.forEach(field => {
+        // Collect responses based on current response categories
+        Object.keys(responseCategories).forEach(field => {
             const input = document.getElementById(`personality-${field}`);
             if (input?.value.trim()) {
                 responses[field] = input.value.trim();
@@ -2283,6 +2404,11 @@ class CompanyProfileManager {
 
         if (Object.keys(responses).length > 0) {
             data.personalityResponses = responses;
+        }
+
+        // Include response categories if they exist
+        if (this.currentData?.responseCategories && Object.keys(this.currentData.responseCategories).length > 0) {
+            data.responseCategories = this.currentData.responseCategories;
         }
 
         // Include placeholders if they exist
@@ -2386,6 +2512,170 @@ class CompanyProfileManager {
         }
 
         console.log('✅ Header elements updated');
+    }
+
+    /**
+     * Setup personality response fields based on response categories
+     */
+    setupPersonalityResponses() {
+        const responseFields = this.currentData?.responseCategories || this.getDefaultResponseCategories();
+        const responses = this.currentData?.personalityResponses || {};
+        const container = document.getElementById('personality-responses-list');
+        
+        if (!container) {
+            console.warn('❌ Personality responses container not found');
+            return;
+        }
+
+        // Clear existing content
+        container.innerHTML = '';
+
+        // Build form fields based on response categories
+        Object.entries(responseFields).forEach(([key, field]) => {
+            const fieldContainer = document.createElement('div');
+            fieldContainer.className = 'bg-white border border-gray-200 rounded-lg p-6 shadow-sm';
+            
+            const currentValue = responses[key] || '';
+            const defaultValue = field.defaultTemplate || this.getDefaultPersonalityResponse(key);
+            
+            fieldContainer.innerHTML = `
+                <div class="flex items-start space-x-4">
+                    <div class="flex-shrink-0">
+                        <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                            <i class="${field.icon || 'fas fa-comment'} text-indigo-600"></i>
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <label for="personality-${key}" class="block text-sm font-medium text-gray-900 mb-1">
+                            ${field.label}
+                        </label>
+                        <p class="text-sm text-gray-600 mb-3">${field.description}</p>
+                        <textarea
+                            id="personality-${key}"
+                            name="personality-${key}"
+                            rows="3"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            placeholder="${defaultValue}"
+                        >${currentValue}</textarea>
+                        ${!currentValue ? `
+                        <div class="mt-2">
+                            <button type="button" class="text-xs text-indigo-600 hover:text-indigo-800 use-default-btn" data-field="${key}">
+                                <i class="fas fa-magic mr-1"></i>Use Default Response
+                            </button>
+                        </div>` : ''}
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(fieldContainer);
+            
+            // Setup event listeners for this field
+            const textarea = fieldContainer.querySelector(`#personality-${key}`);
+            const useDefaultBtn = fieldContainer.querySelector('.use-default-btn');
+            
+            if (textarea) {
+                textarea.addEventListener('input', () => {
+                    this.setUnsavedChanges(true);
+                    console.log(`🎭 Personality ${key} updated`);
+                    
+                    // Show/hide default button based on content
+                    if (useDefaultBtn) {
+                        useDefaultBtn.style.display = textarea.value.trim() ? 'none' : 'inline-block';
+                    }
+                });
+            }
+            
+            if (useDefaultBtn) {
+                useDefaultBtn.addEventListener('click', () => {
+                    if (textarea) {
+                        textarea.value = defaultValue;
+                        textarea.dispatchEvent(new Event('input'));
+                        useDefaultBtn.style.display = 'none';
+                    }
+                });
+            }
+        });
+
+        console.log('✅ Personality response fields created');
+    }
+
+    /**
+     * Get default personality response for a field (fallback)
+     */
+    getDefaultPersonalityResponse(field) {
+        const defaults = {
+            greeting: `Hello! Thank you for calling {companyname}. How can I help you today?`,
+            farewell: `Thank you for choosing {companyname}. Have a wonderful day!`,
+            hold: 'Please hold for just a moment while I check on that for you.',
+            transfer: 'Let me transfer you to someone who can better assist you with that.',
+            unavailable: 'I apologize, but that service is currently unavailable. Is there something else I can help you with?',
+            businessHours: 'Our business hours are {businesshours}. We\'d be happy to help you during those times.',
+            afterHours: `Thank you for calling {companyname}. We are currently closed. Please call back during business hours or leave a message.`,
+            voicemail: 'Please leave your name, phone number, and a brief message after the tone, and we\'ll get back to you as soon as possible.',
+            callback: 'I\'d be happy to have someone call you back. What\'s the best number to reach you at?'
+        };
+
+        return defaults[field] || 'Enter your custom response here...';
+    }
+
+    /**
+     * Setup personality form handlers
+     */
+    setupPersonalityFormHandlers() {
+        const personalityForm = document.getElementById('personality-responses-form');
+        if (!personalityForm) return;
+
+        // Find and setup save button
+        const saveBtn = personalityForm.querySelector('[data-save-type="personality"]') ||
+                       personalityForm.querySelector('button[type="submit"]');
+        
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.savePersonalityResponses();
+            });
+        }
+
+        // Setup form submission
+        personalityForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.savePersonalityResponses();
+        });
+    }
+
+    /**
+     * Save personality responses
+     */
+    async savePersonalityResponses() {
+        try {
+            console.log('💾 Saving personality responses...');
+            
+            const responses = {};
+            const responseCategories = this.currentData?.responseCategories || this.getDefaultResponseCategories();
+
+            Object.keys(responseCategories).forEach(field => {
+                const textarea = document.getElementById(`personality-${field}`);
+                if (textarea && textarea.value.trim()) {
+                    responses[field] = textarea.value.trim();
+                }
+            });
+
+            // Update current data
+            if (this.currentData) {
+                this.currentData.personalityResponses = responses;
+            }
+
+            // In a real implementation, this would make an API call to save just personality responses
+            // For now, we'll trigger the main save process to ensure data persistence
+            await this.saveAllChanges(false); // false = don't show duplicate notification
+
+            this.showNotification('Personality responses saved successfully!', 'success');
+            console.log('✅ Personality responses saved:', responses);
+            
+        } catch (error) {
+            console.error('❌ Error saving personality responses:', error);
+            this.showNotification('Failed to save personality responses', 'error');
+        }
     }
 }
 

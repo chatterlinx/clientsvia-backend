@@ -720,6 +720,26 @@
                                     </table>
                                 </div>
                             </div>
+
+                            <!-- Response Categories Management Section -->
+                            <div class="mb-8 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-semibold text-gray-900">
+                                        <i class="fas fa-comment-alt mr-2 text-indigo-600"></i>Response Categories
+                                    </h3>
+                                    <button type="button" id="add-response-category-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition duration-150">
+                                        <i class="fas fa-plus mr-1"></i>Add Response Category
+                                    </button>
+                                </div>
+                                <p class="text-sm text-gray-600 mb-4">
+                                    Manage response categories for different scenarios. Each category defines how your AI agent responds in specific situations.
+                                </p>
+                                
+                                <!-- Response Categories List -->
+                                <div id="response-categories-container" class="space-y-3">
+                                    <!-- Response categories will be populated here -->
+                                </div>
+                            </div>
                             <form id="personality-responses-form">
                                 <div id="personality-responses-list" class="space-y-4"></div>
                                 <div class="mt-8 pt-5 border-t border-gray-200">
@@ -775,6 +795,81 @@
                                         </button>
                                         <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700">
                                             <span id="placeholder-submit-text">Add Placeholder</span>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add/Edit Response Category Modal -->
+                    <div id="response-category-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+                        <div class="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+                            <div class="mt-3">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-medium text-gray-900" id="response-category-modal-title">Add Response Category</h3>
+                                    <button type="button" class="text-gray-400 hover:text-gray-600" id="close-response-category-modal">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <form id="response-category-form">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label for="response-category-key" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Category Key <span class="text-red-500">*</span>
+                                            </label>
+                                            <input type="text" id="response-category-key" name="response-category-key" 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                   placeholder="e.g., greeting, pricing, support" required>
+                                            <p class="text-xs text-gray-500 mt-1">Lowercase, no spaces (used for identification)</p>
+                                        </div>
+                                        <div>
+                                            <label for="response-category-label" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Display Label <span class="text-red-500">*</span>
+                                            </label>
+                                            <input type="text" id="response-category-label" name="response-category-label" 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                   placeholder="e.g., Greeting Response" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <label for="response-category-icon" class="block text-sm font-medium text-gray-700 mb-2">
+                                            Icon Class
+                                        </label>
+                                        <input type="text" id="response-category-icon" name="response-category-icon" 
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                               placeholder="e.g., fas fa-hand-wave">
+                                        <p class="text-xs text-gray-500 mt-1">FontAwesome icon class (optional)</p>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <label for="response-category-description" class="block text-sm font-medium text-gray-700 mb-2">
+                                            Description
+                                        </label>
+                                        <textarea id="response-category-description" name="response-category-description" 
+                                                  rows="2"
+                                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                  placeholder="Brief description of when this response is used"></textarea>
+                                    </div>
+                                    
+                                    <div class="mb-6">
+                                        <label for="response-category-default" class="block text-sm font-medium text-gray-700 mb-2">
+                                            Default Response Template
+                                        </label>
+                                        <textarea id="response-category-default" name="response-category-default" 
+                                                  rows="3"
+                                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                                  placeholder="Enter the default response template (you can use placeholders like {companyname})"></textarea>
+                                        <p class="text-xs text-gray-500 mt-1">Use placeholders like {companyname} for dynamic content</p>
+                                    </div>
+                                    
+                                    <div class="flex justify-end space-x-3">
+                                        <button type="button" id="cancel-response-category" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">
+                                            Cancel
+                                        </button>
+                                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+                                            <span id="response-category-submit-text">Add Category</span>
                                         </button>
                                     </div>
                                 </form>
