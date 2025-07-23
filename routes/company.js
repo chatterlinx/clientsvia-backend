@@ -47,6 +47,9 @@ router.post('/companies', async (req, res) => {
     try {
         const {
             companyName,
+            companyPhone,
+            companyAddress,
+            // Legacy fields (optional for backward compatibility)
             ownerName,
             ownerEmail,
             ownerPhone,
@@ -57,24 +60,70 @@ router.post('/companies', async (req, res) => {
             timezone
         } = req.body;
 
-        if (!companyName || !ownerName || !ownerEmail || !contactPhone || !timezone ||
-            !address || !address.street || !address.city || !address.state || !address.zip || !address.country) {
-            console.warn('[API POST /api/companies] Validation failed. Missing or invalid required fields. Data received:', req.body);
-            return res.status(400).json({ message: 'Missing required fields or timezone is missing.' });
-        }
+        // Check for simplified form (new workflow) vs legacy form
+        const isSimplifiedForm = companyPhone && companyAddress && !ownerName && !ownerEmail;
+        
+        let newCompanyData;
+        
+        if (isSimplifiedForm) {
+            // New simplified validation - only requires company name, phone, and address
+            if (!companyName || !companyPhone || !companyAddress) {
+                console.warn('[API POST /api/companies] Simplified form validation failed. Missing required fields:', {
+                    companyName: !!companyName,
+                    companyPhone: !!companyPhone,
+                    companyAddress: !!companyAddress
+                });
+                return res.status(400).json({ message: 'Missing required fields: Company Name, Phone Number, and Address are required.' });
+            }
 
-        const newCompanyData = {
-            companyName,
-            tradeTypes: [],
-            ownerName,
-            ownerEmail,
-            ownerPhone: ownerPhone || null,
-            contactName: contactName || null,
-            contactEmail: contactEmail || null,
-            contactPhone,
-            address,
-            timezone: timezone || 'America/New_York'
-        };
+            newCompanyData = {
+                companyName,
+                companyPhone,
+                companyAddress,
+                // Set defaults for fields to be completed later
+                tradeTypes: [],
+                ownerName: null,
+                ownerEmail: null,
+                ownerPhone: null,
+                contactName: null,
+                contactEmail: null,
+                contactPhone: null,
+                address: {
+                    street: '',
+                    city: '',
+                    state: '',
+                    zip: '',
+                    country: 'USA'
+                },
+                timezone: timezone || 'America/New_York',
+                status: 'active',
+                profileComplete: false // Flag to track if additional details have been added
+            };
+
+            console.log('[API POST /api/companies] Creating simplified company with data:', newCompanyData);
+            
+        } else {
+            // Legacy validation for backward compatibility
+            if (!companyName || !ownerName || !ownerEmail || !contactPhone || !timezone ||
+                !address || !address.street || !address.city || !address.state || !address.zip || !address.country) {
+                console.warn('[API POST /api/companies] Legacy form validation failed. Missing or invalid required fields. Data received:', req.body);
+                return res.status(400).json({ message: 'Missing required fields or timezone is missing.' });
+            }
+
+            newCompanyData = {
+                companyName,
+                tradeTypes: [],
+                ownerName,
+                ownerEmail,
+                ownerPhone: ownerPhone || null,
+                contactName: contactName || null,
+                contactEmail: contactEmail || null,
+                contactPhone,
+                address,
+                timezone: timezone || 'America/New_York',
+                profileComplete: true
+            };
+        }
 
         // Use Mongoose model to create the company with all default values
         const newCompany = new Company(newCompanyData);

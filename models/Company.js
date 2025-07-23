@@ -209,15 +209,25 @@ const agentSetupSchema = new mongoose.Schema({
 // --- Main Company Schema ---
 const companySchema = new mongoose.Schema({
     companyName: { type: String, required: [true, 'Company name is required.'], trim: true },
-    ownerName: { type: String, required: [true, 'Owner name is required.'], trim: true },
-    ownerEmail: { type: String, required: [true, 'Owner email is required.'], trim: true, lowercase: true },
+    
+    // New simplified fields for basic company creation
+    companyPhone: { type: String, trim: true, default: null }, // Primary company phone number
+    companyAddress: { type: String, trim: true, default: null }, // Full address as single string
+    
+    // Legacy/detailed fields (now optional - filled in Overview tab)
+    ownerName: { type: String, trim: true, default: null }, // Removed required validation
+    ownerEmail: { type: String, trim: true, default: null, lowercase: true }, // Removed required validation
     ownerPhone: { type: String, trim: true, default: null },
     contactName: { type: String, trim: true, default: null },
     contactEmail: { type: String, trim: true, default: null, lowercase: true },
-    contactPhone: { type: String, required: [true, 'Contact phone is required.'], trim: true },
-    address: { type: addressSchema, default: () => ({}) },
+    contactPhone: { type: String, trim: true, default: null }, // Removed required validation
+    
+    address: { type: addressSchema, default: () => ({}) }, // Detailed address object (optional)
     tradeTypes: { type: [String], default: [] }, 
     timezone: { type: String, default: 'America/New_York', trim: true },
+    
+    // Profile completion tracking
+    profileComplete: { type: Boolean, default: false }, // Track if detailed info has been added
     
     twilioConfig: { type: twilioConfigSchema, default: () => ({}) },
     smsSettings: { type: smsSettingsSchema, default: () => ({}) },
