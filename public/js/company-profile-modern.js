@@ -364,9 +364,8 @@ class CompanyProfileManager {
                                placeholder="123 Main St, City, State 12345">
                     </div>
                     <div class="md:col-span-2 space-y-1">
-                        <label class="form-label text-gray-700 font-medium">Description</label>
-                        <textarea id="edit-description" class="form-textarea focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" rows="3" 
-                                  placeholder="Describe your business and services...">${this.escapeHtml(this.currentData.description || '')}</textarea>
+                        <label class="form-label text-gray-700 font-medium">Description</label>                        <textarea id="edit-description" class="form-textarea wider-textbox focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" rows="3" 
+                            placeholder="Describe your business and services...">${this.escapeHtml(this.currentData.description || '')}</textarea>
                     </div>
                     <div class="space-y-1">
                         <label class="form-label text-gray-700 font-medium">Service Area</label>
@@ -477,7 +476,7 @@ class CompanyProfileManager {
                 </div>
                 <div class="md:col-span-2">
                     <label class="form-label">Description</label>
-                    <textarea id="edit-description" class="form-textarea" rows="3">${this.escapeHtml(this.currentData.description || '')}</textarea>
+                    <textarea id="edit-description" class="form-textarea wider-textbox" rows="3">${this.escapeHtml(this.currentData.description || '')}</textarea>
                 </div>
                 <div>
                     <label class="form-label">Service Area</label>
@@ -2705,7 +2704,7 @@ class CompanyProfileManager {
                         </div>
                         <div class="mb-2">
                             <label class="form-label">Notes</label>
-                            <textarea class="form-textarea contact-notes" data-cidx="${cIdx}" rows="2" placeholder="Special notes about this contact...">${contact.notes||''}</textarea>
+                            <textarea class="form-textarea wider-textbox contact-notes" data-cidx="${cIdx}" rows="2" placeholder="Special notes about this contact...">${contact.notes||''}</textarea>
                         </div>
                     </div>
                     <div class="flex flex-col items-end justify-between ml-0 md:ml-4 mt-4 md:mt-0">
