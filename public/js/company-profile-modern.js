@@ -2263,7 +2263,8 @@ class CompanyProfileManager {
 
         Object.entries(fields).forEach(([inputId, dataKey]) => {
             const input = document.getElementById(inputId);
-            if (input && input.value.trim()) {
+            if (input) {
+                // Always include the field, even if empty (to allow clearing values)
                 data[dataKey] = input.value.trim();
                 
                 // For backward compatibility with simplified workflow,
