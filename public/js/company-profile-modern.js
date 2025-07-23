@@ -1732,6 +1732,22 @@ class CompanyProfileManager {
                 panel.classList.add('hidden');
             }
         });
+
+        // Handle lazy loading for specific tabs
+        if (tabName === 'personality-responses') {
+            this.ensurePersonalityTabLoaded();
+        }
+    }
+
+    /**
+     * Ensure personality tab is properly loaded when accessed
+     */
+    ensurePersonalityTabLoaded() {
+        const container = document.getElementById('personality-responses-list');
+        if (container && container.children.length === 0) {
+            console.log('🎭 Lazy loading personality responses...');
+            this.setupPersonalityResponses();
+        }
     }
 
     /**
