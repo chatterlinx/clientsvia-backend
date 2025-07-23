@@ -197,8 +197,8 @@ class CompanyProfileManager {
 
         this.saveButton = document.createElement('button');
         this.saveButton.id = 'floating-save-btn';
-        this.saveButton.className = 'fixed bottom-6 right-6 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg z-50 transition-all duration-300 transform translate-y-20 opacity-0';
-        this.saveButton.innerHTML = '<i class="fas fa-save mr-2"></i>Save Changes';
+        this.saveButton.className = 'fixed bottom-6 right-6 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-8 rounded-xl shadow-2xl z-50 transition-all duration-300 transform translate-y-20 opacity-0 border-2 border-green-400';
+        this.saveButton.innerHTML = '<i class="fas fa-save mr-3 text-lg"></i><span class="text-lg">Save Changes</span>';
         this.saveButton.style.display = 'none';
         
         this.saveButton.addEventListener('click', async () => {
@@ -206,6 +206,7 @@ class CompanyProfileManager {
         });
         
         document.body.appendChild(this.saveButton);
+        console.log('✅ Floating save button created');
     }
 
     /**
@@ -214,6 +215,7 @@ class CompanyProfileManager {
     showSaveButton() {
         if (!this.saveButton) return;
         
+        console.log('💾 Showing save button');
         this.saveButton.style.display = 'block';
         setTimeout(() => {
             this.saveButton.classList.remove('translate-y-20', 'opacity-0');
@@ -316,66 +318,69 @@ class CompanyProfileManager {
         if (!this.domElements.editFormContainer) return;
 
         const formHTML = `
-            <div class="bg-white rounded-lg border border-gray-200 p-6">
+            <div class="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
                 <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-lg font-semibold text-gray-900">Company Information</h3>
-                    <span class="text-sm text-gray-500">All fields are editable</span>
+                    <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                        <i class="fas fa-building text-indigo-600 mr-2"></i>
+                        Company Information
+                    </h3>
+                    <span class="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">All fields are editable</span>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label class="form-label">Company Name *</label>
-                        <input type="text" id="edit-company-name" class="form-input" 
+                    <div class="space-y-1">
+                        <label class="form-label text-gray-700 font-medium">Company Name *</label>
+                        <input type="text" id="edit-company-name" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
                                value="${this.escapeHtml(this.currentData.companyName || this.currentData.name || '')}"
                                placeholder="Enter company name">
                     </div>
-                    <div>
-                        <label class="form-label">Business Phone</label>
-                        <input type="tel" id="edit-business-phone" class="form-input" 
+                    <div class="space-y-1">
+                        <label class="form-label text-gray-700 font-medium">Business Phone</label>
+                        <input type="tel" id="edit-business-phone" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
                                value="${this.escapeHtml(this.currentData.businessPhone || '')}"
                                placeholder="+1-555-123-4567">
                     </div>
-                    <div>
-                        <label class="form-label">Business Email</label>
-                        <input type="email" id="edit-business-email" class="form-input" 
+                    <div class="space-y-1">
+                        <label class="form-label text-gray-700 font-medium">Business Email</label>
+                        <input type="email" id="edit-business-email" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
                                value="${this.escapeHtml(this.currentData.businessEmail || '')}"
                                placeholder="contact@company.com">
                     </div>
-                    <div>
-                        <label class="form-label">Website</label>
-                        <input type="url" id="edit-business-website" class="form-input" 
+                    <div class="space-y-1">
+                        <label class="form-label text-gray-700 font-medium">Website</label>
+                        <input type="url" id="edit-business-website" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
                                value="${this.escapeHtml(this.currentData.businessWebsite || '')}"
                                placeholder="https://www.company.com">
                     </div>
-                    <div class="md:col-span-2">
-                        <label class="form-label">Business Address</label>
-                        <input type="text" id="edit-business-address" class="form-input" 
+                    <div class="md:col-span-2 space-y-1">
+                        <label class="form-label text-gray-700 font-medium">Business Address</label>
+                        <input type="text" id="edit-business-address" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
                                value="${this.escapeHtml(this.currentData.businessAddress || '')}"
                                placeholder="123 Main St, City, State 12345">
                     </div>
-                    <div class="md:col-span-2">
-                        <label class="form-label">Description</label>
-                        <textarea id="edit-description" class="form-textarea" rows="3" 
+                    <div class="md:col-span-2 space-y-1">
+                        <label class="form-label text-gray-700 font-medium">Description</label>
+                        <textarea id="edit-description" class="form-textarea focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" rows="3" 
                                   placeholder="Describe your business and services...">${this.escapeHtml(this.currentData.description || '')}</textarea>
                     </div>
-                    <div>
-                        <label class="form-label">Service Area</label>
-                        <input type="text" id="edit-service-area" class="form-input" 
+                    <div class="space-y-1">
+                        <label class="form-label text-gray-700 font-medium">Service Area</label>
+                        <input type="text" id="edit-service-area" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
                                value="${this.escapeHtml(this.currentData.serviceArea || '')}"
                                placeholder="Greater Metro Area">
                     </div>
-                    <div>
-                        <label class="form-label">Business Hours</label>
-                        <input type="text" id="edit-business-hours" class="form-input" 
+                    <div class="space-y-1">
+                        <label class="form-label text-gray-700 font-medium">Business Hours</label>
+                        <input type="text" id="edit-business-hours" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
                                value="${this.escapeHtml(this.currentData.businessHours || '')}"
                                placeholder="Monday-Friday: 9:00 AM - 5:00 PM">
                     </div>
                 </div>
                 
-                <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div class="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
                     <div class="flex items-center">
-                        <i class="fas fa-info-circle text-blue-600 mr-2"></i>
-                        <span class="text-sm text-blue-800">Changes are tracked automatically. Save button will appear when you make edits.</span>
+                        <i class="fas fa-magic text-blue-600 mr-2"></i>
+                        <span class="text-sm text-blue-800 font-medium">Live editing enabled - Save button appears automatically when you make changes</span>
                     </div>
                 </div>
             </div>
