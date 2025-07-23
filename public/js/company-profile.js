@@ -58,6 +58,110 @@ function clearUnsavedChanges() {
     hasUnsavedChanges = false;
 }
 
+function createSaveButton() {
+    // Create save button if it doesn't exist
+    const saveButton = document.createElement('button');
+    saveButton.id = 'save-changes-btn';
+    saveButton.className = 'fixed bottom-6 right-6 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg z-50 transition-all duration-300 transform translate-y-20 opacity-0';
+    saveButton.innerHTML = '<i class="fas fa-save mr-2"></i>Save Changes';
+    saveButton.style.display = 'none';
+    
+    saveButton.addEventListener('click', async () => {
+        try {
+            await saveAllChanges();
+            showNotification('All changes saved successfully!', 'success');
+            hideSaveButton();
+            clearUnsavedChanges();
+        } catch (error) {
+            showNotification('Failed to save changes', 'error');
+        }
+    });
+    
+    document.body.appendChild(saveButton);
+    return saveButton;
+}
+
+function initializeUnsavedChangesTracking() {
+    console.log('🔄 Initializing unsaved changes tracking...');
+    
+    // Track all form inputs, selects, and textareas
+    document.addEventListener('input', (e) => {
+        if (e.target.matches('input, textarea, select')) {
+            console.log('📝 Change detected:', e.target.name || e.target.id, e.target.value);
+            setUnsavedChanges();
+        }
+    });
+    
+    // Track checkbox changes
+    document.addEventListener('change', (e) => {
+        if (e.target.matches('input[type="checkbox"], input[type="radio"]')) {
+            console.log('☑️ Checkbox/Radio change detected:', e.target.name || e.target.id, e.target.checked);
+            setUnsavedChanges();
+        }
+    });
+    
+    // Warn before leaving page with unsaved changes
+    window.addEventListener('beforeunload', (e) => {
+        if (hasUnsavedChanges) {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved changes. Are you sure you want to leave without saving?';
+            return e.returnValue;
+        }
+    });
+    
+    console.log('✅ Unsaved changes tracking initialized');
+}
+
+function showSaveButton() {
+    const saveButton = document.getElementById('save-changes-btn');
+    if (saveButton) {
+        saveButton.style.display = 'block';
+        // Animate in
+        setTimeout(() => {
+            saveButton.classList.remove('translate-y-20', 'opacity-0');
+            saveButton.classList.add('translate-y-0', 'opacity-100');
+        }, 10);
+    }
+}
+
+function hideSaveButton() {
+    const saveButton = document.getElementById('save-changes-btn');
+    if (saveButton) {
+        saveButton.classList.add('translate-y-20', 'opacity-0');
+        saveButton.classList.remove('translate-y-0', 'opacity-100');
+        setTimeout(() => {
+            saveButton.style.display = 'none';
+        }, 300);
+    }
+}
+
+function setUnsavedChanges() {
+    if (!hasUnsavedChanges) {
+        hasUnsavedChanges = true;
+        showSaveButton();
+        console.log('💾 Unsaved changes detected - Save button shown');
+    }
+}
+
+function clearUnsavedChanges() {
+    hasUnsavedChanges = false;
+    hideSaveButton();
+    console.log('✅ Changes saved - Save button hidden');
+}
+
+async function saveAllChanges() {
+    console.log('💾 Saving all changes...');
+    
+    // This will save all the current form data
+    try {
+        await saveCompanyData();
+        console.log('✅ Company data saved');
+    } catch (error) {
+        console.error('❌ Error saving company data:', error);
+        throw error;
+    }
+}
+
 // =============================================
 // UTILITY FUNCTIONS
 // =============================================
@@ -264,37 +368,82 @@ function populateCompanyData(data) {
     
     console.log('📝 Populating company data', data);
     
+    // ==========================================
+    // OVERVIEW TAB - PRIORITY FIX
+    // ==========================================
+    
     // Header information - using actual API field names
     const companyNameHeader = document.getElementById('company-name-header');
     const companyIdSubheader = document.getElementById('company-id-subheader');
     
+    console.log('🔍 Header elements found:', { companyNameHeader, companyIdSubheader });
+    
     if (companyNameHeader) {
         companyNameHeader.textContent = data.companyName || data.name || 'Unknown Company';
+        console.log('✅ Updated header name to:', companyNameHeader.textContent);
+    } else {
+        console.error('❌ Company name header element not found');
     }
+    
     if (companyIdSubheader) {
         companyIdSubheader.textContent = `ID: ${data._id || 'Unknown'}`;
+        console.log('✅ Updated header ID to:', companyIdSubheader.textContent);
+    } else {
+        console.error('❌ Company ID subheader element not found');
     }
     
     // Overview tab display elements
-    const companyNameView = document.getElementById('company-name-view');
-    const companyOwnerView = document.getElementById('company-owner-view');
-    const companyOwnerEmailView = document.getElementById('company-owner-email-view');
-    const companyOwnerPhoneView = document.getElementById('company-owner-phone-view');
-    const companyContactNameView = document.getElementById('company-contact-name-view');
-    const companyContactEmailView = document.getElementById('company-contact-email-view');
-    const companyContactPhoneView = document.getElementById('company-contact-phone-view');
-    const companyAddressView = document.getElementById('company-address-view');
+    const overviewElements = {
+        companyNameView: document.getElementById('company-name-view'),
+        companyOwnerView: document.getElementById('company-owner-view'),
+        companyOwnerEmailView: document.getElementById('company-owner-email-view'),
+        companyOwnerPhoneView: document.getElementById('company-owner-phone-view'),
+        companyContactNameView: document.getElementById('company-contact-name-view'),
+        companyContactEmailView: document.getElementById('company-contact-email-view'),
+        companyContactPhoneView: document.getElementById('company-contact-phone-view'),
+        companyAddressView: document.getElementById('company-address-view')
+    };
     
-    if (companyNameView) companyNameView.textContent = data.companyName || data.name || '';
-    if (companyOwnerView) companyOwnerView.textContent = data.ownerName || '';
-    if (companyOwnerEmailView) companyOwnerEmailView.textContent = data.ownerEmail || '';
-    if (companyOwnerPhoneView) companyOwnerPhoneView.textContent = data.ownerPhone || '';
-    if (companyContactNameView) companyContactNameView.textContent = data.contactName || '';
-    if (companyContactEmailView) companyContactEmailView.textContent = data.contactEmail || '';
-    if (companyContactPhoneView) companyContactPhoneView.textContent = data.contactPhone || '';
+    console.log('🔍 Overview elements found:', overviewElements);
+    
+    // Populate Overview tab elements
+    if (overviewElements.companyNameView) {
+        overviewElements.companyNameView.textContent = data.companyName || data.name || 'No name provided';
+        console.log('✅ Updated company name view:', overviewElements.companyNameView.textContent);
+    }
+    
+    if (overviewElements.companyOwnerView) {
+        overviewElements.companyOwnerView.textContent = data.ownerName || 'No owner provided';
+        console.log('✅ Updated owner view:', overviewElements.companyOwnerView.textContent);
+    }
+    
+    if (overviewElements.companyOwnerEmailView) {
+        overviewElements.companyOwnerEmailView.textContent = data.ownerEmail || 'No email provided';
+        console.log('✅ Updated owner email view:', overviewElements.companyOwnerEmailView.textContent);
+    }
+    
+    if (overviewElements.companyOwnerPhoneView) {
+        overviewElements.companyOwnerPhoneView.textContent = data.ownerPhone || 'No phone provided';
+        console.log('✅ Updated owner phone view:', overviewElements.companyOwnerPhoneView.textContent);
+    }
+    
+    if (overviewElements.companyContactNameView) {
+        overviewElements.companyContactNameView.textContent = data.contactName || 'No contact provided';
+        console.log('✅ Updated contact name view:', overviewElements.companyContactNameView.textContent);
+    }
+    
+    if (overviewElements.companyContactEmailView) {
+        overviewElements.companyContactEmailView.textContent = data.contactEmail || 'No contact email provided';
+        console.log('✅ Updated contact email view:', overviewElements.companyContactEmailView.textContent);
+    }
+    
+    if (overviewElements.companyContactPhoneView) {
+        overviewElements.companyContactPhoneView.textContent = data.contactPhone || 'No contact phone provided';
+        console.log('✅ Updated contact phone view:', overviewElements.companyContactPhoneView.textContent);
+    }
     
     // Address formatting
-    if (companyAddressView && data.address) {
+    if (overviewElements.companyAddressView && data.address) {
         const address = data.address;
         const fullAddress = [
             address.street,
@@ -303,92 +452,65 @@ function populateCompanyData(data) {
             address.zip || address.zipCode,
             address.country
         ].filter(Boolean).join(', ');
-        companyAddressView.textContent = fullAddress || 'No address provided';
+        overviewElements.companyAddressView.textContent = fullAddress || 'No address provided';
+        console.log('✅ Updated address view:', overviewElements.companyAddressView.textContent);
+    } else if (overviewElements.companyAddressView) {
+        overviewElements.companyAddressView.textContent = 'No address provided';
+        console.log('✅ Set default address message');
     }
     
-    // Basic company information - mapping API fields to form fields  
-    if (window.companyNameInput) window.companyNameInput.value = data.companyName || data.name || '';
-    if (window.companyEmailInput) window.companyEmailInput.value = data.email || data.ownerEmail || '';
-    if (window.companyPhoneInput) window.companyPhoneInput.value = data.phone || data.ownerPhone || '';
-    if (window.companyWebsiteInput) window.companyWebsiteInput.value = data.website || '';
+    console.log('🎯 OVERVIEW TAB POPULATION COMPLETE');
     
-    // Address information
-    if (data.address) {
-        if (window.addressStreetInput) window.addressStreetInput.value = data.address.street || '';
-        if (window.addressCityInput) window.addressCityInput.value = data.address.city || '';
-        if (window.addressStateInput) window.addressStateInput.value = data.address.state || '';
-        if (window.addressZipInput) window.addressZipInput.value = data.address.zipCode || '';
-        if (window.addressCountryInput) window.addressCountryInput.value = data.address.country || '';
-    }
+    // ==========================================
+    // OTHER TABS - WILL FIX LATER
+    // ==========================================
     
-    // Configuration Tab - Twilio Settings
-    if (data.twilioConfig) {
-        if (window.twilioAccountSidInput) window.twilioAccountSidInput.value = data.twilioConfig.accountSid || '';
-        if (window.twilioAuthTokenInput) window.twilioAuthTokenInput.value = data.twilioConfig.authToken || '';
-        if (window.primaryPhoneNumberInput) window.primaryPhoneNumberInput.value = data.twilioConfig.phoneNumber || '';
-        
-        // Populate additional phone numbers if available
-        if (data.twilioConfig.phoneNumbers && data.twilioConfig.phoneNumbers.length > 0) {
-            populateAdditionalPhoneNumbers(data.twilioConfig.phoneNumbers);
-        }
-        
-        console.log('📞 Twilio settings populated:', {
-            accountSid: data.twilioConfig.accountSid,
-            phoneNumber: data.twilioConfig.phoneNumber,
-            additionalNumbers: data.twilioConfig.phoneNumbers?.length || 0
-        });
-    }
+    // TODO: Will implement other tabs systematically
+    // - Configuration tab
+    // - Calendar settings  
+    // - AI Settings
+    // - Trade categories
+    // - Personality responses
     
-    // AI Settings
-    if (data.aiSettings) {
-        if (window.aiModelSelect) window.aiModelSelect.value = data.aiSettings.model || '';
-        if (window.aiPersonalitySelect) window.aiPersonalitySelect.value = data.aiSettings.personality || '';
-        if (window.ttsProviderSelect) window.ttsProviderSelect.value = data.aiSettings.ttsProvider || '';
-        
-        // ElevenLabs Settings
-        if (data.aiSettings.elevenLabs) {
-            if (window.elevenlabsApiKeyInput) window.elevenlabsApiKeyInput.value = data.aiSettings.elevenLabs.apiKey || '';
-            if (window.elevenlabsVoiceSelect) window.elevenlabsVoiceSelect.value = data.aiSettings.elevenLabs.voiceId || '';
-        }
-    }
-    
-    // Calendar Settings
-    if (window.timezoneSelect) window.timezoneSelect.value = data.timezone || '';
-    
-    // Populate operating hours if available
-    if (data.agentSetup && data.agentSetup.operatingHours) {
-        populateOperatingHours(data.agentSetup.operatingHours);
-    }
-    
-    // Populate agent personality responses
-    populatePersonalityResponses(data.agentSetup?.personalityResponses || data.aiAgentSetup?.personalityResponses || {});
-    
-    // Populate trade categories
-    populateTradeCategories(data.tradeTypes || []);
-    
-    console.log('✅ Company data populated successfully');
+    console.log('✅ Company data populated successfully (Overview tab focused)');
 }
 
 async function saveCompanyData() {
     try {
         console.log('💾 Saving company data...');
         
+        // Collect all form data from Overview tab and other editable fields
         const formData = {
-            name: window.companyNameInput?.value || '',
-            email: window.companyEmailInput?.value || '',
-            phone: window.companyPhoneInput?.value || '',
+            // Basic company information
+            companyName: window.companyNameInput?.value || '',
+            ownerName: window.ownerNameInput?.value || '',
+            ownerEmail: window.ownerEmailInput?.value || '',
+            ownerPhone: window.ownerPhoneInput?.value || '',
+            contactName: window.contactNameInput?.value || '',
+            contactEmail: window.contactEmailInput?.value || '',
+            contactPhone: window.contactPhoneInput?.value || '',
             website: window.companyWebsiteInput?.value || '',
+            
+            // Address information
             address: {
                 street: window.addressStreetInput?.value || '',
                 city: window.addressCityInput?.value || '',
                 state: window.addressStateInput?.value || '',
                 zipCode: window.addressZipInput?.value || '',
                 country: window.addressCountryInput?.value || ''
-            }
+            },
+            
+            // Company status
+            isActive: window.companyStatusCheckbox?.checked ?? true,
+            
+            // Timezone
+            timezone: window.timezoneSelect?.value || ''
         };
         
+        console.log('📤 Sending form data:', formData);
+        
         const response = await fetch(`/api/company/${companyId}`, {
-            method: 'PUT',
+            method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -396,20 +518,23 @@ async function saveCompanyData() {
         });
         
         if (!response.ok) {
-            throw new Error(`Save failed: ${response.statusText}`);
+            const errorText = await response.text();
+            throw new Error(`Save failed: ${response.status} ${response.statusText} - ${errorText}`);
         }
         
         const updatedData = await response.json();
         currentCompanyData = { ...currentCompanyData, ...updatedData };
         
-        clearUnsavedChanges();
-        showNotification('Company data saved successfully!');
+        // Update the Overview tab display with saved data
+        populateCompanyData(currentCompanyData);
         
-        console.log('✅ Company data saved successfully');
+        console.log('✅ Company data saved successfully:', updatedData);
+        
+        return updatedData;
         
     } catch (error) {
         console.error('❌ Error saving company data:', error);
-        showNotification('Failed to save company data', 'error');
+        throw error;
     }
 }
 
@@ -831,13 +956,18 @@ function initializeWebhookCopyButtons() {
 }
 
 function initializeEditProfileFeatures() {
-    // Edit Profile (platform feature)
+    // Remove Edit Profile button functionality - page is always editable
     if (window.editProfileButton) {
-        window.editProfileButton.addEventListener('click', () => {
-            console.log('✏️ Edit Profile clicked');
-            showNotification('Edit Profile modal would open here', 'info');
-        });
+        // Hide the edit profile button since page is always editable
+        window.editProfileButton.style.display = 'none';
+        console.log('✅ Edit Profile button hidden - page is always editable');
     }
+    
+    // Initialize save button (initially hidden)
+    const saveButton = document.getElementById('save-changes-btn') || createSaveButton();
+    
+    // Initialize unsaved changes tracking
+    initializeUnsavedChangesTracking();
 }
 
 function initializeSaveFeatures() {
