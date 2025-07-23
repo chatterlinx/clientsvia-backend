@@ -189,6 +189,69 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
     }
 });
 
+// Delete a company completely from the database
+router.delete('/company/:id', async (req, res) => {
+    const companyId = req.params.id;
+    console.log(`[API DELETE /api/company/:id] Deleting company with ID: ${companyId}`);
+    
+    if (!ObjectId.isValid(companyId)) {
+        return res.status(400).json({ message: 'Invalid company ID format' });
+    }
+    
+    try {
+        // First, check if the company exists
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ message: 'Company not found' });
+        }
+        
+        const companyName = company.companyName || company.name || 'Unknown Company';
+        console.log(`[API DELETE /api/company/:id] Found company to delete: ${companyName}`);
+        
+        // Delete the company from the database
+        const deleteResult = await Company.findByIdAndDelete(companyId);
+        
+        if (!deleteResult) {
+            throw new Error('Failed to delete company from database');
+        }
+        
+        // Clear the company from Redis cache
+        try {
+            const cacheKey = `company:${companyId}`;
+            await redisClient.del(cacheKey);
+            console.log(`[API DELETE /api/company/:id] Cleared cache: ${cacheKey}`);
+        } catch (cacheError) {
+            console.warn(`[API DELETE /api/company/:id] Failed to clear cache:`, cacheError.message);
+            // Don't fail the request if cache clearing fails
+        }
+        
+        // Clear any personality responses cache for this company
+        try {
+            await clearCompanyResponsesCache(companyId);
+            console.log(`[API DELETE /api/company/:id] Cleared personality responses cache for company: ${companyId}`);
+        } catch (personalityCacheError) {
+            console.warn(`[API DELETE /api/company/:id] Failed to clear personality responses cache:`, personalityCacheError.message);
+            // Don't fail the request if cache clearing fails
+        }
+        
+        console.log(`[API DELETE /api/company/:id] Successfully deleted company: ${companyName} (ID: ${companyId})`);
+        
+        res.json({ 
+            success: true,
+            message: `Company "${companyName}" has been permanently deleted`,
+            deletedCompanyId: companyId,
+            deletedCompanyName: companyName
+        });
+        
+    } catch (error) {
+        console.error(`[API DELETE /api/company/:id] Error deleting company ${companyId}:`, error.message, error.stack);
+        res.status(500).json({ 
+            message: `Error deleting company: ${error.message}`,
+            error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
+
 router.patch('/company/:id', async (req, res) => {
     console.log(`[API PATCH /api/company/:id] (Overview) Received update for ID: ${req.params.id} with data:`, JSON.stringify(req.body, null, 2));
     const companyId = req.params.id;
