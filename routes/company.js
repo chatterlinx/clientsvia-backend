@@ -263,6 +263,8 @@ router.patch('/company/:id', async (req, res) => {
         delete updates._id;
 
         const updateOperation = {};
+        
+        // Handle address updates with dot notation
         if (updates.address && typeof updates.address === 'object') {
             for (const subKey in updates.address) {
                 updateOperation[`address.${subKey}`] = updates.address[subKey];
@@ -274,6 +276,14 @@ router.patch('/company/:id', async (req, res) => {
              if(updates.addressState  !== undefined) { updateOperation['address.state'] = updates.addressState;  delete updates.addressState;}
              if(updates.addressZip    !== undefined) { updateOperation['address.zip'] = updates.addressZip;    delete updates.addressZip;}
              if(updates.addressCountry!== undefined) { updateOperation['address.country'] = updates.addressCountry; delete updates.addressCountry;}
+        }
+        
+        // Handle twilioConfig updates with dot notation
+        if (updates.twilioConfig && typeof updates.twilioConfig === 'object') {
+            for (const subKey in updates.twilioConfig) {
+                updateOperation[`twilioConfig.${subKey}`] = updates.twilioConfig[subKey];
+            }
+            delete updates.twilioConfig;
         }
 
         for (const key in updates) {

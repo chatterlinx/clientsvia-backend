@@ -498,15 +498,152 @@ class CompanyProfileManager {
     setupPhoneNumbersManagement() {
         const addPhoneBtn = document.getElementById('addPhoneNumberBtn');
         if (addPhoneBtn) {
-            addPhoneBtn.addEventListener('click', () => {
+            // Remove existing listener to avoid duplicates
+            addPhoneBtn.replaceWith(addPhoneBtn.cloneNode(true));
+            const newAddPhoneBtn = document.getElementById('addPhoneNumberBtn');
+            
+            newAddPhoneBtn.addEventListener('click', () => {
                 this.addPhoneNumber();
             });
         }
 
-        // Load existing phone numbers
-        if (this.currentData.phoneNumbers && Array.isArray(this.currentData.phoneNumbers)) {
-            this.renderPhoneNumbers(this.currentData.phoneNumbers);
+        // Load existing phone numbers or create default one
+        this.renderPhoneNumbers();
+        
+        // Setup event listeners for existing phone number items
+        this.setupPhoneNumberEventListeners();
+    }
+
+    /**
+     * Setup event listeners for phone number items
+     */
+    setupPhoneNumberEventListeners() {
+        const phoneNumberItems = document.querySelectorAll('.phone-number-item');
+        console.log(`📞 Setting up event listeners for ${phoneNumberItems.length} phone number items`);
+        
+        phoneNumberItems.forEach((item, index) => {
+            this.setupSinglePhoneNumberListeners(item);
+            
+            // Also add change listeners for form inputs to track unsaved changes
+            const inputs = item.querySelectorAll('input, select');
+            inputs.forEach(input => {
+                input.addEventListener('change', () => {
+                    this.setUnsavedChanges(true);
+                });
+                input.addEventListener('input', () => {
+                    this.setUnsavedChanges(true);
+                });
+            });
+        });
+    }
+
+    /**
+     * Render existing phone numbers
+     */
+    renderPhoneNumbers() {
+        const phoneNumbersList = document.getElementById('phoneNumbersList');
+        if (!phoneNumbersList) return;
+
+        // Get phone numbers from current data
+        const phoneNumbers = this.currentData?.twilioConfig?.phoneNumbers || 
+                           this.currentData?.phoneNumbers || [];
+
+        // If no phone numbers exist, add a default empty one
+        if (phoneNumbers.length === 0) {
+            this.addPhoneNumber();
+            return;
         }
+
+        // Clear existing items
+        phoneNumbersList.innerHTML = '';
+
+        // Render each phone number
+        phoneNumbers.forEach((phone, index) => {
+            this.addPhoneNumberWithData(phone, index === 0);
+        });
+    }
+
+    /**
+     * Add phone number field with existing data
+     */
+    addPhoneNumberWithData(phoneData, isPrimary = false) {
+        const phoneNumbersList = document.getElementById('phoneNumbersList');
+        const template = document.getElementById('phoneNumberTemplate');
+        
+        if (!phoneNumbersList || !template) return;
+
+        const newItem = template.content.cloneNode(true);
+        
+        // Populate with existing data
+        const phoneInput = newItem.querySelector('input[name="phoneNumber"]');
+        const friendlyInput = newItem.querySelector('input[name="friendlyName"]');
+        const statusSelect = newItem.querySelector('select[name="status"]');
+        const setPrimaryBtn = newItem.querySelector('button[title="Set as Primary"]');
+        
+        if (phoneInput) phoneInput.value = phoneData.phoneNumber || phoneData.number || '';
+        if (friendlyInput) friendlyInput.value = phoneData.friendlyName || '';
+        if (statusSelect) statusSelect.value = phoneData.status || 'active';
+        
+        if (setPrimaryBtn && (isPrimary || phoneData.isPrimary)) {
+            setPrimaryBtn.textContent = 'Primary';
+            setPrimaryBtn.classList.remove('bg-blue-100', 'text-blue-800');
+            setPrimaryBtn.classList.add('bg-green-100', 'text-green-800');
+        }
+        
+        phoneNumbersList.appendChild(newItem);
+        
+        // Setup event listeners for this item
+        const addedItem = phoneNumbersList.lastElementChild;
+        this.setupSinglePhoneNumberListeners(addedItem);
+    }
+
+    /**
+     * Setup event listeners for a single phone number item
+     */
+    setupSinglePhoneNumberListeners(item) {
+        if (!item) return;
+        
+        const deleteBtn = item.querySelector('button[title="Remove"]');
+        const setPrimaryBtn = item.querySelector('button[title="Set as Primary"]');
+        
+        // Handle delete button
+        if (deleteBtn) {
+            // Remove existing event listeners by cloning the element
+            const newDeleteBtn = deleteBtn.cloneNode(true);
+            deleteBtn.parentNode.replaceChild(newDeleteBtn, deleteBtn);
+            
+            newDeleteBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('📞 Delete button clicked');
+                this.removePhoneNumber(item);
+            });
+        }
+        
+        // Handle set primary button
+        if (setPrimaryBtn) {
+            // Remove existing event listeners by cloning the element
+            const newSetPrimaryBtn = setPrimaryBtn.cloneNode(true);
+            setPrimaryBtn.parentNode.replaceChild(newSetPrimaryBtn, setPrimaryBtn);
+            
+            newSetPrimaryBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('📞 Set primary button clicked');
+                this.setPrimaryNumber(item);
+            });
+        }
+        
+        // Add change listeners to inputs for unsaved changes tracking
+        const inputs = item.querySelectorAll('input, select');
+        inputs.forEach(input => {
+            input.addEventListener('change', () => {
+                this.setUnsavedChanges(true);
+            });
+            input.addEventListener('input', () => {
+                this.setUnsavedChanges(true);
+            });
+        });
     }
 
     /**
@@ -521,8 +658,63 @@ class CompanyProfileManager {
         const newItem = template.content.cloneNode(true);
         phoneNumbersList.appendChild(newItem);
         
+        // Setup event listeners for the newly added item
+        const addedItem = phoneNumbersList.lastElementChild;
+        this.setupSinglePhoneNumberListeners(addedItem);
+        
         this.setUnsavedChanges(true);
         console.log('📞 New phone number field added');
+    }
+
+    /**
+     * Remove phone number field
+     */
+    removePhoneNumber(phoneItem) {
+        if (!phoneItem) return;
+        
+        // Don't allow removing the last phone number
+        const phoneNumbersList = document.getElementById('phoneNumbersList');
+        const allItems = phoneNumbersList.querySelectorAll('.phone-number-item');
+        
+        if (allItems.length <= 1) {
+            this.showNotification('Cannot remove the last phone number', 'error');
+            return;
+        }
+        
+        phoneItem.remove();
+        this.setUnsavedChanges(true);
+        console.log('📞 Phone number field removed');
+    }
+
+    /**
+     * Set phone number as primary
+     */
+    setPrimaryNumber(phoneItem) {
+        if (!phoneItem) return;
+        
+        // Remove primary status from all items
+        const phoneNumbersList = document.getElementById('phoneNumbersList');
+        const allItems = phoneNumbersList.querySelectorAll('.phone-number-item');
+        
+        allItems.forEach(item => {
+            const primaryBtn = item.querySelector('button[title="Set as Primary"]');
+            if (primaryBtn) {
+                primaryBtn.textContent = 'Set Primary';
+                primaryBtn.classList.remove('bg-green-100', 'text-green-800');
+                primaryBtn.classList.add('bg-blue-100', 'text-blue-800');
+            }
+        });
+        
+        // Set this item as primary
+        const primaryBtn = phoneItem.querySelector('button[title="Set as Primary"]');
+        if (primaryBtn) {
+            primaryBtn.textContent = 'Primary';
+            primaryBtn.classList.remove('bg-blue-100', 'text-blue-800');
+            primaryBtn.classList.add('bg-green-100', 'text-green-800');
+        }
+        
+        this.setUnsavedChanges(true);
+        console.log('📞 Primary phone number updated');
     }
 
     /**
@@ -641,41 +833,50 @@ class CompanyProfileManager {
         try {
             console.log('💾 Saving configuration changes...');
             
-            // Collect configuration data
-            const configData = this.collectConfigurationData();
+            // Show loading state
+            this.showLoading(true);
             
-            // Save via main save process
-            if (this.currentData) {
-                Object.assign(this.currentData, configData);
+            // Collect only configuration data
+            const configData = {};
+            this.collectConfigData(configData);
+            
+            // Add other tabs' data if they exist
+            this.collectNotesData(configData);
+            this.collectCalendarData(configData);
+            this.collectAISettingsData(configData);
+            this.collectVoiceData(configData);
+            this.collectPersonalityData(configData);
+            this.collectAgentLogicData(configData);
+            
+            console.log('📤 Sending configuration data:', configData);
+            
+            // Send PATCH request
+            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(configData)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to save configuration');
             }
+
+            const updatedCompany = await response.json();
+            this.currentData = updatedCompany;
+            this.setUnsavedChanges(false);
             
-            await this.saveAllChanges(false);
+            console.log('✅ Configuration saved successfully');
             this.showNotification('Configuration saved successfully!', 'success');
             
         } catch (error) {
             console.error('❌ Error saving configuration:', error);
             this.showNotification('Failed to save configuration', 'error');
+        } finally {
+            this.showLoading(false);
         }
-    }
-
-    /**
-     * Collect configuration data from form
-     */
-    collectConfigurationData() {
-        const data = {};
-        
-        // Twilio credentials
-        const twilioAccountSid = document.getElementById('twilioAccountSid')?.value.trim();
-        const twilioAuthToken = document.getElementById('twilioAuthToken')?.value.trim();
-        const twilioApiKey = document.getElementById('twilioApiKey')?.value.trim();
-        const twilioApiSecret = document.getElementById('twilioApiSecret')?.value.trim();
-        
-        if (twilioAccountSid) data.twilioAccountSid = twilioAccountSid;
-        if (twilioAuthToken && twilioAuthToken !== '••••••••••••••••') data.twilioAuthToken = twilioAuthToken;
-        if (twilioApiKey) data.twilioApiKey = twilioApiKey;
-        if (twilioApiSecret && twilioApiSecret !== '••••••••••••••••') data.twilioApiSecret = twilioApiSecret;
-        
-        return data;
     }
 
     /**
@@ -2299,20 +2500,25 @@ class CompanyProfileManager {
         const twilioApiKey = document.getElementById('twilioApiKey');
         const twilioApiSecret = document.getElementById('twilioApiSecret');
         
+        // Initialize twilioConfig object if it doesn't exist
+        if (!data.twilioConfig) {
+            data.twilioConfig = {};
+        }
+        
         if (twilioSid?.value.trim()) {
-            data.twilioAccountSid = twilioSid.value.trim();
+            data.twilioConfig.accountSid = twilioSid.value.trim();
         }
         
         if (twilioToken?.value.trim() && twilioToken.value !== '••••••••••••••••') {
-            data.twilioAuthToken = twilioToken.value.trim();
+            data.twilioConfig.authToken = twilioToken.value.trim();
         }
         
         if (twilioApiKey?.value.trim()) {
-            data.twilioApiKey = twilioApiKey.value.trim();
+            data.twilioConfig.apiKey = twilioApiKey.value.trim();
         }
         
         if (twilioApiSecret?.value.trim() && twilioApiSecret.value !== '••••••••••••••••') {
-            data.twilioApiSecret = twilioApiSecret.value.trim();
+            data.twilioConfig.apiSecret = twilioApiSecret.value.trim();
         }
 
         // ElevenLabs credentials
@@ -2327,24 +2533,33 @@ class CompanyProfileManager {
             data.elevenLabsVoiceId = elevenLabsVoiceId.value.trim();
         }
 
-        // Phone numbers
+        // Phone numbers - save to twilioConfig.phoneNumbers
         const phoneNumbers = [];
-        const phoneInputs = document.querySelectorAll('input[name="phoneNumber"]');
-        const friendlyInputs = document.querySelectorAll('input[name="friendlyName"]');
+        const phoneNumberItems = document.querySelectorAll('.phone-number-item');
         
-        phoneInputs.forEach((phoneInput, index) => {
-            if (phoneInput.value.trim()) {
+        phoneNumberItems.forEach((item, index) => {
+            const phoneInput = item.querySelector('input[name="phoneNumber"]');
+            const friendlyInput = item.querySelector('input[name="friendlyName"]');
+            const statusSelect = item.querySelector('select[name="status"]');
+            const isPrimaryBtn = item.querySelector('button[title="Set as Primary"]');
+            
+            if (phoneInput?.value.trim()) {
+                const isPrimary = isPrimaryBtn?.textContent === 'Primary';
+                
                 phoneNumbers.push({
-                    number: phoneInput.value.trim(),
-                    friendlyName: friendlyInputs[index]?.value.trim() || '',
-                    isPrimary: index === 0
+                    phoneNumber: phoneInput.value.trim(),
+                    friendlyName: friendlyInput?.value.trim() || '',
+                    status: statusSelect?.value || 'active',
+                    isPrimary: isPrimary || index === 0 // First one is primary by default
                 });
             }
         });
         
         if (phoneNumbers.length > 0) {
-            data.phoneNumbers = phoneNumbers;
+            data.twilioConfig.phoneNumbers = phoneNumbers;
         }
+
+        console.log('📋 Configuration data collected:', data);
     }
 
     /**
