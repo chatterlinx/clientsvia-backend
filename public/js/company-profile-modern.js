@@ -1382,15 +1382,14 @@ class CompanyProfileManager {
      * Get default personality response for a field
      */
     getDefaultPersonalityResponse(field) {
-        const companyName = this.currentData?.companyName || 'our company';
         const defaults = {
-            greeting: `Hello! Thank you for calling ${companyName}. How can I help you today?`,
-            farewell: `Thank you for choosing ${companyName}. Have a wonderful day!`,
+            greeting: `Hello! Thank you for calling {companyname}. How can I help you today?`,
+            farewell: `Thank you for choosing {companyname}. Have a wonderful day!`,
             hold: 'Please hold for just a moment while I check on that for you.',
             transfer: 'Let me transfer you to someone who can better assist you with that.',
             unavailable: 'I apologize, but that service is currently unavailable. Is there something else I can help you with?',
             businessHours: 'Our business hours are Monday through Friday, 9 AM to 5 PM. We\'d be happy to help you during those times.',
-            afterHours: `Thank you for calling ${companyName}. We are currently closed. Please call back during business hours or leave a message.`,
+            afterHours: `Thank you for calling {companyname}. We are currently closed. Please call back during business hours or leave a message.`,
             voicemail: 'Please leave your name, phone number, and a brief message after the tone, and we\'ll get back to you as soon as possible.',
             callback: 'I\'d be happy to have someone call you back. What\'s the best number to reach you at?'
         };

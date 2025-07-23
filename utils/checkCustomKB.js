@@ -307,7 +307,7 @@ async function checkCompanyCategoryQAsWithTrace(transcript, company, keywords, t
 }
 
 /**
- * Direct database lookup with trace logging - ENHANCED FOR PENGUIN AIR
+ * Direct database lookup with trace logging - ENHANCED FOR ALL COMPANIES
  */
 async function checkTradeCategoryDatabaseWithTrace(transcript, categoryID, companyID, keywords, traceLogger) {
   try {
@@ -320,7 +320,7 @@ async function checkTradeCategoryDatabaseWithTrace(transcript, categoryID, compa
     // Enhanced search - try multiple category formats and keyword matching
     const searchQueries = [
       { categoryID: categoryID },
-      { categoryID: 'hvac-residential' }, // Hard-coded fallback for Penguin Air
+      { categoryID: 'hvac-residential' }, // Common fallback for HVAC companies
       { categoryID: 'HVAC' },
       { category: categoryID },
       { trade: 'HVAC' }
