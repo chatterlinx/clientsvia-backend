@@ -215,14 +215,48 @@ function populateCompanyData(data) {
     console.log('📝 Populating company data', data);
     
     // Header information - using actual API field names
-    if (window.companyNameHeader) {
-        window.companyNameHeader.textContent = data.companyName || data.name || 'Unknown Company';
+    const companyNameHeader = document.getElementById('company-name-header');
+    const companyIdSubheader = document.getElementById('company-id-subheader');
+    
+    if (companyNameHeader) {
+        companyNameHeader.textContent = data.companyName || data.name || 'Unknown Company';
     }
-    if (window.companyIdSubheader) {
-        window.companyIdSubheader.textContent = `ID: ${data._id || 'Unknown'}`;
+    if (companyIdSubheader) {
+        companyIdSubheader.textContent = `ID: ${data._id || 'Unknown'}`;
     }
     
-    // Basic company information - mapping API fields to form fields
+    // Overview tab display elements
+    const companyNameView = document.getElementById('company-name-view');
+    const companyOwnerView = document.getElementById('company-owner-view');
+    const companyOwnerEmailView = document.getElementById('company-owner-email-view');
+    const companyOwnerPhoneView = document.getElementById('company-owner-phone-view');
+    const companyContactNameView = document.getElementById('company-contact-name-view');
+    const companyContactEmailView = document.getElementById('company-contact-email-view');
+    const companyContactPhoneView = document.getElementById('company-contact-phone-view');
+    const companyAddressView = document.getElementById('company-address-view');
+    
+    if (companyNameView) companyNameView.textContent = data.companyName || data.name || '';
+    if (companyOwnerView) companyOwnerView.textContent = data.ownerName || '';
+    if (companyOwnerEmailView) companyOwnerEmailView.textContent = data.ownerEmail || '';
+    if (companyOwnerPhoneView) companyOwnerPhoneView.textContent = data.ownerPhone || '';
+    if (companyContactNameView) companyContactNameView.textContent = data.contactName || '';
+    if (companyContactEmailView) companyContactEmailView.textContent = data.contactEmail || '';
+    if (companyContactPhoneView) companyContactPhoneView.textContent = data.contactPhone || '';
+    
+    // Address formatting
+    if (companyAddressView && data.address) {
+        const address = data.address;
+        const fullAddress = [
+            address.street,
+            address.city,
+            address.state,
+            address.zip || address.zipCode,
+            address.country
+        ].filter(Boolean).join(', ');
+        companyAddressView.textContent = fullAddress || 'No address provided';
+    }
+    
+    // Basic company information - mapping API fields to form fields  
     if (window.companyNameInput) window.companyNameInput.value = data.companyName || data.name || '';
     if (window.companyEmailInput) window.companyEmailInput.value = data.email || data.ownerEmail || '';
     if (window.companyPhoneInput) window.companyPhoneInput.value = data.phone || data.ownerPhone || '';
