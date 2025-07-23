@@ -275,6 +275,9 @@ class CompanyProfileManager {
 
         console.log('📄 Populating Overview tab...');
 
+        // Update header elements
+        this.updateHeaderElements();
+
         // Modern UX: Show editable form directly, no separate view/edit modes
         this.createModernEditableForm();
         
@@ -380,6 +383,12 @@ class CompanyProfileManager {
 
         this.domElements.editFormContainer.innerHTML = formHTML;
         this.domElements.editFormContainer.classList.remove('hidden');
+
+        // Hide the static view elements since we're using the modern always-editable form
+        const staticViewContainer = document.getElementById('company-details-view');
+        if (staticViewContainer) {
+            staticViewContainer.style.display = 'none';
+        }
 
         // Hide the old edit button since form is always visible
         if (this.domElements.editButton) {
@@ -1924,6 +1933,25 @@ class CompanyProfileManager {
             behavior: 'smooth', 
             block: 'nearest' 
         });
+    }
+
+    /**
+     * Update header elements and remove loading placeholders
+     */
+    updateHeaderElements() {
+        // Update main header
+        const companyNameHeader = document.getElementById('company-name-header');
+        if (companyNameHeader) {
+            companyNameHeader.textContent = this.currentData.companyName || this.currentData.name || 'Company Profile';
+        }
+
+        // Update company ID subheader
+        const companyIdSubheader = document.getElementById('company-id-subheader');
+        if (companyIdSubheader) {
+            companyIdSubheader.textContent = `ID: ${this.companyId}`;
+        }
+
+        console.log('✅ Header elements updated');
     }
 }
 
