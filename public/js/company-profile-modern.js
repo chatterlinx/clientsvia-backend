@@ -263,7 +263,30 @@ class CompanyProfileManager {
 
         } catch (error) {
             console.error('❌ Failed to load company data:', error);
-            this.showNotification('Failed to load company data', 'error');
+            
+            // For testing purposes, create mock data when backend is not available
+            if (error.message.includes('Failed to fetch') || error.message.includes('ECONNREFUSED')) {
+                console.log('🔧 Backend not available, using mock data for testing');
+                this.currentData = {
+                    companyId: this.companyId,
+                    companyName: 'Test Company (Mock Data)',
+                    companyOwner: 'Test Owner',
+                    companyOwnerEmail: 'test@example.com',
+                    companyOwnerPhone: '+1234567890'
+                };
+                
+                // Populate tabs with mock data
+                this.populateOverviewTab();
+                this.populateConfigTab();
+                this.populateNotesTab();
+                this.populateCalendarTab();
+                this.populateAISettingsTab();
+                this.populateVoiceTab();
+                this.populatePersonalityTab();
+                this.populateAgentLogicTab();
+            } else {
+                this.showNotification('Failed to load company data', 'error');
+            }
         } finally {
             this.showLoading(false);
         }
@@ -656,29 +679,13 @@ class CompanyProfileManager {
      */
     setupConfigFormListeners() {
         const configForm = document.getElementById('config-settings-form');
-        if (!configForm) return;
-
-        // Setup webhook toggle functionality
-        const toggleWebhookBtn = document.getElementById('toggleWebhookInfo');
-        const webhookPanel = document.getElementById('webhookInfoPanel');
-        
-        if (toggleWebhookBtn && webhookPanel) {
-            toggleWebhookBtn.addEventListener('click', () => {
-                const isHidden = webhookPanel.classList.contains('hidden');
-                if (isHidden) {
-                    // Generate dynamic webhook content with companyId
-                    this.generateWebhookPanel();
-                    webhookPanel.classList.remove('hidden');
-                    toggleWebhookBtn.innerHTML = '<i class="fas fa-eye-slash mr-1"></i>Hide Webhook URLs';
-                } else {
-                    webhookPanel.classList.add('hidden');
-                    toggleWebhookBtn.innerHTML = '<i class="fas fa-info-circle mr-1"></i>Show Webhook URLs';
-                }
-            });
+        if (!configForm) {
+            console.warn('❌ Config form not found');
+            return;
         }
 
-        // Setup webhook copy buttons (handled dynamically now)
-        // Copy functionality is now handled in generateWebhookPanel()
+        // Setup webhook toggle functionality
+        this.setupWebhookToggle();
 
         // Setup form submission
         configForm.addEventListener('submit', async (e) => {
@@ -693,6 +700,70 @@ class CompanyProfileManager {
                 this.setUnsavedChanges(true);
             });
         });
+    }
+
+    /**
+     * Setup webhook toggle functionality
+     */
+    setupWebhookToggle() {
+        const toggleWebhookBtn = document.getElementById('toggleWebhookInfo');
+        const webhookPanel = document.getElementById('webhookInfoPanel');
+        
+        console.log('🔧 Setting up webhook toggle...', { 
+            toggleWebhookBtn: !!toggleWebhookBtn, 
+            webhookPanel: !!webhookPanel,
+            companyId: this.companyId 
+        });
+        
+        if (!toggleWebhookBtn || !webhookPanel) {
+            console.warn('❌ Webhook toggle elements not found:', { 
+                toggleWebhookBtn: !!toggleWebhookBtn, 
+                webhookPanel: !!webhookPanel 
+            });
+            return;
+        }
+
+        if (!this.companyId) {
+            console.warn('❌ Company ID not available for webhook setup');
+            return;
+        }
+
+        // Check if already set up (avoid duplicate event listeners)
+        if (toggleWebhookBtn.dataset.webhookSetup === 'true') {
+            console.log('✅ Webhook toggle already set up');
+            return;
+        }
+
+        // Mark as set up
+        toggleWebhookBtn.dataset.webhookSetup = 'true';
+        
+        // Add the event listener
+        toggleWebhookBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            console.log('🔘 Webhook toggle clicked for company:', this.companyId);
+            
+            const currentPanel = document.getElementById('webhookInfoPanel');
+            if (!currentPanel) {
+                console.error('❌ Webhook panel disappeared');
+                return;
+            }
+            
+            const isHidden = currentPanel.classList.contains('hidden');
+            console.log('📊 Panel hidden state:', isHidden);
+            
+            if (isHidden) {
+                // Generate dynamic webhook content with companyId
+                console.log('🔧 Generating webhook panel for company:', this.companyId);
+                this.generateWebhookPanel();
+                currentPanel.classList.remove('hidden');
+                toggleWebhookBtn.innerHTML = '<i class="fas fa-eye-slash mr-1"></i>Hide Webhook URLs';
+            } else {
+                currentPanel.classList.add('hidden');
+                toggleWebhookBtn.innerHTML = '<i class="fas fa-info-circle mr-1"></i>Show Webhook URLs';
+            }
+        });
+        
+        console.log('✅ Webhook toggle setup complete');
     }
 
     /**
@@ -2169,7 +2240,7 @@ class CompanyProfileManager {
         this.domElements.tabButtons.forEach(button => {
             if (button.dataset.tab === tabName) {
                 button.classList.remove('tab-button-inactive');
-                button.classList.add('tab-button-active');
+                               button.classList.add('tab-button-active');
             } else {
                 button.classList.remove('tab-button-active');
                 button.classList.add('tab-button-inactive');
@@ -2190,6 +2261,28 @@ class CompanyProfileManager {
         // Handle lazy loading for specific tabs
         if (tabName === 'personality-responses') {
             this.ensurePersonalityTabLoaded();
+        }
+        
+        // Ensure webhook toggle is properly set up when configuration tab is accessed
+        if (tabName === 'config') {
+            // Delay setup to ensure DOM elements are ready
+            setTimeout(() => {
+                this.setupWebhookToggle();
+                // Also add a debug function to window for manual testing
+                window.debugWebhookToggle = () => {
+                    console.log('🐛 Debug webhook toggle called');
+                    this.setupWebhookToggle();
+                    
+                    // Try to click the button programmatically for testing
+                    const btn = document.getElementById('toggleWebhookInfo');
+                    if (btn) {
+                        console.log('🐛 Found button, attempting click');
+                        btn.click();
+                    } else {
+                        console.log('🐛 Button not found');
+                    }
+                };
+            }, 100);
         }
     }
 
@@ -2855,6 +2948,135 @@ class CompanyProfileManager {
         this.renderContactsSection();
         this.setupContactsHandlers();
     }
+
+    /**
+     * Generate dynamic webhook panel with company-specific URLs
+     */
+    generateWebhookPanel() {
+        const webhookPanel = document.getElementById('webhookInfoPanel');
+        if (!webhookPanel) {
+            console.error('❌ Webhook panel not found');
+            return;
+        }
+        
+        if (!this.companyId) {
+            console.error('❌ Company ID not available');
+            webhookPanel.innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p class="text-red-800 text-sm">⚠️ Company ID not found. Please refresh the page.</p>
+                </div>
+            `;
+            return;
+        }
+
+        const baseUrl = this.apiBaseUrl || 'https://clientsvia-backend.onrender.com';
+        console.log('🔧 Generating webhooks for company:', this.companyId, 'Base URL:', baseUrl);
+        
+        // Define webhooks with companyId parameter
+        const webhooks = [
+            {
+                title: '🎤 Voice Webhook (Primary)',
+                url: `${baseUrl}/api/twilio/voice?companyId=${this.companyId}`,
+                description: 'Configure this in Twilio Console → Phone Numbers → Voice Configuration',
+                primary: true
+            },
+            {
+                title: '🗣️ Speech Recognition',
+                url: `${baseUrl}/api/twilio/handle-speech?companyId=${this.companyId}`,
+                description: 'Used internally for AI speech processing',
+                primary: true
+            },
+            {
+                title: '📞 Partial Speech',
+                url: `${baseUrl}/api/twilio/partial-speech?companyId=${this.companyId}`,
+                description: 'For real-time speech processing',
+                primary: false
+            },
+            {
+                title: '⏱️ Speech Timing Test',
+                url: `${baseUrl}/api/twilio/speech-timing-test?companyId=${this.companyId}`,
+                description: 'For performance testing and optimization',
+                primary: false
+            }
+        ];
+
+        webhookPanel.innerHTML = `
+            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
+                <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                    <h5 class="text-sm font-medium text-blue-900 mb-1">🏢 Company: ${this.currentData?.companyName || 'Unknown'}</h5>
+                    <p class="text-xs text-blue-700">Company ID: <code class="bg-white px-1 rounded">${this.companyId}</code></p>
+                </div>
+                
+                ${webhooks.map(webhook => `
+                    <div class="webhook-item">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="text-sm font-medium text-gray-900">${webhook.title}</h4>
+                            <button type="button" class="copy-webhook-btn text-xs ${webhook.primary ? 'bg-blue-100 hover:bg-blue-200 text-blue-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'} px-2 py-1 rounded" data-webhook="${webhook.url}">
+                                <i class="fas fa-copy mr-1"></i>Copy
+                            </button>
+                        </div>
+                        <div class="bg-white border rounded p-2 font-mono text-sm text-gray-800 break-all">
+                            ${webhook.url}
+                        </div>
+                        <p class="text-xs text-gray-600 mt-1">${webhook.description}</p>
+                    </div>
+                `).join('')}
+                
+                <!-- Configuration Instructions -->
+                <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                    <h5 class="text-sm font-medium text-blue-900 mb-2">📋 Quick Setup Instructions:</h5>
+                    <ol class="text-xs text-blue-800 space-y-1">
+                        <li>1. Go to <a href="https://console.twilio.com" target="_blank" class="underline hover:no-underline">Twilio Console</a></li>
+                        <li>2. Navigate to Phone Numbers → Manage → Active Numbers</li>
+                        <li>3. Click on your phone number</li>
+                        <li>4. Set Voice Configuration webhook to the <strong>Voice Webhook URL</strong> above</li>
+                        <li>5. Set HTTP method to <strong>POST</strong></li>
+                        <li>6. Save configuration</li>
+                        <li>7. Test by calling your number - the AI agent will respond with company-specific data</li>
+                    </ol>
+                </div>
+            </div>
+        `;
+
+        // Re-setup copy functionality for dynamically generated buttons
+        this.setupWebhookCopyButtons();
+    }
+
+    /**
+     * Setup copy functionality for webhook buttons
+     */
+    setupWebhookCopyButtons() {
+        const copyButtons = document.querySelectorAll('.copy-webhook-btn');
+        copyButtons.forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const webhookUrl = btn.dataset.webhook;
+                if (webhookUrl) {
+                    try {
+                        await navigator.clipboard.writeText(webhookUrl);
+                        const originalText = btn.innerHTML;
+                        btn.innerHTML = '<i class="fas fa-check mr-1"></i>Copied!';
+                        btn.classList.add('bg-green-100', 'text-green-700');
+                        btn.classList.remove('bg-blue-100', 'text-blue-700', 'bg-gray-100', 'text-gray-600');
+                        
+                        setTimeout(() => {
+                            btn.innerHTML = originalText;
+                            btn.classList.remove('bg-green-100', 'text-green-700');
+                            // Restore original colors based on webhook type
+                            if (webhookUrl.includes('voice') || webhookUrl.includes('speech')) {
+                                btn.classList.add('bg-blue-100', 'text-blue-700');
+                            } else {
+                                btn.classList.add('bg-gray-100', 'text-gray-600');
+                            }
+                        }, 2000);
+                    } catch (err) {
+                        console.error('Failed to copy webhook URL:', err);
+                        this.showNotification('Failed to copy webhook URL', 'error');
+                    }
+                }
+            });
+        });
+    }
 }
 
 // =============================================
@@ -2869,6 +3091,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         companyProfileManager = new CompanyProfileManager();
         await companyProfileManager.init();
+        
+        // Add global debug functions for testing
+        window.debugCompanyProfile = companyProfileManager;
+        window.testWebhookButton = () => {
+            console.log('🧪 Testing webhook button...');
+            if (companyProfileManager) {
+                companyProfileManager.setupWebhookToggle();
+                const btn = document.getElementById('toggleWebhookInfo');
+                const panel = document.getElementById('webhookInfoPanel');
+                console.log('Button found:', !!btn);
+                console.log('Panel found:', !!panel);
+                if (btn) {
+                    console.log('Button text:', btn.innerHTML);
+                    console.log('Button dataset:', btn.dataset);
+                }
+                if (panel) {
+                    console.log('Panel classes:', panel.className);
+                }
+            }
+        };
+        
     } catch (error) {
         console.error('❌ Failed to initialize company profile:', error);
     }
