@@ -2217,7 +2217,7 @@ class CompanyProfileManager {
         // Personality tab data
         this.collectPersonalityData(data);
         
-        // // Agent Logic tab data
+        // // // Agent Logic tab data
         this.collectAgentLogicData(data);
 
         console.log('📤 Collected form data:', data);
@@ -2534,10 +2534,30 @@ class CompanyProfileManager {
         Object.entries(responseFields).forEach(([key, field]) => {
             const fieldContainer = document.createElement('div');
             fieldContainer.className = 'bg-white border border-gray-200 rounded-lg p-6 shadow-sm';
-            
-            const currentValue = responses[key] || '';
+
+            // Get array of responses for this category
+            const currentValues = Array.isArray(responses[key]) ? responses[key] : (responses[key] ? [responses[key]] : []);
             const defaultValue = field.defaultTemplate || this.getDefaultPersonalityResponse(key);
-            
+
+            // Build dynamic response list
+            let responseListHtml = '';
+            (currentValues.length ? currentValues : [defaultValue]).forEach((val, idx) => {
+                responseListHtml += `
+                    <div class="flex items-center mb-2 response-row">
+                        <textarea
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm response-textarea"
+                            rows="2"
+                            data-category="${key}"
+                            data-index="${idx}"
+                            placeholder="${defaultValue}"
+                        >${val}</textarea>
+                        <button type="button" class="ml-2 text-red-600 hover:text-red-800 remove-response-btn" data-category="${key}" data-index="${idx}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+            });
+
             fieldContainer.innerHTML = `
                 <div class="flex items-start space-x-4">
                     <div class="flex-shrink-0">
@@ -2546,132 +2566,88 @@ class CompanyProfileManager {
                         </div>
                     </div>
                     <div class="flex-1">
-                        <label for="personality-${key}" class="block text-sm font-medium text-gray-900 mb-1">
+                        <label class="block text-sm font-medium text-gray-900 mb-1">
                             ${field.label}
                         </label>
                         <p class="text-sm text-gray-600 mb-3">${field.description}</p>
-                        <textarea
-                            id="personality-${key}"
-                            name="personality-${key}"
-                            rows="3"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                            placeholder="${defaultValue}"
-                        >${currentValue}</textarea>
-                        ${!currentValue ? `
-                        <div class="mt-2">
-                            <button type="button" class="text-xs text-indigo-600 hover:text-indigo-800 use-default-btn" data-field="${key}">
-                                <i class="fas fa-magic mr-1"></i>Use Default Response
-                            </button>
-                        </div>` : ''}
+                        <div class="response-list" data-category="${key}">
+                            ${responseListHtml}
+                        </div>
+                        <button type="button" class="mt-2 text-xs text-indigo-600 hover:text-indigo-800 add-response-btn" data-category="${key}">
+                            <i class="fas fa-plus mr-1"></i>Add Response
+                        </button>
                     </div>
                 </div>
             `;
-            
+
             container.appendChild(fieldContainer);
-            
-            // Setup event listeners for this field
-            const textarea = fieldContainer.querySelector(`#personality-${key}`);
-            const useDefaultBtn = fieldContainer.querySelector('.use-default-btn');
-            
-            if (textarea) {
-                textarea.addEventListener('input', () => {
+        });
+
+        // Event delegation for add/remove
+        container.addEventListener('click', (e) => {
+            if (e.target.closest('.add-response-btn')) {
+                const key = e.target.closest('.add-response-btn').dataset.category;
+                const list = container.querySelector(`.response-list[data-category="${key}"]`);
+                if (list) {
+                    const idx = list.querySelectorAll('.response-row').length;
+                    const defaultValue = responseFields[key].defaultTemplate || this.getDefaultPersonalityResponse(key);
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center mb-2 response-row';
+                    div.innerHTML = `
+                        <textarea class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm response-textarea" rows="2" data-category="${key}" data-index="${idx}" placeholder="${defaultValue}"></textarea>
+                        <button type="button" class="ml-2 text-red-600 hover:text-red-800 remove-response-btn" data-category="${key}" data-index="${idx}"><i class="fas fa-trash"></i></button>
+                    `;
+                    list.appendChild(div);
                     this.setUnsavedChanges(true);
-                    console.log(`🎭 Personality ${key} updated`);
-                    
-                    // Show/hide default button based on content
-                    if (useDefaultBtn) {
-                        useDefaultBtn.style.display = textarea.value.trim() ? 'none' : 'inline-block';
+                }
+            } else if (e.target.closest('.remove-response-btn')) {
+                const btn = e.target.closest('.remove-response-btn');
+                const key = btn.dataset.category;
+                const idx = parseInt(btn.dataset.index, 10);
+                const list = container.querySelector(`.response-list[data-category="${key}"]`);
+                if (list) {
+                    const rows = list.querySelectorAll('.response-row');
+                    if (rows[idx]) {
+                        rows[idx].remove();
+                        this.setUnsavedChanges(true);
                     }
-                });
-            }
-            
-            if (useDefaultBtn) {
-                useDefaultBtn.addEventListener('click', () => {
-                    if (textarea) {
-                        textarea.value = defaultValue;
-                        textarea.dispatchEvent(new Event('input'));
-                        useDefaultBtn.style.display = 'none';
-                    }
-                });
+                }
             }
         });
 
-        console.log('✅ Personality response fields created');
-    }
-
-    /**
-     * Get default personality response for a field (fallback)
-     */
-    getDefaultPersonalityResponse(field) {
-        const defaults = {
-            greeting: `Hello! Thank you for calling {companyname}. How can I help you today?`,
-            farewell: `Thank you for choosing {companyname}. Have a wonderful day!`,
-            hold: 'Please hold for just a moment while I check on that for you.',
-            transfer: 'Let me transfer you to someone who can better assist you with that.',
-            unavailable: 'I apologize, but that service is currently unavailable. Is there something else I can help you with?',
-            businessHours: 'Our business hours are {businesshours}. We\'d be happy to help you during those times.',
-            afterHours: `Thank you for calling {companyname}. We are currently closed. Please call back during business hours or leave a message.`,
-            voicemail: 'Please leave your name, phone number, and a brief message after the tone, and we\'ll get back to you as soon as possible.',
-            callback: 'I\'d be happy to have someone call you back. What\'s the best number to reach you at?'
-        };
-
-        return defaults[field] || 'Enter your custom response here...';
-    }
-
-    /**
-     * Setup personality form handlers
-     */
-    setupPersonalityFormHandlers() {
-        const personalityForm = document.getElementById('personality-responses-form');
-        if (!personalityForm) return;
-
-        // Find and setup save button
-        const saveBtn = personalityForm.querySelector('[data-save-type="personality"]') ||
-                       personalityForm.querySelector('button[type="submit"]');
-        
-        if (saveBtn) {
-            saveBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                await this.savePersonalityResponses();
-            });
-        }
-
-        // Setup form submission
-        personalityForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            await this.savePersonalityResponses();
+        // Track changes in textareas
+        container.addEventListener('input', (e) => {
+            if (e.target.classList.contains('response-textarea')) {
+                this.setUnsavedChanges(true);
+            }
         });
+
+        console.log('✅ Personality response fields (multi-response) created');
     }
 
     /**
-     * Save personality responses
+     * Save personality responses (multi-response per category)
      */
     async savePersonalityResponses() {
         try {
             console.log('💾 Saving personality responses...');
-            
             const responses = {};
-            const responseCategories = this.currentData?.responseCategories || this.getDefaultResponseCategories();
-
-            Object.keys(responseCategories).forEach(field => {
-                const textarea = document.getElementById(`personality-${field}`);
-                if (textarea && textarea.value.trim()) {
-                    responses[field] = textarea.value.trim();
+            const responseFields = this.currentData?.responseCategories || this.getDefaultResponseCategories();
+            Object.keys(responseFields).forEach(field => {
+                const list = document.querySelector(`.response-list[data-category="${field}"]`);
+                if (list) {
+                    const values = Array.from(list.querySelectorAll('.response-textarea'))
+                        .map(t => t.value.trim())
+                        .filter(Boolean);
+                    if (values.length) responses[field] = values;
                 }
             });
-
-            // Update current data
             if (this.currentData) {
                 this.currentData.personalityResponses = responses;
             }
-
-            // In a real implementation, this would make an API call to save just personality responses
-            // For now, we'll trigger the main save process to ensure data persistence
-            await this.saveAllChanges(false); // false = don't show duplicate notification
-
+            await this.saveAllChanges(false);
             this.showNotification('Personality responses saved successfully!', 'success');
             console.log('✅ Personality responses saved:', responses);
-            
         } catch (error) {
             console.error('❌ Error saving personality responses:', error);
             this.showNotification('Failed to save personality responses', 'error');
