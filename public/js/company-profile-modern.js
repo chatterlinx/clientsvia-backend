@@ -1614,10 +1614,12 @@ class CompanyProfileManager {
 
         // Update panel visibility
         this.domElements.tabPanels.forEach(panel => {
-            if (panel.id === `${tabName}-panel`) {
+            if (panel.id === `${tabName}-content`) {
                 panel.style.display = 'block';
+                panel.classList.remove('hidden');
             } else {
                 panel.style.display = 'none';
+                panel.classList.add('hidden');
             }
         });
     }
