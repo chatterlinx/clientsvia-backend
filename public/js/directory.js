@@ -11,6 +11,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let allCompanies = []; // To store all fetched companies for filtering
     let availableTradeCategories = []; // To store fetched trade categories
 
+    // Listen for company profile updates from other tabs/windows
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'companyProfileUpdated' && e.newValue) {
+            console.log('[JS directory.js] Company profile updated, refreshing directory...');
+            fetchCompanies(); // Refresh the company list
+            localStorage.removeItem('companyProfileUpdated'); // Clean up
+        }
+    });
+
     /**
      * Constructs a base URL for API calls.
      * @returns {string} The base URL (e.g., "http://localhost:4000") or an empty string for root-relative paths.
@@ -158,11 +167,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const companyPhone = company.companyPhone || 'N/A';
         const companyAddress = company.companyAddress || 'N/A';
         
-        // Check if additional details have been added
+        // Check if profile has been completed with business details
         const hasOwnerInfo = company.ownerName && company.ownerEmail;
-        const hasContactInfo = company.contactName || company.contactEmail;
-        const profileStatus = hasOwnerInfo ? 'Complete' : 'Setup Needed';
-        const profileStatusClass = hasOwnerInfo ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
+        const hasBusinessInfo = company.businessEmail || company.businessWebsite || company.description;
+        const hasAdditionalDetails = company.profileComplete || hasBusinessInfo || hasOwnerInfo;
+        
+        const profileStatus = hasAdditionalDetails ? 'Complete' : 'Setup Needed';
+        const profileStatusClass = hasAdditionalDetails ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
 
         const companyId = company._id || '#';
         const isActive = typeof company.isActive === 'boolean' ? company.isActive : true;
@@ -187,19 +198,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 <div class="mb-3">
                     <span class="text-xs font-medium px-2 py-1 rounded-full ${profileStatusClass}">
-                        <i class="fas ${hasOwnerInfo ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-1"></i>
+                        <i class="fas ${hasAdditionalDetails ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-1"></i>
                         Profile ${profileStatus}
                     </span>
                 </div>
                 
-                ${!hasOwnerInfo ? 
+                ${!hasAdditionalDetails ? 
                     '<p class="text-xs text-amber-600 bg-amber-50 p-2 rounded"><i class="fas fa-info-circle mr-1"></i>Complete setup in company profile</p>' : 
                     ''
                 }
             </div>
             <div class="mt-4 pt-3 border-t border-gray-200 actions flex justify-between items-center">
                 <a href="/company-profile.html?id=${companyId}" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
-                    <i class="fas ${hasOwnerInfo ? 'fa-eye' : 'fa-edit'} mr-1"></i>${hasOwnerInfo ? 'View Profile' : 'Complete Setup'}
+                    <i class="fas ${hasAdditionalDetails ? 'fa-eye' : 'fa-edit'} mr-1"></i>${hasAdditionalDetails ? 'View Profile' : 'Complete Setup'}
                 </a>
                 <button data-id="${companyId}" data-name="${escapeHTML(companyName)}" class="delete-company-btn text-red-500 hover:text-red-700 text-sm font-medium"><i class="fas fa-trash-alt mr-1"></i>Delete</button>
             </div>

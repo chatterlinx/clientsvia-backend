@@ -298,6 +298,13 @@ router.patch('/company/:id', async (req, res) => {
         }
         updateOperation.updatedAt = new Date();
 
+        // Auto-set profileComplete when business details are provided
+        const hasBusinessInfo = updates.businessEmail || updates.businessWebsite || updates.description || 
+                              updates.businessPhone || updates.businessAddress || updates.serviceArea || updates.businessHours;
+        if (hasBusinessInfo) {
+            updateOperation.profileComplete = true;
+        }
+
         const updatedCompany = await Company.findByIdAndUpdate(
             companyId,
             updateOperation,

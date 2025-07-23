@@ -2201,6 +2201,14 @@ class CompanyProfileManager {
             // Refresh the display with updated data
             this.populateOverviewTab();
             
+            // Notify directory page to refresh (if open in another tab)
+            try {
+                localStorage.setItem('companyProfileUpdated', Date.now().toString());
+                console.log('📢 Directory refresh signal sent');
+            } catch (e) {
+                console.warn('Could not send directory refresh signal:', e);
+            }
+            
             if (showNotification) {
                 this.showNotification('All changes saved successfully!', 'success');
             }
