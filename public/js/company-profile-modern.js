@@ -270,7 +270,7 @@ class CompanyProfileManager {
     }
 
     /**
-     * Populate Overview tab with data
+     * Populate Overview tab with data and setup contacts
      */
     populateOverviewTab() {
         if (!this.currentData) return;
@@ -285,6 +285,9 @@ class CompanyProfileManager {
         
         // Still populate view elements for any legacy components that need them
         this.populateViewElements();
+
+        this.renderContactsSection();
+        this.setupContactsHandlers();
     }
 
     /**
@@ -2150,12 +2153,14 @@ class CompanyProfileManager {
      * Save all changes to the backend
      */
     async saveAllChanges(showNotification = true) {
+        const data = {};
+        this.collectOverviewData(data);
+        // Collect data from all tabs
+        const updateData = this.collectAllFormData();
+
         try {
             console.log('💾 Saving all changes...');
             this.showLoading(true);
-
-            // Collect data from all tabs
-            const updateData = this.collectAllFormData();
 
             const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`, {
                 method: 'PATCH',
@@ -2217,7 +2222,7 @@ class CompanyProfileManager {
         // Personality tab data
         this.collectPersonalityData(data);
         
-        // // // Agent Logic tab data
+        // // // // Agent Logic tab data
         this.collectAgentLogicData(data);
 
         console.log('📤 Collected form data:', data);
@@ -2245,6 +2250,8 @@ class CompanyProfileManager {
                 data[dataKey] = input.value.trim();
             }
         });
+
+        this.collectContactsData(data);
     }
 
     /**
@@ -2652,6 +2659,145 @@ class CompanyProfileManager {
             console.error('❌ Error saving personality responses:', error);
             this.showNotification('Failed to save personality responses', 'error');
         }
+    }
+
+    /**
+     * Render dynamic company contacts section
+     */
+    renderContactsSection() {
+        const contacts = Array.isArray(this.currentData.contacts) ? this.currentData.contacts : [];
+        const contactsList = document.getElementById('contacts-list');
+        if (!contactsList) return;
+        contactsList.innerHTML = '';
+        contacts.forEach((contact, cIdx) => {
+            const contactDiv = document.createElement('div');
+            contactDiv.className = 'border border-gray-200 rounded-lg p-4 bg-gray-50';
+            contactDiv.innerHTML = `
+                <div class="flex flex-col md:flex-row md:items-center md:space-x-6">
+                    <div class="flex-1">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                            <div>
+                                <label class="form-label">Name</label>
+                                <input type="text" class="form-input contact-name" value="${contact.name || ''}" data-cidx="${cIdx}" placeholder="Contact Name">
+                            </div>
+                            <div>
+                                <label class="form-label">Role</label>
+                                <input type="text" class="form-input contact-role" value="${contact.role || ''}" data-cidx="${cIdx}" placeholder="Role (e.g. Customer Service)">
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Phone Numbers</label>
+                            <div class="space-y-2" id="contact-phones-${cIdx}">
+                                ${(contact.phones||[]).map((phone, pIdx) => `
+                                    <div class="flex items-center mb-1 phone-row">
+                                        <select class="form-select phone-type" data-cidx="${cIdx}" data-pidx="${pIdx}">
+                                            <option value="cell" ${phone.type==='cell'?'selected':''}>Cell</option>
+                                            <option value="office" ${phone.type==='office'?'selected':''}>Office</option>
+                                            <option value="landline" ${phone.type==='landline'?'selected':''}>Landline</option>
+                                            <option value="other" ${phone.type==='other'?'selected':''}>Other</option>
+                                        </select>
+                                        <input type="tel" class="form-input ml-2 phone-value" value="${phone.value||''}" data-cidx="${cIdx}" data-pidx="${pIdx}" placeholder="Phone Number">
+                                        <button type="button" class="ml-2 text-red-600 hover:text-red-800 remove-phone-btn" data-cidx="${cIdx}" data-pidx="${pIdx}"><i class="fas fa-trash"></i></button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <button type="button" class="mt-2 text-xs text-indigo-600 hover:text-indigo-800 add-phone-btn" data-cidx="${cIdx}"><i class="fas fa-plus mr-1"></i>Add Phone</button>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Notes</label>
+                            <textarea class="form-textarea contact-notes" data-cidx="${cIdx}" rows="2" placeholder="Special notes about this contact...">${contact.notes||''}</textarea>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-end justify-between ml-0 md:ml-4 mt-4 md:mt-0">
+                        <button type="button" class="text-red-600 hover:text-red-800 remove-contact-btn" data-cidx="${cIdx}"><i class="fas fa-trash mr-1"></i>Remove Contact</button>
+                    </div>
+                </div>
+            `;
+            contactsList.appendChild(contactDiv);
+        });
+    }
+
+    /**
+     * Setup dynamic contacts event handlers
+     */
+    setupContactsHandlers() {
+        const contactsList = document.getElementById('contacts-list');
+        const addContactBtn = document.getElementById('add-contact-btn');
+        if (!contactsList || !addContactBtn) return;
+        // Add contact
+        addContactBtn.onclick = () => {
+            if (!Array.isArray(this.currentData.contacts)) this.currentData.contacts = [];
+            this.currentData.contacts.push({ name: '', role: '', phones: [], notes: '' });
+            this.renderContactsSection();
+            this.setUnsavedChanges(true);
+        };
+        // Delegate events for add/remove phone and remove contact
+        contactsList.onclick = (e) => {
+            const addPhoneBtn = e.target.closest('.add-phone-btn');
+            const removePhoneBtn = e.target.closest('.remove-phone-btn');
+            const removeContactBtn = e.target.closest('.remove-contact-btn');
+            if (addPhoneBtn) {
+                const cidx = parseInt(addPhoneBtn.dataset.cidx, 10);
+                if (Array.isArray(this.currentData.contacts[cidx].phones)) {
+                    this.currentData.contacts[cidx].phones.push({ type: 'cell', value: '' });
+                } else {
+                    this.currentData.contacts[cidx].phones = [{ type: 'cell', value: '' }];
+                }
+                this.renderContactsSection();
+                this.setUnsavedChanges(true);
+            } else if (removePhoneBtn) {
+                const cidx = parseInt(removePhoneBtn.dataset.cidx, 10);
+                const pidx = parseInt(removePhoneBtn.dataset.pidx, 10);
+                if (Array.isArray(this.currentData.contacts[cidx].phones)) {
+                    this.currentData.contacts[cidx].phones.splice(pidx, 1);
+                }
+                this.renderContactsSection();
+                this.setUnsavedChanges(true);
+            } else if (removeContactBtn) {
+                const cidx = parseInt(removeContactBtn.dataset.cidx, 10);
+                this.currentData.contacts.splice(cidx, 1);
+                this.renderContactsSection();
+                this.setUnsavedChanges(true);
+            }
+        };
+        // Delegate input changes
+        contactsList.oninput = (e) => {
+            const nameInput = e.target.classList.contains('contact-name');
+            const roleInput = e.target.classList.contains('contact-role');
+            const notesInput = e.target.classList.contains('contact-notes');
+            const phoneType = e.target.classList.contains('phone-type');
+            const phoneValue = e.target.classList.contains('phone-value');
+            if (nameInput || roleInput || notesInput || phoneType || phoneValue) {
+                const cidx = parseInt(e.target.dataset.cidx, 10);
+                if (nameInput) this.currentData.contacts[cidx].name = e.target.value;
+                if (roleInput) this.currentData.contacts[cidx].role = e.target.value;
+                if (notesInput) this.currentData.contacts[cidx].notes = e.target.value;
+                if (phoneType || phoneValue) {
+                    const pidx = parseInt(e.target.dataset.pidx, 10);
+                    if (phoneType) this.currentData.contacts[cidx].phones[pidx].type = e.target.value;
+                    if (phoneValue) this.currentData.contacts[cidx].phones[pidx].value = e.target.value;
+                }
+                this.setUnsavedChanges(true);
+            }
+        };
+    }
+
+    /**
+     * Collect contacts data for saving
+     */
+    collectContactsData(data) {
+        if (Array.isArray(this.currentData.contacts)) {
+            // Deep copy to avoid mutation
+            data.contacts = JSON.parse(JSON.stringify(this.currentData.contacts));
+        }
+    }
+
+    /**
+     * Initialize all sections and tabs
+     */
+    initializeAll() {
+        this.renderContactsSection();
+        this.setupContactsHandlers();
     }
 }
 
