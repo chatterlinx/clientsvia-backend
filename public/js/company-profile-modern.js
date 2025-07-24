@@ -1480,11 +1480,16 @@ class CompanyProfileManager {
      * GOLD STANDARD: Initialize enterprise notes management system
      */
     initializeEnterpriseNotesSystem() {
+        console.log('📝 Initializing enterprise notes system...');
+        console.log('📝 Current data notes:', this.currentData?.notes);
+        
         // Initialize notes array with enterprise structure
         this.notes = this.currentData?.notes || [];
+        console.log('📝 Notes after initialization:', this.notes);
         
         // Ensure notes have proper structure
         this.notes = this.notes.map(note => this.normalizeNoteStructure(note));
+        console.log('📝 Notes after normalization:', this.notes);
         
         // Setup enterprise notes interface
         this.setupEnterpriseNotesInterface();
@@ -1734,11 +1739,21 @@ class CompanyProfileManager {
      * GOLD STANDARD: Add enterprise note with full feature set
      */
     addEnterpriseNote() {
+        console.log('📝 Adding enterprise note...');
+        
         const titleInput = document.getElementById('quick-note-title');
         const contentTextarea = document.getElementById('quick-note-content');
         const categorySelect = document.getElementById('quick-note-category');
         const prioritySelect = document.getElementById('quick-note-priority');
         const pinCheckbox = document.getElementById('quick-note-pin');
+
+        console.log('📝 Form elements found:', {
+            titleInput: !!titleInput,
+            contentTextarea: !!contentTextarea,
+            categorySelect: !!categorySelect,
+            prioritySelect: !!prioritySelect,
+            pinCheckbox: !!pinCheckbox
+        });
 
         // Validation
         if (!contentTextarea?.value.trim()) {
@@ -1763,6 +1778,9 @@ class CompanyProfileManager {
             isEditing: false
         };
 
+        console.log('📝 Creating new note:', newNote);
+        console.log('📝 Current notes array before addition:', this.notes);
+
         // Add to notes array (pinned notes go to top)
         if (newNote.isPinned) {
             this.notes.unshift(newNote);
@@ -1776,6 +1794,8 @@ class CompanyProfileManager {
             }
         }
 
+        console.log('📝 Notes array after addition:', this.notes);
+
         // Clear form
         titleInput.value = '';
         contentTextarea.value = '';
@@ -1788,7 +1808,7 @@ class CompanyProfileManager {
         this.setUnsavedChanges(true);
         this.showNotification('Note added successfully!', 'success');
         
-        console.log('📝 Enterprise note added:', newNote);
+        console.log('📝 Enterprise note added successfully:', newNote);
     }
 
     /**
@@ -4173,6 +4193,9 @@ class CompanyProfileManager {
      */
     collectNotesData(data) {
         console.log('📝 Collecting enterprise notes data...');
+        console.log('📝 Current notes state:', this.notes);
+        console.log('📝 Notes is array?', Array.isArray(this.notes));
+        console.log('📝 Notes length:', this.notes ? this.notes.length : 'undefined');
         
         if (this.notes && Array.isArray(this.notes) && this.notes.length > 0) {
             // Ensure all notes have proper enterprise structure
@@ -4190,7 +4213,7 @@ class CompanyProfileManager {
             }));
 
             data.notes = processedNotes;
-            console.log(`📝 Collected ${processedNotes.length} enterprise notes for saving`);
+            console.log(`📝 Collected ${processedNotes.length} enterprise notes for saving:`, processedNotes);
             
             // Also save in legacy format for backward compatibility
             data.legacyNotes = processedNotes.map(note => ({
@@ -4204,8 +4227,10 @@ class CompanyProfileManager {
         } else {
             data.notes = [];
             data.legacyNotes = [];
-            console.log('📝 No notes to collect');
+            console.log('📝 No notes to collect - setting empty arrays');
         }
+        
+        console.log('📝 Final notes data being saved:', data.notes);
     }
 
     /**

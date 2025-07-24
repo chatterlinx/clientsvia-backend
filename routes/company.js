@@ -254,6 +254,16 @@ router.delete('/company/:id', async (req, res) => {
 
 router.patch('/company/:id', async (req, res) => {
     console.log(`[API PATCH /api/company/:id] (Overview) Received update for ID: ${req.params.id} with data:`, JSON.stringify(req.body, null, 2));
+    
+    // GOLD STANDARD: Debug notes data specifically
+    if (req.body.notes) {
+        console.log('📝 [NOTES DEBUG] Notes field received:', req.body.notes);
+        console.log('📝 [NOTES DEBUG] Notes is array:', Array.isArray(req.body.notes));
+        console.log('📝 [NOTES DEBUG] Notes length:', req.body.notes.length);
+    } else {
+        console.log('📝 [NOTES DEBUG] No notes field in request body');
+    }
+    
     const companyId = req.params.id;
 
     if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID format' });
@@ -302,6 +312,10 @@ router.patch('/company/:id', async (req, res) => {
                     updateOperation[key] = updates[key];
                 } else if (key === 'contacts' && Array.isArray(updates[key])) {
                     updateOperation[key] = updates[key];
+                } else if (key === 'notes' && Array.isArray(updates[key])) {
+                    // GOLD STANDARD: Handle notes array properly
+                    console.log('📝 [NOTES DEBUG] Processing notes array for save:', updates[key]);
+                    updateOperation[key] = updates[key];
                 }
                 else {
                     updateOperation[key] = updates[key];
@@ -324,6 +338,11 @@ router.patch('/company/:id', async (req, res) => {
         );
 
         if (!updatedCompany) return res.status(404).json({ message: 'Company not found.' });
+
+        // GOLD STANDARD: Debug notes after save
+        if (updatedCompany.notes) {
+            console.log('📝 [NOTES DEBUG] Notes after save:', updatedCompany.notes.length, 'notes saved');
+        }
 
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);

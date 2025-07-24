@@ -43,6 +43,7 @@ const bookingScriptsRoutes = require('./routes/bookingScripts'); // Booking Scri
 const bookingHandlerRoutes = require('./routes/bookingHandler'); // Booking Handler API
 const aiIntelligenceRoutes = require('./routes/aiIntelligence'); // AI Intelligence Engine
 const monitoringRoutes = require('./routes/monitoring'); // Agent Monitoring System
+const notesRoutes = require('./routes/notes'); // GOLD STANDARD: Enterprise Notes Management
 
 // Initialize Express app
 const app = express();
@@ -91,6 +92,7 @@ app.use('/api/agent', agentPerformanceRoutes);
 app.use('/api/agent', intentRoutingRoutes); // Intent Routing & Flow Control routes
 app.use('/api/booking-scripts', bookingScriptsRoutes); // Booking Scripts Configuration
 app.use('/api/monitoring', monitoringRoutes); // Agent Monitoring System
+app.use('/api/notes', notesRoutes); // GOLD STANDARD: Enterprise Notes Management
 app.use('/api/booking-handler', bookingHandlerRoutes); // Booking Handler API for testing and integration
 app.use('/api/ai-intelligence', aiIntelligenceRoutes); // AI Intelligence Engine routes
 

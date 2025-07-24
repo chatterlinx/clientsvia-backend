@@ -29,6 +29,7 @@ const ollamaRoutes = require('./routes/ollama');
 const llmRoutes = require('./routes/llm');
 const bookingRoutes = require('./routes/booking');
 const transferRoutes = require('./routes/transfer');
+const notesRoutes = require('./routes/notes'); // GOLD STANDARD: Enterprise Notes API
 
 // Event Hooks and Notification System Routes with error handling
 let eventHooksRoutes, notificationRoutes;
@@ -116,6 +117,7 @@ app.use('/api/ollama', ollamaRoutes);
 app.use('/api/llm', llmRoutes);
 app.use('/api/booking', bookingRoutes);
 app.use('/api/transfer', transferRoutes);
+app.use('/api/notes', notesRoutes); // GOLD STANDARD: Enterprise Notes Management
 app.use('/api/event-hooks', eventHooksRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/qna-learning', qnaLearningRoutes);
@@ -124,6 +126,7 @@ console.log('✅ Ollama routes registered at /api/ollama');
 console.log('✅ LLM routes registered at /api/llm');
 console.log('✅ Booking routes registered at /api/booking');
 console.log('✅ Transfer routes registered at /api/transfer');
+console.log('✅ Notes routes registered at /api/notes'); // GOLD STANDARD: Enterprise Notes
 console.log('✅ Event Hooks routes registered at /api/event-hooks');
 console.log('✅ Notification routes registered at /api/notifications');
 console.log('✅ Q&A Learning routes registered at /api/qna-learning');
