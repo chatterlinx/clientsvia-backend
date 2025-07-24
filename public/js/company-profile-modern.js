@@ -1466,30 +1466,23 @@ class CompanyProfileManager {
     }
 
     /**
-     * GOLD STANDARD: Populate Notes tab with enterprise-grade note management system
+     * PRODUCTION: Populate Notes tab with enterprise-grade note management system
      * Features: Pin/unpin, edit in-place, timestamps, search, categories, auto-save
      */
-    populateNotesTab() {
-        console.log('📝 Initializing enterprise Notes management system...');
-        
+    populateNotesTab() {        
         // Initialize notes management system with advanced features
         this.initializeEnterpriseNotesSystem();
     }
 
     /**
-     * GOLD STANDARD: Initialize enterprise notes management system
+     * PRODUCTION: Initialize enterprise notes management system
      */
-    initializeEnterpriseNotesSystem() {
-        console.log('📝 Initializing enterprise notes system...');
-        console.log('📝 Current data notes:', this.currentData?.notes);
-        
+    initializeEnterpriseNotesSystem() {        
         // Initialize notes array with enterprise structure
         this.notes = this.currentData?.notes || [];
-        console.log('📝 Notes after initialization:', this.notes);
         
         // Ensure notes have proper structure
         this.notes = this.notes.map(note => this.normalizeNoteStructure(note));
-        console.log('📝 Notes after normalization:', this.notes);
         
         // Setup enterprise notes interface
         this.setupEnterpriseNotesInterface();
@@ -1504,7 +1497,7 @@ class CompanyProfileManager {
     }
 
     /**
-     * GOLD STANDARD: Normalize note structure for enterprise features
+     * PRODUCTION: Normalize note structure for enterprise features
      */
     normalizeNoteStructure(note) {
         return {
@@ -1732,28 +1725,18 @@ class CompanyProfileManager {
             });
         }
 
-        console.log('✅ Enterprise notes event listeners setup complete');
+        // Event listeners setup complete
     }
 
     /**
-     * GOLD STANDARD: Add enterprise note with full feature set
+     * PRODUCTION: Add enterprise note with full feature set
      */
-    addEnterpriseNote() {
-        console.log('📝 Adding enterprise note...');
-        
+    addEnterpriseNote() {        
         const titleInput = document.getElementById('quick-note-title');
         const contentTextarea = document.getElementById('quick-note-content');
         const categorySelect = document.getElementById('quick-note-category');
         const prioritySelect = document.getElementById('quick-note-priority');
         const pinCheckbox = document.getElementById('quick-note-pin');
-
-        console.log('📝 Form elements found:', {
-            titleInput: !!titleInput,
-            contentTextarea: !!contentTextarea,
-            categorySelect: !!categorySelect,
-            prioritySelect: !!prioritySelect,
-            pinCheckbox: !!pinCheckbox
-        });
 
         // Validation
         if (!contentTextarea?.value.trim()) {
@@ -1778,9 +1761,6 @@ class CompanyProfileManager {
             isEditing: false
         };
 
-        console.log('📝 Creating new note:', newNote);
-        console.log('📝 Current notes array before addition:', this.notes);
-
         // Add to notes array (pinned notes go to top)
         if (newNote.isPinned) {
             this.notes.unshift(newNote);
@@ -1794,8 +1774,6 @@ class CompanyProfileManager {
             }
         }
 
-        console.log('📝 Notes array after addition:', this.notes);
-
         // Clear form
         titleInput.value = '';
         contentTextarea.value = '';
@@ -1807,12 +1785,10 @@ class CompanyProfileManager {
         this.renderEnterpriseNotes();
         this.setUnsavedChanges(true);
         this.showNotification('Note added successfully!', 'success');
-        
-        console.log('📝 Enterprise note added successfully:', newNote);
     }
 
     /**
-     * GOLD STANDARD: Extract tags from note content (#hashtags)
+     * PRODUCTION: Extract tags from note content (#hashtags)
      */
     extractTagsFromContent(content) {
         const tagRegex = /#(\w+)/g;
@@ -1827,7 +1803,7 @@ class CompanyProfileManager {
     }
 
     /**
-     * GOLD STANDARD: Render enterprise notes with advanced features
+     * PRODUCTION: Render enterprise notes with advanced features
      */
     renderEnterpriseNotes() {
         const container = document.getElementById('enterprise-notes-container');
@@ -1894,12 +1870,10 @@ class CompanyProfileManager {
         
         // Setup individual note event listeners
         this.setupNoteCardEventListeners();
-        
-        console.log(`✅ Rendered ${sortedNotes.length} enterprise notes`);
     }
 
     /**
-     * GOLD STANDARD: Generate HTML for individual note with all features
+     * PRODUCTION: Generate HTML for individual note with all features
      */
     generateNoteHTML(note) {
         const categoryColors = {
@@ -2081,7 +2055,7 @@ class CompanyProfileManager {
     }
 
     /**
-     * GOLD STANDARD: Toggle pin status of note
+     * PRODUCTION: Toggle pin status of note
      */
     togglePinNote(noteId) {
         const note = this.notes.find(n => n.id == noteId);
@@ -2129,12 +2103,10 @@ class CompanyProfileManager {
                 textarea.setSelectionRange(textarea.value.length, textarea.value.length);
             }
         }, 100);
-        
-        console.log('✏️ Started editing note:', note.title);
     }
 
     /**
-     * GOLD STANDARD: Save edited note
+     * PRODUCTION: Save edited note
      */
     saveEditNote(noteId) {
         const note = this.notes.find(n => n.id == noteId);
@@ -2194,8 +2166,6 @@ class CompanyProfileManager {
         this.renderEnterpriseNotes();
         this.setUnsavedChanges(true);
         this.showNotification('Note deleted successfully!', 'success');
-        
-        console.log('🗑️ Note deleted:', note.title);
     }
 
     /**
@@ -4188,14 +4158,9 @@ class CompanyProfileManager {
     }
 
     /**
-     * GOLD STANDARD: Collect Notes tab data with enterprise structure
+     * PRODUCTION: Collect Notes tab data with enterprise structure
      */
-    collectNotesData(data) {
-        console.log('📝 Collecting enterprise notes data...');
-        console.log('📝 Current notes state:', this.notes);
-        console.log('📝 Notes is array?', Array.isArray(this.notes));
-        console.log('📝 Notes length:', this.notes ? this.notes.length : 'undefined');
-        
+    collectNotesData(data) {        
         if (this.notes && Array.isArray(this.notes) && this.notes.length > 0) {
             // Ensure all notes have proper enterprise structure
             const processedNotes = this.notes.map(note => ({
@@ -4212,7 +4177,6 @@ class CompanyProfileManager {
             }));
 
             data.notes = processedNotes;
-            console.log(`📝 Collected ${processedNotes.length} enterprise notes for saving:`, processedNotes);
             
             // Also save in legacy format for backward compatibility
             data.legacyNotes = processedNotes.map(note => ({
@@ -4226,10 +4190,7 @@ class CompanyProfileManager {
         } else {
             data.notes = [];
             data.legacyNotes = [];
-            console.log('📝 No notes to collect - setting empty arrays');
         }
-        
-        console.log('📝 Final notes data being saved:', data.notes);
     }
 
     /**
