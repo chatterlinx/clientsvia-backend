@@ -1,4 +1,9 @@
-# 🔧 Upcoming Modules for Gold Standard AI Agent
+# 🔧 Upcoming ModuWe will create:
+
+- [x] HTML UI (dropdowns/sliders for each) ✅ COMPLETED
+- [x] Company schema: `agentPersonalitySettings` ✅ COMPLETED
+- [ ] API routes: GET/PUT company/:id/personality
+- [ ] Live preview tool (text-to-speech test)r Gold Standard AI Agent
 
 This file outlines and begins implementation prep for the next key sections of your Admin Agent Logic Tab:
 
