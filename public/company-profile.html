@@ -83,6 +83,30 @@
         #toast-notification.show { opacity: 1; }
         #toast-notification.success { background-color: #4CAF50; }
         #toast-notification.error { background-color: #f44336; }
+        
+        /* AI Agent Logic Vertical Tabs */
+        .agent-tab-btn {
+            color: #6B7280;
+            background-color: transparent;
+            border: 1px solid transparent;
+        }
+        .agent-tab-btn:hover {
+            color: #4F46E5;
+            background-color: #F3F4F6;
+        }
+        .agent-tab-btn.active {
+            color: #4F46E5;
+            background-color: #EEF2FF;
+            border-color: #C7D2FE;
+            font-weight: 600;
+        }
+        .agent-tab-content {
+            display: none;
+        }
+        .agent-tab-content.active {
+            display: block;
+        }
+        
         @media (min-width: 768px) { .wider-textbox { max-width: 800px; } }
         @media (max-width: 767px) { .wider-textbox { max-width: 100%; } }
     </style>
@@ -802,24 +826,394 @@
 
                     <div id="ai-agent-logic-content" class="tab-content-item hidden">
                         <section class="profile-section bg-transparent shadow-none p-0">
-                            <h2 class="profile-section-title"><i class="fas fa-brain mr-2 text-indigo-600"></i>AI Agent Logic</h2>
-                            
-                            <!-- Notepad Section -->
-                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-                                <div class="border-b border-gray-200 bg-gray-50 px-4 py-3 rounded-t-lg">
+                            <div class="flex items-center justify-between mb-6">
+                                <div>
+                                    <h2 class="text-2xl font-bold text-gray-900 flex items-center">
+                                        <i class="fas fa-brain mr-3 text-indigo-600"></i>AI Agent Logic
+                                        <span class="ml-3 px-3 py-1 bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-800 text-sm font-medium rounded-full">Gold Standard</span>
+                                    </h2>
+                                    <p class="text-gray-600 mt-2">Complete agent behavior control and configuration system</p>
+                                </div>
+                                <div class="flex items-center space-x-3">
+                                    <button id="agent-status-toggle" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition duration-150 ease-in-out">
+                                        <i class="fas fa-play mr-2"></i>Agent Active
+                                    </button>
+                                    <button id="test-agent-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition duration-150 ease-in-out">
+                                        <i class="fas fa-vial mr-2"></i>Test Agent
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Agent Logic Vertical Tabs -->
+                            <div class="flex gap-6">
+                                <!-- Vertical Tab Navigation -->
+                                <div class="w-64 flex-shrink-0">
+                                    <nav class="space-y-1">
+                                        <button class="agent-tab-btn active w-full text-left px-4 py-3 rounded-lg font-medium text-sm transition duration-150 ease-in-out flex items-center" data-tab="company-identity">
+                                            <i class="fas fa-building mr-3 text-blue-600"></i>Company Identity
+                                        </button>
+                                        <button class="agent-tab-btn w-full text-left px-4 py-3 rounded-lg font-medium text-sm transition duration-150 ease-in-out flex items-center" data-tab="conversation-flow">
+                                            <i class="fas fa-comments mr-3 text-green-600"></i>Conversation Flow
+                                        </button>
+                                        <button class="agent-tab-btn w-full text-left px-4 py-3 rounded-lg font-medium text-sm transition duration-150 ease-in-out flex items-center" data-tab="booking-system">
+                                            <i class="fas fa-calendar-check mr-3 text-purple-600"></i>Booking System
+                                        </button>
+                                        <button class="agent-tab-btn w-full text-left px-4 py-3 rounded-lg font-medium text-sm transition duration-150 ease-in-out flex items-center" data-tab="knowledge-base">
+                                            <i class="fas fa-brain mr-3 text-orange-600"></i>Knowledge Base
+                                        </button>
+                                        <button class="agent-tab-btn w-full text-left px-4 py-3 rounded-lg font-medium text-sm transition duration-150 ease-in-out flex items-center" data-tab="escalation-rules">
+                                            <i class="fas fa-arrow-up mr-3 text-red-600"></i>Escalation Rules
+                                        </button>
+                                        <button class="agent-tab-btn w-full text-left px-4 py-3 rounded-lg font-medium text-sm transition duration-150 ease-in-out flex items-center" data-tab="notifications">
+                                            <i class="fas fa-bell mr-3 text-yellow-600"></i>Notifications
+                                        </button>
+                                        <button class="agent-tab-btn w-full text-left px-4 py-3 rounded-lg font-medium text-sm transition duration-150 ease-in-out flex items-center" data-tab="intelligence">
+                                            <i class="fas fa-chart-line mr-3 text-teal-600"></i>Intelligence
+                                        </button>
+                                        <button class="agent-tab-btn w-full text-left px-4 py-3 rounded-lg font-medium text-sm transition duration-150 ease-in-out flex items-center" data-tab="advanced-settings">
+                                            <i class="fas fa-cogs mr-3 text-gray-600"></i>Advanced Settings
+                                        </button>
+                                    </nav>
+                                </div>
+
+                                <!-- Tab Content -->
+                                <div class="flex-1">
+                                    <!-- Company Identity Tab -->
+                                    <div id="company-identity-tab" class="agent-tab-content">
+                                        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                            <div class="border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 rounded-t-lg">
+                                                <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                                                    <i class="fas fa-building mr-2 text-blue-600"></i>Company Identity & Personality
+                                                </h3>
+                                                <p class="text-sm text-gray-600 mt-1">Define how your AI agent represents your company</p>
+                                            </div>
+                                            
+                                            <div class="p-6 space-y-6">
+                                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                                    <div>
+                                                        <label class="form-label">Agent Name</label>
+                                                        <input type="text" id="agent-name" class="form-input" placeholder="e.g., Sarah from TechFlow Plumbing">
+                                                        <p class="text-xs text-gray-500 mt-1">How the agent introduces itself</p>
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label">Agent Personality</label>
+                                                        <select id="agent-personality" class="form-select">
+                                                            <option value="professional">Professional</option>
+                                                            <option value="friendly">Friendly</option>
+                                                            <option value="enthusiastic">Enthusiastic</option>
+                                                            <option value="calm">Calm & Reassuring</option>
+                                                            <option value="technical">Technical Expert</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <label class="form-label">Company Background & Specialties</label>
+                                                    <textarea id="company-background" class="form-textarea" rows="4" placeholder="Describe your company's expertise, years in business, specialties, certifications, etc. This helps the agent represent your company accurately."></textarea>
+                                                </div>
+
+                                                <div>
+                                                    <label class="form-label">Service Area Coverage</label>
+                                                    <textarea id="service-areas" class="form-textarea" rows="3" placeholder="List cities, neighborhoods, or regions you serve. Be specific so the agent can properly qualify leads."></textarea>
+                                                </div>
+
+                                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                                    <div>
+                                                        <label class="form-label">Response Style</label>
+                                                        <select id="response-style" class="form-select">
+                                                            <option value="concise">Concise & Direct</option>
+                                                            <option value="detailed">Detailed & Thorough</option>
+                                                            <option value="conversational">Conversational</option>
+                                                            <option value="educational">Educational</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label">Confidence Level</label>
+                                                        <select id="confidence-level" class="form-select">
+                                                            <option value="high">High - Always confident</option>
+                                                            <option value="balanced">Balanced - Confident but cautious</option>
+                                                            <option value="careful">Careful - Conservative responses</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Conversation Flow Tab -->
+                                    <div id="conversation-flow-tab" class="agent-tab-content hidden">
+                                        <div class="space-y-6">
+                                            <!-- Greeting Configuration -->
+                                            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                                <div class="border-b border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-4 rounded-t-lg">
+                                                    <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                                                        <i class="fas fa-hand-wave mr-2 text-green-600"></i>Greeting & Opening
+                                                    </h3>
+                                                </div>
+                                                <div class="p-6">
+                                                    <div class="mb-4">
+                                                        <label class="form-label">Agent Greeting Script</label>
+                                                        <textarea id="greeting-script" class="form-textarea" rows="3" placeholder="Hi! Thank you for calling [Company Name]. This is [Agent Name]. How can I help you today?"></textarea>
+                                                        <p class="text-xs text-gray-500 mt-1">Use [Company Name] and [Agent Name] as placeholders</p>
+                                                    </div>
+                                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label class="form-label">After Hours Greeting</label>
+                                                            <textarea id="after-hours-greeting" class="form-textarea" rows="2" placeholder="Thank you for calling. Our office is currently closed..."></textarea>
+                                                        </div>
+                                                        <div>
+                                                            <label class="form-label">Closing Script</label>
+                                                            <textarea id="closing-script" class="form-textarea" rows="2" placeholder="Thank you for calling [Company Name]. Have a great day!"></textarea>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Call Intent Recognition -->
+                                            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                                <div class="border-b border-gray-200 bg-gradient-to-r from-purple-50 to-pink-50 px-6 py-4 rounded-t-lg">
+                                                    <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                                                        <i class="fas fa-bullseye mr-2 text-purple-600"></i>Intent Recognition & Routing
+                                                    </h3>
+                                                    <p class="text-sm text-gray-600 mt-1">Define how the agent identifies and handles different call types</p>
+                                                </div>
+                                                <div class="p-6">
+                                                    <div id="intent-rules-container">
+                                                        <!-- Intent rules will be dynamically loaded here -->
+                                                    </div>
+                                                    <button id="add-intent-rule" class="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium">
+                                                        <i class="fas fa-plus mr-2"></i>Add Intent Rule
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Booking System Tab -->
+                                    <div id="booking-system-tab" class="agent-tab-content hidden">
+                                        <div class="space-y-6">
+                                            <!-- Booking Flow Configuration -->
+                                            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                                <div class="border-b border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50 px-6 py-4 rounded-t-lg">
+                                                    <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                                                        <i class="fas fa-calendar-check mr-2 text-blue-600"></i>Booking Flow Configuration
+                                                        <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">Interactive</span>
+                                                    </h3>
+                                                    <p class="text-sm text-gray-600 mt-1">Configure the conversation flow for booking appointments with customers</p>
+                                                </div>
+                                                
+                                                <div class="p-6">
+                                                    <div class="mb-4">
+                                                        <table id="booking-flow-table" class="table-auto w-full border mb-4 text-sm">
+                                                            <thead>
+                                                                <tr class="bg-gray-100">
+                                                                    <th class="p-3 text-left font-medium text-gray-700">Order</th>
+                                                                    <th class="p-3 text-left font-medium text-gray-700">Prompt</th>
+                                                                    <th class="p-3 text-left font-medium text-gray-700">Field Name</th>
+                                                                    <th class="p-3 text-left font-medium text-gray-700">Required</th>
+                                                                    <th class="p-3 text-left font-medium text-gray-700">Actions</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody id="booking-flow-body">
+                                                                <!-- Fields will load here -->
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+
+                                                    <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                                                        <h4 class="font-medium text-gray-900 mb-3">Add New Booking Field</h4>
+                                                        <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
+                                                            <input 
+                                                                id="new-prompt" 
+                                                                placeholder="Prompt (e.g. What's your address?)" 
+                                                                class="form-input text-sm"
+                                                            />
+                                                            <input 
+                                                                id="new-name" 
+                                                                placeholder="Field Name (e.g. address)" 
+                                                                class="form-input text-sm"
+                                                            />
+                                                            <select id="new-field-type" class="form-select text-sm">
+                                                                <option value="text">Text</option>
+                                                                <option value="phone">Phone</option>
+                                                                <option value="email">Email</option>
+                                                                <option value="date">Date</option>
+                                                                <option value="time">Time</option>
+                                                                <option value="select">Multiple Choice</option>
+                                                            </select>
+                                                            <button 
+                                                                type="button"
+                                                                class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md text-sm" 
+                                                                onclick="addBookingField()"
+                                                            >
+                                                                <i class="fas fa-plus mr-1"></i>Add Field
+                                                            </button>
+                                                        </div>
+                                                        <div class="mt-3 flex items-center">
+                                                            <input type="checkbox" id="new-field-required" class="form-checkbox">
+                                                            <label for="new-field-required" class="form-check-label">Required field</label>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+                                                        <div class="text-sm text-gray-600">
+                                                            <i class="fas fa-info-circle mr-1 text-blue-500"></i>
+                                                            These fields define the conversation flow for booking appointments
+                                                        </div>
+                                                        <div class="flex items-center space-x-3">
+                                                            <button 
+                                                                type="button"
+                                                                class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md" 
+                                                                onclick="saveBookingFlow()"
+                                                            >
+                                                                <i class="fas fa-save mr-2"></i>Save Booking Flow
+                                                            </button>
+                                                            <span id="booking-flow-saved" class="text-green-600 text-sm hidden">
+                                                                <i class="fas fa-check-circle mr-1"></i>Saved!
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Service-Specific Booking Flows -->
+                                            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                                <div class="border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-blue-50 px-6 py-4 rounded-t-lg">
+                                                    <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                                                        <i class="fas fa-wrench mr-2 text-indigo-600"></i>Service-Specific Flows
+                                                    </h3>
+                                                    <p class="text-sm text-gray-600 mt-1">Configure different booking flows for different services</p>
+                                                </div>
+                                                <div class="p-6">
+                                                    <div id="service-flows-container">
+                                                        <!-- Service-specific flows will be loaded here -->
+                                                    </div>
+                                                    <button id="add-service-flow" class="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">
+                                                        <i class="fas fa-plus mr-2"></i>Add Service Flow
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Knowledge Base Tab -->
+                                    <div id="knowledge-base-tab" class="agent-tab-content hidden">
+                                        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                            <div class="border-b border-gray-200 bg-gradient-to-r from-orange-50 to-red-50 px-6 py-4 rounded-t-lg">
+                                                <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                                                    <i class="fas fa-brain mr-2 text-orange-600"></i>Knowledge Base Management
+                                                </h3>
+                                                <p class="text-sm text-gray-600 mt-1">Manage what your agent knows and how it responds to questions</p>
+                                            </div>
+                                            
+                                            <div class="p-6">
+                                                <!-- Knowledge Base content will be added here -->
+                                                <div class="text-center py-12 text-gray-500">
+                                                    <i class="fas fa-construction text-4xl mb-4"></i>
+                                                    <p>Knowledge Base configuration coming in next update...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Escalation Rules Tab -->
+                                    <div id="escalation-rules-tab" class="agent-tab-content hidden">
+                                        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                            <div class="border-b border-gray-200 bg-gradient-to-r from-red-50 to-pink-50 px-6 py-4 rounded-t-lg">
+                                                <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                                                    <i class="fas fa-arrow-up mr-2 text-red-600"></i>Escalation Rules & Human Handoff
+                                                </h3>
+                                                <p class="text-sm text-gray-600 mt-1">Define when and how to escalate calls to human agents</p>
+                                            </div>
+                                            
+                                            <div class="p-6">
+                                                <!-- Escalation Rules content will be added here -->
+                                                <div class="text-center py-12 text-gray-500">
+                                                    <i class="fas fa-construction text-4xl mb-4"></i>
+                                                    <p>Escalation Rules configuration coming in next update...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Notifications Tab -->
+                                    <div id="notifications-tab" class="agent-tab-content hidden">
+                                        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                            <div class="border-b border-gray-200 bg-gradient-to-r from-yellow-50 to-orange-50 px-6 py-4 rounded-t-lg">
+                                                <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                                                    <i class="fas fa-bell mr-2 text-yellow-600"></i>Notifications & Alerts
+                                                </h3>
+                                                <p class="text-sm text-gray-600 mt-1">Configure when and how to send notifications</p>
+                                            </div>
+                                            
+                                            <div class="p-6">
+                                                <!-- Notifications content will be added here -->
+                                                <div class="text-center py-12 text-gray-500">
+                                                    <i class="fas fa-construction text-4xl mb-4"></i>
+                                                    <p>Notifications configuration coming in next update...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Intelligence Tab -->
+                                    <div id="intelligence-tab" class="agent-tab-content hidden">
+                                        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                            <div class="border-b border-gray-200 bg-gradient-to-r from-teal-50 to-cyan-50 px-6 py-4 rounded-t-lg">
+                                                <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                                                    <i class="fas fa-chart-line mr-2 text-teal-600"></i>Intelligence & Analytics
+                                                </h3>
+                                                <p class="text-sm text-gray-600 mt-1">Monitor and optimize agent performance</p>
+                                            </div>
+                                            
+                                            <div class="p-6">
+                                                <!-- Intelligence content will be added here -->
+                                                <div class="text-center py-12 text-gray-500">
+                                                    <i class="fas fa-construction text-4xl mb-4"></i>
+                                                    <p>Intelligence configuration coming in next update...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Advanced Settings Tab -->
+                                    <div id="advanced-settings-tab" class="agent-tab-content hidden">
+                                        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                            <div class="border-b border-gray-200 bg-gradient-to-r from-gray-50 to-slate-50 px-6 py-4 rounded-t-lg">
+                                                <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                                                    <i class="fas fa-cogs mr-2 text-gray-600"></i>Advanced Settings & Fine-Tuning
+                                                </h3>
+                                                <p class="text-sm text-gray-600 mt-1">Advanced configuration for power users</p>
+                                            </div>
+                                            
+                                            <div class="p-6">
+                                                <!-- Advanced Settings content will be added here -->
+                                                <div class="text-center py-12 text-gray-500">
+                                                    <i class="fas fa-construction text-4xl mb-4"></i>
+                                                    <p>Advanced Settings coming in next update...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Logic Notes Section (moved to bottom for quick access) -->
+                            <div class="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">
+                                <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">
                                     <h3 class="text-lg font-medium text-gray-800">
-                                        <i class="fas fa-sticky-note mr-2 text-yellow-600"></i>Logic Notes
+                                        <i class="fas fa-sticky-note mr-2 text-yellow-600"></i>Development Notes
                                     </h3>
                                     <p class="text-sm text-gray-600 mt-1">Keep track of AI logic decisions, rules, and implementation notes</p>
                                 </div>
                                 
-                                <div class="p-4">
+                                <div class="p-6">
                                     <!-- Add New Note Form -->
                                     <div class="mb-4 pb-4 border-b border-gray-200">
                                         <label for="new-logic-note" class="form-label">Add New Note</label>
                                         <textarea 
                                             id="new-logic-note" 
-                                            class="form-textarea wider-textbox" 
+                                            class="form-textarea" 
                                             rows="3" 
                                             placeholder="Enter your AI logic note here..."
                                         ></textarea>
@@ -827,7 +1221,7 @@
                                             <button 
                                                 type="button" 
                                                 onclick="addLogicNote()" 
-                                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out"
+                                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out"
                                             >
                                                 <i class="fas fa-plus mr-2"></i>Add Note
                                             </button>
@@ -837,73 +1231,6 @@
                                     <!-- Notes List -->
                                     <div id="logic-notes-list" class="space-y-3">
                                         <p class="text-gray-500 italic text-center py-4">No notes yet. Add your first note above.</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Booking Flow Config Section -->
-                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-                                <div class="border-b border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50 px-4 py-3 rounded-t-lg">
-                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
-                                        <i class="fas fa-calendar-check mr-2 text-blue-600"></i>Booking Flow Configuration
-                                        <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">Interactive</span>
-                                    </h3>
-                                    <p class="text-sm text-gray-600 mt-1">Configure the conversation flow for booking appointments with customers</p>
-                                </div>
-                                
-                                <div class="p-4">
-                                    <div class="mb-4">
-                                        <table id="booking-flow-table" class="table-auto w-full border mb-4 text-sm">
-                                            <thead>
-                                                <tr class="bg-gray-100">
-                                                    <th class="p-3 text-left font-medium text-gray-700">Prompt</th>
-                                                    <th class="p-3 text-left font-medium text-gray-700">Field Name</th>
-                                                    <th class="p-3 text-left font-medium text-gray-700">Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="booking-flow-body">
-                                                <!-- Fields will load here -->
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    <div class="flex items-center gap-2 mb-4 p-3 bg-gray-50 rounded-lg">
-                                        <input 
-                                            id="new-prompt" 
-                                            placeholder="Prompt (e.g. What's your address?)" 
-                                            class="form-input flex-1 text-sm"
-                                        />
-                                        <input 
-                                            id="new-name" 
-                                            placeholder="Field Name (e.g. address)" 
-                                            class="form-input w-1/3 text-sm"
-                                        />
-                                        <button 
-                                            type="button"
-                                            class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out" 
-                                            onclick="addBookingField()"
-                                        >
-                                            <i class="fas fa-plus mr-1"></i>Add Field
-                                        </button>
-                                    </div>
-
-                                    <div class="flex justify-between items-center pt-3 border-t border-gray-200">
-                                        <div class="text-sm text-gray-600">
-                                            <i class="fas fa-info-circle mr-1 text-blue-500"></i>
-                                            These fields define the conversation flow for booking appointments
-                                        </div>
-                                        <div class="flex items-center space-x-3">
-                                            <button 
-                                                type="button"
-                                                class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out" 
-                                                onclick="saveBookingFlow()"
-                                            >
-                                                <i class="fas fa-save mr-2"></i>Save Booking Flow
-                                            </button>
-                                            <span id="booking-flow-saved" class="text-green-600 text-sm hidden">
-                                                <i class="fas fa-check-circle mr-1"></i>Saved!
-                                            </span>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
