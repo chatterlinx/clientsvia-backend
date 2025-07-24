@@ -481,8 +481,24 @@ class CompanyProfileManager {
         }
         
         if (twilioTokenInput && (twilioConfig.authToken || this.currentData.twilioAuthToken)) {
-            twilioTokenInput.value = '••••••••••••••••'; // Mask for security
-            console.log('🔧 Loaded Twilio Auth Token (masked)');
+            const savedToken = twilioConfig.authToken || this.currentData.twilioAuthToken;
+            // Show last 4 characters with masking for better UX
+            if (savedToken && savedToken.length > 4) {
+                twilioTokenInput.value = '••••••••••••' + savedToken.slice(-4);
+                twilioTokenInput.dataset.hasToken = 'true';
+                console.log('🔧 Loaded Twilio Auth Token (showing last 4):', '••••••••••••' + savedToken.slice(-4));
+            } else {
+                twilioTokenInput.value = '••••••••••••••••';
+                twilioTokenInput.dataset.hasToken = 'true';
+                console.log('🔧 Loaded Twilio Auth Token (fully masked - short token)');
+            }
+        } else {
+            if (twilioTokenInput) {
+                twilioTokenInput.value = '';
+                twilioTokenInput.placeholder = 'Enter Auth Token';
+                twilioTokenInput.dataset.hasToken = 'false';
+                console.log('🔧 No Twilio Auth Token found - field empty');
+            }
         }
         
         if (twilioApiKeyInput && (twilioConfig.apiKey || this.currentData.twilioApiKey)) {
@@ -491,8 +507,24 @@ class CompanyProfileManager {
         }
         
         if (twilioApiSecretInput && (twilioConfig.apiSecret || this.currentData.twilioApiSecret)) {
-            twilioApiSecretInput.value = '••••••••••••••••'; // Mask for security
-            console.log('🔧 Loaded Twilio API Secret (masked)');
+            const savedSecret = twilioConfig.apiSecret || this.currentData.twilioApiSecret;
+            // Show last 4 characters with masking for better UX
+            if (savedSecret && savedSecret.length > 4) {
+                twilioApiSecretInput.value = '••••••••••••' + savedSecret.slice(-4);
+                twilioApiSecretInput.dataset.hasSecret = 'true';
+                console.log('🔧 Loaded Twilio API Secret (showing last 4):', '••••••••••••' + savedSecret.slice(-4));
+            } else {
+                twilioApiSecretInput.value = '••••••••••••••••';
+                twilioApiSecretInput.dataset.hasSecret = 'true';
+                console.log('🔧 Loaded Twilio API Secret (fully masked - short secret)');
+            }
+        } else {
+            if (twilioApiSecretInput) {
+                twilioApiSecretInput.value = '';
+                twilioApiSecretInput.placeholder = 'Enter API Secret';
+                twilioApiSecretInput.dataset.hasSecret = 'false';
+                console.log('🔧 No Twilio API Secret found - field empty');
+            }
         }
 
         // Setup phone numbers management
@@ -2555,9 +2587,23 @@ class CompanyProfileManager {
             console.log('🔧 Set accountSid:', data.twilioConfig.accountSid);
         }
         
-        if (twilioToken?.value.trim() && twilioToken.value !== '••••••••••••••••') {
-            data.twilioConfig.authToken = twilioToken.value.trim();
-            console.log('🔧 Set authToken:', '***masked***');
+        if (twilioToken?.value.trim()) {
+            const tokenValue = twilioToken.value.trim();
+            // Check if it's a masked value (starts with bullets) or a new token
+            const isMaskedValue = tokenValue.startsWith('••••••••••••') || tokenValue === '••••••••••••••••';
+            
+            if (!isMaskedValue) {
+                // It's a new token, save it
+                data.twilioConfig.authToken = tokenValue;
+                console.log('🔧 Set NEW authToken:', '***masked***');
+            } else {
+                // It's a masked value, preserve existing token if we have one
+                const existingToken = this.currentData?.twilioConfig?.authToken || this.currentData?.twilioAuthToken;
+                if (existingToken) {
+                    data.twilioConfig.authToken = existingToken;
+                    console.log('🔧 Preserved existing authToken:', '***masked***');
+                }
+            }
         }
         
         if (twilioApiKey?.value.trim()) {
@@ -2565,9 +2611,23 @@ class CompanyProfileManager {
             console.log('🔧 Set apiKey:', data.twilioConfig.apiKey);
         }
         
-        if (twilioApiSecret?.value.trim() && twilioApiSecret.value !== '••••••••••••••••') {
-            data.twilioConfig.apiSecret = twilioApiSecret.value.trim();
-            console.log('🔧 Set apiSecret:', '***masked***');
+        if (twilioApiSecret?.value.trim()) {
+            const secretValue = twilioApiSecret.value.trim();
+            // Check if it's a masked value (starts with bullets) or a new secret
+            const isMaskedValue = secretValue.startsWith('••••••••••••') || secretValue === '••••••••••••••••';
+            
+            if (!isMaskedValue) {
+                // It's a new secret, save it
+                data.twilioConfig.apiSecret = secretValue;
+                console.log('🔧 Set NEW apiSecret:', '***masked***');
+            } else {
+                // It's a masked value, preserve existing secret if we have one
+                const existingSecret = this.currentData?.twilioConfig?.apiSecret || this.currentData?.twilioApiSecret;
+                if (existingSecret) {
+                    data.twilioConfig.apiSecret = existingSecret;
+                    console.log('🔧 Preserved existing apiSecret:', '***masked***');
+                }
+            }
         }
 
         // ElevenLabs credentials
