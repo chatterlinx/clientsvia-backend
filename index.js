@@ -29,6 +29,7 @@ const uploadRoutes = require('./routes/upload');
 const learningRoutes = require('./routes/learning');
 const agentSettingsRoutes = require('./routes/agentSettings'); // ENTERPRISE: AI Agent Settings
 const companyAgentSettingsRoutes = require('./routes/company/agentSettings'); // ENTERPRISE: Company-specific AI Agent Settings
+const companyPersonalityRoutes = require('./routes/company/personality'); // MODULE 1: Agent Personality Settings
 
 // Import new AI Agent routes
 const eventHooksRoutes = require('./routes/eventHooks'); // Event Hooks Management
@@ -82,6 +83,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/learning', learningRoutes);
 app.use('/api/agent', agentSettingsRoutes); // ENTERPRISE: AI Agent Settings Management
 app.use('/api/company', companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
+app.use('/api/company', companyPersonalityRoutes); // MODULE 1: Agent Personality Settings
 
 // Register AI Agent routes
 app.use('/api/event-hooks', eventHooksRoutes); // Event Hooks Management API

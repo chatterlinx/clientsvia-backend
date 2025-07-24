@@ -2,7 +2,7 @@
 
 - [x] HTML UI (dropdowns/sliders for each) ✅ COMPLETED
 - [x] Company schema: `agentPersonalitySettings` ✅ COMPLETED
-- [ ] API routes: GET/PUT company/:id/personality
+- [x] API routes: GET/PUT company/:id/personality ✅ COMPLETED
 - [ ] Live preview tool (text-to-speech test)r Gold Standard AI Agent
 
 This file outlines and begins implementation prep for the next key sections of your Admin Agent Logic Tab:
