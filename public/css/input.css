@@ -134,17 +134,178 @@ body {
   color: #F59E0B; 
 }
 
-/* Status Badges */
-.status-badge { 
-  @apply px-2.5 py-0.5 rounded-full text-xs font-medium; 
+/* ===== ENTERPRISE NOTES SYSTEM STYLES ===== */
+
+/* Note Cards */
+.note-card {
+  @apply transition-all duration-200 ease-in-out;
+  @apply hover:transform hover:-translate-y-1;
 }
 
-.status-active { 
-  @apply bg-green-100 text-green-800; 
+.note-card:hover {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
 }
 
-.status-inactive { 
-  @apply bg-red-100 text-red-800; 
+/* Pinned Notes Special Styling */
+.note-card.pinned {
+  @apply ring-2 ring-yellow-300 bg-gradient-to-br from-yellow-50 to-amber-50;
+}
+
+.note-card.pinned::before {
+  content: '📌';
+  @apply absolute -top-2 -right-2 text-yellow-600 text-lg;
+}
+
+/* Note Content Formatting */
+.note-content .prose {
+  @apply text-gray-700 leading-relaxed;
+}
+
+.note-content code {
+  @apply bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm font-mono;
+}
+
+.note-content strong {
+  @apply font-semibold text-gray-900;
+}
+
+.note-content em {
+  @apply italic text-gray-600;
+}
+
+/* Category Badges */
+.category-badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.category-general { @apply bg-gray-100 text-gray-800; }
+.category-bug { @apply bg-red-100 text-red-800; }
+.category-feature { @apply bg-blue-100 text-blue-800; }
+.category-todo { @apply bg-green-100 text-green-800; }
+.category-meeting { @apply bg-purple-100 text-purple-800; }
+.category-documentation { @apply bg-indigo-100 text-indigo-800; }
+
+/* Priority Indicators */
+.priority-high { @apply text-red-600; }
+.priority-normal { @apply text-blue-600; }
+.priority-low { @apply text-gray-500; }
+
+/* Notes Search and Filter */
+.notes-search-container {
+  @apply relative;
+}
+
+.notes-search-container .search-icon {
+  @apply absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400;
+}
+
+/* Quick Add Form */
+.quick-add-form {
+  @apply bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-dashed border-purple-200;
+  @apply hover:border-purple-300 transition-colors duration-200;
+}
+
+/* Animation for new notes */
+@keyframes noteSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.note-card.new {
+  animation: noteSlideIn 0.4s ease-out;
+}
+
+/* Tag Styling */
+.note-tag {
+  @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800;
+}
+
+/* Edit Mode Styling */
+.note-editing {
+  @apply ring-2 ring-blue-300 bg-blue-50;
+}
+
+.note-title-edit,
+.note-content-edit {
+  @apply border-2 border-blue-300 focus:border-blue-500 focus:ring-blue-200;
+}
+
+/* Empty State */
+.notes-empty-state {
+  @apply text-center py-12 bg-gradient-to-br from-gray-50 to-gray-100;
+}
+
+/* Button Hover Effects */
+.pin-note-btn.pinned {
+  @apply text-yellow-600 bg-yellow-100;
+}
+
+.pin-note-btn:hover {
+  @apply bg-yellow-50 text-yellow-700;
+}
+
+.edit-note-btn:hover {
+  @apply bg-blue-50 text-blue-700;
+}
+
+.delete-note-btn:hover {
+  @apply bg-red-50 text-red-700;
+}
+
+/* Responsive Notes Grid */
+@media (max-width: 768px) {
+  .note-card {
+    @apply mx-2;
+  }
+  
+  .notes-controls {
+    @apply flex-col space-y-4;
+  }
+  
+  .quick-add-form {
+    @apply p-4;
+  }
+}
+
+/* Print Styles for Notes */
+@media print {
+  .note-card {
+    @apply border border-gray-300 break-inside-avoid mb-4;
+  }
+  
+  .pin-note-btn,
+  .edit-note-btn,
+  .delete-note-btn {
+    @apply hidden;
+  }
+}
+
+/* High Contrast Mode for Notes */
+@media (prefers-contrast: high) {
+  .note-card {
+    @apply border-2 border-gray-900;
+  }
+  
+  .category-badge {
+    @apply border border-gray-900 font-bold;
+  }
+}
+
+/* Reduced Motion for Notes */
+@media (prefers-reduced-motion: reduce) {
+  .note-card {
+    @apply transition-none;
+  }
+  
+  .note-card.new {
+    animation: none;
+  }
 }
 
 /* ===== GOLD STANDARD ENTERPRISE FORM STYLES ===== */
@@ -296,42 +457,5 @@ body {
   
   .contact-item {
     @apply p-4;
-  }
-}
-
-/* Print Styles */
-@media print {
-  .enterprise-input,
-  .form-textarea {
-    @apply border-gray-400 bg-transparent;
-  }
-  
-  .contact-item {
-    @apply border border-gray-300 break-inside-avoid;
-  }
-}
-
-/* High Contrast Mode Support */
-@media (prefers-contrast: high) {
-  .enterprise-input {
-    @apply border-2 border-gray-900;
-  }
-  
-  .form-label {
-    @apply font-bold;
-  }
-}
-
-/* Reduced Motion Support */
-@media (prefers-reduced-motion: reduce) {
-  .enterprise-input,
-  .contact-item,
-  .phone-row {
-    @apply transition-none;
-  }
-  
-  .fade-in,
-  .slide-in {
-    animation: none;
   }
 }

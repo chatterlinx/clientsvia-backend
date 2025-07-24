@@ -12,11 +12,18 @@ const addressSchema = new mongoose.Schema({
     country: { type: String, trim: true, default: 'USA' }
 }, { _id: false });
 
-// --- Sub-schema for Notes ---
+// --- Sub-schema for Enterprise Notes ---
 const noteSchema = new mongoose.Schema({
     _id: { type: ObjectId, default: () => new mongoose.Types.ObjectId() },
-    text: { type: String, trim: true, required: true },
+    id: { type: String, required: true }, // Frontend ID for compatibility
+    title: { type: String, trim: true, required: true },
+    content: { type: String, trim: true, required: true }, // Replaces 'text'
+    text: { type: String, trim: true }, // Legacy field for backward compatibility
+    category: { type: String, enum: ['general', 'bug', 'feature', 'todo', 'meeting', 'documentation'], default: 'general' },
+    priority: { type: String, enum: ['low', 'normal', 'high'], default: 'normal' },
     isPinned: { type: Boolean, default: false },
+    tags: [{ type: String, trim: true }],
+    author: { type: String, trim: true, default: 'Developer' },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 });

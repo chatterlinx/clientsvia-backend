@@ -1466,148 +1466,847 @@ class CompanyProfileManager {
     }
 
     /**
-     * Populate Notes tab with data
+     * GOLD STANDARD: Populate Notes tab with enterprise-grade note management system
+     * Features: Pin/unpin, edit in-place, timestamps, search, categories, auto-save
      */
     populateNotesTab() {
-        console.log('📝 Populating Notes tab...');
+        console.log('📝 Initializing enterprise Notes management system...');
         
-        // Initialize notes management system
-        this.initializeNotesSystem();
+        // Initialize notes management system with advanced features
+        this.initializeEnterpriseNotesSystem();
     }
 
     /**
-     * Initialize notes management system
+     * GOLD STANDARD: Initialize enterprise notes management system
      */
-    initializeNotesSystem() {
-        // Initialize notes array
+    initializeEnterpriseNotesSystem() {
+        // Initialize notes array with enterprise structure
         this.notes = this.currentData?.notes || [];
         
-        // Setup notes interface
-        this.setupNotesInterface();
+        // Ensure notes have proper structure
+        this.notes = this.notes.map(note => this.normalizeNoteStructure(note));
         
-        // Render existing notes
-        this.renderNotes();
+        // Setup enterprise notes interface
+        this.setupEnterpriseNotesInterface();
         
-        console.log('✅ Notes system initialized');
+        // Render notes with advanced features
+        this.renderEnterpriseNotes();
+        
+        // Setup search and filtering
+        this.setupNotesSearch();
+        
+        console.log('✅ Enterprise notes system initialized with', this.notes.length, 'notes');
     }
 
     /**
-     * Setup notes interface and event listeners
+     * GOLD STANDARD: Normalize note structure for enterprise features
      */
-    setupNotesInterface() {
-        // Find add note button
-        const addNoteBtn = document.querySelector('[onclick*="addLogicNote"]') || 
-                          document.getElementById('add-note-btn');
-        
-        if (addNoteBtn) {
-            // Remove existing onclick and add modern event listener
-            addNoteBtn.removeAttribute('onclick');
-            addNoteBtn.addEventListener('click', () => {
-                this.addNote();
-            });
-        }
-
-        // Setup note textarea
-        const noteTextarea = document.getElementById('new-logic-note') || 
-                           document.getElementById('new-note');
-        
-        if (noteTextarea) {
-            noteTextarea.addEventListener('input', () => {
-                this.setUnsavedChanges(true);
-            });
-        }
+    normalizeNoteStructure(note) {
+        return {
+            id: note.id || Date.now() + Math.random(),
+            content: note.content || note.text || '',
+            title: note.title || this.extractTitleFromContent(note.content || note.text || ''),
+            isPinned: note.isPinned || false,
+            category: note.category || 'general',
+            priority: note.priority || 'normal',
+            tags: note.tags || [],
+            createdAt: note.createdAt || note.timestamp || new Date().toISOString(),
+            updatedAt: note.updatedAt || note.timestamp || new Date().toISOString(),
+            author: note.author || 'Developer',
+            isEditing: false
+        };
     }
 
     /**
-     * Add new note
+     * GOLD STANDARD: Extract title from note content
      */
-    addNote() {
-        const textarea = document.getElementById('new-logic-note') || 
-                        document.getElementById('new-note');
+    extractTitleFromContent(content) {
+        if (!content) return 'Untitled Note';
         
-        if (!textarea || !textarea.value.trim()) {
-            this.showNotification('Please enter a note', 'error');
+        // Get first line as title, max 50 chars
+        const firstLine = content.split('\n')[0].trim();
+        return firstLine.length > 50 ? firstLine.substring(0, 47) + '...' : firstLine || 'Untitled Note';
+    }
+
+    /**
+     * GOLD STANDARD: Setup enterprise notes interface with advanced controls
+     */
+    setupEnterpriseNotesInterface() {
+        // Transform the basic notes HTML into enterprise-grade interface
+        const notesContent = document.getElementById('notes-content');
+        if (!notesContent) {
+            console.error('❌ Notes content container not found');
             return;
         }
 
-        const note = {
-            id: Date.now(),
-            content: textarea.value.trim(),
-            timestamp: new Date().toISOString(),
-            author: 'Admin' // Could be made dynamic
+        // Replace with enterprise notes interface
+        notesContent.innerHTML = this.generateEnterpriseNotesHTML();
+        
+        // Setup event listeners for advanced features
+        this.setupNotesEventListeners();
+        
+        console.log('✅ Enterprise notes interface created');
+    }
+
+    /**
+     * GOLD STANDARD: Generate enterprise notes HTML interface
+     */
+    generateEnterpriseNotesHTML() {
+        return `
+            <section class="profile-section bg-transparent shadow-none p-0">
+                <!-- Header with Stats and Controls -->
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900 flex items-center">
+                            <div class="bg-gradient-to-r from-purple-100 to-indigo-100 p-3 rounded-xl mr-4">
+                                <i class="fas fa-sticky-note text-purple-600 text-xl"></i>
+                            </div>
+                            Developer Notes
+                        </h2>
+                        <p class="text-gray-600 mt-2">Manage your development notes, ideas, and documentation</p>
+                    </div>
+                    <div class="flex items-center space-x-4 mt-4 lg:mt-0">
+                        <div class="text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-full">
+                            <span id="notes-count">0</span> total notes
+                        </div>
+                        <div class="text-sm text-gray-500 bg-purple-100 px-4 py-2 rounded-full">
+                            <span id="pinned-count">0</span> pinned
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search, Filter, and Add Controls -->
+                <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
+                    <div class="flex flex-col lg:flex-row lg:items-center lg:space-x-6 space-y-4 lg:space-y-0">
+                        <!-- Search Bar -->
+                        <div class="flex-1">
+                            <div class="relative">
+                                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                <input 
+                                    type="text" 
+                                    id="notes-search" 
+                                    class="form-input pl-10 pr-4" 
+                                    placeholder="Search notes by title, content, or tags..."
+                                >
+                            </div>
+                        </div>
+                        
+                        <!-- Category Filter -->
+                        <div>
+                            <select id="notes-category-filter" class="form-select">
+                                <option value="">All Categories</option>
+                                <option value="general">General</option>
+                                <option value="bug">Bug Reports</option>
+                                <option value="feature">Feature Ideas</option>
+                                <option value="todo">To Do</option>
+                                <option value="meeting">Meeting Notes</option>
+                                <option value="documentation">Documentation</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Sort Options -->
+                        <div>
+                            <select id="notes-sort" class="form-select">
+                                <option value="updated-desc">Recently Updated</option>
+                                <option value="created-desc">Recently Created</option>
+                                <option value="title-asc">Title A-Z</option>
+                                <option value="priority-desc">Priority High-Low</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Add Note -->
+                <div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border-2 border-dashed border-purple-200 p-6 mb-6">
+                    <div class="mb-4">
+                        <label for="quick-note-title" class="form-label">Note Title</label>
+                        <input 
+                            type="text" 
+                            id="quick-note-title" 
+                            class="form-input" 
+                            placeholder="Quick note title..."
+                        >
+                    </div>
+                    <div class="mb-4">
+                        <label for="quick-note-content" class="form-label">Note Content</label>
+                        <textarea 
+                            id="quick-note-content" 
+                            class="form-textarea" 
+                            rows="4" 
+                            placeholder="Write your note here... (Markdown supported)"
+                        ></textarea>
+                    </div>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                        <div class="flex items-center space-x-4">
+                            <select id="quick-note-category" class="form-select">
+                                <option value="general">General</option>
+                                <option value="bug">Bug Report</option>
+                                <option value="feature">Feature Idea</option>
+                                <option value="todo">To Do</option>
+                                <option value="meeting">Meeting Notes</option>
+                                <option value="documentation">Documentation</option>
+                            </select>
+                            <select id="quick-note-priority" class="form-select">
+                                <option value="normal">Normal</option>
+                                <option value="high">High Priority</option>
+                                <option value="low">Low Priority</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <label class="flex items-center">
+                                <input type="checkbox" id="quick-note-pin" class="form-checkbox mr-2">
+                                <span class="text-sm text-gray-700">Pin to top</span>
+                            </label>
+                            <button id="add-enterprise-note" class="btn-primary flex items-center">
+                                <i class="fas fa-plus mr-2"></i>
+                                Add Note
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notes Display Area -->
+                <div id="enterprise-notes-container">
+                    <!-- Notes will be rendered here -->
+                </div>
+
+                <!-- Empty State (will be shown when no notes) -->
+                <div id="notes-empty-state" class="hidden text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                    <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-purple-100 mb-4">
+                        <i class="fas fa-sticky-note text-purple-600 text-2xl"></i>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">No notes yet</h3>
+                    <p class="text-sm text-gray-600 mb-6 max-w-sm mx-auto">
+                        Start organizing your development thoughts, ideas, and documentation with your first note.
+                    </p>
+                </div>
+            </section>
+        `;
+    }
+
+    /**
+     * GOLD STANDARD: Setup comprehensive event listeners for notes functionality
+     */
+    setupNotesEventListeners() {
+        // Add note button
+        const addButton = document.getElementById('add-enterprise-note');
+        if (addButton) {
+            addButton.addEventListener('click', () => this.addEnterpriseNote());
+        }
+
+        // Search functionality
+        const searchInput = document.getElementById('notes-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', this.debounce(() => this.filterNotes(), 300));
+        }
+
+        // Category filter
+        const categoryFilter = document.getElementById('notes-category-filter');
+        if (categoryFilter) {
+            categoryFilter.addEventListener('change', () => this.filterNotes());
+        }
+
+        // Sort options
+        const sortSelect = document.getElementById('notes-sort');
+        if (sortSelect) {
+            sortSelect.addEventListener('change', () => this.renderEnterpriseNotes());
+        }
+
+        // Quick title auto-generation
+        const contentTextarea = document.getElementById('quick-note-content');
+        const titleInput = document.getElementById('quick-note-title');
+        
+        if (contentTextarea && titleInput) {
+            contentTextarea.addEventListener('input', () => {
+                if (!titleInput.value.trim()) {
+                    const generatedTitle = this.extractTitleFromContent(contentTextarea.value);
+                    if (generatedTitle !== 'Untitled Note') {
+                        titleInput.value = generatedTitle;
+                    }
+                }
+            });
+        }
+
+        console.log('✅ Enterprise notes event listeners setup complete');
+    }
+
+    /**
+     * GOLD STANDARD: Add enterprise note with full feature set
+     */
+    addEnterpriseNote() {
+        const titleInput = document.getElementById('quick-note-title');
+        const contentTextarea = document.getElementById('quick-note-content');
+        const categorySelect = document.getElementById('quick-note-category');
+        const prioritySelect = document.getElementById('quick-note-priority');
+        const pinCheckbox = document.getElementById('quick-note-pin');
+
+        // Validation
+        if (!contentTextarea?.value.trim()) {
+            this.showNotification('Please enter note content', 'error');
+            contentTextarea?.focus();
+            return;
+        }
+
+        const title = titleInput?.value.trim() || this.extractTitleFromContent(contentTextarea.value);
+        
+        const newNote = {
+            id: Date.now() + Math.random(),
+            title: title,
+            content: contentTextarea.value.trim(),
+            category: categorySelect?.value || 'general',
+            priority: prioritySelect?.value || 'normal',
+            isPinned: pinCheckbox?.checked || false,
+            tags: this.extractTagsFromContent(contentTextarea.value),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            author: 'Developer',
+            isEditing: false
         };
 
-        this.notes.unshift(note);
-        textarea.value = '';
-        
-        this.renderNotes();
+        // Add to notes array (pinned notes go to top)
+        if (newNote.isPinned) {
+            this.notes.unshift(newNote);
+        } else {
+            // Add after pinned notes
+            const firstUnpinnedIndex = this.notes.findIndex(note => !note.isPinned);
+            if (firstUnpinnedIndex === -1) {
+                this.notes.push(newNote);
+            } else {
+                this.notes.splice(firstUnpinnedIndex, 0, newNote);
+            }
+        }
+
+        // Clear form
+        titleInput.value = '';
+        contentTextarea.value = '';
+        categorySelect.value = 'general';
+        prioritySelect.value = 'normal';
+        pinCheckbox.checked = false;
+
+        // Update display
+        this.renderEnterpriseNotes();
         this.setUnsavedChanges(true);
         this.showNotification('Note added successfully!', 'success');
         
-        console.log('📝 Note added:', note);
+        console.log('📝 Enterprise note added:', newNote);
     }
 
     /**
-     * Delete note
+     * GOLD STANDARD: Extract tags from note content (#hashtags)
      */
-    deleteNote(noteId) {
-        if (!confirm('Are you sure you want to delete this note?')) return;
-
-        this.notes = this.notes.filter(note => note.id !== noteId);
-        this.renderNotes();
-        this.setUnsavedChanges(true);
-        this.showNotification('Note deleted', 'success');
+    extractTagsFromContent(content) {
+        const tagRegex = /#(\w+)/g;
+        const tags = [];
+        let match;
         
-        console.log('🗑️ Note deleted:', noteId);
+        while ((match = tagRegex.exec(content)) !== null) {
+            tags.push(match[1].toLowerCase());
+        }
+        
+        return [...new Set(tags)]; // Remove duplicates
     }
 
     /**
-     * Render notes list
+     * GOLD STANDARD: Render enterprise notes with advanced features
      */
-    renderNotes() {
-        const container = document.getElementById('logic-notes-list') || 
-                         document.getElementById('notes-list');
+    renderEnterpriseNotes() {
+        const container = document.getElementById('enterprise-notes-container');
+        const emptyState = document.getElementById('notes-empty-state');
         
         if (!container) {
-            console.warn('Notes container not found');
+            console.error('❌ Enterprise notes container not found');
             return;
         }
 
-        if (this.notes.length === 0) {
-            container.innerHTML = `
-                <div class="text-center py-8 text-gray-500">
-                    <i class="fas fa-sticky-note text-3xl mb-3 text-gray-300"></i>
-                    <p>No notes yet. Add your first note above.</p>
+        // Update counts
+        this.updateNotesCounts();
+
+        // Sort notes
+        const sortedNotes = this.sortNotes([...this.notes]);
+        
+        if (sortedNotes.length === 0) {
+            container.innerHTML = '';
+            emptyState?.classList.remove('hidden');
+            return;
+        }
+
+        emptyState?.classList.add('hidden');
+        
+        // Separate pinned and regular notes
+        const pinnedNotes = sortedNotes.filter(note => note.isPinned);
+        const regularNotes = sortedNotes.filter(note => !note.isPinned);
+
+        let html = '';
+
+        // Render pinned notes section
+        if (pinnedNotes.length > 0) {
+            html += `
+                <div class="mb-8">
+                    <div class="flex items-center mb-4">
+                        <i class="fas fa-thumbtack text-yellow-600 mr-2"></i>
+                        <h3 class="text-lg font-semibold text-gray-900">Pinned Notes</h3>
+                        <span class="ml-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">${pinnedNotes.length}</span>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        ${pinnedNotes.map(note => this.generateNoteHTML(note)).join('')}
+                    </div>
                 </div>
             `;
+        }
+
+        // Render regular notes section
+        if (regularNotes.length > 0) {
+            html += `
+                <div>
+                    <div class="flex items-center mb-4">
+                        <i class="fas fa-sticky-note text-gray-600 mr-2"></i>
+                        <h3 class="text-lg font-semibold text-gray-900">Notes</h3>
+                        <span class="ml-2 bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full">${regularNotes.length}</span>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        ${regularNotes.map(note => this.generateNoteHTML(note)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+        
+        // Setup individual note event listeners
+        this.setupNoteCardEventListeners();
+        
+        console.log(`✅ Rendered ${sortedNotes.length} enterprise notes`);
+    }
+
+    /**
+     * GOLD STANDARD: Generate HTML for individual note with all features
+     */
+    generateNoteHTML(note) {
+        const categoryColors = {
+            general: 'bg-gray-100 text-gray-800',
+            bug: 'bg-red-100 text-red-800',
+            feature: 'bg-blue-100 text-blue-800',
+            todo: 'bg-green-100 text-green-800',
+            meeting: 'bg-purple-100 text-purple-800',
+            documentation: 'bg-indigo-100 text-indigo-800'
+        };
+
+        const priorityColors = {
+            low: 'text-gray-500',
+            normal: 'text-blue-500',
+            high: 'text-red-500'
+        };
+
+        const createdDate = new Date(note.createdAt).toLocaleDateString();
+        const updatedDate = new Date(note.updatedAt).toLocaleDateString();
+        const isRecent = (Date.now() - new Date(note.updatedAt).getTime()) < 24 * 60 * 60 * 1000;
+
+        return `
+            <div class="note-card bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-200 ${note.isPinned ? 'ring-2 ring-yellow-200' : ''}" data-note-id="${note.id}">
+                <!-- Note Header -->
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex-1">
+                        ${note.isEditing ? `
+                            <input 
+                                type="text" 
+                                class="note-title-edit form-input text-lg font-semibold mb-2" 
+                                value="${this.escapeHtml(note.title)}"
+                            >
+                        ` : `
+                            <h4 class="text-lg font-semibold text-gray-900 mb-2 break-words">
+                                ${this.escapeHtml(note.title)}
+                                ${isRecent ? '<span class="ml-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">New</span>' : ''}
+                            </h4>
+                        `}
+                        
+                        <!-- Metadata -->
+                        <div class="flex items-center space-x-4 text-sm text-gray-500 mb-3">
+                            <span class="${categoryColors[note.category] || categoryColors.general} px-2 py-1 rounded-full text-xs font-medium">
+                                ${note.category}
+                            </span>
+                            <span class="flex items-center ${priorityColors[note.priority]}">
+                                <i class="fas fa-flag mr-1"></i>
+                                ${note.priority}
+                            </span>
+                            <span class="flex items-center">
+                                <i class="fas fa-clock mr-1"></i>
+                                ${createdDate === updatedDate ? createdDate : `Updated ${updatedDate}`}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="flex items-center space-x-2 ml-4">
+                        <button class="pin-note-btn p-2 rounded-lg hover:bg-gray-100 transition-colors ${note.isPinned ? 'text-yellow-600' : 'text-gray-400'}" 
+                                data-note-id="${note.id}" 
+                                title="${note.isPinned ? 'Unpin note' : 'Pin note'}">
+                            <i class="fas fa-thumbtack"></i>
+                        </button>
+                        <button class="edit-note-btn p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" 
+                                data-note-id="${note.id}" 
+                                title="Edit note">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="delete-note-btn p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-600 transition-colors" 
+                                data-note-id="${note.id}" 
+                                title="Delete note">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Note Content -->
+                <div class="note-content">
+                    ${note.isEditing ? `
+                        <textarea 
+                            class="note-content-edit form-textarea w-full" 
+                            rows="6"
+                        >${this.escapeHtml(note.content)}</textarea>
+                        <div class="flex justify-end space-x-2 mt-3">
+                            <button class="cancel-edit-btn bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg text-sm" data-note-id="${note.id}">
+                                Cancel
+                            </button>
+                            <button class="save-edit-btn bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm" data-note-id="${note.id}">
+                                Save Changes
+                            </button>
+                        </div>
+                    ` : `
+                        <div class="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap break-words">
+                            ${this.formatNoteContent(note.content)}
+                        </div>
+                        
+                        <!-- Tags -->
+                        ${note.tags && note.tags.length > 0 ? `
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                ${note.tags.map(tag => `
+                                    <span class="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full">
+                                        #${tag}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    `}
+                </div>
+
+                <!-- Note Footer -->
+                <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 text-xs text-gray-500">
+                    <span>By ${note.author}</span>
+                    <span title="Created: ${new Date(note.createdAt).toLocaleString()}">
+                        ${this.getRelativeTime(note.updatedAt)}
+                    </span>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * GOLD STANDARD: Format note content with basic markdown support
+     */
+    formatNoteContent(content) {
+        return content
+            // Bold text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            // Italic text
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            // Code inline
+            .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded">$1</code>')
+            // Links
+            .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 hover:underline">$1</a>')
+            // Hashtags
+            .replace(/#(\w+)/g, '<span class="text-indigo-600 font-medium">#$1</span>');
+    }
+
+    /**
+     * GOLD STANDARD: Get relative time string
+     */
+    getRelativeTime(timestamp) {
+        const now = new Date();
+        const time = new Date(timestamp);
+        const diffMs = now - time;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        
+        return time.toLocaleDateString();
+    }
+
+    /**
+     * GOLD STANDARD: Setup event listeners for individual note cards
+     */
+    setupNoteCardEventListeners() {
+        const container = document.getElementById('enterprise-notes-container');
+        if (!container) return;
+
+        // Use event delegation for better performance
+        container.addEventListener('click', (e) => {
+            const noteId = e.target.closest('[data-note-id]')?.dataset.noteId;
+            if (!noteId) return;
+
+            if (e.target.closest('.pin-note-btn')) {
+                this.togglePinNote(noteId);
+            } else if (e.target.closest('.edit-note-btn')) {
+                this.startEditNote(noteId);
+            } else if (e.target.closest('.delete-note-btn')) {
+                this.deleteEnterpriseNote(noteId);
+            } else if (e.target.closest('.save-edit-btn')) {
+                this.saveEditNote(noteId);
+            } else if (e.target.closest('.cancel-edit-btn')) {
+                this.cancelEditNote(noteId);
+            }
+        });
+    }
+
+    /**
+     * GOLD STANDARD: Toggle pin status of note
+     */
+    togglePinNote(noteId) {
+        const note = this.notes.find(n => n.id == noteId);
+        if (!note) return;
+
+        note.isPinned = !note.isPinned;
+        note.updatedAt = new Date().toISOString();
+        
+        // Move pinned notes to top, unpinned notes to their proper position
+        this.notes = this.notes.sort((a, b) => {
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            return new Date(b.updatedAt) - new Date(a.updatedAt);
+        });
+
+        this.renderEnterpriseNotes();
+        this.setUnsavedChanges(true);
+        
+        const action = note.isPinned ? 'pinned' : 'unpinned';
+        this.showNotification(`Note ${action} successfully!`, 'success');
+        
+        console.log(`� Note ${action}:`, note.title);
+    }
+
+    /**
+     * GOLD STANDARD: Start editing a note
+     */
+    startEditNote(noteId) {
+        const note = this.notes.find(n => n.id == noteId);
+        if (!note) return;
+
+        // Set all other notes to not editing
+        this.notes.forEach(n => n.isEditing = false);
+        
+        // Set this note to editing mode
+        note.isEditing = true;
+        
+        this.renderEnterpriseNotes();
+        
+        // Focus on the content textarea
+        setTimeout(() => {
+            const textarea = document.querySelector(`[data-note-id="${noteId}"] .note-content-edit`);
+            if (textarea) {
+                textarea.focus();
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            }
+        }, 100);
+        
+        console.log('✏️ Started editing note:', note.title);
+    }
+
+    /**
+     * GOLD STANDARD: Save edited note
+     */
+    saveEditNote(noteId) {
+        const note = this.notes.find(n => n.id == noteId);
+        if (!note) return;
+
+        const noteCard = document.querySelector(`[data-note-id="${noteId}"]`);
+        const titleInput = noteCard?.querySelector('.note-title-edit');
+        const contentTextarea = noteCard?.querySelector('.note-content-edit');
+
+        if (!contentTextarea?.value.trim()) {
+            this.showNotification('Note content cannot be empty', 'error');
             return;
         }
 
-        container.innerHTML = this.notes.map(note => `
-            <div class="note-card bg-white border border-gray-200 rounded-lg p-4 mb-4 shadow-sm">
-                <div class="note-content text-gray-800 whitespace-pre-wrap mb-3">
-                    ${this.escapeHtml(note.content)}
-                </div>
-                <div class="flex justify-between items-center text-sm text-gray-500">
-                    <div class="note-timestamps">
-                        <span class="mr-4">
-                            <i class="fas fa-clock mr-1"></i>
-                            ${new Date(note.timestamp).toLocaleString()}
-                        </span>
-                        <span>
-                            <i class="fas fa-user mr-1"></i>
-                            ${this.escapeHtml(note.author)}
-                        </span>
-                    </div>
-                    <button onclick="companyProfileManager.deleteNote(${note.id})" 
-                            class="text-red-600 hover:text-red-800 transition-colors">
-                        <i class="fas fa-trash mr-1"></i>Delete
-                    </button>
-                </div>
-            </div>
-        `).join('');
+        // Update note data
+        const newTitle = titleInput?.value.trim() || this.extractTitleFromContent(contentTextarea.value);
+        const newContent = contentTextarea.value.trim();
+        
+        note.title = newTitle;
+        note.content = newContent;
+        note.tags = this.extractTagsFromContent(newContent);
+        note.updatedAt = new Date().toISOString();
+        note.isEditing = false;
 
-        console.log(`✅ Rendered ${this.notes.length} notes`);
+        this.renderEnterpriseNotes();
+        this.setUnsavedChanges(true);
+        this.showNotification('Note updated successfully!', 'success');
+        
+        console.log('💾 Note saved:', note.title);
+    }
+
+    /**
+     * GOLD STANDARD: Cancel editing a note
+     */
+    cancelEditNote(noteId) {
+        const note = this.notes.find(n => n.id == noteId);
+        if (!note) return;
+
+        note.isEditing = false;
+        this.renderEnterpriseNotes();
+        
+        console.log('❌ Cancelled editing note:', note.title);
+    }
+
+    /**
+     * GOLD STANDARD: Delete note with confirmation
+     */
+    deleteEnterpriseNote(noteId) {
+        const note = this.notes.find(n => n.id == noteId);
+        if (!note) return;
+
+        const confirmMessage = `Are you sure you want to delete "${note.title}"?\n\nThis action cannot be undone.`;
+        
+        if (!confirm(confirmMessage)) return;
+
+        this.notes = this.notes.filter(n => n.id != noteId);
+        this.renderEnterpriseNotes();
+        this.setUnsavedChanges(true);
+        this.showNotification('Note deleted successfully!', 'success');
+        
+        console.log('🗑️ Note deleted:', note.title);
+    }
+
+    /**
+     * GOLD STANDARD: Update notes counts in header
+     */
+    updateNotesCounts() {
+        const totalCount = document.getElementById('notes-count');
+        const pinnedCount = document.getElementById('pinned-count');
+        
+        if (totalCount) totalCount.textContent = this.notes.length;
+        if (pinnedCount) pinnedCount.textContent = this.notes.filter(n => n.isPinned).length;
+    }
+
+    /**
+     * GOLD STANDARD: Sort notes based on selected criteria
+     */
+    sortNotes(notes) {
+        const sortSelect = document.getElementById('notes-sort');
+        const sortBy = sortSelect?.value || 'updated-desc';
+
+        return notes.sort((a, b) => {
+            // Always keep pinned notes at top within their group
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+
+            switch (sortBy) {
+                case 'created-desc':
+                    return new Date(b.createdAt) - new Date(a.createdAt);
+                case 'title-asc':
+                    return a.title.localeCompare(b.title);
+                case 'priority-desc':
+                    const priorityOrder = { high: 3, normal: 2, low: 1 };
+                    return (priorityOrder[b.priority] || 2) - (priorityOrder[a.priority] || 2);
+                case 'updated-desc':
+                default:
+                    return new Date(b.updatedAt) - new Date(a.updatedAt);
+            }
+        });
+    }
+
+    /**
+     * GOLD STANDARD: Filter notes based on search and category
+     */
+    filterNotes() {
+        const searchInput = document.getElementById('notes-search');
+        const categoryFilter = document.getElementById('notes-category-filter');
+        
+        const searchTerm = searchInput?.value.toLowerCase() || '';
+        const selectedCategory = categoryFilter?.value || '';
+
+        // Filter notes
+        const filteredNotes = this.notes.filter(note => {
+            const matchesSearch = !searchTerm || 
+                note.title.toLowerCase().includes(searchTerm) ||
+                note.content.toLowerCase().includes(searchTerm) ||
+                note.tags.some(tag => tag.includes(searchTerm));
+            
+            const matchesCategory = !selectedCategory || note.category === selectedCategory;
+            
+            return matchesSearch && matchesCategory;
+        });
+
+        // Temporarily update notes array for rendering
+        const originalNotes = [...this.notes];
+        this.notes = filteredNotes;
+        this.renderEnterpriseNotes();
+        this.notes = originalNotes;
+
+        console.log(`🔍 Filtered notes: ${filteredNotes.length}/${originalNotes.length} shown`);
+    }
+
+    /**
+     * GOLD STANDARD: Setup notes search functionality
+     */
+    setupNotesSearch() {
+        const searchInput = document.getElementById('notes-search');
+        if (searchInput) {
+            // Clear search button
+            const clearBtn = document.createElement('button');
+            clearBtn.innerHTML = '<i class="fas fa-times"></i>';
+            clearBtn.className = 'absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden';
+            clearBtn.id = 'clear-search-btn';
+            
+            searchInput.parentNode.appendChild(clearBtn);
+            
+            // Show/hide clear button
+            searchInput.addEventListener('input', () => {
+                if (searchInput.value) {
+                    clearBtn.classList.remove('hidden');
+                } else {
+                    clearBtn.classList.add('hidden');
+                }
+            });
+            
+            // Clear search
+            clearBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                clearBtn.classList.add('hidden');
+                this.renderEnterpriseNotes();
+            });
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Debounce utility for search
+     */
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    /**
+     * Delete note - Legacy method kept for compatibility
+     */
+    deleteNote(noteId) {
+        this.deleteEnterpriseNote(noteId);
+    }
+
+    /**
+     * GOLD STANDARD: Render notes - Updated to use enterprise system
+     */
+    renderNotes() {
+        this.renderEnterpriseNotes();
     }
 
     /**
@@ -3470,11 +4169,42 @@ class CompanyProfileManager {
     }
 
     /**
-     * Collect Notes tab data
+     * GOLD STANDARD: Collect Notes tab data with enterprise structure
      */
     collectNotesData(data) {
-        if (this.notes && this.notes.length > 0) {
-            data.notes = this.notes;
+        console.log('📝 Collecting enterprise notes data...');
+        
+        if (this.notes && Array.isArray(this.notes) && this.notes.length > 0) {
+            // Ensure all notes have proper enterprise structure
+            const processedNotes = this.notes.map(note => ({
+                id: note.id || Date.now() + Math.random(),
+                title: note.title || this.extractTitleFromContent(note.content || ''),
+                content: note.content || note.text || '',
+                category: note.category || 'general',
+                priority: note.priority || 'normal',
+                isPinned: note.isPinned || false,
+                tags: note.tags || [],
+                createdAt: note.createdAt || note.timestamp || new Date().toISOString(),
+                updatedAt: note.updatedAt || note.timestamp || new Date().toISOString(),
+                author: note.author || 'Developer'
+            }));
+
+            data.notes = processedNotes;
+            console.log(`📝 Collected ${processedNotes.length} enterprise notes for saving`);
+            
+            // Also save in legacy format for backward compatibility
+            data.legacyNotes = processedNotes.map(note => ({
+                id: note.id,
+                text: note.content,
+                timestamp: note.updatedAt,
+                author: note.author,
+                isPinned: note.isPinned
+            }));
+            
+        } else {
+            data.notes = [];
+            data.legacyNotes = [];
+            console.log('📝 No notes to collect');
         }
     }
 
