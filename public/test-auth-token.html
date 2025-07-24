@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Auth Token Display</title>
+</head>
+<body>
+    <h1>Test Auth Token Display</h1>
+    
+    <div>
+        <label for="twilioAuthToken">Auth Token</label>
+        <input type="password" id="twilioAuthToken" placeholder="Enter Auth Token">
+        <button onclick="loadToken()">Load Test Token</button>
+        <button onclick="showValue()">Show Current Value</button>
+    </div>
+
+    <div id="output"></div>
+
+    <script>
+        function loadToken() {
+            const tokenInput = document.getElementById('twilioAuthToken');
+            const savedToken = 'final_test_token_xyz123';
+            
+            console.log('Original token:', savedToken);
+            
+            if (savedToken && savedToken.length > 4) {
+                tokenInput.value = '••••••••••••' + savedToken.slice(-4);
+                console.log('Masked token:', tokenInput.value);
+            }
+            
+            document.getElementById('output').innerHTML = 'Token loaded: ' + tokenInput.value;
+        }
+        
+        function showValue() {
+            const tokenInput = document.getElementById('twilioAuthToken');
+            document.getElementById('output').innerHTML = 'Current value: ' + tokenInput.value;
+        }
+    </script>
+</body>
+</html>

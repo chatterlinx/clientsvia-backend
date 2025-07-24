@@ -1,3 +1,5 @@
+console.log('🚀 Loading company-profile-modern.js v2.1 - Auth Token Fix');
+
 /**
  * Modern Company Profile Management System
  * Clean, maintainable, and feature-complete implementation
@@ -469,11 +471,19 @@ class CompanyProfileManager {
         console.log('🔧 Loading Twilio config:', {
             twilioConfig: this.currentData.twilioConfig,
             flatSid: this.currentData.twilioAccountSid,
-            flatToken: this.currentData.twilioAuthToken
+            flatToken: this.currentData.twilioAuthToken,
+            authTokenValue: this.currentData.twilioConfig?.authToken
         });
         
         // Check nested structure first, then flat structure for backward compatibility
         const twilioConfig = this.currentData.twilioConfig || {};
+        
+        console.log('🔧 DEBUG: About to process Auth Token:', {
+            twilioTokenInput: !!twilioTokenInput,
+            authToken: twilioConfig.authToken,
+            flatAuthToken: this.currentData.twilioAuthToken,
+            hasEither: !!(twilioConfig.authToken || this.currentData.twilioAuthToken)
+        });
         
         if (twilioSidInput && (twilioConfig.accountSid || this.currentData.twilioAccountSid)) {
             twilioSidInput.value = twilioConfig.accountSid || this.currentData.twilioAccountSid;
@@ -487,6 +497,7 @@ class CompanyProfileManager {
                 twilioTokenInput.value = '••••••••••••' + savedToken.slice(-4);
                 twilioTokenInput.dataset.hasToken = 'true';
                 console.log('🔧 Loaded Twilio Auth Token (showing last 4):', '••••••••••••' + savedToken.slice(-4));
+                console.log('🔧 Full token for debug:', savedToken);
             } else {
                 twilioTokenInput.value = '••••••••••••••••';
                 twilioTokenInput.dataset.hasToken = 'true';
