@@ -71,6 +71,12 @@ class CompanyProfileManager {
         const urlParams = new URLSearchParams(window.location.search);
         this.companyId = urlParams.get('id');
         
+        // For testing - provide default ID if none provided
+        if (!this.companyId) {
+            this.companyId = 'test123';
+            console.warn('⚠️ No company ID found in URL parameters, using test ID:', this.companyId);
+        }
+        
         // Set global references for legacy compatibility
         window.currentCompanyId = this.companyId;
         window.companyId = this.companyId;
@@ -230,10 +236,14 @@ class CompanyProfileManager {
      */
     async loadCompanyData() {
         try {
-            console.log('📥 Loading company data...');
+            console.log('📥 Loading company data for ID:', this.companyId);
+            console.log('🌐 API Base URL:', this.apiBaseUrl);
             this.showLoading(true);
 
-            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`);
+            const apiUrl = `${this.apiBaseUrl}/api/company/${this.companyId}`;
+            console.log('📞 Fetching from:', apiUrl);
+            
+            const response = await fetch(apiUrl);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -254,30 +264,14 @@ class CompanyProfileManager {
 
         } catch (error) {
             console.error('❌ Failed to load company data:', error);
+            console.error('Error details:', {
+                message: error.message,
+                companyId: this.companyId,
+                apiBaseUrl: this.apiBaseUrl,
+                fullUrl: `${this.apiBaseUrl}/api/company/${this.companyId}`
+            });
             
-            // For testing purposes, create mock data when backend is not available
-            if (error.message.includes('Failed to fetch') || error.message.includes('ECONNREFUSED')) {
-                console.log('🔧 Backend not available, using mock data for testing');
-                this.currentData = {
-                    companyId: this.companyId,
-                    companyName: 'Test Company (Mock Data)',
-                    companyOwner: 'Test Owner',
-                    companyOwnerEmail: 'test@example.com',
-                    companyOwnerPhone: '+1234567890'
-                };
-                
-                // Populate tabs with mock data
-                this.populateOverviewTab();
-                this.populateConfigTab();
-                this.populateNotesTab();
-                this.populateCalendarTab();
-                this.populateAISettingsTab();
-                this.populateVoiceTab();
-                this.populatePersonalityTab();
-                this.populateAgentLogicTab();
-            } else {
-                this.showNotification('Failed to load company data', 'error');
-            }
+            this.showNotification(`Failed to load company data: ${error.message}`, 'error');
         } finally {
             this.showLoading(false);
         }
@@ -2370,17 +2364,32 @@ class CompanyProfileManager {
     async saveAllChanges(showNotification = true) {
         if (!this.companyId) {
             console.error('❌ No company ID available for saving');
+            this.showNotification('No company ID found', 'error');
             return;
         }
 
-        // Collect data from all tabs
-        const updateData = this.collectAllFormData();
+        console.log('💾 Starting saveAllChanges for company ID:', this.companyId);
 
         try {
-            console.log('💾 Saving all changes...');
-            this.showLoading(true);
+            // Collect data from all tabs
+            console.log('💾 Collecting form data from all tabs...');
+            const updateData = this.collectAllFormData();
+            
+            console.log('💾 Collected update data:', JSON.stringify(updateData, null, 2));
+            
+            if (Object.keys(updateData).length === 0) {
+                console.warn('⚠️ No data collected to save');
+                this.showNotification('No changes to save', 'warning');
+                return;
+            }
 
-            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`, {
+            console.log('💾 Sending PATCH request...');
+            this.showLoading(true);
+            
+            const url = `${this.apiBaseUrl}/api/company/${this.companyId}`;
+            console.log('💾 Request URL:', url);
+
+            const response = await fetch(url, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json'
@@ -2388,8 +2397,12 @@ class CompanyProfileManager {
                 body: JSON.stringify(updateData)
             });
 
+            console.log('💾 Response status:', response.status, response.statusText);
+
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const errorText = await response.text();
+                console.error('❌ Save failed with response:', errorText);
+                throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
             }
 
             const savedData = await response.json();
@@ -2494,11 +2507,20 @@ class CompanyProfileManager {
      * Collect Configuration tab data
      */
     collectConfigData(data) {
+        console.log('🔧 Starting collectConfigData...');
+        
         // Twilio credentials
         const twilioSid = document.getElementById('twilioAccountSid');
         const twilioToken = document.getElementById('twilioAuthToken');
         const twilioApiKey = document.getElementById('twilioApiKey');
         const twilioApiSecret = document.getElementById('twilioApiSecret');
+        
+        console.log('🔧 Found Twilio elements:', {
+            twilioSid: !!twilioSid,
+            twilioToken: !!twilioToken,
+            twilioApiKey: !!twilioApiKey,
+            twilioApiSecret: !!twilioApiSecret
+        });
         
         // Initialize twilioConfig object if it doesn't exist
         if (!data.twilioConfig) {
@@ -2507,18 +2529,22 @@ class CompanyProfileManager {
         
         if (twilioSid?.value.trim()) {
             data.twilioConfig.accountSid = twilioSid.value.trim();
+            console.log('🔧 Set accountSid:', data.twilioConfig.accountSid);
         }
         
         if (twilioToken?.value.trim() && twilioToken.value !== '••••••••••••••••') {
             data.twilioConfig.authToken = twilioToken.value.trim();
+            console.log('🔧 Set authToken:', '***masked***');
         }
         
         if (twilioApiKey?.value.trim()) {
             data.twilioConfig.apiKey = twilioApiKey.value.trim();
+            console.log('🔧 Set apiKey:', data.twilioConfig.apiKey);
         }
         
         if (twilioApiSecret?.value.trim() && twilioApiSecret.value !== '••••••••••••••••') {
             data.twilioConfig.apiSecret = twilioApiSecret.value.trim();
+            console.log('🔧 Set apiSecret:', '***masked***');
         }
 
         // ElevenLabs credentials
@@ -2527,15 +2553,19 @@ class CompanyProfileManager {
         
         if (elevenLabsApiKey?.value.trim() && elevenLabsApiKey.value !== '••••••••••••••••') {
             data.elevenLabsApiKey = elevenLabsApiKey.value.trim();
+            console.log('🔧 Set elevenLabsApiKey:', '***masked***');
         }
         
         if (elevenLabsVoiceId?.value.trim()) {
             data.elevenLabsVoiceId = elevenLabsVoiceId.value.trim();
+            console.log('🔧 Set elevenLabsVoiceId:', data.elevenLabsVoiceId);
         }
 
         // Phone numbers - save to twilioConfig.phoneNumbers
         const phoneNumbers = [];
         const phoneNumberItems = document.querySelectorAll('.phone-number-item');
+        
+        console.log('🔧 Found phone number items:', phoneNumberItems.length);
         
         phoneNumberItems.forEach((item, index) => {
             const phoneInput = item.querySelector('input[name="phoneNumber"]');
@@ -2543,23 +2573,34 @@ class CompanyProfileManager {
             const statusSelect = item.querySelector('select[name="status"]');
             const isPrimaryBtn = item.querySelector('button[title="Set as Primary"]');
             
+            console.log(`🔧 Phone item ${index}:`, {
+                phoneValue: phoneInput?.value,
+                friendlyValue: friendlyInput?.value,
+                statusValue: statusSelect?.value,
+                isPrimary: isPrimaryBtn?.textContent
+            });
+            
             if (phoneInput?.value.trim()) {
                 const isPrimary = isPrimaryBtn?.textContent === 'Primary';
                 
-                phoneNumbers.push({
+                const phoneData = {
                     phoneNumber: phoneInput.value.trim(),
                     friendlyName: friendlyInput?.value.trim() || '',
                     status: statusSelect?.value || 'active',
                     isPrimary: isPrimary || index === 0 // First one is primary by default
-                });
+                };
+                
+                phoneNumbers.push(phoneData);
+                console.log(`🔧 Added phone number ${index}:`, phoneData);
             }
         });
         
         if (phoneNumbers.length > 0) {
             data.twilioConfig.phoneNumbers = phoneNumbers;
+            console.log('🔧 Set phoneNumbers:', phoneNumbers.length, 'items');
         }
 
-        console.log('📋 Configuration data collected:', data);
+        console.log('📋 Configuration data collected:', JSON.stringify(data, null, 2));
     }
 
     /**

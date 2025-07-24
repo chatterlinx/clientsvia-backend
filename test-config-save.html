@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Tab Test</title>
+    <link rel="stylesheet" href="/css/output.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; padding: 20px; }
+        .test-section { border: 1px solid #e5e7eb; padding: 20px; margin: 20px 0; border-radius: 8px; }
+        .phone-number-item { border: 1px solid #d1d5db; padding: 15px; margin: 10px 0; border-radius: 6px; }
+        .form-input, .form-select { padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; margin: 5px; }
+        .btn { padding: 8px 16px; margin: 5px; border-radius: 4px; cursor: pointer; }
+        .btn-primary { background: #4f46e5; color: white; border: none; }
+        .btn-danger { background: #ef4444; color: white; border: none; }
+        .btn-secondary { background: #6b7280; color: white; border: none; }
+        #debug-output { background: #f3f4f6; padding: 15px; border-radius: 6px; font-family: monospace; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Configuration Tab Save Test</h1>
+    
+    <div class="test-section">
+        <h2>Twilio Configuration</h2>
+        <input type="text" id="twilioAccountSid" class="form-input" placeholder="Account SID" value="AC123456789">
+        <input type="text" id="twilioAuthToken" class="form-input" placeholder="Auth Token" value="test-token">
+    </div>
+
+    <div class="test-section">
+        <h2>Phone Numbers</h2>
+        <div id="phoneNumbersList">
+            <div class="phone-number-item">
+                <input type="tel" name="phoneNumber" class="form-input" placeholder="+12395551212" value="+12395551212">
+                <input type="text" name="friendlyName" class="form-input" placeholder="Friendly Name" value="Primary Number">
+                <select name="status" class="form-select">
+                    <option value="active" selected>Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+                <button type="button" class="btn btn-secondary" title="Set as Primary">Primary</button>
+                <button type="button" class="btn btn-danger" title="Remove"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+        <button type="button" id="addPhoneNumberBtn" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Add Number
+        </button>
+    </div>
+
+    <div class="test-section">
+        <button type="button" id="saveConfigBtn" class="btn btn-primary">Save Configuration</button>
+        <button type="button" id="testCollectBtn" class="btn btn-secondary">Test Data Collection</button>
+    </div>
+
+    <div class="test-section">
+        <h3>Debug Output:</h3>
+        <div id="debug-output"></div>
+    </div>
+
+    <template id="phoneNumberTemplate">
+        <div class="phone-number-item">
+            <input type="tel" name="phoneNumber" class="form-input" placeholder="+12395551212">
+            <input type="text" name="friendlyName" class="form-input" placeholder="Friendly Name">
+            <select name="status" class="form-select">
+                <option value="active" selected>Active</option>
+                <option value="inactive">Inactive</option>
+            </select>
+            <button type="button" class="btn btn-secondary" title="Set as Primary">Set Primary</button>
+            <button type="button" class="btn btn-danger" title="Remove"><i class="fas fa-trash"></i></button>
+        </div>
+    </template>
+
+    <script>
+        // Simplified version of the configuration management
+        class ConfigTestManager {
+            constructor() {
+                this.setupEventListeners();
+                this.debugOutput = document.getElementById('debug-output');
+                this.log('ConfigTestManager initialized');
+            }
+
+            log(message) {
+                const timestamp = new Date().toLocaleTimeString();
+                this.debugOutput.textContent += `[${timestamp}] ${message}\n`;
+                console.log(message);
+            }
+
+            setupEventListeners() {
+                // Add phone number button
+                document.getElementById('addPhoneNumberBtn').addEventListener('click', () => {
+                    this.addPhoneNumber();
+                });
+
+                // Save config button
+                document.getElementById('saveConfigBtn').addEventListener('click', () => {
+                    this.saveConfiguration();
+                });
+
+                // Test collect button
+                document.getElementById('testCollectBtn').addEventListener('click', () => {
+                    this.testDataCollection();
+                });
+
+                // Setup existing phone number listeners
+                this.setupPhoneNumberEventListeners();
+            }
+
+            setupPhoneNumberEventListeners() {
+                const phoneItems = document.querySelectorAll('.phone-number-item');
+                this.log(`Setting up listeners for ${phoneItems.length} phone items`);
+                
+                phoneItems.forEach(item => {
+                    this.setupSinglePhoneNumberListeners(item);
+                });
+            }
+
+            setupSinglePhoneNumberListeners(item) {
+                const deleteBtn = item.querySelector('button[title="Remove"]');
+                const setPrimaryBtn = item.querySelector('button[title="Set as Primary"]');
+                
+                if (deleteBtn) {
+                    deleteBtn.onclick = (e) => {
+                        e.preventDefault();
+                        this.log('Delete button clicked');
+                        this.removePhoneNumber(item);
+                    };
+                }
+                
+                if (setPrimaryBtn) {
+                    setPrimaryBtn.onclick = (e) => {
+                        e.preventDefault();
+                        this.log('Set primary button clicked');
+                        this.setPrimaryNumber(item);
+                    };
+                }
+            }
+
+            addPhoneNumber() {
+                const phoneNumbersList = document.getElementById('phoneNumbersList');
+                const template = document.getElementById('phoneNumberTemplate');
+                
+                if (!phoneNumbersList || !template) {
+                    this.log('ERROR: Missing phoneNumbersList or template');
+                    return;
+                }
+
+                const newItem = template.content.cloneNode(true);
+                phoneNumbersList.appendChild(newItem);
+                
+                // Setup listeners for the newly added item
+                const addedItem = phoneNumbersList.lastElementChild;
+                this.setupSinglePhoneNumberListeners(addedItem);
+                
+                this.log('New phone number added');
+            }
+
+            removePhoneNumber(phoneItem) {
+                const phoneNumbersList = document.getElementById('phoneNumbersList');
+                const allItems = phoneNumbersList.querySelectorAll('.phone-number-item');
+                
+                if (allItems.length <= 1) {
+                    this.log('ERROR: Cannot remove the last phone number');
+                    return;
+                }
+                
+                phoneItem.remove();
+                this.log('Phone number removed');
+            }
+
+            setPrimaryNumber(phoneItem) {
+                // Remove primary status from all items
+                const phoneNumbersList = document.getElementById('phoneNumbersList');
+                const allItems = phoneNumbersList.querySelectorAll('.phone-number-item');
+                
+                allItems.forEach(item => {
+                    const primaryBtn = item.querySelector('button[title="Set as Primary"]');
+                    if (primaryBtn) {
+                        primaryBtn.textContent = 'Set Primary';
+                        primaryBtn.classList.remove('btn-primary');
+                        primaryBtn.classList.add('btn-secondary');
+                    }
+                });
+                
+                // Set this item as primary
+                const primaryBtn = phoneItem.querySelector('button[title="Set as Primary"]');
+                if (primaryBtn) {
+                    primaryBtn.textContent = 'Primary';
+                    primaryBtn.classList.remove('btn-secondary');
+                    primaryBtn.classList.add('btn-primary');
+                }
+                
+                this.log('Primary number set');
+            }
+
+            collectConfigData() {
+                const data = {};
+
+                // Twilio credentials
+                const twilioSid = document.getElementById('twilioAccountSid');
+                const twilioToken = document.getElementById('twilioAuthToken');
+                
+                if (!data.twilioConfig) {
+                    data.twilioConfig = {};
+                }
+                
+                if (twilioSid?.value.trim()) {
+                    data.twilioConfig.accountSid = twilioSid.value.trim();
+                }
+                
+                if (twilioToken?.value.trim()) {
+                    data.twilioConfig.authToken = twilioToken.value.trim();
+                }
+
+                // Phone numbers
+                const phoneNumbers = [];
+                const phoneNumberItems = document.querySelectorAll('.phone-number-item');
+                
+                phoneNumberItems.forEach((item, index) => {
+                    const phoneInput = item.querySelector('input[name="phoneNumber"]');
+                    const friendlyInput = item.querySelector('input[name="friendlyName"]');
+                    const statusSelect = item.querySelector('select[name="status"]');
+                    const isPrimaryBtn = item.querySelector('button[title="Set as Primary"]');
+                    
+                    if (phoneInput?.value.trim()) {
+                        const isPrimary = isPrimaryBtn?.textContent === 'Primary';
+                        
+                        phoneNumbers.push({
+                            phoneNumber: phoneInput.value.trim(),
+                            friendlyName: friendlyInput?.value.trim() || '',
+                            status: statusSelect?.value || 'active',
+                            isPrimary: isPrimary || index === 0
+                        });
+                    }
+                });
+                
+                if (phoneNumbers.length > 0) {
+                    data.twilioConfig.phoneNumbers = phoneNumbers;
+                }
+
+                return data;
+            }
+
+            testDataCollection() {
+                const data = this.collectConfigData();
+                this.log('Collected data:');
+                this.log(JSON.stringify(data, null, 2));
+            }
+
+            async saveConfiguration() {
+                try {
+                    this.log('Starting save process...');
+                    
+                    const configData = this.collectConfigData();
+                    this.log('Configuration data collected:');
+                    this.log(JSON.stringify(configData, null, 2));
+                    
+                    // Simulate API call
+                    this.log('Simulating API call to /api/company/test-id');
+                    
+                    // In real implementation, this would be:
+                    // const response = await fetch('/api/company/test-id', {
+                    //     method: 'PATCH',
+                    //     headers: { 'Content-Type': 'application/json' },
+                    //     body: JSON.stringify(configData)
+                    // });
+                    
+                    this.log('✅ Configuration save simulation completed');
+                    
+                } catch (error) {
+                    this.log('❌ Error saving configuration: ' + error.message);
+                }
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new ConfigTestManager();
+        });
+    </script>
+</body>
+</html>
