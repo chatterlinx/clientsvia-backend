@@ -434,15 +434,20 @@ class CompanyProfileManager {
      * Populate Configuration tab with data
      */
     populateConfigTab() {
-        console.log('⚙️ Populating Config tab...');
-        
-        if (!this.currentData) {
-            console.log('⚠️ No company data available for Config tab');
-            return;
-        }
+        try {
+            console.log('⚙️ Populating Config tab...');
+            
+            if (!this.currentData) {
+                console.log('⚠️ No company data available for Config tab');
+                return;
+            }
 
-        // Create modern configuration interface
-        this.createConfigurationInterface();
+            // Create modern configuration interface
+            this.createConfigurationInterface();
+        } catch (error) {
+            console.error('❌ Error populating Config tab:', error);
+            this.showNotification('Error loading configuration data', 'error');
+        }
     }
 
     /**
@@ -490,22 +495,34 @@ class CompanyProfileManager {
      * Setup phone numbers management
      */
     setupPhoneNumbersManagement() {
-        const addPhoneBtn = document.getElementById('addPhoneNumberBtn');
-        if (addPhoneBtn) {
-            // Remove existing listener to avoid duplicates
-            addPhoneBtn.replaceWith(addPhoneBtn.cloneNode(true));
-            const newAddPhoneBtn = document.getElementById('addPhoneNumberBtn');
+        try {
+            console.log('📞 Setting up phone numbers management...');
             
-            newAddPhoneBtn.addEventListener('click', () => {
-                this.addPhoneNumber();
-            });
-        }
+            const addPhoneBtn = document.getElementById('addPhoneNumberBtn');
+            if (addPhoneBtn) {
+                // Remove existing listener to avoid duplicates
+                addPhoneBtn.replaceWith(addPhoneBtn.cloneNode(true));
+                const newAddPhoneBtn = document.getElementById('addPhoneNumberBtn');
+                
+                newAddPhoneBtn.addEventListener('click', () => {
+                    this.addPhoneNumber();
+                });
+                console.log('📞 Add phone button listener attached');
+            } else {
+                console.warn('📞 Add phone button not found');
+            }
 
-        // Load existing phone numbers or create default one
-        this.renderPhoneNumbers();
-        
-        // Setup event listeners for existing phone number items
-        this.setupPhoneNumberEventListeners();
+            // Load existing phone numbers or create default one
+            this.renderPhoneNumbers();
+            
+            // Setup event listeners for existing phone number items
+            this.setupPhoneNumberEventListeners();
+            
+            console.log('✅ Phone numbers management setup complete');
+        } catch (error) {
+            console.error('❌ Error setting up phone numbers management:', error);
+            // Continue execution but log the error
+        }
     }
 
     /**
@@ -536,14 +553,23 @@ class CompanyProfileManager {
      */
     renderPhoneNumbers() {
         const phoneNumbersList = document.getElementById('phoneNumbersList');
-        if (!phoneNumbersList) return;
+        if (!phoneNumbersList) {
+            console.warn('📞 Phone numbers list element not found');
+            return;
+        }
 
-        // Get phone numbers from current data
-        const phoneNumbers = this.currentData?.twilioConfig?.phoneNumbers || 
-                           this.currentData?.phoneNumbers || [];
+        // Get phone numbers from current data with safety checks
+        let phoneNumbers = [];
+        if (this.currentData) {
+            phoneNumbers = this.currentData?.twilioConfig?.phoneNumbers || 
+                          this.currentData?.phoneNumbers || [];
+        }
+        
+        console.log('📞 Rendering phone numbers:', phoneNumbers);
 
         // If no phone numbers exist, add a default empty one
         if (phoneNumbers.length === 0) {
+            console.log('📞 No phone numbers found, adding default empty one');
             this.addPhoneNumber();
             return;
         }
@@ -553,6 +579,7 @@ class CompanyProfileManager {
 
         // Render each phone number
         phoneNumbers.forEach((phone, index) => {
+            console.log(`📞 Adding phone number ${index + 1}:`, phone);
             this.addPhoneNumberWithData(phone, index === 0);
         });
     }
@@ -709,23 +736,6 @@ class CompanyProfileManager {
         
         this.setUnsavedChanges(true);
         console.log('📞 Primary phone number updated');
-    }
-
-    /**
-     * Render existing phone numbers
-     */
-    renderPhoneNumbers(phoneNumbers) {
-        phoneNumbers.forEach((phone, index) => {
-            const phoneInputs = document.querySelectorAll('input[name="phoneNumber"]');
-            if (phoneInputs[index]) {
-                phoneInputs[index].value = phone.number || '';
-            }
-            
-            const friendlyInputs = document.querySelectorAll('input[name="friendlyName"]');
-            if (friendlyInputs[index]) {
-                friendlyInputs[index].value = phone.friendlyName || '';
-            }
-        });
     }
 
     /**
