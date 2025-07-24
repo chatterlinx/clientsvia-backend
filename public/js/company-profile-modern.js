@@ -466,20 +466,33 @@ class CompanyProfileManager {
         const twilioApiKeyInput = document.getElementById('twilioApiKey');
         const twilioApiSecretInput = document.getElementById('twilioApiSecret');
         
-        if (twilioSidInput && this.currentData.twilioAccountSid) {
-            twilioSidInput.value = this.currentData.twilioAccountSid;
+        console.log('🔧 Loading Twilio config:', {
+            twilioConfig: this.currentData.twilioConfig,
+            flatSid: this.currentData.twilioAccountSid,
+            flatToken: this.currentData.twilioAuthToken
+        });
+        
+        // Check nested structure first, then flat structure for backward compatibility
+        const twilioConfig = this.currentData.twilioConfig || {};
+        
+        if (twilioSidInput && (twilioConfig.accountSid || this.currentData.twilioAccountSid)) {
+            twilioSidInput.value = twilioConfig.accountSid || this.currentData.twilioAccountSid;
+            console.log('🔧 Loaded Twilio SID:', twilioSidInput.value);
         }
         
-        if (twilioTokenInput && this.currentData.twilioAuthToken) {
+        if (twilioTokenInput && (twilioConfig.authToken || this.currentData.twilioAuthToken)) {
             twilioTokenInput.value = '••••••••••••••••'; // Mask for security
+            console.log('🔧 Loaded Twilio Auth Token (masked)');
         }
         
-        if (twilioApiKeyInput && this.currentData.twilioApiKey) {
-            twilioApiKeyInput.value = this.currentData.twilioApiKey;
+        if (twilioApiKeyInput && (twilioConfig.apiKey || this.currentData.twilioApiKey)) {
+            twilioApiKeyInput.value = twilioConfig.apiKey || this.currentData.twilioApiKey;
+            console.log('🔧 Loaded Twilio API Key:', twilioApiKeyInput.value);
         }
         
-        if (twilioApiSecretInput && this.currentData.twilioApiSecret) {
+        if (twilioApiSecretInput && (twilioConfig.apiSecret || this.currentData.twilioApiSecret)) {
             twilioApiSecretInput.value = '••••••••••••••••'; // Mask for security
+            console.log('🔧 Loaded Twilio API Secret (masked)');
         }
 
         // Setup phone numbers management
