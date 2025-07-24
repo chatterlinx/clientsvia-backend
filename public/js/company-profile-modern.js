@@ -280,125 +280,635 @@ class CompanyProfileManager {
     }
 
     /**
-     * Populate Overview tab with data and setup contacts
+     * GOLD STANDARD: Populate Overview tab with enterprise-grade UX
+     * Features: Live validation, auto-save, accessibility, error recovery
      */
     populateOverviewTab() {
-        if (!this.currentData) return;
+        if (!this.currentData) {
+            this.showNotification('Company data not loaded', 'error');
+            return;
+        }
 
-        console.log('📄 Populating Overview tab...');
+        console.log('📄 Populating Overview tab with enterprise features...');
 
-        // Update header elements
-        this.updateHeaderElements();
+        try {
+            // Update header elements with current data
+            this.updateHeaderElements();
 
-        // Modern UX: Show editable form directly, no separate view/edit modes
-        this.createModernEditableForm();
+            // Create modern always-editable form with validation
+            this.createEnterpriseEditableForm();
 
-        this.renderContactsSection();
-        this.setupContactsHandlers();
+            // Initialize contacts management with enterprise features
+            this.initializeContactsManagement();
+            
+            // Setup comprehensive validation and auto-save
+            this.setupEnterpriseFormValidation();
+
+            console.log('✅ Overview tab initialized with enterprise features');
+        } catch (error) {
+            console.error('❌ Error initializing Overview tab:', error);
+            this.showNotification('Failed to initialize Overview tab', 'error');
+        }
     }
 
     /**
-     * Create modern always-editable form
+     * GOLD STANDARD: Create enterprise-grade always-editable form
+     * Features: Validation, accessibility, progressive enhancement
      */
-    createModernEditableForm() {
-        if (!this.domElements.editFormContainer) return;
+    createEnterpriseEditableForm() {
+        if (!this.domElements.editFormContainer) {
+            console.error('❌ Edit form container not found');
+            return;
+        }
 
-        console.log('🔧 Creating modern form with data:', this.currentData);
-
-        const formHTML = `
-            <div class="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-lg font-semibold text-gray-900 flex items-center">
-                        <i class="fas fa-building text-indigo-600 mr-2"></i>
-                        Company Information
-                    </h3>
-                    <span class="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">All fields are editable</span>
-                </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="space-y-1">
-                        <label class="form-label text-gray-700 font-medium">Company Name *</label>
-                        <input type="text" id="edit-company-name" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                               value="${this.escapeHtml(this.currentData.companyName || this.currentData.name || '')}"
-                               placeholder="Enter company name">
-                    </div>
-                    <div class="space-y-1">
-                        <label class="form-label text-gray-700 font-medium">Business Phone</label>
-                        <input type="tel" id="edit-business-phone" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                               value="${this.escapeHtml(this.currentData.companyPhone || this.currentData.businessPhone || '')}"
-                               placeholder="+1-555-123-4567">
-                    </div>
-                    <div class="space-y-1">
-                        <label class="form-label text-gray-700 font-medium">Business Email</label>
-                        <input type="email" id="edit-business-email" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                               value="${this.escapeHtml(this.currentData.businessEmail || '')}"
-                               placeholder="contact@company.com">
-                    </div>
-                    <div class="space-y-1">
-                        <label class="form-label text-gray-700 font-medium">Website</label>
-                        <input type="url" id="edit-business-website" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                               value="${this.escapeHtml(this.currentData.businessWebsite || '')}"
-                               placeholder="https://www.company.com">
-                    </div>
-                    <div class="md:col-span-2 space-y-1">
-                        <label class="form-label text-gray-700 font-medium">Business Address</label>
-                        <input type="text" id="edit-business-address" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                               value="${this.escapeHtml(this.currentData.companyAddress || this.currentData.businessAddress || '')}"
-                               placeholder="123 Main St, City, State 12345">
-                    </div>
-                    <div class="md:col-span-2 space-y-1">
-                        <label class="form-label text-gray-700 font-medium">Description</label>                        <textarea id="edit-description" class="form-textarea wider-textbox focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" rows="3" 
-                            placeholder="Describe your business and services...">${this.escapeHtml(this.currentData.description || '')}</textarea>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="form-label text-gray-700 font-medium">Service Area</label>
-                        <input type="text" id="edit-service-area" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                               value="${this.escapeHtml(this.currentData.serviceArea || '')}"
-                               placeholder="Greater Metro Area">
-                    </div>
-                    <div class="space-y-1">
-                        <label class="form-label text-gray-700 font-medium">Business Hours</label>
-                        <input type="text" id="edit-business-hours" class="form-input focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                               value="${this.escapeHtml(this.currentData.businessHours || '')}"
-                               placeholder="Monday-Friday: 9:00 AM - 5:00 PM">
-                    </div>
-                </div>
-                
-                <div class="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-                    <div class="flex items-center">
-                        <i class="fas fa-magic text-blue-600 mr-2"></i>
-                        <span class="text-sm text-blue-800 font-medium">Live editing enabled - Save button appears automatically when you make changes</span>
-                    </div>
-                </div>
-            </div>
-        `;
-
+        const formHTML = this.generateEnterpriseFormHTML();
         this.domElements.editFormContainer.innerHTML = formHTML;
         this.domElements.editFormContainer.classList.remove('hidden');
 
-        // Hide the old edit button since form is always visible
+        // Hide legacy edit button (form is always visible)
         if (this.domElements.editButton) {
             this.domElements.editButton.style.display = 'none';
         }
 
-        // Setup modern form listeners
-        this.setupModernFormListeners();
+        // Initialize enterprise form features
+        this.initializeFormAccessibility();
+        this.setupFormAutoSave();
+        
+        console.log('🔧 Enterprise editable form created');
     }
 
     /**
-     * Setup event listeners for the modern always-editable form
+     * GOLD STANDARD: Generate enterprise form HTML with validation
      */
-    setupModernFormListeners() {
-        // Track changes in edit form
-        const editInputs = this.domElements.editFormContainer.querySelectorAll('input, textarea');
-        editInputs.forEach(input => {
+    generateEnterpriseFormHTML() {
+        const data = this.currentData;
+        const requiredFields = ['companyName'];
+        
+        return `
+            <div class="bg-white rounded-xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-200">
+                <!-- Header Section -->
+                <div class="flex justify-between items-center mb-8">
+                    <div class="flex items-center">
+                        <div class="bg-indigo-100 p-3 rounded-lg mr-4">
+                            <i class="fas fa-building text-indigo-600 text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-900">Company Information</h3>
+                            <p class="text-sm text-gray-600 mt-1">Manage your business details and contact information</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div id="validation-status" class="hidden">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium">
+                                <i class="fas fa-check-circle mr-1"></i>
+                                All fields valid
+                            </span>
+                        </div>
+                        <span class="text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-full">
+                            <i class="fas fa-edit text-gray-400 mr-1"></i>
+                            Live editing enabled
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Form Fields Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Left Column - Essential Info -->
+                    <div class="space-y-6">
+                        <div class="form-group">
+                            <label for="edit-company-name" class="form-label required">
+                                Company Name
+                                <span class="text-red-500 ml-1" title="Required field">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                id="edit-company-name" 
+                                name="companyName"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.companyName || data.name || '')}"
+                                placeholder="Enter your company name"
+                                required
+                                aria-describedby="company-name-help"
+                                data-validate="required|min:2|max:100"
+                            >
+                            <div id="company-name-help" class="form-help">
+                                This name will appear on all communications and documents
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-phone" class="form-label">
+                                Business Phone
+                            </label>
+                            <input 
+                                type="tel" 
+                                id="edit-business-phone" 
+                                name="businessPhone"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.companyPhone || data.businessPhone || '')}"
+                                placeholder="+1 (555) 123-4567"
+                                aria-describedby="business-phone-help"
+                                data-validate="phone"
+                            >
+                            <div id="business-phone-help" class="form-help">
+                                Primary contact number for customers and partners
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-email" class="form-label">
+                                Business Email
+                            </label>
+                            <input 
+                                type="email" 
+                                id="edit-business-email" 
+                                name="businessEmail"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.businessEmail || '')}"
+                                placeholder="contact@yourcompany.com"
+                                aria-describedby="business-email-help"
+                                data-validate="email"
+                            >
+                            <div id="business-email-help" class="form-help">
+                                Main email address for business communications
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-website" class="form-label">
+                                Website
+                            </label>
+                            <input 
+                                type="url" 
+                                id="edit-business-website" 
+                                name="businessWebsite"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.businessWebsite || '')}"
+                                placeholder="https://www.yourcompany.com"
+                                aria-describedby="business-website-help"
+                                data-validate="url"
+                            >
+                            <div id="business-website-help" class="form-help">
+                                Your company's website URL
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column - Additional Details -->
+                    <div class="space-y-6">
+                        <div class="form-group">
+                            <label for="edit-business-address" class="form-label">
+                                Business Address
+                            </label>
+                            <textarea 
+                                id="edit-business-address" 
+                                name="businessAddress"
+                                class="form-textarea enterprise-input" 
+                                rows="3"
+                                placeholder="123 Main Street&#10;Suite 100&#10;City, State 12345"
+                                aria-describedby="business-address-help"
+                                data-validate="address"
+                            >${this.escapeHtml(data.companyAddress || data.businessAddress || '')}</textarea>
+                            <div id="business-address-help" class="form-help">
+                                Physical location of your business
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-service-area" class="form-label">
+                                Service Area
+                            </label>
+                            <input 
+                                type="text" 
+                                id="edit-service-area" 
+                                name="serviceArea"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.serviceArea || '')}"
+                                placeholder="Greater Metro Area, 50-mile radius"
+                                aria-describedby="service-area-help"
+                            >
+                            <div id="service-area-help" class="form-help">
+                                Geographic area where you provide services
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-hours" class="form-label">
+                                Business Hours
+                            </label>
+                            <input 
+                                type="text" 
+                                id="edit-business-hours" 
+                                name="businessHours"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.businessHours || '')}"
+                                placeholder="Monday-Friday: 9:00 AM - 5:00 PM"
+                                aria-describedby="business-hours-help"
+                            >
+                            <div id="business-hours-help" class="form-help">
+                                When your business is open for customers
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Description Section -->
+                <div class="mt-8">
+                    <div class="form-group">
+                        <label for="edit-description" class="form-label">
+                            Business Description
+                        </label>
+                        <textarea 
+                            id="edit-description" 
+                            name="description"
+                            class="form-textarea enterprise-input" 
+                            rows="4"
+                            placeholder="Describe your business, services, and what makes you unique..."
+                            aria-describedby="description-help"
+                            data-validate="max:1000"
+                        >${this.escapeHtml(data.description || '')}</textarea>
+                        <div id="description-help" class="form-help">
+                            Brief overview of your business and services (up to 1000 characters)
+                        </div>
+                        <div class="field-validation hidden"></div>
+                        <div class="text-right mt-1">
+                            <span id="description-counter" class="text-xs text-gray-500">
+                                ${(data.description || '').length}/1000 characters
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Status Indicator -->
+                <div class="mt-8 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="bg-blue-100 p-2 rounded-lg mr-3">
+                                <i class="fas fa-magic text-blue-600"></i>
+                            </div>
+                            <div>
+                                <span class="text-sm text-blue-900 font-semibold">Enterprise Live Editing</span>
+                                <p class="text-xs text-blue-700 mt-1">Changes are validated in real-time and auto-saved</p>
+                            </div>
+                        </div>
+                        <div id="form-status" class="flex items-center text-sm">
+                            <div class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                            <span class="text-green-700 font-medium">Ready</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * GOLD STANDARD: Setup enterprise form validation and auto-save
+     */
+    setupEnterpriseFormValidation() {
+        const form = this.domElements.editFormContainer;
+        if (!form) return;
+
+        // Get all enterprise inputs
+        const inputs = form.querySelectorAll('.enterprise-input');
+        
+        inputs.forEach(input => {
+            // Real-time validation on input
+            input.addEventListener('input', (e) => this.handleEnterpriseInput(e));
+            input.addEventListener('blur', (e) => this.validateField(e.target));
+            input.addEventListener('focus', (e) => this.clearFieldErrors(e.target));
+        });
+
+        // Special handling for description character counter
+        const descriptionField = document.getElementById('edit-description');
+        if (descriptionField) {
+            descriptionField.addEventListener('input', this.updateCharacterCounter.bind(this));
+        }
+
+        console.log('🔧 Enterprise validation setup complete');
+    }
+
+    /**
+     * GOLD STANDARD: Handle enterprise input with validation and auto-save
+     */
+    handleEnterpriseInput(event) {
+        const field = event.target;
+        
+        // Mark as changed for auto-save
+        this.setUnsavedChanges(true);
+        
+        // Real-time validation (debounced)
+        clearTimeout(this.validationTimeout);
+        this.validationTimeout = setTimeout(() => {
+            this.validateField(field);
+            this.updateFormStatus();
+        }, 300);
+
+        // Update form status
+        this.setFormStatus('typing', 'Making changes...');
+        
+        console.log(`📝 Enterprise field changed: ${field.name} = ${field.value.substring(0, 50)}...`);
+    }
+
+    /**
+     * GOLD STANDARD: Validate individual field with enterprise rules
+     */
+    validateField(field) {
+        const rules = field.getAttribute('data-validate');
+        if (!rules) return true;
+
+        const validationContainer = field.parentNode.querySelector('.field-validation');
+        if (!validationContainer) return true;
+
+        const value = field.value.trim();
+        const ruleArray = rules.split('|');
+        const errors = [];
+
+        // Apply validation rules
+        for (const rule of ruleArray) {
+            const [ruleName, ruleValue] = rule.split(':');
+            
+            switch (ruleName) {
+                case 'required':
+                    if (!value) errors.push('This field is required');
+                    break;
+                case 'min':
+                    if (value.length < parseInt(ruleValue)) {
+                        errors.push(`Minimum ${ruleValue} characters required`);
+                    }
+                    break;
+                case 'max':
+                    if (value.length > parseInt(ruleValue)) {
+                        errors.push(`Maximum ${ruleValue} characters allowed`);
+                    }
+                    break;
+                case 'email':
+                    if (value && !this.isValidEmail(value)) {
+                        errors.push('Please enter a valid email address');
+                    }
+                    break;
+                case 'phone':
+                    if (value && !this.isValidPhone(value)) {
+                        errors.push('Please enter a valid phone number');
+                    }
+                    break;
+                case 'url':
+                    if (value && !this.isValidUrl(value)) {
+                        errors.push('Please enter a valid website URL');
+                    }
+                    break;
+            }
+        }
+
+        // Display validation results
+        if (errors.length > 0) {
+            this.showFieldErrors(field, errors);
+            return false;
+        } else {
+            this.showFieldSuccess(field);
+            return true;
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Initialize form accessibility features
+     */
+    initializeFormAccessibility() {
+        const form = this.domElements.editFormContainer;
+        if (!form) return;
+
+        // Add ARIA labels and descriptions
+        const inputs = form.querySelectorAll('input, textarea');
+        inputs.forEach(input => {
+            // Ensure proper labeling
+            const label = form.querySelector(`label[for="${input.id}"]`);
+            if (label && !input.getAttribute('aria-labelledby')) {
+                input.setAttribute('aria-labelledby', label.id || `${input.id}-label`);
+            }
+
+            // Add required indicators for screen readers
+            if (input.hasAttribute('required')) {
+                input.setAttribute('aria-required', 'true');
+            }
+        });
+
+        console.log('♿ Accessibility features initialized');
+    }
+
+    /**
+     * GOLD STANDARD: Setup form auto-save with enterprise features
+     */
+    setupFormAutoSave() {
+        // Auto-save after 2 seconds of inactivity
+        this.autoSaveTimeout = null;
+        
+        const form = this.domElements.editFormContainer;
+        if (!form) return;
+
+        const inputs = form.querySelectorAll('.enterprise-input');
+        inputs.forEach(input => {
             input.addEventListener('input', () => {
-                this.setUnsavedChanges(true);
-                console.log(`📝 Field changed: ${input.id} = ${input.value}`);
+                clearTimeout(this.autoSaveTimeout);
+                this.setFormStatus('pending', 'Auto-saving...');
+                
+                this.autoSaveTimeout = setTimeout(async () => {
+                    try {
+                        await this.performAutoSave();
+                        this.setFormStatus('saved', 'All changes saved');
+                    } catch (error) {
+                        this.setFormStatus('error', 'Auto-save failed');
+                        console.error('Auto-save failed:', error);
+                    }
+                }, 2000);
             });
         });
 
-        console.log('✅ Modern form listeners setup complete');
+        console.log('💾 Auto-save enabled');
+    }
+
+    /**
+     * GOLD STANDARD: Initialize contacts management with enterprise features
+     */
+    initializeContactsManagement() {
+        try {
+            this.renderEnterpriseContactsSection();
+            this.setupEnterpriseContactsHandlers();
+            console.log('� Enterprise contacts management initialized');
+        } catch (error) {
+            console.error('❌ Error initializing contacts:', error);
+            this.showNotification('Failed to initialize contacts section', 'error');
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Validation utility methods
+     */
+    isValidEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    }
+
+    isValidPhone(phone) {
+        // Remove all non-digits for validation
+        const cleaned = phone.replace(/\D/g, '');
+        return cleaned.length >= 10 && cleaned.length <= 15;
+    }
+
+    isValidUrl(url) {
+        try {
+            new URL(url);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Update character counter for description field
+     */
+    updateCharacterCounter() {
+        const descriptionField = document.getElementById('edit-description');
+        const counter = document.getElementById('description-counter');
+        
+        if (descriptionField && counter) {
+            const length = descriptionField.value.length;
+            const maxLength = 1000;
+            
+            counter.textContent = `${length}/${maxLength} characters`;
+            
+            // Color coding based on usage
+            if (length > maxLength * 0.9) {
+                counter.className = 'text-xs text-red-600 font-medium';
+            } else if (length > maxLength * 0.75) {
+                counter.className = 'text-xs text-yellow-600';
+            } else {
+                counter.className = 'text-xs text-gray-500';
+            }
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Show field validation errors
+     */
+    showFieldErrors(field, errors) {
+        const validationContainer = field.parentNode.querySelector('.field-validation');
+        if (!validationContainer) return;
+
+        validationContainer.innerHTML = errors.map(error => 
+            `<div class="text-red-600 text-xs mt-1 flex items-center">
+                <i class="fas fa-exclamation-circle mr-1"></i>
+                ${error}
+            </div>`
+        ).join('');
+        
+        validationContainer.classList.remove('hidden');
+        field.classList.add('border-red-300');
+        field.classList.remove('border-green-300');
+    }
+
+    /**
+     * GOLD STANDARD: Show field validation success
+     */
+    showFieldSuccess(field) {
+        const validationContainer = field.parentNode.querySelector('.field-validation');
+        if (validationContainer) {
+            validationContainer.classList.add('hidden');
+        }
+        
+        field.classList.remove('border-red-300');
+        field.classList.add('border-green-300');
+    }
+
+    /**
+     * GOLD STANDARD: Clear field errors on focus
+     */
+    clearFieldErrors(field) {
+        const validationContainer = field.parentNode.querySelector('.field-validation');
+        if (validationContainer) {
+            validationContainer.classList.add('hidden');
+        }
+        
+        field.classList.remove('border-red-300', 'border-green-300');
+    }
+
+    /**
+     * GOLD STANDARD: Set form status indicator
+     */
+    setFormStatus(status, message) {
+        const statusElement = document.getElementById('form-status');
+        if (!statusElement) return;
+
+        const statusConfigs = {
+            ready: { color: 'text-green-700', bgColor: 'bg-green-500', icon: 'fas fa-check-circle' },
+            typing: { color: 'text-blue-700', bgColor: 'bg-blue-500', icon: 'fas fa-edit' },
+            pending: { color: 'text-yellow-700', bgColor: 'bg-yellow-500', icon: 'fas fa-clock' },
+            saved: { color: 'text-green-700', bgColor: 'bg-green-500', icon: 'fas fa-check-circle' },
+            error: { color: 'text-red-700', bgColor: 'bg-red-500', icon: 'fas fa-exclamation-circle' }
+        };
+
+        const config = statusConfigs[status] || statusConfigs.ready;
+        
+        statusElement.innerHTML = `
+            <div class="w-2 h-2 ${config.bgColor} rounded-full mr-2 ${status === 'pending' ? 'animate-pulse' : ''}"></div>
+            <span class="${config.color} font-medium">${message}</span>
+        `;
+    }
+
+    /**
+     * GOLD STANDARD: Update overall form validation status
+     */
+    updateFormStatus() {
+        const form = this.domElements.editFormContainer;
+        if (!form) return;
+
+        const inputs = form.querySelectorAll('.enterprise-input');
+        let allValid = true;
+        let hasErrors = false;
+
+        inputs.forEach(input => {
+            const hasError = input.classList.contains('border-red-300');
+            if (hasError) {
+                allValid = false;
+                hasErrors = true;
+            }
+        });
+
+        const validationStatus = document.getElementById('validation-status');
+        if (validationStatus) {
+            if (allValid && !hasErrors) {
+                validationStatus.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800';
+                validationStatus.innerHTML = '<i class="fas fa-check-circle mr-1"></i>All fields valid';
+                validationStatus.classList.remove('hidden');
+            } else if (hasErrors) {
+                validationStatus.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800';
+                validationStatus.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>Please fix errors';
+                validationStatus.classList.remove('hidden');
+            } else {
+                validationStatus.classList.add('hidden');
+            }
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Perform auto-save operation
+     */
+    async performAutoSave() {
+        if (!this.hasUnsavedChanges) return;
+
+        try {
+            console.log('💾 Performing auto-save...');
+            await this.saveAllChanges(true); // true = silent save
+            console.log('✅ Auto-save completed');
+        } catch (error) {
+            console.error('❌ Auto-save failed:', error);
+            throw error;
+        }
     }
 
     /**
@@ -2552,37 +3062,240 @@ class CompanyProfileManager {
     }
 
     /**
-     * Collect Overview tab data
+     * GOLD STANDARD: Collect Overview tab data with enterprise validation
+     * Features: Data sanitization, validation, error handling
      */
     collectOverviewData(data) {
-        const fields = {
-            'edit-company-name': 'companyName',
-            'edit-business-phone': 'businessPhone',
-            'edit-business-email': 'businessEmail',
-            'edit-business-website': 'businessWebsite',
-            'edit-business-address': 'businessAddress',
-            'edit-description': 'description',
-            'edit-service-area': 'serviceArea',
-            'edit-business-hours': 'businessHours'
-        };
+        console.log('📊 Collecting Overview data with enterprise validation...');
 
-        Object.entries(fields).forEach(([inputId, dataKey]) => {
-            const input = document.getElementById(inputId);
-            if (input) {
-                // Always include the field, even if empty (to allow clearing values)
-                data[dataKey] = input.value.trim();
-                
-                // For backward compatibility with simplified workflow,
-                // also set the corresponding company* field if it's phone or address
-                if (dataKey === 'businessPhone') {
-                    data['companyPhone'] = input.value.trim();
-                } else if (dataKey === 'businessAddress') {
-                    data['companyAddress'] = input.value.trim();
+        try {
+            // Define field mappings with validation rules
+            const fieldMappings = {
+                'edit-company-name': { 
+                    key: 'companyName', 
+                    required: true,
+                    sanitize: true,
+                    aliases: ['name'] // Backward compatibility
+                },
+                'edit-business-phone': { 
+                    key: 'businessPhone', 
+                    format: 'phone',
+                    aliases: ['companyPhone'] // Backward compatibility
+                },
+                'edit-business-email': { 
+                    key: 'businessEmail', 
+                    format: 'email',
+                    sanitize: true 
+                },
+                'edit-business-website': { 
+                    key: 'businessWebsite', 
+                    format: 'url',
+                    sanitize: true 
+                },
+                'edit-business-address': { 
+                    key: 'businessAddress', 
+                    sanitize: true,
+                    aliases: ['companyAddress'] // Backward compatibility
+                },
+                'edit-description': { 
+                    key: 'description', 
+                    maxLength: 1000,
+                    sanitize: true 
+                },
+                'edit-service-area': { 
+                    key: 'serviceArea', 
+                    sanitize: true 
+                },
+                'edit-business-hours': { 
+                    key: 'businessHours', 
+                    sanitize: true 
                 }
-            }
-        });
+            };
 
-        this.collectContactsData(data);
+            const validationErrors = [];
+            const collectedData = {};
+
+            // Process each field with enterprise-grade validation
+            Object.entries(fieldMappings).forEach(([inputId, config]) => {
+                const input = document.getElementById(inputId);
+                if (!input) {
+                    console.warn(`⚠️ Input element not found: ${inputId}`);
+                    return;
+                }
+
+                let value = input.value || '';
+
+                // Sanitize input if required
+                if (config.sanitize) {
+                    value = this.sanitizeInput(value);
+                }
+
+                // Format validation
+                if (value && config.format) {
+                    if (!this.validateFormat(value, config.format)) {
+                        validationErrors.push(`Invalid ${config.format} format for ${config.key}`);
+                    }
+                }
+
+                // Required field validation
+                if (config.required && !value.trim()) {
+                    validationErrors.push(`${config.key} is required`);
+                }
+
+                // Length validation
+                if (config.maxLength && value.length > config.maxLength) {
+                    validationErrors.push(`${config.key} exceeds maximum length of ${config.maxLength}`);
+                }
+
+                // Store the main value
+                collectedData[config.key] = value.trim();
+
+                // Store aliases for backward compatibility
+                if (config.aliases) {
+                    config.aliases.forEach(alias => {
+                        collectedData[alias] = value.trim();
+                    });
+                }
+
+                console.log(`📝 Collected ${config.key}: ${value.substring(0, 50)}${value.length > 50 ? '...' : ''}`);
+            });
+
+            // Handle validation errors
+            if (validationErrors.length > 0) {
+                console.warn('⚠️ Validation errors found:', validationErrors);
+                this.showNotification(`Validation errors: ${validationErrors.join(', ')}`, 'warning');
+                
+                // Still collect data but mark as having errors
+                collectedData._hasValidationErrors = true;
+                collectedData._validationErrors = validationErrors;
+            }
+
+            // Merge collected data into main data object
+            Object.assign(data, collectedData);
+
+            // Collect contacts data with enterprise validation
+            this.collectEnterpriseContactsData(data);
+
+            console.log('✅ Overview data collection completed', {
+                fieldsCollected: Object.keys(collectedData).length,
+                hasErrors: !!collectedData._hasValidationErrors
+            });
+
+        } catch (error) {
+            console.error('❌ Error collecting Overview data:', error);
+            this.showNotification('Failed to collect form data', 'error');
+            throw error;
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Sanitize user input to prevent XSS and data issues
+     */
+    sanitizeInput(input) {
+        if (typeof input !== 'string') return input;
+        
+        return input
+            .trim()
+            // Remove potentially dangerous HTML/Script tags
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+            .replace(/<[^>]*>/g, '') // Remove all HTML tags
+            // Normalize whitespace
+            .replace(/\s+/g, ' ')
+            // Remove control characters except newlines and tabs
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    }
+
+    /**
+     * GOLD STANDARD: Validate data format
+     */
+    validateFormat(value, format) {
+        switch (format) {
+            case 'email':
+                return this.isValidEmail(value);
+            case 'phone':
+                return this.isValidPhone(value);
+            case 'url':
+                return this.isValidUrl(value);
+            default:
+                return true;
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Collect contacts data with enterprise validation
+     */
+    collectEnterpriseContactsData(data) {
+        try {
+            const contactsList = document.getElementById('contacts-list');
+            if (!contactsList) {
+                console.log('📞 No contacts section found, skipping contacts collection');
+                return;
+            }
+
+            const contacts = [];
+            const contactElements = contactsList.querySelectorAll('.contact-item');
+
+            contactElements.forEach((contactElement, index) => {
+                const contact = {
+                    name: '',
+                    role: '',
+                    phones: [],
+                    notes: ''
+                };
+
+                // Collect name
+                const nameInput = contactElement.querySelector('.contact-name');
+                if (nameInput) {
+                    contact.name = this.sanitizeInput(nameInput.value);
+                }
+
+                // Collect role
+                const roleInput = contactElement.querySelector('.contact-role');
+                if (roleInput) {
+                    contact.role = this.sanitizeInput(roleInput.value);
+                }
+
+                // Collect phone numbers
+                const phoneElements = contactElement.querySelectorAll('.phone-row');
+                phoneElements.forEach(phoneElement => {
+                    const typeSelect = phoneElement.querySelector('.phone-type');
+                    const valueInput = phoneElement.querySelector('.phone-value');
+                    
+                    if (typeSelect && valueInput && valueInput.value.trim()) {
+                        const phoneValue = valueInput.value.trim();
+                        
+                        // Validate phone number
+                        if (this.isValidPhone(phoneValue)) {
+                            contact.phones.push({
+                                type: typeSelect.value,
+                                value: phoneValue
+                            });
+                        } else {
+                            console.warn(`⚠️ Invalid phone number for contact ${index + 1}: ${phoneValue}`);
+                        }
+                    }
+                });
+
+                // Collect notes
+                const notesInput = contactElement.querySelector('.contact-notes');
+                if (notesInput) {
+                    contact.notes = this.sanitizeInput(notesInput.value);
+                }
+
+                // Only add contact if it has meaningful data
+                if (contact.name || contact.role || contact.phones.length > 0 || contact.notes) {
+                    contacts.push(contact);
+                }
+            });
+
+            data.contacts = contacts;
+            console.log(`📞 Collected ${contacts.length} contacts with enterprise validation`);
+
+        } catch (error) {
+            console.error('❌ Error collecting contacts data:', error);
+            // Don't throw - contacts are optional
+            data.contacts = data.contacts || [];
+        }
     }
 
     /**
@@ -3058,128 +3771,414 @@ class CompanyProfileManager {
     }
 
     /**
-     * Render dynamic company contacts section
+     * GOLD STANDARD: Render enterprise contacts section with advanced UX
      */
-    renderContactsSection() {
+    renderEnterpriseContactsSection() {
         const contacts = Array.isArray(this.currentData.contacts) ? this.currentData.contacts : [];
         const contactsList = document.getElementById('contacts-list');
-        if (!contactsList) return;
+        
+        if (!contactsList) {
+            console.warn('⚠️ Contacts list container not found');
+            return;
+        }
+
+        console.log(`👥 Rendering ${contacts.length} contacts with enterprise features`);
+
+        // Clear existing contacts
         contactsList.innerHTML = '';
-        contacts.forEach((contact, cIdx) => {
-            const contactDiv = document.createElement('div');
-            contactDiv.className = 'border border-gray-200 rounded-lg p-4 bg-gray-50';
-            contactDiv.innerHTML = `
-                <div class="flex flex-col md:flex-row md:items-center md:space-x-6">
-                    <div class="flex-1">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
-                            <div>
-                                <label class="form-label">Name</label>
-                                <input type="text" class="form-input contact-name" value="${contact.name || ''}" data-cidx="${cIdx}" placeholder="Contact Name">
+
+        if (contacts.length === 0) {
+            // Show empty state with call-to-action
+            contactsList.innerHTML = this.generateEmptyContactsState();
+            return;
+        }
+
+        // Render each contact with enterprise features
+        contacts.forEach((contact, index) => {
+            const contactElement = this.createEnterpriseContactElement(contact, index);
+            contactsList.appendChild(contactElement);
+        });
+
+        // Add "Add Contact" button at the bottom
+        const addContactSection = document.createElement('div');
+        addContactSection.className = 'mt-6 text-center';
+        addContactSection.innerHTML = `
+            <button 
+                type="button" 
+                id="add-contact-btn" 
+                class="inline-flex items-center px-6 py-3 border border-dashed border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+                aria-label="Add new contact"
+            >
+                <i class="fas fa-user-plus mr-2 text-indigo-600"></i>
+                Add New Contact
+            </button>
+        `;
+        contactsList.appendChild(addContactSection);
+    }
+
+    /**
+     * GOLD STANDARD: Generate empty contacts state with call-to-action
+     */
+    generateEmptyContactsState() {
+        return `
+            <div class="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-indigo-100 mb-4">
+                    <i class="fas fa-users text-indigo-600 text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No contacts added yet</h3>
+                <p class="text-sm text-gray-600 mb-6 max-w-sm mx-auto">
+                    Add key contacts for your business to help customers reach the right person quickly.
+                </p>
+                <button 
+                    type="button" 
+                    id="add-contact-btn" 
+                    class="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200"
+                    aria-label="Add your first contact"
+                >
+                    <i class="fas fa-user-plus mr-2"></i>
+                    Add Your First Contact
+                </button>
+            </div>
+        `;
+    }
+
+    /**
+     * GOLD STANDARD: Create enterprise contact element with validation
+     */
+    createEnterpriseContactElement(contact, index) {
+        const contactDiv = document.createElement('div');
+        contactDiv.className = 'contact-item bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow duration-200 mb-4';
+        contactDiv.setAttribute('data-contact-index', index);
+        
+        contactDiv.innerHTML = `
+            <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between">
+                <!-- Contact Information -->
+                <div class="flex-1 lg:mr-6">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center">
+                            <div class="bg-indigo-100 p-2 rounded-lg mr-3">
+                                <i class="fas fa-user text-indigo-600"></i>
                             </div>
-                            <div>
-                                <label class="form-label">Role</label>
-                                <input type="text" class="form-input contact-role" value="${contact.role || ''}" data-cidx="${cIdx}" placeholder="Role (e.g. Customer Service)">
+                            <h4 class="text-lg font-semibold text-gray-900">
+                                Contact ${index + 1}
+                                ${contact.name ? `- ${this.escapeHtml(contact.name)}` : ''}
+                            </h4>
+                        </div>
+                        <button 
+                            type="button" 
+                            class="remove-contact-btn text-gray-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors duration-200" 
+                            data-contact-index="${index}"
+                            aria-label="Remove contact ${index + 1}"
+                            title="Remove this contact"
+                        >
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+
+                    <!-- Basic Information Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div class="form-group">
+                            <label class="form-label">Full Name</label>
+                            <input 
+                                type="text" 
+                                class="form-input contact-name enterprise-input" 
+                                value="${this.escapeHtml(contact.name || '')}" 
+                                data-contact-index="${index}" 
+                                placeholder="Enter contact name"
+                                aria-describedby="contact-name-help-${index}"
+                            >
+                            <div id="contact-name-help-${index}" class="form-help">
+                                Full name of the contact person
                             </div>
                         </div>
-                        <div class="mb-2">
-                            <label class="form-label">Phone Numbers</label>
-                            <div class="space-y-2" id="contact-phones-${cIdx}">
-                                ${(contact.phones||[]).map((phone, pIdx) => `
-                                    <div class="flex items-center mb-1 phone-row">
-                                        <select class="form-select phone-type" data-cidx="${cIdx}" data-pidx="${pIdx}">
-                                            <option value="cell" ${phone.type==='cell'?'selected':''}>Cell</option>
-                                            <option value="office" ${phone.type==='office'?'selected':''}>Office</option>
-                                            <option value="landline" ${phone.type==='landline'?'selected':''}>Landline</option>
-                                            <option value="other" ${phone.type==='other'?'selected':''}>Other</option>
-                                        </select>
-                                        <input type="tel" class="form-input ml-2 phone-value" value="${phone.value||''}" data-cidx="${cIdx}" data-pidx="${pIdx}" placeholder="Phone Number">
-                                        <button type="button" class="ml-2 text-red-600 hover:text-red-800 remove-phone-btn" data-cidx="${cIdx}" data-pidx="${pIdx}"><i class="fas fa-trash"></i></button>
-                                    </div>
-                                `).join('')}
+                        <div class="form-group">
+                            <label class="form-label">Role / Title</label>
+                            <input 
+                                type="text" 
+                                class="form-input contact-role enterprise-input" 
+                                value="${this.escapeHtml(contact.role || '')}" 
+                                data-contact-index="${index}" 
+                                placeholder="e.g., Customer Service Manager"
+                                aria-describedby="contact-role-help-${index}"
+                            >
+                            <div id="contact-role-help-${index}" class="form-help">
+                                Job title or department
                             </div>
-                            <button type="button" class="mt-2 text-xs text-indigo-600 hover:text-indigo-800 add-phone-btn" data-cidx="${cIdx}"><i class="fas fa-plus mr-1"></i>Add Phone</button>
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label">Notes</label>
-                            <textarea class="form-textarea wider-textbox contact-notes" data-cidx="${cIdx}" rows="2" placeholder="Special notes about this contact...">${contact.notes||''}</textarea>
                         </div>
                     </div>
-                    <div class="flex flex-col items-end justify-between ml-0 md:ml-4 mt-4 md:mt-0">
-                        <button type="button" class="text-red-600 hover:text-red-800 remove-contact-btn" data-cidx="${cIdx}"><i class="fas fa-trash mr-1"></i>Remove Contact</button>
+
+                    <!-- Phone Numbers Section -->
+                    <div class="mb-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="form-label mb-0">Phone Numbers</label>
+                            <button 
+                                type="button" 
+                                class="add-phone-btn text-sm text-indigo-600 hover:text-indigo-800 font-medium inline-flex items-center px-3 py-1 rounded-md hover:bg-indigo-50 transition-colors duration-200" 
+                                data-contact-index="${index}"
+                                aria-label="Add phone number for contact ${index + 1}"
+                            >
+                                <i class="fas fa-plus mr-1"></i>
+                                Add Phone
+                            </button>
+                        </div>
+                        <div class="space-y-3" id="contact-phones-${index}">
+                            ${this.renderContactPhones(contact.phones || [], index)}
+                        </div>
+                        ${(contact.phones || []).length === 0 ? `
+                            <div class="text-center py-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                                <i class="fas fa-phone text-gray-400 mb-2"></i>
+                                <p class="text-sm text-gray-600">No phone numbers added</p>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Notes Section -->
+                    <div class="form-group">
+                        <label class="form-label">Notes</label>
+                        <textarea 
+                            class="form-textarea contact-notes enterprise-input" 
+                            data-contact-index="${index}" 
+                            rows="3" 
+                            placeholder="Special notes about this contact (availability, preferences, etc.)"
+                            aria-describedby="contact-notes-help-${index}"
+                        >${this.escapeHtml(contact.notes || '')}</textarea>
+                        <div id="contact-notes-help-${index}" class="form-help">
+                            Any special information about contacting this person
+                        </div>
                     </div>
                 </div>
-            `;
-            contactsList.appendChild(contactDiv);
-        });
+            </div>
+        `;
+
+        return contactDiv;
     }
 
     /**
-     * Setup dynamic contacts event handlers
+     * GOLD STANDARD: Render contact phone numbers with validation
      */
-    setupContactsHandlers() {
-        const contactsList = document.getElementById('contacts-list');
-        const addContactBtn = document.getElementById('add-contact-btn');
-        if (!contactsList || !addContactBtn) return;
-        // Add contact
-        addContactBtn.onclick = () => {
-            if (!Array.isArray(this.currentData.contacts)) this.currentData.contacts = [];
-            this.currentData.contacts.push({ name: '', role: '', phones: [], notes: '' });
-            this.renderContactsSection();
-            this.setUnsavedChanges(true);
-        };
-        // Delegate events for add/remove phone and remove contact
-        contactsList.onclick = (e) => {
-            const addPhoneBtn = e.target.closest('.add-phone-btn');
-            const removePhoneBtn = e.target.closest('.remove-phone-btn');
-            const removeContactBtn = e.target.closest('.remove-contact-btn');
-            if (addPhoneBtn) {
-                const cidx = parseInt(addPhoneBtn.dataset.cidx, 10);
-                if (Array.isArray(this.currentData.contacts[cidx].phones)) {
-                    this.currentData.contacts[cidx].phones.push({ type: 'cell', value: '' });
-                } else {
-                    this.currentData.contacts[cidx].phones = [{ type: 'cell', value: '' }];
-                }
-                this.renderContactsSection();
-                this.setUnsavedChanges(true);
-            } else if (removePhoneBtn) {
-                const cidx = parseInt(removePhoneBtn.dataset.cidx, 10);
-                const pidx = parseInt(removePhoneBtn.dataset.pidx, 10);
-                if (Array.isArray(this.currentData.contacts[cidx].phones)) {
-                    this.currentData.contacts[cidx].phones.splice(pidx, 1);
-                }
-                this.renderContactsSection();
-                this.setUnsavedChanges(true);
-            } else if (removeContactBtn) {
-                const cidx = parseInt(removeContactBtn.dataset.cidx, 10);
-                this.currentData.contacts.splice(cidx, 1);
-                this.renderContactsSection();
-                this.setUnsavedChanges(true);
-            }
-        };
-        // Delegate input changes
-        contactsList.oninput = (e) => {
-            const nameInput = e.target.classList.contains('contact-name');
-            const roleInput = e.target.classList.contains('contact-role');
-            const notesInput = e.target.classList.contains('contact-notes');
-            const phoneType = e.target.classList.contains('phone-type');
-            const phoneValue = e.target.classList.contains('phone-value');
-            if (nameInput || roleInput || notesInput || phoneType || phoneValue) {
-                const cidx = parseInt(e.target.dataset.cidx, 10);
-                if (nameInput) this.currentData.contacts[cidx].name = e.target.value;
-                if (roleInput) this.currentData.contacts[cidx].role = e.target.value;
-                if (notesInput) this.currentData.contacts[cidx].notes = e.target.value;
-                if (phoneType || phoneValue) {
-                    const pidx = parseInt(e.target.dataset.pidx, 10);
-                    if (phoneType) this.currentData.contacts[cidx].phones[pidx].type = e.target.value;
-                    if (phoneValue) this.currentData.contacts[cidx].phones[pidx].value = e.target.value;
-                }
-                this.setUnsavedChanges(true);
-            }
-        };
+    renderContactPhones(phones, contactIndex) {
+        if (!Array.isArray(phones) || phones.length === 0) {
+            return '';
+        }
+
+        return phones.map((phone, phoneIndex) => `
+            <div class="phone-row flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                <div class="flex-shrink-0">
+                    <select 
+                        class="form-select phone-type text-sm" 
+                        data-contact-index="${contactIndex}" 
+                        data-phone-index="${phoneIndex}"
+                        aria-label="Phone type for contact ${contactIndex + 1}, phone ${phoneIndex + 1}"
+                    >
+                        <option value="cell" ${phone.type === 'cell' ? 'selected' : ''}>📱 Cell</option>
+                        <option value="office" ${phone.type === 'office' ? 'selected' : ''}>🏢 Office</option>
+                        <option value="landline" ${phone.type === 'landline' ? 'selected' : ''}>📞 Landline</option>
+                        <option value="fax" ${phone.type === 'fax' ? 'selected' : ''}>📠 Fax</option>
+                        <option value="other" ${phone.type === 'other' ? 'selected' : ''}>📋 Other</option>
+                    </select>
+                </div>
+                <div class="flex-1">
+                    <input 
+                        type="tel" 
+                        class="form-input phone-value" 
+                        value="${this.escapeHtml(phone.value || '')}" 
+                        data-contact-index="${contactIndex}" 
+                        data-phone-index="${phoneIndex}" 
+                        placeholder="(555) 123-4567"
+                        aria-label="Phone number for contact ${contactIndex + 1}"
+                    >
+                </div>
+                <button 
+                    type="button" 
+                    class="remove-phone-btn flex-shrink-0 text-gray-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors duration-200" 
+                    data-contact-index="${contactIndex}" 
+                    data-phone-index="${phoneIndex}"
+                    aria-label="Remove phone number ${phoneIndex + 1} for contact ${contactIndex + 1}"
+                    title="Remove this phone number"
+                >
+                    <i class="fas fa-trash text-sm"></i>
+                </button>
+            </div>
+        `).join('');
     }
 
     /**
-     * Collect contacts data for saving
+     * GOLD STANDARD: Setup enterprise contacts event handlers
+     */
+    setupEnterpriseContactsHandlers() {
+        const contactsList = document.getElementById('contacts-list');
+        if (!contactsList) {
+            console.warn('⚠️ Contacts list not found for handler setup');
+            return;
+        }
+
+        // Use event delegation for better performance and dynamic content handling
+        contactsList.addEventListener('click', this.handleContactsClick.bind(this));
+        contactsList.addEventListener('input', this.handleContactsInput.bind(this));
+        contactsList.addEventListener('change', this.handleContactsChange.bind(this));
+
+        console.log('👥 Enterprise contacts handlers setup complete');
+    }
+
+    /**
+     * GOLD STANDARD: Handle contacts click events with enterprise logic
+     */
+    handleContactsClick(event) {
+        const target = event.target.closest('button');
+        if (!target) return;
+
+        event.preventDefault();
+        
+        if (target.id === 'add-contact-btn' || target.classList.contains('add-contact-btn')) {
+            this.addNewContact();
+        } else if (target.classList.contains('add-phone-btn')) {
+            this.addPhoneToContact(parseInt(target.dataset.contactIndex));
+        } else if (target.classList.contains('remove-phone-btn')) {
+            this.removePhoneFromContact(
+                parseInt(target.dataset.contactIndex), 
+                parseInt(target.dataset.phoneIndex)
+            );
+        } else if (target.classList.contains('remove-contact-btn')) {
+            this.removeContact(parseInt(target.dataset.contactIndex));
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Handle contacts input events with validation
+     */
+    handleContactsInput(event) {
+        if (event.target.classList.contains('enterprise-input')) {
+            this.setUnsavedChanges(true);
+            
+            // Auto-save after 2 seconds of inactivity
+            clearTimeout(this.contactsAutoSaveTimeout);
+            this.contactsAutoSaveTimeout = setTimeout(() => {
+                this.performAutoSave().catch(console.error);
+            }, 2000);
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Handle contacts change events
+     */
+    handleContactsChange(event) {
+        if (event.target.classList.contains('phone-type')) {
+            this.setUnsavedChanges(true);
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Add new contact with enterprise defaults
+     */
+    addNewContact() {
+        if (!Array.isArray(this.currentData.contacts)) {
+            this.currentData.contacts = [];
+        }
+
+        const newContact = {
+            name: '',
+            role: '',
+            phones: [{ type: 'cell', value: '' }], // Start with one phone number
+            notes: ''
+        };
+
+        this.currentData.contacts.push(newContact);
+        this.renderEnterpriseContactsSection();
+        this.setUnsavedChanges(true);
+
+        // Focus on the name field of the new contact
+        setTimeout(() => {
+            const newContactNameField = document.querySelector(`[data-contact-index="${this.currentData.contacts.length - 1}"] .contact-name`);
+            if (newContactNameField) {
+                newContactNameField.focus();
+            }
+        }, 100);
+
+        console.log('👤 New contact added');
+    }
+
+    /**
+     * GOLD STANDARD: Add phone to contact with validation
+     */
+    addPhoneToContact(contactIndex) {
+        if (!this.currentData.contacts[contactIndex]) {
+            console.error('❌ Invalid contact index:', contactIndex);
+            return;
+        }
+
+        if (!Array.isArray(this.currentData.contacts[contactIndex].phones)) {
+            this.currentData.contacts[contactIndex].phones = [];
+        }
+
+        // Limit to 5 phone numbers per contact
+        if (this.currentData.contacts[contactIndex].phones.length >= 5) {
+            this.showNotification('Maximum 5 phone numbers per contact', 'warning');
+            return;
+        }
+
+        this.currentData.contacts[contactIndex].phones.push({ 
+            type: 'cell', 
+            value: '' 
+        });
+
+        this.renderEnterpriseContactsSection();
+        this.setUnsavedChanges(true);
+
+        console.log(`📞 Phone added to contact ${contactIndex}`);
+    }
+
+    /**
+     * GOLD STANDARD: Remove phone from contact with confirmation
+     */
+    removePhoneFromContact(contactIndex, phoneIndex) {
+        if (!this.currentData.contacts[contactIndex]?.phones?.[phoneIndex]) {
+            console.error('❌ Invalid phone index:', { contactIndex, phoneIndex });
+            return;
+        }
+
+        // Show confirmation for last phone number
+        const phones = this.currentData.contacts[contactIndex].phones;
+        if (phones.length === 1) {
+            if (!confirm('Remove the last phone number for this contact?')) {
+                return;
+            }
+        }
+
+        phones.splice(phoneIndex, 1);
+        this.renderEnterpriseContactsSection();
+        this.setUnsavedChanges(true);
+
+        console.log(`📞 Phone removed from contact ${contactIndex}`);
+    }
+
+    /**
+     * GOLD STANDARD: Remove contact with confirmation
+     */
+    removeContact(contactIndex) {
+        if (!this.currentData.contacts[contactIndex]) {
+            console.error('❌ Invalid contact index:', contactIndex);
+            return;
+        }
+
+        const contact = this.currentData.contacts[contactIndex];
+        const contactName = contact.name || `Contact ${contactIndex + 1}`;
+        
+        if (!confirm(`Remove ${contactName}? This action cannot be undone.`)) {
+            return;
+        }
+
+        this.currentData.contacts.splice(contactIndex, 1);
+        this.renderEnterpriseContactsSection();
+        this.setUnsavedChanges(true);
+
+        this.showNotification(`${contactName} removed`, 'success');
+        console.log(`👤 Contact removed: ${contactName}`);
+    }
+
+    /**
+     * GOLD STANDARD: Legacy method for backward compatibility - deprecated
+     * Use collectEnterpriseContactsData instead
      */
     collectContactsData(data) {
         // Collect additional contacts from the UI
