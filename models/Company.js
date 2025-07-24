@@ -278,6 +278,93 @@ const companySchema = new mongoose.Schema({
     aiSettings: { type: aiSettingsSchema, default: () => ({}) },
     agentSetup: { type: agentSetupSchema, default: () => ({}) },
     aiAgentSetup: { type: mongoose.Schema.Types.Mixed, default: null }, // New AI Agent Setup data
+    
+    // 🚀 ENTERPRISE AI AGENT SETTINGS - Multi-tenant gold standard
+    tradeCategories: { 
+        type: [String], 
+        default: [],
+        index: true
+    },
+    agentIntelligenceSettings: {
+        useLLM: { type: Boolean, default: true },
+        llmModel: { 
+            type: String, 
+            default: 'ollama-phi3',
+            enum: ['ollama-phi3', 'ollama-mistral', 'gemini-pro', 'openai-gpt4', 'claude-3']
+        },
+        memoryMode: { 
+            type: String, 
+            enum: ['short', 'conversation'], 
+            default: 'short' 
+        },
+        fallbackThreshold: { 
+            type: Number, 
+            min: 0, 
+            max: 1, 
+            default: 0.5 
+        },
+        escalationMode: { 
+            type: String, 
+            enum: ['ask', 'auto'], 
+            default: 'ask' 
+        },
+        rePromptAfterTurns: { 
+            type: Number, 
+            min: 1, 
+            max: 10, 
+            default: 3 
+        },
+        maxPromptsPerCall: { 
+            type: Number, 
+            min: 1, 
+            max: 10, 
+            default: 2 
+        },
+        
+        // Enhanced enterprise features
+        firstPromptSoft: { type: Boolean, default: true },
+        semanticSearchEnabled: { type: Boolean, default: true },
+        confidenceScoring: { type: Boolean, default: true },
+        autoLearningQueue: { type: Boolean, default: true },
+        contextRetention: { type: Boolean, default: true },
+        intelligentRouting: { type: Boolean, default: true },
+        sentimentAnalysis: { type: Boolean, default: false },
+        realTimeOptimization: { type: Boolean, default: true }
+    },
+    bookingFlow: [{
+        name: { type: String, required: true },
+        prompt: { type: String, required: true },
+        required: { type: Boolean, default: true },
+        type: { type: String, enum: ['text', 'phone', 'email', 'date', 'notes'], default: 'text' }
+    }],
+    personnel: [{
+        role: { type: String, required: true },
+        name: { type: String },
+        phone: { type: String },
+        email: { type: String },
+        hours: { type: Object, default: {} }, // e.g. { "mon-fri": "08:00-18:00" }
+        allowDirectTransfer: { type: Boolean, default: true },
+        messageOnly: { type: Boolean, default: false }
+    }],
+    calendars: [{
+        trade: { type: String },
+        calendarId: { type: String },
+        cutoffTime: { type: String, default: '18:00' },
+        bufferMinutes: { type: Number, default: 120 },
+        slotDuration: { type: Number, default: 60 }
+    }],
+    messageTemplates: {
+        bookingConfirmation: {
+            sms: { type: String, default: "You're booked for {{time}} at {{companyName}}." },
+            email: { type: String, default: "Hi {{name}}, your booking is confirmed for {{time}}." }
+        },
+        fallbackMessage: {
+            sms: { type: String, default: "Message from customer: {{message}}" },
+            email: { type: String, default: "Customer message: {{message}}" }
+        }
+    },
+    
+    enterpriseAgent: { type: mongoose.Schema.Types.Mixed, default: {} }, // Enterprise AI Agent Settings - using Mixed for flexibility
     personalityResponses: { type: personalityResponsesSchema, default: () => defaultResponses },
     learningSettings: { type: learningSettingsSchema, default: () => ({}) },
     
@@ -350,9 +437,3 @@ companySchema.methods.getActivePhoneNumbers = function() {
 
 const Company = mongoose.model('Company', companySchema, 'companiesCollection');
 module.exports = Company;
-
-// 🎛️ AGENT PERFORMANCE CONTROLS - LIVE TUNING DASHBOARD
-// These controls MUST stay live for ongoing optimization work
-// Adjust defaults here during testing - NO RECODING required for future tuning
-// Location: AI Voice Settings → Agent Performance Controls
-// Future clients can customize without code changes

@@ -31,6 +31,19 @@ const bookingRoutes = require('./routes/booking');
 const transferRoutes = require('./routes/transfer');
 const notesRoutes = require('./routes/notes'); // GOLD STANDARD: Enterprise Notes API
 
+console.log('✅ Notes routes loaded, about to load Agent Settings routes...');
+
+// ENTERPRISE: AI Agent Settings API with error handling
+let agentSettingsRoutes;
+try {
+  agentSettingsRoutes = require('./routes/agentSettings');
+  console.log('✅ Agent Settings routes loaded successfully in app.js');
+} catch (error) {
+  console.error('❌ Failed to load Agent Settings routes:', error.message);
+  console.error('Stack:', error.stack);
+  process.exit(1);
+}
+
 // Event Hooks and Notification System Routes with error handling
 let eventHooksRoutes, notificationRoutes;
 try {
@@ -104,7 +117,7 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/company', companyRoutes);
-app.use('/api/company', tradeCategoryRoutes);
+app.use('/api/trade-categories', tradeCategoryRoutes); // GLOBAL trade categories
 app.use('/api/company', settingsRoutes);
 
 app.use('/api/ai-agent-workflows', aiAgentWorkflowRoutes);
@@ -118,6 +131,7 @@ app.use('/api/llm', llmRoutes);
 app.use('/api/booking', bookingRoutes);
 app.use('/api/transfer', transferRoutes);
 app.use('/api/notes', notesRoutes); // GOLD STANDARD: Enterprise Notes Management
+app.use('/api/agent', agentSettingsRoutes); // ENTERPRISE: AI Agent Settings Management
 app.use('/api/event-hooks', eventHooksRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/qna-learning', qnaLearningRoutes);
@@ -127,6 +141,8 @@ console.log('✅ LLM routes registered at /api/llm');
 console.log('✅ Booking routes registered at /api/booking');
 console.log('✅ Transfer routes registered at /api/transfer');
 console.log('✅ Notes routes registered at /api/notes'); // GOLD STANDARD: Enterprise Notes
+console.log('✅ Agent Settings routes registered at /api/agent'); // ENTERPRISE: AI Agent Settings
+console.log('✅ Agent Settings routes registered at /api/agent'); // ENTERPRISE: AI Agent Settings
 console.log('✅ Event Hooks routes registered at /api/event-hooks');
 console.log('✅ Notification routes registered at /api/notifications');
 console.log('✅ Q&A Learning routes registered at /api/qna-learning');
