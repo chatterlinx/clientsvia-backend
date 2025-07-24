@@ -2,23 +2,50 @@ const express = require('express');
 const twilio = require('twilio');
 const nodemailer = require('nodemailer');
 const Alert = require('../models/Alert'); // Ensure path is correct
+const Company = require('../models/Company');
+const { createTwilioClient, getPrimaryPhoneNumber } = require('../utils/twilioClientFactory');
 
 const router = express.Router();
 
 /**
- * Sends an SMS notification using Twilio.
+ * Sends an SMS notification using Twilio (supports per-company credentials)
  */
 async function sendSmsNotification(alert) {
     const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, DEVELOPER_ALERT_PHONE_NUMBER } = process.env;
-    if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER || !DEVELOPER_ALERT_PHONE_NUMBER) {
-        console.error('Twilio credentials or developer phone number are not fully configured in .env. SMS not sent.');
+    
+    let client = null;
+    let fromNumber = null;
+    
+    // Try to get company-specific Twilio client first
+    if (alert.companyId) {
+        try {
+            const company = await Company.findById(alert.companyId);
+            if (company) {
+                client = createTwilioClient(company);
+                fromNumber = getPrimaryPhoneNumber(company);
+                console.log(`[ALERT SMS] Using company-specific Twilio client for: ${company.companyName}`);
+            }
+        } catch (error) {
+            console.warn('[ALERT SMS] Failed to get company-specific credentials, falling back to global:', error.message);
+        }
+    }
+    
+    // Fallback to global credentials if no company-specific client available
+    if (!client && TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
+        client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+        fromNumber = TWILIO_PHONE_NUMBER;
+        console.log('[ALERT SMS] Using global Twilio credentials');
+    }
+    
+    if (!client || !fromNumber || !DEVELOPER_ALERT_PHONE_NUMBER) {
+        console.error('Twilio credentials or developer phone number are not fully configured. SMS not sent.');
         return 'SMS not sent due to missing configuration.';
     }
-    const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+    
     try {
         const message = await client.messages.create({
             body: `AI Agent Malfunction Alert!\nCompany ID: ${alert.companyId}\nError: ${alert.error}`,
-            from: TWILIO_PHONE_NUMBER,
+            from: fromNumber,
             to: DEVELOPER_ALERT_PHONE_NUMBER
         });
         return `SMS sent successfully with SID: ${message.sid}`;

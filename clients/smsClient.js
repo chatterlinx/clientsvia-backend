@@ -3,30 +3,32 @@
 // Spartan Coder - Gold Standard Implementation
 
 const twilio = require('twilio');
+const { createTwilioClient, getPrimaryPhoneNumber } = require('../utils/twilioClientFactory');
 
 class SMSClient {
   constructor() {
-    // Initialize Twilio client if credentials are available
+    // Legacy global client for backward compatibility (deprecated)
     this.client = null;
     this.isProduction = process.env.NODE_ENV === 'production';
     this.testMode = process.env.SMS_TEST_MODE === 'true';
     
+    // Legacy global config (deprecated - use per-company credentials instead)
     this.config = {
       accountSid: process.env.TWILIO_ACCOUNT_SID,
       authToken: process.env.TWILIO_AUTH_TOKEN,
       fromNumber: process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_PHONE_NUMBER
     };
 
-    // Initialize Twilio client if credentials exist
+    // Initialize legacy global client if credentials exist (for backward compatibility)
     if (this.config.accountSid && this.config.authToken) {
       try {
         this.client = twilio(this.config.accountSid, this.config.authToken);
-        console.log('[SMS] ✅ Twilio client initialized successfully');
+        console.log('[SMS] ✅ Legacy global Twilio client initialized (deprecated)');
       } catch (error) {
-        console.error('[SMS] ❌ Failed to initialize Twilio client:', error.message);
+        console.error('[SMS] ❌ Failed to initialize legacy Twilio client:', error.message);
       }
     } else {
-      console.log('[SMS] ⚠️  Twilio credentials not found, using mock mode');
+      console.log('[SMS] ⚠️  Legacy Twilio credentials not found, using per-company credentials');
     }
 
     // Message tracking
@@ -99,10 +101,118 @@ class SMSClient {
   }
 
   /**
+   * Send SMS message with per-company credentials (RECOMMENDED)
+   * @param {object} options - { to, body, from?, company }
+   * @returns {Promise<object>} - { success, messageId?, error? }
+   */
+  async sendWithCompany(options) {
+    const { to, body, from, company } = options;
+
+    // Validate input
+    if (!to || !body) {
+      const error = 'Missing required fields: to and body';
+      console.error('[SMS] ❌', error);
+      this.stats.failed++;
+      return { success: false, error };
+    }
+
+    if (!company) {
+      const error = 'Company object is required for per-company SMS';
+      console.error('[SMS] ❌', error);
+      this.stats.failed++;
+      return { success: false, error };
+    }
+
+    // Normalize phone number
+    const normalizedTo = this.normalizePhoneNumber(to);
+    if (!normalizedTo) {
+      const error = `Invalid phone number format: ${to}`;
+      console.error('[SMS] ❌', error);
+      this.stats.failed++;
+      return { success: false, error };
+    }
+
+    // Get company-specific Twilio client
+    const companyClient = createTwilioClient(company);
+    if (!companyClient && !this.testMode) {
+      const error = `No Twilio credentials configured for company: ${company.companyName}`;
+      console.error('[SMS] ❌', error);
+      this.stats.failed++;
+      return { success: false, error };
+    }
+
+    // Determine from number - use company's primary number or provided from
+    const fromNumber = from || getPrimaryPhoneNumber(company) || this.config.fromNumber;
+    if (!fromNumber) {
+      const error = `No from phone number available for company: ${company.companyName}`;
+      console.error('[SMS] ❌', error);
+      this.stats.failed++;
+      return { success: false, error };
+    }
+
+    const messageData = {
+      to: normalizedTo,
+      body: body.substring(0, 1600), // SMS length limit
+      from: fromNumber,
+      timestamp: new Date().toISOString(),
+      companyId: company._id?.toString(),
+      companyName: company.companyName
+    };
+
+    try {
+      let result;
+
+      if (this.testMode || !companyClient) {
+        // Mock mode for development/testing
+        result = await this.mockSend(messageData);
+        console.log(`[SMS] 📱 Mock SMS sent for company: ${company.companyName}`);
+      } else {
+        // Production Twilio send with company-specific client
+        result = await this.companyTwilioSend(messageData, companyClient);
+        console.log(`[SMS] ✅ SMS sent for company: ${company.companyName}`);
+      }
+
+      // Track successful message
+      this.trackMessage(messageData, result, true);
+      this.stats.sent++;
+
+      console.log(`[SMS] ✅ Company message sent to ${normalizedTo} from ${fromNumber}`);
+      return { success: true, ...result };
+
+    } catch (error) {
+      // Track failed message
+      this.trackMessage(messageData, null, false, error.message);
+      this.stats.failed++;
+
+      console.error(`[SMS] ❌ Failed to send for company ${company.companyName}:`, error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Send SMS via Twilio
    */
   async twilioSend(messageData) {
     const message = await this.client.messages.create({
+      body: messageData.body,
+      from: messageData.from,
+      to: messageData.to
+    });
+
+    return {
+      messageId: message.sid,
+      status: message.status,
+      provider: 'twilio',
+      cost: message.price,
+      deliveryStatus: 'queued'
+    };
+  }
+
+  /**
+   * Send SMS via Twilio with company-specific client
+   */
+  async companyTwilioSend(messageData, companyClient) {
+    const message = await companyClient.messages.create({
       body: messageData.body,
       from: messageData.from,
       to: messageData.to

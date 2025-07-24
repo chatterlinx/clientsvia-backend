@@ -3,6 +3,8 @@ const router = express.Router();
 const { AgentEventHooks } = require('../hooks/agentEventHooks');
 const smsClient = require('../clients/smsClient');
 const emailClient = require('../clients/emailClient');
+const Company = require('../models/Company');
+const { createTwilioClient, getPrimaryPhoneNumber } = require('../utils/twilioClientFactory');
 
 // Initialize event hooks
 const eventHooks = new AgentEventHooks();
@@ -12,14 +14,28 @@ router.get('/company/:companyId/config', async (req, res) => {
     try {
         const { companyId } = req.params;
         
+        // Get company data to check for per-company Twilio credentials
+        const company = await Company.findById(companyId);
+        
+        // Check per-company Twilio configuration
+        const hasTwilioCredentials = company?.twilioConfig && (
+            (company.twilioConfig.accountSid && company.twilioConfig.authToken) ||
+            (company.twilioConfig.apiKey && company.twilioConfig.apiSecret)
+        );
+        
+        const primaryPhoneNumber = getPrimaryPhoneNumber(company);
+        
         // Get current configuration
         const config = {
             hooks: eventHooks.getHooks(companyId),
             analytics: eventHooks.getAnalytics(companyId),
             smsConfig: {
-                enabled: process.env.TWILIO_ACCOUNT_SID ? true : false,
-                accountSid: process.env.TWILIO_ACCOUNT_SID ? '***masked***' : null,
-                fromNumber: process.env.TWILIO_PHONE_NUMBER || null
+                enabled: hasTwilioCredentials || !!process.env.TWILIO_ACCOUNT_SID,
+                configured: hasTwilioCredentials,
+                perCompany: hasTwilioCredentials,
+                legacy: !hasTwilioCredentials && !!process.env.TWILIO_ACCOUNT_SID,
+                accountSid: hasTwilioCredentials ? '***company-specific***' : (process.env.TWILIO_ACCOUNT_SID ? '***global***' : null),
+                fromNumber: primaryPhoneNumber || process.env.TWILIO_PHONE_NUMBER || null
             },
             emailConfig: {
                 enabled: process.env.SENDGRID_API_KEY ? true : false,
@@ -227,14 +243,27 @@ router.post('/company/:companyId/test-sms', async (req, res) => {
             });
         }
 
-        const result = await smsClient.sendSMS(phoneNumber, message, {
-            context: { companyId, test: true }
+        // Get company data for per-company credentials
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found'
+            });
+        }
+
+        // Use per-company SMS sending method
+        const result = await smsClient.sendWithCompany({
+            to: phoneNumber,
+            body: `Test SMS from ${company.companyName}: ${message}`,
+            company: company
         });
 
         res.json({
-            success: true,
-            message: 'Test SMS sent successfully',
-            data: result
+            success: result.success,
+            message: result.success ? 'Test SMS sent successfully' : 'Test SMS failed',
+            data: result,
+            company: company.companyName
         });
     } catch (error) {
         console.error('Error sending test SMS:', error);
@@ -324,14 +353,27 @@ router.get('/company/:companyId/validate-config', async (req, res) => {
     try {
         const { companyId } = req.params;
         
+        // Get company data to check for per-company Twilio credentials
+        const company = await Company.findById(companyId);
+        
+        // Check per-company Twilio configuration
+        const hasTwilioCredentials = company?.twilioConfig && (
+            (company.twilioConfig.accountSid && company.twilioConfig.authToken) ||
+            (company.twilioConfig.apiKey && company.twilioConfig.apiSecret)
+        );
+        
+        const primaryPhoneNumber = getPrimaryPhoneNumber(company);
+        
         const config = {
             hooks: eventHooks.getHooks(companyId),
             analytics: eventHooks.getAnalytics(companyId),
             smsConfig: {
-                enabled: process.env.TWILIO_ACCOUNT_SID ? true : false,
-                configured: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
-                accountSid: process.env.TWILIO_ACCOUNT_SID ? '***masked***' : null,
-                fromNumber: process.env.TWILIO_PHONE_NUMBER || null
+                enabled: hasTwilioCredentials || !!process.env.TWILIO_ACCOUNT_SID,
+                configured: hasTwilioCredentials,
+                perCompany: hasTwilioCredentials,
+                legacy: !hasTwilioCredentials && !!process.env.TWILIO_ACCOUNT_SID,
+                accountSid: hasTwilioCredentials ? '***company-specific***' : (process.env.TWILIO_ACCOUNT_SID ? '***global***' : null),
+                fromNumber: primaryPhoneNumber || process.env.TWILIO_PHONE_NUMBER || null
             },
             emailConfig: {
                 enabled: process.env.SENDGRID_API_KEY ? true : false,
@@ -340,7 +382,7 @@ router.get('/company/:companyId/validate-config', async (req, res) => {
                 fromEmail: process.env.SENDGRID_FROM_EMAIL || null
             },
             validation: {
-                smsValid: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER),
+                smsValid: hasTwilioCredentials || !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER),
                 emailValid: !!(process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL),
                 hooksConfigured: Object.keys(eventHooks.getHooks(companyId) || {}).length > 0
             }
