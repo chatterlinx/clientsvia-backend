@@ -1923,69 +1923,70 @@ class CompanyProfileManager {
 
         return `
             <div class="note-card bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 ${note.isPinned ? 'ring-2 ring-yellow-200' : ''}" data-note-id="${note.id}">
-                <!-- Note Header -->
-                <div class="flex items-start justify-between px-2 py-1.5">
-                    <div class="flex-1 pr-2">
+                <!-- Compact Note Layout -->
+                <div class="p-2">
+                    <!-- Title and Actions Row -->
+                    <div class="flex items-start justify-between mb-1">
                         ${note.isEditing ? `
                             <input 
                                 type="text" 
-                                class="note-title-edit form-input text-sm font-semibold mb-1 w-full" 
+                                class="note-title-edit form-input text-sm font-semibold flex-1 mr-2" 
                                 value="${this.escapeHtml(note.title)}"
                             >
                         ` : `
-                            <h4 class="text-sm font-semibold text-gray-900 mb-1 break-words">
-                                ${this.escapeHtml(note.title)}
-                                ${isRecent ? '<span class="ml-1.5 bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded-full">New</span>' : ''}
-                            </h4>
+                            <div class="flex-1">
+                                <h4 class="text-sm font-semibold text-gray-900 break-words">
+                                    ${this.escapeHtml(note.title)}
+                                    ${isRecent ? '<span class="ml-1.5 bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded-full">New</span>' : ''}
+                                </h4>
+                            </div>
                         `}
                         
-                        <!-- Metadata -->
-                        <div class="flex items-center flex-wrap gap-2 text-xs text-gray-500">
-                            <span class="${categoryColors[note.category] || categoryColors.general} px-1.5 py-0.5 rounded-full text-xs font-medium">
-                                ${note.category}
-                            </span>
-                            <span class="flex items-center ${priorityColors[note.priority]}">
-                                <i class="fas fa-flag mr-1"></i>
-                                ${note.priority}
-                            </span>
-                            <span class="flex items-center">
-                                <i class="fas fa-clock mr-1"></i>
-                                ${createdDate === updatedDate ? createdDate : `Updated ${updatedDate}`}
-                            </span>
-                            <span class="flex items-center text-gray-400">
-                                By ${note.author}
-                            </span>
+                        <!-- Action Buttons -->
+                        <div class="flex items-center space-x-0.5 ml-2">
+                            <button class="pin-note-btn p-1 rounded hover:bg-gray-100 transition-colors ${note.isPinned ? 'text-yellow-600' : 'text-gray-400'}" 
+                                    data-note-id="${note.id}" 
+                                    title="${note.isPinned ? 'Unpin note' : 'Pin note'}">
+                                <i class="fas fa-thumbtack text-xs"></i>
+                            </button>
+                            <button class="edit-note-btn p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" 
+                                    data-note-id="${note.id}" 
+                                    title="Edit note">
+                                <i class="fas fa-edit text-xs"></i>
+                            </button>
+                            <button class="delete-note-btn p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-600 transition-colors" 
+                                    data-note-id="${note.id}" 
+                                    title="Delete note">
+                                <i class="fas fa-trash text-xs"></i>
+                            </button>
                         </div>
                     </div>
                     
-                    <!-- Action Buttons -->
-                    <div class="flex items-center space-x-0.5">
-                        <button class="pin-note-btn p-1 rounded hover:bg-gray-100 transition-colors ${note.isPinned ? 'text-yellow-600' : 'text-gray-400'}" 
-                                data-note-id="${note.id}" 
-                                title="${note.isPinned ? 'Unpin note' : 'Pin note'}">
-                            <i class="fas fa-thumbtack text-xs"></i>
-                        </button>
-                        <button class="edit-note-btn p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" 
-                                data-note-id="${note.id}" 
-                                title="Edit note">
-                            <i class="fas fa-edit text-xs"></i>
-                        </button>
-                        <button class="delete-note-btn p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-600 transition-colors" 
-                                data-note-id="${note.id}" 
-                                title="Delete note">
-                            <i class="fas fa-trash text-xs"></i>
-                        </button>
+                    <!-- Metadata Row -->
+                    <div class="flex items-center flex-wrap gap-2 text-xs text-gray-500 mb-2">
+                        <span class="${categoryColors[note.category] || categoryColors.general} px-1.5 py-0.5 rounded-full text-xs font-medium">
+                            ${note.category}
+                        </span>
+                        <span class="flex items-center ${priorityColors[note.priority]}">
+                            <i class="fas fa-flag mr-1"></i>
+                            ${note.priority}
+                        </span>
+                        <span class="flex items-center">
+                            <i class="fas fa-clock mr-1"></i>
+                            ${createdDate === updatedDate ? createdDate : `Updated ${updatedDate}`}
+                        </span>
+                        <span class="flex items-center text-gray-400">
+                            By ${note.author}
+                        </span>
                     </div>
-                </div>
 
-                <!-- Note Content -->
-                <div class="note-content px-2 py-1">
+                    <!-- Note Content -->
                     ${note.isEditing ? `
                         <textarea 
-                            class="note-content-edit form-textarea w-full text-sm resize-none" 
+                            class="note-content-edit form-textarea w-full text-sm resize-none mb-1.5" 
                             rows="2"
                         >${this.escapeHtml(note.content)}</textarea>
-                        <div class="flex justify-end space-x-2 mt-1.5">
+                        <div class="flex justify-end space-x-2">
                             <button class="cancel-edit-btn bg-gray-300 hover:bg-gray-400 text-gray-700 px-2 py-1 rounded text-xs" data-note-id="${note.id}">
                                 Cancel
                             </button>
@@ -1994,12 +1995,12 @@ class CompanyProfileManager {
                             </button>
                         </div>
                     ` : `
-                        <div class="text-sm text-gray-700 whitespace-pre-wrap break-words leading-tight">
+                        <div class="text-sm text-gray-700 whitespace-pre-wrap break-words leading-tight mb-2">
                             ${this.formatNoteContent(note.content)}
                         </div>
                         
-                        <!-- Tags and Footer in one line -->
-                        <div class="flex items-center justify-between mt-1.5 pt-1 border-t border-gray-100">
+                        <!-- Tags and Time -->
+                        <div class="flex items-center justify-between">
                             <div class="flex flex-wrap gap-1">
                                 ${note.tags && note.tags.length > 0 ? note.tags.map(tag => `
                                     <span class="bg-indigo-100 text-indigo-800 text-xs px-1.5 py-0.5 rounded">
