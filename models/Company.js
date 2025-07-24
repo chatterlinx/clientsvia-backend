@@ -233,7 +233,7 @@ const companySchema = new mongoose.Schema({
     contactEmail: { type: String, trim: true, default: null, lowercase: true },
     contactPhone: { type: String, trim: true, default: null }, // Removed required validation
     
-    // Additional contacts for Overview tab
+    // Additional contacts for Overview tab (legacy format)
     additionalContacts: { 
         type: [{
             name: { type: String, trim: true },
@@ -242,6 +242,20 @@ const companySchema = new mongoose.Schema({
             phone: { type: String, trim: true }
         }], 
         default: [] 
+    },
+    
+    // Modern contacts format with multiple phones per contact
+    contacts: {
+        type: [{
+            name: { type: String, trim: true },
+            role: { type: String, trim: true },
+            phones: [{
+                type: { type: String, enum: ['cell', 'office', 'landline', 'fax', 'other'], default: 'cell' },
+                value: { type: String, trim: true }
+            }],
+            notes: { type: String, trim: true }
+        }],
+        default: []
     },
     
     address: { type: addressSchema, default: () => ({}) }, // Detailed address object (optional)

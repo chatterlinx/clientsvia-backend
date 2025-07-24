@@ -300,6 +300,8 @@ router.patch('/company/:id', async (req, res) => {
                     updateOperation[key] = updates[key] === 'true' || updates[key] === true;
                 } else if (key === 'additionalContacts' && Array.isArray(updates[key])) {
                     updateOperation[key] = updates[key];
+                } else if (key === 'contacts' && Array.isArray(updates[key])) {
+                    updateOperation[key] = updates[key];
                 }
                 else {
                     updateOperation[key] = updates[key];

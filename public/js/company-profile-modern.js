@@ -3178,7 +3178,9 @@ class CompanyProfileManager {
 
             console.log('✅ Overview data collection completed', {
                 fieldsCollected: Object.keys(collectedData).length,
-                hasErrors: !!collectedData._hasValidationErrors
+                hasErrors: !!collectedData._hasValidationErrors,
+                contactsCount: data.contacts ? data.contacts.length : 0,
+                additionalContactsCount: data.additionalContacts ? data.additionalContacts.length : 0
             });
 
         } catch (error) {
@@ -3225,6 +3227,8 @@ class CompanyProfileManager {
      * GOLD STANDARD: Collect contacts data with enterprise validation
      */
     collectEnterpriseContactsData(data) {
+        console.log('📞 Starting contacts data collection...');
+        
         try {
             const contactsList = document.getElementById('contacts-list');
             if (!contactsList) {
@@ -3235,7 +3239,11 @@ class CompanyProfileManager {
             const contacts = [];
             const contactElements = contactsList.querySelectorAll('.contact-item');
 
+            console.log(`📞 Found ${contactElements.length} contact elements in DOM`);
+
             contactElements.forEach((contactElement, index) => {
+                console.log(`📞 Processing contact ${index + 1}`);
+                
                 const contact = {
                     name: '',
                     role: '',
@@ -3247,17 +3255,21 @@ class CompanyProfileManager {
                 const nameInput = contactElement.querySelector('.contact-name');
                 if (nameInput) {
                     contact.name = this.sanitizeInput(nameInput.value);
+                    console.log(`📞 Contact ${index + 1} name: "${contact.name}"`);
                 }
 
                 // Collect role
                 const roleInput = contactElement.querySelector('.contact-role');
                 if (roleInput) {
                     contact.role = this.sanitizeInput(roleInput.value);
+                    console.log(`📞 Contact ${index + 1} role: "${contact.role}"`);
                 }
 
                 // Collect phone numbers
                 const phoneElements = contactElement.querySelectorAll('.phone-row');
-                phoneElements.forEach(phoneElement => {
+                console.log(`📞 Contact ${index + 1} has ${phoneElements.length} phone elements`);
+                
+                phoneElements.forEach((phoneElement, phoneIndex) => {
                     const typeSelect = phoneElement.querySelector('.phone-type');
                     const valueInput = phoneElement.querySelector('.phone-value');
                     
@@ -3270,6 +3282,7 @@ class CompanyProfileManager {
                                 type: typeSelect.value,
                                 value: phoneValue
                             });
+                            console.log(`📞 Contact ${index + 1} phone ${phoneIndex + 1}: ${typeSelect.value} - ${phoneValue}`);
                         } else {
                             console.warn(`⚠️ Invalid phone number for contact ${index + 1}: ${phoneValue}`);
                         }
@@ -3280,16 +3293,32 @@ class CompanyProfileManager {
                 const notesInput = contactElement.querySelector('.contact-notes');
                 if (notesInput) {
                     contact.notes = this.sanitizeInput(notesInput.value);
+                    console.log(`📞 Contact ${index + 1} notes: "${contact.notes.substring(0, 50)}${contact.notes.length > 50 ? '...' : ''}"`);
                 }
 
                 // Only add contact if it has meaningful data
-                if (contact.name || contact.role || contact.phones.length > 0 || contact.notes) {
+                const hasData = contact.name || contact.role || contact.phones.length > 0 || contact.notes;
+                if (hasData) {
                     contacts.push(contact);
+                    console.log(`📞 Contact ${index + 1} added to collection (has meaningful data)`);
+                } else {
+                    console.log(`📞 Contact ${index + 1} skipped (no meaningful data)`);
                 }
             });
 
             data.contacts = contacts;
+            
+            // Also save in legacy format for backward compatibility
+            data.additionalContacts = contacts.map(contact => ({
+                name: contact.name || '',
+                role: contact.role || '',
+                email: contact.email || '', // In case email is added later
+                phone: contact.phones && contact.phones.length > 0 ? contact.phones[0].value : '',
+                notes: contact.notes || ''
+            }));
+            
             console.log(`📞 Collected ${contacts.length} contacts with enterprise validation`);
+            console.log(`📞 Legacy format: ${data.additionalContacts.length} additionalContacts`);
 
         } catch (error) {
             console.error('❌ Error collecting contacts data:', error);
@@ -3774,7 +3803,22 @@ class CompanyProfileManager {
      * GOLD STANDARD: Render enterprise contacts section with advanced UX
      */
     renderEnterpriseContactsSection() {
-        const contacts = Array.isArray(this.currentData.contacts) ? this.currentData.contacts : [];
+        // Map database 'additionalContacts' to frontend 'contacts' format
+        let contacts = [];
+        if (Array.isArray(this.currentData.contacts)) {
+            contacts = this.currentData.contacts;
+        } else if (Array.isArray(this.currentData.additionalContacts)) {
+            // Convert additionalContacts (legacy format) to new contacts format
+            contacts = this.currentData.additionalContacts.map(contact => ({
+                name: contact.name || '',
+                role: contact.role || '',
+                phones: contact.phone ? [{ type: 'cell', value: contact.phone }] : [],
+                notes: contact.notes || ''
+            }));
+            // Update the current data to use the new format
+            this.currentData.contacts = contacts;
+        }
+        
         const contactsList = document.getElementById('contacts-list');
         
         if (!contactsList) {
@@ -4072,8 +4116,13 @@ class CompanyProfileManager {
      * GOLD STANDARD: Add new contact with enterprise defaults
      */
     addNewContact() {
+        console.log('👤 Adding new contact...');
+        console.log('👤 Current data contacts:', this.currentData.contacts);
+        console.log('👤 Current data additionalContacts:', this.currentData.additionalContacts);
+        
         if (!Array.isArray(this.currentData.contacts)) {
             this.currentData.contacts = [];
+            console.log('👤 Initialized contacts array');
         }
 
         const newContact = {
@@ -4084,6 +4133,8 @@ class CompanyProfileManager {
         };
 
         this.currentData.contacts.push(newContact);
+        console.log('👤 New contact added, total contacts:', this.currentData.contacts.length);
+        
         this.renderEnterpriseContactsSection();
         this.setUnsavedChanges(true);
 
@@ -4092,10 +4143,13 @@ class CompanyProfileManager {
             const newContactNameField = document.querySelector(`[data-contact-index="${this.currentData.contacts.length - 1}"] .contact-name`);
             if (newContactNameField) {
                 newContactNameField.focus();
+                console.log('👤 Focused on new contact name field');
+            } else {
+                console.warn('👤 Could not find name field to focus');
             }
         }, 100);
 
-        console.log('👤 New contact added');
+        console.log('👤 New contact added successfully');
     }
 
     /**
