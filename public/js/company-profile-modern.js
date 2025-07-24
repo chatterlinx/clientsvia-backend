@@ -1867,7 +1867,7 @@ class CompanyProfileManager {
                         <h3 class="text-lg font-semibold text-gray-900">Pinned Notes</h3>
                         <span class="ml-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">${pinnedNotes.length}</span>
                     </div>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="space-y-4">
                         ${pinnedNotes.map(note => this.generateNoteHTML(note)).join('')}
                     </div>
                 </div>
@@ -1883,7 +1883,7 @@ class CompanyProfileManager {
                         <h3 class="text-lg font-semibold text-gray-900">Notes</h3>
                         <span class="ml-2 bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full">${regularNotes.length}</span>
                     </div>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="space-y-4">
                         ${regularNotes.map(note => this.generateNoteHTML(note)).join('')}
                     </div>
                 </div>
@@ -1922,14 +1922,14 @@ class CompanyProfileManager {
         const isRecent = (Date.now() - new Date(note.updatedAt).getTime()) < 24 * 60 * 60 * 1000;
 
         return `
-            <div class="note-card bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-200 ${note.isPinned ? 'ring-2 ring-yellow-200' : ''}" data-note-id="${note.id}">
+            <div class="note-card bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 ${note.isPinned ? 'ring-2 ring-yellow-200' : ''}" data-note-id="${note.id}">
                 <!-- Note Header -->
-                <div class="flex items-start justify-between mb-4">
-                    <div class="flex-1">
+                <div class="flex items-start justify-between p-4 border-b border-gray-100">
+                    <div class="flex-1 pr-4">
                         ${note.isEditing ? `
                             <input 
                                 type="text" 
-                                class="note-title-edit form-input text-lg font-semibold mb-2" 
+                                class="note-title-edit form-input text-lg font-semibold mb-2 w-full" 
                                 value="${this.escapeHtml(note.title)}"
                             >
                         ` : `
@@ -1940,7 +1940,7 @@ class CompanyProfileManager {
                         `}
                         
                         <!-- Metadata -->
-                        <div class="flex items-center space-x-4 text-sm text-gray-500 mb-3">
+                        <div class="flex items-center flex-wrap gap-4 text-sm text-gray-500">
                             <span class="${categoryColors[note.category] || categoryColors.general} px-2 py-1 rounded-full text-xs font-medium">
                                 ${note.category}
                             </span>
@@ -1952,31 +1952,34 @@ class CompanyProfileManager {
                                 <i class="fas fa-clock mr-1"></i>
                                 ${createdDate === updatedDate ? createdDate : `Updated ${updatedDate}`}
                             </span>
+                            <span class="flex items-center text-xs text-gray-400">
+                                By ${note.author}
+                            </span>
                         </div>
                     </div>
                     
                     <!-- Action Buttons -->
-                    <div class="flex items-center space-x-2 ml-4">
+                    <div class="flex items-center space-x-1">
                         <button class="pin-note-btn p-2 rounded-lg hover:bg-gray-100 transition-colors ${note.isPinned ? 'text-yellow-600' : 'text-gray-400'}" 
                                 data-note-id="${note.id}" 
                                 title="${note.isPinned ? 'Unpin note' : 'Pin note'}">
-                            <i class="fas fa-thumbtack"></i>
+                            <i class="fas fa-thumbtack text-sm"></i>
                         </button>
                         <button class="edit-note-btn p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" 
                                 data-note-id="${note.id}" 
                                 title="Edit note">
-                            <i class="fas fa-edit"></i>
+                            <i class="fas fa-edit text-sm"></i>
                         </button>
                         <button class="delete-note-btn p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-600 transition-colors" 
                                 data-note-id="${note.id}" 
                                 title="Delete note">
-                            <i class="fas fa-trash"></i>
+                            <i class="fas fa-trash text-sm"></i>
                         </button>
                     </div>
                 </div>
 
                 <!-- Note Content -->
-                <div class="note-content">
+                <div class="note-content p-4">
                     ${note.isEditing ? `
                         <textarea 
                             class="note-content-edit form-textarea w-full" 
@@ -1991,13 +1994,13 @@ class CompanyProfileManager {
                             </button>
                         </div>
                     ` : `
-                        <div class="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap break-words">
+                        <div class="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap break-words leading-relaxed">
                             ${this.formatNoteContent(note.content)}
                         </div>
                         
                         <!-- Tags -->
                         ${note.tags && note.tags.length > 0 ? `
-                            <div class="flex flex-wrap gap-2 mt-4">
+                            <div class="flex flex-wrap gap-2 mt-4 pt-3 border-t border-gray-100">
                                 ${note.tags.map(tag => `
                                     <span class="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full">
                                         #${tag}
@@ -2005,15 +2008,14 @@ class CompanyProfileManager {
                                 `).join('')}
                             </div>
                         ` : ''}
+                        
+                        <!-- Footer with timestamp -->
+                        <div class="flex items-center justify-end mt-4 pt-3 border-t border-gray-100 text-xs text-gray-400">
+                            <span title="Created: ${new Date(note.createdAt).toLocaleString()}">
+                                ${this.getRelativeTime(note.updatedAt)}
+                            </span>
+                        </div>
                     `}
-                </div>
-
-                <!-- Note Footer -->
-                <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 text-xs text-gray-500">
-                    <span>By ${note.author}</span>
-                    <span title="Created: ${new Date(note.createdAt).toLocaleString()}">
-                        ${this.getRelativeTime(note.updatedAt)}
-                    </span>
                 </div>
             </div>
         `;
