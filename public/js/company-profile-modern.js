@@ -1662,8 +1662,8 @@ class CompanyProfileManager {
                                 <input type="checkbox" id="quick-note-pin" class="form-checkbox mr-2">
                                 <span class="text-sm text-gray-700">Pin to top</span>
                             </label>
-                            <button id="add-enterprise-note" class="btn-primary flex items-center">
-                                <i class="fas fa-plus mr-2"></i>
+                            <button id="add-enterprise-note" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                <i class="fas fa-plus mr-2 text-sm"></i>
                                 Add Note
                             </button>
                         </div>
