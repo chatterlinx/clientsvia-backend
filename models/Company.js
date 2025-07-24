@@ -33,6 +33,8 @@ const twilioPhoneNumberSchema = new mongoose.Schema({
 const twilioConfigSchema = new mongoose.Schema({
     accountSid: { type: String, trim: true, default: null },
     authToken: { type: String, trim: true, default: null },
+    apiKey: { type: String, trim: true, default: null },
+    apiSecret: { type: String, trim: true, default: null },
     phoneNumber: { type: String, trim: true, default: null }, // Keep for backward compatibility
     phoneNumbers: { type: [twilioPhoneNumberSchema], default: [] } // New multiple phone numbers
 }, { _id: false });

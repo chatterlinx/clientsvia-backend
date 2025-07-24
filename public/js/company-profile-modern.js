@@ -513,8 +513,24 @@ class CompanyProfileManager {
         }
         
         if (twilioApiKeyInput && (twilioConfig.apiKey || this.currentData.twilioApiKey)) {
-            twilioApiKeyInput.value = twilioConfig.apiKey || this.currentData.twilioApiKey;
-            console.log('🔧 Loaded Twilio API Key:', twilioApiKeyInput.value);
+            const savedApiKey = twilioConfig.apiKey || this.currentData.twilioApiKey;
+            // Show last 4 characters with masking for better UX (API Keys can be sensitive too)
+            if (savedApiKey && savedApiKey.length > 4) {
+                twilioApiKeyInput.value = '••••••••••••' + savedApiKey.slice(-4);
+                twilioApiKeyInput.dataset.hasApiKey = 'true';
+                console.log('🔧 Loaded Twilio API Key (showing last 4):', '••••••••••••' + savedApiKey.slice(-4));
+            } else {
+                twilioApiKeyInput.value = '••••••••••••••••';
+                twilioApiKeyInput.dataset.hasApiKey = 'true';
+                console.log('🔧 Loaded Twilio API Key (fully masked - short key)');
+            }
+        } else {
+            if (twilioApiKeyInput) {
+                twilioApiKeyInput.value = '';
+                twilioApiKeyInput.placeholder = 'Enter API Key';
+                twilioApiKeyInput.dataset.hasApiKey = 'false';
+                console.log('🔧 No Twilio API Key found - field empty');
+            }
         }
         
         if (twilioApiSecretInput && (twilioConfig.apiSecret || this.currentData.twilioApiSecret)) {
@@ -2618,8 +2634,22 @@ class CompanyProfileManager {
         }
         
         if (twilioApiKey?.value.trim()) {
-            data.twilioConfig.apiKey = twilioApiKey.value.trim();
-            console.log('🔧 Set apiKey:', data.twilioConfig.apiKey);
+            const apiKeyValue = twilioApiKey.value.trim();
+            // Check if it's a masked value (starts with bullets) or a new API key
+            const isMaskedValue = apiKeyValue.startsWith('••••••••••••') || apiKeyValue === '••••••••••••••••';
+            
+            if (!isMaskedValue) {
+                // It's a new API key, save it
+                data.twilioConfig.apiKey = apiKeyValue;
+                console.log('🔧 Set NEW apiKey:', '***masked***');
+            } else {
+                // It's a masked value, preserve existing API key if we have one
+                const existingApiKey = this.currentData?.twilioConfig?.apiKey || this.currentData?.twilioApiKey;
+                if (existingApiKey) {
+                    data.twilioConfig.apiKey = existingApiKey;
+                    console.log('🔧 Preserved existing apiKey:', '***masked***');
+                }
+            }
         }
         
         if (twilioApiSecret?.value.trim()) {
