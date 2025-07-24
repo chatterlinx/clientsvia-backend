@@ -81,7 +81,7 @@ app.use('/api/elevenlabs', elevenLabsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/learning', learningRoutes);
 app.use('/api/agent', agentSettingsRoutes); // ENTERPRISE: AI Agent Settings Management
-app.use('/api/company/agent', companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
+app.use('/api/company', companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
 
 // Register AI Agent routes
 app.use('/api/event-hooks', eventHooksRoutes); // Event Hooks Management API
