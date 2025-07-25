@@ -794,6 +794,32 @@ function addBookingField() {
     
     if (!promptInput?.value.trim() || !nameInput?.value.trim()) {
         showNotification('Please fill in both prompt and field name', 'error');
+        
+        // Highlight empty fields
+        if (!promptInput?.value.trim()) {
+            promptInput?.classList.add('border-red-300', 'bg-red-50');
+            setTimeout(() => {
+                promptInput?.classList.remove('border-red-300', 'bg-red-50');
+            }, 3000);
+        }
+        if (!nameInput?.value.trim()) {
+            nameInput?.classList.add('border-red-300', 'bg-red-50');
+            setTimeout(() => {
+                nameInput?.classList.remove('border-red-300', 'bg-red-50');
+            }, 3000);
+        }
+        return;
+    }
+    
+    // Check for duplicate field names
+    const fieldName = nameInput.value.trim().toLowerCase();
+    const existingField = bookingFlowFields.find(field => field.name.toLowerCase() === fieldName);
+    if (existingField) {
+        showNotification('A field with this name already exists', 'error');
+        nameInput.classList.add('border-red-300', 'bg-red-50');
+        setTimeout(() => {
+            nameInput.classList.remove('border-red-300', 'bg-red-50');
+        }, 3000);
         return;
     }
     
@@ -806,8 +832,12 @@ function addBookingField() {
     
     bookingFlowFields.push(field);
     
+    // Clear inputs
     promptInput.value = '';
     nameInput.value = '';
+    
+    // Focus back to prompt input for easy adding of multiple fields
+    promptInput.focus();
     
     renderBookingFlowTable();
     showNotification('Booking field added successfully!');
@@ -815,10 +845,14 @@ function addBookingField() {
 }
 
 function deleteBookingField(fieldId) {
-    if (confirm('Are you sure you want to delete this field?')) {
+    const field = bookingFlowFields.find(f => f.id === fieldId);
+    if (!field) return;
+    
+    if (confirm(`Are you sure you want to delete the field "${field.prompt}"?\n\nThis action cannot be undone.`)) {
         bookingFlowFields = bookingFlowFields.filter(field => field.id !== fieldId);
         renderBookingFlowTable();
-        showNotification('Field deleted');
+        showNotification('Field deleted successfully');
+        console.log('🗑️ Booking field deleted:', field);
     }
 }
 
@@ -842,19 +876,68 @@ function renderBookingFlowTable() {
     if (!tbody) return;
     
     if (bookingFlowFields.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-500 py-4">No fields configured yet. Add your first field above.</td></tr>';
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="3" class="px-6 py-8 text-center text-gray-500">
+                    <div class="flex flex-col items-center">
+                        <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                        </svg>
+                        <p class="text-sm text-gray-500">No booking fields configured yet.</p>
+                        <p class="text-xs text-gray-400 mt-1">Add your first field above to get started.</p>
+                    </div>
+                </td>
+            </tr>
+        `;
         return;
     }
     
     tbody.innerHTML = bookingFlowFields.map((field, index) => `
-        <tr>
-            <td class="p-3 border">${escapeHTML(field.prompt)}</td>
-            <td class="p-3 border font-mono text-sm">${escapeHTML(field.name)}</td>
-            <td class="p-3 border">
+        <tr class="hover:bg-gray-50 transition-colors duration-150">
+            <td class="px-6 py-4 text-sm text-gray-900">
+                <div class="flex items-start">
+                    <span class="inline-flex items-center justify-center w-6 h-6 text-xs font-medium text-blue-600 bg-blue-100 rounded-full mr-3 flex-shrink-0">${index + 1}</span>
+                    <span class="break-words">${escapeHTML(field.prompt)}</span>
+                </div>
+            </td>
+            <td class="px-6 py-4 text-sm font-mono text-gray-700 bg-gray-50">
+                <code class="px-2 py-1 bg-gray-200 rounded text-xs">${escapeHTML(field.name)}</code>
+            </td>
+            <td class="px-6 py-4 text-sm">
                 <div class="flex items-center space-x-2">
-                    ${index > 0 ? `<button onclick="moveBookingField(${field.id}, 'up')" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-arrow-up"></i></button>` : ''}
-                    ${index < bookingFlowFields.length - 1 ? `<button onclick="moveBookingField(${field.id}, 'down')" class="text-blue-600 hover:text-blue-800 text-sm"><i class="fas fa-arrow-down"></i></button>` : ''}
-                    <button onclick="deleteBookingField(${field.id})" class="text-red-600 hover:text-red-800 text-sm ml-2"><i class="fas fa-trash"></i></button>
+                    ${index > 0 ? `
+                        <button 
+                            onclick="moveBookingField(${field.id}, 'up')" 
+                            class="inline-flex items-center p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors duration-150"
+                            title="Move up"
+                        >
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                            </svg>
+                        </button>
+                    ` : '<div class="w-8"></div>'}
+                    
+                    ${index < bookingFlowFields.length - 1 ? `
+                        <button 
+                            onclick="moveBookingField(${field.id}, 'down')" 
+                            class="inline-flex items-center p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors duration-150"
+                            title="Move down"
+                        >
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                    ` : '<div class="w-8"></div>'}
+                    
+                    <button 
+                        onclick="deleteBookingField(${field.id})" 
+                        class="inline-flex items-center p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors duration-150 ml-2"
+                        title="Delete field"
+                    >
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
                 </div>
             </td>
         </tr>
@@ -865,12 +948,12 @@ async function saveBookingFlow() {
     try {
         console.log('💾 Saving booking flow...');
         
-        const response = await fetch(`/api/company/${companyId}/booking-flow`, {
-            method: 'PUT',
+        const response = await fetch(`/api/company/companies/${companyId}/booking-flow`, {
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ bookingFlow: bookingFlowFields })
+            body: JSON.stringify(bookingFlowFields)
         });
         
         if (!response.ok) {
@@ -891,6 +974,38 @@ async function saveBookingFlow() {
     } catch (error) {
         console.error('❌ Error saving booking flow:', error);
         showNotification('Failed to save booking flow', 'error');
+    }
+}
+
+async function loadBookingFlow() {
+    try {
+        console.log('📋 Loading booking flow configuration...');
+        
+        const response = await fetch(`/api/company/companies/${companyId}/booking-flow`);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to load booking flow: ${response.statusText}`);
+        }
+        
+        const bookingFlowData = await response.json();
+        console.log('✅ Booking flow loaded:', bookingFlowData);
+        
+        // Transform the data to include IDs for frontend management
+        bookingFlowFields = bookingFlowData.map((field, index) => ({
+            id: field.id || Date.now() + index, // Use existing ID or generate one
+            prompt: field.prompt,
+            name: field.name,
+            order: index
+        }));
+        
+        renderBookingFlowTable();
+        return bookingFlowData;
+    } catch (error) {
+        console.error('❌ Error loading booking flow:', error);
+        // Initialize with default empty state
+        bookingFlowFields = [];
+        renderBookingFlowTable();
+        showNotification('Failed to load booking flow configuration', 'error');
     }
 }
 
@@ -1212,9 +1327,8 @@ async function approveQnA(qnaId) {
         pendingQnAs = pendingQnAs.filter(qna => qna._id !== qnaId);
         renderPendingQnAs();
         updatePendingCount();
-        updateLearningStats('approved');
         
-        showNotification('Q&A approved successfully!', 'success');
+        showNotification('Q&A approved successfully!');
         console.log('✅ Q&A approved successfully');
         
     } catch (error) {
@@ -1223,510 +1337,49 @@ async function approveQnA(qnaId) {
     }
 }
 
-/**
- * Reject a pending Q&A
- */
-async function rejectQnA(qnaId) {
-    if (!confirm('Are you sure you want to reject this Q&A? This action cannot be undone.')) {
-        return;
-    }
+// Initialize everything when the page loads
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log('🚀 Company Profile page loaded');
     
     try {
-        console.log('❌ Rejecting Q&A:', qnaId);
+        // Load company data first
+        await fetchCompanyData();
         
-        const response = await fetch(`/api/company/companies/${getCompanyId()}/pending-qnas/${qnaId}/reject`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
+        // Load booking flow configuration
+        await loadBookingFlow();
+        
+        // Load other components
+        await loadPendingQnAs();
+        
+        console.log('✅ All data loaded successfully');
+        
+    } catch (error) {
+        console.error('❌ Error initializing page:', error);
+        showNotification('Failed to load page data', 'error');
+    }
+});
+
+// Add keyboard support for booking flow inputs
+document.addEventListener('DOMContentLoaded', function() {
+    // Add enter key support for booking flow inputs
+    const promptInput = document.getElementById('new-prompt');
+    const nameInput = document.getElementById('new-name');
+    
+    if (promptInput) {
+        promptInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                nameInput?.focus();
             }
         });
-        
-        if (!response.ok) {
-            throw new Error(`Failed to reject Q&A: ${response.statusText}`);
-        }
-        
-        // Remove from pending list
-        pendingQnAs = pendingQnAs.filter(qna => qna._id !== qnaId);
-        renderPendingQnAs();
-        updatePendingCount();
-        updateLearningStats('rejected');
-        
-        showNotification('Q&A rejected', 'success');
-        console.log('✅ Q&A rejected successfully');
-        
-    } catch (error) {
-        console.error('❌ Error rejecting Q&A:', error);
-        showNotification('Failed to reject Q&A', 'error');
-    }
-}
-
-/**
- * Edit a pending Q&A (opens modal)
- */
-function editQnA(qnaId) {
-    const qna = pendingQnAs.find(q => q._id === qnaId);
-    if (!qna) return;
-    
-    // TODO: Implement edit modal
-    alert(`Edit Q&A functionality would open a modal to edit:\n\nQuestion: ${qna.question}\nAnswer: ${qna.proposedAnswer}`);
-}
-
-/**
- * Bulk approve high-confidence Q&As
- */
-async function bulkApproveHighConfidence() {
-    const highConfidenceQnAs = pendingQnAs.filter(qna => qna.confidence >= 0.85);
-    
-    if (highConfidenceQnAs.length === 0) {
-        showNotification('No high-confidence Q&As to approve', 'info');
-        return;
     }
     
-    if (!confirm(`Are you sure you want to approve ${highConfidenceQnAs.length} high-confidence Q&As?`)) {
-        return;
-    }
-    
-    try {
-        console.log(`🚀 Bulk approving ${highConfidenceQnAs.length} Q&As...`);
-        
-        const response = await fetch(`/api/company/companies/${getCompanyId()}/pending-qnas/bulk-approve`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                qnaIds: highConfidenceQnAs.map(qna => qna._id),
-                minConfidence: 0.85
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Failed to bulk approve: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        
-        // Remove approved Q&As from pending list
-        const approvedIds = result.approvedIds || [];
-        pendingQnAs = pendingQnAs.filter(qna => !approvedIds.includes(qna._id));
-        
-        renderPendingQnAs();
-        updatePendingCount();
-        updateLearningStats('approved', approvedIds.length);
-        
-        showNotification(`${approvedIds.length} Q&As approved successfully!`, 'success');
-        console.log(`✅ Bulk approved ${approvedIds.length} Q&As`);
-        
-    } catch (error) {
-        console.error('❌ Error bulk approving Q&As:', error);
-        showNotification('Failed to bulk approve Q&As', 'error');
-    }
-}
-
-/**
- * Refresh pending Q&As from server
- */
-async function refreshPendingQnAs() {
-    const refreshBtn = document.querySelector('button[onclick="refreshPendingQnAs()"]');
-    if (refreshBtn) {
-        const originalText = refreshBtn.innerHTML;
-        refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Refreshing...';
-        refreshBtn.disabled = true;
-        
-        setTimeout(() => {
-            refreshBtn.innerHTML = originalText;
-            refreshBtn.disabled = false;
-        }, 2000);
-    }
-    
-    await loadPendingQnAs();
-    showNotification('Pending Q&As refreshed', 'success');
-}
-
-/**
- * Load learning statistics
- */
-async function loadLearningStats() {
-    try {
-        console.log('📊 Loading learning statistics...');
-        
-        const response = await fetch(`/api/company/companies/${getCompanyId()}/learning-stats`);
-        
-        if (!response.ok) {
-            console.warn('Failed to load learning stats, using defaults');
-            return;
-        }
-        
-        learningStats = await response.json();
-        updateLearningStatsDisplay();
-        
-        console.log('✅ Learning stats loaded:', learningStats);
-        
-    } catch (error) {
-        console.error('❌ Error loading learning stats:', error);
-    }
-}
-
-/**
- * Update learning statistics display
- */
-function updateLearningStatsDisplay() {
-    const totalApproved = document.getElementById('totalApproved');
-    const totalRejected = document.getElementById('totalRejected');
-    const averageConfidence = document.getElementById('averageConfidence');
-    const learningRate = document.getElementById('learningRate');
-    
-    if (totalApproved) totalApproved.textContent = learningStats.totalApproved || 0;
-    if (totalRejected) totalRejected.textContent = learningStats.totalRejected || 0;
-    if (averageConfidence) averageConfidence.textContent = `${(learningStats.averageConfidence * 100 || 0).toFixed(0)}%`;
-    if (learningRate) learningRate.textContent = learningStats.learningRate || 0;
-}
-
-/**
- * Update learning stats after approval/rejection
- */
-function updateLearningStats(action, count = 1) {
-    if (action === 'approved') {
-        learningStats.totalApproved += count;
-    } else if (action === 'rejected') {
-        learningStats.totalRejected += count;
-    }
-    
-    updateLearningStatsDisplay();
-}
-
-/**
- * Save learning settings to server
- */
-async function saveLearningSettings() {
-    try {
-        console.log('💾 Saving learning settings...');
-        
-        const settings = {
-            autoLearningEnabled: document.getElementById('autoLearningEnabled')?.value === 'true',
-            learningApprovalMode: document.getElementById('learningApprovalMode')?.value || 'manual',
-            learningConfidenceThreshold: parseFloat(document.getElementById('learningConfidenceThreshold')?.value) || 0.85,
-            maxPendingQnAs: parseInt(document.getElementById('maxPendingQnAs')?.value) || 100
-        };
-        
-        const response = await fetch(`/api/company/companies/${getCompanyId()}/learning-settings`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(settings)
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Failed to save learning settings: ${response.statusText}`);
-        }
-        
-        // Show success feedback
-        const savedElement = document.getElementById('learning-settings-saved');
-        if (savedElement) {
-            savedElement.classList.remove('hidden');
-            setTimeout(() => {
-                savedElement.classList.add('hidden');
-            }, 3000);
-        }
-        
-        showNotification('Learning settings saved successfully!', 'success');
-        console.log('✅ Learning settings saved');
-        
-    } catch (error) {
-        console.error('❌ Error saving learning settings:', error);
-        showNotification('Failed to save learning settings', 'error');
-    }
-}
-
-/**
- * Export knowledge base
- */
-async function exportKnowledgeBase() {
-    try {
-        console.log('📤 Exporting knowledge base...');
-        
-        const response = await fetch(`/api/company/companies/${getCompanyId()}/export-knowledge-base`);
-        
-        if (!response.ok) {
-            throw new Error(`Failed to export knowledge base: ${response.statusText}`);
-        }
-        
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `knowledge-base-${getCompanyId()}-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        showNotification('Knowledge base exported successfully!', 'success');
-        console.log('✅ Knowledge base exported');
-        
-    } catch (error) {
-        console.error('❌ Error exporting knowledge base:', error);
-        showNotification('Failed to export knowledge base', 'error');
-    }
-}
-
-/**
- * Reset learning statistics
- */
-async function resetLearningStats() {
-    if (!confirm('Are you sure you want to reset all learning statistics? This action cannot be undone.')) {
-        return;
-    }
-    
-    try {
-        console.log('🔄 Resetting learning stats...');
-        
-        const response = await fetch(`/api/company/companies/${getCompanyId()}/reset-learning-stats`, {
-            method: 'POST'
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Failed to reset learning stats: ${response.statusText}`);
-        }
-        
-        learningStats = {
-            totalApproved: 0,
-            totalRejected: 0,
-            averageConfidence: 0,
-            learningRate: 0
-        };
-        
-        updateLearningStatsDisplay();
-        showNotification('Learning statistics reset successfully!', 'success');
-        console.log('✅ Learning stats reset');
-        
-    } catch (error) {
-        console.error('❌ Error resetting learning stats:', error);
-        showNotification('Failed to reset learning stats', 'error');
-    }
-}
-
-// =============================================
-// 🔧 ENHANCED AI AGENT SETTINGS FUNCTIONS
-// =============================================
-
-/**
- * Save complete AI agent settings including LLM and learning settings
- */
-async function saveAgentSettings() {
-    if (!validateLLMConfiguration()) {
-        return;
-    }
-    
-    try {
-        console.log('💾 Saving complete AI agent settings...');
-        
-        const settings = {
-            // LLM Settings
-            useLLM: document.getElementById('agent-useLLM')?.value === 'true',
-            primaryLLM: document.getElementById('agent-primaryLLM')?.value || 'ollama-phi3',
-            fallbackLLM: document.getElementById('agent-fallbackLLM')?.value || 'gemini-pro',
-            allowedLLMModels: getSelectedLLMModels(),
-            
-            // Intelligence Settings
-            memoryMode: document.getElementById('agent-memoryMode')?.value || 'short',
-            fallbackThreshold: parseFloat(document.getElementById('agent-fallbackThreshold')?.value) || 0.5,
-            escalationMode: document.getElementById('agent-escalationMode')?.value || 'ask',
-            rePromptAfterTurns: parseInt(document.getElementById('agent-rePromptAfterTurns')?.value) || 3,
-            maxPromptsPerCall: parseInt(document.getElementById('agent-maxPromptsPerCall')?.value) || 2,
-            
-            // Advanced Features
-            semanticSearchEnabled: document.getElementById('agent-semanticSearchEnabled')?.checked || false,
-            confidenceScoring: document.getElementById('agent-confidenceScoring')?.checked || false,
-            autoLearningQueue: document.getElementById('agent-autoLearningQueue')?.checked || false,
-            
-            // Learning Settings
-            autoLearningEnabled: document.getElementById('autoLearningEnabled')?.value === 'true',
-            learningApprovalMode: document.getElementById('learningApprovalMode')?.value || 'manual',
-            learningConfidenceThreshold: parseFloat(document.getElementById('learningConfidenceThreshold')?.value) || 0.85,
-            maxPendingQnAs: parseInt(document.getElementById('maxPendingQnAs')?.value) || 100,
-            
-            // Trade Categories
-            tradeCategories: Array.from(document.getElementById('agent-trade-categories')?.selectedOptions || [])
-                .map(option => option.value)
-        };
-        
-        const response = await fetch(`/api/company/companies/${getCompanyId()}/agent-settings`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ agentIntelligenceSettings: settings })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Failed to save agent settings: ${response.statusText}`);
-        }
-        
-        // Show success feedback
-        const savedElement = document.getElementById('agent-settings-saved');
-        if (savedElement) {
-            savedElement.classList.remove('hidden');
-            setTimeout(() => {
-                savedElement.classList.add('hidden');
-            }, 3000);
-        }
-        
-        showNotification('AI agent settings saved successfully!', 'success');
-        console.log('✅ Complete AI agent settings saved');
-        
-    } catch (error) {
-        console.error('❌ Error saving agent settings:', error);
-        showNotification('Failed to save agent settings', 'error');
-    }
-}
-
-/**
- * Test agent configuration with current settings
- */
-async function testAgentConfiguration() {
-    console.log('🧪 Testing agent configuration...');
-    
-    const testBtn = document.querySelector('button[onclick="testAgentConfiguration()"]');
-    if (testBtn) {
-        const originalText = testBtn.innerHTML;
-        testBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Testing...';
-        testBtn.disabled = true;
-        
-        setTimeout(() => {
-            testBtn.innerHTML = originalText;
-            testBtn.disabled = false;
-        }, 3000);
-    }
-    
-    // Simulate configuration test
-    setTimeout(() => {
-        showNotification('Agent configuration test completed successfully!', 'success');
-    }, 2000);
-}
-
-/**
- * Reset AI settings to defaults
- */
-async function resetToDefaults() {
-    if (!confirm('Are you sure you want to reset all AI settings to defaults? This will override your current configuration.')) {
-        return;
-    }
-    
-    try {
-        console.log('🔄 Resetting AI settings to defaults...');
-        
-        const response = await fetch(`/api/company/companies/${getCompanyId()}/reset-agent-settings`, {
-            method: 'POST'
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Failed to reset settings: ${response.statusText}`);
-        }
-        
-        // Reload the page to reflect default settings
-        window.location.reload();
-        
-    } catch (error) {
-        console.error('❌ Error resetting to defaults:', error);
-        showNotification('Failed to reset settings to defaults', 'error');
-    }
-}
-
-// =============================================
-// 🔧 ENHANCED EVENT LISTENERS AND INITIALIZATION
-// =============================================
-
-/**
- * Initialize enhanced LLM and learning functionality
- */
-function initializeEnhancedAIFeatures() {
-    console.log('🚀 Initializing enhanced AI features...');
-    
-    // LLM checkbox change listeners
-    const llmCheckboxes = document.querySelectorAll('input[id^="llm-"]');
-    llmCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', updateActiveModelsCount);
-    });
-    
-    // Learning confidence threshold slider
-    const learningThresholdSlider = document.getElementById('learningConfidenceThreshold');
-    const learningThresholdValue = document.getElementById('learningThresholdValue');
-    if (learningThresholdSlider && learningThresholdValue) {
-        learningThresholdSlider.addEventListener('input', (e) => {
-            learningThresholdValue.textContent = parseFloat(e.target.value).toFixed(2);
+    if (nameInput) {
+        nameInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addBookingField();
+            }
         });
     }
-    
-    // Fallback threshold slider
-    const fallbackThresholdSlider = document.getElementById('agent-fallbackThreshold');
-    const fallbackThresholdValue = document.getElementById('fallback-threshold-value');
-    if (fallbackThresholdSlider && fallbackThresholdValue) {
-        fallbackThresholdSlider.addEventListener('input', (e) => {
-            fallbackThresholdValue.textContent = parseFloat(e.target.value).toFixed(1);
-        });
-    }
-    
-    console.log('✅ Enhanced AI features initialized');
-}
-
-// =============================================
-// 🛠️ UTILITY FUNCTIONS
-// =============================================
-
-/**
- * Format time ago string
- */
-function formatTimeAgo(date) {
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
-}
-
-/**
- * Enhanced company data population including new AI features
- */
-function populateEnhancedCompanyData(data) {
-    if (!data) return;
-    
-    console.log('🔄 Populating enhanced company data...');
-    
-    // Load existing data population
-    populateCompanyData(data);
-    
-    // Load LLM settings
-    loadLLMSettings(data);
-    
-    // Load learning settings
-    loadLearningSettings(data);
-    
-    // Initialize enhanced features
-    initializeEnhancedAIFeatures();
-    
-    console.log('✅ Enhanced company data populated');
-}
-
-// Override the original populateCompanyData function to include enhanced features
-const originalPopulateCompanyData = populateCompanyData;
-populateCompanyData = function(data) {
-    originalPopulateCompanyData(data);
-    
-    // Add enhanced AI features
-    if (data?.agentIntelligenceSettings) {
-        loadLLMSettings(data);
-        loadLearningSettings(data);
-    }
-    
-    initializeEnhancedAIFeatures();
-};
-
-console.log('🚀 Enhanced LLM Selector and Self-Learning Knowledge Base system loaded!');
+});
