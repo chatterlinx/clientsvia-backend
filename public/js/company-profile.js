@@ -948,7 +948,7 @@ async function saveBookingFlow() {
     try {
         console.log('💾 Saving booking flow...');
         
-        const response = await fetch(`/api/company/companies/${companyId}/booking-flow`, {
+        const response = await fetch(`/api/companies/${companyId}/booking-flow`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -981,7 +981,7 @@ async function loadBookingFlow() {
     try {
         console.log('📋 Loading booking flow configuration...');
         
-        const response = await fetch(`/api/company/companies/${companyId}/booking-flow`);
+        const response = await fetch(`/api/companies/${companyId}/booking-flow`);
         
         if (!response.ok) {
             throw new Error(`Failed to load booking flow: ${response.statusText}`);
