@@ -90,8 +90,7 @@ const tradeCategorySchema = new mongoose.Schema({
   lastKnowledgeUpdate: { type: Date, default: Date.now }
 });
 
-// Indexes for performance
-tradeCategorySchema.index({ name: 1 });
+// Indexes for performance (note: name index is auto-created by unique constraint)
 tradeCategorySchema.index({ 'qna.keywords': 1 });
 tradeCategorySchema.index({ 'qna.confidence': -1 });
 tradeCategorySchema.index({ 'qna.useCount': -1 });
