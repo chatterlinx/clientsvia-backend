@@ -151,31 +151,6 @@ app.use("/api/uploads", uploadRoutes);
 
 // Development routes
 if (process.env.NODE_ENV !== 'production') {
-    // Serve test script for development
-    app.get('/test-render-log.js', (req, res) => {
-        res.sendFile(path.join(__dirname, 'test-render-log.js'));
-    });
-    
-    // Serve render log demo script
-    app.get('/render-log-demo.js', (req, res) => {
-        res.sendFile(path.join(__dirname, 'render-log-demo.js'));
-    });
-    
-    // Serve booking flow engine test
-    app.get('/test-booking-flow-engine.js', (req, res) => {
-        res.sendFile(path.join(__dirname, 'test-booking-flow-engine.js'));
-    });
-    
-    // Serve booking flow UI test
-    app.get('/test-booking-flow-ui.js', (req, res) => {
-        res.sendFile(path.join(__dirname, 'test-booking-flow-ui.js'));
-    });
-    
-    // Serve transfer router test
-    app.get('/test-transfer-router.js', (req, res) => {
-        res.sendFile(path.join(__dirname, 'test-transfer-router.js'));
-    });
-    
     // Serve selfCheckLogger service
     app.get('/services/selfCheckLogger.js', (req, res) => {
         res.sendFile(path.join(__dirname, 'services', 'selfCheckLogger.js'));
