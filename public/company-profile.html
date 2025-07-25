@@ -946,16 +946,100 @@
                                                 <p class="text-xs text-gray-500 mt-1">Enable intelligent responses beyond Q&A database</p>
                                             </div>
 
-                                            <!-- Model Selection -->
-                                            <div>
-                                                <label class="form-label">AI Model</label>
-                                                <select id="agent-llmModel" class="form-select">
-                                                    <option value="ollama-mistral">Ollama Mistral (Local)</option>
-                                                    <option value="ollama-phi3">Ollama Phi3 (Fast)</option>
-                                                    <option value="gemini-pro">Gemini Pro (Cloud)</option>
-                                                    <option value="openai-gpt4">OpenAI GPT-4 (Premium)</option>
-                                                </select>
-                                                <p class="text-xs text-gray-500 mt-1">Choose the AI model for intelligent responses</p>
+                                            <!-- 🚀 ENHANCED LLM SELECTOR - Multi-Model Configuration -->
+                                            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+                                                <h5 class="text-sm font-semibold text-gray-800 mb-3 flex items-center">
+                                                    <i class="fas fa-microchip mr-2 text-blue-600"></i>LLM Model Configuration
+                                                    <span class="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">Multi-Model</span>
+                                                </h5>
+                                                
+                                                <!-- Primary LLM Selection -->
+                                                <div class="mb-4">
+                                                    <label class="form-label text-sm">Primary LLM Model</label>
+                                                    <select id="agent-primaryLLM" class="form-select">
+                                                        <option value="ollama-phi3">Ollama Phi3 (Fast, Local)</option>
+                                                        <option value="ollama-mistral">Ollama Mistral (Advanced, Local)</option>
+                                                        <option value="gemini-pro">Gemini Pro (Cloud, Balanced)</option>
+                                                        <option value="openai-gpt4">OpenAI GPT-4 (Premium, Cloud)</option>
+                                                        <option value="claude-3">Claude-3 (Premium, Cloud)</option>
+                                                    </select>
+                                                    <p class="text-xs text-gray-500 mt-1">Primary model for initial responses</p>
+                                                </div>
+
+                                                <!-- Fallback LLM Selection -->
+                                                <div class="mb-4">
+                                                    <label class="form-label text-sm">Fallback LLM Model</label>
+                                                    <select id="agent-fallbackLLM" class="form-select">
+                                                        <option value="gemini-pro">Gemini Pro (Cloud, Reliable)</option>
+                                                        <option value="ollama-phi3">Ollama Phi3 (Fast, Local)</option>
+                                                        <option value="ollama-mistral">Ollama Mistral (Advanced, Local)</option>
+                                                        <option value="openai-gpt4">OpenAI GPT-4 (Premium, Cloud)</option>
+                                                        <option value="claude-3">Claude-3 (Premium, Cloud)</option>
+                                                    </select>
+                                                    <p class="text-xs text-gray-500 mt-1">Backup model when primary fails</p>
+                                                </div>
+
+                                                <!-- Allowed Models Multi-Select -->
+                                                <div class="mb-4">
+                                                    <label class="form-label text-sm flex items-center">
+                                                        <i class="fas fa-shield-alt mr-2 text-green-600"></i>Allowed LLM Models
+                                                    </label>
+                                                    <div class="space-y-2 mt-2">
+                                                        <label class="flex items-center p-2 bg-white rounded border border-gray-200 hover:bg-gray-50">
+                                                            <input type="checkbox" id="llm-ollama-phi3" class="form-checkbox h-4 w-4 text-blue-600" checked>
+                                                            <div class="ml-3 flex-1">
+                                                                <span class="text-sm font-medium">Ollama Phi3</span>
+                                                                <span class="ml-2 px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded">Local</span>
+                                                                <p class="text-xs text-gray-500">Fast responses, privacy-focused</p>
+                                                            </div>
+                                                        </label>
+                                                        
+                                                        <label class="flex items-center p-2 bg-white rounded border border-gray-200 hover:bg-gray-50">
+                                                            <input type="checkbox" id="llm-ollama-mistral" class="form-checkbox h-4 w-4 text-blue-600">
+                                                            <div class="ml-3 flex-1">
+                                                                <span class="text-sm font-medium">Ollama Mistral</span>
+                                                                <span class="ml-2 px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded">Local</span>
+                                                                <p class="text-xs text-gray-500">Advanced reasoning capabilities</p>
+                                                            </div>
+                                                        </label>
+                                                        
+                                                        <label class="flex items-center p-2 bg-white rounded border border-gray-200 hover:bg-gray-50">
+                                                            <input type="checkbox" id="llm-gemini-pro" class="form-checkbox h-4 w-4 text-blue-600" checked>
+                                                            <div class="ml-3 flex-1">
+                                                                <span class="text-sm font-medium">Gemini Pro</span>
+                                                                <span class="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">Cloud</span>
+                                                                <p class="text-xs text-gray-500">Google's balanced AI model</p>
+                                                            </div>
+                                                        </label>
+                                                        
+                                                        <label class="flex items-center p-2 bg-white rounded border border-gray-200 hover:bg-gray-50">
+                                                            <input type="checkbox" id="llm-openai-gpt4" class="form-checkbox h-4 w-4 text-blue-600">
+                                                            <div class="ml-3 flex-1">
+                                                                <span class="text-sm font-medium">OpenAI GPT-4</span>
+                                                                <span class="ml-2 px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded">Premium</span>
+                                                                <p class="text-xs text-gray-500">Most advanced reasoning</p>
+                                                            </div>
+                                                        </label>
+                                                        
+                                                        <label class="flex items-center p-2 bg-white rounded border border-gray-200 hover:bg-gray-50">
+                                                            <input type="checkbox" id="llm-claude-3" class="form-checkbox h-4 w-4 text-blue-600">
+                                                            <div class="ml-3 flex-1">
+                                                                <span class="text-sm font-medium">Claude-3</span>
+                                                                <span class="ml-2 px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded">Premium</span>
+                                                                <p class="text-xs text-gray-500">Anthropic's latest model</p>
+                                                            </div>
+                                                        </label>
+                                                    </div>
+                                                    <p class="text-xs text-gray-500 mt-2">Select which models the agent can use</p>
+                                                </div>
+
+                                                <!-- Model Performance Stats -->
+                                                <div class="mt-3 p-3 bg-gray-50 rounded-lg">
+                                                    <div class="flex items-center justify-between text-xs">
+                                                        <span class="text-gray-600">Active Models:</span>
+                                                        <span id="activeModelsCount" class="font-medium text-blue-600">2 selected</span>
+                                                    </div>
+                                                </div>
                                             </div>
 
                                             <!-- Memory Mode -->
@@ -1257,6 +1341,164 @@
                                                 class="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 py-2 px-3 rounded border border-yellow-300 transition duration-150 ease-in-out"
                                             >
                                                 <i class="fas fa-dollar-sign mr-1"></i>Pricing Question
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 📚 SELF-LEARNING KNOWLEDGE BASE APPROVAL SYSTEM - Module 4: Learning & Approval -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gradient-to-r from-purple-50 to-pink-50 px-4 py-3 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-graduation-cap mr-2 text-purple-600"></i>Self-Learning Knowledge Base
+                                        <span class="ml-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">Module 4</span>
+                                    </h3>
+                                    <p class="text-sm text-gray-600 mt-1">Review and approve AI-generated Q&A pairs for continuous learning</p>
+                                </div>
+                                
+                                <div class="p-6">
+                                    <!-- Learning Controls Section -->
+                                    <div class="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                                        <h4 class="text-md font-semibold text-gray-700 mb-4 flex items-center">
+                                            <i class="fas fa-cogs mr-2 text-blue-600"></i>Learning Controls
+                                        </h4>
+                                        
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <!-- Auto Learning Toggle -->
+                                            <div>
+                                                <label class="form-label">Auto Learning</label>
+                                                <select id="autoLearningEnabled" class="form-select">
+                                                    <option value="true">Enabled - Capture new Q&As</option>
+                                                    <option value="false">Disabled - No learning</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">Enable automatic capture of new questions</p>
+                                            </div>
+
+                                            <!-- Approval Mode -->
+                                            <div>
+                                                <label class="form-label">Approval Mode</label>
+                                                <select id="learningApprovalMode" class="form-select">
+                                                    <option value="manual">Manual - Admin approval required</option>
+                                                    <option value="auto-high-confidence">Auto - High confidence only</option>
+                                                    <option value="disabled">Disabled - No new Q&As</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">How to handle new Q&A pairs</p>
+                                            </div>
+
+                                            <!-- Confidence Threshold -->
+                                            <div>
+                                                <label class="form-label">Learning Confidence Threshold</label>
+                                                <div class="flex items-center space-x-3">
+                                                    <input type="range" id="learningConfidenceThreshold" class="flex-1" min="0.5" max="0.95" step="0.05" value="0.85">
+                                                    <span id="learningThresholdValue" class="text-sm font-medium text-gray-700 w-12">0.85</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">Minimum confidence to auto-approve (if enabled)</p>
+                                            </div>
+
+                                            <!-- Max Pending Limit -->
+                                            <div>
+                                                <label class="form-label">Max Pending Q&As</label>
+                                                <select id="maxPendingQnAs" class="form-select">
+                                                    <option value="50">50 items</option>
+                                                    <option value="100">100 items</option>
+                                                    <option value="200">200 items</option>
+                                                    <option value="500">500 items</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">Maximum pending items before cleanup</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Pending Q&A Management -->
+                                    <div class="mb-6">
+                                        <div class="flex items-center justify-between mb-4">
+                                            <h4 class="text-md font-semibold text-gray-700 flex items-center">
+                                                <i class="fas fa-clock mr-2 text-orange-600"></i>Pending Q&A Approval
+                                                <span id="pendingCount" class="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded-full">0 pending</span>
+                                            </h4>
+                                            <div class="flex items-center space-x-2">
+                                                <button 
+                                                    type="button" 
+                                                    onclick="refreshPendingQnAs()" 
+                                                    class="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded transition duration-150 ease-in-out"
+                                                >
+                                                    <i class="fas fa-sync-alt mr-1"></i>Refresh
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onclick="bulkApproveHighConfidence()" 
+                                                    class="text-sm bg-green-600 hover:bg-green-700 text-white py-1 px-3 rounded transition duration-150 ease-in-out"
+                                                >
+                                                    <i class="fas fa-check-double mr-1"></i>Bulk Approve (85%+)
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Pending Q&A List -->
+                                        <div id="pendingQnAList" class="space-y-3 max-h-96 overflow-y-auto">
+                                            <div class="text-center py-8 text-gray-500">
+                                                <i class="fas fa-inbox text-3xl mb-2"></i>
+                                                <p>No pending Q&A pairs</p>
+                                                <p class="text-xs">New questions will appear here for approval</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Learning Statistics -->
+                                    <div class="mb-6 p-4 bg-gradient-to-r from-green-50 to-teal-50 rounded-lg border border-green-200">
+                                        <h4 class="text-md font-semibold text-gray-700 mb-4 flex items-center">
+                                            <i class="fas fa-chart-bar mr-2 text-green-600"></i>Learning Statistics
+                                        </h4>
+                                        
+                                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            <div class="text-center">
+                                                <div id="totalApproved" class="text-2xl font-bold text-green-600">0</div>
+                                                <div class="text-xs text-gray-500">Approved</div>
+                                            </div>
+                                            <div class="text-center">
+                                                <div id="totalRejected" class="text-2xl font-bold text-red-600">0</div>
+                                                <div class="text-xs text-gray-500">Rejected</div>
+                                            </div>
+                                            <div class="text-center">
+                                                <div id="averageConfidence" class="text-2xl font-bold text-blue-600">0%</div>
+                                                <div class="text-xs text-gray-500">Avg Confidence</div>
+                                            </div>
+                                            <div class="text-center">
+                                                <div id="learningRate" class="text-2xl font-bold text-purple-600">0</div>
+                                                <div class="text-xs text-gray-500">Per Day</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Action Buttons -->
+                                    <div class="flex justify-between items-center pt-4 border-t border-gray-200">
+                                        <div class="flex items-center space-x-3">
+                                            <button 
+                                                type="button" 
+                                                onclick="exportKnowledgeBase()" 
+                                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out"
+                                            >
+                                                <i class="fas fa-download mr-2"></i>Export Knowledge Base
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                onclick="resetLearningStats()" 
+                                                class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out"
+                                            >
+                                                <i class="fas fa-undo mr-2"></i>Reset Stats
+                                            </button>
+                                        </div>
+                                        <div class="flex items-center space-x-3">
+                                            <span id="learning-settings-saved" class="text-green-600 text-sm hidden">
+                                                <i class="fas fa-check-circle mr-1"></i>Settings Saved!
+                                            </span>
+                                            <button 
+                                                type="button" 
+                                                onclick="saveLearningSettings()" 
+                                                class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-6 rounded-md shadow-sm transition duration-150 ease-in-out"
+                                            >
+                                                <i class="fas fa-save mr-2"></i>Save Learning Settings
                                             </button>
                                         </div>
                                     </div>

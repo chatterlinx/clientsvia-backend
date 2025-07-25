@@ -37,6 +37,10 @@ const agentTestingRoutes = require('./routes/company/agentTesting'); // MODULE 3
 const eventHooksRoutes = require('./routes/eventHooks'); // Event Hooks Management
 const transferRouterRoutes = require('./routes/transferRouter'); // Transfer Router Management
 
+// 🚀 ENHANCED AI AGENT LOGIC - Module Components
+const pendingQnARoutes = require('./routes/company/pendingQnA'); // MODULE 4: Self-Learning Knowledge Base Approval
+const enhancedAgentSettingsRoutes = require('./routes/company/enhancedAgentSettings'); // Enhanced LLM Selector & Agent Settings
+
 const aiAgentWorkflowRoutes = require('./routes/aiAgentWorkflows');
 const aiAgentAnalyticsRoutes = require('./routes/aiAgentAnalytics');
 const knowledgeAutoPopulationRoutes = require('./routes/knowledgeAutoPopulation');
@@ -88,6 +92,8 @@ app.use('/api/company', companyAgentSettingsRoutes); // ENTERPRISE: Company-spec
 app.use('/api/company', companyPersonalityRoutes); // MODULE 1: Agent Personality Settings
 app.use('/api/company', companyKnowledgeRoutes); // MODULE 2: Knowledge Q&A Source Controls
 app.use('/api/company', agentTestingRoutes); // MODULE 3: AI Agent Testing Console
+app.use('/api/company', pendingQnARoutes); // MODULE 4: Self-Learning Knowledge Base Approval
+app.use('/api/company', enhancedAgentSettingsRoutes); // Enhanced LLM Selector & Agent Settings
 
 // Register AI Agent routes
 app.use('/api/event-hooks', eventHooksRoutes); // Event Hooks Management API

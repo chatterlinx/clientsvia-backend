@@ -292,6 +292,50 @@ const companySchema = new mongoose.Schema({
             default: 'ollama-phi3',
             enum: ['ollama-phi3', 'ollama-mistral', 'gemini-pro', 'openai-gpt4', 'claude-3']
         },
+        
+        // 🚀 ENHANCED LLM SELECTION CONTROLS
+        allowedLLMModels: { 
+            type: [String], 
+            default: ['ollama-phi3', 'gemini-pro'],
+            validate: {
+                validator: function(v) {
+                    const validModels = ['ollama-phi3', 'ollama-mistral', 'gemini-pro', 'openai-gpt4', 'claude-3'];
+                    return v.every(model => validModels.includes(model));
+                },
+                message: 'Invalid LLM model in allowedLLMModels'
+            }
+        },
+        primaryLLM: { 
+            type: String, 
+            default: 'ollama-phi3',
+            enum: ['ollama-phi3', 'ollama-mistral', 'gemini-pro', 'openai-gpt4', 'claude-3']
+        },
+        fallbackLLM: { 
+            type: String, 
+            default: 'gemini-pro',
+            enum: ['ollama-phi3', 'ollama-mistral', 'gemini-pro', 'openai-gpt4', 'claude-3']
+        },
+        
+        // 📚 SELF-LEARNING CONTROLS
+        autoLearningEnabled: { type: Boolean, default: true },
+        learningApprovalMode: { 
+            type: String, 
+            enum: ['manual', 'auto-high-confidence', 'disabled'], 
+            default: 'manual' 
+        },
+        learningConfidenceThreshold: { 
+            type: Number, 
+            min: 0, 
+            max: 1, 
+            default: 0.85 
+        },
+        maxPendingQnAs: { 
+            type: Number, 
+            min: 10, 
+            max: 500, 
+            default: 100 
+        },
+        
         memoryMode: { 
             type: String, 
             enum: ['short', 'conversation'], 
