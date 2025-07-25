@@ -1194,6 +1194,217 @@
                                     </div>
                                 </div>
                             </div>
+                            
+                            <!-- 📚 KNOWLEDGE Q&A SOURCE CONTROLS - Module 2: Knowledge Source Priority & Configuration -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-book-open mr-2 text-indigo-600"></i>Knowledge Source Controls
+                                        <span class="ml-2 px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded-full">Module 2</span>
+                                    </h3>
+                                    <p class="text-sm text-gray-600 mt-1">Prioritize and configure knowledge sources, confidence thresholds, and memory settings</p>
+                                </div>
+                                
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <!-- Left Column: Source Priority & Configuration -->
+                                        <div class="space-y-5">
+                                            <h4 class="text-md font-semibold text-gray-700 border-b pb-2">
+                                                <i class="fas fa-layer-group mr-2 text-indigo-600"></i>Knowledge Source Priority
+                                                <span class="text-xs text-gray-500 ml-2">(Drag to reorder)</span>
+                                            </h4>
+                                            
+                                            <div id="source-priority-container" class="space-y-2">
+                                                <!-- Source Priority Items (will be populated via JS) -->
+                                                <div id="source-companyQnA" data-source="companyQnA" class="priority-item flex items-center p-3 bg-white border border-gray-300 rounded-lg cursor-move hover:bg-blue-50 transition duration-150">
+                                                    <div class="handle mr-3 text-gray-400">
+                                                        <i class="fas fa-grip-vertical"></i>
+                                                    </div>
+                                                    <div class="flex-1">
+                                                        <div class="flex items-center justify-between">
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-building text-blue-500 mr-2"></i>
+                                                                <span class="font-medium">Company Q&A</span>
+                                                            </div>
+                                                            <div class="text-sm font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                                                                Priority: <span class="priority-value">1</span>
+                                                            </div>
+                                                        </div>
+                                                        <p class="text-xs text-gray-600 mt-1">Company-specific questions and answers</p>
+                                                        <div class="mt-2">
+                                                            <label class="flex items-center space-x-2 text-sm">
+                                                                <span class="text-gray-700">Confidence:</span>
+                                                                <input type="range" 
+                                                                    id="threshold-companyQnA" 
+                                                                    class="w-1/2" 
+                                                                    min="0" max="1" step="0.05" value="0.8">
+                                                                <span id="threshold-value-companyQnA" class="text-sm font-mono">0.80</span>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div id="source-tradeQnA" data-source="tradeQnA" class="priority-item flex items-center p-3 bg-white border border-gray-300 rounded-lg cursor-move hover:bg-blue-50 transition duration-150">
+                                                    <div class="handle mr-3 text-gray-400">
+                                                        <i class="fas fa-grip-vertical"></i>
+                                                    </div>
+                                                    <div class="flex-1">
+                                                        <div class="flex items-center justify-between">
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-tools text-purple-500 mr-2"></i>
+                                                                <span class="font-medium">Trade Category Q&A</span>
+                                                            </div>
+                                                            <div class="text-sm font-mono bg-purple-100 text-purple-800 px-2 py-0.5 rounded">
+                                                                Priority: <span class="priority-value">2</span>
+                                                            </div>
+                                                        </div>
+                                                        <p class="text-xs text-gray-600 mt-1">Industry-specific knowledge (HVAC, plumbing, etc.)</p>
+                                                        <div class="mt-2">
+                                                            <label class="flex items-center space-x-2 text-sm">
+                                                                <span class="text-gray-700">Confidence:</span>
+                                                                <input type="range" 
+                                                                    id="threshold-tradeQnA" 
+                                                                    class="w-1/2" 
+                                                                    min="0" max="1" step="0.05" value="0.75">
+                                                                <span id="threshold-value-tradeQnA" class="text-sm font-mono">0.75</span>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div id="source-vectorSearch" data-source="vectorSearch" class="priority-item flex items-center p-3 bg-white border border-gray-300 rounded-lg cursor-move hover:bg-blue-50 transition duration-150">
+                                                    <div class="handle mr-3 text-gray-400">
+                                                        <i class="fas fa-grip-vertical"></i>
+                                                    </div>
+                                                    <div class="flex-1">
+                                                        <div class="flex items-center justify-between">
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-network-wired text-green-500 mr-2"></i>
+                                                                <span class="font-medium">Vector Search</span>
+                                                            </div>
+                                                            <div class="text-sm font-mono bg-green-100 text-green-800 px-2 py-0.5 rounded">
+                                                                Priority: <span class="priority-value">3</span>
+                                                            </div>
+                                                        </div>
+                                                        <p class="text-xs text-gray-600 mt-1">Semantic search across all knowledge</p>
+                                                        <div class="mt-2">
+                                                            <label class="flex items-center space-x-2 text-sm">
+                                                                <span class="text-gray-700">Confidence:</span>
+                                                                <input type="range" 
+                                                                    id="threshold-vectorSearch" 
+                                                                    class="w-1/2" 
+                                                                    min="0" max="1" step="0.05" value="0.7">
+                                                                <span id="threshold-value-vectorSearch" class="text-sm font-mono">0.70</span>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div id="source-llmFallback" data-source="llmFallback" class="priority-item flex items-center p-3 bg-white border border-gray-300 rounded-lg cursor-move hover:bg-blue-50 transition duration-150">
+                                                    <div class="handle mr-3 text-gray-400">
+                                                        <i class="fas fa-grip-vertical"></i>
+                                                    </div>
+                                                    <div class="flex-1">
+                                                        <div class="flex items-center justify-between">
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-robot text-amber-500 mr-2"></i>
+                                                                <span class="font-medium">LLM Fallback</span>
+                                                            </div>
+                                                            <div class="text-sm font-mono bg-amber-100 text-amber-800 px-2 py-0.5 rounded">
+                                                                Priority: <span class="priority-value">4</span>
+                                                            </div>
+                                                        </div>
+                                                        <p class="text-xs text-gray-600 mt-1">AI-generated responses (last resort)</p>
+                                                        <div class="mt-2">
+                                                            <label class="flex items-center space-x-2 text-sm">
+                                                                <span class="text-gray-700">Confidence:</span>
+                                                                <input type="range" 
+                                                                    id="threshold-llmFallback" 
+                                                                    class="w-1/2" 
+                                                                    min="0" max="1" step="0.05" value="0.6">
+                                                                <span id="threshold-value-llmFallback" class="text-sm font-mono">0.60</span>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Right Column: Memory & Fallback Settings -->
+                                        <div class="space-y-5">
+                                            <h4 class="text-md font-semibold text-gray-700 border-b pb-2">
+                                                <i class="fas fa-brain mr-2 text-indigo-600"></i>Memory & Fallback Options
+                                            </h4>
+                                            
+                                            <!-- Memory Mode Selection -->
+                                            <div>
+                                                <label for="memoryModeSelect" class="form-label">Memory Mode</label>
+                                                <select id="memoryModeSelect" class="form-select">
+                                                    <option value="short">Short-term (Basic context)</option>
+                                                    <option value="conversational" selected>Conversational (Full dialog history)</option>
+                                                    <option value="session">Session (Persistent memory)</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">How agent remembers previous interactions</p>
+                                            </div>
+                                            
+                                            <!-- Context Retention Time -->
+                                            <div>
+                                                <label for="contextRetentionSlider" class="form-label">Context Retention Time</label>
+                                                <div class="flex items-center space-x-3">
+                                                    <input type="range" id="contextRetentionSlider" 
+                                                        class="w-1/2" min="5" max="120" step="5" value="30">
+                                                    <span id="contextRetentionValue" class="text-sm font-mono bg-gray-100 px-2 py-1 rounded">30 minutes</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">How long to maintain conversation history</p>
+                                            </div>
+                                            
+                                            <!-- Fallback Behaviors -->
+                                            <div class="mt-5">
+                                                <h5 class="text-sm font-medium text-gray-700 mb-3">Fallback Behavior</h5>
+                                                <div class="space-y-3">
+                                                    <label class="flex items-center p-3 bg-red-50 rounded-lg border border-red-200">
+                                                        <input type="checkbox" id="rejectLowConfidenceToggle" class="form-checkbox" checked>
+                                                        <div class="ml-3">
+                                                            <span class="text-sm font-medium text-gray-900">Reject Low Confidence Matches</span>
+                                                            <p class="text-xs text-gray-500">Don't use answers below threshold</p>
+                                                        </div>
+                                                    </label>
+                                                    
+                                                    <label class="flex items-center p-3 bg-orange-50 rounded-lg border border-orange-200">
+                                                        <input type="checkbox" id="escalateNoMatchToggle" class="form-checkbox" checked>
+                                                        <div class="ml-3">
+                                                            <span class="text-sm font-medium text-gray-900">Escalate On No Match</span>
+                                                            <p class="text-xs text-gray-500">Connect to human when no good answers</p>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Fallback Message -->
+                                            <div class="mt-4">
+                                                <label for="fallbackMessageInput" class="form-label">Fallback Message</label>
+                                                <textarea id="fallbackMessageInput" class="form-textarea" rows="3">I want to make sure I give you accurate information. Let me connect you with a specialist who can help.</textarea>
+                                                <p class="text-xs text-gray-500 mt-1">Message to use when escalating to human</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Action Buttons -->
+                                    <div class="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center">
+                                        <button type="button" onclick="resetKnowledgeDefaults()" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">
+                                            <i class="fas fa-undo mr-2"></i>Reset Defaults
+                                        </button>
+                                        <div class="flex items-center space-x-3">
+                                            <span id="knowledge-settings-saved" class="text-green-600 text-sm hidden">
+                                                <i class="fas fa-check-circle mr-1"></i>Knowledge Settings Saved!
+                                            </span>
+                                            <button type="button" onclick="saveKnowledgeSettings()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-6 rounded-md shadow-sm transition duration-150 ease-in-out">
+                                                <i class="fas fa-save mr-2"></i>Save Knowledge Settings
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
                         </section>
                     </div>
@@ -1558,6 +1769,245 @@
             console.log('✅ Personality settings reset to defaults');
         }
         
+        // 📚 KNOWLEDGE Q&A SOURCE CONTROLS FUNCTIONS - Module 2
+        
+        // Initialize drag-and-drop functionality for knowledge source priority
+        function initKnowledgeSources() {
+            // Set up range input event listeners
+            const rangeInputs = document.querySelectorAll('input[type="range"][id^="threshold-"]');
+            rangeInputs.forEach(input => {
+                const valueDisplay = document.getElementById(`threshold-value-${input.id.split('-')[1]}`);
+                input.addEventListener('input', () => {
+                    valueDisplay.textContent = parseFloat(input.value).toFixed(2);
+                });
+            });
+            
+            // Set up context retention slider
+            const contextSlider = document.getElementById('contextRetentionSlider');
+            const contextValue = document.getElementById('contextRetentionValue');
+            contextSlider.addEventListener('input', () => {
+                contextValue.textContent = `${contextSlider.value} minutes`;
+            });
+            
+            // Initialize drag & drop (simulated for now)
+            const container = document.getElementById('source-priority-container');
+            const items = container.querySelectorAll('.priority-item');
+            
+            // Simple click-based priority switching (since full drag-drop requires libraries)
+            items.forEach(item => {
+                item.addEventListener('click', function() {
+                    if (event.target.tagName === 'INPUT') return; // Don't trigger on slider clicks
+                    
+                    // Ask user which priority to assign
+                    const currentPriority = parseInt(this.querySelector('.priority-value').textContent);
+                    const newPriority = prompt(`Change "${this.dataset.source}" priority (1-4):`, currentPriority);
+                    
+                    if (newPriority && !isNaN(newPriority) && newPriority >= 1 && newPriority <= 4) {
+                        // Find the item that currently has the target priority
+                        const targetItem = Array.from(items).find(i => 
+                            parseInt(i.querySelector('.priority-value').textContent) === parseInt(newPriority)
+                        );
+                        
+                        if (targetItem) {
+                            // Swap priorities
+                            targetItem.querySelector('.priority-value').textContent = currentPriority;
+                            this.querySelector('.priority-value').textContent = newPriority;
+                            
+                            // Update visual order
+                            updateSourcePriorityOrder();
+                        }
+                    }
+                });
+            });
+            
+            console.log('✅ Knowledge source controls initialized');
+        }
+        
+        // Update the visual order of sources based on priority
+        function updateSourcePriorityOrder() {
+            const container = document.getElementById('source-priority-container');
+            const items = Array.from(container.querySelectorAll('.priority-item'));
+            
+            // Sort items by priority
+            items.sort((a, b) => {
+                const priorityA = parseInt(a.querySelector('.priority-value').textContent);
+                const priorityB = parseInt(b.querySelector('.priority-value').textContent);
+                return priorityA - priorityB;
+            });
+            
+            // Remove all items
+            items.forEach(item => container.removeChild(item));
+            
+            // Add them back in sorted order
+            items.forEach(item => container.appendChild(item));
+        }
+        
+        // Load knowledge settings from API
+        async function loadKnowledgeSettings() {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) return;
+            
+            try {
+                const response = await fetch(`/api/company/companies/${companyId}/knowledge`);
+                if (!response.ok) {
+                    console.log('Using default knowledge settings');
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    const settings = data.data;
+                    
+                    // Update source priorities
+                    if (settings.sourcePriority) {
+                        for (const [source, priority] of Object.entries(settings.sourcePriority)) {
+                            const element = document.querySelector(`#source-${source} .priority-value`);
+                            if (element) element.textContent = priority;
+                        }
+                        updateSourcePriorityOrder();
+                    }
+                    
+                    // Update confidence thresholds
+                    if (settings.confidenceThresholds) {
+                        for (const [source, threshold] of Object.entries(settings.confidenceThresholds)) {
+                            const slider = document.getElementById(`threshold-${source}`);
+                            const display = document.getElementById(`threshold-value-${source}`);
+                            
+                            if (slider && display) {
+                                slider.value = threshold;
+                                display.textContent = parseFloat(threshold).toFixed(2);
+                            }
+                        }
+                    }
+                    
+                    // Update memory settings
+                    if (settings.memoryMode) {
+                        document.getElementById('memoryModeSelect').value = settings.memoryMode;
+                    }
+                    
+                    if (settings.contextRetentionMinutes) {
+                        const slider = document.getElementById('contextRetentionSlider');
+                        const display = document.getElementById('contextRetentionValue');
+                        slider.value = settings.contextRetentionMinutes;
+                        display.textContent = `${settings.contextRetentionMinutes} minutes`;
+                    }
+                    
+                    // Update fallback behaviors
+                    document.getElementById('rejectLowConfidenceToggle').checked = 
+                        settings.rejectLowConfidence !== undefined ? settings.rejectLowConfidence : true;
+                        
+                    document.getElementById('escalateNoMatchToggle').checked = 
+                        settings.escalateOnNoMatch !== undefined ? settings.escalateOnNoMatch : true;
+                    
+                    // Update fallback message
+                    if (settings.fallbackMessage) {
+                        document.getElementById('fallbackMessageInput').value = settings.fallbackMessage;
+                    }
+                    
+                    console.log('✅ Knowledge settings loaded');
+                }
+            } catch (error) {
+                console.error('❌ Failed to load knowledge settings:', error);
+            }
+        }
+        
+        // Save knowledge settings to API
+        async function saveKnowledgeSettings() {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) return;
+            
+            // Build source priority object
+            const sourcePriority = {};
+            document.querySelectorAll('.priority-item').forEach(item => {
+                const source = item.dataset.source;
+                const priority = parseInt(item.querySelector('.priority-value').textContent);
+                sourcePriority[source] = priority;
+            });
+            
+            // Build confidence thresholds object
+            const confidenceThresholds = {};
+            document.querySelectorAll('input[type="range"][id^="threshold-"]').forEach(input => {
+                const source = input.id.split('-')[1];
+                confidenceThresholds[source] = parseFloat(input.value);
+            });
+            
+            // Build complete settings object
+            const knowledgeData = {
+                sourcePriority,
+                confidenceThresholds,
+                memoryMode: document.getElementById('memoryModeSelect').value,
+                contextRetentionMinutes: parseInt(document.getElementById('contextRetentionSlider').value),
+                rejectLowConfidence: document.getElementById('rejectLowConfidenceToggle').checked,
+                escalateOnNoMatch: document.getElementById('escalateNoMatchToggle').checked,
+                fallbackMessage: document.getElementById('fallbackMessageInput').value.trim()
+            };
+            
+            try {
+                const response = await fetch(`/api/company/companies/${companyId}/knowledge`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(knowledgeData)
+                });
+                
+                if (response.ok) {
+                    // Show success message
+                    const savedIndicator = document.getElementById('knowledge-settings-saved');
+                    savedIndicator.classList.remove('hidden');
+                    setTimeout(() => savedIndicator.classList.add('hidden'), 3000);
+                    
+                    console.log('✅ Knowledge settings saved');
+                    alert('✅ Knowledge settings saved successfully!');
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to save settings');
+                }
+            } catch (error) {
+                console.error('❌ Failed to save knowledge settings:', error);
+                alert(`❌ Failed to save knowledge settings: ${error.message}`);
+            }
+        }
+        
+        // Reset knowledge settings to defaults
+        function resetKnowledgeDefaults() {
+            if (!confirm('Reset knowledge settings to defaults?')) return;
+            
+            // Reset source priorities
+            document.querySelector('#source-companyQnA .priority-value').textContent = '1';
+            document.querySelector('#source-tradeQnA .priority-value').textContent = '2';
+            document.querySelector('#source-vectorSearch .priority-value').textContent = '3';
+            document.querySelector('#source-llmFallback .priority-value').textContent = '4';
+            updateSourcePriorityOrder();
+            
+            // Reset confidence thresholds
+            document.getElementById('threshold-companyQnA').value = 0.8;
+            document.getElementById('threshold-value-companyQnA').textContent = '0.80';
+            
+            document.getElementById('threshold-tradeQnA').value = 0.75;
+            document.getElementById('threshold-value-tradeQnA').textContent = '0.75';
+            
+            document.getElementById('threshold-vectorSearch').value = 0.7;
+            document.getElementById('threshold-value-vectorSearch').textContent = '0.70';
+            
+            document.getElementById('threshold-llmFallback').value = 0.6;
+            document.getElementById('threshold-value-llmFallback').textContent = '0.60';
+            
+            // Reset memory settings
+            document.getElementById('memoryModeSelect').value = 'conversational';
+            document.getElementById('contextRetentionSlider').value = 30;
+            document.getElementById('contextRetentionValue').textContent = '30 minutes';
+            
+            // Reset fallback behaviors
+            document.getElementById('rejectLowConfidenceToggle').checked = true;
+            document.getElementById('escalateNoMatchToggle').checked = true;
+            
+            // Reset fallback message
+            document.getElementById('fallbackMessageInput').value = 
+                "I want to make sure I give you accurate information. Let me connect you with a specialist who can help.";
+            
+            console.log('✅ Knowledge settings reset to defaults');
+        }
+        
         // Update threshold value display
         document.addEventListener('DOMContentLoaded', function() {
             const thresholdSlider = document.getElementById('agent-fallbackThreshold');
@@ -1598,6 +2048,8 @@
                         loadAgentTradeCategories();
                         loadAgentSettings();
                         loadAgentPersonalitySettings(); // Module 1: Load personality settings
+                        initKnowledgeSources(); // Module 2: Initialize knowledge source controls
+                        loadKnowledgeSettings(); // Module 2: Load knowledge settings
                         loadAgentAnalytics();
                     }, 100);
                 });

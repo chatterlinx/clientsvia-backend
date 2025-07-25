@@ -44,10 +44,10 @@ Admins will toggle where answers come from and in what order:
 
 We will build:
 
-- [ ] HTML UI with drag-to-prioritize and toggles
-- [ ] Schema: `agentKnowledgeSettings`
-- [ ] API endpoints: save/load settings
-- [ ] Connection to Q&A fallback logic
+- [x] HTML UI with drag-to-prioritize and toggles ✅ COMPLETED
+- [x] Schema: `agentKnowledgeSettings` ✅ COMPLETED
+- [x] API endpoints: save/load settings ✅ COMPLETED
+- [x] Connection to Q&A fallback logic ✅ COMPLETED
 
 ---
 
