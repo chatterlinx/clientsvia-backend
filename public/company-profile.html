@@ -1885,26 +1885,50 @@
                     option.selected = selectedTrades.includes(option.value);
                 });
 
-                // Populate agent settings
+                // Populate agent settings with safety checks
                 const settings = data.agentSettings || {};
                 
-                document.getElementById('agent-useLLM').value = settings.useLLM !== false ? 'true' : 'false';
-                document.getElementById('agent-llmModel').value = settings.llmModel || 'ollama-mistral';
-                document.getElementById('agent-memoryMode').value = settings.memoryMode || 'short';
-                document.getElementById('agent-escalationMode').value = settings.escalationMode || 'ask';
-                document.getElementById('agent-rePromptAfterTurns').value = settings.rePromptAfterTurns || 3;
-                document.getElementById('agent-maxPromptsPerCall').value = settings.maxPromptsPerCall || 2;
+                // Helper function to safely set element values
+                const safeSetValue = (id, value) => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.value = value;
+                    } else {
+                        console.warn(`⚠️ Element not found: ${id}`);
+                    }
+                };
                 
-                // Fallback threshold slider
+                const safeSetChecked = (id, checked) => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.checked = checked;
+                    } else {
+                        console.warn(`⚠️ Element not found: ${id}`);
+                    }
+                };
+                
+                // Set values safely
+                safeSetValue('agent-useLLM', settings.useLLM !== false ? 'true' : 'false');
+                safeSetValue('agent-llmModel', settings.llmModel || 'ollama-mistral');
+                safeSetValue('agent-memoryMode', settings.memoryMode || 'short');
+                safeSetValue('agent-escalationMode', settings.escalationMode || 'ask');
+                safeSetValue('agent-rePromptAfterTurns', settings.rePromptAfterTurns || 3);
+                safeSetValue('agent-maxPromptsPerCall', settings.maxPromptsPerCall || 2);
+                
+                // Fallback threshold slider with safety checks
                 const thresholdSlider = document.getElementById('agent-fallbackThreshold');
                 const thresholdValue = document.getElementById('fallback-threshold-value');
-                thresholdSlider.value = settings.fallbackThreshold || 0.5;
-                thresholdValue.textContent = thresholdSlider.value;
+                if (thresholdSlider && thresholdValue) {
+                    thresholdSlider.value = settings.fallbackThreshold || 0.5;
+                    thresholdValue.textContent = thresholdSlider.value;
+                } else {
+                    console.warn('⚠️ Threshold slider elements not found');
+                }
                 
-                // Advanced features
-                document.getElementById('agent-semanticSearchEnabled').checked = settings.semanticSearchEnabled !== false;
-                document.getElementById('agent-confidenceScoring').checked = settings.confidenceScoring !== false;
-                document.getElementById('agent-autoLearningQueue').checked = settings.autoLearningQueue !== false;
+                // Advanced features with safety checks
+                safeSetChecked('agent-semanticSearchEnabled', settings.semanticSearchEnabled !== false);
+                safeSetChecked('agent-confidenceScoring', settings.confidenceScoring !== false);
+                safeSetChecked('agent-autoLearningQueue', settings.autoLearningQueue !== false);
                 
                 console.log('✅ Agent settings loaded successfully');
                 
@@ -1927,18 +1951,39 @@
                 const tradeSelector = document.getElementById('agent-trade-categories');
                 const tradeCategories = Array.from(tradeSelector.selectedOptions).map(option => option.value);
 
-                // Collect agent settings
+                // Helper function to safely get element values
+                const safeGetValue = (id, defaultValue = '') => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        return element.value;
+                    } else {
+                        console.warn(`⚠️ Element not found during save: ${id}, using default: ${defaultValue}`);
+                        return defaultValue;
+                    }
+                };
+                
+                const safeGetChecked = (id, defaultValue = false) => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        return element.checked;
+                    } else {
+                        console.warn(`⚠️ Element not found during save: ${id}, using default: ${defaultValue}`);
+                        return defaultValue;
+                    }
+                };
+
+                // Collect agent settings safely
                 const agentSettings = {
-                    useLLM: document.getElementById('agent-useLLM').value === 'true',
-                    llmModel: document.getElementById('agent-llmModel').value,
-                    memoryMode: document.getElementById('agent-memoryMode').value,
-                    fallbackThreshold: parseFloat(document.getElementById('agent-fallbackThreshold').value),
-                    escalationMode: document.getElementById('agent-escalationMode').value,
-                    rePromptAfterTurns: parseInt(document.getElementById('agent-rePromptAfterTurns').value),
-                    maxPromptsPerCall: parseInt(document.getElementById('agent-maxPromptsPerCall').value),
-                    semanticSearchEnabled: document.getElementById('agent-semanticSearchEnabled').checked,
-                    confidenceScoring: document.getElementById('agent-confidenceScoring').checked,
-                    autoLearningQueue: document.getElementById('agent-autoLearningQueue').checked
+                    useLLM: safeGetValue('agent-useLLM') === 'true',
+                    llmModel: safeGetValue('agent-llmModel', 'ollama-mistral'),
+                    memoryMode: safeGetValue('agent-memoryMode', 'short'),
+                    fallbackThreshold: parseFloat(safeGetValue('agent-fallbackThreshold', '0.5')),
+                    escalationMode: safeGetValue('agent-escalationMode', 'ask'),
+                    rePromptAfterTurns: parseInt(safeGetValue('agent-rePromptAfterTurns', '3')),
+                    maxPromptsPerCall: parseInt(safeGetValue('agent-maxPromptsPerCall', '2')),
+                    semanticSearchEnabled: safeGetChecked('agent-semanticSearchEnabled', true),
+                    confidenceScoring: safeGetChecked('agent-confidenceScoring', true),
+                    autoLearningQueue: safeGetChecked('agent-autoLearningQueue', true)
                 };
 
                 const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
