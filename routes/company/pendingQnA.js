@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const PendingQnA = require('../../models/PendingQnA');
 const Company = require('../../models/Company');
+const knowledgeBaseService = require('../../services/knowledgeBaseService');
 const { ObjectId } = require('mongodb');
 
 // =============================================
@@ -84,9 +85,24 @@ router.post('/companies/:companyId/pending-qnas/:qnaId/approve', async (req, res
         // Approve the Q&A
         await qna.approve('admin'); // TODO: Get actual user from auth
 
-        // TODO: Add to company's Q&A knowledge base
-        // This would integrate with the existing Company Q&A system
-        // await addToCompanyKnowledgeBase(companyId, qna.question, qna.proposedAnswer);
+        // Add to company's knowledge base
+        try {
+            await knowledgeBaseService.addToCompanyKnowledgeBase(
+                companyId, 
+                qna.question, 
+                qna.proposedAnswer,
+                {
+                    category: 'AI Agent Auto-Learning',
+                    confidence: qna.aiAgentContext?.confidence || 0.8,
+                    frequency: qna.frequency,
+                    keywords: qna.tags || []
+                }
+            );
+            console.log(`[AI Agent Logic] ✅ Q&A added to knowledge base: ${qnaId}`);
+        } catch (kbError) {
+            console.error(`[AI Agent Logic] ⚠️ Knowledge base update failed:`, kbError);
+            // Continue with approval even if KB update fails
+        }
 
         console.log(`[AI Agent Logic] ✅ Q&A approved successfully: ${qnaId}`);
 
@@ -196,21 +212,42 @@ router.post('/companies/:companyId/pending-qnas/bulk-approve', async (req, res) 
 
         // Approve each one
         const approvedIds = [];
+        const knowledgeBaseErrors = [];
+        
         for (const qna of qnasToApprove) {
             await qna.approve('admin'); // TODO: Get actual user from auth
             approvedIds.push(qna._id.toString());
             
-            // TODO: Add to company knowledge base
-            // await addToCompanyKnowledgeBase(companyId, qna.question, qna.proposedAnswer);
+            // Add to company knowledge base
+            try {
+                await knowledgeBaseService.addToCompanyKnowledgeBase(
+                    companyId,
+                    qna.question,
+                    qna.proposedAnswer,
+                    {
+                        category: 'AI Agent Auto-Learning',
+                        confidence: qna.aiAgentContext?.confidence || 0.8,
+                        frequency: qna.frequency,
+                        keywords: qna.tags || []
+                    }
+                );
+            } catch (kbError) {
+                knowledgeBaseErrors.push({ qnaId: qna._id.toString(), error: kbError.message });
+                console.error(`[AI Agent Logic] ⚠️ KB update failed for ${qna._id}:`, kbError);
+            }
         }
 
         console.log(`[AI Agent Logic] ✅ Bulk approved ${approvedIds.length} Q&As successfully`);
+        if (knowledgeBaseErrors.length > 0) {
+            console.log(`[AI Agent Logic] ⚠️ ${knowledgeBaseErrors.length} knowledge base updates failed`);
+        }
 
         res.json({ 
             success: true, 
             message: `${approvedIds.length} Q&As approved successfully`,
             approvedIds: approvedIds,
-            count: approvedIds.length
+            count: approvedIds.length,
+            knowledgeBaseErrors: knowledgeBaseErrors.length > 0 ? knowledgeBaseErrors : undefined
         });
 
     } catch (error) {
@@ -264,6 +301,9 @@ router.get('/companies/:companyId/learning-stats', async (req, res) => {
             }
         ]);
 
+        // Get knowledge base stats
+        const kbStats = await knowledgeBaseService.getKnowledgeBaseStats(companyId);
+
         const finalStats = {
             totalApproved: stats.totalApproved,
             totalRejected: stats.totalRejected,
@@ -272,7 +312,8 @@ router.get('/companies/:companyId/learning-stats', async (req, res) => {
             learningRate: Math.round(totalProcessed / 30), // Per day average
             approvalRate: stats.approvalRate,
             pendingRate: stats.pendingRate,
-            highPriorityCount: stats.highPriority
+            highPriorityCount: stats.highPriority,
+            knowledgeBase: kbStats
         };
 
         console.log(`[AI Agent Logic] ✅ Learning stats calculated:`, finalStats);
