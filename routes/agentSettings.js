@@ -12,8 +12,8 @@ router.get('/companies/:companyId/agent-settings', async (req, res) => {
     
     console.log(`🏢 [Agent Settings] Loading settings for companyId: ${companyId}`);
     
-    // Find company by companyId string field (not MongoDB _id)
-    const company = await Company.findOne({ companyId: companyId });
+    // Find company by MongoDB _id using Mongoose findById
+    const company = await Company.findById(companyId);
     
     if (!company) {
       console.log(`❌ [Agent Settings] Company not found: ${companyId}`);
@@ -21,7 +21,7 @@ router.get('/companies/:companyId/agent-settings', async (req, res) => {
     }
 
     const response = {
-      companyId: company.companyId,
+      companyId: company._id.toString(), // Use MongoDB _id as companyId
       companyName: company.companyName,
       // Multi-tenant: Each company selects from global trade categories
       tradeCategories: company.tradeCategories || [],
@@ -92,9 +92,9 @@ router.post('/companies/:companyId/agent-settings', async (req, res) => {
       autoLearningQueue: agentSettings.autoLearningQueue !== undefined ? Boolean(agentSettings.autoLearningQueue) : true
     };
 
-    // Multi-tenant update: Update specific company by companyId
-    const company = await Company.findOneAndUpdate(
-      { companyId: companyId },
+    // Multi-tenant update: Update specific company by MongoDB _id
+    const company = await Company.findByIdAndUpdate(
+      companyId,
       {
         tradeCategories,
         agentSettings: validatedSettings,
@@ -118,7 +118,7 @@ router.post('/companies/:companyId/agent-settings', async (req, res) => {
       success: true, 
       message: 'AI Agent settings saved successfully',
       company: {
-        companyId: company.companyId,
+        companyId: company._id.toString(), // Use MongoDB _id as companyId
         companyName: company.companyName,
         tradeCategories: company.tradeCategories,
         agentSettings: company.agentSettings
@@ -140,7 +140,7 @@ router.post('/companies/:companyId/test-agent', async (req, res) => {
     const { companyId } = req.params;
     const { testMessage } = req.body;
 
-    const company = await Company.findOne({ companyId: companyId });
+    const company = await Company.findById(companyId);
     if (!company) {
       return res.status(404).json({ error: 'Company not found' });
     }
