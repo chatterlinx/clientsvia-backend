@@ -53,6 +53,7 @@ const bookingHandlerRoutes = require('./routes/bookingHandler'); // Booking Hand
 const aiIntelligenceRoutes = require('./routes/aiIntelligence'); // AI Intelligence Engine
 const monitoringRoutes = require('./routes/monitoring'); // Agent Monitoring System
 const notesRoutes = require('./routes/notes'); // GOLD STANDARD: Enterprise Notes Management
+const agentProcessorRoutes = require('./routes/agentProcessor'); // NEW: Central agent processing
 
 // Initialize Express app
 const app = express();
@@ -111,6 +112,9 @@ app.use('/api/monitoring', monitoringRoutes); // Agent Monitoring System
 app.use('/api/notes', notesRoutes); // GOLD STANDARD: Enterprise Notes Management
 app.use('/api/booking-handler', bookingHandlerRoutes); // Booking Handler API for testing and integration
 app.use('/api/ai-intelligence', aiIntelligenceRoutes); // AI Intelligence Engine routes
+
+// Mount agent processor routes
+app.use('/api/agent', agentProcessorRoutes); // NEW: Central agent processing API
 
 /*
 --- TWILIO SMOKE TEST ROUTE (COMMENTED OUT) ---

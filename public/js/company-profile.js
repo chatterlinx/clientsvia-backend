@@ -1010,28 +1010,319 @@ async function loadBookingFlow() {
 }
 
 // =============================================
-// 🚀 ENHANCED LLM SELECTOR - Multi-Model Configuration Functions
+// 🧠 AI AGENT INTELLIGENCE SETTINGS - CONNECTED TO BACKEND
 // =============================================
 
 /**
- * Load and populate LLM settings from company data
+ * Load agent intelligence settings from backend
  */
-function loadLLMSettings(companyData) {
-    console.log('🧠 Loading LLM settings:', companyData?.agentIntelligenceSettings);
+async function loadAgentIntelligenceSettings() {
+    try {
+        console.log('🧠 Loading agent intelligence settings...');
+        
+        const response = await fetch(`/api/agent/settings/${companyId}`);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to load settings: ${response.statusText}`);
+        }
+        
+        const settings = await response.json();
+        console.log('✅ Agent intelligence settings loaded:', settings);
+        
+        // Populate UI controls with actual settings
+        populateAgentIntelligenceUI(settings);
+        
+        return settings;
+    } catch (error) {
+        console.error('❌ Error loading agent intelligence settings:', error);
+        showNotification('Failed to load agent settings', 'error');
+        
+        // Load defaults if backend fails
+        populateAgentIntelligenceUI({});
+    }
+}
+
+/**
+ * Populate the UI with agent intelligence settings
+ */
+function populateAgentIntelligenceUI(settings) {
+    console.log('📝 Populating agent intelligence UI with:', settings);
     
-    const settings = companyData?.agentIntelligenceSettings || {};
+    // Core AI Configuration
+    const useLLMSelect = document.getElementById('agent-useLLM');
+    if (useLLMSelect) {
+        useLLMSelect.value = settings.useLLM !== false ? 'true' : 'false';
+    }
     
-    // Primary LLM
     const primaryLLMSelect = document.getElementById('agent-primaryLLM');
     if (primaryLLMSelect) {
         primaryLLMSelect.value = settings.primaryLLM || 'ollama-phi3';
     }
     
-    // Fallback LLM
     const fallbackLLMSelect = document.getElementById('agent-fallbackLLM');
     if (fallbackLLMSelect) {
         fallbackLLMSelect.value = settings.fallbackLLM || 'gemini-pro';
     }
+    
+    const memoryModeSelect = document.getElementById('agent-memoryMode');
+    if (memoryModeSelect) {
+        memoryModeSelect.value = settings.memoryMode || 'conversation';
+    }
+    
+    // Intelligence Thresholds
+    const fallbackThresholdSlider = document.getElementById('agent-fallbackThreshold');
+    const fallbackThresholdValue = document.getElementById('fallback-threshold-value');
+    if (fallbackThresholdSlider && fallbackThresholdValue) {
+        const threshold = settings.fallbackThreshold || 0.5;
+        fallbackThresholdSlider.value = threshold;
+        fallbackThresholdValue.textContent = threshold.toFixed(2);
+    }
+    
+    const escalationModeSelect = document.getElementById('agent-escalationMode');
+    if (escalationModeSelect) {
+        escalationModeSelect.value = settings.escalationMode || 'ask';
+    }
+    
+    const rePromptSelect = document.getElementById('agent-rePromptAfterTurns');
+    if (rePromptSelect) {
+        rePromptSelect.value = settings.rePromptAfterTurns || 2;
+    }
+    
+    const maxPromptsSelect = document.getElementById('agent-maxPromptsPerCall');
+    if (maxPromptsSelect) {
+        maxPromptsSelect.value = settings.maxPromptsPerCall || 3;
+    }
+    
+    // Advanced Features
+    const semanticSearchCheckbox = document.getElementById('agent-semanticSearchEnabled');
+    if (semanticSearchCheckbox) {
+        semanticSearchCheckbox.checked = settings.semanticSearchEnabled || false;
+    }
+    
+    const confidenceScoringCheckbox = document.getElementById('agent-confidenceScoring');
+    if (confidenceScoringCheckbox) {
+        confidenceScoringCheckbox.checked = settings.confidenceScoring !== false;
+    }
+    
+    const autoLearningCheckbox = document.getElementById('agent-autoLearningQueue');
+    if (autoLearningCheckbox) {
+        autoLearningCheckbox.checked = settings.autoLearningQueue || false;
+    }
+    
+    // Allowed LLM Models
+    const allowedLLMs = settings.allowedLLMs || ['ollama-phi3', 'gemini-pro'];
+    const modelCheckboxes = [
+        'llm-ollama-phi3',
+        'llm-ollama-mistral', 
+        'llm-gemini-pro',
+        'llm-openai-gpt4',
+        'llm-claude-3'
+    ];
+    
+    modelCheckboxes.forEach(checkboxId => {
+        const checkbox = document.getElementById(checkboxId);
+        if (checkbox) {
+            const modelName = checkboxId.replace('llm-', '').replace('-', '-');
+            checkbox.checked = allowedLLMs.includes(modelName);
+        }
+    });
+    
+    // Update active models count
+    updateActiveModelsCount();
+    
+    console.log('✅ Agent intelligence UI populated');
+}
+
+/**
+ * Save agent intelligence settings to backend
+ */
+async function saveAgentSettings() {
+    try {
+        console.log('💾 Saving agent intelligence settings...');
+        
+        // Collect all settings from UI
+        const settings = {
+            // Core AI Configuration
+            useLLM: document.getElementById('agent-useLLM')?.value === 'true',
+            primaryLLM: document.getElementById('agent-primaryLLM')?.value || 'ollama-phi3',
+            fallbackLLM: document.getElementById('agent-fallbackLLM')?.value || 'gemini-pro',
+            memoryMode: document.getElementById('agent-memoryMode')?.value || 'conversation',
+            
+            // Intelligence Thresholds
+            fallbackThreshold: parseFloat(document.getElementById('agent-fallbackThreshold')?.value) || 0.5,
+            escalationMode: document.getElementById('agent-escalationMode')?.value || 'ask',
+            rePromptAfterTurns: parseInt(document.getElementById('agent-rePromptAfterTurns')?.value) || 2,
+            maxPromptsPerCall: parseInt(document.getElementById('agent-maxPromptsPerCall')?.value) || 3,
+            
+            // Advanced Features
+            semanticSearchEnabled: document.getElementById('agent-semanticSearchEnabled')?.checked || false,
+            confidenceScoring: document.getElementById('agent-confidenceScoring')?.checked !== false,
+            autoLearningQueue: document.getElementById('agent-autoLearningQueue')?.checked || false,
+            
+            // Allowed LLM Models
+            allowedLLMs: []
+        };
+        
+        // Collect selected LLM models
+        const selectedLLMCheckboxes = [
+            { id: 'llm-ollama-phi3', name: 'ollama-phi3' },
+            { id: 'llm-ollama-mistral', name: 'ollama-mistral' },
+            { id: 'llm-gemini-pro', name: 'gemini-pro' },
+            { id: 'llm-openai-gpt4', name: 'openai-gpt4' },
+            { id: 'llm-claude-3', name: 'claude-3' }
+        ];
+        
+        selectedLLMCheckboxes.forEach(({ id, name }) => {
+            const checkbox = document.getElementById(id);
+            if (checkbox?.checked) {
+                settings.allowedLLMs.push(name);
+            }
+        });
+        
+        console.log('🚀 Settings to save:', settings);
+        
+        // Save to backend
+        const response = await fetch(`/api/agent/settings/${companyId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(settings)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Save failed: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log('✅ Settings saved:', result);
+        
+        // Show success feedback
+        const savedElement = document.getElementById('agent-settings-saved');
+        if (savedElement) {
+            savedElement.classList.remove('hidden');
+            setTimeout(() => {
+                savedElement.classList.add('hidden');
+            }, 3000);
+        }
+        
+        showNotification('Agent settings saved successfully!');
+        
+    } catch (error) {
+        console.error('❌ Error saving agent settings:', error);
+        showNotification('Failed to save agent settings', 'error');
+    }
+}
+
+/**
+ * Reset agent settings to defaults
+ */
+async function resetToDefaults() {
+    if (!confirm('Are you sure you want to reset all agent settings to defaults? This cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        console.log('🔄 Resetting agent settings to defaults...');
+        
+        const response = await fetch(`/api/agent/settings/${companyId}/reset`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Reset failed: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log('✅ Settings reset:', result);
+        
+        // Repopulate UI with default settings
+        populateAgentIntelligenceUI(result.settings);
+        
+        showNotification('Agent settings reset to defaults');
+        
+    } catch (error) {
+        console.error('❌ Error resetting agent settings:', error);
+        showNotification('Failed to reset agent settings', 'error');
+    }
+}
+
+/**
+ * Test agent configuration with current settings
+ */
+async function testAgentConfiguration() {
+    const testMessage = document.getElementById('testMessage')?.value;
+    
+    if (!testMessage?.trim()) {
+        showNotification('Please enter a test message first', 'error');
+        return;
+    }
+    
+    // Save current settings first, then test
+    await saveAgentSettings();
+    
+    // Run the actual test
+    await runAgentTest();
+}
+
+/**
+ * Update active models count display
+ */
+function updateActiveModelsCount() {
+    const modelCheckboxList = [
+        'llm-ollama-phi3',
+        'llm-ollama-mistral', 
+        'llm-gemini-pro',
+        'llm-openai-gpt4',
+        'llm-claude-3'
+    ];
+    
+    let activeCount = 0;
+    modelCheckboxList.forEach(checkboxId => {
+        const checkbox = document.getElementById(checkboxId);
+        if (checkbox?.checked) {
+            activeCount++;
+        }
+    });
+    
+    const countDisplay = document.getElementById('activeModelsCount');
+    if (countDisplay) {
+        countDisplay.textContent = `${activeCount} selected`;
+    }
+}
+
+// Add event listeners for threshold slider
+document.addEventListener('DOMContentLoaded', function() {
+    const fallbackThresholdSlider = document.getElementById('agent-fallbackThreshold');
+    const fallbackThresholdValue = document.getElementById('fallback-threshold-value');
+    
+    if (fallbackThresholdSlider && fallbackThresholdValue) {
+        fallbackThresholdSlider.addEventListener('input', function() {
+            fallbackThresholdValue.textContent = parseFloat(this.value).toFixed(2);
+        });
+    }
+    
+    // Add event listeners for LLM checkboxes to update count
+    const modelCheckboxIds = [
+        'llm-ollama-phi3',
+        'llm-ollama-mistral', 
+        'llm-gemini-pro',
+        'llm-openai-gpt4',
+        'llm-claude-3'
+    ];
+    
+    modelCheckboxIds.forEach(checkboxId => {
+        const checkbox = document.getElementById(checkboxId);
+        if (checkbox) {
+            checkbox.addEventListener('change', updateActiveModelsCount);
+        }
+    });
+});
+
+// ...existing code...
     
     // Allowed LLM Models - Multi-select checkboxes
     const allowedModels = settings.allowedLLMModels || ['ollama-phi3', 'gemini-pro'];
@@ -1073,10 +1364,255 @@ function updateActiveModelsCount() {
     }
 }
 
+// =============================================
+// 🧪 AGENT TESTING CONSOLE - CONNECTED TO BACKEND
+// =============================================
+
 /**
- * Get selected LLM models from checkboxes
+ * Run agent test using the new backend processor
  */
-function getSelectedLLMModels() {
+async function runAgentTest() {
+    const testMessageInput = document.getElementById('testMessage');
+    const testAgentBtn = document.getElementById('testAgentBtn');
+    const agentResponseDiv = document.getElementById('agentResponse');
+    const traceLogsDiv = document.getElementById('traceLogs');
+    const responseMetadataDiv = document.getElementById('responseMetadata');
+    
+    if (!testMessageInput?.value?.trim()) {
+        showNotification('Please enter a test message', 'error');
+        return;
+    }
+    
+    const testMessage = testMessageInput.value.trim();
+    
+    try {
+        // Update UI to show testing state
+        if (testAgentBtn) {
+            testAgentBtn.disabled = true;
+            testAgentBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Testing...';
+        }
+        
+        // Clear previous results
+        if (agentResponseDiv) {
+            agentResponseDiv.innerHTML = '<p class="text-gray-500 italic">Processing your test message...</p>';
+        }
+        
+        if (traceLogsDiv) {
+            traceLogsDiv.innerHTML = '<div class="text-yellow-400">Starting agent test...</div>';
+        }
+        
+        console.log('🧪 Running agent test:', testMessage);
+        
+        // Call the new backend processor
+        const response = await fetch('/api/agent/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                companyId: companyId,
+                message: testMessage,
+                callSid: `test_${Date.now()}`
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Test failed: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log('✅ Agent test result:', result);
+        
+        // Display agent response
+        if (agentResponseDiv) {
+            const responseHTML = `
+                <div class="space-y-3">
+                    <div class="font-medium text-blue-900">${escapeHTML(result.response.text)}</div>
+                    ${result.response.escalate ? '<div class="text-orange-600 text-sm font-medium mt-2"><i class="fas fa-exclamation-triangle mr-1"></i>Escalation Required</div>' : ''}
+                </div>
+            `;
+            agentResponseDiv.innerHTML = responseHTML;
+        }
+        
+        // Display metadata
+        if (responseMetadataDiv) {
+            responseMetadataDiv.classList.remove('hidden');
+            
+            const responseTimeSpan = document.getElementById('responseTime');
+            const confidenceScoreSpan = document.getElementById('confidenceScore');
+            const knowledgeSourceSpan = document.getElementById('knowledgeSource');
+            
+            if (responseTimeSpan) responseTimeSpan.textContent = result.metadata.responseTime;
+            if (confidenceScoreSpan) confidenceScoreSpan.textContent = result.metadata.confidenceScore;
+            if (knowledgeSourceSpan) knowledgeSourceSpan.textContent = result.metadata.knowledgeSource;
+        }
+        
+        // Display trace logs
+        if (traceLogsDiv && result.traceLogs) {
+            const logsHTML = result.traceLogs.map(log => 
+                `<div class="text-green-400">${escapeHTML(log)}</div>`
+            ).join('');
+            traceLogsDiv.innerHTML = logsHTML;
+            
+            // Auto-scroll if enabled
+            const autoScrollCheckbox = document.getElementById('autoScroll');
+            if (autoScrollCheckbox?.checked) {
+                traceLogsDiv.scrollTop = traceLogsDiv.scrollHeight;
+            }
+        }
+        
+        // Add to test history
+        addToTestHistory(testMessage, result.response.text, result.metadata);
+        
+        showNotification('Agent test completed successfully!');
+        
+    } catch (error) {
+        console.error('❌ Agent test error:', error);
+        
+        if (agentResponseDiv) {
+            agentResponseDiv.innerHTML = `<div class="text-red-600">Test failed: ${escapeHTML(error.message)}</div>`;
+        }
+        
+        if (traceLogsDiv) {
+            traceLogsDiv.innerHTML = `<div class="text-red-400">ERROR: ${escapeHTML(error.message)}</div>`;
+        }
+        
+        showNotification('Agent test failed', 'error');
+        
+    } finally {
+        // Reset button state
+        if (testAgentBtn) {
+            testAgentBtn.disabled = false;
+            testAgentBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Test Agent';
+        }
+    }
+}
+
+/**
+ * Clear test results
+ */
+function clearTestResults() {
+    const agentResponseDiv = document.getElementById('agentResponse');
+    const traceLogsDiv = document.getElementById('traceLogs');
+    const responseMetadataDiv = document.getElementById('responseMetadata');
+    const testMessageInput = document.getElementById('testMessage');
+    
+    if (agentResponseDiv) {
+        agentResponseDiv.innerHTML = '<p class="text-gray-500 italic text-center py-4">No test run yet. Enter a message and click "Test Agent" to see the response.</p>';
+    }
+    
+    if (traceLogsDiv) {
+        traceLogsDiv.innerHTML = '<div class="text-gray-400">No trace logs yet. Run a test to see detailed execution logs.</div>';
+    }
+    
+    if (responseMetadataDiv) {
+        responseMetadataDiv.classList.add('hidden');
+    }
+    
+    if (testMessageInput) {
+        testMessageInput.value = '';
+    }
+}
+
+/**
+ * Load test template
+ */
+async function loadTestTemplate(templateType) {
+    try {
+        const response = await fetch('/api/agent/test-templates');
+        
+        if (!response.ok) {
+            throw new Error('Failed to load templates');
+        }
+        
+        const templates = await response.json();
+        const template = templates[templateType];
+        
+        if (template) {
+            const testMessageInput = document.getElementById('testMessage');
+            if (testMessageInput) {
+                testMessageInput.value = template.message;
+                testMessageInput.focus();
+            }
+            
+            showNotification(`Loaded template: ${template.description}`);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error loading test template:', error);
+        showNotification('Failed to load template', 'error');
+    }
+}
+
+/**
+ * Add test to history
+ */
+function addToTestHistory(message, response, metadata) {
+    const testHistoryDiv = document.getElementById('testHistory');
+    if (!testHistoryDiv) return;
+    
+    // Clear "no history" message
+    if (testHistoryDiv.innerHTML.includes('No test history yet')) {
+        testHistoryDiv.innerHTML = '';
+    }
+    
+    const timestamp = new Date().toLocaleTimeString();
+    const historyItem = document.createElement('div');
+    historyItem.className = 'border border-gray-200 rounded-lg p-3 bg-gray-50';
+    historyItem.innerHTML = `
+        <div class="flex justify-between items-start mb-2">
+            <span class="text-xs text-gray-500">${timestamp}</span>
+            <span class="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">${metadata.confidenceScore}</span>
+        </div>
+        <div class="text-sm mb-2"><strong>Q:</strong> ${escapeHTML(message.substring(0, 80))}${message.length > 80 ? '...' : ''}</div>
+        <div class="text-sm text-gray-700"><strong>A:</strong> ${escapeHTML(response.substring(0, 80))}${response.length > 80 ? '...' : ''}</div>
+    `;
+    
+    testHistoryDiv.insertBefore(historyItem, testHistoryDiv.firstChild);
+    
+    // Keep only last 5 tests
+    while (testHistoryDiv.children.length > 5) {
+        testHistoryDiv.removeChild(testHistoryDiv.lastChild);
+    }
+}
+
+/**
+ * Clear test history
+ */
+function clearTestHistory() {
+    const testHistoryDiv = document.getElementById('testHistory');
+    if (testHistoryDiv) {
+        testHistoryDiv.innerHTML = '<p class="text-gray-500 italic text-center py-4">No test history yet.</p>';
+    }
+}
+
+/**
+ * Download trace logs
+ */
+function downloadTraceLogs() {
+    const traceLogsDiv = document.getElementById('traceLogs');
+    if (!traceLogsDiv) return;
+    
+    const logs = traceLogsDiv.textContent;
+    if (!logs || logs.includes('No trace logs yet')) {
+        showNotification('No trace logs to download', 'error');
+        return;
+    }
+    
+    const blob = new Blob([logs], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agent-trace-logs-${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showNotification('Trace logs downloaded');
+}
+
+// ...existing code...
     const selectedModels = [];
     const llmCheckboxes = document.querySelectorAll('input[id^="llm-"]:checked');
     
@@ -1344,6 +1880,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     try {
         // Load company data first
         await fetchCompanyData();
+        
+        // Load agent intelligence settings
+        await loadAgentIntelligenceSettings();
         
         // Load booking flow configuration
         await loadBookingFlow();
