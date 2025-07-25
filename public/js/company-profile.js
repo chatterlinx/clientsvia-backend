@@ -19,6 +19,7 @@ let currentCompanyData = null;
 let hasUnsavedChanges = false;
 let availableTradeCategories = [];
 let currentActiveTab = 'overview';
+let personalityResponses = [];  // Store the personality responses
 
 // Company ID extraction and validation
 const urlParams = new URLSearchParams(window.location.search);
@@ -285,6 +286,20 @@ function initializeDOMReferences() {
     window.configurationForm = document.getElementById('configuration-form');
     window.elevenlabsSettingsForm = document.getElementById('elevenlabs-settings-form');
     window.personalityResponsesForm = document.getElementById('personality-responses-form');
+    
+    // Agent Personality Responses
+    window.responseCategoriesContainer = document.getElementById('response-categories-container');
+    window.addResponseCategoryBtn = document.getElementById('add-response-category-btn');
+    window.responseModalTitle = document.getElementById('response-category-modal-title');
+    window.responseCategoryForm = document.getElementById('response-category-form');
+    window.responseCategoryKey = document.getElementById('response-category-key');
+    window.responseCategoryLabel = document.getElementById('response-category-label');
+    window.responseCategoryIcon = document.getElementById('response-category-icon');
+    window.responseCategoryDescription = document.getElementById('response-category-description');
+    window.responseCategoryDefault = document.getElementById('response-category-default');
+    window.responseCategorySubmitText = document.getElementById('response-category-submit-text');
+    window.closeResponseCategoryModal = document.getElementById('close-response-category-modal');
+    window.cancelResponseCategory = document.getElementById('cancel-response-category');
     
     console.log('📋 DOM references initialized');
 }
@@ -886,6 +901,9 @@ async function saveBookingFlow() {
 function initializePlatformFeatures() {
     console.log('🔧 Initializing platform features...');
     
+    // Initialize Agent Personality Responses
+    initializePersonalityResponses();
+    
     // Google Calendar Connection (platform feature)
     initializeGoogleCalendarFeatures();
     
@@ -1001,51 +1019,388 @@ function initializeSaveFeatures() {
 }
 
 // =============================================
-// ADDITIONAL MISSING FUNCTIONS
+// AGENT PERSONALITY RESPONSES MANAGEMENT
 // =============================================
 
-async function saveElevenLabsSettings() {
-    const formData = new FormData(window.elevenlabsSettingsForm);
-    const data = Object.fromEntries(formData);
+// Global variables for personality response editing
+let isEditingResponse = false;
+let currentEditingResponseKey = null;
+
+// Initialize response categories handling
+function initializePersonalityResponses() {
+    console.log('🎭 Initializing Agent Personality Responses');
     
-    try {
-        const response = await fetch(`/api/company/${companyId}`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                'aiSettings.elevenLabs': {
-                    apiKey: data.elevenlabsApiKey,
-                    voiceId: data.elevenlabsVoice
-                }
-            })
+    // Load personality responses for the company
+    loadPersonalityResponses();
+    
+    // Add event listener for the add button
+    if (window.addResponseCategoryBtn) {
+        window.addResponseCategoryBtn.addEventListener('click', () => {
+            openResponseCategoryModal();
         });
-        
-        if (!response.ok) {
-            throw new Error(`Failed to save: ${response.statusText}`);
-        }
-        
-        console.log('✅ ElevenLabs settings saved');
-        clearUnsavedChanges();
-    } catch (error) {
-        console.error('❌ Error saving ElevenLabs settings:', error);
-        throw error;
+    }
+    
+    // Modal close buttons
+    if (window.closeResponseCategoryModal) {
+        window.closeResponseCategoryModal.addEventListener('click', () => {
+            closeResponseCategoryModal();
+        });
+    }
+    
+    if (window.cancelResponseCategory) {
+        window.cancelResponseCategory.addEventListener('click', () => {
+            closeResponseCategoryModal();
+        });
+    }
+    
+    // Form submission
+    if (window.responseCategoryForm) {
+        window.responseCategoryForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            saveResponseCategory();
+        });
     }
 }
 
-function testElevenLabsVoice() {
-    const testPhrase = window.elevenlabsTestPhraseInput?.value || 'Hello, this is a test from ElevenLabs!';
-    const apiKey = window.elevenlabsApiKeyInput?.value;
-    const voiceId = window.elevenlabsVoiceSelect?.value;
+// Load personality responses from the API
+async function loadPersonalityResponses() {
+    try {
+        if (!companyId) return;
+        
+        const response = await fetch(`/api/company/companies/${companyId}/personality/responses`);
+        
+        if (!response.ok) {
+            console.error('Failed to load personality responses:', response.status);
+            return;
+        }
+        
+        personalityResponses = await response.json();
+        console.log('📥 Loaded personality responses:', personalityResponses.length);
+        
+        renderPersonalityResponses();
+    } catch (error) {
+        console.error('Error loading personality responses:', error);
+    }
+}
+
+// Save all personality responses to the API
+async function savePersonalityResponses() {
+    try {
+        if (!companyId) return;
+        
+        const response = await fetch(`/api/company/companies/${companyId}/personality/responses`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ responses: personalityResponses })
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to save personality responses:', response.status);
+            return false;
+        }
+        
+        console.log('💾 Saved personality responses');
+        return true;
+    } catch (error) {
+        console.error('Error saving personality responses:', error);
+        return false;
+    }
+}
+
+// Render all personality responses in the UI
+function renderPersonalityResponses() {
+    if (!window.responseCategoriesContainer) return;
     
-    if (!apiKey || !voiceId) {
-        showNotification('Please enter API key and select a voice first', 'error');
+    window.responseCategoriesContainer.innerHTML = '';
+    
+    if (!personalityResponses.length) {
+        window.responseCategoriesContainer.innerHTML = `
+            <div class="p-4 border border-gray-200 rounded-md bg-gray-50">
+                <p class="text-gray-500 text-center">No response categories found. Click "Add Response Category" to create one.</p>
+            </div>
+        `;
         return;
     }
     
-    showNotification('Testing voice... (This would make an API call to ElevenLabs)', 'info');
-    console.log('🎵 Testing ElevenLabs voice:', { testPhrase, voiceId });
+    personalityResponses.forEach(category => {
+        const categoryCard = document.createElement('div');
+        categoryCard.className = 'border border-indigo-100 rounded-lg overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow duration-200';
+        
+        // Determine if using custom message
+        const isUsingCustom = category.useCustom && category.customMessage;
+        const activeMessage = isUsingCustom ? category.customMessage : category.defaultMessage;
+        
+        categoryCard.innerHTML = `
+            <div class="flex items-center justify-between p-4 border-b border-indigo-50 bg-gradient-to-r from-indigo-50 to-blue-50">
+                <div class="flex items-center">
+                    <span class="text-indigo-600 mr-2">
+                        <i class="${category.icon || 'fas fa-comment-dots'}"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-900">${category.label}</h3>
+                        <p class="text-xs text-gray-500">Key: ${category.key}</p>
+                    </div>
+                </div>
+                <div class="flex space-x-2">
+                    <button type="button" class="edit-response-btn p-1 text-blue-600 hover:text-blue-800" 
+                            data-key="${category.key}">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button type="button" class="delete-response-btn p-1 text-red-600 hover:text-red-800" 
+                            data-key="${category.key}">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-4">
+                <div class="mb-3">
+                    <p class="text-xs text-gray-500 mb-1">${category.description || 'No description provided.'}</p>
+                </div>
+                <div class="mb-3">
+                    <div class="flex items-center justify-between mb-1">
+                        <p class="text-xs font-medium text-gray-700">Current Response:</p>
+                        <div class="flex items-center">
+                            <span class="text-xs ${isUsingCustom ? 'text-green-600' : 'text-gray-500'} mr-2">
+                                ${isUsingCustom ? 'Using Custom' : 'Using Default'}
+                            </span>
+                            <label class="inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="toggle-response-btn sr-only" data-key="${category.key}" 
+                                       ${isUsingCustom ? 'checked' : ''}>
+                                <div class="relative w-10 h-5 bg-gray-200 rounded-full toggle-bg 
+                                            ${isUsingCustom ? 'bg-indigo-600' : 'bg-gray-200'}">
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="border border-gray-100 rounded p-2 bg-gray-50">
+                        <p class="text-sm text-gray-700">${activeMessage}</p>
+                    </div>
+                </div>
+                <div class="pt-2 border-t border-gray-100">
+                    <div class="flex items-center justify-between">
+                        <button type="button" class="preview-response-btn text-xs text-indigo-600 hover:text-indigo-800" 
+                                data-key="${category.key}">
+                            <i class="fas fa-play mr-1"></i>Preview
+                        </button>
+                        <p class="text-xs text-gray-400">
+                            ${category.defaultMessage !== category.customMessage ? 'Custom message set' : 'No custom message'}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        window.responseCategoriesContainer.appendChild(categoryCard);
+        
+        // Add event listeners to the buttons
+        const editBtn = categoryCard.querySelector('.edit-response-btn');
+        const deleteBtn = categoryCard.querySelector('.delete-response-btn');
+        const toggleBtn = categoryCard.querySelector('.toggle-response-btn');
+        const previewBtn = categoryCard.querySelector('.preview-response-btn');
+        
+        if (editBtn) {
+            editBtn.addEventListener('click', () => {
+                const key = editBtn.getAttribute('data-key');
+                editResponseCategory(key);
+            });
+        }
+        
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => {
+                const key = deleteBtn.getAttribute('data-key');
+                deleteResponseCategory(key);
+            });
+        }
+        
+        if (toggleBtn) {
+            toggleBtn.addEventListener('change', () => {
+                const key = toggleBtn.getAttribute('data-key');
+                toggleCustomResponse(key, toggleBtn.checked);
+            });
+        }
+        
+        if (previewBtn) {
+            previewBtn.addEventListener('click', () => {
+                const key = previewBtn.getAttribute('data-key');
+                previewResponseCategory(key);
+            });
+        }
+    });
+}
+
+// Open the modal to add a new response category
+function openResponseCategoryModal(categoryKey = null) {
+    isEditingResponse = !!categoryKey;
+    currentEditingResponseKey = categoryKey;
+    
+    // Reset form
+    window.responseCategoryForm.reset();
+    
+    if (isEditingResponse) {
+        // Find the category to edit
+        const category = personalityResponses.find(cat => cat.key === categoryKey);
+        if (!category) return;
+        
+        // Fill the form with category data
+        window.responseCategoryKey.value = category.key;
+        window.responseCategoryLabel.value = category.label;
+        window.responseCategoryIcon.value = category.icon || '';
+        window.responseCategoryDescription.value = category.description || '';
+        window.responseCategoryDefault.value = category.defaultMessage || '';
+        
+        // Update modal title
+        window.responseModalTitle.textContent = 'Edit Response Category';
+        window.responseCategorySubmitText.textContent = 'Save Changes';
+        
+        // Disable key field in edit mode
+        window.responseCategoryKey.disabled = true;
+    } else {
+        // Set for adding a new category
+        window.responseModalTitle.textContent = 'Add Response Category';
+        window.responseCategorySubmitText.textContent = 'Add Category';
+        
+        // Enable key field for new categories
+        window.responseCategoryKey.disabled = false;
+    }
+    
+    // Show modal
+    document.getElementById('response-category-modal').classList.remove('hidden');
+}
+
+// Close the response category modal
+function closeResponseCategoryModal() {
+    document.getElementById('response-category-modal').classList.add('hidden');
+    isEditingResponse = false;
+    currentEditingResponseKey = null;
+}
+
+// Save a new or edited response category
+function saveResponseCategory() {
+    const key = window.responseCategoryKey.value.trim();
+    const label = window.responseCategoryLabel.value.trim();
+    const icon = window.responseCategoryIcon.value.trim();
+    const description = window.responseCategoryDescription.value.trim();
+    const defaultMessage = window.responseCategoryDefault.value.trim();
+    
+    if (!key || !label || !defaultMessage) {
+        showNotification('Please fill in all required fields', 'error');
+        return;
+    }
+    
+    if (isEditingResponse) {
+        // Update existing category
+        const index = personalityResponses.findIndex(cat => cat.key === currentEditingResponseKey);
+        if (index !== -1) {
+            // Preserve custom message and useCustom flag when editing
+            const customMessage = personalityResponses[index].customMessage;
+            const useCustom = personalityResponses[index].useCustom;
+            
+            personalityResponses[index] = {
+                key,
+                label,
+                icon,
+                description,
+                defaultMessage,
+                customMessage,
+                useCustom
+            };
+        }
+    } else {
+        // Check if key already exists
+        if (personalityResponses.some(cat => cat.key === key)) {
+            showNotification('A category with this key already exists', 'error');
+            return;
+        }
+        
+        // Add new category
+        personalityResponses.push({
+            key,
+            label,
+            icon,
+            description,
+            defaultMessage,
+            customMessage: null,
+            useCustom: false
+        });
+    }
+    
+    // Save to backend
+    savePersonalityResponses().then(success => {
+        if (success) {
+            closeResponseCategoryModal();
+            renderPersonalityResponses();
+            showNotification(
+                isEditingResponse ? 'Response category updated' : 'Response category added', 
+                'success'
+            );
+        } else {
+            showNotification('Failed to save response category', 'error');
+        }
+    });
+}
+
+// Edit an existing response category
+function editResponseCategory(key) {
+    openResponseCategoryModal(key);
+}
+
+// Delete a response category
+function deleteResponseCategory(key) {
+    if (!confirm(`Are you sure you want to delete the "${key}" response category?`)) {
+        return;
+    }
+    
+    const index = personalityResponses.findIndex(cat => cat.key === key);
+    if (index !== -1) {
+        personalityResponses.splice(index, 1);
+        
+        // Save to backend
+        savePersonalityResponses().then(success => {
+            if (success) {
+                renderPersonalityResponses();
+                showNotification('Response category deleted', 'success');
+            } else {
+                showNotification('Failed to delete response category', 'error');
+            }
+        });
+    }
+}
+
+// Toggle between custom and default response
+function toggleCustomResponse(key, useCustom) {
+    const index = personalityResponses.findIndex(cat => cat.key === key);
+    if (index !== -1) {
+        // If toggling to custom but no custom message exists yet, copy the default
+        if (useCustom && !personalityResponses[index].customMessage) {
+            personalityResponses[index].customMessage = personalityResponses[index].defaultMessage;
+        }
+        
+        personalityResponses[index].useCustom = useCustom;
+        
+        // Save to backend
+        savePersonalityResponses().then(success => {
+            if (success) {
+                renderPersonalityResponses();
+            } else {
+                showNotification('Failed to update response setting', 'error');
+            }
+        });
+    }
+}
+
+// Preview a response category
+function previewResponseCategory(key) {
+    const category = personalityResponses.find(cat => cat.key === key);
+    if (!category) return;
+    
+    const message = category.useCustom && category.customMessage ? 
+                    category.customMessage : 
+                    category.defaultMessage;
+    
+    // Show preview in a notification or modal
+    showNotification(`"${message}"`, 'info', 5000);
 }
 
 // =============================================

@@ -374,7 +374,16 @@ const companySchema = new mongoose.Schema({
         speechPace: { type: String, enum: ['slow', 'normal', 'fast'], default: 'normal' },
         bargeInMode: { type: Boolean, default: true },
         acknowledgeEmotion: { type: Boolean, default: true },
-        useEmojis: { type: Boolean, default: false }
+        useEmojis: { type: Boolean, default: false },
+        // Response categories for customizable agent messages
+        responses: [{
+            key: { type: String, required: true },
+            label: { type: String, required: true },
+            description: { type: String, default: '' },
+            defaultMessage: { type: String, required: true },
+            customMessage: { type: String, default: null },
+            useCustom: { type: Boolean, default: false }
+        }]
     },
     
     // 📚 Knowledge Q&A Source Controls - Module 2

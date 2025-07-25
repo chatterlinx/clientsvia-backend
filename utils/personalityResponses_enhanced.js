@@ -5,6 +5,7 @@ const { redisClient } = require('../clients');
 // In-memory cache so each company's responses are only loaded once per session
 const companyResponsesCache = new Map();
 
+// Default responses as fallback
 const defaultResponses = {
   cantUnderstand: [
     "I'm sorry, I didn't quite catch that. Could you repeat it?",
@@ -151,6 +152,104 @@ const defaultResponses = {
   ]
 };
 
+/**
+ * Retrieves company responses from the database and caches them
+ * @param {string} companyId - MongoDB ObjectId of the company
+ * @returns {Object} - Company personality responses
+ */
+async function fetchCompanyResponses(companyId) {
+  // Check cache first
+  if (companyResponsesCache.has(companyId)) {
+    return companyResponsesCache.get(companyId);
+  }
+  
+  // If not in cache, fetch from database
+  try {
+    const db = await getDB();
+    const company = await db.collection('companies').findOne(
+      { _id: ObjectId(companyId) },
+      { projection: { 'agentPersonalitySettings.responses': 1 } }
+    );
+    
+    // Initialize response object
+    const responses = {};
+    
+    // If company has personalized responses, process them
+    if (company && 
+        company.agentPersonalitySettings && 
+        Array.isArray(company.agentPersonalitySettings.responses)) {
+      
+      // Process each response category
+      company.agentPersonalitySettings.responses.forEach(response => {
+        // Only add the response if it has valid data
+        if (response.key) {
+          // If useCustom is true and customMessage exists, use it
+          // Otherwise fall back to defaultMessage
+          if (response.useCustom && response.customMessage) {
+            responses[response.key] = [response.customMessage];
+          } else {
+            responses[response.key] = [response.defaultMessage];
+          }
+        }
+      });
+    }
+    
+    // Store in cache
+    companyResponsesCache.set(companyId, responses);
+    return responses;
+  } catch (error) {
+    console.error('Error fetching company responses:', error);
+    return {};
+  }
+}
+
+/**
+ * Clears the company responses cache for a specific company or all companies
+ * @param {string} [companyId] - Optional company ID to clear specific cache
+ */
+function clearCompanyResponsesCache(companyId = null) {
+  if (companyId) {
+    companyResponsesCache.delete(companyId);
+  } else {
+    companyResponsesCache.clear();
+  }
+}
+
+/**
+ * Get a personality response for a given category
+ * Enhanced version that handles custom company responses
+ * @param {string} companyId - Company ID
+ * @param {string} category - Response category
+ * @param {string} [personalityType] - Optional personality type for specialized responses
+ * @returns {Promise<string>} - A personality response
+ */
+async function getPersonalityResponse(companyId, category, personalityType = '') {
+  // Get company-specific responses or empty object if none
+  const companyResponses = companyId ? await fetchCompanyResponses(companyId) : {};
+  
+  // Create a personality-specific category key
+  const personalityCategory = personalityType ? `${category}_${personalityType}` : category;
+  
+  // Try to get the response from company-specific responses, falling back to defaults
+  let responses = companyResponses[personalityCategory] || defaultResponses[personalityCategory];
+  
+  // Fallback to generic category if personality-specific doesn't exist
+  if (!responses || !responses.length) {
+    responses = companyResponses[category] || defaultResponses[category] || [];
+  }
+  
+  if (!responses.length) return '';
+  
+  const key = `lastResp:${companyId || 'global'}:${personalityCategory}`;
+  let lastIndex = parseInt(await redisClient.get(key) || '-1', 10);
+  let idx = Math.floor(Math.random() * responses.length);
+  if (responses.length > 1 && idx === lastIndex) {
+    idx = (idx + 1) % responses.length;
+  }
+  await redisClient.setEx(key, 3600, String(idx));
+  return responses[idx];
+}
+
 // Standard personality response categories that auto-populate for new companies
 const standardPersonalityCategories = [
   'lightHumor',
@@ -241,12 +340,22 @@ function clearCompanyResponsesCache(companyId) {
   if (companyId) companyResponsesCache.delete(companyId);
 }
 
-// Enhanced function to get personality-specific responses
-async function getPersonalityResponse(companyId, category, personality = 'friendly') {
+/**
+ * Get a personality response for a given category
+ * Enhanced version that handles custom company responses
+ * @param {string} companyId - Company ID
+ * @param {string} category - Response category
+ * @param {string} [personalityType] - Optional personality type for specialized responses
+ * @returns {Promise<string>} - A personality response
+ */
+async function getPersonalityResponse(companyId, category, personalityType = '') {
+  // Get company-specific responses or empty object if none
   const companyResponses = companyId ? await fetchCompanyResponses(companyId) : {};
   
-  // Try personality-specific category first (e.g., 'greeting_friendly')
-  const personalityCategory = `${category}_${personality}`;
+  // Create a personality-specific category key
+  const personalityCategory = personalityType ? `${category}_${personalityType}` : category;
+  
+  // Try to get the response from company-specific responses, falling back to defaults
   let responses = companyResponses[personalityCategory] || defaultResponses[personalityCategory];
   
   // Fallback to generic category if personality-specific doesn't exist
