@@ -368,6 +368,15 @@ const companySchema = new mongoose.Schema({
     personalityResponses: { type: personalityResponsesSchema, default: () => defaultResponses },
     learningSettings: { type: learningSettingsSchema, default: () => ({}) },
     
+    // 🎭 Agent Personality Configuration - Module 1
+    agentPersonalitySettings: {
+        voiceTone: { type: String, enum: ['friendly', 'professional', 'playful'], default: 'friendly' },
+        speechPace: { type: String, enum: ['slow', 'normal', 'fast'], default: 'normal' },
+        bargeInMode: { type: Boolean, default: true },
+        acknowledgeEmotion: { type: Boolean, default: true },
+        useEmojis: { type: Boolean, default: false }
+    },
+    
     notes: { type: [noteSchema], default: [] },
     
     // Booking Scripts Configuration
