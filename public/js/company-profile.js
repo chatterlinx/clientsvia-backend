@@ -1572,6 +1572,328 @@ function initializeEventListeners() {
 }
 
 // =============================================
+// MODULE 3: AI AGENT TESTING CONSOLE FUNCTIONS
+// =============================================
+
+/**
+ * Test the AI agent with a user message
+ */
+async function runAgentTest() {
+    const testMessage = document.getElementById('testMessage');
+    if (!testMessage || !testMessage.value.trim()) {
+        showError('Please enter a test message');
+        return;
+    }
+
+    const testBtn = document.getElementById('testAgentBtn');
+    const originalBtnText = testBtn.innerHTML;
+    testBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Testing...';
+    testBtn.disabled = true;
+
+    // Clear previous results and show loading state
+    showTestLoading();
+    clearTraceLogs();
+    addTraceLog('🚀 Starting AI agent test...', 'info');
+    addTraceLog(`📝 Input message: "${testMessage.value.trim()}"`, 'info');
+
+    const startTime = Date.now();
+
+    try {
+        const response = await fetch(`/api/company/companies/${getCompanyId()}/agent-test`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: testMessage.value.trim(),
+                includeTrace: true
+            })
+        });
+
+        const endTime = Date.now();
+        const responseTime = endTime - startTime;
+
+        if (!response.ok) {
+            throw new Error(`Test failed: ${response.status} ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        addTraceLog('✅ Received response from server', 'success');
+        
+        // Display results
+        displayTestResults(result, responseTime);
+        addToTestHistory({
+            timestamp: new Date().toISOString(),
+            message: testMessage.value.trim(),
+            response: result.response,
+            responseTime,
+            confidence: result.confidence || 0
+        });
+
+        // Process trace logs if available
+        if (result.traceLogs && result.traceLogs.length > 0) {
+            result.traceLogs.forEach(log => addTraceLog(log.message, log.level));
+        }
+
+    } catch (error) {
+        console.error('Agent test failed:', error);
+        addTraceLog(`❌ Test failed: ${error.message}`, 'error');
+        showTestError(error.message);
+    } finally {
+        testBtn.innerHTML = originalBtnText;
+        testBtn.disabled = false;
+    }
+}
+
+/**
+ * Display test results in the UI
+ */
+function displayTestResults(result, responseTime) {
+    const agentResponse = document.getElementById('agentResponse');
+    const responseMetadata = document.getElementById('responseMetadata');
+
+    if (agentResponse) {
+        agentResponse.innerHTML = `
+            <div class="space-y-2">
+                <div class="font-medium text-blue-800">
+                    <i class="fas fa-robot mr-2"></i>Agent Response:
+                </div>
+                <div class="text-gray-800 bg-white p-3 rounded border">
+                    ${escapeHTML(result.response || 'No response received')}
+                </div>
+            </div>
+        `;
+    }
+
+    if (responseMetadata) {
+        responseMetadata.classList.remove('hidden');
+        
+        const responseTimeEl = document.getElementById('responseTime');
+        const confidenceScoreEl = document.getElementById('confidenceScore');
+        const knowledgeSourceEl = document.getElementById('knowledgeSource');
+
+        if (responseTimeEl) responseTimeEl.textContent = `${responseTime}ms`;
+        if (confidenceScoreEl) {
+            const confidence = result.confidence || 0;
+            confidenceScoreEl.textContent = `${(confidence * 100).toFixed(1)}%`;
+            confidenceScoreEl.className = confidence > 0.7 ? 'font-medium text-green-600' : 
+                                         confidence > 0.4 ? 'font-medium text-yellow-600' : 
+                                         'font-medium text-red-600';
+        }
+        if (knowledgeSourceEl) knowledgeSourceEl.textContent = result.source || 'Unknown';
+    }
+}
+
+/**
+ * Show loading state for test results
+ */
+function showTestLoading() {
+    const agentResponse = document.getElementById('agentResponse');
+    if (agentResponse) {
+        agentResponse.innerHTML = `
+            <div class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-2xl text-blue-600 mb-2"></i>
+                <p class="text-gray-600">Testing AI agent response...</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Show error state for test results
+ */
+function showTestError(errorMessage) {
+    const agentResponse = document.getElementById('agentResponse');
+    if (agentResponse) {
+        agentResponse.innerHTML = `
+            <div class="text-center py-8">
+                <i class="fas fa-exclamation-triangle text-2xl text-red-600 mb-2"></i>
+                <p class="text-red-600 font-medium">Test Failed</p>
+                <p class="text-gray-600 text-sm mt-1">${escapeHTML(errorMessage)}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Add a trace log entry
+ */
+function addTraceLog(message, level = 'info') {
+    const traceLogs = document.getElementById('traceLogs');
+    if (!traceLogs) return;
+
+    const timestamp = new Date().toLocaleTimeString();
+    const levelIcon = {
+        'info': '📄',
+        'success': '✅',
+        'warning': '⚠️',
+        'error': '❌'
+    }[level] || '📄';
+
+    const levelClass = {
+        'info': 'text-green-400',
+        'success': 'text-green-300',
+        'warning': 'text-yellow-400',
+        'error': 'text-red-400'
+    }[level] || 'text-green-400';
+
+    const logEntry = document.createElement('div');
+    logEntry.className = `${levelClass} text-xs leading-relaxed`;
+    logEntry.innerHTML = `<span class="text-gray-500">[${timestamp}]</span> ${levelIcon} ${escapeHTML(message)}`;
+
+    traceLogs.appendChild(logEntry);
+
+    // Auto-scroll if enabled
+    const autoScroll = document.getElementById('autoScroll');
+    if (autoScroll && autoScroll.checked) {
+        traceLogs.scrollTop = traceLogs.scrollHeight;
+    }
+}
+
+/**
+ * Clear trace logs
+ */
+function clearTraceLogs() {
+    const traceLogs = document.getElementById('traceLogs');
+    if (traceLogs) {
+        traceLogs.innerHTML = '<div class="text-gray-400">Trace logs cleared.</div>';
+    }
+}
+
+/**
+ * Clear all test results
+ */
+function clearTestResults() {
+    const agentResponse = document.getElementById('agentResponse');
+    const responseMetadata = document.getElementById('responseMetadata');
+    const testMessage = document.getElementById('testMessage');
+
+    if (agentResponse) {
+        agentResponse.innerHTML = '<p class="text-gray-500 italic text-center py-4">No test run yet. Enter a message and click "Test Agent" to see the response.</p>';
+    }
+
+    if (responseMetadata) {
+        responseMetadata.classList.add('hidden');
+    }
+
+    if (testMessage) {
+        testMessage.value = '';
+    }
+
+    clearTraceLogs();
+}
+
+/**
+ * Add test result to history
+ */
+function addToTestHistory(testData) {
+    const testHistory = document.getElementById('testHistory');
+    if (!testHistory) return;
+
+    // Remove "no history" message if present
+    const noHistoryMsg = testHistory.querySelector('.py-4');
+    if (noHistoryMsg) {
+        noHistoryMsg.remove();
+    }
+
+    const historyEntry = document.createElement('div');
+    historyEntry.className = 'bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm';
+    
+    const timestamp = new Date(testData.timestamp).toLocaleString();
+    const confidence = (testData.confidence * 100).toFixed(1);
+    
+    historyEntry.innerHTML = `
+        <div class="flex justify-between items-start mb-2">
+            <span class="text-xs text-gray-500">${timestamp}</span>
+            <span class="text-xs text-gray-500">${testData.responseTime}ms | ${confidence}%</span>
+        </div>
+        <div class="text-gray-700">
+            <div class="font-medium mb-1">Q: ${escapeHTML(testData.message.substring(0, 60))}${testData.message.length > 60 ? '...' : ''}</div>
+            <div class="text-gray-600">A: ${escapeHTML(testData.response.substring(0, 80))}${testData.response.length > 80 ? '...' : ''}</div>
+        </div>
+    `;
+
+    testHistory.insertBefore(historyEntry, testHistory.firstChild);
+
+    // Keep only last 10 entries
+    const entries = testHistory.querySelectorAll('.bg-gray-50');
+    if (entries.length > 10) {
+        for (let i = 10; i < entries.length; i++) {
+            entries[i].remove();
+        }
+    }
+}
+
+/**
+ * Clear test history
+ */
+function clearTestHistory() {
+    const testHistory = document.getElementById('testHistory');
+    if (testHistory) {
+        testHistory.innerHTML = '<p class="text-gray-500 italic text-center py-4">No test history yet.</p>';
+    }
+}
+
+/**
+ * Download trace logs as text file
+ */
+function downloadTraceLogs() {
+    const traceLogs = document.getElementById('traceLogs');
+    if (!traceLogs) return;
+
+    const logText = Array.from(traceLogs.children)
+        .map(el => el.textContent)
+        .join('\n');
+
+    if (!logText || logText.trim().length === 0) {
+        showError('No trace logs to download');
+        return;
+    }
+
+    const blob = new Blob([logText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `agent-trace-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showNotification('Trace logs downloaded successfully');
+}
+
+/**
+ * Load a test template into the message field
+ */
+function loadTestTemplate(templateType) {
+    const testMessage = document.getElementById('testMessage');
+    if (!testMessage) return;
+
+    const templates = {
+        greeting: "Hello! I'm interested in your services. Can you tell me more about what you offer?",
+        service_inquiry: "What types of plumbing services do you provide? I have a leaky faucet that needs fixing.",
+        booking_request: "I'd like to schedule an appointment for next week. What times do you have available?",
+        pricing_question: "How much do you typically charge for a bathroom renovation? Can you give me a rough estimate?"
+    };
+
+    const template = templates[templateType];
+    if (template) {
+        testMessage.value = template;
+        testMessage.focus();
+        addTraceLog(`📋 Loaded template: ${templateType}`, 'info');
+    }
+}
+
+/**
+ * Get the current company ID from URL parameters
+ */
+function getCompanyId() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('id');
+}
+
+// =============================================
 // ERROR HANDLING
 // =============================================
 
@@ -1614,5 +1936,12 @@ window.addBookingField = addBookingField;
 window.deleteBookingField = deleteBookingField;
 window.moveBookingField = moveBookingField;
 window.saveBookingFlow = saveBookingFlow;
+
+// MODULE 3: Testing Console Functions
+window.runAgentTest = runAgentTest;
+window.clearTestResults = clearTestResults;
+window.clearTestHistory = clearTestHistory;
+window.downloadTraceLogs = downloadTraceLogs;
+window.loadTestTemplate = loadTestTemplate;
 
 console.log('🚀 Company Profile JavaScript loaded successfully');

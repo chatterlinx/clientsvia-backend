@@ -1097,6 +1097,172 @@
                                 </div>
                             </div>
 
+                            <!-- 🧪 AI AGENT TESTING CONSOLE + TRACE LOGS - Module 3: Testing & Debugging -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gradient-to-r from-orange-50 to-amber-50 px-4 py-3 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-flask mr-2 text-orange-600"></i>Testing Console + Trace Logs
+                                        <span class="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded-full">Module 3</span>
+                                    </h3>
+                                    <p class="text-sm text-gray-600 mt-1">Test AI agent responses in real-time with detailed trace logging and debugging</p>
+                                </div>
+                                
+                                <div class="p-6">
+                                    <!-- Testing Input Section -->
+                                    <div class="mb-6">
+                                        <div class="flex items-start space-x-4">
+                                            <div class="flex-1">
+                                                <label for="testMessage" class="form-label">Test Message</label>
+                                                <textarea 
+                                                    id="testMessage" 
+                                                    class="form-textarea" 
+                                                    rows="3" 
+                                                    placeholder="Enter a test message to see how the AI agent responds..."
+                                                ></textarea>
+                                            </div>
+                                            <div class="flex flex-col space-y-2 pt-6">
+                                                <button 
+                                                    type="button" 
+                                                    onclick="runAgentTest()" 
+                                                    id="testAgentBtn"
+                                                    class="bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out"
+                                                >
+                                                    <i class="fas fa-play mr-2"></i>Test Agent
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onclick="clearTestResults()" 
+                                                    class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out"
+                                                >
+                                                    <i class="fas fa-trash mr-2"></i>Clear
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Test Results Section -->
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <!-- Agent Response -->
+                                        <div class="space-y-4">
+                                            <h4 class="text-md font-semibold text-gray-700 border-b pb-2">
+                                                <i class="fas fa-robot mr-2 text-blue-600"></i>Agent Response
+                                            </h4>
+                                            
+                                            <div id="agentResponse" class="bg-blue-50 border border-blue-200 rounded-lg p-4 min-h-32">
+                                                <p class="text-gray-500 italic text-center py-4">No test run yet. Enter a message and click "Test Agent" to see the response.</p>
+                                            </div>
+                                            
+                                            <!-- Response Metadata -->
+                                            <div id="responseMetadata" class="hidden space-y-2">
+                                                <div class="text-xs space-y-1">
+                                                    <div class="flex justify-between">
+                                                        <span class="text-gray-600">Response Time:</span>
+                                                        <span id="responseTime" class="font-medium">-</span>
+                                                    </div>
+                                                    <div class="flex justify-between">
+                                                        <span class="text-gray-600">Confidence Score:</span>
+                                                        <span id="confidenceScore" class="font-medium">-</span>
+                                                    </div>
+                                                    <div class="flex justify-between">
+                                                        <span class="text-gray-600">Knowledge Source:</span>
+                                                        <span id="knowledgeSource" class="font-medium">-</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Trace Logs -->
+                                        <div class="space-y-4">
+                                            <h4 class="text-md font-semibold text-gray-700 border-b pb-2">
+                                                <i class="fas fa-list-ul mr-2 text-green-600"></i>Trace Logs
+                                            </h4>
+                                            
+                                            <div id="traceLogs" class="bg-gray-900 text-green-400 font-mono text-xs rounded-lg p-4 min-h-32 overflow-y-auto max-h-64">
+                                                <div class="text-gray-400">No trace logs yet. Run a test to see detailed execution logs.</div>
+                                            </div>
+                                            
+                                            <!-- Log Controls -->
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center space-x-2">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        id="autoScroll" 
+                                                        checked 
+                                                        class="form-checkbox h-4 w-4"
+                                                    >
+                                                    <label for="autoScroll" class="text-sm text-gray-600">Auto-scroll logs</label>
+                                                </div>
+                                                <button 
+                                                    type="button" 
+                                                    onclick="downloadTraceLogs()" 
+                                                    class="text-xs bg-gray-600 hover:bg-gray-700 text-white py-1 px-2 rounded transition duration-150 ease-in-out"
+                                                >
+                                                    <i class="fas fa-download mr-1"></i>Download
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Test History -->
+                                    <div class="mt-6 pt-4 border-t border-gray-200">
+                                        <div class="flex items-center justify-between mb-4">
+                                            <h4 class="text-md font-semibold text-gray-700">
+                                                <i class="fas fa-history mr-2 text-purple-600"></i>Test History
+                                            </h4>
+                                            <button 
+                                                type="button" 
+                                                onclick="clearTestHistory()" 
+                                                class="text-xs bg-purple-600 hover:bg-purple-700 text-white py-1 px-2 rounded transition duration-150 ease-in-out"
+                                            >
+                                                <i class="fas fa-trash mr-1"></i>Clear History
+                                            </button>
+                                        </div>
+                                        
+                                        <div id="testHistory" class="space-y-2 max-h-48 overflow-y-auto">
+                                            <p class="text-gray-500 italic text-center py-4">No test history yet.</p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Quick Test Templates -->
+                                    <div class="mt-6 pt-4 border-t border-gray-200">
+                                        <h4 class="text-md font-semibold text-gray-700 mb-3">
+                                            <i class="fas fa-rocket mr-2 text-indigo-600"></i>Quick Test Templates
+                                        </h4>
+                                        
+                                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                            <button 
+                                                type="button" 
+                                                onclick="loadTestTemplate('greeting')"
+                                                class="text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-800 py-2 px-3 rounded border border-indigo-300 transition duration-150 ease-in-out"
+                                            >
+                                                <i class="fas fa-hand-wave mr-1"></i>Greeting
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                onclick="loadTestTemplate('service_inquiry')"
+                                                class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 py-2 px-3 rounded border border-blue-300 transition duration-150 ease-in-out"
+                                            >
+                                                <i class="fas fa-question-circle mr-1"></i>Service Inquiry
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                onclick="loadTestTemplate('booking_request')"
+                                                class="text-xs bg-green-100 hover:bg-green-200 text-green-800 py-2 px-3 rounded border border-green-300 transition duration-150 ease-in-out"
+                                            >
+                                                <i class="fas fa-calendar mr-1"></i>Booking Request
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                onclick="loadTestTemplate('pricing_question')"
+                                                class="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 py-2 px-3 rounded border border-yellow-300 transition duration-150 ease-in-out"
+                                            >
+                                                <i class="fas fa-dollar-sign mr-1"></i>Pricing Question
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- 🎭 AGENT PERSONALITY CONFIGURATION - Module 1: Voice & Behavior Control -->
                             <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
                                 <div class="border-b border-gray-200 bg-gradient-to-r from-pink-50 to-rose-50 px-4 py-3 rounded-t-lg">
