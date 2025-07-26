@@ -467,102 +467,271 @@
 
                     <div id="ai-voice-content" class="tab-content-item hidden">
                         <section class="profile-section bg-transparent shadow-none p-0">
-                            <h2 class="profile-section-title"><i class="fas fa-microphone-alt mr-2 text-indigo-600"></i>AI Voice Settings</h2>
-                            <form id="elevenlabs-settings-form" class="mb-6">
-                                <div class="mb-4">
-                                    <label for="elevenlabsApiKey" class="form-label">ElevenLabs API Key</label>
-                                    <input type="text" id="elevenlabsApiKey" name="elevenlabsApiKey" class="form-input wider-textbox" placeholder="Enter your ElevenLabs API Key">
-                                </div>
-                                <div class="mb-4">
-                                    <label for="elevenlabsVoice" class="form-label">Voice Selection</label>
-                                    <select id="elevenlabsVoice" name="elevenlabsVoice" class="form-select wider-textbox">
-                                        <option value="">Select a voice</option>
-                                        <option value="Rachel">Rachel</option>
-                                        <option value="Domi">Domi</option>
-                                        <option value="Bella">Bella</option>
-                                        <option value="Antoni">Antoni</option>
-                                        <option value="Elli">Elli</option>
-                                        <option value="Josh">Josh</option>
-                                        <option value="Arnold">Arnold</option>
-                                        <option value="Adam">Adam</option>
-                                        <option value="Sam">Sam</option>
-                                    </select>
-                                </div>
-                                <div class="mb-4">
-                                    <label for="elevenlabsTestPhrase" class="form-label">Test Phrase</label>
-                                    <input type="text" id="elevenlabsTestPhrase" name="elevenlabsTestPhrase" class="form-input wider-textbox" placeholder="Type a phrase to test voice playback" value="Hello, this is a test from ElevenLabs!">
-                                </div>
-                                <button type="button" id="testElevenLabsVoiceBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">Listen to Test Phrase</button>
-                            <button type="submit" class="ml-4 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">Save ElevenLabs Settings</button>
-                        </form>
+                            <h2 class="profile-section-title">
+                                <i class="fas fa-microphone-alt mr-2 text-indigo-600"></i>AI Voice Settings
+                                <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Latest ElevenLabs API</span>
+                            </h2>
 
-                        <!-- Agent Performance Controls Section -->
-                        <section class="profile-section bg-gray-50 border border-gray-200 rounded-lg p-6 mt-8">
-                            <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                                <i class="fas fa-tachometer-alt mr-2 text-indigo-600"></i>Agent Performance Controls
-                                <span class="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Advanced</span>
-                            </h3>
-                            <p class="text-sm text-gray-600 mb-6">Fine-tune agent response timing and behavior for optimal call experience.</p>
-                            
-                            <form id="agent-performance-form" class="space-y-6">
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <!-- Speech Confidence Threshold -->
-                                    <div>
-                                        <label for="speechConfidenceThreshold" class="form-label">Speech Recognition Sensitivity</label>
-                                        <input type="range" id="speechConfidenceThreshold" name="speechConfidenceThreshold" 
-                                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
-                                               value="0.4" min="0.1" max="0.9" step="0.1">
-                                        <div class="flex justify-between text-xs text-gray-500 mt-1">
-                                            <span>Low (0.1)</span>
-                                            <span id="speechConfidenceValue">0.4</span>
-                                            <span>High (0.9)</span>
+                            <!-- API Configuration Section -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-key mr-2 text-blue-600"></i>API Configuration
+                                        <button type="button" id="test-api-connection" class="ml-auto text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition duration-150">
+                                            <i class="fas fa-plug mr-1"></i>Test Connection
+                                        </button>
+                                    </h3>
+                                </div>
+                                
+                                <form id="elevenlabs-api-form" class="p-6">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <div>
+                                            <label for="elevenlabsApiKey" class="form-label">ElevenLabs API Key</label>
+                                            <input type="password" id="elevenlabsApiKey" name="elevenlabsApiKey" 
+                                                   class="form-input" placeholder="sk-..." autocomplete="new-password">
+                                            <p class="text-xs text-gray-500 mt-1">Get your API key from <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" class="text-blue-600 hover:underline">ElevenLabs Dashboard</a></p>
                                         </div>
-                                        <p class="text-xs text-gray-500 mt-1">Lower = more sensitive, Higher = more accurate</p>
-                                    </div>
-
-                                    <!-- Fuzzy Match Threshold -->
-                                    <div>
-                                        <label for="fuzzyMatchThreshold" class="form-label">Q&A Matching Sensitivity</label>
-                                        <input type="range" id="fuzzyMatchThreshold" name="fuzzyMatchThreshold" 
-                                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
-                                               value="0.3" min="0.1" max="0.8" step="0.1">
-                                        <div class="flex justify-between text-xs text-gray-500 mt-1">
-                                            <span>Strict (0.1)</span>
-                                            <span id="fuzzyThresholdValue">0.3</span>
-                                            <span>Flexible (0.8)</span>
+                                        
+                                        <div id="subscription-info" class="hidden">
+                                            <label class="form-label">Subscription Status</label>
+                                            <div id="subscription-details" class="text-sm bg-gray-50 p-3 rounded border">
+                                                <!-- Subscription info will be loaded here -->
+                                            </div>
                                         </div>
-                                        <p class="text-xs text-gray-500 mt-1">How closely caller words must match Q&A keywords</p>
                                     </div>
+                                </form>
+                            </div>
 
-                                    <!-- Max Repeats -->
-                                    <div>
-                                        <label for="maxRepeats" class="form-label">Max Retry Attempts</label>
-                                        <select id="maxRepeats" name="maxRepeats" class="form-select">
-                                            <option value="1">1 time</option>
-                                            <option value="2">2 times</option>
-                                            <option value="3" selected>3 times</option>
-                                            <option value="4">4 times</option>
-                                            <option value="5">5 times</option>
-                                        </select>
-                                        <p class="text-xs text-gray-500 mt-1">Times to retry before escalating unclear speech</p>
-                                    </div>
+                            <!-- Voice Selection & Preview -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-user-friends mr-2 text-purple-600"></i>Voice Selection & Preview
+                                        <button type="button" id="refresh-voices" class="ml-auto text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded transition duration-150">
+                                            <i class="fas fa-sync mr-1"></i>Refresh Voices
+                                        </button>
+                                    </h3>
+                                </div>
+                                
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <!-- Voice Selection -->
+                                        <div>
+                                            <label for="voice-selector" class="form-label">Select Voice</label>
+                                            <select id="voice-selector" name="voiceId" class="form-select mb-3" onchange="handleVoiceChange()">
+                                                <option value="">Choose a voice...</option>
+                                            </select>
+                                            
+                                            <!-- Voice Filters -->
+                                            <div class="flex space-x-2 mb-4">
+                                                <select id="voice-gender-filter" class="text-xs border border-gray-300 rounded px-2 py-1" onchange="filterVoices()">
+                                                    <option value="">All Genders</option>
+                                                    <option value="male">Male</option>
+                                                    <option value="female">Female</option>
+                                                </select>
+                                                <select id="voice-category-filter" class="text-xs border border-gray-300 rounded px-2 py-1" onchange="filterVoices()">
+                                                    <option value="">All Categories</option>
+                                                    <option value="conversational">Conversational</option>
+                                                    <option value="professional">Professional</option>
+                                                    <option value="narration">Narration</option>
+                                                </select>
+                                            </div>
+                                        </div>
 
-                                    <!-- TTS Provider -->
-                                    <div>
-                                        <label for="ttsProvider" class="form-label">TTS Provider</label>
-                                        <select id="ttsProvider" name="ttsProvider" class="form-select">
-                                            <option value="elevenlabs" selected>ElevenLabs (Premium)</option>
-                                        </select>
-                                        <p class="text-xs text-gray-500 mt-1">Voice synthesis provider for agent responses</p>
+                                        <!-- Voice Preview & Info -->
+                                        <div id="voice-preview-section" class="hidden">
+                                            <label class="form-label">Voice Preview</label>
+                                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                                <div id="voice-info" class="mb-3">
+                                                    <!-- Voice details will be populated here -->
+                                                </div>
+                                                
+                                                <div class="flex items-center space-x-2">
+                                                    <button type="button" id="play-voice-sample" class="text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded transition duration-150">
+                                                        <i class="fas fa-play mr-1"></i>Play Sample
+                                                    </button>
+                                                    <audio id="voice-preview-audio" controls class="hidden"></audio>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
+                            </div>
 
-                                <div class="border-t border-gray-200 pt-6">
-                                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
-                                        <i class="fas fa-save mr-2"></i>Save Performance Settings
+                            <!-- Advanced Voice Settings -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-sliders-h mr-2 text-orange-600"></i>Advanced Voice Settings
+                                        <button type="button" id="reset-voice-settings" class="ml-auto text-sm bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded transition duration-150">
+                                            <i class="fas fa-undo mr-1"></i>Reset to Optimal
+                                        </button>
+                                    </h3>
+                                </div>
+                                
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <!-- Left Column: Voice Quality -->
+                                        <div class="space-y-4">
+                                            <h4 class="text-md font-semibold text-gray-700 border-b pb-2">Voice Quality</h4>
+                                            
+                                            <!-- Stability -->
+                                            <div>
+                                                <label for="voice-stability" class="form-label flex items-center justify-between">
+                                                    Stability
+                                                    <span id="stability-value" class="text-sm text-gray-500">0.5</span>
+                                                </label>
+                                                <input type="range" id="voice-stability" name="stability" 
+                                                       class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                                       value="0.5" min="0.0" max="1.0" step="0.1" oninput="updateSliderValue('stability', this.value)">
+                                                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                    <span>Variable (0.0)</span>
+                                                    <span>Stable (1.0)</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">Higher = more consistent, Lower = more expressive</p>
+                                            </div>
+
+                                            <!-- Similarity Boost -->
+                                            <div>
+                                                <label for="voice-similarity" class="form-label flex items-center justify-between">
+                                                    Similarity Boost
+                                                    <span id="similarity-value" class="text-sm text-gray-500">0.7</span>
+                                                </label>
+                                                <input type="range" id="voice-similarity" name="similarity_boost" 
+                                                       class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                                       value="0.7" min="0.0" max="1.0" step="0.1" oninput="updateSliderValue('similarity', this.value)">
+                                                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                    <span>Creative (0.0)</span>
+                                                    <span>Accurate (1.0)</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">Higher = more similar to original voice</p>
+                                            </div>
+
+                                            <!-- Style -->
+                                            <div>
+                                                <label for="voice-style" class="form-label flex items-center justify-between">
+                                                    Style Exaggeration
+                                                    <span id="style-value" class="text-sm text-gray-500">0.0</span>
+                                                </label>
+                                                <input type="range" id="voice-style" name="style" 
+                                                       class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                                       value="0.0" min="0.0" max="1.0" step="0.1" oninput="updateSliderValue('style', this.value)">
+                                                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                                    <span>Natural (0.0)</span>
+                                                    <span>Exaggerated (1.0)</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">Higher = more expressive, can reduce quality</p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Right Column: Performance & Output -->
+                                        <div class="space-y-4">
+                                            <h4 class="text-md font-semibold text-gray-700 border-b pb-2">Performance & Output</h4>
+                                            
+                                            <!-- Speaker Boost -->
+                                            <div>
+                                                <label class="form-label">Speaker Boost</label>
+                                                <div class="flex items-center space-x-3">
+                                                    <input type="checkbox" id="voice-speaker-boost" name="use_speaker_boost" 
+                                                           class="form-checkbox" checked onchange="updateCheckboxValue('speaker-boost', this.checked)">
+                                                    <span class="text-sm text-gray-700">Enable speaker boost for better quality</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">Recommended for most use cases</p>
+                                            </div>
+
+                                            <!-- Model Selection -->
+                                            <div>
+                                                <label for="voice-model" class="form-label">AI Model</label>
+                                                <select id="voice-model" name="model_id" class="form-select">
+                                                    <option value="eleven_turbo_v2_5">Turbo v2.5 (Fastest)</option>
+                                                    <option value="eleven_multilingual_v2">Multilingual v2 (Quality)</option>
+                                                    <option value="eleven_monolingual_v1">Monolingual v1 (Classic)</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">Turbo recommended for real-time applications</p>
+                                            </div>
+
+                                            <!-- Output Format -->
+                                            <div>
+                                                <label for="voice-format" class="form-label">Output Format</label>
+                                                <select id="voice-format" name="output_format" class="form-select">
+                                                    <option value="mp3_44100_128">MP3 44.1kHz 128kbps (Recommended)</option>
+                                                    <option value="mp3_44100_192">MP3 44.1kHz 192kbps (Higher Quality)</option>
+                                                    <option value="pcm_16000">PCM 16kHz (Phone Quality)</option>
+                                                    <option value="pcm_22050">PCM 22kHz (Good Quality)</option>
+                                                    <option value="pcm_44100">PCM 44.1kHz (CD Quality)</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">MP3 recommended for web delivery</p>
+                                            </div>
+
+                                            <!-- Streaming Optimization -->
+                                            <div>
+                                                <label for="voice-latency" class="form-label">Streaming Latency</label>
+                                                <select id="voice-latency" name="optimize_streaming_latency" class="form-select">
+                                                    <option value="0">No optimization (Best Quality)</option>
+                                                    <option value="1">Light optimization</option>
+                                                    <option value="2">Moderate optimization</option>
+                                                    <option value="3">High optimization</option>
+                                                    <option value="4">Maximum optimization (Real-time)</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">Higher values reduce latency but may affect quality</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Test & Preview -->
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-vial mr-2 text-green-600"></i>Test & Preview
+                                    </h3>
+                                </div>
+                                
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <!-- Test Input -->
+                                        <div>
+                                            <label for="test-text" class="form-label">Test Message</label>
+                                            <textarea id="test-text" name="testText" rows="3" class="form-input" 
+                                                      placeholder="Enter text to test voice synthesis...">Hello! Thanks for calling. How can I help you today?</textarea>
+                                            
+                                            <div class="flex items-center space-x-3 mt-3">
+                                                <button type="button" id="test-voice-btn" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition duration-150">
+                                                    <i class="fas fa-play mr-2"></i>Generate Test Audio
+                                                </button>
+                                                <button type="button" id="stream-test-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-150">
+                                                    <i class="fas fa-broadcast-tower mr-2"></i>Stream Test
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Test Results -->
+                                        <div>
+                                            <label class="form-label">Test Results</label>
+                                            <div id="test-results" class="bg-gray-50 border border-gray-200 rounded-lg p-4 min-h-[120px]">
+                                                <div class="text-center text-gray-500 py-8">
+                                                    <i class="fas fa-headphones text-2xl mb-2"></i>
+                                                    <p>Test your voice settings to hear how they sound</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Save Settings -->
+                            <div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-6">
+                                <div>
+                                    <h3 class="text-md font-semibold text-gray-800">Save Voice Configuration</h3>
+                                    <p class="text-sm text-gray-600">Apply these settings to your AI agent</p>
+                                </div>
+                                <div class="flex space-x-3">
+                                    <button type="button" id="save-voice-settings" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150">
+                                        <i class="fas fa-save mr-2"></i>Save Voice Settings
                                     </button>
                                 </div>
-                            </form>
+                            </div>
                         </section>
                     </div>
 

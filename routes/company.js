@@ -1087,4 +1087,120 @@ router.post('/companies/:companyId/trade-categories', apiLimiter, async (req, re
     }
 });
 
+// Enhanced ElevenLabs Voice Settings endpoint
+router.post('/:companyId/voice-settings', async (req, res) => {
+    try {
+        const companyId = req.params.companyId;
+        const {
+            apiKey,
+            voiceId,
+            stability,
+            similarity_boost,
+            style,
+            use_speaker_boost,
+            model_id,
+            output_format,
+            optimize_streaming_latency
+        } = req.body;
+
+        // Validate required fields
+        if (!voiceId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Voice ID is required'
+            });
+        }
+
+        // Find and update company
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+
+        // Initialize aiSettings if not exists
+        if (!company.aiSettings) {
+            company.aiSettings = {};
+        }
+
+        // Initialize elevenLabs settings if not exists
+        if (!company.aiSettings.elevenLabs) {
+            company.aiSettings.elevenLabs = {};
+        }
+
+        // Update ElevenLabs settings
+        company.aiSettings.elevenLabs = {
+            apiKey: apiKey || company.aiSettings.elevenLabs.apiKey,
+            voiceId: voiceId,
+            stability: parseFloat(stability) || 0.5,
+            similarity_boost: parseFloat(similarity_boost) || 0.7,
+            style: parseFloat(style) || 0.0,
+            use_speaker_boost: use_speaker_boost !== false, // Default to true
+            model_id: model_id || 'eleven_turbo_v2_5',
+            output_format: output_format || 'mp3_44100_128',
+            optimize_streaming_latency: parseInt(optimize_streaming_latency) || 0,
+            updated: new Date()
+        };
+
+        // Save company
+        await company.save();
+
+        console.log(`✅ ElevenLabs voice settings saved for company ${companyId}`);
+
+        res.json({
+            success: true,
+            message: 'Voice settings saved successfully',
+            settings: company.aiSettings.elevenLabs
+        });
+
+    } catch (error) {
+        console.error('❌ Error saving voice settings:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to save voice settings',
+            error: error.message
+        });
+    }
+});
+
+// Get company voice settings
+router.get('/:companyId/voice-settings', async (req, res) => {
+    try {
+        const companyId = req.params.companyId;
+        
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+
+        const voiceSettings = company.aiSettings?.elevenLabs || {
+            stability: 0.5,
+            similarity_boost: 0.7,
+            style: 0.0,
+            use_speaker_boost: true,
+            model_id: 'eleven_turbo_v2_5',
+            output_format: 'mp3_44100_128',
+            optimize_streaming_latency: 0
+        };
+
+        res.json({
+            success: true,
+            settings: voiceSettings
+        });
+
+    } catch (error) {
+        console.error('❌ Error getting voice settings:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get voice settings',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

@@ -1481,606 +1481,624 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// ...existing code...
-    
-    // Allowed LLM Models - Multi-select checkboxes
-    const allowedModels = settings.allowedLLMModels || ['ollama-phi3', 'gemini-pro'];
-    const llmModelCheckboxes = {
-        'ollama-phi3': document.getElementById('llm-ollama-phi3'),
-        'ollama-mistral': document.getElementById('llm-ollama-mistral'),
-        'gemini-pro': document.getElementById('llm-gemini-pro'),
-        'openai-gpt4': document.getElementById('llm-openai-gpt4'),
-        'claude-3': document.getElementById('llm-claude-3')
-    };
-    
-    Object.entries(llmModelCheckboxes).forEach(([model, checkbox]) => {
-        if (checkbox) {
-            checkbox.checked = allowedModels.includes(model);
-        }
-    });
-    
-    updateActiveModelsCount();
-    
-    // Other LLM settings
-    const useLLMSelect = document.getElementById('agent-useLLM');
-    if (useLLMSelect) {
-        useLLMSelect.value = settings.useLLM?.toString() || 'true';
-    }
-    
-    console.log('✅ LLM settings loaded successfully');
-}
-
-/**
- * Update active models count display
- */
-function updateActiveModelsCount() {
-    const checkboxes = document.querySelectorAll('#agent-primaryLLM, #agent-fallbackLLM').length;
-    const selectedCheckboxes = document.querySelectorAll('input[id^="llm-"]:checked').length;
-    
-    const countDisplay = document.getElementById('activeModelsCount');
-    if (countDisplay) {
-        countDisplay.textContent = `${selectedCheckboxes} selected`;
-    }
-}
-
 // =============================================
-// 🧪 AGENT TESTING CONSOLE - CONNECTED TO BACKEND
-// =============================================
+// 🎤 ENHANCED ELEVENLABS VOICE SETTINGS
+// Latest ElevenLabs SDK Integration
+// ===========================================
 
-/**
- * Run agent test using the new backend processor
- */
-async function runAgentTest() {
-    const testMessageInput = document.getElementById('testMessage');
-    const testAgentBtn = document.getElementById('testAgentBtn');
-    const agentResponseDiv = document.getElementById('agentResponse');
-    const traceLogsDiv = document.getElementById('traceLogs');
-    const responseMetadataDiv = document.getElementById('responseMetadata');
-    
-    if (!testMessageInput?.value?.trim()) {
-        showNotification('Please enter a test message', 'error');
-        return;
-    }
-    
-    const testMessage = testMessageInput.value.trim();
-    
-    try {
-        // Update UI to show testing state
-        if (testAgentBtn) {
-            testAgentBtn.disabled = true;
-            testAgentBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Testing...';
-        }
-        
-        // Clear previous results
-        if (agentResponseDiv) {
-            agentResponseDiv.innerHTML = '<p class="text-gray-500 italic">Processing your test message...</p>';
-        }
-        
-        if (traceLogsDiv) {
-            traceLogsDiv.innerHTML = '<div class="text-yellow-400">Starting agent test...</div>';
-        }
-        
-        console.log('🧪 Running agent test:', testMessage);
-        
-        // Call the new backend processor
-        const response = await fetch('/api/agent/test', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                companyId: companyId,
-                message: testMessage,
-                callSid: `test_${Date.now()}`
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Test failed: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        console.log('✅ Agent test result:', result);
-        
-        // Display agent response
-        if (agentResponseDiv) {
-            const responseHTML = `
-                <div class="space-y-3">
-                    <div class="font-medium text-blue-900">${escapeHTML(result.response.text)}</div>
-                    ${result.response.escalate ? '<div class="text-orange-600 text-sm font-medium mt-2"><i class="fas fa-exclamation-triangle mr-1"></i>Escalation Required</div>' : ''}
-                </div>
-            `;
-            agentResponseDiv.innerHTML = responseHTML;
-        }
-        
-        // Display metadata
-        if (responseMetadataDiv) {
-            responseMetadataDiv.classList.remove('hidden');
-            
-            const responseTimeSpan = document.getElementById('responseTime');
-            const confidenceScoreSpan = document.getElementById('confidenceScore');
-            const knowledgeSourceSpan = document.getElementById('knowledgeSource');
-            
-            if (responseTimeSpan) responseTimeSpan.textContent = result.metadata.responseTime;
-            if (confidenceScoreSpan) confidenceScoreSpan.textContent = result.metadata.confidenceScore;
-            if (knowledgeSourceSpan) knowledgeSourceSpan.textContent = result.metadata.knowledgeSource;
-        }
-        
-        // Display trace logs
-        if (traceLogsDiv && result.traceLogs) {
-            const logsHTML = result.traceLogs.map(log => 
-                `<div class="text-green-400">${escapeHTML(log)}</div>`
-            ).join('');
-            traceLogsDiv.innerHTML = logsHTML;
-            
-            // Auto-scroll if enabled
-            const autoScrollCheckbox = document.getElementById('autoScroll');
-            if (autoScrollCheckbox?.checked) {
-                traceLogsDiv.scrollTop = traceLogsDiv.scrollHeight;
-            }
-        }
-        
-        // Add to test history
-        addToTestHistory(testMessage, result.response.text, result.metadata);
-        
-        showNotification('Agent test completed successfully!');
-        
-    } catch (error) {
-        console.error('❌ Agent test error:', error);
-        
-        if (agentResponseDiv) {
-            agentResponseDiv.innerHTML = `<div class="text-red-600">Test failed: ${escapeHTML(error.message)}</div>`;
-        }
-        
-        if (traceLogsDiv) {
-            traceLogsDiv.innerHTML = `<div class="text-red-400">ERROR: ${escapeHTML(error.message)}</div>`;
-        }
-        
-        showNotification('Agent test failed', 'error');
-        
-    } finally {
-        // Reset button state
-        if (testAgentBtn) {
-            testAgentBtn.disabled = false;
-            testAgentBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Test Agent';
-        }
-    }
-}
-
-/**
- * Clear test results
- */
-function clearTestResults() {
-    const agentResponseDiv = document.getElementById('agentResponse');
-    const traceLogsDiv = document.getElementById('traceLogs');
-    const responseMetadataDiv = document.getElementById('responseMetadata');
-    const testMessageInput = document.getElementById('testMessage');
-    
-    if (agentResponseDiv) {
-        agentResponseDiv.innerHTML = '<p class="text-gray-500 italic text-center py-4">No test run yet. Enter a message and click "Test Agent" to see the response.</p>';
-    }
-    
-    if (traceLogsDiv) {
-        traceLogsDiv.innerHTML = '<div class="text-gray-400">No trace logs yet. Run a test to see detailed execution logs.</div>';
-    }
-    
-    if (responseMetadataDiv) {
-        responseMetadataDiv.classList.add('hidden');
-    }
-    
-    if (testMessageInput) {
-        testMessageInput.value = '';
-    }
-}
-
-/**
- * Load test template
- */
-async function loadTestTemplate(templateType) {
-    try {
-        const response = await fetch('/api/agent/test-templates');
-        
-        if (!response.ok) {
-            throw new Error('Failed to load templates');
-        }
-        
-        const templates = await response.json();
-        const template = templates[templateType];
-        
-        if (template) {
-            const testMessageInput = document.getElementById('testMessage');
-            if (testMessageInput) {
-                testMessageInput.value = template.message;
-                testMessageInput.focus();
-            }
-            
-            showNotification(`Loaded template: ${template.description}`);
-        }
-        
-    } catch (error) {
-        console.error('❌ Error loading test template:', error);
-        showNotification('Failed to load template', 'error');
-    }
-}
-
-/**
- * Add test to history
- */
-function addToTestHistory(message, response, metadata) {
-    const testHistoryDiv = document.getElementById('testHistory');
-    if (!testHistoryDiv) return;
-    
-    // Clear "no history" message
-    if (testHistoryDiv.innerHTML.includes('No test history yet')) {
-        testHistoryDiv.innerHTML = '';
-    }
-    
-    const timestamp = new Date().toLocaleTimeString();
-    const historyItem = document.createElement('div');
-    historyItem.className = 'border border-gray-200 rounded-lg p-3 bg-gray-50';
-    historyItem.innerHTML = `
-        <div class="flex justify-between items-start mb-2">
-            <span class="text-xs text-gray-500">${timestamp}</span>
-            <span class="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">${metadata.confidenceScore}</span>
-        </div>
-        <div class="text-sm mb-2"><strong>Q:</strong> ${escapeHTML(message.substring(0, 80))}${message.length > 80 ? '...' : ''}</div>
-        <div class="text-sm text-gray-700"><strong>A:</strong> ${escapeHTML(response.substring(0, 80))}${response.length > 80 ? '...' : ''}</div>
-    `;
-    
-    testHistoryDiv.insertBefore(historyItem, testHistoryDiv.firstChild);
-    
-    // Keep only last 5 tests
-    while (testHistoryDiv.children.length > 5) {
-        testHistoryDiv.removeChild(testHistoryDiv.lastChild);
-    }
-}
-
-/**
- * Clear test history
- */
-function clearTestHistory() {
-    const testHistoryDiv = document.getElementById('testHistory');
-    if (testHistoryDiv) {
-        testHistoryDiv.innerHTML = '<p class="text-gray-500 italic text-center py-4">No test history yet.</p>';
-    }
-}
-
-/**
- * Download trace logs
- */
-function downloadTraceLogs() {
-    const traceLogsDiv = document.getElementById('traceLogs');
-    if (!traceLogsDiv) return;
-    
-    const logs = traceLogsDiv.textContent;
-    if (!logs || logs.includes('No trace logs yet')) {
-        showNotification('No trace logs to download', 'error');
-        return;
-    }
-    
-    const blob = new Blob([logs], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `agent-trace-logs-${new Date().toISOString().split('T')[0]}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    showNotification('Trace logs downloaded');
-}
-
-// ...existing code...
-    const selectedModels = [];
-    const checkedLLMBoxes = document.querySelectorAll('input[id^="llm-"]:checked');
-    
-    checkedLLMBoxes.forEach(checkbox => {
-        const model = checkbox.id.replace('llm-', '');
-        selectedModels.push(model);
-    });
-    
-    return selectedModels;
-}
-
-/**
- * Validate LLM configuration
- */
-function validateLLMConfiguration() {
-    const selectedModels = getSelectedLLMModels();
-    const primaryLLM = document.getElementById('agent-primaryLLM')?.value;
-    const fallbackLLM = document.getElementById('agent-fallbackLLM')?.value;
-    
-    // Must have at least one model selected
-    if (selectedModels.length === 0) {
-        showNotification('Please select at least one LLM model', 'error');
-        return false;
-    }
-    
-    // Primary LLM must be in allowed models
-    if (primaryLLM && !selectedModels.includes(primaryLLM)) {
-        showNotification('Primary LLM must be in allowed models list', 'error');
-        return false;
-    }
-    
-    // Fallback LLM must be in allowed models
-    if (fallbackLLM && !selectedModels.includes(fallbackLLM)) {
-        showNotification('Fallback LLM must be in allowed models list', 'error');
-        return false;
-    }
-    
-    return true;
-}
-
-// =============================================
-// 📚 SELF-LEARNING KNOWLEDGE BASE APPROVAL SYSTEM
-// =============================================
-
-let pendingQnAs = [];
-let learningStats = {
-    totalApproved: 0,
-    totalRejected: 0,
-    averageConfidence: 0,
-    learningRate: 0
+let availableVoices = [];
+let availableModels = [];
+let currentVoiceSettings = {
+    stability: 0.5,
+    similarity_boost: 0.7,
+    style: 0.0,
+    use_speaker_boost: true,
+    model_id: 'eleven_turbo_v2_5',
+    output_format: 'mp3_44100_128',
+    optimize_streaming_latency: 0
 };
 
 /**
- * Load learning settings from company data
+ * Initialize Enhanced ElevenLabs Voice Settings
  */
-function loadLearningSettings(companyData) {
-    console.log('📚 Loading learning settings:', companyData?.agentIntelligenceSettings);
+function initializeEnhancedVoiceSettings() {
+    console.log('🎤 Initializing Enhanced ElevenLabs Voice Settings...');
     
-    const settings = companyData?.agentIntelligenceSettings || {};
+    // Bind event listeners
+    bindVoiceSettingsEvents();
     
-    // Auto Learning Toggle
-    const autoLearningEnabled = document.getElementById('autoLearningEnabled');
-    if (autoLearningEnabled) {
-        autoLearningEnabled.value = settings.autoLearningEnabled?.toString() || 'true';
-    }
-    
-    // Approval Mode
-    const learningApprovalMode = document.getElementById('learningApprovalMode');
-    if (learningApprovalMode) {
-        learningApprovalMode.value = settings.learningApprovalMode || 'manual';
-    }
-    
-    // Confidence Threshold
-    const learningConfidenceThreshold = document.getElementById('learningConfidenceThreshold');
-    const learningThresholdValue = document.getElementById('learningThresholdValue');
-    if (learningConfidenceThreshold && learningThresholdValue) {
-        const threshold = settings.learningConfidenceThreshold || 0.85;
-        learningConfidenceThreshold.value = threshold;
-        learningThresholdValue.textContent = threshold.toFixed(2);
-    }
-    
-    // Max Pending Q&As
-    const maxPendingQnAs = document.getElementById('maxPendingQnAs');
-    if (maxPendingQnAs) {
-        maxPendingQnAs.value = settings.maxPendingQnAs?.toString() || '100';
-    }
-    
-    // Load pending Q&As and stats
-    loadPendingQnAs();
-    loadLearningStats();
-    
-    console.log('✅ Learning settings loaded successfully');
+    // Load initial data
+    loadElevenLabsData();
 }
 
 /**
- * Load pending Q&As from server
+ * Bind all voice settings event listeners
  */
-async function loadPendingQnAs() {
+function bindVoiceSettingsEvents() {
+    // API Connection Test
+    document.getElementById('test-api-connection')?.addEventListener('click', testApiConnection);
+    
+    // Voice Management
+    document.getElementById('refresh-voices')?.addEventListener('click', loadElevenLabsVoices);
+    document.getElementById('voice-selector')?.addEventListener('change', handleVoiceChange);
+    
+    // Voice Settings Controls
+    document.getElementById('reset-voice-settings')?.addEventListener('click', resetVoiceSettings);
+    
+    // Test & Preview
+    document.getElementById('test-voice-btn')?.addEventListener('click', testVoiceSynthesis);
+    document.getElementById('stream-test-btn')?.addEventListener('click', testVoiceStreaming);
+    document.getElementById('play-voice-sample')?.addEventListener('click', playVoiceSample);
+    
+    // Save Settings
+    document.getElementById('save-voice-settings')?.addEventListener('click', saveVoiceSettings);
+    
+    // Real-time slider updates
+    ['voice-stability', 'voice-similarity', 'voice-style'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', updateVoiceSettingsPreview);
+    });
+    
+    // Model and format changes
+    ['voice-model', 'voice-format', 'voice-latency'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', updateVoiceSettingsPreview);
+    });
+    
+    document.getElementById('voice-speaker-boost')?.addEventListener('change', updateVoiceSettingsPreview);
+}
+
+/**
+ * Load all ElevenLabs data (voices, models, user info)
+ */
+async function loadElevenLabsData() {
     try {
-        console.log('📥 Loading pending Q&As...');
+        showNotification('Loading ElevenLabs data...', 'info');
         
-        const response = await fetch(`/api/company/companies/${getCompanyId()}/pending-qnas`);
+        await Promise.all([
+            loadElevenLabsVoices(),
+            loadElevenLabsModels(),
+            loadUserSubscriptionInfo()
+        ]);
         
-        if (!response.ok) {
-            throw new Error(`Failed to load pending Q&As: ${response.statusText}`);
-        }
-        
-        pendingQnAs = await response.json();
-        renderPendingQnAs();
-        updatePendingCount();
-        
-        console.log(`✅ Loaded ${pendingQnAs.length} pending Q&As`);
-        
+        console.log('✅ ElevenLabs data loaded successfully');
     } catch (error) {
-        console.error('❌ Error loading pending Q&As:', error);
-        showNotification('Failed to load pending Q&As', 'error');
+        console.error('❌ Failed to load ElevenLabs data:', error);
+        showNotification('Failed to load ElevenLabs data', 'error');
     }
 }
 
 /**
- * Render pending Q&As in the UI
+ * Test API connection
  */
-function renderPendingQnAs() {
-    const container = document.getElementById('pendingQnAList');
-    if (!container) return;
+async function testApiConnection() {
+    const apiKey = document.getElementById('elevenlabsApiKey')?.value?.trim();
     
-    if (pendingQnAs.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-8 text-gray-500">
-                <i class="fas fa-inbox text-3xl mb-2"></i>
-                <p>No pending Q&A pairs</p>
-                <p class="text-xs">New questions will appear here for approval</p>
-            </div>
-        `;
+    if (!apiKey) {
+        showNotification('Please enter your ElevenLabs API key first', 'warning');
         return;
     }
     
-    container.innerHTML = pendingQnAs.map(qna => createPendingQnACard(qna)).join('');
+    const button = document.getElementById('test-api-connection');
+    const originalText = button.innerHTML;
+    
+    try {
+        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Testing...';
+        button.disabled = true;
+        
+        const response = await fetch('/api/elevenlabs/user', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification('✅ API connection successful!', 'success');
+            displaySubscriptionInfo(data.user);
+        } else {
+            throw new Error('API connection failed');
+        }
+    } catch (error) {
+        console.error('❌ API connection test failed:', error);
+        showNotification('❌ API connection failed. Please check your API key.', 'error');
+    } finally {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }
 }
 
 /**
- * Create HTML for a pending Q&A card
+ * Load available voices from ElevenLabs
  */
-function createPendingQnACard(qna) {
-    const confidence = (qna.confidence * 100).toFixed(1);
-    const confidenceClass = qna.confidence > 0.8 ? 'text-green-600' : 
-                           qna.confidence > 0.6 ? 'text-yellow-600' : 'text-red-600';
+async function loadElevenLabsVoices() {
+    try {
+        const response = await fetch('/api/elevenlabs/voices');
+        const data = await response.json();
+        
+        if (data.success) {
+            availableVoices = data.voices;
+            populateVoiceSelector(availableVoices);
+            console.log(`✅ Loaded ${data.count} voices`);
+            showNotification(`Loaded ${data.count} voices`, 'success');
+        } else {
+            throw new Error(data.message);
+        }
+    } catch (error) {
+        console.error('❌ Failed to load voices:', error);
+        showNotification('Failed to load voices. Please check your API key.', 'error');
+    }
+}
+
+/**
+ * Load available models from ElevenLabs
+ */
+async function loadElevenLabsModels() {
+    try {
+        const response = await fetch('/api/elevenlabs/models');
+        const data = await response.json();
+        
+        if (data.success) {
+            availableModels = data.models;
+            populateModelSelector(availableModels);
+            console.log(`✅ Loaded ${data.count} models`);
+        }
+    } catch (error) {
+        console.error('❌ Failed to load models:', error);
+        // Don't show error notification for models as it's not critical
+    }
+}
+
+/**
+ * Load user subscription information
+ */
+async function loadUserSubscriptionInfo() {
+    try {
+        const response = await fetch('/api/elevenlabs/user');
+        const data = await response.json();
+        
+        if (data.success) {
+            displaySubscriptionInfo(data.user);
+        }
+    } catch (error) {
+        console.error('❌ Failed to load user info:', error);
+        // Don't show error for subscription info
+    }
+}
+
+/**
+ * Populate voice selector dropdown
+ */
+function populateVoiceSelector(voices) {
+    const selector = document.getElementById('voice-selector');
+    if (!selector) return;
     
-    const timeAgo = formatTimeAgo(new Date(qna.createdAt));
+    // Clear existing options except the first
+    selector.innerHTML = '<option value="">Choose a voice...</option>';
     
-    return `
-        <div class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm" data-qna-id="${qna._id}">
-            <div class="flex items-start justify-between mb-3">
-                <div class="flex-1">
-                    <div class="flex items-center space-x-2 mb-2">
-                        <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                            ${qna.frequency || 1}x asked
-                        </span>
-                        <span class="text-xs ${confidenceClass} font-medium">
-                            ${confidence}% confidence
-                        </span>
-                        <span class="text-xs text-gray-500">
-                            ${timeAgo}
-                        </span>
-                    </div>
-                    <div class="space-y-2">
-                        <div>
-                            <label class="text-xs font-medium text-gray-600">Question:</label>
-                            <p class="text-sm text-gray-800">${escapeHTML(qna.question)}</p>
-                        </div>
-                        <div>
-                            <label class="text-xs font-medium text-gray-600">Proposed Answer:</label>
-                            <p class="text-sm text-gray-700 bg-gray-50 p-2 rounded">
-                                ${escapeHTML(qna.proposedAnswer || 'No proposed answer')}
-                            </p>
-                        </div>
-                    </div>
-                </div>
+    voices.forEach(voice => {
+        const option = document.createElement('option');
+        option.value = voice.voice_id;
+        option.textContent = `${voice.name} (${voice.gender || 'Unknown'}, ${voice.category || 'General'})`;
+        option.dataset.voice = JSON.stringify(voice);
+        selector.appendChild(option);
+    });
+}
+
+/**
+ * Populate model selector dropdown
+ */
+function populateModelSelector(models) {
+    const selector = document.getElementById('voice-model');
+    if (!selector || models.length === 0) return;
+    
+    // Clear existing options
+    selector.innerHTML = '';
+    
+    models.forEach(model => {
+        if (model.can_do_text_to_speech) {
+            const option = document.createElement('option');
+            option.value = model.model_id;
+            option.textContent = `${model.name} - ${model.description}`;
+            selector.appendChild(option);
+        }
+    });
+    
+    // Set default to turbo if available
+    if (selector.querySelector('option[value="eleven_turbo_v2_5"]')) {
+        selector.value = 'eleven_turbo_v2_5';
+    }
+}
+
+/**
+ * Display subscription information
+ */
+function displaySubscriptionInfo(userInfo) {
+    const container = document.getElementById('subscription-details');
+    const section = document.getElementById('subscription-info');
+    
+    if (!container || !userInfo) return;
+    
+    const charUsed = userInfo.character_count || 0;
+    const charLimit = userInfo.character_limit || 0;
+    const charPercentage = charLimit > 0 ? Math.round((charUsed / charLimit) * 100) : 0;
+    
+    container.innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+            <span class="font-medium">Tier:</span>
+            <span class="px-2 py-1 text-xs rounded ${userInfo.tier === 'free' ? 'bg-gray-100' : 'bg-blue-100'} text-gray-800">
+                ${userInfo.tier || 'Unknown'}
+            </span>
+        </div>
+        <div class="flex items-center justify-between mb-2">
+            <span class="font-medium">Characters:</span>
+            <span class="text-sm">${charUsed.toLocaleString()} / ${charLimit.toLocaleString()} (${charPercentage}%)</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2">
+            <div class="bg-blue-600 h-2 rounded-full" style="width: ${Math.min(charPercentage, 100)}%"></div>
+        </div>
+    `;
+    
+    section.classList.remove('hidden');
+}
+
+/**
+ * Handle voice selection change
+ */
+async function handleVoiceChange() {
+    const selector = document.getElementById('voice-selector');
+    const selectedOption = selector.selectedOptions[0];
+    
+    if (!selectedOption || !selectedOption.dataset.voice) {
+        document.getElementById('voice-preview-section').classList.add('hidden');
+        return;
+    }
+    
+    const voice = JSON.parse(selectedOption.dataset.voice);
+    displayVoiceInfo(voice);
+    
+    // Load optimal settings for this voice
+    if (voice.settings) {
+        loadOptimalVoiceSettings(voice.settings);
+    }
+    
+    document.getElementById('voice-preview-section').classList.remove('hidden');
+}
+
+/**
+ * Display voice information
+ */
+function displayVoiceInfo(voice) {
+    const container = document.getElementById('voice-info');
+    if (!container) return;
+    
+    container.innerHTML = `
+        <div class="grid grid-cols-2 gap-2 text-sm">
+            <div><strong>Name:</strong> ${voice.name}</div>
+            <div><strong>Gender:</strong> ${voice.gender || 'Unknown'}</div>
+            <div><strong>Category:</strong> ${voice.category || 'General'}</div>
+            <div><strong>Accent:</strong> ${voice.accent || 'Unknown'}</div>
+        </div>
+        ${voice.description ? `<p class="text-xs text-gray-600 mt-2">${voice.description}</p>` : ''}
+    `;
+}
+
+/**
+ * Load optimal voice settings
+ */
+function loadOptimalVoiceSettings(settings) {
+    if (settings.stability !== undefined) {
+        document.getElementById('voice-stability').value = settings.stability;
+        updateSliderValue('stability', settings.stability);
+    }
+    if (settings.similarity_boost !== undefined) {
+        document.getElementById('voice-similarity').value = settings.similarity_boost;
+        updateSliderValue('similarity', settings.similarity_boost);
+    }
+    if (settings.style !== undefined) {
+        document.getElementById('voice-style').value = settings.style;
+        updateSliderValue('style', settings.style);
+    }
+    if (settings.use_speaker_boost !== undefined) {
+        document.getElementById('voice-speaker-boost').checked = settings.use_speaker_boost;
+    }
+}
+
+/**
+ * Update slider value display
+ */
+function updateSliderValue(type, value) {
+    const displayElement = document.getElementById(`${type}-value`);
+    if (displayElement) {
+        displayElement.textContent = parseFloat(value).toFixed(1);
+    }
+    
+    // Update current settings
+    if (type === 'stability') currentVoiceSettings.stability = parseFloat(value);
+    if (type === 'similarity') currentVoiceSettings.similarity_boost = parseFloat(value);
+    if (type === 'style') currentVoiceSettings.style = parseFloat(value);
+}
+
+/**
+ * Update checkbox value
+ */
+function updateCheckboxValue(type, checked) {
+    if (type === 'speaker-boost') {
+        currentVoiceSettings.use_speaker_boost = checked;
+    }
+}
+
+/**
+ * Reset voice settings to optimal defaults
+ */
+function resetVoiceSettings() {
+    document.getElementById('voice-stability').value = 0.5;
+    document.getElementById('voice-similarity').value = 0.7;
+    document.getElementById('voice-style').value = 0.0;
+    document.getElementById('voice-speaker-boost').checked = true;
+    document.getElementById('voice-model').value = 'eleven_turbo_v2_5';
+    document.getElementById('voice-format').value = 'mp3_44100_128';
+    document.getElementById('voice-latency').value = '0';
+    
+    updateSliderValue('stability', 0.5);
+    updateSliderValue('similarity', 0.7);
+    updateSliderValue('style', 0.0);
+    updateCheckboxValue('speaker-boost', true);
+    
+    showNotification('Voice settings reset to optimal defaults', 'info');
+}
+
+/**
+ * Update voice settings preview
+ */
+function updateVoiceSettingsPreview() {
+    currentVoiceSettings = {
+        stability: parseFloat(document.getElementById('voice-stability').value),
+        similarity_boost: parseFloat(document.getElementById('voice-similarity').value),
+        style: parseFloat(document.getElementById('voice-style').value),
+        use_speaker_boost: document.getElementById('voice-speaker-boost').checked,
+        model_id: document.getElementById('voice-model').value,
+        output_format: document.getElementById('voice-format').value,
+        optimize_streaming_latency: parseInt(document.getElementById('voice-latency').value)
+    };
+}
+
+/**
+ * Test voice synthesis
+ */
+async function testVoiceSynthesis() {
+    const voiceId = document.getElementById('voice-selector').value;
+    const testText = document.getElementById('test-text').value.trim();
+    
+    if (!voiceId || !testText) {
+        showNotification('Please select a voice and enter test text', 'warning');
+        return;
+    }
+    
+    const button = document.getElementById('test-voice-btn');
+    const originalText = button.innerHTML;
+    
+    try {
+        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+        button.disabled = true;
+        
+        updateVoiceSettingsPreview();
+        
+        const response = await fetch('/api/elevenlabs/synthesize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: testText,
+                voiceId: voiceId,
+                ...currentVoiceSettings
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            displayTestResults(data, 'synthesis');
+            showNotification('✅ Test audio generated successfully!', 'success');
+        } else {
+            throw new Error(data.message);
+        }
+    } catch (error) {
+        console.error('❌ Voice synthesis test failed:', error);
+        showNotification('❌ Voice synthesis test failed', 'error');
+    } finally {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }
+}
+
+/**
+ * Test voice streaming
+ */
+async function testVoiceStreaming() {
+    const voiceId = document.getElementById('voice-selector').value;
+    const testText = document.getElementById('test-text').value.trim();
+    
+    if (!voiceId || !testText) {
+        showNotification('Please select a voice and enter test text', 'warning');
+        return;
+    }
+    
+    const button = document.getElementById('stream-test-btn');
+    const originalText = button.innerHTML;
+    
+    try {
+        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Streaming...';
+        button.disabled = true;
+        
+        updateVoiceSettingsPreview();
+        
+        const response = await fetch('/api/elevenlabs/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: testText,
+                voiceId: voiceId,
+                ...currentVoiceSettings,
+                optimize_streaming_latency: 4 // Max optimization for streaming test
+            })
+        });
+        
+        if (response.ok) {
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            displayStreamingResults(audioUrl);
+            showNotification('✅ Streaming test completed!', 'success');
+        } else {
+            throw new Error('Streaming test failed');
+        }
+    } catch (error) {
+        console.error('❌ Voice streaming test failed:', error);
+        showNotification('❌ Voice streaming test failed', 'error');
+    } finally {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }
+}
+
+/**
+ * Play voice sample from preview URL
+ */
+async function playVoiceSample() {
+    const selector = document.getElementById('voice-selector');
+    const selectedOption = selector.selectedOptions[0];
+    
+    if (!selectedOption || !selectedOption.dataset.voice) {
+        showNotification('Please select a voice first', 'warning');
+        return;
+    }
+    
+    const voice = JSON.parse(selectedOption.dataset.voice);
+    
+    if (voice.preview_url) {
+        const audio = document.getElementById('voice-preview-audio');
+        audio.src = voice.preview_url;
+        audio.classList.remove('hidden');
+        audio.play();
+        showNotification('Playing voice sample...', 'info');
+    } else {
+        showNotification('No preview available for this voice', 'warning');
+    }
+}
+
+/**
+ * Display test results
+ */
+function displayTestResults(data, type) {
+    const container = document.getElementById('test-results');
+    if (!container) return;
+    
+    const audioBlob = new Blob([Uint8Array.from(atob(data.audioContent), c => c.charCodeAt(0))], { type: 'audio/mpeg' });
+    const audioUrl = URL.createObjectURL(audioBlob);
+    
+    container.innerHTML = `
+        <div class="text-center">
+            <div class="mb-3">
+                <i class="fas fa-check-circle text-green-600 text-2xl mb-2"></i>
+                <p class="font-medium text-gray-800">Test ${type} completed!</p>
+                <p class="text-sm text-gray-600">Audio size: ${(data.size / 1024).toFixed(1)} KB</p>
+                <p class="text-sm text-gray-600">Format: ${data.format}</p>
             </div>
-            
-            <div class="flex items-center justify-between pt-3 border-t border-gray-200">
-                <div class="flex items-center space-x-2">
-                    <button 
-                        type="button" 
-                        onclick="approveQnA('${qna._id}')"
-                        class="text-xs bg-green-600 hover:bg-green-700 text-white py-1 px-3 rounded transition duration-150 ease-in-out"
-                    >
-                        <i class="fas fa-check mr-1"></i>Approve
-                    </button>
-                    <button 
-                        type="button" 
-                        onclick="rejectQnA('${qna._id}')"
-                        class="text-xs bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded transition duration-150 ease-in-out"
-                    >
-                        <i class="fas fa-times mr-1"></i>Reject
-                    </button>
-                    <button 
-                        type="button" 
-                        onclick="editQnA('${qna._id}')"
-                        class="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded transition duration-150 ease-in-out"
-                    >
-                        <i class="fas fa-edit mr-1"></i>Edit
-                    </button>
-                </div>
-                
-                <div class="flex items-center space-x-2 text-xs text-gray-500">
-                    <span class="capitalize">${qna.source || 'unknown'}</span>
-                    ${qna.tradeCategory ? `<span class="bg-gray-100 px-2 py-1 rounded">${qna.tradeCategory}</span>` : ''}
-                </div>
-            </div>
+            <audio controls class="w-full max-w-sm mx-auto">
+                <source src="${audioUrl}" type="audio/mpeg">
+                Your browser does not support the audio element.
+            </audio>
         </div>
     `;
 }
 
 /**
- * Update pending count display
+ * Display streaming results
  */
-function updatePendingCount() {
-    const countDisplay = document.getElementById('pendingCount');
-    if (countDisplay) {
-        const count = pendingQnAs.length;
-        countDisplay.textContent = `${count} pending`;
-        countDisplay.className = count === 0 ? 
-            'ml-2 px-2 py-1 bg-gray-100 text-gray-800 text-xs font-medium rounded-full' :
-            'ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs font-medium rounded-full';
-    }
+function displayStreamingResults(audioUrl) {
+    const container = document.getElementById('test-results');
+    if (!container) return;
+    
+    container.innerHTML = `
+        <div class="text-center">
+            <div class="mb-3">
+                <i class="fas fa-broadcast-tower text-blue-600 text-2xl mb-2"></i>
+                <p class="font-medium text-gray-800">Streaming test completed!</p>
+                <p class="text-sm text-gray-600">Real-time streaming optimized</p>
+            </div>
+            <audio controls class="w-full max-w-sm mx-auto">
+                <source src="${audioUrl}" type="audio/mpeg">
+                Your browser does not support the audio element.
+            </audio>
+        </div>
+    `;
 }
 
 /**
- * Approve a pending Q&A
+ * Filter voices based on criteria
  */
-async function approveQnA(qnaId) {
+function filterVoices() {
+    const genderFilter = document.getElementById('voice-gender-filter').value;
+    const categoryFilter = document.getElementById('voice-category-filter').value;
+    
+    let filteredVoices = availableVoices;
+    
+    if (genderFilter) {
+        filteredVoices = filteredVoices.filter(voice => 
+            voice.gender && voice.gender.toLowerCase() === genderFilter.toLowerCase()
+        );
+    }
+    
+    if (categoryFilter) {
+        filteredVoices = filteredVoices.filter(voice => 
+            voice.category && voice.category.toLowerCase().includes(categoryFilter.toLowerCase())
+        );
+    }
+    
+    populateVoiceSelector(filteredVoices);
+}
+
+/**
+ * Save voice settings
+ */
+async function saveVoiceSettings() {
     try {
-        console.log('✅ Approving Q&A:', qnaId);
+        const voiceId = document.getElementById('voice-selector').value;
+        const apiKey = document.getElementById('elevenlabsApiKey').value.trim();
         
-        const response = await fetch(`/api/company/companies/${getCompanyId()}/pending-qnas/${qnaId}/approve`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Failed to approve Q&A: ${response.statusText}`);
+        if (!voiceId) {
+            showNotification('Please select a voice first', 'warning');
+            return;
         }
         
-        // Remove from pending list
-        pendingQnAs = pendingQnAs.filter(qna => qna._id !== qnaId);
-        renderPendingQnAs();
-        updatePendingCount();
+        updateVoiceSettingsPreview();
         
-        showNotification('Q&A approved successfully!');
-        console.log('✅ Q&A approved successfully');
+        const voiceSettings = {
+            apiKey: apiKey,
+            voiceId: voiceId,
+            ...currentVoiceSettings
+        };
         
+        // Save to company settings (you'll need to implement the endpoint)
+        const response = await fetch(`/api/companies/${companyId}/voice-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(voiceSettings)
+        });
+        
+        if (response.ok) {
+            showNotification('✅ Voice settings saved successfully!', 'success');
+        } else {
+            throw new Error('Failed to save voice settings');
+        }
     } catch (error) {
-        console.error('❌ Error approving Q&A:', error);
-        showNotification('Failed to approve Q&A', 'error');
+        console.error('❌ Failed to save voice settings:', error);
+        showNotification('❌ Failed to save voice settings', 'error');
     }
 }
 
-// Initialize everything when the page loads
-document.addEventListener('DOMContentLoaded', async function() {
-    console.log('🚀 Company Profile page loaded');
-    
-    try {
-        // Load company data first
-        await fetchCompanyData();
-        
-        // Load agent intelligence settings
-        await loadAgentIntelligenceSettings();
-        
-        // Load booking flow configuration
-        await loadBookingFlow();
-        
-        // Load trade categories selector
-        await loadTradeCategorySelector();
-        
-        // Load other components
-        await loadPendingQnAs();
-        
-        console.log('✅ All data loaded successfully');
-        
-    } catch (error) {
-        console.error('❌ Error initializing page:', error);
-        showNotification('Failed to load page data', 'error');
-    }
-});
-
-// Add keyboard support for booking flow inputs
-document.addEventListener('DOMContentLoaded', function() {
-    // Add enter key support for booking flow inputs
-    const promptInput = document.getElementById('new-prompt');
-    const nameInput = document.getElementById('new-name');
-    
-    if (promptInput) {
-        promptInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                nameInput?.focus();
-            }
-        });
-    }
-    
-    if (nameInput) {
-        nameInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                addBookingField();
-            }
-        });
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('ai-voice-content')) {
+        initializeEnhancedVoiceSettings();
     }
 });
