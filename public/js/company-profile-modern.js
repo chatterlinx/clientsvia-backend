@@ -4282,8 +4282,20 @@ class CompanyProfileManager {
      */
     collectVoiceData(data) {
         const apiKeyInput = document.getElementById('elevenlabsApiKey');
-        const voiceSelect = document.getElementById('elevenlabsVoice') || document.getElementById('voice-selector');
+        const newVoiceSelector = document.getElementById('voice-selector');
+        const legacyVoiceSelector = document.getElementById('elevenlabsVoice');
         const useOwnApiToggle = document.getElementById('useOwnApiKey');
+        
+        // Debug logging
+        console.log('🔍 Voice selector debug:', {
+            newVoiceSelector: !!newVoiceSelector,
+            newVoiceSelectorValue: newVoiceSelector?.value,
+            legacyVoiceSelector: !!legacyVoiceSelector,
+            legacyVoiceSelectorValue: legacyVoiceSelector?.value
+        });
+        
+        // Prioritize new voice selector over legacy one
+        const voiceSelect = newVoiceSelector || legacyVoiceSelector;
         
         // Initialize aiSettings structure
         data.aiSettings = data.aiSettings || {};
@@ -4302,17 +4314,45 @@ class CompanyProfileManager {
             console.log('🔑 Collecting API key:', apiKeyInput.value.substring(0, 8) + '...');
         }
         
-        if (voiceSelect?.value) {
+        // Robust voice ID collection with fallbacks
+        let voiceId = null;
+        
+        // Priority 1: Check the voice selector dropdown
+        if (voiceSelect?.value && voiceSelect.value !== '' && voiceSelect.value !== 'undefined') {
+            voiceId = voiceSelect.value;
+            console.log('🎙️ Using voiceId from selector:', voiceId);
+        }
+        // Priority 2: Try to get the first available voice from the selector options
+        else if (voiceSelect?.options && voiceSelect.options.length > 0) {
+            for (let i = 0; i < voiceSelect.options.length; i++) {
+                const option = voiceSelect.options[i];
+                if (option.value && option.value !== 'undefined' && option.value !== '') {
+                    voiceId = option.value;
+                    console.log('🎙️ Using first valid option from selector:', voiceId);
+                    // Update the selector to reflect this choice
+                    voiceSelect.value = voiceId;
+                    break;
+                }
+            }
+        }
+        
+        if (voiceId) {
             // Save to both locations for consistency
-            data.elevenLabsVoiceId = voiceSelect.value;
-            data.aiSettings.elevenLabs.voiceId = voiceSelect.value;
-            console.log('🎙️ Collecting voice ID:', voiceSelect.value);
+            data.elevenLabsVoiceId = voiceId;
+            data.aiSettings.elevenLabs.voiceId = voiceId;
+            console.log('🎙️ Final collected voice ID:', voiceId);
+        } else {
+            console.log('⚠️ No valid voice selected, skipping voice ID collection');
+            console.log('   - Voice selector element:', voiceSelect?.id || 'none');
+            console.log('   - Voice selector value:', voiceSelect?.value);
+            console.log('   - Options available:', voiceSelect?.options?.length || 0);
         }
         
         console.log('📊 Voice data collected:', {
             useOwnApiKey: data.aiSettings.elevenLabs.useOwnApiKey,
             hasApiKey: !!data.aiSettings.elevenLabs.apiKey,
-            voiceId: data.aiSettings.elevenLabs.voiceId
+            voiceId: data.aiSettings.elevenLabs.voiceId,
+            selectorUsed: voiceSelect?.id || 'none'
         });
     }
 
