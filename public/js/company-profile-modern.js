@@ -2591,8 +2591,12 @@ class CompanyProfileManager {
      */
     setupElevenLabsConfig() {
         const apiKeyInput = document.getElementById('elevenlabsApiKey');
-        const voiceSelect = document.getElementById('elevenlabsVoice') || document.getElementById('voice-selector'); 
+        const newVoiceSelector = document.getElementById('voice-selector');
+        const legacyVoiceSelector = document.getElementById('elevenlabsVoice');
         const useOwnApiToggle = document.getElementById('useOwnApiKey');
+        
+        // Prioritize new voice selector over legacy one
+        const voiceSelect = newVoiceSelector || legacyVoiceSelector;
         
         // Set current ElevenLabs settings if available
         let apiKey = null;
@@ -2737,8 +2741,12 @@ class CompanyProfileManager {
      */
     async testElevenLabsVoice() {
         const apiKeyInput = document.getElementById('elevenlabsApiKey');
-        const voiceSelect = document.getElementById('elevenlabsVoice');
+        const newVoiceSelector = document.getElementById('voice-selector');
+        const legacyVoiceSelector = document.getElementById('elevenlabsVoice');
         const testPhraseInput = document.getElementById('elevenlabsTestPhrase');
+        
+        // Prioritize new voice selector over legacy one
+        const voiceSelect = newVoiceSelector || legacyVoiceSelector;
         
         const apiKey = apiKeyInput?.value;
         const voiceId = voiceSelect?.value;
@@ -4136,19 +4144,7 @@ class CompanyProfileManager {
             }
         }
 
-        // ElevenLabs credentials
-        const elevenLabsApiKey = document.getElementById('elevenLabsApiKey');
-        const elevenLabsVoiceId = document.getElementById('elevenLabsVoiceId');
-        
-        if (elevenLabsApiKey?.value.trim() && elevenLabsApiKey.value !== '••••••••••••••••') {
-            data.elevenLabsApiKey = elevenLabsApiKey.value.trim();
-            console.log('🔧 Set elevenLabsApiKey:', '***masked***');
-        }
-        
-        if (elevenLabsVoiceId?.value.trim()) {
-            data.elevenLabsVoiceId = elevenLabsVoiceId.value.trim();
-            console.log('🔧 Set elevenLabsVoiceId:', data.elevenLabsVoiceId);
-        }
+        // ElevenLabs credentials are handled in collectVoiceData() - skipping legacy collection here
 
         // Phone numbers - save to twilioConfig.phoneNumbers
         const phoneNumbers = [];
