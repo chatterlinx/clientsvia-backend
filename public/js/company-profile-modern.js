@@ -2591,17 +2591,24 @@ class CompanyProfileManager {
      */
     setupElevenLabsConfig() {
         const apiKeyInput = document.getElementById('elevenlabsApiKey');
-        const voiceSelect = document.getElementById('elevenlabsVoice');
+        const voiceSelect = document.getElementById('elevenlabsVoice') || document.getElementById('voice-selector'); 
+        const useOwnApiToggle = document.getElementById('useOwnApiKey');
         
         // Set current ElevenLabs settings if available
         let apiKey = null;
         let voiceId = null;
+        let useOwnApi = false;
         
         // Check for API key in multiple locations
         if (this.currentData?.elevenLabsApiKey) {
             apiKey = this.currentData.elevenLabsApiKey;
         } else if (this.currentData?.aiSettings?.elevenLabs?.apiKey) {
             apiKey = this.currentData.aiSettings.elevenLabs.apiKey;
+        }
+        
+        // Check for useOwnApiKey toggle
+        if (this.currentData?.aiSettings?.elevenLabs?.useOwnApiKey !== undefined) {
+            useOwnApi = this.currentData.aiSettings.elevenLabs.useOwnApiKey;
         }
         
         // Check for voice ID in multiple locations
@@ -2613,12 +2620,24 @@ class CompanyProfileManager {
             voiceId = this.currentData.voiceSettings.voiceId;
         }
         
+        // Set the toggle state
+        if (useOwnApiToggle) {
+            useOwnApiToggle.checked = useOwnApi;
+            // Trigger the toggle function to set up UI correctly
+            if (typeof toggleApiKeySource === 'function') {
+                toggleApiKeySource();
+            }
+            console.log('🔄 Loaded useOwnApiKey setting:', useOwnApi);
+        }
+
         if (apiKeyInput && apiKey) {
             apiKeyInput.value = apiKey.substring(0, 8) + '••••••••••••••••';
+            console.log('🔑 Loaded masked API key');
         }
         
         if (voiceSelect && voiceId) {
             voiceSelect.value = voiceId;
+            console.log('🎙️ Loaded voice ID:', voiceId);
         }
 
         // Track API key changes
@@ -2626,6 +2645,14 @@ class CompanyProfileManager {
             apiKeyInput.addEventListener('input', () => {
                 this.setUnsavedChanges(true);
                 console.log('🔑 ElevenLabs API key updated');
+            });
+        }
+        
+        // Track toggle changes
+        if (useOwnApiToggle) {
+            useOwnApiToggle.addEventListener('change', () => {
+                this.setUnsavedChanges(true);
+                console.log('🔄 API key toggle changed to:', useOwnApiToggle.checked);
             });
         }
 
@@ -2639,10 +2666,18 @@ class CompanyProfileManager {
     }
 
     /**
-     * Load ElevenLabs voices
+     * Load ElevenLabs voices - Now handled by the new voice system
      */
     loadElevenLabsVoices() {
         const voiceSelect = document.getElementById('elevenlabsVoice');
+        const newVoiceSelector = document.getElementById('voice-selector');
+        
+        // If we have the new voice selector, skip this legacy loading
+        if (newVoiceSelector) {
+            console.log('🎙️ Using new voice selector system');
+            return;
+        }
+        
         if (!voiceSelect) return;
 
         // Default voices available in ElevenLabs
@@ -4247,23 +4282,38 @@ class CompanyProfileManager {
      */
     collectVoiceData(data) {
         const apiKeyInput = document.getElementById('elevenlabsApiKey');
-        const voiceSelect = document.getElementById('elevenlabsVoice');
+        const voiceSelect = document.getElementById('elevenlabsVoice') || document.getElementById('voice-selector');
+        const useOwnApiToggle = document.getElementById('useOwnApiKey');
+        
+        // Initialize aiSettings structure
+        data.aiSettings = data.aiSettings || {};
+        data.aiSettings.elevenLabs = data.aiSettings.elevenLabs || {};
+        
+        // Handle the API key toggle
+        if (useOwnApiToggle) {
+            data.aiSettings.elevenLabs.useOwnApiKey = useOwnApiToggle.checked;
+            console.log('🔄 Collecting useOwnApiKey:', useOwnApiToggle.checked);
+        }
         
         if (apiKeyInput?.value && !apiKeyInput.value.includes('••••')) {
             // Save to both locations for consistency
             data.elevenLabsApiKey = apiKeyInput.value;
-            data.aiSettings = data.aiSettings || {};
-            data.aiSettings.elevenLabs = data.aiSettings.elevenLabs || {};
             data.aiSettings.elevenLabs.apiKey = apiKeyInput.value;
+            console.log('🔑 Collecting API key:', apiKeyInput.value.substring(0, 8) + '...');
         }
         
         if (voiceSelect?.value) {
             // Save to both locations for consistency
             data.elevenLabsVoiceId = voiceSelect.value;
-            data.aiSettings = data.aiSettings || {};
-            data.aiSettings.elevenLabs = data.aiSettings.elevenLabs || {};
             data.aiSettings.elevenLabs.voiceId = voiceSelect.value;
+            console.log('🎙️ Collecting voice ID:', voiceSelect.value);
         }
+        
+        console.log('📊 Voice data collected:', {
+            useOwnApiKey: data.aiSettings.elevenLabs.useOwnApiKey,
+            hasApiKey: !!data.aiSettings.elevenLabs.apiKey,
+            voiceId: data.aiSettings.elevenLabs.voiceId
+        });
     }
 
     /**

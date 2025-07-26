@@ -497,7 +497,7 @@
                                             </div>
                                             <div class="flex items-center">
                                                 <label class="relative inline-flex items-center cursor-pointer">
-                                                    <input type="checkbox" id="useOwnApiKey" class="sr-only peer" onchange="toggleApiKeySource()">
+                                                    <input type="checkbox" id="useOwnApiKey" class="sr-only peer">
                                                     <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                                                     <span class="ml-3 text-sm font-medium text-gray-700" id="toggle-label">Use Own API</span>
                                                 </label>
@@ -566,18 +566,18 @@
                                         <!-- Voice Selection -->
                                         <div>
                                             <label for="voice-selector" class="form-label">Select Voice</label>
-                                            <select id="voice-selector" name="voiceId" class="form-select mb-3" onchange="handleVoiceChange()">
+                                            <select id="voice-selector" name="voiceId" class="form-select mb-3">
                                                 <option value="">Choose a voice...</option>
                                             </select>
                                             
                                             <!-- Voice Filters -->
                                             <div class="flex space-x-2 mb-4">
-                                                <select id="voice-gender-filter" class="text-xs border border-gray-300 rounded px-2 py-1" onchange="filterVoices()">
+                                                <select id="voice-gender-filter" class="text-xs border border-gray-300 rounded px-2 py-1">
                                                     <option value="">All Genders</option>
                                                     <option value="male">Male</option>
                                                     <option value="female">Female</option>
                                                 </select>
-                                                <select id="voice-category-filter" class="text-xs border border-gray-300 rounded px-2 py-1" onchange="filterVoices()">
+                                                <select id="voice-category-filter" class="text-xs border border-gray-300 rounded px-2 py-1">
                                                     <option value="">All Categories</option>
                                                     <option value="conversational">Conversational</option>
                                                     <option value="professional">Professional</option>
@@ -2123,6 +2123,292 @@
             
             return companyId;
         }
+
+        // Utility function to show notifications
+        function showNotification(message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 transform translate-x-full`;
+            
+            // Set colors based on type
+            const colors = {
+                success: 'bg-green-100 border border-green-400 text-green-700',
+                error: 'bg-red-100 border border-red-400 text-red-700',
+                warning: 'bg-yellow-100 border border-yellow-400 text-yellow-700',
+                info: 'bg-blue-100 border border-blue-400 text-blue-700'
+            };
+            
+            notification.className += ` ${colors[type] || colors.info}`;
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <span class="flex-1">${message}</span>
+                    <button type="button" class="ml-3 text-sm opacity-70 hover:opacity-100" onclick="this.parentElement.parentElement.remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            // Add to page
+            document.body.appendChild(notification);
+            
+            // Animate in
+            setTimeout(() => {
+                notification.classList.remove('translate-x-full');
+            }, 10);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                notification.classList.add('translate-x-full');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 5000);
+            
+            console.log(`📢 Notification (${type}): ${message}`);
+        }
+
+        // 🎙️ ELEVENLABS VOICE FUNCTIONS
+        let availableVoices = [];
+        
+        // Test ElevenLabs API connection
+        async function testElevenLabsConnection() {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) {
+                showNotification('Error: Company ID not found', 'error');
+                return;
+            }
+
+            const button = document.getElementById('test-api-connection');
+            const originalText = button.innerHTML;
+            
+            try {
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Testing...';
+                button.disabled = true;
+
+                console.log('🔧 Testing ElevenLabs connection...');
+                
+                const response = await fetch(`/api/elevenlabs/companies/${companyId}/test-connection`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('✅ ElevenLabs connection successful!', 'success');
+                    console.log('✅ Connection test passed:', result);
+                    
+                    // Optionally refresh voices after successful connection
+                    setTimeout(() => refreshVoices(), 1000);
+                } else {
+                    throw new Error(result.message || 'Connection test failed');
+                }
+            } catch (error) {
+                console.error('❌ ElevenLabs connection test failed:', error);
+                showNotification(`❌ Connection failed: ${error.message}`, 'error');
+            } finally {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        // Refresh available voices
+        async function refreshVoices() {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) {
+                showNotification('Error: Company ID not found', 'error');
+                return;
+            }
+
+            const button = document.getElementById('refresh-voices');
+            const originalText = button.innerHTML;
+            
+            try {
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Loading...';
+                button.disabled = true;
+
+                console.log('🎙️ Refreshing ElevenLabs voices...');
+                
+                const response = await fetch(`/api/elevenlabs/companies/${companyId}/voices`);
+                const result = await response.json();
+
+                if (result.success) {
+                    availableVoices = result.voices || [];
+                    populateVoiceSelector();
+                    showNotification(`✅ Loaded ${availableVoices.length} voices`, 'success');
+                    console.log(`✅ Loaded ${availableVoices.length} voices:`, availableVoices);
+                } else {
+                    throw new Error(result.message || 'Failed to load voices');
+                }
+            } catch (error) {
+                console.error('❌ Failed to refresh voices:', error);
+                showNotification(`❌ Failed to load voices: ${error.message}`, 'error');
+                availableVoices = [];
+                populateVoiceSelector();
+            } finally {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        // Populate voice selector dropdown
+        function populateVoiceSelector() {
+            const selector = document.getElementById('voice-selector');
+            if (!selector) return;
+
+            // Clear existing options except the first one
+            while (selector.children.length > 1) {
+                selector.removeChild(selector.lastChild);
+            }
+
+            // Add voice options
+            availableVoices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.voice_id;
+                option.textContent = `${voice.name} (${voice.labels?.gender || 'Unknown'})`;
+                option.setAttribute('data-category', voice.labels?.category || '');
+                option.setAttribute('data-gender', voice.labels?.gender || '');
+                selector.appendChild(option);
+            });
+
+            console.log(`📝 Populated voice selector with ${availableVoices.length} voices`);
+        }
+
+        // Filter voices based on gender and category
+        function filterVoices() {
+            const genderFilter = document.getElementById('voice-gender-filter')?.value || '';
+            const categoryFilter = document.getElementById('voice-category-filter')?.value || '';
+            const selector = document.getElementById('voice-selector');
+            
+            if (!selector) return;
+
+            // Show/hide options based on filters
+            Array.from(selector.options).forEach((option, index) => {
+                if (index === 0) return; // Skip the "Choose a voice..." option
+
+                const optionGender = option.getAttribute('data-gender') || '';
+                const optionCategory = option.getAttribute('data-category') || '';
+
+                const genderMatch = !genderFilter || optionGender.toLowerCase() === genderFilter.toLowerCase();
+                const categoryMatch = !categoryFilter || optionCategory.toLowerCase() === categoryFilter.toLowerCase();
+
+                option.style.display = (genderMatch && categoryMatch) ? 'block' : 'none';
+            });
+
+            console.log(`🔍 Filtered voices by gender: ${genderFilter}, category: ${categoryFilter}`);
+        }
+
+        // Handle voice selection change
+        function handleVoiceChange() {
+            const selector = document.getElementById('voice-selector');
+            const selectedVoice = availableVoices.find(v => v.voice_id === selector.value);
+            
+            if (selectedVoice) {
+                console.log('🎙️ Selected voice:', selectedVoice.name);
+                // Trigger form change detection
+                if (typeof window.handleFormChange === 'function') {
+                    window.handleFormChange();
+                }
+            }
+        }
+
+        // Toggle between ClientsVia global API and company's own API
+        function toggleApiKeySource() {
+            const checkbox = document.getElementById('useOwnApiKey');
+            const apiKeyInput = document.getElementById('elevenlabsApiKey');
+            const globalInfo = document.getElementById('global-api-info');
+            const ownInfo = document.getElementById('own-api-info');
+            const subscriptionInfo = document.getElementById('subscription-info');
+            const apiSourceDescription = document.getElementById('api-source-description');
+            const toggleLabel = document.getElementById('toggle-label');
+            
+            if (checkbox.checked) {
+                // Switch to own API mode
+                apiKeyInput.disabled = false;
+                apiKeyInput.required = true;
+                globalInfo.classList.add('hidden');
+                ownInfo.classList.remove('hidden');
+                subscriptionInfo.classList.remove('hidden');
+                apiSourceDescription.textContent = 'Using your own ElevenLabs API account';
+                toggleLabel.textContent = 'Use ClientsVia API';
+                
+                console.log('🔄 Switched to own API mode');
+            } else {
+                // Switch to global API mode
+                apiKeyInput.disabled = true;
+                apiKeyInput.required = false;
+                apiKeyInput.value = ''; // Clear the field
+                globalInfo.classList.remove('hidden');
+                ownInfo.classList.add('hidden');
+                subscriptionInfo.classList.add('hidden');
+                apiSourceDescription.textContent = 'Using ClientsVia global API (default for all companies)';
+                toggleLabel.textContent = 'Use Own API';
+                
+                console.log('🔄 Switched to ClientsVia global API mode');
+            }
+            
+            // Trigger form change detection
+            if (typeof window.handleFormChange === 'function') {
+                window.handleFormChange();
+            }
+        }
+
+        // Initialize ElevenLabs event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Test API Connection button
+            const testButton = document.getElementById('test-api-connection');
+            if (testButton) {
+                testButton.addEventListener('click', testElevenLabsConnection);
+                console.log('✅ Test API Connection button listener attached');
+            }
+
+            // Refresh Voices button
+            const refreshButton = document.getElementById('refresh-voices');
+            if (refreshButton) {
+                refreshButton.addEventListener('click', refreshVoices);
+                console.log('✅ Refresh Voices button listener attached');
+            }
+
+            // Voice filter dropdowns
+            const genderFilter = document.getElementById('voice-gender-filter');
+            const categoryFilter = document.getElementById('voice-category-filter');
+            
+            if (genderFilter) {
+                genderFilter.addEventListener('change', filterVoices);
+                console.log('✅ Gender filter listener attached');
+            }
+            
+            if (categoryFilter) {
+                categoryFilter.addEventListener('change', filterVoices);
+                console.log('✅ Category filter listener attached');
+            }
+
+            // Voice selector
+            const voiceSelector = document.getElementById('voice-selector');
+            if (voiceSelector) {
+                voiceSelector.addEventListener('change', handleVoiceChange);
+                console.log('✅ Voice selector listener attached');
+            }
+
+            // API Key toggle
+            const apiToggle = document.getElementById('useOwnApiKey');
+            if (apiToggle) {
+                apiToggle.addEventListener('change', toggleApiKeySource);
+                console.log('✅ API key toggle listener attached');
+            }
+
+            // Auto-load voices when page loads
+            setTimeout(() => {
+                if (document.getElementById('voice-selector')) {
+                    console.log('🎙️ Auto-loading voices on page load...');
+                    refreshVoices();
+                }
+            }, 1000);
+        });
 
         // 🚀 ENTERPRISE AI AGENT FUNCTIONS
         

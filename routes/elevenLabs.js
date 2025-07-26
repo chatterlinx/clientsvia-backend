@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const Company = require('../models/Company');
 const { 
   getAvailableVoices, 
   getAvailableModels,
@@ -191,6 +192,87 @@ async function generateStatic(req, res) {
   }
 }
 
+/**
+ * GET /api/elevenlabs/companies/:companyId/voices - Get voices for specific company
+ */
+async function getCompanyVoices(req, res) {
+  try {
+    const { companyId } = req.params;
+    
+    // Fetch company data to get API settings
+    const company = await Company.findById(companyId);
+    if (!company) {
+      return res.status(404).json({ success: false, message: 'Company not found' });
+    }
+
+    console.log(`🎙️ [Company Voices] Fetching voices for company: ${company.companyName} (${companyId})`);
+    
+    const voices = await getAvailableVoices({ company });
+    
+    console.log(`✅ [Company Voices] Found ${voices.length} voices for ${company.companyName}`);
+    res.json({ 
+      success: true, 
+      voices, 
+      count: voices.length,
+      company: {
+        id: company._id,
+        name: company.companyName,
+        useOwnApi: company.aiSettings?.elevenLabs?.useOwnApiKey || false
+      }
+    });
+  } catch (err) {
+    console.error(`❌ [Company Voices] Error for company ${req.params.companyId}:`, err.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch voices', 
+      error: err.message 
+    });
+  }
+}
+
+/**
+ * POST /api/elevenlabs/companies/:companyId/test-connection - Test API connection
+ */
+async function testCompanyConnection(req, res) {
+  try {
+    const { companyId } = req.params;
+    
+    // Fetch company data to get API settings
+    const company = await Company.findById(companyId);
+    if (!company) {
+      return res.status(404).json({ success: false, message: 'Company not found' });
+    }
+
+    console.log(`🔧 [Test Connection] Testing ElevenLabs connection for: ${company.companyName}`);
+    
+    // Test connection by fetching user info
+    const userInfo = await getUserInfo({ company });
+    
+    console.log(`✅ [Test Connection] Success for ${company.companyName}`);
+    res.json({ 
+      success: true, 
+      message: 'Connection successful',
+      userInfo: {
+        subscription: userInfo.subscription?.tier || 'unknown',
+        charactersUsed: userInfo.subscription?.character_count || 0,
+        charactersLimit: userInfo.subscription?.character_limit || 0
+      },
+      company: {
+        id: company._id,
+        name: company.companyName,
+        useOwnApi: company.aiSettings?.elevenLabs?.useOwnApiKey || false
+      }
+    });
+  } catch (err) {
+    console.error(`❌ [Test Connection] Error for company ${req.params.companyId}:`, err.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Connection failed', 
+      error: err.message 
+    });
+  }
+}
+
 // Route definitions
 router.get('/voices', listVoices);
 router.get('/models', listModels);
@@ -199,5 +281,7 @@ router.get('/user', getUserSubscription);
 router.post('/synthesize', synthesize);
 router.post('/stream', streamSynthesis);
 router.post('/static', generateStatic);
+router.get('/companies/:companyId/voices', getCompanyVoices);
+router.post('/companies/:companyId/test-connection', testCompanyConnection);
 
 module.exports = router;
