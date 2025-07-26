@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Voice Filter Test</title>
+    <script>console.log('Voice Filter Test Loading...');</script>
+</head>
+<body>
+    <h2>Voice Filter Test</h2>
+    
+    <div>
+        <label>Gender Filter:</label>
+        <select id="voice-gender-filter" onchange="filterVoices()">
+            <option value="">All Genders</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+        </select>
+    </div>
+    
+    <div>
+        <label>Category Filter:</label>
+        <select id="voice-category-filter" onchange="filterVoices()">
+            <option value="">All Categories</option>
+            <option value="conversational">Conversational</option>
+            <option value="professional">Professional</option>
+            <option value="narration">Narration</option>
+        </select>
+    </div>
+    
+    <div>
+        <label>Voice:</label>
+        <select id="voice-selector">
+            <option value="">Loading voices...</option>
+        </select>
+    </div>
+    
+    <div id="test-results" style="margin-top: 20px; padding: 10px; border: 1px solid #ccc;">
+        <h3>Test Results:</h3>
+        <div id="test-output"></div>
+    </div>
+    
+    <script>
+        // Test variables
+        let availableVoices = [];
+        
+        // Default voices for testing
+        function loadDefaultVoices() {
+            const defaultVoices = [
+                { voice_id: 'rachel', name: 'Rachel', gender: 'female', category: 'conversational' },
+                { voice_id: 'adam', name: 'Adam', gender: 'male', category: 'conversational' },
+                { voice_id: 'bella', name: 'Bella', gender: 'female', category: 'professional' },
+                { voice_id: 'antoni', name: 'Antoni', gender: 'male', category: 'professional' },
+                { voice_id: 'josh', name: 'Josh', gender: 'male', category: 'narration' },
+                { voice_id: 'sam', name: 'Sam', gender: 'male', category: 'conversational' }
+            ];
+            
+            availableVoices = defaultVoices;
+            populateVoiceSelector(defaultVoices);
+            console.log('📢 Loaded default voices as fallback');
+            logTest('Default voices loaded: ' + defaultVoices.length);
+        }
+        
+        // Populate voice selector
+        function populateVoiceSelector(voices) {
+            const selector = document.getElementById('voice-selector');
+            selector.innerHTML = '';
+            
+            if (!voices || voices.length === 0) {
+                selector.innerHTML = '<option value="">No voices available</option>';
+                return;
+            }
+            
+            voices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.voice_id;
+                option.textContent = `${voice.name} (${voice.gender}, ${voice.category})`;
+                selector.appendChild(option);
+            });
+            
+            logTest(`Voice selector populated with ${voices.length} voices`);
+        }
+        
+        // Filter voices function (copied from main file)
+        function filterVoices() {
+            console.log('🎙️ Filtering voices...');
+            logTest('filterVoices() called');
+            
+            // Check if voices are loaded
+            if (!availableVoices || availableVoices.length === 0) {
+                console.log('⏳ Voices not loaded yet, loading default voices...');
+                logTest('Voices not loaded, loading defaults...');
+                loadDefaultVoices();
+                // Try again after a short delay
+                setTimeout(filterVoices, 500);
+                return;
+            }
+            
+            const genderFilter = document.getElementById('voice-gender-filter').value;
+            const categoryFilter = document.getElementById('voice-category-filter').value;
+            
+            console.log('🔍 Filter criteria:', { genderFilter, categoryFilter });
+            logTest(`Filter criteria: Gender=${genderFilter}, Category=${categoryFilter}`);
+            console.log('🎭 Available voices to filter:', availableVoices.length);
+            
+            let filteredVoices = availableVoices;
+            
+            if (genderFilter) {
+                filteredVoices = filteredVoices.filter(voice => 
+                    voice.gender && voice.gender.toLowerCase() === genderFilter.toLowerCase()
+                );
+            }
+            
+            if (categoryFilter) {
+                filteredVoices = filteredVoices.filter(voice => 
+                    voice.category && voice.category.toLowerCase().includes(categoryFilter.toLowerCase())
+                );
+            }
+            
+            console.log('✅ Filtered voices:', filteredVoices.length);
+            logTest(`Filtered results: ${filteredVoices.length} voices`);
+            populateVoiceSelector(filteredVoices);
+        }
+        
+        // Test logging
+        function logTest(message) {
+            const output = document.getElementById('test-output');
+            const timestamp = new Date().toLocaleTimeString();
+            output.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Test page loaded');
+            logTest('Test page initialized');
+            loadDefaultVoices();
+        });
+    </script>
+</body>
+</html>
