@@ -84,6 +84,7 @@ const learningSettingsSchema = new mongoose.Schema({
 
 // --- CORRECTED: Sub-schema for AI Settings ---
 const elevenLabsSettingsSchema = new mongoose.Schema({
+    useOwnApiKey: { type: Boolean, default: false }, // Toggle: false = use ClientsVia global, true = use own API
     apiKey: { type: String, default: '' },
     voiceId: { type: String, trim: true, default: null },
     stability: { type: Number, default: 0.5 },

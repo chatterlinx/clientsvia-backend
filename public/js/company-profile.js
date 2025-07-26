@@ -1508,6 +1508,9 @@ function initializeEnhancedVoiceSettings() {
     // Bind event listeners
     bindVoiceSettingsEvents();
     
+    // Load API key toggle state
+    loadApiKeyToggle();
+    
     // Load initial data
     loadElevenLabsData();
 }
@@ -2097,98 +2100,83 @@ async function saveVoiceSettings() {
     }
 }
 
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    if (document.getElementById('ai-voice-content')) {
-        initializeEnhancedVoiceSettings();
+/**
+ * Toggle between ClientsVia global API and company's own API
+ */
+function toggleApiKeySource() {
+    const toggle = document.getElementById('useOwnApiKey');
+    const apiKeyInput = document.getElementById('elevenlabsApiKey');
+    const globalApiInfo = document.getElementById('global-api-info');
+    const ownApiInfo = document.getElementById('own-api-info');
+    const apiSourceDescription = document.getElementById('api-source-description');
+    const toggleLabel = document.getElementById('toggle-label');
+    const apiKeyRequired = document.getElementById('api-key-required');
+    
+    if (!toggle) return;
+    
+    const useOwnApi = toggle.checked;
+    
+    if (useOwnApi) {
+        // Switch to own API mode
+        apiKeyInput.disabled = false;
+        apiKeyInput.required = true;
+        globalApiInfo.classList.add('hidden');
+        ownApiInfo.classList.remove('hidden');
+        apiSourceDescription.textContent = 'Using your personal ElevenLabs API account';
+        toggleLabel.textContent = 'Using Own API';
+        apiKeyRequired.classList.remove('hidden');
+        
+        console.log('🔑 Switched to company own API mode');
+        showNotification('Switched to your own ElevenLabs API', 'info');
+    } else {
+        // Switch to global API mode
+        apiKeyInput.disabled = true;
+        apiKeyInput.required = false;
+        globalApiInfo.classList.remove('hidden');
+        ownApiInfo.classList.add('hidden');
+        apiSourceDescription.textContent = 'Using ClientsVia global API (default for all companies)';
+        toggleLabel.textContent = 'Use Own API';
+        apiKeyRequired.classList.add('hidden');
+        
+        console.log('🏢 Switched to ClientsVia global API mode');
+        showNotification('Switched to ClientsVia global API', 'success');
     }
-});
-
-// =============================================
-// LANGUAGE SELECTION HANDLING
-// =============================================
-
-/**
- * Handle language selection change
- */
-function handleLanguageChange() {
-    const select = document.getElementById('agent-language');
-    if (!select) return;
     
-    const selectedLanguage = select.value;
-    const languageName = select.options[select.selectedIndex].text;
-    
-    console.log('🌍 Agent language changed:', { 
-        code: selectedLanguage, 
-        name: languageName 
-    });
-    
-    // Update language-dependent features
-    updateLanguageFeatures(selectedLanguage);
-    
-    // Show notification
-    showNotification(`Agent language set to ${languageName}`, 'success');
+    // Save the toggle state
+    saveApiKeyToggle(useOwnApi);
 }
 
 /**
- * Update language-dependent feature indicators
+ * Save API key toggle state to backend
  */
-function updateLanguageFeatures(languageCode) {
-    // Language support matrix
-    const languageSupport = {
-        'en': { llm: true, voice: true, qna: true, name: 'English' },
-        'es': { llm: true, voice: true, qna: true, name: 'Spanish' },
-        'fr': { llm: true, voice: true, qna: true, name: 'French' },
-        'de': { llm: true, voice: true, qna: true, name: 'German' },
-        'it': { llm: true, voice: true, qna: true, name: 'Italian' },
-        'pt': { llm: true, voice: true, qna: true, name: 'Portuguese' },
-        'ru': { llm: true, voice: true, qna: true, name: 'Russian' },
-        'zh': { llm: true, voice: true, qna: true, name: 'Chinese' },
-        'ja': { llm: true, voice: true, qna: true, name: 'Japanese' },
-        'ko': { llm: true, voice: true, qna: true, name: 'Korean' },
-        'ar': { llm: true, voice: true, qna: true, name: 'Arabic' },
-        'hi': { llm: true, voice: true, qna: true, name: 'Hindi' },
-        'nl': { llm: true, voice: true, qna: true, name: 'Dutch' },
-        'sv': { llm: true, voice: true, qna: true, name: 'Swedish' },
-        'da': { llm: true, voice: true, qna: true, name: 'Danish' },
-        'no': { llm: true, voice: true, qna: true, name: 'Norwegian' },
-        'fi': { llm: true, voice: true, qna: true, name: 'Finnish' },
-        'pl': { llm: true, voice: true, qna: true, name: 'Polish' },
-        'tr': { llm: true, voice: true, qna: true, name: 'Turkish' },
-        'cs': { llm: true, voice: true, qna: true, name: 'Czech' }
-    };
-    
-    const support = languageSupport[languageCode] || languageSupport['en'];
-    
-    // Update feature indicators (visual feedback)
-    const indicators = document.querySelectorAll('.inline-flex.items-center.px-2.py-1.rounded-full.text-xs');
-    indicators.forEach(indicator => {
-        const icon = indicator.querySelector('i');
-        if (icon?.classList.contains('fa-brain')) {
-            // LLM Support indicator
-            indicator.className = support.llm 
-                ? 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800'
-                : 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600';
-        } else if (icon?.classList.contains('fa-microphone')) {
-            // Voice Synthesis indicator
-            indicator.className = support.voice 
-                ? 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800'
-                : 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600';
-        } else if (icon?.classList.contains('fa-search')) {
-            // Q&A Matching indicator
-            indicator.className = support.qna 
-                ? 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800'
-                : 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600';
+async function saveApiKeyToggle(useOwnApi) {
+    try {
+        const companyId = getCompanyIdFromUrl();
+        if (!companyId) return;
+        
+        const response = await fetch(`/api/companies/${companyId}/voice-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                'elevenLabs.useOwnApiKey': useOwnApi 
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to save API toggle state');
         }
-    });
-    
-    console.log('🌍 Language features updated for:', support.name, support);
+        
+        console.log('✅ API toggle state saved:', useOwnApi);
+    } catch (error) {
+        console.error('❌ Error saving API toggle state:', error);
+        showNotification('Failed to save API preference', 'error');
+    }
 }
 
 /**
- * Load company language settings
+ * Load API key toggle state from company data
  */
-async function loadCompanyLanguage() {
+async function loadApiKeyToggle() {
     try {
         const companyId = getCompanyIdFromUrl();
         if (!companyId) return;
@@ -2196,44 +2184,39 @@ async function loadCompanyLanguage() {
         const response = await fetch(`/api/companies/${companyId}`);
         if (!response.ok) return;
         
-        const data = await response.json();
-        const language = data.aiSettings?.language || 'en';
+        const company = await response.json();
+        const useOwnApi = company.aiSettings?.elevenLabs?.useOwnApiKey || false;
         
-        const select = document.getElementById('agent-language');
-        if (select && select.value !== language) {
-            select.value = language;
-            updateLanguageFeatures(language);
-            console.log('🌍 Company language loaded:', language);
+        const toggle = document.getElementById('useOwnApiKey');
+        if (toggle) {
+            toggle.checked = useOwnApi;
+            toggleApiKeySource(); // Apply the toggle state to UI
         }
+        
+        // Load API key if using own API
+        if (useOwnApi && company.aiSettings?.elevenLabs?.apiKey) {
+            const apiKeyInput = document.getElementById('elevenlabsApiKey');
+            if (apiKeyInput) {
+                apiKeyInput.value = company.aiSettings.elevenLabs.apiKey;
+            }
+        }
+        
+        console.log('🔑 API toggle state loaded:', useOwnApi);
     } catch (error) {
-        console.error('❌ Error loading company language:', error);
+        console.error('❌ Error loading API toggle state:', error);
     }
 }
 
-/**
- * Save language selection
- */
-async function saveLanguageSettings() {
-    try {
-        const companyId = getCompanyIdFromUrl();
-        if (!companyId) return;
-        
-        const language = document.getElementById('agent-language')?.value || 'en';
-        
-        const response = await fetch(`/api/companies/${companyId}/ai-settings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ language })
-        });
-        
-        if (!response.ok) {
-            throw new Error('Failed to save language settings');
-        }
-        
-        console.log('🌍 Language settings saved:', language);
-        return true;
-    } catch (error) {
-        console.error('❌ Error saving language settings:', error);
-        return false;
-    }
+// =============================================
+// PLATFORM FEATURES INITIALIZATION
+// =============================================
+
+function initializePlatformFeatures() {
+    console.log('🔧 Initializing platform features...');
+    
+    // Initialize Enhanced Voice Settings
+    initializeEnhancedVoiceSettings();
+    
+    // Initialize other platform features here as needed
+    console.log('✅ Platform features initialized');
 }

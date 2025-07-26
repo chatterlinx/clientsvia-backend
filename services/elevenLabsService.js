@@ -5,18 +5,24 @@ const path = require('path');
 const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 
 function getElevenLabsApiKey(company) {
-  // First check company settings - but verify it's not empty after trimming
+  // Check if company has toggled to use their own API key
+  const useOwnApi = company?.aiSettings?.elevenLabs?.useOwnApiKey;
   const companyKey = company?.aiSettings?.elevenLabs?.apiKey;
-  if (companyKey && companyKey.trim()) {
+  
+  if (useOwnApi && companyKey && companyKey.trim()) {
+    // Company has opted to use their own API key
+    console.log(`🔑 Company ${company._id || 'unknown'} using own ElevenLabs API`);
     return companyKey.trim();
   }
   
-  // Fall back to environment variable
+  // Default: Use ClientsVia global API key
   if (process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_API_KEY.trim()) {
+    console.log(`🏢 Using ClientsVia global ElevenLabs API for company ${company?._id || 'unknown'}`);
     return process.env.ELEVENLABS_API_KEY.trim();
   }
   
   // No valid key found
+  console.warn(`⚠️ No ElevenLabs API key configured for company ${company?._id || 'unknown'}`);
   return null;
 }
 
