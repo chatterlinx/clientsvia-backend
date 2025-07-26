@@ -2258,11 +2258,20 @@
         // Populate voice selector dropdown
         function populateVoiceSelector() {
             const selector = document.getElementById('voice-selector');
+            const refreshButton = document.getElementById('refresh-voices');
+            
             if (!selector) return;
 
             // Clear existing options except the first one
             while (selector.children.length > 1) {
                 selector.removeChild(selector.lastChild);
+            }
+            
+            // Re-enable selector and reset button
+            selector.disabled = false;
+            if (refreshButton) {
+                refreshButton.innerHTML = '<i class="fas fa-sync mr-1"></i>Refresh Voices';
+                refreshButton.disabled = false;
             }
 
             // Add voice options
@@ -2306,13 +2315,43 @@
         function handleVoiceChange() {
             const selector = document.getElementById('voice-selector');
             const selectedVoice = availableVoices.find(v => v.voice_id === selector.value);
+            const previewSection = document.getElementById('voice-preview-section');
+            const voiceInfo = document.getElementById('voice-info');
             
             if (selectedVoice) {
                 console.log('🎙️ Selected voice:', selectedVoice.name);
+                
+                // Show the preview section
+                previewSection.classList.remove('hidden');
+                
+                // Populate voice information
+                voiceInfo.innerHTML = `
+                    <div class="text-sm">
+                        <div class="font-medium text-gray-900 mb-1">${selectedVoice.name}</div>
+                        <div class="text-gray-600 mb-2">${selectedVoice.labels?.description || 'No description available'}</div>
+                        <div class="flex items-center space-x-4 text-xs text-gray-500">
+                            ${selectedVoice.labels?.gender ? `<span><i class="fas fa-user mr-1"></i>${selectedVoice.labels.gender}</span>` : ''}
+                            ${selectedVoice.labels?.age ? `<span><i class="fas fa-calendar mr-1"></i>${selectedVoice.labels.age}</span>` : ''}
+                            ${selectedVoice.labels?.category ? `<span><i class="fas fa-tag mr-1"></i>${selectedVoice.labels.category}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                // Show voice sample preview if available
+                if (selectedVoice.preview_url) {
+                    const audioElement = document.getElementById('voice-preview-audio');
+                    audioElement.src = selectedVoice.preview_url;
+                    audioElement.classList.remove('hidden');
+                }
+                
                 // Trigger form change detection
                 if (typeof window.handleFormChange === 'function') {
                     window.handleFormChange();
                 }
+            } else {
+                // Hide the preview section if no voice selected
+                previewSection.classList.add('hidden');
+                voiceInfo.innerHTML = '';
             }
         }
 
@@ -2546,6 +2585,69 @@
             console.log('📥 Audio download initiated:', filename);
         }
 
+        // Play voice sample
+        function playVoiceSample() {
+            const audioElement = document.getElementById('voice-preview-audio');
+            const selector = document.getElementById('voice-selector');
+            const selectedVoice = availableVoices.find(v => v.voice_id === selector.value);
+            
+            if (!selectedVoice) {
+                showNotification('Please select a voice first', 'error');
+                return;
+            }
+            
+            if (selectedVoice.preview_url && audioElement) {
+                audioElement.src = selectedVoice.preview_url;
+                audioElement.play().catch(error => {
+                    console.error('Failed to play voice sample:', error);
+                    showNotification('Failed to play voice sample', 'error');
+                });
+                console.log('🔊 Playing voice sample for:', selectedVoice.name);
+            } else {
+                // Generate a quick sample using the selected voice
+                generateVoiceSample(selectedVoice.voice_id, selectedVoice.name);
+            }
+        }
+
+        // Generate a quick voice sample
+        async function generateVoiceSample(voiceId, voiceName) {
+            const companyId = getCurrentCompanyId();
+            const sampleText = "Hello! This is a sample of how I sound. Thank you for listening.";
+            
+            try {
+                console.log('🎵 Generating voice sample for:', voiceName);
+                
+                const response = await fetch('/api/elevenlabs/synthesize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: sampleText,
+                        voiceId: voiceId,
+                        companyId: companyId
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    const audioData = `data:audio/mp3;base64,${result.audioContent}`;
+                    const audioElement = document.getElementById('voice-preview-audio');
+                    audioElement.src = audioData;
+                    audioElement.play();
+                    
+                    console.log('✅ Voice sample generated and playing');
+                    showNotification(`🔊 Playing sample of ${voiceName}`, 'success');
+                } else {
+                    throw new Error(result.message || 'Failed to generate sample');
+                }
+            } catch (error) {
+                console.error('❌ Failed to generate voice sample:', error);
+                showNotification(`❌ Failed to generate voice sample: ${error.message}`, 'error');
+            }
+        }
+
         // Initialize ElevenLabs event listeners
         document.addEventListener('DOMContentLoaded', function() {
             // Test API Connection button
@@ -2604,10 +2706,36 @@
                 console.log('✅ Stream test button listener attached');
             }
 
+            // Play voice sample button
+            const playSampleBtn = document.getElementById('play-voice-sample');
+            if (playSampleBtn) {
+                playSampleBtn.addEventListener('click', playVoiceSample);
+                console.log('✅ Play voice sample button listener attached');
+            }
+
             // Auto-load voices when page loads
             setTimeout(() => {
                 if (document.getElementById('voice-selector')) {
                     console.log('🎙️ Auto-loading voices on page load...');
+                    
+                    // Show loading state
+                    const voiceSelector = document.getElementById('voice-selector');
+                    const refreshButton = document.getElementById('refresh-voices');
+                    
+                    if (voiceSelector && voiceSelector.children.length <= 1) {
+                        // Only has the default "Choose a voice..." option
+                        const loadingOption = document.createElement('option');
+                        loadingOption.value = '';
+                        loadingOption.textContent = 'Loading voices...';
+                        voiceSelector.appendChild(loadingOption);
+                        voiceSelector.disabled = true;
+                        
+                        if (refreshButton) {
+                            refreshButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Loading...';
+                            refreshButton.disabled = true;
+                        }
+                    }
+                    
                     refreshVoices();
                 }
             }, 1000);
