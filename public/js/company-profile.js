@@ -2084,9 +2084,8 @@ function displayStreamingResults(audioUrl) {
  * Filter voices based on criteria
  */
 function filterVoices() {
-    console.log('🔍 filterVoices called, availableVoices count:', availableVoices.length);
-    const genderFilter = document.getElementById('voice-gender-filter')?.value || '';
-    const categoryFilter = document.getElementById('voice-category-filter')?.value || '';
+    const genderFilter = document.getElementById('voice-gender-filter').value;
+    const categoryFilter = document.getElementById('voice-category-filter').value;
     
     let filteredVoices = availableVoices;
     
@@ -2094,21 +2093,16 @@ function filterVoices() {
         filteredVoices = filteredVoices.filter(voice => 
             voice.gender && voice.gender.toLowerCase() === genderFilter.toLowerCase()
         );
-        console.log('🔍 After gender filter:', filteredVoices.length);
     }
     
     if (categoryFilter) {
         filteredVoices = filteredVoices.filter(voice => 
             voice.category && voice.category.toLowerCase().includes(categoryFilter.toLowerCase())
         );
-        console.log('🔍 After category filter:', filteredVoices.length);
     }
     
     populateVoiceSelector(filteredVoices);
 }
-
-// Make filterVoices available globally
-window.filterVoices = filterVoices;
 
 /**
  * Save voice settings
@@ -2269,3 +2263,42 @@ function initializePlatformFeatures() {
     // Initialize other platform features here as needed
     console.log('✅ Platform features initialized');
 }
+
+// =============================================
+// HANDLE LANGUAGE CHANGE
+// =============================================
+
+/**
+ * Handle language selection change
+ */
+function handleLanguageChange() {
+    console.log('🌐 Language change detected');
+    const languageSelect = document.getElementById('agent-language');
+    if (languageSelect) {
+        const selectedLanguage = languageSelect.value;
+        console.log('Selected language:', selectedLanguage);
+        setUnsavedChanges();
+    }
+}
+
+// =============================================
+// GLOBAL FUNCTION EXPOSURE FOR HTML HANDLERS
+// =============================================
+
+// Explicitly expose functions to global scope for HTML event handlers
+window.filterVoices = filterVoices;
+window.toggleApiKeySource = toggleApiKeySource;
+window.handleVoiceChange = handleVoiceChange;
+window.updateCheckboxValue = updateCheckboxValue;
+window.handleTradeCategoryChange = handleTradeCategoryChange;
+window.handleLanguageChange = handleLanguageChange;
+
+console.log('🌐 Global functions exposed for HTML event handlers');
+console.log('Available functions:', {
+    filterVoices: typeof window.filterVoices,
+    toggleApiKeySource: typeof window.toggleApiKeySource,
+    handleVoiceChange: typeof window.handleVoiceChange,
+    updateCheckboxValue: typeof window.updateCheckboxValue,
+    handleTradeCategoryChange: typeof window.handleTradeCategoryChange,
+    handleLanguageChange: typeof window.handleLanguageChange
+});
