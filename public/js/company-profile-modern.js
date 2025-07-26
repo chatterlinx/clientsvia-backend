@@ -2624,6 +2624,14 @@ class CompanyProfileManager {
             voiceId = this.currentData.voiceSettings.voiceId;
         }
         
+        console.log('🔍 setupElevenLabsConfig voice data:', {
+            elevenLabsVoiceId: this.currentData?.elevenLabsVoiceId,
+            aiSettingsVoiceId: this.currentData?.aiSettings?.elevenLabs?.voiceId,
+            voiceSettingsVoiceId: this.currentData?.voiceSettings?.voiceId,
+            finalVoiceId: voiceId,
+            currentSelectorValue: voiceSelect?.value
+        });
+        
         // Set the toggle state
         if (useOwnApiToggle) {
             useOwnApiToggle.checked = useOwnApi;
@@ -2639,9 +2647,15 @@ class CompanyProfileManager {
             console.log('🔑 Loaded masked API key');
         }
         
-        if (voiceSelect && voiceId) {
+        if (voiceSelect && voiceId && voiceId !== 'undefined' && voiceId !== undefined) {
+            console.log('🎙️ Setting voice selector to saved voice ID:', voiceId);
             voiceSelect.value = voiceId;
-            console.log('🎙️ Loaded voice ID:', voiceId);
+            console.log('🎙️ Voice selector value after setting:', voiceSelect.value);
+        } else {
+            console.log('🎙️ No valid saved voice ID found, leaving selector as-is');
+            console.log('   - voiceSelect exists:', !!voiceSelect);
+            console.log('   - voiceId value:', voiceId);
+            console.log('   - current selector value:', voiceSelect?.value);
         }
 
         // Track API key changes

@@ -2285,6 +2285,12 @@
 
             // Add voice options
             availableVoices.forEach((voice, index) => {
+                // Skip voices with invalid voice_id
+                if (!voice.voice_id || voice.voice_id === 'undefined' || voice.voice_id === undefined) {
+                    console.warn(`⚠️ Skipping voice with invalid ID:`, voice);
+                    return;
+                }
+                
                 const option = document.createElement('option');
                 option.value = voice.voice_id;
                 option.textContent = `${voice.name} (${voice.labels?.gender || 'Unknown'})`;
@@ -2300,9 +2306,10 @@
             });
 
             // Auto-select the first voice if none is selected and we have voices
-            if (availableVoices.length > 0 && !selector.value) {
-                selector.value = availableVoices[0].voice_id;
-                console.log(`🎯 Auto-selected first voice: ${availableVoices[0].name}`);
+            if (availableVoices.length > 0 && (!selector.value || selector.value === 'undefined' || selector.value === '')) {
+                const firstVoice = availableVoices[0];
+                selector.value = firstVoice.voice_id;
+                console.log(`🎯 Auto-selected first voice: ${firstVoice.name} (${firstVoice.voice_id})`);
                 
                 // Trigger the change event to show voice preview
                 setTimeout(() => handleVoiceChange(), 100);
@@ -2338,6 +2345,22 @@
         // Handle voice selection change
         function handleVoiceChange() {
             const selector = document.getElementById('voice-selector');
+            
+            // Safeguard: if selector value is 'undefined', try to fix it
+            if (selector && selector.value === 'undefined') {
+                console.log('🚨 Detected undefined voice selector value, attempting to fix...');
+                
+                // Try to set it to the first valid option
+                if (availableVoices && availableVoices.length > 0) {
+                    const firstValidVoice = availableVoices[0];
+                    console.log(`🔧 Setting to first available voice: ${firstValidVoice.name} (${firstValidVoice.voice_id})`);
+                    selector.value = firstValidVoice.voice_id;
+                } else {
+                    console.log('🔧 No voices available, setting to empty');
+                    selector.value = '';
+                }
+            }
+            
             const selectedVoice = availableVoices.find(v => v.voice_id === selector.value);
             const previewSection = document.getElementById('voice-preview-section');
             const voiceInfo = document.getElementById('voice-info');
@@ -2783,6 +2806,31 @@
                     }
                     
                     refreshVoices();
+                    
+                    // Debug: Setup voice selector value tracking
+                    setTimeout(() => {
+                        const selector = document.getElementById('voice-selector');
+                        if (selector) {
+                            let lastValue = selector.value;
+                            
+                            // Track property changes
+                            const checkValue = () => {
+                                if (selector.value !== lastValue) {
+                                    console.log(`🔍 Voice selector value changed: "${lastValue}" -> "${selector.value}"`);
+                                    console.trace('Voice selector change stack trace:');
+                                    lastValue = selector.value;
+                                }
+                            };
+                            
+                            // Check periodically
+                            setInterval(checkValue, 100);
+                            
+                            // Track events
+                            selector.addEventListener('change', () => {
+                                console.log(`🔍 Voice selector change event: value = "${selector.value}"`);
+                            });
+                        }
+                    }, 2000);
                 } else {
                     console.warn('⚠️ Voice selector not found on page load');
                 }
