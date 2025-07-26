@@ -77,10 +77,20 @@ async function synthesize(req, res) {
     use_speaker_boost,
     model_id,
     output_format,
-    optimize_streaming_latency
+    optimize_streaming_latency,
+    companyId
   } = req.body || {};
   
   try {
+    let company = null;
+    
+    // If companyId is provided, fetch company data for API key selection
+    if (companyId) {
+      const Company = require('../models/Company');
+      company = await Company.findById(companyId);
+      console.log(`🎙️ [Synthesize] Using company-specific settings for: ${company?.companyName || companyId}`);
+    }
+    
     const buffer = await synthesizeSpeech({
       text,
       voiceId,
@@ -90,7 +100,8 @@ async function synthesize(req, res) {
       use_speaker_boost,
       model_id,
       output_format,
-      optimize_streaming_latency
+      optimize_streaming_latency,
+      company
     });
     
     res.json({ 
@@ -118,15 +129,32 @@ async function streamSynthesis(req, res) {
     use_speaker_boost,
     model_id,
     output_format,
-    optimize_streaming_latency = 4 // Max optimization for streaming
+    optimize_streaming_latency = 4, // Max optimization for streaming
+    companyId
   } = req.body || {};
   
   try {
+    let company = null;
+    
+    // If companyId is provided, fetch company data for API key selection
+    if (companyId) {
+      const Company = require('../models/Company');
+      company = await Company.findById(companyId);
+      console.log(`🌊 [Stream] Using company-specific settings for: ${company?.companyName || companyId}`);
+    }
+    
     const audioStream = await streamSpeech({
       text,
       voiceId,
       stability,
       similarity_boost,
+      style,
+      use_speaker_boost,
+      model_id,
+      output_format,
+      optimize_streaming_latency,
+      company
+    });
       style,
       use_speaker_boost,
       model_id,

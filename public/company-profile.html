@@ -2357,6 +2357,195 @@
             }
         }
 
+        // Generate test audio
+        async function generateTestAudio() {
+            const companyId = getCurrentCompanyId();
+            const testText = document.getElementById('test-text')?.value;
+            const voiceId = document.getElementById('voice-selector')?.value;
+            const testResultsDiv = document.getElementById('test-results');
+            
+            if (!companyId) {
+                showNotification('Error: Company ID not found', 'error');
+                return;
+            }
+            
+            if (!testText?.trim()) {
+                showNotification('Please enter test text', 'error');
+                return;
+            }
+            
+            if (!voiceId) {
+                showNotification('Please select a voice first', 'error');
+                return;
+            }
+
+            const button = document.getElementById('test-voice-btn');
+            const originalText = button.innerHTML;
+            
+            try {
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+                button.disabled = true;
+
+                console.log('🎵 Generating test audio...', { voiceId, textLength: testText.length });
+                
+                const response = await fetch('/api/elevenlabs/synthesize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: testText.trim(),
+                        voiceId: voiceId,
+                        companyId: companyId // Pass company ID for API selection
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Create audio element and play
+                    const audioData = `data:audio/mp3;base64,${result.audioContent}`;
+                    const audio = new Audio(audioData);
+                    
+                    testResultsDiv.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <i class="fas fa-volume-up text-green-600"></i>
+                                <span class="text-sm font-medium">Audio generated successfully!</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button type="button" onclick="this.previousElementSibling.previousElementSibling.play()" 
+                                        class="text-sm bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded">
+                                    <i class="fas fa-play mr-1"></i>Play
+                                </button>
+                                <button type="button" onclick="downloadAudio('${audioData}', 'test-voice.mp3')" 
+                                        class="text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded">
+                                    <i class="fas fa-download mr-1"></i>Download
+                                </button>
+                            </div>
+                            <audio controls class="hidden">${audioData}</audio>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-2">
+                            Size: ${(result.size / 1024).toFixed(1)} KB | Format: ${result.format || 'mp3'}
+                        </div>
+                    `;
+                    
+                    // Auto-play the audio
+                    audio.play().catch(e => console.log('Auto-play blocked:', e));
+                    
+                    showNotification('✅ Test audio generated successfully!', 'success');
+                    console.log('✅ Audio generated:', result);
+                } else {
+                    throw new Error(result.message || 'Failed to generate audio');
+                }
+            } catch (error) {
+                console.error('❌ Failed to generate test audio:', error);
+                testResultsDiv.innerHTML = `
+                    <div class="flex items-center space-x-3 text-red-600">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span class="text-sm">Failed to generate audio: ${error.message}</span>
+                    </div>
+                `;
+                showNotification(`❌ Failed to generate audio: ${error.message}`, 'error');
+            } finally {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        // Stream test audio
+        async function streamTestAudio() {
+            const companyId = getCurrentCompanyId();
+            const testText = document.getElementById('test-text')?.value;
+            const voiceId = document.getElementById('voice-selector')?.value;
+            const testResultsDiv = document.getElementById('test-results');
+            
+            if (!companyId) {
+                showNotification('Error: Company ID not found', 'error');
+                return;
+            }
+            
+            if (!testText?.trim()) {
+                showNotification('Please enter test text', 'error');
+                return;
+            }
+            
+            if (!voiceId) {
+                showNotification('Please select a voice first', 'error');
+                return;
+            }
+
+            const button = document.getElementById('stream-test-btn');
+            const originalText = button.innerHTML;
+            
+            try {
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Streaming...';
+                button.disabled = true;
+
+                console.log('🌊 Starting audio stream test...', { voiceId, textLength: testText.length });
+                
+                testResultsDiv.innerHTML = `
+                    <div class="flex items-center space-x-3 text-blue-600">
+                        <i class="fas fa-broadcast-tower animate-pulse"></i>
+                        <span class="text-sm">Streaming audio...</span>
+                    </div>
+                `;
+
+                const response = await fetch('/api/elevenlabs/stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: testText.trim(),
+                        voiceId: voiceId,
+                        companyId: companyId
+                    })
+                });
+
+                if (response.ok) {
+                    // For stream, we'll show success message
+                    testResultsDiv.innerHTML = `
+                        <div class="flex items-center space-x-3 text-green-600">
+                            <i class="fas fa-check-circle"></i>
+                            <span class="text-sm">Stream test completed successfully!</span>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-2">
+                            Streaming functionality is working properly.
+                        </div>
+                    `;
+                    
+                    showNotification('✅ Stream test completed!', 'success');
+                    console.log('✅ Stream test completed');
+                } else {
+                    throw new Error('Stream test failed');
+                }
+            } catch (error) {
+                console.error('❌ Failed to stream test audio:', error);
+                testResultsDiv.innerHTML = `
+                    <div class="flex items-center space-x-3 text-red-600">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span class="text-sm">Stream test failed: ${error.message}</span>
+                    </div>
+                `;
+                showNotification(`❌ Stream test failed: ${error.message}`, 'error');
+            } finally {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        // Download audio utility
+        function downloadAudio(audioData, filename) {
+            const link = document.createElement('a');
+            link.href = audioData;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            console.log('📥 Audio download initiated:', filename);
+        }
+
         // Initialize ElevenLabs event listeners
         document.addEventListener('DOMContentLoaded', function() {
             // Test API Connection button
@@ -2399,6 +2588,20 @@
             if (apiToggle) {
                 apiToggle.addEventListener('change', toggleApiKeySource);
                 console.log('✅ API key toggle listener attached');
+            }
+
+            // Test voice button
+            const testVoiceBtn = document.getElementById('test-voice-btn');
+            if (testVoiceBtn) {
+                testVoiceBtn.addEventListener('click', generateTestAudio);
+                console.log('✅ Test voice button listener attached');
+            }
+
+            // Stream test button
+            const streamTestBtn = document.getElementById('stream-test-btn');
+            if (streamTestBtn) {
+                streamTestBtn.addEventListener('click', streamTestAudio);
+                console.log('✅ Stream test button listener attached');
             }
 
             // Auto-load voices when page loads
