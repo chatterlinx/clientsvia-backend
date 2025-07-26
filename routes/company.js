@@ -7,6 +7,7 @@ const Company = require('../models/Company'); // Add Company model import
 const { google } = require('googleapis'); // For Google Calendar
 const { normalizePhoneNumber } = require('../utils/phone');
 const { redisClient } = require('../clients');
+const { apiLimiter } = require('../middleware/rateLimit'); // Rate limiting
 const { defaultResponses, clearCompanyResponsesCache, initializeStandardPersonalityResponses, ensurePersonalityResponsesExist } = require('../utils/personalityResponses_enhanced');
 
 // Google OAuth2 Client Setup
@@ -892,7 +893,7 @@ router.get('/companies/:companyId/personality-status', async (req, res) => {
 // --- Booking Flow Configuration Routes ---
 
 // Get booking flow configuration for a company
-router.get('/companies/:companyId/booking-flow', async (req, res) => {
+router.get('/companies/:companyId/booking-flow', apiLimiter, async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -900,11 +901,7 @@ router.get('/companies/:companyId/booking-flow', async (req, res) => {
             return res.status(400).json({ error: 'Invalid company ID' });
         }
         
-        const db = getDB();
-        const company = await db.collection('companies').findOne(
-            { _id: new ObjectId(companyId) },
-            { projection: { bookingFlow: 1 } }
-        );
+        const company = await Company.findById(companyId).select('bookingFlow');
         
         if (!company) {
             return res.status(404).json({ error: 'Company not found' });
@@ -918,6 +915,7 @@ router.get('/companies/:companyId/booking-flow', async (req, res) => {
             { prompt: "What email should we use for booking confirmations?", name: "email" }
         ];
         
+        console.log(`[API] Loaded booking flow for company ${companyId}:`, company.bookingFlow || 'using defaults');
         res.json(company.bookingFlow || defaultBookingFlow);
     } catch (error) {
         console.error('[API Error] Error fetching booking flow:', error);
@@ -926,7 +924,7 @@ router.get('/companies/:companyId/booking-flow', async (req, res) => {
 });
 
 // Save booking flow configuration for a company
-router.post('/companies/:companyId/booking-flow', async (req, res) => {
+router.post('/companies/:companyId/booking-flow', apiLimiter, async (req, res) => {
     try {
         const { companyId } = req.params;
         const bookingFlowFields = req.body;
@@ -935,29 +933,52 @@ router.post('/companies/:companyId/booking-flow', async (req, res) => {
             return res.status(400).json({ error: 'Invalid company ID' });
         }
         
-        // Validate booking flow fields
+        // Enhanced validation for booking flow fields
         if (!Array.isArray(bookingFlowFields)) {
             return res.status(400).json({ error: 'Booking flow must be an array' });
         }
         
+        if (bookingFlowFields.length > 20) {
+            return res.status(400).json({ error: 'Maximum 20 booking flow fields allowed' });
+        }
+        
         for (const field of bookingFlowFields) {
+            // Required field validation
             if (!field.prompt || !field.name || typeof field.prompt !== 'string' || typeof field.name !== 'string') {
                 return res.status(400).json({ error: 'Each booking flow field must have a prompt and name' });
             }
+            
+            // Length validation
+            if (field.prompt.length > 500) {
+                return res.status(400).json({ error: 'Prompt must be less than 500 characters' });
+            }
+            
+            if (field.name.length > 100) {
+                return res.status(400).json({ error: 'Field name must be less than 100 characters' });
+            }
+            
+            // Sanitize field names (alphanumeric and underscores only)
+            if (!/^[a-zA-Z0-9_]+$/.test(field.name)) {
+                return res.status(400).json({ error: 'Field names can only contain letters, numbers, and underscores' });
+            }
+            
+            // Validate field type if provided
+            if (field.type && !['text', 'phone', 'email', 'date', 'notes'].includes(field.type)) {
+                return res.status(400).json({ error: 'Invalid field type' });
+            }
         }
         
-        const db = getDB();
-        const result = await db.collection('companies').updateOne(
-            { _id: new ObjectId(companyId) },
+        // Use Mongoose model for consistency
+        const result = await Company.findByIdAndUpdate(
+            companyId,
             { 
-                $set: { 
-                    bookingFlow: bookingFlowFields,
-                    bookingFlowUpdatedAt: new Date()
-                } 
-            }
+                bookingFlow: bookingFlowFields,
+                bookingFlowUpdatedAt: new Date()
+            },
+            { new: true, runValidators: true }
         );
         
-        if (result.matchedCount === 0) {
+        if (!result) {
             return res.status(404).json({ error: 'Company not found' });
         }
         
@@ -965,7 +986,8 @@ router.post('/companies/:companyId/booking-flow', async (req, res) => {
         res.json({ 
             success: true, 
             message: 'Booking flow configuration saved successfully',
-            fieldCount: bookingFlowFields.length
+            fieldCount: bookingFlowFields.length,
+            bookingFlow: result.bookingFlow
         });
     } catch (error) {
         console.error('[API Error] Error saving booking flow:', error);

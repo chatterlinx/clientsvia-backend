@@ -9,9 +9,15 @@ const Company = require('../models/Company');
 class SuperIntelligentAgentEngine {
     
     constructor() {
-        this.openai = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY
-        });
+        // Initialize OpenAI only if API key is available
+        if (process.env.OPENAI_API_KEY) {
+            this.openai = new OpenAI({
+                apiKey: process.env.OPENAI_API_KEY
+            });
+        } else {
+            console.warn('⚠️  OpenAI API key not found - SuperIntelligentAgent will use fallback modes');
+            this.openai = null;
+        }
         
         // Initialize vector database connection (Pinecone/FAISS simulation)
         this.vectorDB = new Map(); // In production: use Pinecone/Weaviate
@@ -258,6 +264,16 @@ class SuperIntelligentAgentEngine {
 
     async observeQuery(query, context) {
         // Analyze query intent, sentiment, urgency
+        if (!this.openai) {
+            // Fallback analysis when OpenAI is not available
+            return {
+                intent: 'general_inquiry',
+                sentiment: 0.5,
+                urgency: 2,
+                complexity: 2
+            };
+        }
+        
         const analysis = await this.openai.chat.completions.create({
             model: "gpt-4",
             messages: [{
@@ -299,6 +315,15 @@ class SuperIntelligentAgentEngine {
     }
 
     async generateActionableResponse(reasoning, context) {
+        if (!this.openai) {
+            // Fallback response when OpenAI is not available
+            return {
+                response: "I understand your question. Let me help you with that.",
+                confidence: 0.6,
+                suggestedActions: []
+            };
+        }
+        
         const prompt = this.buildReasoningPrompt(reasoning, context);
         
         const response = await this.openai.chat.completions.create({
@@ -356,6 +381,16 @@ class SuperIntelligentAgentEngine {
     }
 
     async generateHandoffSummary(callTranscript, context) {
+        if (!this.openai) {
+            // Fallback summary when OpenAI is not available
+            return {
+                summary: "Customer inquiry requiring human assistance",
+                keyPoints: ["Customer needs assistance"],
+                suggestedActions: ["Review customer request"],
+                priority: "medium"
+            };
+        }
+        
         const summary = await this.openai.chat.completions.create({
             model: "gpt-4",
             messages: [{

@@ -792,17 +792,19 @@ function addBookingField() {
     const promptInput = document.getElementById('new-prompt');
     const nameInput = document.getElementById('new-name');
     
-    if (!promptInput?.value.trim() || !nameInput?.value.trim()) {
-        showNotification('Please fill in both prompt and field name', 'error');
-        
-        // Highlight empty fields
-        if (!promptInput?.value.trim()) {
+    // Enhanced validation
+    const promptValue = promptInput.value?.trim();
+    const nameValue = nameInput.value?.trim();
+    
+    if (!promptValue || !nameValue) {
+        showNotification('Both prompt and field name are required', 'error');
+        if (!promptValue) {
             promptInput?.classList.add('border-red-300', 'bg-red-50');
             setTimeout(() => {
                 promptInput?.classList.remove('border-red-300', 'bg-red-50');
             }, 3000);
         }
-        if (!nameInput?.value.trim()) {
+        if (!nameValue) {
             nameInput?.classList.add('border-red-300', 'bg-red-50');
             setTimeout(() => {
                 nameInput?.classList.remove('border-red-300', 'bg-red-50');
@@ -811,8 +813,34 @@ function addBookingField() {
         return;
     }
     
+    // Length validation
+    if (promptValue.length > 500) {
+        showNotification('Prompt must be less than 500 characters', 'error');
+        promptInput?.classList.add('border-red-300', 'bg-red-50');
+        setTimeout(() => {
+            promptInput?.classList.remove('border-red-300', 'bg-red-50');
+        }, 3000);
+        return;
+    }
+    
+    if (nameValue.length > 100) {
+        showNotification('Field name must be less than 100 characters', 'error');
+        nameInput?.classList.add('border-red-300', 'bg-red-50');
+        setTimeout(() => {
+            nameInput?.classList.remove('border-red-300', 'bg-red-50');
+        }, 3000);
+        return;
+    }
+    
+    // Sanitize field name (alphanumeric and underscores only)
+    const sanitizedName = nameValue.replace(/[^a-zA-Z0-9_]/g, '_');
+    if (sanitizedName !== nameValue) {
+        showNotification('Field name can only contain letters, numbers, and underscores. Name has been sanitized.', 'warning');
+        nameInput.value = sanitizedName;
+    }
+    
     // Check for duplicate field names
-    const fieldName = nameInput.value.trim().toLowerCase();
+    const fieldName = sanitizedName.toLowerCase();
     const existingField = bookingFlowFields.find(field => field.name.toLowerCase() === fieldName);
     if (existingField) {
         showNotification('A field with this name already exists', 'error');
@@ -823,10 +851,16 @@ function addBookingField() {
         return;
     }
     
+    // Maximum fields check
+    if (bookingFlowFields.length >= 20) {
+        showNotification('Maximum 20 booking fields allowed', 'error');
+        return;
+    }
+    
     const field = {
         id: Date.now(),
-        prompt: promptInput.value.trim(),
-        name: nameInput.value.trim(),
+        prompt: promptValue,
+        name: sanitizedName,
         order: bookingFlowFields.length
     };
     
@@ -948,17 +982,29 @@ async function saveBookingFlow() {
     try {
         console.log('💾 Saving booking flow...');
         
+        // Clean the data for backend - remove frontend-only fields
+        const cleanedFields = bookingFlowFields.map(field => ({
+            prompt: field.prompt,
+            name: field.name,
+            required: field.required || true,
+            type: field.type || 'text'
+        }));
+        
         const response = await fetch(`/api/companies/${companyId}/booking-flow`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(bookingFlowFields)
+            body: JSON.stringify(cleanedFields)
         });
         
         if (!response.ok) {
-            throw new Error(`Save failed: ${response.statusText}`);
+            const errorData = await response.json();
+            throw new Error(`Save failed: ${errorData.error || response.statusText}`);
         }
+        
+        const result = await response.json();
+        console.log('✅ Booking flow save response:', result);
         
         const savedElement = document.getElementById('booking-flow-saved');
         if (savedElement) {
@@ -973,7 +1019,7 @@ async function saveBookingFlow() {
         
     } catch (error) {
         console.error('❌ Error saving booking flow:', error);
-        showNotification('Failed to save booking flow', 'error');
+        showNotification(`Failed to save booking flow: ${error.message}`, 'error');
     }
 }
 
@@ -1326,7 +1372,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Allowed LLM Models - Multi-select checkboxes
     const allowedModels = settings.allowedLLMModels || ['ollama-phi3', 'gemini-pro'];
-    const llmCheckboxes = {
+    const llmModelCheckboxes = {
         'ollama-phi3': document.getElementById('llm-ollama-phi3'),
         'ollama-mistral': document.getElementById('llm-ollama-mistral'),
         'gemini-pro': document.getElementById('llm-gemini-pro'),
@@ -1334,7 +1380,7 @@ document.addEventListener('DOMContentLoaded', function() {
         'claude-3': document.getElementById('llm-claude-3')
     };
     
-    Object.entries(llmCheckboxes).forEach(([model, checkbox]) => {
+    Object.entries(llmModelCheckboxes).forEach(([model, checkbox]) => {
         if (checkbox) {
             checkbox.checked = allowedModels.includes(model);
         }
@@ -1614,9 +1660,9 @@ function downloadTraceLogs() {
 
 // ...existing code...
     const selectedModels = [];
-    const llmCheckboxes = document.querySelectorAll('input[id^="llm-"]:checked');
+    const checkedLLMBoxes = document.querySelectorAll('input[id^="llm-"]:checked');
     
-    llmCheckboxes.forEach(checkbox => {
+    checkedLLMBoxes.forEach(checkbox => {
         const model = checkbox.id.replace('llm-', '');
         selectedModels.push(model);
     });
