@@ -1092,8 +1092,6 @@ router.post('/:companyId/voice-settings', async (req, res) => {
     try {
         const companyId = req.params.companyId;
         const {
-            useCompanyApiKey, // New field for API source toggle
-            apiKeySource, // Legacy support
             apiKey,
             voiceId,
             stability,
@@ -1105,12 +1103,11 @@ router.post('/:companyId/voice-settings', async (req, res) => {
             optimize_streaming_latency
         } = req.body;
 
-        // Validate required fields based on API source
-        const willUseCompanyApi = useCompanyApiKey || (apiKeySource === 'company');
-        if (willUseCompanyApi && !apiKey) {
+        // Validate required fields
+        if (!voiceId) {
             return res.status(400).json({
                 success: false,
-                message: 'API Key is required when using company\'s own ElevenLabs account'
+                message: 'Voice ID is required'
             });
         }
 
@@ -1135,18 +1132,15 @@ router.post('/:companyId/voice-settings', async (req, res) => {
 
         // Update ElevenLabs settings
         company.aiSettings.elevenLabs = {
-            useCompanyApiKey: useCompanyApiKey !== undefined ? useCompanyApiKey : 
-                            (apiKeySource === 'company' ? true : 
-                             company.aiSettings.elevenLabs.useCompanyApiKey || false),
             apiKey: apiKey || company.aiSettings.elevenLabs.apiKey,
-            voiceId: voiceId || company.aiSettings.elevenLabs.voiceId,
-            stability: parseFloat(stability) || company.aiSettings.elevenLabs.stability || 0.5,
-            similarity_boost: parseFloat(similarity_boost) || company.aiSettings.elevenLabs.similarity_boost || 0.7,
-            style: parseFloat(style) || company.aiSettings.elevenLabs.style || 0.0,
+            voiceId: voiceId,
+            stability: parseFloat(stability) || 0.5,
+            similarity_boost: parseFloat(similarity_boost) || 0.7,
+            style: parseFloat(style) || 0.0,
             use_speaker_boost: use_speaker_boost !== false, // Default to true
-            model_id: model_id || company.aiSettings.elevenLabs.model_id || 'eleven_turbo_v2_5',
-            output_format: output_format || company.aiSettings.elevenLabs.output_format || 'mp3_44100_128',
-            optimize_streaming_latency: parseInt(optimize_streaming_latency) || company.aiSettings.elevenLabs.optimize_streaming_latency || 0,
+            model_id: model_id || 'eleven_turbo_v2_5',
+            output_format: output_format || 'mp3_44100_128',
+            optimize_streaming_latency: parseInt(optimize_streaming_latency) || 0,
             updated: new Date()
         };
 
