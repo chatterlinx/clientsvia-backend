@@ -2737,8 +2737,22 @@
                     }
                     
                     refreshVoices();
+                } else {
+                    console.warn('⚠️ Voice selector not found on page load');
                 }
             }, 1000);
+            
+            // Debug: Log all available elements for troubleshooting
+            console.log('🔍 ElevenLabs UI Elements Check:');
+            console.log('  - Test API Connection button:', !!document.getElementById('test-api-connection'));
+            console.log('  - Refresh Voices button:', !!document.getElementById('refresh-voices')); 
+            console.log('  - Voice selector:', !!document.getElementById('voice-selector'));
+            console.log('  - API Key toggle:', !!document.getElementById('useOwnApiKey'));
+            console.log('  - API Key input:', !!document.getElementById('elevenlabsApiKey'));
+            console.log('  - Test voice button:', !!document.getElementById('test-voice-btn'));
+            console.log('  - Stream test button:', !!document.getElementById('stream-test-btn'));
+            console.log('  - Test text input:', !!document.getElementById('test-text'));
+            console.log('  - Test results div:', !!document.getElementById('test-results'));
         });
 
         // 🚀 ENTERPRISE AI AGENT FUNCTIONS
