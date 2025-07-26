@@ -996,7 +996,7 @@ router.post('/companies/:companyId/booking-flow', apiLimiter, async (req, res) =
 });
 
 // Get company's trade categories
-router.get('/company/:companyId/trade-categories', apiLimiter, async (req, res) => {
+router.get('/companies/:companyId/trade-categories', apiLimiter, async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -1019,7 +1019,7 @@ router.get('/company/:companyId/trade-categories', apiLimiter, async (req, res) 
 });
 
 // Save company's trade categories
-router.post('/company/:companyId/trade-categories', apiLimiter, async (req, res) => {
+router.post('/companies/:companyId/trade-categories', apiLimiter, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { tradeCategories } = req.body;

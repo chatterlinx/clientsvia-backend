@@ -667,7 +667,7 @@ async function loadCompanyTradeCategories() {
     try {
         console.log('📋 Loading company trade categories...');
         
-        const response = await fetch(`/api/company/${companyId}/trade-categories`);
+        const response = await fetch(`/api/companies/${companyId}/trade-categories`);
         if (!response.ok) {
             throw new Error(`Failed to load company trade categories: ${response.statusText}`);
         }
@@ -798,7 +798,7 @@ async function saveTradeCategories() {
         
         console.log('📋 Saving categories:', selectedValues);
         
-        const response = await fetch(`/api/company/${companyId}/trade-categories`, {
+        const response = await fetch(`/api/companies/${companyId}/trade-categories`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
