@@ -2238,6 +2238,13 @@
 
                 if (result.success) {
                     availableVoices = result.voices || [];
+                    
+                    // Check for any voices with undefined voice_id
+                    const invalidVoices = availableVoices.filter(voice => !voice.voice_id || voice.voice_id === 'undefined');
+                    if (invalidVoices.length > 0) {
+                        console.warn('⚠️ Found voices with invalid voice_id:', invalidVoices);
+                    }
+                    
                     populateVoiceSelector();
                     showNotification(`✅ Loaded ${availableVoices.length} voices`, 'success');
                     console.log(`✅ Loaded ${availableVoices.length} voices:`, availableVoices);
@@ -2275,12 +2282,18 @@
             }
 
             // Add voice options
-            availableVoices.forEach(voice => {
+            availableVoices.forEach((voice, index) => {
                 const option = document.createElement('option');
                 option.value = voice.voice_id;
                 option.textContent = `${voice.name} (${voice.labels?.gender || 'Unknown'})`;
                 option.setAttribute('data-category', voice.labels?.category || '');
                 option.setAttribute('data-gender', voice.labels?.gender || '');
+                
+                // Debug logging for voice options
+                if (voice.name.toLowerCase().includes('mark') || index < 3) {
+                    console.log(`🎙️ Voice option ${index}: ${voice.name} = ${voice.voice_id}`);
+                }
+                
                 selector.appendChild(option);
             });
 

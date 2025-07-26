@@ -4287,8 +4287,21 @@ class CompanyProfileManager {
             newVoiceSelector: !!newVoiceSelector,
             newVoiceSelectorValue: newVoiceSelector?.value,
             legacyVoiceSelector: !!legacyVoiceSelector,
-            legacyVoiceSelectorValue: legacyVoiceSelector?.value
+            legacyVoiceSelectorValue: legacyVoiceSelector?.value,
+            selectedIndex: newVoiceSelector?.selectedIndex,
+            optionsCount: newVoiceSelector?.options?.length
         });
+        
+        // Also log the selected option details
+        if (newVoiceSelector && newVoiceSelector.selectedIndex >= 0) {
+            const selectedOption = newVoiceSelector.options[newVoiceSelector.selectedIndex];
+            console.log('🎯 Selected option details:', {
+                index: newVoiceSelector.selectedIndex,
+                value: selectedOption.value,
+                text: selectedOption.textContent,
+                isUndefined: selectedOption.value === 'undefined'
+            });
+        }
         
         // Prioritize new voice selector over legacy one
         const voiceSelect = newVoiceSelector || legacyVoiceSelector;
@@ -4314,7 +4327,7 @@ class CompanyProfileManager {
         let voiceId = null;
         
         // Priority 1: Check the voice selector dropdown
-        if (voiceSelect?.value && voiceSelect.value !== '' && voiceSelect.value !== 'undefined') {
+        if (voiceSelect?.value && voiceSelect.value !== '' && voiceSelect.value !== 'undefined' && voiceSelect.value !== undefined) {
             voiceId = voiceSelect.value;
             console.log('🎙️ Using voiceId from selector:', voiceId);
         }
@@ -4322,7 +4335,7 @@ class CompanyProfileManager {
         else if (voiceSelect?.options && voiceSelect.options.length > 0) {
             for (let i = 0; i < voiceSelect.options.length; i++) {
                 const option = voiceSelect.options[i];
-                if (option.value && option.value !== 'undefined' && option.value !== '') {
+                if (option.value && option.value !== 'undefined' && option.value !== '' && option.value !== undefined) {
                     voiceId = option.value;
                     console.log('🎙️ Using first valid option from selector:', voiceId);
                     // Update the selector to reflect this choice
@@ -4332,7 +4345,7 @@ class CompanyProfileManager {
             }
         }
         
-        if (voiceId) {
+        if (voiceId && voiceId !== 'undefined' && voiceId !== undefined) {
             // Save to both locations for consistency
             data.elevenLabsVoiceId = voiceId;
             data.aiSettings.elevenLabs.voiceId = voiceId;
@@ -4342,6 +4355,13 @@ class CompanyProfileManager {
             console.log('   - Voice selector element:', voiceSelect?.id || 'none');
             console.log('   - Voice selector value:', voiceSelect?.value);
             console.log('   - Options available:', voiceSelect?.options?.length || 0);
+            
+            // Don't save undefined voice IDs - keep existing or set to null
+            if (data.aiSettings?.elevenLabs?.voiceId === 'undefined') {
+                console.log('🔧 Removing invalid "undefined" voice ID');
+                data.aiSettings.elevenLabs.voiceId = null;
+                data.elevenLabsVoiceId = null;
+            }
         }
         
         console.log('📊 Voice data collected:', {
