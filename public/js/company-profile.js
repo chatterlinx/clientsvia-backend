@@ -1505,6 +1505,10 @@ let currentVoiceSettings = {
 function initializeEnhancedVoiceSettings() {
     console.log('🎤 Initializing Enhanced ElevenLabs Voice Settings...');
     
+    // Test if voice selector exists
+    const voiceSelector = document.getElementById('voice-selector');
+    console.log('🔍 Voice selector element found:', !!voiceSelector);
+    
     // Bind event listeners
     bindVoiceSettingsEvents();
     
@@ -1513,6 +1517,12 @@ function initializeEnhancedVoiceSettings() {
     
     // Load initial data
     loadElevenLabsData();
+    
+    // Force load default voices immediately as a test
+    setTimeout(() => {
+        console.log('🧪 Force loading default voices as test...');
+        loadDefaultVoices();
+    }, 1000);
 }
 
 /**
@@ -1696,19 +1706,30 @@ async function loadUserSubscriptionInfo() {
  * Populate voice selector dropdown
  */
 function populateVoiceSelector(voices) {
+    console.log('🎙️ populateVoiceSelector called with voices:', voices.length);
+    
     const selector = document.getElementById('voice-selector');
-    if (!selector) return;
+    console.log('🔍 Voice selector element:', selector);
+    
+    if (!selector) {
+        console.error('❌ Voice selector element not found!');
+        return;
+    }
     
     // Clear existing options except the first
     selector.innerHTML = '<option value="">Choose a voice...</option>';
+    console.log('🧹 Cleared voice selector, adding', voices.length, 'voices');
     
-    voices.forEach(voice => {
+    voices.forEach((voice, index) => {
         const option = document.createElement('option');
         option.value = voice.voice_id;
         option.textContent = `${voice.name} (${voice.gender || 'Unknown'}, ${voice.category || 'General'})`;
         option.dataset.voice = JSON.stringify(voice);
         selector.appendChild(option);
+        console.log(`✅ Added voice ${index + 1}:`, voice.name);
     });
+    
+    console.log('🎤 Voice selector populated with', selector.options.length, 'total options');
 }
 
 /**
