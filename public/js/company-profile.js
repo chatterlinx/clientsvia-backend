@@ -2084,8 +2084,9 @@ function displayStreamingResults(audioUrl) {
  * Filter voices based on criteria
  */
 function filterVoices() {
-    const genderFilter = document.getElementById('voice-gender-filter').value;
-    const categoryFilter = document.getElementById('voice-category-filter').value;
+    console.log('🔍 filterVoices called, availableVoices count:', availableVoices.length);
+    const genderFilter = document.getElementById('voice-gender-filter')?.value || '';
+    const categoryFilter = document.getElementById('voice-category-filter')?.value || '';
     
     let filteredVoices = availableVoices;
     
@@ -2093,16 +2094,21 @@ function filterVoices() {
         filteredVoices = filteredVoices.filter(voice => 
             voice.gender && voice.gender.toLowerCase() === genderFilter.toLowerCase()
         );
+        console.log('🔍 After gender filter:', filteredVoices.length);
     }
     
     if (categoryFilter) {
         filteredVoices = filteredVoices.filter(voice => 
             voice.category && voice.category.toLowerCase().includes(categoryFilter.toLowerCase())
         );
+        console.log('🔍 After category filter:', filteredVoices.length);
     }
     
     populateVoiceSelector(filteredVoices);
 }
+
+// Make filterVoices available globally
+window.filterVoices = filterVoices;
 
 /**
  * Save voice settings
