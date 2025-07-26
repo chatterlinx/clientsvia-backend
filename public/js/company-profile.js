@@ -214,8 +214,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize all platform components (ALWAYS works)
     initializeEventListeners();
     
-    // Initialize platform features that don't depend on company data
-    initializePlatformFeatures();
+    // Initialize ElevenLabs voice settings
+    initializeEnhancedVoiceSettings();
     
     // Load company data if ID is available (OPTIONAL for platform functionality)
     if (companyId) {
