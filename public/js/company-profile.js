@@ -613,15 +613,23 @@ async function savePersonalityResponses() {
 }
 
 // =============================================
-// TRADE CATEGORIES MANAGEMENT
+// TRADE CATEGORIES MANAGEMENT - MULTI-SELECT FOR COMPANY
 // =============================================
 
+/**
+ * Load all available trade categories and populate the multi-select dropdown
+ */
 async function loadTradeCategorySelector() {
     try {
-        console.log('📋 Loading trade categories...');
+        console.log('📋 Loading trade categories for company selection...');
         
         const response = await fetch('/api/trade-categories');
+        if (!response.ok) {
+            throw new Error(`Failed to load trade categories: ${response.statusText}`);
+        }
+        
         const categories = await response.json();
+        console.log('📋 Available trade categories:', categories.length);
         
         const select = document.getElementById('trade-category-select');
         if (!select) {
@@ -629,30 +637,109 @@ async function loadTradeCategorySelector() {
             return;
         }
         
+        // Clear existing options
         select.innerHTML = '';
         
+        // Add categories as options
         categories.forEach(category => {
             const option = document.createElement('option');
             option.value = category.name;
-            option.textContent = category.name;
+            option.textContent = `${category.name} (${category.qas ? category.qas.length : 0} Q&As)`;
+            option.title = category.description || `${category.name} trade category`;
             select.appendChild(option);
         });
         
-        // Load company's selected categories
-        if (currentCompanyData && currentCompanyData.tradeTypes) {
-            const selectedCategories = currentCompanyData.tradeTypes;
-            for (const option of select.options) {
-                if (selectedCategories.includes(option.value)) {
-                    option.selected = true;
-                }
-            }
-        }
+        // Load company's currently selected categories
+        await loadCompanyTradeCategories();
         
-        console.log('✅ Trade categories loaded');
+        console.log('✅ Trade categories selector loaded');
         
     } catch (error) {
         console.error('❌ Error loading trade categories:', error);
+        showNotification('Failed to load trade categories', 'error');
     }
+}
+
+/**
+ * Load the company's currently selected trade categories
+ */
+async function loadCompanyTradeCategories() {
+    try {
+        console.log('📋 Loading company trade categories...');
+        
+        const response = await fetch(`/api/company/${companyId}/trade-categories`);
+        if (!response.ok) {
+            throw new Error(`Failed to load company trade categories: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        const selectedCategories = data.tradeCategories || [];
+        
+        const select = document.getElementById('trade-category-select');
+        if (!select) return;
+        
+        // Clear all selections first
+        for (const option of select.options) {
+            option.selected = false;
+        }
+        
+        // Select the company's categories
+        selectedCategories.forEach(categoryName => {
+            for (const option of select.options) {
+                if (option.value === categoryName) {
+                    option.selected = true;
+                    break;
+                }
+            }
+        });
+        
+        // Update the count display
+        updateSelectedCategoriesCount();
+        
+        console.log(`✅ Company has ${selectedCategories.length} trade categories selected:`, selectedCategories);
+        
+    } catch (error) {
+        console.error('❌ Error loading company trade categories:', error);
+        // Don't show error notification here as it might be called during page load
+    }
+}
+
+/**
+ * Update the display of how many categories are selected
+ */
+function updateSelectedCategoriesCount() {
+    const select = document.getElementById('trade-category-select');
+    if (!select) return;
+    
+    const selectedCount = select.selectedOptions.length;
+    const totalCount = select.options.length;
+    
+    // Find or create count display element
+    let countDisplay = document.getElementById('trade-categories-count');
+    if (!countDisplay) {
+        countDisplay = document.createElement('div');
+        countDisplay.id = 'trade-categories-count';
+        countDisplay.className = 'mt-2 text-sm font-medium';
+        select.parentNode.insertBefore(countDisplay, select.nextSibling);
+    }
+    
+    if (selectedCount === 0) {
+        countDisplay.innerHTML = `<span class="text-gray-500"><i class="fas fa-info-circle mr-1"></i>No categories selected</span>`;
+    } else {
+        countDisplay.innerHTML = `<span class="text-indigo-600"><i class="fas fa-check-circle mr-1"></i>${selectedCount} of ${totalCount} categories selected</span>`;
+    }
+}
+
+/**
+ * Handle selection changes in the multi-select
+ */
+function handleTradeCategoryChange() {
+    updateSelectedCategoriesCount();
+    
+    const select = document.getElementById('trade-category-select');
+    const selectedValues = Array.from(select.selectedOptions).map(opt => opt.value);
+    
+    console.log('📋 Trade categories selection changed:', selectedValues);
 }
 
 function populateTradeCategories(selectedCategories) {
@@ -684,6 +771,9 @@ function updateTradeCategoriesDisplay(categories) {
     ).join('');
 }
 
+/**
+ * Save the selected trade categories for this company
+ */
 async function saveTradeCategories() {
     try {
         console.log('💾 Saving trade categories...');
@@ -695,6 +785,19 @@ async function saveTradeCategories() {
         
         const selectedValues = Array.from(select.selectedOptions).map(opt => opt.value);
         
+        // Validation
+        if (selectedValues.length === 0) {
+            showNotification('Please select at least one trade category', 'warning');
+            return;
+        }
+        
+        if (selectedValues.length > 10) {
+            showNotification('Maximum 10 trade categories allowed', 'error');
+            return;
+        }
+        
+        console.log('📋 Saving categories:', selectedValues);
+        
         const response = await fetch(`/api/company/${companyId}/trade-categories`, {
             method: 'POST',
             headers: {
@@ -704,20 +807,30 @@ async function saveTradeCategories() {
         });
         
         if (!response.ok) {
-            throw new Error(`Save failed: ${response.statusText}`);
+            const errorData = await response.json();
+            throw new Error(`Save failed: ${errorData.error || response.statusText}`);
         }
+        
+        const result = await response.json();
+        console.log('✅ Trade categories save response:', result);
         
         // Update local data
         if (currentCompanyData) {
             currentCompanyData.tradeTypes = selectedValues;
         }
         
-        showNotification('Trade categories saved successfully!');
-        console.log('✅ Trade categories saved');
+        // Show success message with count
+        showNotification(`${selectedValues.length} trade categories saved successfully!`);
+        console.log('✅ Trade categories saved:', selectedValues);
+        
+        // Update count display
+        updateSelectedCategoriesCount();
         
     } catch (error) {
         console.error('❌ Error saving trade categories:', error);
-        showNotification('Failed to save trade categories', 'error');
+        showNotification(`Failed to save trade categories: ${error.message}`, 'error');
+    }
+}
     }
 }
 
@@ -1932,6 +2045,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         
         // Load booking flow configuration
         await loadBookingFlow();
+        
+        // Load trade categories selector
+        await loadTradeCategorySelector();
         
         // Load other components
         await loadPendingQnAs();

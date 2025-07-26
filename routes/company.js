@@ -995,4 +995,96 @@ router.post('/companies/:companyId/booking-flow', apiLimiter, async (req, res) =
     }
 });
 
+// Get company's trade categories
+router.get('/company/:companyId/trade-categories', apiLimiter, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        if (!ObjectId.isValid(companyId)) {
+            return res.status(400).json({ error: 'Invalid company ID' });
+        }
+        
+        const company = await Company.findById(companyId).select('tradeTypes');
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        console.log(`[API] Loaded trade categories for company ${companyId}:`, company.tradeTypes);
+        res.json({ tradeCategories: company.tradeTypes || [] });
+    } catch (error) {
+        console.error('[API Error] Error fetching company trade categories:', error);
+        res.status(500).json({ error: 'Failed to fetch company trade categories' });
+    }
+});
+
+// Save company's trade categories
+router.post('/company/:companyId/trade-categories', apiLimiter, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { tradeCategories } = req.body;
+        
+        if (!ObjectId.isValid(companyId)) {
+            return res.status(400).json({ error: 'Invalid company ID' });
+        }
+        
+        // Validate trade categories
+        if (!Array.isArray(tradeCategories)) {
+            return res.status(400).json({ error: 'Trade categories must be an array' });
+        }
+        
+        // Limit number of categories to prevent abuse
+        if (tradeCategories.length > 10) {
+            return res.status(400).json({ error: 'Maximum 10 trade categories allowed per company' });
+        }
+        
+        // Validate each category name
+        for (const category of tradeCategories) {
+            if (typeof category !== 'string' || category.trim().length === 0) {
+                return res.status(400).json({ error: 'All trade categories must be valid non-empty strings' });
+            }
+            if (category.length > 100) {
+                return res.status(400).json({ error: 'Trade category names must be less than 100 characters' });
+            }
+        }
+        
+        // Clean and deduplicate categories
+        const cleanedCategories = [...new Set(tradeCategories.map(cat => cat.trim()))];
+        
+        // Use Mongoose model for consistency
+        const result = await Company.findByIdAndUpdate(
+            companyId,
+            { 
+                tradeTypes: cleanedCategories,
+                updatedAt: new Date()
+            },
+            { new: true, runValidators: true }
+        );
+        
+        if (!result) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Clear Redis cache if it exists
+        try {
+            const cacheKey = `company:${companyId}`;
+            await redisClient.del(cacheKey);
+            console.log(`[Trade Categories] Cleared cache: ${cacheKey}`);
+        } catch (redisError) {
+            console.warn('[Trade Categories] Redis cache clear failed:', redisError.message);
+        }
+        
+        console.log(`[API] Updated trade categories for company ${companyId}:`, cleanedCategories);
+        res.json({ 
+            success: true, 
+            message: 'Trade categories updated successfully',
+            tradeCategories: cleanedCategories,
+            count: cleanedCategories.length
+        });
+    } catch (error) {
+        console.error('[API Error] Error saving company trade categories:', error);
+        res.status(500).json({ error: 'Failed to save company trade categories' });
+    }
+});
+
 module.exports = router;
