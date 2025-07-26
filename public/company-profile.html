@@ -2284,6 +2284,15 @@
                 selector.appendChild(option);
             });
 
+            // Auto-select the first voice if none is selected and we have voices
+            if (availableVoices.length > 0 && !selector.value) {
+                selector.value = availableVoices[0].voice_id;
+                console.log(`🎯 Auto-selected first voice: ${availableVoices[0].name}`);
+                
+                // Trigger the change event to show voice preview
+                setTimeout(() => handleVoiceChange(), 100);
+            }
+
             console.log(`📝 Populated voice selector with ${availableVoices.length} voices`);
         }
 
@@ -2413,7 +2422,7 @@
                 return;
             }
             
-            if (!voiceId) {
+            if (!voiceId || voiceId === 'undefined' || voiceId === '') {
                 showNotification('Please select a voice first', 'error');
                 return;
             }
@@ -2509,7 +2518,7 @@
                 return;
             }
             
-            if (!voiceId) {
+            if (!voiceId || voiceId === 'undefined' || voiceId === '') {
                 showNotification('Please select a voice first', 'error');
                 return;
             }
