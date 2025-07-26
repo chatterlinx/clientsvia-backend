@@ -2274,11 +2274,13 @@
                 selector.removeChild(selector.lastChild);
             }
             
-            // Re-enable selector and reset button
+            // Always ensure button is in correct state
             selector.disabled = false;
             if (refreshButton) {
                 refreshButton.innerHTML = '<i class="fas fa-sync mr-1"></i>Refresh Voices';
                 refreshButton.disabled = false;
+                refreshButton.classList.remove('opacity-50');
+                console.log('🔧 Refresh button state restored');
             }
 
             // Add voice options
@@ -2339,6 +2341,14 @@
             const selectedVoice = availableVoices.find(v => v.voice_id === selector.value);
             const previewSection = document.getElementById('voice-preview-section');
             const voiceInfo = document.getElementById('voice-info');
+            const refreshButton = document.getElementById('refresh-voices');
+            
+            // Ensure refresh button is not stuck in loading state
+            if (refreshButton && refreshButton.innerHTML.includes('Loading')) {
+                refreshButton.innerHTML = '<i class="fas fa-sync mr-1"></i>Refresh Voices';
+                refreshButton.disabled = false;
+                console.log('🔧 Fixed stuck loading state on refresh button');
+            }
             
             if (selectedVoice) {
                 console.log('🎙️ Selected voice:', selectedVoice.name);
@@ -2374,6 +2384,17 @@
                 // Hide the preview section if no voice selected
                 previewSection.classList.add('hidden');
                 voiceInfo.innerHTML = '';
+            }
+        }
+
+        // Force reset button states (utility function)
+        function resetButtonStates() {
+            const refreshButton = document.getElementById('refresh-voices');
+            if (refreshButton) {
+                refreshButton.innerHTML = '<i class="fas fa-sync mr-1"></i>Refresh Voices';
+                refreshButton.disabled = false;
+                refreshButton.classList.remove('opacity-50');
+                console.log('🔧 Force reset refresh button state');
             }
         }
 
@@ -2739,6 +2760,9 @@
             setTimeout(() => {
                 if (document.getElementById('voice-selector')) {
                     console.log('🎙️ Auto-loading voices on page load...');
+                    
+                    // Reset any stuck button states first
+                    resetButtonStates();
                     
                     // Show loading state
                     const voiceSelector = document.getElementById('voice-selector');
