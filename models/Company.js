@@ -93,6 +93,7 @@ const elevenLabsSettingsSchema = new mongoose.Schema({
 }, { _id: false });
 
 const aiSettingsSchema = new mongoose.Schema({
+    language: { type: String, default: 'en', trim: true }, // Primary language for agent conversations
     model: { type: String, default: 'gemini-1.5-pro', trim: true },
     personality: { type: String, default: 'friendly', trim: true },
     googleVoice: { type: String, default: 'en-US-Standard-A', trim: true },

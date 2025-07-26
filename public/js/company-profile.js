@@ -652,6 +652,9 @@ async function loadTradeCategorySelector() {
         // Load company's currently selected categories
         await loadCompanyTradeCategories();
         
+        // Load company's language setting
+        await loadCompanyLanguage();
+        
         console.log('✅ Trade categories selector loaded');
         
     } catch (error) {
@@ -829,8 +832,6 @@ async function saveTradeCategories() {
     } catch (error) {
         console.error('❌ Error saving trade categories:', error);
         showNotification(`Failed to save trade categories: ${error.message}`, 'error');
-    }
-}
     }
 }
 
@@ -2102,3 +2103,137 @@ document.addEventListener('DOMContentLoaded', () => {
         initializeEnhancedVoiceSettings();
     }
 });
+
+// =============================================
+// LANGUAGE SELECTION HANDLING
+// =============================================
+
+/**
+ * Handle language selection change
+ */
+function handleLanguageChange() {
+    const select = document.getElementById('agent-language');
+    if (!select) return;
+    
+    const selectedLanguage = select.value;
+    const languageName = select.options[select.selectedIndex].text;
+    
+    console.log('🌍 Agent language changed:', { 
+        code: selectedLanguage, 
+        name: languageName 
+    });
+    
+    // Update language-dependent features
+    updateLanguageFeatures(selectedLanguage);
+    
+    // Show notification
+    showNotification(`Agent language set to ${languageName}`, 'success');
+}
+
+/**
+ * Update language-dependent feature indicators
+ */
+function updateLanguageFeatures(languageCode) {
+    // Language support matrix
+    const languageSupport = {
+        'en': { llm: true, voice: true, qna: true, name: 'English' },
+        'es': { llm: true, voice: true, qna: true, name: 'Spanish' },
+        'fr': { llm: true, voice: true, qna: true, name: 'French' },
+        'de': { llm: true, voice: true, qna: true, name: 'German' },
+        'it': { llm: true, voice: true, qna: true, name: 'Italian' },
+        'pt': { llm: true, voice: true, qna: true, name: 'Portuguese' },
+        'ru': { llm: true, voice: true, qna: true, name: 'Russian' },
+        'zh': { llm: true, voice: true, qna: true, name: 'Chinese' },
+        'ja': { llm: true, voice: true, qna: true, name: 'Japanese' },
+        'ko': { llm: true, voice: true, qna: true, name: 'Korean' },
+        'ar': { llm: true, voice: true, qna: true, name: 'Arabic' },
+        'hi': { llm: true, voice: true, qna: true, name: 'Hindi' },
+        'nl': { llm: true, voice: true, qna: true, name: 'Dutch' },
+        'sv': { llm: true, voice: true, qna: true, name: 'Swedish' },
+        'da': { llm: true, voice: true, qna: true, name: 'Danish' },
+        'no': { llm: true, voice: true, qna: true, name: 'Norwegian' },
+        'fi': { llm: true, voice: true, qna: true, name: 'Finnish' },
+        'pl': { llm: true, voice: true, qna: true, name: 'Polish' },
+        'tr': { llm: true, voice: true, qna: true, name: 'Turkish' },
+        'cs': { llm: true, voice: true, qna: true, name: 'Czech' }
+    };
+    
+    const support = languageSupport[languageCode] || languageSupport['en'];
+    
+    // Update feature indicators (visual feedback)
+    const indicators = document.querySelectorAll('.inline-flex.items-center.px-2.py-1.rounded-full.text-xs');
+    indicators.forEach(indicator => {
+        const icon = indicator.querySelector('i');
+        if (icon?.classList.contains('fa-brain')) {
+            // LLM Support indicator
+            indicator.className = support.llm 
+                ? 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800'
+                : 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600';
+        } else if (icon?.classList.contains('fa-microphone')) {
+            // Voice Synthesis indicator
+            indicator.className = support.voice 
+                ? 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800'
+                : 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600';
+        } else if (icon?.classList.contains('fa-search')) {
+            // Q&A Matching indicator
+            indicator.className = support.qna 
+                ? 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800'
+                : 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600';
+        }
+    });
+    
+    console.log('🌍 Language features updated for:', support.name, support);
+}
+
+/**
+ * Load company language settings
+ */
+async function loadCompanyLanguage() {
+    try {
+        const companyId = getCompanyIdFromUrl();
+        if (!companyId) return;
+        
+        const response = await fetch(`/api/companies/${companyId}`);
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        const language = data.aiSettings?.language || 'en';
+        
+        const select = document.getElementById('agent-language');
+        if (select && select.value !== language) {
+            select.value = language;
+            updateLanguageFeatures(language);
+            console.log('🌍 Company language loaded:', language);
+        }
+    } catch (error) {
+        console.error('❌ Error loading company language:', error);
+    }
+}
+
+/**
+ * Save language selection
+ */
+async function saveLanguageSettings() {
+    try {
+        const companyId = getCompanyIdFromUrl();
+        if (!companyId) return;
+        
+        const language = document.getElementById('agent-language')?.value || 'en';
+        
+        const response = await fetch(`/api/companies/${companyId}/ai-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ language })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to save language settings');
+        }
+        
+        console.log('🌍 Language settings saved:', language);
+        return true;
+    } catch (error) {
+        console.error('❌ Error saving language settings:', error);
+        return false;
+    }
+}

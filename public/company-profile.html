@@ -1125,6 +1125,51 @@
                                                 <p class="text-xs text-gray-500 mt-1">Controls which Q&A categories the agent can access</p>
                                             </div>
 
+                                            <!-- Language Selection -->
+                                            <div>
+                                                <label for="agent-language" class="form-label">
+                                                    <i class="fas fa-globe mr-1 text-green-600"></i>Agent Language
+                                                </label>
+                                                <select id="agent-language" onchange="handleLanguageChange()" class="form-select">
+                                                    <option value="en">🇺🇸 English</option>
+                                                    <option value="es">🇪🇸 Spanish</option>
+                                                    <option value="fr">🇫🇷 French</option>
+                                                    <option value="de">🇩🇪 German</option>
+                                                    <option value="it">🇮🇹 Italian</option>
+                                                    <option value="pt">🇧🇷 Portuguese</option>
+                                                    <option value="ru">🇷🇺 Russian</option>
+                                                    <option value="zh">🇨🇳 Chinese (Simplified)</option>
+                                                    <option value="ja">🇯🇵 Japanese</option>
+                                                    <option value="ko">🇰🇷 Korean</option>
+                                                    <option value="ar">🇸🇦 Arabic</option>
+                                                    <option value="hi">🇮🇳 Hindi</option>
+                                                    <option value="nl">🇳🇱 Dutch</option>
+                                                    <option value="sv">🇸🇪 Swedish</option>
+                                                    <option value="da">🇩🇰 Danish</option>
+                                                    <option value="no">🇳🇴 Norwegian</option>
+                                                    <option value="fi">🇫🇮 Finnish</option>
+                                                    <option value="pl">🇵🇱 Polish</option>
+                                                    <option value="tr">🇹🇷 Turkish</option>
+                                                    <option value="cs">🇨🇿 Czech</option>
+                                                </select>
+                                                <p class="text-xs text-gray-500 mt-1">
+                                                    Primary language for agent conversations, Q&A matching, and LLM responses
+                                                </p>
+                                                
+                                                <!-- Language Feature Indicators -->
+                                                <div class="mt-2 flex flex-wrap gap-1">
+                                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                                                        <i class="fas fa-brain mr-1"></i>LLM Support
+                                                    </span>
+                                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                                                        <i class="fas fa-microphone mr-1"></i>Voice Synthesis
+                                                    </span>
+                                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800">
+                                                        <i class="fas fa-search mr-1"></i>Q&A Matching
+                                                    </span>
+                                                </div>
+                                            </div>
+
                                             <!-- LLM Toggle -->
                                             <div>
                                                 <label class="form-label">Use Large Language Model (LLM)</label>
