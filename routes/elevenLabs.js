@@ -155,12 +155,6 @@ async function streamSynthesis(req, res) {
       optimize_streaming_latency,
       company
     });
-      style,
-      use_speaker_boost,
-      model_id,
-      output_format,
-      optimize_streaming_latency
-    });
 
     // Set appropriate headers for streaming
     res.writeHead(200, {
