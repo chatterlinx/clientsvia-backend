@@ -2315,15 +2315,71 @@
                 selector.appendChild(option);
             });
 
-            // Auto-select the first voice if none is selected and we have voices
-            if (availableVoices.length > 0 && (!selector.value || selector.value === 'undefined' || selector.value === '')) {
+            // Check for company-specific saved voice ID first
+            let savedVoiceId = null;
+            
+            // Method 1: Check data attribute first (set by setupElevenLabsConfig)
+            if (selector.getAttribute('data-saved-voice-id')) {
+                savedVoiceId = selector.getAttribute('data-saved-voice-id');
+                console.log('🎙️ Found saved voice ID from data attribute:', savedVoiceId);
+            } 
+            
+            // Method 2: Try to get saved voice ID from the global company profile manager
+            if (!savedVoiceId && window.companyProfileManager && window.companyProfileManager.currentData) {
+                const data = window.companyProfileManager.currentData;
+                if (data.elevenLabsVoiceId) {
+                    savedVoiceId = data.elevenLabsVoiceId;
+                    console.log('🎙️ Found saved voice ID from elevenLabsVoiceId:', savedVoiceId);
+                } else if (data.aiSettings?.elevenLabs?.voiceId) {
+                    savedVoiceId = data.aiSettings.elevenLabs.voiceId;
+                    console.log('🎙️ Found saved voice ID from aiSettings.elevenLabs.voiceId:', savedVoiceId);
+                } else if (data.voiceSettings?.voiceId) {
+                    savedVoiceId = data.voiceSettings.voiceId;
+                    console.log('🎙️ Found saved voice ID from voiceSettings.voiceId:', savedVoiceId);
+                }
+            }
+            
+            console.log('🔍 Checking for saved voice during population:', {
+                savedVoiceId: savedVoiceId,
+                currentSelectorValue: selector.value,
+                availableVoicesCount: availableVoices.length,
+                dataAttribute: selector.getAttribute('data-saved-voice-id'),
+                companyDataExists: !!(window.companyProfileManager && window.companyProfileManager.currentData)
+            });
+            
+            // If we have a saved voice ID, try to select it
+            if (savedVoiceId && savedVoiceId !== 'undefined' && availableVoices.length > 0) {
+                const savedVoice = availableVoices.find(v => v.voice_id === savedVoiceId);
+                if (savedVoice) {
+                    selector.value = savedVoiceId;
+                    console.log(`🎯 Restored saved voice: ${savedVoice.name} (${savedVoiceId})`);
+                    
+                    // Trigger the change event to show voice preview
+                    setTimeout(() => {
+                        console.log(`🔍 Pre-handleVoiceChange selector value (saved): "${selector.value}"`);
+                        handleVoiceChange();
+                    }, 150);
+                } else {
+                    console.log(`⚠️ Saved voice ID ${savedVoiceId} not found in available voices, will auto-select first voice`);
+                    // Fall back to auto-selecting first voice
+                    if (availableVoices.length > 0) {
+                        const firstVoice = availableVoices[0];
+                        selector.value = firstVoice.voice_id;
+                        console.log(`🎯 Auto-selected first voice (fallback): ${firstVoice.name} (${firstVoice.voice_id})`);
+                        setTimeout(() => {
+                            handleVoiceChange();
+                        }, 150);
+                    }
+                }
+            } else if (availableVoices.length > 0 && (!selector.value || selector.value === 'undefined' || selector.value === '')) {
+                // Auto-select the first voice if no saved voice and none is selected
                 const firstVoice = availableVoices[0];
                 
                 // Set the value directly and verify it was set correctly
                 selector.value = firstVoice.voice_id;
                 
                 if (selector.value === firstVoice.voice_id) {
-                    console.log(`🎯 Auto-selected first voice: ${firstVoice.name} (${firstVoice.voice_id})`);
+                    console.log(`🎯 Auto-selected first voice (no saved voice): ${firstVoice.name} (${firstVoice.voice_id})`);
                     
                     // Trigger the change event to show voice preview (with a slight delay to ensure DOM is ready)
                     setTimeout(() => {

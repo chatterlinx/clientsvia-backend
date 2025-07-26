@@ -2647,15 +2647,21 @@ class CompanyProfileManager {
             console.log('🔑 Loaded masked API key');
         }
         
+        // Don't set the voice selector here - let the voice population logic handle it
+        // The saved voice ID will be picked up by populateVoiceSelector when voices are loaded
         if (voiceSelect && voiceId && voiceId !== 'undefined' && voiceId !== undefined) {
-            console.log('🎙️ Setting voice selector to saved voice ID:', voiceId);
-            voiceSelect.value = voiceId;
-            console.log('🎙️ Voice selector value after setting:', voiceSelect.value);
+            console.log('🎙️ Saved voice ID available for selection after voices load:', voiceId);
+            // Store the voice ID for the population logic to use
+            if (voiceSelect) {
+                voiceSelect.setAttribute('data-saved-voice-id', voiceId);
+                console.log('🎙️ Set data-saved-voice-id attribute to:', voiceId);
+                console.log('🎙️ Verification - attribute value:', voiceSelect.getAttribute('data-saved-voice-id'));
+            }
         } else {
-            console.log('🎙️ No valid saved voice ID found, leaving selector as-is');
+            console.log('🎙️ No valid saved voice ID found');
             console.log('   - voiceSelect exists:', !!voiceSelect);
             console.log('   - voiceId value:', voiceId);
-            console.log('   - current selector value:', voiceSelect?.value);
+            console.log('   - voiceId type:', typeof voiceId);
         }
 
         // Track API key changes
