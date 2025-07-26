@@ -1509,20 +1509,18 @@ function initializeEnhancedVoiceSettings() {
     const voiceSelector = document.getElementById('voice-selector');
     console.log('🔍 Voice selector element found:', !!voiceSelector);
     
+    // Load default voices immediately
+    console.log('🏃‍♂️ Loading default voices immediately...');
+    loadDefaultVoices();
+    
     // Bind event listeners
     bindVoiceSettingsEvents();
     
     // Load API key toggle state
     loadApiKeyToggle();
     
-    // Load initial data
+    // Load initial data (will override defaults if API is available)
     loadElevenLabsData();
-    
-    // Force load default voices immediately as a test
-    setTimeout(() => {
-        console.log('🧪 Force loading default voices as test...');
-        loadDefaultVoices();
-    }, 1000);
 }
 
 /**
@@ -2084,8 +2082,22 @@ function displayStreamingResults(audioUrl) {
  * Filter voices based on criteria
  */
 function filterVoices() {
+    console.log('🎙️ Filtering voices...');
+    
+    // Check if voices are loaded
+    if (!availableVoices || availableVoices.length === 0) {
+        console.log('⏳ Voices not loaded yet, loading default voices...');
+        loadDefaultVoices();
+        // Try again after a short delay
+        setTimeout(filterVoices, 500);
+        return;
+    }
+    
     const genderFilter = document.getElementById('voice-gender-filter').value;
     const categoryFilter = document.getElementById('voice-category-filter').value;
+    
+    console.log('🔍 Filter criteria:', { genderFilter, categoryFilter });
+    console.log('🎭 Available voices to filter:', availableVoices.length);
     
     let filteredVoices = availableVoices;
     
@@ -2101,6 +2113,7 @@ function filterVoices() {
         );
     }
     
+    console.log('✅ Filtered voices:', filteredVoices.length);
     populateVoiceSelector(filteredVoices);
 }
 
