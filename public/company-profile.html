@@ -2285,6 +2285,16 @@
 
             // Add voice options
             availableVoices.forEach((voice, index) => {
+                // Debug voice structure for first few voices
+                if (index < 3) {
+                    console.log(`🔍 Voice ${index} structure:`, {
+                        voice_id: voice.voice_id,
+                        id: voice.id,
+                        name: voice.name,
+                        keys: Object.keys(voice)
+                    });
+                }
+                
                 // Skip voices with invalid voice_id
                 if (!voice.voice_id || voice.voice_id === 'undefined' || voice.voice_id === undefined) {
                     console.warn(`⚠️ Skipping voice with invalid ID:`, voice);

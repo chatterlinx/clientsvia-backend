@@ -47,32 +47,62 @@ function createClient({ apiKey, company } = {}) {
  * Get all available voices from ElevenLabs
  */
 async function getAvailableVoices({ apiKey, company } = {}) {
+  console.log('🎙️ getAvailableVoices called with:', { 
+    hasApiKey: !!apiKey, 
+    companyId: company?._id,
+    useOwnApi: company?.aiSettings?.elevenLabs?.useOwnApiKey 
+  });
+  
   try {
     const client = createClient({ apiKey, company });
     const response = await client.voices.getAll();
     
+    console.log('✅ ElevenLabs API response received:', {
+      voicesCount: response.voices?.length || 0,
+      firstVoiceSample: response.voices?.[0] ? {
+        name: response.voices[0].name,
+        voice_id: response.voices[0].voice_id,
+        id: response.voices[0].id,
+        keys: Object.keys(response.voices[0])
+      } : null
+    });
+    
     // Enhanced voice data with additional metadata
-    return response.voices.map(voice => ({
-      voice_id: voice.voice_id,
-      name: voice.name,
-      category: voice.category || 'uncategorized',
-      description: voice.description || '',
-      labels: {
-        gender: voice.labels?.gender || 'unknown',
-        age: voice.labels?.age || 'unknown',
-        accent: voice.labels?.accent || 'unknown',
-        category: voice.labels?.['use case'] || voice.category || 'general',
-        description: voice.description || `${voice.name} voice`
-      },
-      preview_url: voice.preview_url,
-      available_for_tiers: voice.available_for_tiers || [],
-      settings: voice.settings || {
-        stability: 0.5,
-        similarity_boost: 0.7,
-        style: 0.0,
-        use_speaker_boost: true
+    return response.voices.map((voice, index) => {
+      // Handle different possible field names for voice ID
+      const voiceId = voice.voice_id || voice.id || voice.voiceId || `${voice.name}-generated-id-${index}`;
+      
+      if (index < 3) {
+        console.log(`🎙️ Processing voice ${index}: ${voice.name}, ID fields:`, {
+          voice_id: voice.voice_id,
+          id: voice.id,
+          voiceId: voice.voiceId,
+          finalId: voiceId
+        });
       }
-    }));
+      
+      return {
+        voice_id: voiceId,
+        name: voice.name,
+        category: voice.category || 'uncategorized',
+        description: voice.description || '',
+        labels: {
+          gender: voice.labels?.gender || 'unknown',
+          age: voice.labels?.age || 'unknown',
+          accent: voice.labels?.accent || 'unknown',
+          category: voice.labels?.['use case'] || voice.category || 'general',
+          description: voice.description || `${voice.name} voice`
+        },
+        preview_url: voice.preview_url,
+        available_for_tiers: voice.available_for_tiers || [],
+        settings: voice.settings || {
+          stability: 0.5,
+          similarity_boost: 0.7,
+          style: 0.0,
+          use_speaker_boost: true
+        }
+      };
+    });
   } catch (error) {
     console.error('❌ ElevenLabs getAvailableVoices error:', error);
     
@@ -82,7 +112,9 @@ async function getAvailableVoices({ apiKey, company } = {}) {
         error.message.includes('API key') ||
         error.body?.detail?.status === 'invalid_api_key') {
       console.log('🎭 Using mock voice data for testing (invalid API key)');
-      return getMockVoices();
+      const mockVoices = getMockVoices();
+      console.log('🎭 Mock voices created:', mockVoices.length, 'voices');
+      return mockVoices;
     }
     
     throw new Error(`Failed to fetch voices: ${error.message}`);
