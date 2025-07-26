@@ -631,7 +631,7 @@ async function loadTradeCategorySelector() {
         const categories = await response.json();
         console.log('📋 Available trade categories:', categories.length);
         
-        const select = document.getElementById('trade-category-select');
+        const select = document.getElementById('agent-trade-categories');
         if (!select) {
             console.warn('Trade category select element not found');
             return;
@@ -675,7 +675,7 @@ async function loadCompanyTradeCategories() {
         const data = await response.json();
         const selectedCategories = data.tradeCategories || [];
         
-        const select = document.getElementById('trade-category-select');
+        const select = document.getElementById('agent-trade-categories');
         if (!select) return;
         
         // Clear all selections first
@@ -708,7 +708,7 @@ async function loadCompanyTradeCategories() {
  * Update the display of how many categories are selected
  */
 function updateSelectedCategoriesCount() {
-    const select = document.getElementById('trade-category-select');
+    const select = document.getElementById('agent-trade-categories');
     if (!select) return;
     
     const selectedCount = select.selectedOptions.length;
@@ -736,7 +736,7 @@ function updateSelectedCategoriesCount() {
 function handleTradeCategoryChange() {
     updateSelectedCategoriesCount();
     
-    const select = document.getElementById('trade-category-select');
+    const select = document.getElementById('agent-trade-categories');
     const selectedValues = Array.from(select.selectedOptions).map(opt => opt.value);
     
     console.log('📋 Trade categories selection changed:', selectedValues);
@@ -778,7 +778,7 @@ async function saveTradeCategories() {
     try {
         console.log('💾 Saving trade categories...');
         
-        const select = document.getElementById('trade-category-select');
+        const select = document.getElementById('agent-trade-categories');
         if (!select) {
             throw new Error('Trade category select element not found');
         }
