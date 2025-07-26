@@ -220,12 +220,16 @@ async function generateStatic(req, res) {
 async function getCompanyVoices(req, res) {
   try {
     const { companyId } = req.params;
+    console.log(`🏢 [Company Voices] Request for company ID: ${companyId}`);
     
     // Fetch company data to get API settings
     const company = await Company.findById(companyId);
     if (!company) {
+      console.log(`❌ [Company Voices] Company not found: ${companyId}`);
       return res.status(404).json({ success: false, message: 'Company not found' });
     }
+    
+    console.log(`✅ [Company Voices] Found company: ${company.companyName}`);
 
     console.log(`🎙️ [Company Voices] Fetching voices for company: ${company.companyName} (${companyId})`);
     
@@ -258,10 +262,12 @@ async function getCompanyVoices(req, res) {
 async function testCompanyConnection(req, res) {
   try {
     const { companyId } = req.params;
+    console.log(`🔧 [Test Connection] Request for company ID: ${companyId}`);
     
     // Fetch company data to get API settings
     const company = await Company.findById(companyId);
     if (!company) {
+      console.log(`❌ [Test Connection] Company not found: ${companyId}`);
       return res.status(404).json({ success: false, message: 'Company not found' });
     }
 
