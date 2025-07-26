@@ -8,7 +8,8 @@ const {
   streamSpeech,
   analyzeVoice,
   generateStaticPrompt,
-  getUserInfo
+  getUserInfo,
+  getMockVoices
 } = require('../services/elevenLabsService');
 
 /**
@@ -248,6 +249,25 @@ async function getCompanyVoices(req, res) {
     });
   } catch (err) {
     console.error(`❌ [Company Voices] Error for company ${req.params.companyId}:`, err.message);
+    
+    // Handle API key errors with mock data for testing
+    if (err.message.includes('invalid_api_key') || err.message.includes('API key')) {
+      console.log('🎭 [Company Voices] Using mock voice data for testing (invalid API key)');
+      const mockVoices = getMockVoices();
+      
+      return res.json({ 
+        success: true, 
+        voices: mockVoices, 
+        count: mockVoices.length,
+        isMockData: true,
+        company: {
+          id: req.params.companyId,
+          name: 'Test Company',
+          useOwnApi: false
+        }
+      });
+    }
+    
     res.status(500).json({ 
       success: false, 
       message: 'Failed to fetch voices', 

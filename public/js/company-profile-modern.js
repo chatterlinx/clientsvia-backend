@@ -4345,15 +4345,14 @@ class CompanyProfileManager {
             voiceId = voiceSelect.value;
             console.log('🎙️ Using voiceId from selector:', voiceId);
         }
-        // Priority 2: Try to get the first available voice from the selector options
+        // Priority 2: Try to get the first available voice from the selector options (but DON'T change the selector)
         else if (voiceSelect?.options && voiceSelect.options.length > 0) {
             for (let i = 0; i < voiceSelect.options.length; i++) {
                 const option = voiceSelect.options[i];
                 if (option.value && option.value !== 'undefined' && option.value !== '' && option.value !== undefined) {
                     voiceId = option.value;
-                    console.log('🎙️ Using first valid option from selector:', voiceId);
-                    // Update the selector to reflect this choice
-                    voiceSelect.value = voiceId;
+                    console.log('🎙️ Using first valid option from selector (fallback):', voiceId);
+                    // DO NOT update the selector here - let the UI handle that separately
                     break;
                 }
             }

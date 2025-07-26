@@ -2308,11 +2308,21 @@
             // Auto-select the first voice if none is selected and we have voices
             if (availableVoices.length > 0 && (!selector.value || selector.value === 'undefined' || selector.value === '')) {
                 const firstVoice = availableVoices[0];
-                selector.value = firstVoice.voice_id;
-                console.log(`🎯 Auto-selected first voice: ${firstVoice.name} (${firstVoice.voice_id})`);
                 
-                // Trigger the change event to show voice preview
-                setTimeout(() => handleVoiceChange(), 100);
+                // Set the value directly and verify it was set correctly
+                selector.value = firstVoice.voice_id;
+                
+                if (selector.value === firstVoice.voice_id) {
+                    console.log(`🎯 Auto-selected first voice: ${firstVoice.name} (${firstVoice.voice_id})`);
+                    
+                    // Trigger the change event to show voice preview (with a slight delay to ensure DOM is ready)
+                    setTimeout(() => {
+                        console.log(`🔍 Pre-handleVoiceChange selector value: "${selector.value}"`);
+                        handleVoiceChange();
+                    }, 150);
+                } else {
+                    console.error(`❌ Failed to auto-select voice. Expected: ${firstVoice.voice_id}, Got: ${selector.value}`);
+                }
             }
 
             console.log(`📝 Populated voice selector with ${availableVoices.length} voices`);
@@ -2346,8 +2356,15 @@
         function handleVoiceChange() {
             const selector = document.getElementById('voice-selector');
             
+            if (!selector) {
+                console.error('❌ Voice selector not found in handleVoiceChange');
+                return;
+            }
+            
+            console.log(`🔍 handleVoiceChange called, selector value: "${selector.value}"`);
+            
             // Safeguard: if selector value is 'undefined', try to fix it
-            if (selector && selector.value === 'undefined') {
+            if (selector.value === 'undefined') {
                 console.log('🚨 Detected undefined voice selector value, attempting to fix...');
                 
                 // Try to set it to the first valid option
@@ -2355,6 +2372,12 @@
                     const firstValidVoice = availableVoices[0];
                     console.log(`🔧 Setting to first available voice: ${firstValidVoice.name} (${firstValidVoice.voice_id})`);
                     selector.value = firstValidVoice.voice_id;
+                    
+                    // Verify the fix worked
+                    if (selector.value !== firstValidVoice.voice_id) {
+                        console.error(`❌ Failed to fix selector value. Expected: ${firstValidVoice.voice_id}, Got: ${selector.value}`);
+                        return;
+                    }
                 } else {
                     console.log('🔧 No voices available, setting to empty');
                     selector.value = '';
@@ -2374,7 +2397,7 @@
             }
             
             if (selectedVoice) {
-                console.log('🎙️ Selected voice:', selectedVoice.name);
+                console.log('🎙️ Selected voice:', selectedVoice.name, 'ID:', selectedVoice.voice_id);
                 
                 // Show the preview section
                 previewSection.classList.remove('hidden');
@@ -2399,14 +2422,18 @@
                     audioElement.classList.remove('hidden');
                 }
                 
-                // Trigger form change detection
-                if (typeof window.handleFormChange === 'function') {
-                    window.handleFormChange();
-                }
+                // Trigger form change detection (with a delay to prevent race conditions)
+                setTimeout(() => {
+                    if (typeof window.handleFormChange === 'function') {
+                        console.log('🔄 Triggering form change detection from handleVoiceChange');
+                        window.handleFormChange();
+                    }
+                }, 200);
             } else {
                 // Hide the preview section if no voice selected
                 previewSection.classList.add('hidden');
                 voiceInfo.innerHTML = '';
+                console.log('ℹ️ No voice selected or voice not found');
             }
         }
 
