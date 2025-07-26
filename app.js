@@ -81,20 +81,45 @@ app.use(cors({ origin: false })); // Restrict origins
 app.use(apiLimiter);              // Rate limiting
 app.use(express.json());          // Body parsing
 
-const redisClient = redis.createClient({ url: process.env.REDIS_URL });
+const redisClient = redis.createClient({ 
+  url: process.env.REDIS_URL,
+  socket: {
+    connectTimeout: 60000,
+    lazyConnect: true,
+    reconnectDelay: 1000,
+    reconnectAttempts: 5,
+    keepAlive: 30000,
+  },
+  retry_unfulfilled_commands: true,
+  enable_offline_queue: false
+});
 
 // Handle Redis connection errors gracefully
 redisClient.on('error', (err) => {
-  console.error('Redis Client Error:', err);
+  console.error('Session Redis Client Error:', err);
+  // Don't crash the application
 });
 
 redisClient.on('connect', () => {
-  console.log('✅ Redis connected successfully');
+  console.log('✅ Session Redis connected successfully');
 });
 
-const redisStore = new RedisStore({ client: redisClient });
+redisClient.on('reconnecting', () => {
+  console.log('🔄 Session Redis reconnecting...');
+});
+
+// Use MemoryStore as fallback if Redis fails
+let sessionStore;
+try {
+  const redisStore = new RedisStore({ client: redisClient });
+  sessionStore = redisStore;
+  console.log('📦 Using Redis for session storage');
+} catch (error) {
+  console.warn('⚠️ Redis session store failed, using memory store:', error.message);
+  sessionStore = new session.MemoryStore();
+}
 app.use(session({
-  store: redisStore,
+  store: sessionStore,
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
