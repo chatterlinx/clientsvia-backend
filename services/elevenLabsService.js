@@ -17,18 +17,24 @@ function getElevenLabsApiKey(company) {
   
   // Default: Use ClientsVia global API key
   if (process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_API_KEY.trim()) {
-    console.log(`🏢 Using ClientsVia global ElevenLabs API for company ${company?._id || 'unknown'}`);
+    console.log(`🏢 Using ClientsVia global ElevenLabs API for company ${company?._id || 'global'}`);
     return process.env.ELEVENLABS_API_KEY.trim();
   }
   
   // No valid key found
-  console.warn(`⚠️ No ElevenLabs API key configured for company ${company?._id || 'unknown'}`);
+  console.warn(`⚠️ No ElevenLabs API key configured for company ${company?._id || 'global'}`);
   return null;
 }
 
 function getApiKey({ apiKey, company } = {}) {
-  const key = apiKey ? apiKey.trim() : getElevenLabsApiKey(company);
-  if (!key) throw new Error('ElevenLabs API key not configured');
+  // If explicit API key provided, use it
+  if (apiKey && apiKey.trim()) {
+    return apiKey.trim();
+  }
+  
+  // Otherwise use company-aware key logic
+  const key = getElevenLabsApiKey(company);
+  if (!key) throw new Error('ElevenLabs API key not configured. Please add ELEVENLABS_API_KEY to environment variables or configure company-specific API key.');
   return key;
 }
 

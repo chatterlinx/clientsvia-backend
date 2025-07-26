@@ -1617,21 +1617,43 @@ async function testApiConnection() {
  */
 async function loadElevenLabsVoices() {
     try {
+        console.log('🎤 Loading ElevenLabs voices...');
         const response = await fetch('/api/elevenlabs/voices');
         const data = await response.json();
         
-        if (data.success) {
+        if (data.success && data.voices && data.voices.length > 0) {
             availableVoices = data.voices;
             populateVoiceSelector(availableVoices);
             console.log(`✅ Loaded ${data.count} voices`);
             showNotification(`Loaded ${data.count} voices`, 'success');
         } else {
-            throw new Error(data.message);
+            throw new Error(data.message || 'No voices returned');
         }
     } catch (error) {
         console.error('❌ Failed to load voices:', error);
-        showNotification('Failed to load voices. Please check your API key.', 'error');
+        
+        // Load default voices as fallback
+        loadDefaultVoices();
+        showNotification('Using default voices. Configure ElevenLabs API key for full voice library.', 'warning');
     }
+}
+
+/**
+ * Load default voices when API fails
+ */
+function loadDefaultVoices() {
+    const defaultVoices = [
+        { voice_id: 'rachel', name: 'Rachel', gender: 'female', category: 'conversational' },
+        { voice_id: 'adam', name: 'Adam', gender: 'male', category: 'conversational' },
+        { voice_id: 'bella', name: 'Bella', gender: 'female', category: 'professional' },
+        { voice_id: 'antoni', name: 'Antoni', gender: 'male', category: 'professional' },
+        { voice_id: 'josh', name: 'Josh', gender: 'male', category: 'narration' },
+        { voice_id: 'sam', name: 'Sam', gender: 'male', category: 'conversational' }
+    ];
+    
+    availableVoices = defaultVoices;
+    populateVoiceSelector(defaultVoices);
+    console.log('📢 Loaded default voices as fallback');
 }
 
 /**
