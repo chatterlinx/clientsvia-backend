@@ -155,6 +155,39 @@ The manual should always maintain this structure:
 - **End-of-session updates** mandatory for manual and checklist
 - **Knowledge retention** system prevents re-learning architecture
 
+### Session Log - July 27, 2025 (17:00 PST)
+
+**🎯 TASK:** Fix company profile data loading issue and create manual update instructions  
+**📁 FILES MODIFIED:** 
+- `public/company-profile.html` - Added critical DOMContentLoaded initialization script
+- `CLIENTSVIA_CODING_MANUAL.md` - Added comprehensive update instructions and troubleshooting guide
+
+**🔍 FINDINGS:**
+- Company profile page was showing "Loading..." indefinitely 
+- Root cause: No initialization script to bridge URL parameter to JavaScript functionality
+- CompanyProfileManager class was defined but never instantiated or called
+
+**🚨 ISSUES FOUND:**
+- Missing DOMContentLoaded event listener in company-profile.html
+- No bridge between URL company ID parameter and CompanyProfileManager.init()
+- Previous troubleshooting knowledge not documented for future reference
+
+**✅ SOLUTIONS APPLIED:**
+- Added initialization script that extracts company ID from URL
+- Script creates CompanyProfileManager instance and calls init()
+- Added comprehensive troubleshooting guide with step-by-step diagnosis
+- Created detailed manual update instructions for future agents
+
+**📝 LESSONS LEARNED:**
+- Always ensure there's an initialization bridge between URL parameters and JavaScript functionality
+- Defining functions isn't enough - something must CALL them on page load
+- Document troubleshooting procedures immediately after resolving issues
+- Future agents need explicit instructions on how to maintain the knowledge base
+
+**🔗 COMMITS:** 
+- Company profile fix and manual update instructions
+- Comprehensive troubleshooting guide for data loading issues
+
 ---
 
 ## 🚨 **SAFE PRODUCTION PRACTICES**
@@ -720,6 +753,178 @@ POST /api/twilio/voice              // Initial call handling
 POST /api/twilio/handle-speech      // Speech processing
 POST /api/twilio/partial-speech     // Real-time speech updates
 ```
+
+---
+
+## 🔧 **TROUBLESHOOTING GUIDES**
+
+### **🚨 CRITICAL: Company Profile Data Not Loading**
+
+**SYMPTOM:** Company profile page shows "Loading..." and never loads company data
+
+**MOST COMMON CAUSE:** Missing initialization script in `company-profile.html`
+
+#### **📋 STEP-BY-STEP DIAGNOSIS:**
+
+**1. Check Browser Console:**
+```javascript
+// Open company-profile.html?id=COMPANY_ID in browser
+// Press F12 → Console tab
+// Look for these messages:
+
+// ✅ GOOD - Should see:
+"🚀 Company Profile page DOMContentLoaded - Starting initialization..."
+"✅ Company ID found in URL: 68813026dd95f599c74e49c7"
+"📡 Company Profile Manager initialized"
+"✅ Company data loaded: {company data object}"
+
+// ❌ BAD - If missing these messages, continue to step 2
+```
+
+**2. Check Initialization Script:**
+```bash
+# Search for the critical initialization script in company-profile.html
+grep -n "DOMContentLoaded" public/company-profile.html
+
+# Should find this script near the end of the file:
+```
+```html
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const companyId = urlParams.get('id');
+    
+    if (companyId) {
+        console.log('✅ Company ID found in URL:', companyId);
+        window.companyId = companyId;
+        
+        // Initialize CompanyProfileManager
+        const manager = new CompanyProfileManager();
+        window.companyProfileManager = manager;
+        
+        manager.init().then(() => {
+            console.log('✅ Company Profile Manager initialized successfully');
+        }).catch(error => {
+            console.error('❌ Failed to initialize Company Profile Manager:', error);
+        });
+    } else {
+        console.error('❌ No company ID found in URL');
+    }
+});
+</script>
+```
+
+**3. Fix Missing Initialization Script:**
+If the script is missing, add it right before `</body>` in `company-profile.html`:
+
+```html
+<!-- Add this script right before </body> -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
+    
+    // Extract company ID from URL  
+    const urlParams = new URLSearchParams(window.location.search);
+    const companyId = urlParams.get('id');
+    
+    if (companyId) {
+        console.log('✅ Company ID found in URL:', companyId);
+        
+        // Set global company ID
+        window.companyId = companyId;
+        
+        // Initialize CompanyProfileManager
+        const manager = new CompanyProfileManager();
+        window.companyProfileManager = manager;
+        
+        // Start initialization
+        manager.init().then(() => {
+            console.log('✅ Company Profile Manager initialized successfully');
+        }).catch(error => {
+            console.error('❌ Failed to initialize Company Profile Manager:', error);
+        });
+    } else {
+        console.error('❌ No company ID found in URL');
+        // Show error message to user
+        document.body.innerHTML = '<div class="p-8 text-center"><h1 class="text-2xl font-bold text-red-600">Error: No company ID provided</h1><p class="text-gray-600 mt-2">Please access this page with a valid company ID.</p></div>';
+    }
+});
+</script>
+```
+
+**4. Verify API Endpoint:**
+```bash
+# Test the API endpoint directly
+curl "https://clientsvia-backend.onrender.com/api/company/68813026dd95f599c74e49c7"
+
+# Should return JSON company data
+# If 404 or error, check if company ID exists in database
+```
+
+**5. Check CompanyProfileManager Class:**
+```bash
+# Verify CompanyProfileManager is defined in company-profile-modern.js
+grep -n "class CompanyProfileManager" public/js/company-profile-modern.js
+
+# Should find the class definition
+```
+
+#### **🔍 DEBUGGING CHECKLIST:**
+
+- [ ] **URL has company ID:** `company-profile.html?id=VALID_COMPANY_ID`
+- [ ] **DOMContentLoaded script exists** in `company-profile.html` 
+- [ ] **CompanyProfileManager class defined** in `company-profile-modern.js`
+- [ ] **API endpoint responds** with company data
+- [ ] **No JavaScript errors** in browser console
+- [ ] **Network tab shows** successful API calls
+
+#### **💡 ROOT CAUSE EXPLANATION:**
+
+The company profile page has these components:
+1. `company-profile.html` - The HTML structure and tabs
+2. `company-profile-modern.js` - The `CompanyProfileManager` class with `init()` and `loadCompanyData()` methods
+3. **MISSING LINK:** A script that extracts the company ID from URL and calls the manager's `init()` method
+
+**Without the initialization script:**
+- ✅ HTML loads
+- ✅ JavaScript file loads and defines `CompanyProfileManager` 
+- ❌ **Nothing calls the manager's `init()` method**
+- ❌ **No company data gets fetched**
+- ❌ **Page stays on "Loading..."**
+
+**With the initialization script:**
+- ✅ HTML loads
+- ✅ JavaScript file loads
+- ✅ **DOMContentLoaded fires and extracts company ID**
+- ✅ **Creates CompanyProfileManager instance**
+- ✅ **Calls `manager.init()` which calls `loadCompanyData()`**
+- ✅ **Company data loads and populates all tabs**
+
+#### **🚀 QUICK FIX COMMANDS:**
+
+```bash
+# 1. Add the initialization script to company-profile.html
+# 2. Test locally
+open public/company-profile.html?id=68813026dd95f599c74e49c7
+
+# 3. Commit and deploy
+git add public/company-profile.html
+git commit -m "FIX: Add company profile initialization script
+
+- Added DOMContentLoaded script to extract company ID from URL
+- Creates CompanyProfileManager instance and calls init()
+- Fixes company profile data not loading issue"
+
+git push origin main
+```
+
+#### **🔑 PREVENTION:**
+
+- **Always ensure** there's an initialization script that bridges URL parameters to JavaScript functionality
+- **Test the complete flow:** URL → JavaScript initialization → API calls → Data population
+- **Never assume** that defining functions is enough - something must CALL them on page load
 
 ---
 
