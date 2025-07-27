@@ -272,6 +272,30 @@ This checklist tracks all tasks needed to take ClientsVia from development to pr
 
 ## 📝 **DAILY STANDUP TEMPLATE**
 
+### **📚 END-OF-SESSION WORKFLOW** ⭐
+**CRITICAL PROCESS:** Update documentation after EVERY work session
+
+1. **Update CLIENTSVIA_CODING_MANUAL.md** with:
+   - New findings about system architecture
+   - API endpoints discovered/modified
+   - Database query patterns used
+   - Common mistakes encountered
+   - Debugging solutions found
+   - File locations for features worked on
+
+2. **Update production-ready-checklist.md** with:
+   - Task progress and status changes
+   - Completed items
+   - New issues discovered
+   - Performance metrics observed
+
+3. **Commit changes** with descriptive messages
+4. **Brief next session** will be instant with updated docs
+
+**🎯 GOAL:** Never lose knowledge, always build upon previous work
+
+---
+
 ### **Today's Focus:**
 - [ ] Current task: ________________
 - [ ] Blocker: ____________________
