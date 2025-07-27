@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ElevenLabs Slider Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .slider-container { margin: 15px 0; }
+        .slider-label { display: flex; justify-content: between; align-items: center; margin-bottom: 5px; }
+        .slider-value { color: blue; font-weight: bold; }
+        input[type="range"] { width: 100%; margin: 10px 0; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>ElevenLabs Voice Parameter Slider Test</h1>
+    
+    <div class="test-section">
+        <h2>Voice Parameter Sliders</h2>
+        <p>Test the slider functionality that was just implemented:</p>
+        
+        <!-- Stability Slider -->
+        <div class="slider-container">
+            <div class="slider-label">
+                <label for="voice-stability">Stability</label>
+                <span id="stability-value" class="slider-value">0.5</span>
+            </div>
+            <input type="range" id="voice-stability" name="stability" 
+                   value="0.5" min="0.0" max="1.0" step="0.1" 
+                   oninput="updateSliderValue('stability', this.value)">
+            <div style="font-size: 12px; color: #666;">Higher = more consistent, Lower = more expressive</div>
+        </div>
+        
+        <!-- Similarity Slider -->
+        <div class="slider-container">
+            <div class="slider-label">
+                <label for="voice-similarity">Similarity Boost</label>
+                <span id="similarity-value" class="slider-value">0.7</span>
+            </div>
+            <input type="range" id="voice-similarity" name="similarity_boost" 
+                   value="0.7" min="0.0" max="1.0" step="0.1" 
+                   oninput="updateSliderValue('similarity', this.value)">
+            <div style="font-size: 12px; color: #666;">Higher = more similar to original voice</div>
+        </div>
+        
+        <!-- Style Slider -->
+        <div class="slider-container">
+            <div class="slider-label">
+                <label for="voice-style">Style Exaggeration</label>
+                <span id="style-value" class="slider-value">0.0</span>
+            </div>
+            <input type="range" id="voice-style" name="style" 
+                   value="0.0" min="0.0" max="1.0" step="0.1" 
+                   oninput="updateSliderValue('style', this.value)">
+            <div style="font-size: 12px; color: #666;">Natural (0.0) vs Exaggerated (1.0)</div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Results</h2>
+        <div id="test-logs"></div>
+        <button onclick="testSliderSaving()">Test Slider Saving</button>
+        <button onclick="loadSavedValues()">Load Saved Values</button>
+    </div>
+
+    <script>
+        // Import the updateSliderValue function from the main application
+        function updateSliderValue(parameterName, value) {
+            console.log('🎛️ Updating slider ' + parameterName + ' to ' + value);
+            
+            // Update the display value
+            const valueElement = document.getElementById(parameterName + '-value');
+            if (valueElement) {
+                valueElement.textContent = parseFloat(value).toFixed(1);
+                log('Updated ' + parameterName + ' to ' + value, 'success');
+            } else {
+                log('Could not find element ' + parameterName + '-value', 'error');
+            }
+        }
+        
+        function log(message, type = 'info') {
+            const logDiv = document.createElement('div');
+            logDiv.className = 'log ' + type;
+            logDiv.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            document.getElementById('test-logs').appendChild(logDiv);
+            console.log(message);
+        }
+        
+        async function testSliderSaving() {
+            try {
+                log('Testing slider value saving...', 'info');
+                
+                const companyId = '68813026dd95f599c74e49c7';
+                const stability = document.getElementById('voice-stability').value;
+                const similarity = document.getElementById('voice-similarity').value;
+                const style = document.getElementById('voice-style').value;
+                
+                const updateData = {
+                    aiSettings: {
+                        elevenLabs: {
+                            voiceId: "Mark-mock-id",
+                            useOwnApiKey: false,
+                            stability: parseFloat(stability),
+                            similarityBoost: parseFloat(similarity),
+                            style: parseFloat(style)
+                        }
+                    }
+                };
+                
+                const response = await fetch('/api/company/' + companyId, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updateData)
+                });
+                
+                if (response.ok) {
+                    log('✅ Slider values saved successfully!', 'success');
+                    log('Stability: ' + stability + ', Similarity: ' + similarity + ', Style: ' + style, 'info');
+                } else {
+                    log('❌ Failed to save slider values', 'error');
+                }
+                
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        }
+        
+        async function loadSavedValues() {
+            try {
+                log('Loading saved slider values...', 'info');
+                
+                const companyId = '68813026dd95f599c74e49c7';
+                const response = await fetch('/api/company/' + companyId);
+                const data = await response.json();
+                
+                if (data && data.aiSettings && data.aiSettings.elevenLabs) {
+                    const settings = data.aiSettings.elevenLabs;
+                    
+                    // Update sliders with saved values
+                    if (settings.stability !== undefined) {
+                        document.getElementById('voice-stability').value = settings.stability;
+                        updateSliderValue('stability', settings.stability);
+                    }
+                    
+                    if (settings.similarityBoost !== undefined) {
+                        document.getElementById('voice-similarity').value = settings.similarityBoost;
+                        updateSliderValue('similarity', settings.similarityBoost);
+                    }
+                    
+                    if (settings.style !== undefined && settings.style !== null) {
+                        document.getElementById('voice-style').value = settings.style;
+                        updateSliderValue('style', settings.style);
+                    }
+                    
+                    log('✅ Loaded saved values successfully!', 'success');
+                } else {
+                    log('⚠️ No saved ElevenLabs settings found', 'error');
+                }
+                
+            } catch (error) {
+                log('❌ Error loading values: ' + error.message, 'error');
+            }
+        }
+        
+        // Load saved values on page load
+        window.addEventListener('load', loadSavedValues);
+        
+        log('🎛️ Slider test page loaded. Move sliders to test functionality.', 'success');
+    </script>
+</body>
+</html>
