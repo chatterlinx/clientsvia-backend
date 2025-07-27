@@ -100,6 +100,28 @@ console.log('Debug:', {
 **COMMIT:** 80373538 - "SECOND HOTFIX: Restore files to working state before console cleanup"
 **PROTOCOL:** When sed breaks code, immediately restore to last known good commit, don't attempt repairs
 
+**THIRD ISSUE - JULY 27, 2025 (17:00 PST):**
+**PROBLEM:** After file restoration, company profile page still showed "Loading..." and never loaded data
+**ROOT CAUSE:** Missing initialization script - CompanyProfileManager class exists but was never instantiated
+**SYMPTOMS:** Page loads, shows "Loading...", but stays stuck there indefinitely
+**DIAGNOSIS:** No DOMContentLoaded script to extract company ID and create manager instance
+**SOLUTION:** Added initialization script in company-profile.html:
+```html
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const companyId = urlParams.get('id');
+    if (companyId) {
+        window.companyId = companyId;
+        window.companyProfileManager = new CompanyProfileManager();
+        window.companyProfileManager.init();
+    }
+});
+</script>
+```
+**COMMIT:** e18cd84d - "FIX: Add missing CompanyProfileManager initialization script"
+**LESSON:** JavaScript files can define classes perfectly, but without initialization scripts, nothing happens
+
 ### **🔑 KEY API ENDPOINTS PATTERN:**
 ```javascript
 // CORRECT: Company-specific endpoints
