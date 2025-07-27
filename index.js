@@ -133,7 +133,89 @@ app.post('/api/twilio/voice', (req, res) => {
 // This line will now correctly handle all /api/twilio requests
 app.use('/api/twilio', twilioRoutes);
 
-// Health check endpoint
+// --- Enhanced Health Check Endpoint ---
+app.get('/health', async (req, res) => {
+    const healthCheck = {
+        timestamp: new Date().toISOString(),
+        status: 'ok',
+        environment: process.env.NODE_ENV || 'development',
+        version: '1.0.0',
+        services: {}
+    };
+
+    try {
+        // Check MongoDB connection
+        const mongoose = require('mongoose');
+        if (mongoose.connection.readyState === 1) {
+            healthCheck.services.mongodb = { status: 'connected', readyState: mongoose.connection.readyState };
+        } else {
+            healthCheck.services.mongodb = { status: 'disconnected', readyState: mongoose.connection.readyState };
+            healthCheck.status = 'degraded';
+        }
+
+        // Check Redis connection (if used)
+        try {
+            const { redisClient } = require('./clients');
+            if (redisClient && redisClient.isReady) {
+                healthCheck.services.redis = { status: 'connected' };
+            } else {
+                healthCheck.services.redis = { status: 'disconnected' };
+                healthCheck.status = 'degraded';
+            }
+        } catch (redisError) {
+            healthCheck.services.redis = { status: 'not_configured' };
+        }
+
+        // Check critical environment variables
+        const requiredEnvVars = ['MONGODB_URI'];
+        const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+        
+        if (missingEnvVars.length > 0) {
+            healthCheck.services.environment = { 
+                status: 'error', 
+                missing_variables: missingEnvVars 
+            };
+            healthCheck.status = 'error';
+        } else {
+            healthCheck.services.environment = { status: 'ok' };
+        }
+
+        // Check external API configuration
+        healthCheck.services.external_apis = {
+            elevenlabs: process.env.ELEVENLABS_API_KEY ? 'configured' : 'not_configured',
+            twilio: (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? 'configured' : 'not_configured'
+        };
+
+        // System metrics
+        const memUsage = process.memoryUsage();
+        healthCheck.system = {
+            memory: {
+                rss: `${Math.round(memUsage.rss / 1024 / 1024)} MB`,
+                heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)} MB`,
+                heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)} MB`
+            },
+            uptime: `${Math.round(process.uptime())} seconds`,
+            pid: process.pid
+        };
+
+        // Set appropriate HTTP status code
+        const statusCode = healthCheck.status === 'ok' ? 200 : 
+                          healthCheck.status === 'degraded' ? 503 : 500;
+
+        res.status(statusCode).json(healthCheck);
+
+    } catch (error) {
+        console.error('Health check error:', error);
+        res.status(500).json({
+            timestamp: new Date().toISOString(),
+            status: 'error',
+            error: error.message,
+            environment: process.env.NODE_ENV || 'development'
+        });
+    }
+});
+
+// Simple health check endpoint (legacy compatibility)
 app.get('/healthz', (req, res) => res.json({ ok: true }));
 
 app.get('/:pageName.html', (req, res, next) => {
