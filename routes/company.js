@@ -138,14 +138,14 @@ router.post('/companies', async (req, res) => {
     }
 });
 
+// SECURITY NOTE: This endpoint has been disabled due to data exposure vulnerability
+// Previously exposed all company data publicly without authentication
+// For admin access, implement proper authentication middleware first
 router.get('/companies', async (req, res) => {
-    try {
-        const companies = await Company.find({}).sort({ createdAt: -1 });
-        res.json(companies);
-    } catch (error) {
-        console.error('[API GET /api/companies] Error:', error);
-        res.status(500).json({ message: 'Error fetching companies' });
-    }
+    res.status(403).json({ 
+        message: 'This endpoint has been disabled for security reasons. Please use authenticated admin endpoints instead.',
+        error: 'ENDPOINT_DISABLED_FOR_SECURITY'
+    });
 });
 
 // Middleware to check cache for company data

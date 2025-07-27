@@ -81,47 +81,72 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Fetches companies from the backend API.
+     * NOTE: /api/companies endpoint has been disabled for security reasons
      */
     async function fetchCompanies() {
         if (!companyListContainer) {
             console.error('[JS directory.js] Company list container not found in HTML.');
             return;
         }
-        companyListContainer.innerHTML = '<p class="text-center text-gray-500 col-span-full py-10"><i class="fas fa-spinner fa-spin mr-2"></i>Loading companies...</p>';
+        companyListContainer.innerHTML = '<p class="text-center text-red-500 col-span-full py-10"><i class="fas fa-exclamation-triangle mr-2"></i>Admin Directory Access Disabled</p>';
         if(noCompaniesMessage) noCompaniesMessage.classList.add('hidden');
 
-        try {
-            const baseApiUrl = getBaseApiUrl();
-            // --- CHANGE #1 WAS HERE ---
-            const companiesApiUrl = `${baseApiUrl}/api/companies`;
-            console.log('[JS directory.js] Fetching companies from:', companiesApiUrl);
+        // Display security notice
+        companyListContainer.innerHTML = `
+            <div class="col-span-full max-w-2xl mx-auto bg-red-50 border border-red-200 rounded-lg p-6">
+                <div class="text-center">
+                    <i class="fas fa-shield-alt text-red-500 text-4xl mb-4"></i>
+                    <h3 class="text-lg font-semibold text-red-800 mb-2">Admin Directory Temporarily Disabled</h3>
+                    <p class="text-red-700 mb-4">
+                        The company directory has been disabled due to a security vulnerability that exposed sensitive company data.
+                    </p>
+                    <div class="bg-white border border-red-200 rounded p-4 text-left">
+                        <h4 class="font-semibold text-red-800 mb-2">Security Issue Found:</h4>
+                        <ul class="text-sm text-red-700 space-y-1">
+                            <li>• All company data was publicly accessible without authentication</li>
+                            <li>• API keys, phone numbers, and business details were exposed</li>
+                            <li>• Multi-tenant data isolation was compromised</li>
+                        </ul>
+                    </div>
+                    <p class="text-red-700 mt-4 text-sm">
+                        <strong>Next Steps:</strong> Implement proper authentication middleware for admin access.
+                    </p>
+                </div>
+            </div>
+        `;
+        return;
 
-            const response = await fetch(companiesApiUrl);
-            console.log('[JS directory.js] Fetch /api/companies response status:', response.status, 'Ok:', response.ok);
+        // DISABLED CODE - Previous implementation that exposed all company data
+        // try {
+        //     const baseApiUrl = getBaseApiUrl();
+        //     const companiesApiUrl = `${baseApiUrl}/api/companies`;
+        //     console.log('[JS directory.js] Fetching companies from:', companiesApiUrl);
 
-            if (!response.ok) {
-                let errorText = `Server responded with status ${response.status}`;
-                try {
-                    const errorData = await response.json(); // Try to parse JSON error
-                    errorText = errorData.message || JSON.stringify(errorData);
-                } catch (e) { // If not JSON, try to get text
-                    errorText = await response.text().catch(() => errorText);
-                }
-                console.error('[JS directory.js] Fetch /api/companies not OK. Error:', errorText);
-                throw new Error(`Failed to fetch companies. ${errorText}`);
-            }
+        //     const response = await fetch(companiesApiUrl);
+        //     console.log('[JS directory.js] Fetch /api/companies response status:', response.status, 'Ok:', response.ok);
 
-            const companies = await response.json();
-            allCompanies = companies;
-            console.log('[JS directory.js] Successfully fetched companies:', allCompanies.length);
-            filterAndSearchCompanies(); // Apply initial filters
-        } catch (error) {
-            console.error('[JS directory.js] Error fetching companies:', error);
-            if (companyListContainer) {
-                companyListContainer.innerHTML = `<p class="text-center text-red-500 col-span-full py-10"><i class="fas fa-exclamation-triangle mr-2"></i>Failed to load companies. Details: ${escapeHTML(error.message)}</p>`;
-            }
-        }
-    }
+        //     if (!response.ok) {
+        //         let errorText = `Server responded with status ${response.status}`;
+        //         try {
+        //             const errorData = await response.json(); // Try to parse JSON error
+        //             errorText = errorData.message || JSON.stringify(errorData);
+        //         } catch (e) { // If not JSON, try to get text
+        //             errorText = await response.text().catch(() => errorText);
+        //         }
+        //         console.error('[JS directory.js] Fetch /api/companies not OK. Error:', errorText);
+        //         throw new Error(`Failed to fetch companies. ${errorText}`);
+        //     }
+
+        //     const companies = await response.json();
+        //     allCompanies = companies;
+        //     console.log('[JS directory.js] Successfully fetched companies:', allCompanies.length);
+        //     filterAndSearchCompanies(); // Apply initial filters
+        // } catch (error) {
+        //     console.error('[JS directory.js] Error fetching companies:', error);
+        //     if (companyListContainer) {
+        //         companyListContainer.innerHTML = `<p class="text-center text-red-500 col-span-full py-10"><i class="fas fa-exclamation-triangle mr-2"></i>Failed to load companies. Details: ${escapeHTML(error.message)}</p>`;
+        //     }
+        // }
 
     /**
      * Renders the list of companies to the DOM.
