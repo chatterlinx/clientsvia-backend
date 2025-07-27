@@ -134,12 +134,16 @@ This checklist tracks all tasks needed to take ClientsVia from development to pr
   - **Files:** `utils/logger.js` with helper methods for security, tenant, API, DB, and auth logging  
   - **Acceptance:** ✅ Structured logs, error handling, log rotation, categorized logging  
 
-- [ ] **Task:** Error monitoring setup  
+- [x] **Task:** Error monitoring setup  
   - **Priority:** HIGH  
   - **Time:** 1 hour  
-  - **Status:** Not started  
-  - **Details:** Sentry or similar error tracking  
-  - **Acceptance:** Error alerts and stack traces in production  
+  - **Status:** ✅ **COMPLETED**  
+  - **Details:** Comprehensive Sentry integration with Winston logging  
+  - **Features:** Error tracking, performance monitoring, security event capture, company context  
+  - **Implementation:** Request/error handlers, custom error capture, graceful fallback without DSN  
+  - **Files:** `utils/sentry.js` integrated with `utils/logger.js` and `index.js`  
+  - **Configuration:** Set `SENTRY_DSN` environment variable to enable (optional, graceful fallback)  
+  - **Acceptance:** ✅ Error alerts, stack traces, performance monitoring, security event tracking  
 
 - [ ] **Task:** Basic performance monitoring  
   - **Priority:** MEDIUM  

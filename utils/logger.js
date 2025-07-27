@@ -132,9 +132,42 @@ const logger = winston.createLogger({
   ]
 });
 
+// Add Sentry integration for error levels
+const originalError = logger.error;
+logger.error = function(message, meta = {}) {
+  // Call original Winston error logging
+  originalError.call(this, message, meta);
+  
+  // Also send to Sentry if available
+  try {
+    const { captureError } = require('./sentry');
+    if (meta && meta.stack) {
+      // If there's a stack trace, it's likely an Error object
+      const error = new Error(message);
+      error.stack = meta.stack;
+      captureError(error, meta);
+    } else {
+      // Just capture as a message
+      const { captureMessage } = require('./sentry');
+      captureMessage(message, 'error', meta);
+    }
+  } catch (sentryError) {
+    // Don't fail if Sentry isn't available
+    console.warn('Failed to send error to Sentry:', sentryError.message);
+  }
+};
+
 // Add helper methods for common patterns
 logger.security = (message, meta = {}) => {
   logger.warn(`[SECURITY] ${message}`, { ...meta, category: 'security' });
+  
+  // Also send security events to Sentry
+  try {
+    const { captureSecurityEvent } = require('./sentry');
+    captureSecurityEvent(message, meta);
+  } catch (sentryError) {
+    // Don't fail if Sentry isn't available
+  }
 };
 
 logger.tenant = (companyId, message, meta = {}) => {

@@ -4,6 +4,7 @@ const userSchema = new mongoose.Schema({
   googleId: { type: String, unique: true, sparse: true },
   email: { type: String, required: true, unique: true, lowercase: true },
   name: { type: String, required: true },
+  password: { type: String }, // For JWT authentication (optional, used when googleId is not present)
   avatar: { type: String },
   companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
   role: { type: String, enum: ['admin', 'manager', 'staff'], default: 'admin' },

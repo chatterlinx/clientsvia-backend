@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-07-27T20-57-35-243Z",
+  "backup_type": "local_backup",
+  "collections": {
+    "companies": {
+      "document_count": 1,
+      "has_sample": true,
+      "last_modified": "2025-07-24T23:19:42.694Z"
+    },
+    "conversations": {
+      "document_count": 5,
+      "has_sample": true,
+      "last_modified": "unknown"
+    },
+    "knowledgeentries": {
+      "document_count": 0,
+      "has_sample": false,
+      "last_modified": "unknown"
+    },
+    "alerts": {
+      "document_count": 0,
+      "has_sample": false,
+      "last_modified": "unknown"
+    },
+    "users": {
+      "document_count": 0,
+      "has_sample": false,
+      "last_modified": "unknown"
+    }
+  }
+}

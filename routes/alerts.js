@@ -4,6 +4,7 @@ const nodemailer = require('nodemailer');
 const Alert = require('../models/Alert'); // Ensure path is correct
 const Company = require('../models/Company');
 const { createTwilioClient, getPrimaryPhoneNumber } = require('../utils/twilioClientFactory');
+const { authenticateJWT, requireRole } = require('../middleware/auth'); // Authentication
 
 const router = express.Router();
 
@@ -141,16 +142,36 @@ router.post('/', async (req, res) => {
 });
 
 /**
- * GET /api/alerts
- * SECURITY NOTE: This endpoint has been disabled due to multi-tenant isolation violation
- * Previously exposed alerts from all companies without companyId filtering
+ * GET /api/alerts - ADMIN ENDPOINT: Get all alerts (requires admin authentication)
+ * Security Fix: July 27, 2025 - Previously disabled, now restored with proper authentication
+ * Only accessible to admin users with valid JWT tokens
  */
-router.get('/', async (req, res) => {
-    res.status(403).json({ 
-        message: 'This endpoint has been disabled for security reasons. Use company-specific alert endpoints instead.',
-        error: 'ENDPOINT_DISABLED_FOR_SECURITY',
-        remediation: 'Use /api/company/:companyId/alerts endpoint with proper authentication'
-    });
+router.get('/', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        console.log('[ADMIN API GET /api/alerts] Admin user requesting all alerts:', req.user.email);
+        
+        // Get all alerts with company information
+        const alerts = await Alert.find({})
+            .populate('companyId', 'companyName tradeTypes') // Include company name and trade types
+            .sort({ timestamp: -1 }) // Most recent first
+            .limit(1000); // Reasonable limit for admin dashboard
+        
+        console.log(`[ADMIN API GET /api/alerts] Returning ${alerts.length} alerts to admin`);
+        
+        res.json({
+            success: true,
+            data: alerts,
+            count: alerts.length,
+            message: 'Admin access granted to all alerts'
+        });
+        
+    } catch (err) {
+        console.error('[ADMIN API GET /api/alerts] Error:', err);
+        res.status(500).json({ 
+            message: 'Server error retrieving alerts',
+            error: err.message 
+        });
+    }
 });
 
 /**

@@ -1,5 +1,9 @@
 require('dotenv').config(); // This MUST be the first line
 
+// Initialize Sentry for error monitoring (must be early)
+const { initializeSentry, getSentryRequestHandler, getSentryErrorHandler } = require('./utils/sentry');
+initializeSentry();
+
 // Initialize logger early
 const logger = require('./utils/logger');
 logger.info('--- STARTING CLIENTSVIA BACKEND SERVER - PRODUCTION BUILD ---');
@@ -56,9 +60,14 @@ const aiIntelligenceRoutes = require('./routes/aiIntelligence'); // AI Intellige
 const monitoringRoutes = require('./routes/monitoring'); // Agent Monitoring System
 const notesRoutes = require('./routes/notes'); // GOLD STANDARD: Enterprise Notes Management
 const agentProcessorRoutes = require('./routes/agentProcessor'); // NEW: Central agent processing
+const adminRoutes = require('./routes/admin'); // ADMIN: Authentication-protected admin endpoints
+const authRoutes = require('./routes/auth'); // AUTH: User authentication and JWT management
 
 // Initialize Express app
 const app = express();
+
+// --- Sentry Middleware (must be first) ---
+app.use(getSentryRequestHandler());
 
 // --- Middleware ---
 app.use(express.json());
@@ -91,6 +100,8 @@ app.use('/api/elevenlabs', elevenLabsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/learning', learningRoutes);
 app.use('/api/agent', agentSettingsRoutes); // ENTERPRISE: AI Agent Settings Management
+app.use('/api/auth', authRoutes); // AUTH: User authentication and JWT token management
+app.use('/api/admin', adminRoutes); // ADMIN: Authentication-protected endpoints (companies, alerts, suggestions)
 app.use('/api/company', companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
 app.use('/api/company', companyPersonalityRoutes); // MODULE 1: Agent Personality Settings
 app.use('/api/company', companyKnowledgeRoutes); // MODULE 2: Knowledge Q&A Source Controls
@@ -259,5 +270,8 @@ app.use((err, req, res, next) => {
         res.status(500).json({ message: 'Something broke on the server!' });
     }
 });
+
+// --- Sentry Error Handler (must be last) ---
+app.use(getSentryErrorHandler());
 
 module.exports = { app, startServer };

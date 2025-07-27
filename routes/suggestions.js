@@ -3,6 +3,7 @@ const router = express.Router();
 const SuggestedKnowledgeEntry = require('../models/SuggestedKnowledgeEntry');
 const KnowledgeEntry = require('../models/KnowledgeEntry');
 const { ObjectId } = require('mongodb');
+const { authenticateJWT, requireRole } = require('../middleware/auth'); // Authentication
 
 // POST /api/suggestions - Add a new suggested knowledge entry (used internally by agent)
 router.post('/', async (req, res) => {
@@ -20,14 +21,35 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/suggestions - SECURITY: Disabled due to multi-tenant isolation violation
-// Previously exposed all suggested knowledge entries across companies without filtering
-router.get('/', async (req, res) => {
-  res.status(403).json({ 
-    message: 'This endpoint has been disabled for security reasons. Use company-specific suggestion endpoints instead.',
-    error: 'ENDPOINT_DISABLED_FOR_SECURITY',
-    remediation: 'Use /api/company/:companyId/suggestions endpoint with proper authentication'
-  });
+// GET /api/suggestions - ADMIN ENDPOINT: Get all suggested knowledge entries (requires admin authentication)
+// Security Fix: July 27, 2025 - Previously disabled, now restored with proper authentication
+// Only accessible to admin users with valid JWT tokens
+router.get('/', authenticateJWT, requireRole('admin'), async (req, res) => {
+  try {
+    console.log('[ADMIN API GET /api/suggestions] Admin user requesting all suggestions:', req.user.email);
+    
+    // Get all suggested knowledge entries with company information
+    const suggestions = await SuggestedKnowledgeEntry.find({})
+      .populate('companyId', 'companyName tradeTypes') // Include company name and trade types
+      .sort({ createdAt: -1 }) // Most recent first
+      .limit(1000); // Reasonable limit for admin dashboard
+    
+    console.log(`[ADMIN API GET /api/suggestions] Returning ${suggestions.length} suggestions to admin`);
+    
+    res.json({
+      success: true,
+      data: suggestions,
+      count: suggestions.length,
+      message: 'Admin access granted to all suggested knowledge entries'
+    });
+    
+  } catch (err) {
+    console.error('[ADMIN API GET /api/suggestions] Error:', err);
+    res.status(500).json({ 
+      message: 'Server error retrieving suggestions',
+      error: err.message 
+    });
+  }
 });
 
 // PATCH /api/suggestions/:id - Update a suggested knowledge entry (e.g., change status)

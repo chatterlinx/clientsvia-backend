@@ -8,6 +8,7 @@ const { google } = require('googleapis'); // For Google Calendar
 const { normalizePhoneNumber } = require('../utils/phone');
 const { redisClient } = require('../clients');
 const { apiLimiter } = require('../middleware/rateLimit'); // Rate limiting
+const { authenticateJWT, requireRole } = require('../middleware/auth'); // Authentication
 const { defaultResponses, clearCompanyResponsesCache, initializeStandardPersonalityResponses, ensurePersonalityResponsesExist } = require('../utils/personalityResponses_enhanced');
 
 // Google OAuth2 Client Setup
@@ -138,17 +139,47 @@ router.post('/companies', async (req, res) => {
     }
 });
 
-// SECURITY NOTE: This endpoint has been disabled due to data exposure vulnerability
-// Previously exposed all company data publicly without authentication
-// For admin access, implement proper authentication middleware first
-// FIXED: July 27, 2025 19:55 PST - Force deployment refresh
-router.get('/companies', async (req, res) => {
-    res.status(403).json({ 
-        message: 'This endpoint has been disabled for security reasons. Please use authenticated admin endpoints instead.',
-        error: 'ENDPOINT_DISABLED_FOR_SECURITY',
-        timestamp: new Date().toISOString(),
-        remediation: 'Implement proper authentication middleware for admin access'
-    });
+// ADMIN ENDPOINT: Get all companies (requires admin authentication)
+// Previously disabled for security - now restored with proper authentication
+// Security Fix: July 27, 2025 - Added JWT authentication and admin role requirement
+router.get('/companies', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        console.log('[ADMIN API GET /api/companies] Admin user requesting all companies:', req.user.email);
+        
+        const db = getDB();
+        const companiesCollection = db.collection('companies');
+        
+        // Get all companies with basic info (exclude sensitive fields)
+        const companies = await companiesCollection.find({}, {
+            projection: {
+                // Include basic company info
+                companyName: 1,
+                tradeTypes: 1,
+                status: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                companyPhone: 1,
+                companyAddress: 1
+                // Sensitive fields are automatically excluded when using inclusion projection
+            }
+        }).toArray();
+        
+        console.log(`[ADMIN API GET /api/companies] Returning ${companies.length} companies to admin`);
+        
+        res.json({
+            success: true,
+            data: companies,
+            count: companies.length,
+            message: 'Admin access granted to company directory'
+        });
+        
+    } catch (err) {
+        console.error('[ADMIN API GET /api/companies] Error:', err);
+        res.status(500).json({ 
+            message: 'Server error retrieving companies',
+            error: err.message 
+        });
+    }
 });
 
 // Middleware to check cache for company data
