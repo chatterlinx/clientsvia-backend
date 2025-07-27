@@ -14,6 +14,9 @@
 - **Security Issue Fixed:** Removed `console.log('🔧 Full token for debug:', savedToken)` - CRITICAL
 - **Performance:** Removed 61 verbose debug statements (270→209)
 - **Patterns:** Most noise from tab initialization, phone setup, voice selection loops
+- 🚨 **CRITICAL ERROR:** Used sed commands to remove console.log, broke JavaScript syntax, took production DOWN
+- 🔥 **EMERGENCY FIX:** Had to revert files to working version, lost cleanup progress
+- 📝 **NEW RULE:** Never use automated sed/regex for console.log removal on complex JavaScript
 
 ### **🔒 Security Validation Findings:**
 - **Company Routes:** ✅ Proper ObjectId validation in `/api/company/:id`
@@ -26,6 +29,39 @@
 
 ---
 
+## 🚨 **SAFE PRODUCTION PRACTICES**
+
+### **Console.log Cleanup - SAFE METHOD:**
+```javascript
+// 1. MANUAL INSPECTION: Always check context before removing
+// 2. REPLACE, don't delete: 
+//    console.log('debug') → // console.log('debug')
+// 3. NEVER use sed/regex on complex JavaScript files
+// 4. TEST locally before production push
+// 5. Keep error logs: console.error() should remain
+```
+
+### **Emergency Recovery Commands:**
+```bash
+# Revert specific files to last working commit
+git checkout COMMIT_HASH -- path/to/file.js
+
+# Check production immediately after pushing changes
+curl https://clientsvia-backend.onrender.com/company-profile.html?id=68813026dd95f599c74e49c7
+
+# Monitor production logs in real-time
+# Via Render dashboard → Logs → Live tail
+```
+
+### **Pre-Production Checklist:**
+- [ ] Test locally: `npm start` works without errors
+- [ ] Check browser console: No JavaScript errors
+- [ ] Test main functionality: Company profile loads
+- [ ] Verify API endpoints: Company data fetches correctly
+- [ ] Have rollback plan: Know last working commit hash
+
+---
+
 ## 🎯 **QUICK REFERENCE - CRITICAL INFO**
 
 ### **⚠️ COMMON MISTAKES TO AVOID:**
@@ -33,6 +69,27 @@
 - ❌ **NOT** `companyID` - **IT'S** `companyId` (consistent camelCase)
 - ❌ **NOT** `Company.find()` without filters - **ALWAYS** use `Company.findById(companyId)`
 - ❌ **NOT** direct API key access - **USE** the helper functions for company-specific keys
+- 🚨 **CRITICAL:** **NEVER** use sed/regex to remove console.log statements - **BREAKS JAVASCRIPT SYNTAX**
+
+### **🔥 PRODUCTION DISASTER - JULY 27, 2025:**
+**MISTAKE:** Used `sed -i '' '/console\.log.*pattern/d'` commands to remove console.log statements
+**RESULT:** Completely broke JavaScript syntax, production platform DOWN
+**CAUSE:** sed removed console.log calls that were part of object literals, leaving orphaned syntax
+**EXAMPLE OF BROKEN CODE:**
+```javascript
+// BEFORE (working):
+console.log('Debug:', {
+    twilioConfig: this.currentData.twilioConfig,
+    authToken: 'hidden'
+});
+
+// AFTER sed removal (BROKEN):
+    twilioConfig: this.currentData.twilioConfig,  // Orphaned object literal!
+    authToken: 'hidden'
+});  // Orphaned closing bracket!
+```
+**LESSON:** Manual console.log removal only, never automated sed/regex on complex JavaScript
+**RECOVERY:** `git checkout 7b8105a2 -- public/js/company-profile-modern.js public/company-profile.html`
 
 ### **🔑 KEY API ENDPOINTS PATTERN:**
 ```javascript
