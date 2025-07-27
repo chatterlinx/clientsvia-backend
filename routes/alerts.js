@@ -142,20 +142,15 @@ router.post('/', async (req, res) => {
 
 /**
  * GET /api/alerts
- * Fetches all alerts from the database, sorted by most recent.
+ * SECURITY NOTE: This endpoint has been disabled due to multi-tenant isolation violation
+ * Previously exposed alerts from all companies without companyId filtering
  */
 router.get('/', async (req, res) => {
-    try {
-        console.log('GET /api/alerts: Fetching alerts');
-        const alerts = await Alert.find().sort({ timestamp: -1 }).limit(100);
-        console.log('GET /api/alerts: Fetched', alerts.length, 'alerts');
-        res.json(alerts);
-    } catch (err) {
-        console.error('Error in GET /api/alerts:', err.message, err.stack);
-        if (!res.headersSent) {
-            res.status(500).json({ message: 'Server error while fetching alerts.', error: err.message });
-        }
-    }
+    res.status(403).json({ 
+        message: 'This endpoint has been disabled for security reasons. Use company-specific alert endpoints instead.',
+        error: 'ENDPOINT_DISABLED_FOR_SECURITY',
+        remediation: 'Use /api/company/:companyId/alerts endpoint with proper authentication'
+    });
 });
 
 /**

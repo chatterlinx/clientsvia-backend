@@ -20,20 +20,14 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/suggestions - Get all suggested knowledge entries (with optional filters)
+// GET /api/suggestions - SECURITY: Disabled due to multi-tenant isolation violation
+// Previously exposed all suggested knowledge entries across companies without filtering
 router.get('/', async (req, res) => {
-  try {
-    const { status, category } = req.query;
-    const filter = {};
-    if (status) filter.status = status;
-    if (category) filter.category = category;
-
-    const entries = await SuggestedKnowledgeEntry.find(filter).sort({ createdAt: -1 });
-    res.json(entries);
-  } catch (error) {
-    console.error('[API GET /api/suggestions] Error:', error);
-    res.status(500).json({ message: 'Error fetching suggested knowledge entries.' });
-  }
+  res.status(403).json({ 
+    message: 'This endpoint has been disabled for security reasons. Use company-specific suggestion endpoints instead.',
+    error: 'ENDPOINT_DISABLED_FOR_SECURITY',
+    remediation: 'Use /api/company/:companyId/suggestions endpoint with proper authentication'
+  });
 });
 
 // PATCH /api/suggestions/:id - Update a suggested knowledge entry (e.g., change status)
