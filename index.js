@@ -1,6 +1,8 @@
 require('dotenv').config(); // This MUST be the first line
 
-console.log('--- EXECUTING LATEST INDEX.JS - V7 ---');
+// Initialize logger early
+const logger = require('./utils/logger');
+logger.info('--- STARTING CLIENTSVIA BACKEND SERVER - PRODUCTION BUILD ---');
 // admin-dashboard/index.js (Main Express Server)
 
 // Import necessary modules
