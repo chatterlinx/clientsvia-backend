@@ -2142,7 +2142,7 @@
             notification.innerHTML = `
                 <div class="flex items-center">
                     <span class="flex-1">${message}</span>
-                    <button type="button" class="ml-3 text-sm opacity-70 hover:opacity-100" onclick="this.parentElement.parentElement.remove()">
+                    <button type="button" class="ml-3 text-sm opacity-70 hover:opacity-100" onclick="closeNotification(this)">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -2612,7 +2612,7 @@
                                 <span class="text-sm font-medium">Audio generated successfully!</span>
                             </div>
                             <div class="flex items-center space-x-2">
-                                <button type="button" onclick="this.previousElementSibling.previousElementSibling.play()" 
+                                <button type="button" onclick="playTestAudio()" 
                                         class="text-sm bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded">
                                     <i class="fas fa-play mr-1"></i>Play
                                 </button>
@@ -2621,7 +2621,7 @@
                                     <i class="fas fa-download mr-1"></i>Download
                                 </button>
                             </div>
-                            <audio controls class="hidden">${audioData}</audio>
+                            <audio id="testAudio" controls class="hidden" src="${audioData}"></audio>
                         </div>
                         <div class="text-xs text-gray-500 mt-2">
                             Size: ${(result.size / 1024).toFixed(1)} KB | Format: ${result.format || 'mp3'}
@@ -2730,6 +2730,28 @@
             } finally {
                 button.innerHTML = originalText;
                 button.disabled = false;
+            }
+        }
+
+        // Close notification utility
+        function closeNotification(button) {
+            const notification = button.parentElement.parentElement;
+            if (notification) {
+                notification.remove();
+            }
+        }
+
+        // Play test audio utility
+        function playTestAudio() {
+            const audioElement = document.getElementById('testAudio');
+            if (audioElement) {
+                audioElement.play().catch(e => {
+                    console.error('Failed to play test audio:', e);
+                    showNotification('⚠️ Could not play audio', 'error');
+                });
+            } else {
+                console.error('Test audio element not found');
+                showNotification('⚠️ Audio element not found', 'error');
             }
         }
 
