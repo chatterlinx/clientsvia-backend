@@ -19,6 +19,7 @@ require('./clients');
 // Import database connection logic
 const { connectDB } = require('./db');
 const AgentPromptService = require('./services/agentPromptsService');
+const BackupMonitoringService = require('./services/backupMonitoringService');
 
 // Import API routes
 const companyRoutes = require('./routes/company');
@@ -62,6 +63,7 @@ const notesRoutes = require('./routes/notes'); // GOLD STANDARD: Enterprise Note
 const agentProcessorRoutes = require('./routes/agentProcessor'); // NEW: Central agent processing
 const adminRoutes = require('./routes/admin'); // ADMIN: Authentication-protected admin endpoints
 const authRoutes = require('./routes/auth'); // AUTH: User authentication and JWT management
+const backupRoutes = require('./routes/backup'); // BACKUP: Automated backup monitoring and management
 
 // Initialize Express app
 const app = express();
@@ -102,6 +104,7 @@ app.use('/api/learning', learningRoutes);
 app.use('/api/agent', agentSettingsRoutes); // ENTERPRISE: AI Agent Settings Management
 app.use('/api/auth', authRoutes); // AUTH: User authentication and JWT token management
 app.use('/api/admin', adminRoutes); // ADMIN: Authentication-protected endpoints (companies, alerts, suggestions)
+app.use('/api/backup', backupRoutes); // BACKUP: Automated backup monitoring and management
 app.use('/api/company', companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
 app.use('/api/company', companyPersonalityRoutes); // MODULE 1: Agent Personality Settings
 app.use('/api/company', companyKnowledgeRoutes); // MODULE 2: Knowledge Q&A Source Controls
@@ -248,6 +251,12 @@ async function startServer() {
     try {
         await connectDB();
         await AgentPromptService.loadAll();
+        
+        // Initialize backup monitoring service for production readiness
+        const backupMonitoring = new BackupMonitoringService();
+        backupMonitoring.start();
+        logger.info('🔄 Backup monitoring service initialized');
+        
         const PORT = process.env.PORT || 4000;
         return app.listen(PORT, () => {
             console.log(`Admin dashboard listening at http://localhost:${PORT}`);

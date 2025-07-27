@@ -2,10 +2,15 @@ const express = require('express');
 const router = express.Router();
 const BackupManager = require('../utils/backupManager');
 const logger = require('../utils/logger');
+const { authenticateJWT, requireRole } = require('../middleware/auth');
 
 /**
  * Backup monitoring and management endpoints
+ * All endpoints require admin authentication for security
  */
+
+// Apply authentication middleware to all backup routes
+router.use(authenticateJWT, requireRole('admin'));
 
 // GET /api/backup/status - Check backup status and strategy
 router.get('/status', async (req, res) => {
