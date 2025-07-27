@@ -51,10 +51,34 @@ async function getCompanyByPhoneNumber(phoneNumber) {
       const digitsNoCountry = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
       const searchNumbers = [phoneNumber, digits, digitsNoCountry].filter(Boolean);
 
-      company = await Company.findOne({ 'twilioConfig.phoneNumber': { $in: searchNumbers } }).exec();
+      // Search in both twilioConfig.phoneNumber and twilioConfig.phoneNumbers array
+      company = await Company.findOne({
+        $or: [
+          { 'twilioConfig.phoneNumber': { $in: searchNumbers } },
+          { 'twilioConfig.phoneNumbers.phoneNumber': { $in: searchNumbers } }
+        ]
+      }).exec();
+      
       if (!company) {
-        const all = await Company.find({ 'twilioConfig.phoneNumber': { $ne: null } }).exec();
-        company = all.find((c) => numbersMatch(c.twilioConfig.phoneNumber, phoneNumber));
+        console.log(`[DB FALLBACK] Trying broader search for ${phoneNumber}...`);
+        const all = await Company.find({
+          $or: [
+            { 'twilioConfig.phoneNumber': { $ne: null } },
+            { 'twilioConfig.phoneNumbers': { $exists: true, $ne: [] } }
+          ]
+        }).exec();
+        
+        company = all.find((c) => {
+          // Check single phoneNumber field
+          if (c.twilioConfig?.phoneNumber && numbersMatch(c.twilioConfig.phoneNumber, phoneNumber)) {
+            return true;
+          }
+          // Check phoneNumbers array
+          if (c.twilioConfig?.phoneNumbers && Array.isArray(c.twilioConfig.phoneNumbers)) {
+            return c.twilioConfig.phoneNumbers.some(p => numbersMatch(p.phoneNumber, phoneNumber));
+          }
+          return false;
+        });
       }
 
       if (company) {
@@ -74,10 +98,33 @@ async function getCompanyByPhoneNumber(phoneNumber) {
     const digits = extractDigits(phoneNumber);
     const digitsNoCountry = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
     const searchNumbers = [phoneNumber, digits, digitsNoCountry].filter(Boolean);
-    company = await Company.findOne({ 'twilioConfig.phoneNumber': { $in: searchNumbers } }).exec();
+    
+    company = await Company.findOne({
+      $or: [
+        { 'twilioConfig.phoneNumber': { $in: searchNumbers } },
+        { 'twilioConfig.phoneNumbers.phoneNumber': { $in: searchNumbers } }
+      ]
+    }).exec();
+    
     if (!company) {
-      const all = await Company.find({ 'twilioConfig.phoneNumber': { $ne: null } }).exec();
-      company = all.find((c) => numbersMatch(c.twilioConfig.phoneNumber, phoneNumber));
+      const all = await Company.find({
+        $or: [
+          { 'twilioConfig.phoneNumber': { $ne: null } },
+          { 'twilioConfig.phoneNumbers': { $exists: true, $ne: [] } }
+        ]
+      }).exec();
+      
+      company = all.find((c) => {
+        // Check single phoneNumber field
+        if (c.twilioConfig?.phoneNumber && numbersMatch(c.twilioConfig.phoneNumber, phoneNumber)) {
+          return true;
+        }
+        // Check phoneNumbers array
+        if (c.twilioConfig?.phoneNumbers && Array.isArray(c.twilioConfig.phoneNumbers)) {
+          return c.twilioConfig.phoneNumbers.some(p => numbersMatch(p.phoneNumber, phoneNumber));
+        }
+        return false;
+      });
     }
   }
   if (company) {
