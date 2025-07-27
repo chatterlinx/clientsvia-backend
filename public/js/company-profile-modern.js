@@ -2664,6 +2664,9 @@ class CompanyProfileManager {
             console.log('   - voiceId type:', typeof voiceId);
         }
 
+        // Initialize voice parameter sliders with saved values
+        this.initializeVoiceParameterSliders();
+
         // Track API key changes
         if (apiKeyInput) {
             apiKeyInput.addEventListener('input', () => {
@@ -2687,6 +2690,69 @@ class CompanyProfileManager {
                 console.log('🎵 ElevenLabs voice changed to:', voiceSelect.value);
             });
         }
+    }
+
+    /**
+     * Initialize voice parameter sliders with saved values
+     */
+    initializeVoiceParameterSliders() {
+        console.log('🎛️ Initializing voice parameter sliders...');
+        
+        // Get ElevenLabs settings from current data
+        const elevenLabsSettings = this.currentData?.aiSettings?.elevenLabs || {};
+        
+        // Slider definitions with their default values and corresponding input IDs
+        const sliders = [
+            {
+                name: 'stability',
+                inputId: 'voice-stability',
+                valueId: 'stability-value',
+                savedValue: elevenLabsSettings.stability,
+                defaultValue: 0.5
+            },
+            {
+                name: 'similarity',
+                inputId: 'voice-similarity', 
+                valueId: 'similarity-value',
+                savedValue: elevenLabsSettings.similarityBoost,
+                defaultValue: 0.7
+            },
+            {
+                name: 'style',
+                inputId: 'voice-style',
+                valueId: 'style-value', 
+                savedValue: elevenLabsSettings.style,
+                defaultValue: 0.0
+            }
+        ];
+        
+        // Initialize each slider
+        sliders.forEach(slider => {
+            const inputElement = document.getElementById(slider.inputId);
+            const valueElement = document.getElementById(slider.valueId);
+            
+            if (inputElement && valueElement) {
+                // Use saved value if available, otherwise use default
+                const value = slider.savedValue !== undefined && slider.savedValue !== null 
+                    ? slider.savedValue 
+                    : slider.defaultValue;
+                
+                // Set slider value
+                inputElement.value = value;
+                
+                // Update display value
+                valueElement.textContent = parseFloat(value).toFixed(1);
+                
+                console.log(`🎛️ Initialized ${slider.name} slider: ${value}`);
+            } else {
+                console.warn(`⚠️ Could not find slider elements for ${slider.name}:`, {
+                    inputFound: !!inputElement,
+                    valueFound: !!valueElement
+                });
+            }
+        });
+        
+        console.log('✅ Voice parameter sliders initialized');
     }
 
     /**
@@ -4383,12 +4449,53 @@ class CompanyProfileManager {
             }
         }
         
+        // Collect voice parameter slider values
+        this.collectVoiceParameterSliders(data);
+        
         console.log('📊 Voice data collected:', {
             useOwnApiKey: data.aiSettings.elevenLabs.useOwnApiKey,
             hasApiKey: !!data.aiSettings.elevenLabs.apiKey,
             voiceId: data.aiSettings.elevenLabs.voiceId,
+            stability: data.aiSettings.elevenLabs.stability,
+            similarityBoost: data.aiSettings.elevenLabs.similarityBoost,
+            style: data.aiSettings.elevenLabs.style,
             selectorUsed: voiceSelect?.id || 'none'
         });
+    }
+
+    /**
+     * Collect voice parameter slider values
+     */
+    collectVoiceParameterSliders(data) {
+        console.log('🎛️ Collecting voice parameter slider values...');
+        
+        // Ensure aiSettings.elevenLabs exists
+        if (!data.aiSettings) data.aiSettings = {};
+        if (!data.aiSettings.elevenLabs) data.aiSettings.elevenLabs = {};
+        
+        // Collect slider values
+        const sliders = [
+            { name: 'stability', inputId: 'voice-stability', dataKey: 'stability' },
+            { name: 'similarity', inputId: 'voice-similarity', dataKey: 'similarityBoost' },
+            { name: 'style', inputId: 'voice-style', dataKey: 'style' }
+        ];
+        
+        sliders.forEach(slider => {
+            const inputElement = document.getElementById(slider.inputId);
+            if (inputElement && inputElement.value !== undefined && inputElement.value !== '') {
+                const value = parseFloat(inputElement.value);
+                if (!isNaN(value)) {
+                    data.aiSettings.elevenLabs[slider.dataKey] = value;
+                    console.log(`🎛️ Collected ${slider.name}: ${value}`);
+                } else {
+                    console.warn(`⚠️ Invalid value for ${slider.name}: ${inputElement.value}`);
+                }
+            } else {
+                console.warn(`⚠️ Could not find or get value from ${slider.inputId}`);
+            }
+        });
+        
+        console.log('✅ Voice parameter sliders collected');
     }
 
     /**
@@ -5244,6 +5351,36 @@ class CompanyProfileManager {
         });
     }
 }
+
+// =============================================
+// GLOBAL UTILITY FUNCTIONS
+// =============================================
+
+/**
+ * Update slider value display for ElevenLabs voice parameters
+ * This function is called by the HTML oninput events on the sliders
+ */
+function updateSliderValue(parameterName, value) {
+    console.log(`🎛️ Updating slider ${parameterName} to ${value}`);
+    
+    // Update the display value
+    const valueElement = document.getElementById(`${parameterName}-value`);
+    if (valueElement) {
+        valueElement.textContent = parseFloat(value).toFixed(1);
+        console.log(`✅ Updated ${parameterName}-value display to ${value}`);
+    } else {
+        console.warn(`⚠️ Could not find element ${parameterName}-value`);
+    }
+    
+    // Trigger change detection if company profile manager is available
+    if (window.companyProfileManager) {
+        window.companyProfileManager.setUnsavedChanges(true);
+        console.log(`📝 Marked ElevenLabs ${parameterName} change as unsaved`);
+    }
+}
+
+// Make updateSliderValue globally accessible
+window.updateSliderValue = updateSliderValue;
 
 // =============================================
 // INITIALIZATION
