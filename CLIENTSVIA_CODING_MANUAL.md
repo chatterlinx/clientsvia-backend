@@ -7,6 +7,134 @@
 
 ---
 
+## 📚 **HOW TO UPDATE THIS MANUAL - INSTRUCTIONS FOR FUTURE AGENTS**
+
+### **🎯 WHEN TO UPDATE:**
+- **After every work session** - Add session logs with findings
+- **When discovering new architecture patterns** - Document for future reference
+- **After fixing production issues** - Record root cause and solution
+- **When finding mistakes** - Add to "COMMON MISTAKES" section
+- **After security validations** - Update security patterns section
+- **When creating new workflows** - Document the process
+
+### **🔧 HOW TO UPDATE:**
+
+#### **1. Session Log Updates (MANDATORY after each session):**
+```markdown
+### Session Log - [DATE] ([TIME] PST)
+
+**🎯 TASK:** [Brief description of what was worked on]
+**📁 FILES MODIFIED:** [List key files changed]
+**🔍 FINDINGS:** 
+- [Key discovery 1]
+- [Key discovery 2] 
+**🚨 ISSUES FOUND:**
+- [Any problems discovered]
+**✅ SOLUTIONS APPLIED:**
+- [How issues were resolved]
+**📝 LESSONS LEARNED:**
+- [Critical lessons for future reference]
+**🔗 COMMITS:** [Git commit hashes for reference]
+```
+
+#### **2. Disaster/Mistake Documentation:**
+When you make a mistake that breaks production or causes issues:
+```markdown
+**[DATE] - [BRIEF TITLE]:**
+**MISTAKE:** [Exactly what was done wrong]
+**RESULT:** [What broke/failed]
+**CAUSE:** [Root cause analysis]
+**EXAMPLE:** [Code example if applicable]
+**LESSON:** [Key takeaway]
+**RECOVERY:** [Exact commands/steps used to fix]
+**COMMIT:** [Recovery commit hash]
+```
+
+#### **3. Architecture Pattern Updates:**
+When you discover how something works in the codebase:
+```markdown
+### **🏗 [COMPONENT NAME] Architecture:**
+**Purpose:** [What this component does]
+**Key Files:** [Main files involved]
+**Data Flow:** [How data moves through the system]
+**Critical Functions:** [Important functions to know]
+**Common Issues:** [Problems to watch for]
+**Examples:** [Code examples]
+```
+
+#### **4. Security Pattern Updates:**
+When validating security or finding security issues:
+```markdown
+### **🔒 [AREA] Security Validation:**
+**Date:** [When validated]
+**Scope:** [What was checked]
+**Method:** [How validation was done]
+**Findings:** [Security status]
+**Issues:** [Any vulnerabilities found]
+**Fixes:** [How issues were resolved]
+**Pattern:** [Security pattern to follow]
+```
+
+### **🛠 MANUAL UPDATE COMMANDS:**
+
+#### **After Each Work Session:**
+```bash
+# 1. Update the manual with session findings
+code CLIENTSVIA_CODING_MANUAL.md
+
+# 2. Update the production checklist
+code production-ready-checklist.md
+
+# 3. Commit both files together
+git add CLIENTSVIA_CODING_MANUAL.md production-ready-checklist.md
+git commit -m "DOCS: Session log [DATE] - [BRIEF_DESCRIPTION]
+
+- [Key finding 1]
+- [Key finding 2]
+- [Any issues/lessons learned]"
+
+# 4. Push to remote
+git push origin main
+```
+
+### **📍 MANUAL STRUCTURE GUIDE:**
+
+The manual should always maintain this structure:
+1. **Header** - Version, last updated, status
+2. **Update Instructions** (this section)
+3. **Session Logs** - Most recent first
+4. **Safe Production Practices** 
+5. **Common Mistakes to Avoid**
+6. **Quick Reference**
+7. **Architecture Breakdowns**
+8. **Security Patterns**
+9. **Troubleshooting Guides**
+10. **End-of-Session Workflow**
+
+### **🚨 CRITICAL RULES:**
+
+1. **NEVER delete old session logs** - They contain valuable historical context
+2. **ALWAYS update after production incidents** - Document mistakes for learning
+3. **BE SPECIFIC with examples** - Include code snippets and exact commands
+4. **CROSS-REFERENCE files** - Link related sections and files
+5. **UPDATE BOTH manual and checklist** - Keep them synchronized
+6. **COMMIT DOCUMENTATION** - Don't lose the knowledge
+
+### **📝 TEMPLATE FOR QUICK UPDATES:**
+
+```markdown
+### Session Log - [DATE]
+
+**Task:** [What you worked on]
+**Files:** [Files modified]
+**Issue:** [Problem encountered]
+**Solution:** [How you fixed it]  
+**Lesson:** [Key takeaway]
+**Commit:** [Git hash]
+```
+
+---
+
 ## 📝 **SESSION LOG - JULY 27, 2025**
 
 ### **🧹 Console.log Cleanup Findings:**
@@ -652,8 +780,127 @@ curl -X POST /api/company/TEST_ID/elevenlabs/test-connection
 
 ---
 
-**📚 This manual is a living document - update it whenever you add new features or discover new patterns!**
+## 📋 **END-OF-SESSION WORKFLOW (MANDATORY)**
 
-**🔄 Last Updated:** July 27, 2025  
-**👨‍💻 Maintained by:** Development Team  
-**📋 Version:** 1.0 - Initial Complete Manual
+### **🔄 Every Work Session Must End With:**
+
+#### **1. UPDATE THIS MANUAL:**
+```bash
+# Open the manual and add session log
+code CLIENTSVIA_CODING_MANUAL.md
+
+# Add to the top of the SESSION LOG section:
+### Session Log - [DATE] ([TIME] PST)
+**Task:** [What you worked on]
+**Files:** [Key files modified] 
+**Findings:** [What you discovered]
+**Issues:** [Problems encountered]
+**Solutions:** [How you fixed them]
+**Lessons:** [Key takeaways]
+**Commits:** [Git commit hashes]
+```
+
+#### **2. UPDATE PRODUCTION CHECKLIST:**
+```bash
+# Update the checklist with progress
+code production-ready-checklist.md
+
+# Add any new tasks or update existing ones
+# Mark completed items with ✅
+# Add any new issues found with ❌
+```
+
+#### **3. COMMIT AND PUSH:**
+```bash
+# Stage the documentation files
+git add CLIENTSVIA_CODING_MANUAL.md production-ready-checklist.md
+
+# Commit with descriptive message
+git commit -m "DOCS: Session log [DATE] - [BRIEF_SUMMARY]
+
+- [Key finding 1]
+- [Key finding 2] 
+- [Any critical lessons learned]"
+
+# Push to remote repository
+git push origin main
+```
+
+### **🚨 EMERGENCY DOCUMENTATION PROTOCOL:**
+
+#### **When Production Breaks:**
+1. **IMMEDIATELY document the issue** in this manual
+2. **Record the exact error messages**
+3. **Document the fix steps taken**
+4. **Add to "COMMON MISTAKES" section**
+5. **Update production checklist with new safeguards**
+
+#### **When Discovering New Architecture:**
+1. **Add to appropriate architecture section**
+2. **Include code examples**
+3. **Cross-reference related files**
+4. **Update troubleshooting guides**
+
+### **📝 MANUAL MAINTENANCE CHECKLIST:**
+
+- [ ] Session log added for current work
+- [ ] Any mistakes documented with solutions
+- [ ] New architecture patterns recorded
+- [ ] Security findings updated
+- [ ] Production checklist synchronized
+- [ ] All changes committed to git
+- [ ] Knowledge preserved for future agents
+
+### **🎯 SUCCESS METRICS:**
+
+**This manual is successful when:**
+- New agents can understand the codebase quickly
+- Common mistakes are avoided through documentation
+- Production incidents are resolved faster using recorded solutions
+- Architecture decisions are clear and well-documented
+- No knowledge is lost between work sessions
+
+---
+
+**🔑 KEY REMINDER:** This manual is the collective memory of the ClientsVia platform. Every mistake, discovery, and solution documented here prevents future agents from repeating the same issues and accelerates development velocity.
+
+**📞 ESCALATION:** If you discover critical security issues or production-breaking problems, document them immediately and ensure the production checklist reflects the urgency.
+
+---
+
+## 🚀 **QUICK START FOR NEW AGENTS**
+
+### **📋 IMMEDIATE ACTION ITEMS:**
+1. **Read this manual** - Understand the platform architecture and common issues
+2. **Check production status** - Visit https://clientsvia-backend.onrender.com
+3. **Review recent session logs** - See what was last worked on
+4. **Update at end of session** - Follow the mandatory workflow at the bottom
+
+### **🚨 CRITICAL COMMANDS TO KNOW:**
+```bash
+# Test production is working
+curl https://clientsvia-backend.onrender.com/company-profile.html?id=68813026dd95f599c74e49c7
+
+# Emergency file restore (if you break something)
+git checkout HEAD~1 -- path/to/broken/file.js
+
+# Update documentation (mandatory end-of-session)
+git add CLIENTSVIA_CODING_MANUAL.md production-ready-checklist.md
+git commit -m "DOCS: Session log [DATE] - [SUMMARY]"
+git push origin main
+```
+
+### **❌ NEVER DO THESE THINGS:**
+- Use sed/regex on complex JavaScript files (breaks syntax)
+- Remove console.error statements (needed for debugging)
+- Work without updating documentation
+- Push to production without testing locally
+- Modify company data without companyId validation
+
+### **📁 KEY FILES TO KNOW:**
+- `CLIENTSVIA_CODING_MANUAL.md` - This file (update after every session)
+- `production-ready-checklist.md` - Production status and tasks
+- `public/company-profile.html` - Main company profile page
+- `public/js/company-profile-modern.js` - Company profile JavaScript
+- `routes/company.js` - Main company API endpoints
+- `models/Company.js` - Company data schema
