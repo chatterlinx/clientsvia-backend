@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.1 - Auth Token Fix');
+// console.log('🚀 Loading company-profile-modern.js v2.1 - Auth Token Fix');
 
 /**
  * Modern Company Profile Management System
@@ -11,6 +11,36 @@ console.log('🚀 Loading company-profile-modern.js v2.1 - Auth Token Fix');
  * - Modern ES6+ features
  * - Clean separation of concerns
  */
+
+// Production logging utility
+const Logger = {
+    isDevelopment: window.location.hostname === 'localhost',
+    
+    debug(message, data = null) {
+        if (this.isDevelopment) {
+            console.log(message, data);
+        }
+    },
+    
+    info(message, data = null) {
+        if (this.isDevelopment) {
+            console.log(message, data);
+        }
+    },
+    
+    warn(message, data = null) {
+        console.warn(message, data);
+    },
+    
+    error(message, error = null) {
+        console.error(message, error);
+    },
+    
+    success(message, data = null) {
+        // Keep success messages in production for user feedback
+        console.log(message, data);
+    }
+};
 
 class CompanyProfileManager {
     constructor() {
@@ -37,7 +67,7 @@ class CompanyProfileManager {
      */
     async init() {
         try {
-            console.log('🚀 Initializing Company Profile Manager...');
+            // console.log('🚀 Initializing Company Profile Manager...');
             
             // Extract company ID from URL
             this.extractCompanyId();
@@ -58,7 +88,7 @@ class CompanyProfileManager {
             this.initializeTabs();
             
             this.initialized = true;
-            console.log('✅ Company Profile Manager initialized successfully');
+            // Logger.debug('✅ Company Profile Manager initialized successfully');
             
         } catch (error) {
             console.error('❌ Failed to initialize Company Profile Manager:', error);
@@ -83,7 +113,7 @@ class CompanyProfileManager {
         window.currentCompanyId = this.companyId;
         window.companyId = this.companyId;
         
-        console.log('🔍 Company ID extracted:', this.companyId);
+        
     }
 
     /**
@@ -150,7 +180,6 @@ class CompanyProfileManager {
      */
     handleFormChange(event) {
         if (event.target.matches('input, textarea, select')) {
-            console.log('📝 Change detected:', event.target.name || event.target.id, event.target.value);
             this.setUnsavedChanges(true);
         }
     }
@@ -214,7 +243,6 @@ class CompanyProfileManager {
     showSaveButton() {
         if (!this.saveButton) return;
         
-        console.log('💾 Showing save button');
         this.saveButton.style.display = 'block';
         setTimeout(() => {
             this.saveButton.classList.remove('translate-y-20', 'opacity-0');
@@ -238,8 +266,8 @@ class CompanyProfileManager {
      */
     async loadCompanyData() {
         try {
-            console.log('📥 Loading company data for ID:', this.companyId);
-            console.log('🌐 API Base URL:', this.apiBaseUrl);
+            
+            
             this.showLoading(true);
 
             const apiUrl = `${this.apiBaseUrl}/api/company/${this.companyId}`;
@@ -289,7 +317,6 @@ class CompanyProfileManager {
             return;
         }
 
-        console.log('📄 Populating Overview tab with enterprise features...');
 
         try {
             // Update header elements with current data
@@ -334,7 +361,6 @@ class CompanyProfileManager {
         this.initializeFormAccessibility();
         this.setupFormAutoSave();
         
-        console.log('🔧 Enterprise editable form created');
     }
 
     /**
@@ -591,7 +617,6 @@ class CompanyProfileManager {
             descriptionField.addEventListener('input', this.updateCharacterCounter.bind(this));
         }
 
-        console.log('🔧 Enterprise validation setup complete');
     }
 
     /**
@@ -698,7 +723,6 @@ class CompanyProfileManager {
             }
         });
 
-        console.log('♿ Accessibility features initialized');
     }
 
     /**
@@ -729,7 +753,6 @@ class CompanyProfileManager {
             });
         });
 
-        console.log('💾 Auto-save enabled');
     }
 
     /**
@@ -902,7 +925,6 @@ class CompanyProfileManager {
         if (!this.hasUnsavedChanges) return;
 
         try {
-            console.log('💾 Performing auto-save...');
             await this.saveAllChanges(true); // true = silent save
             console.log('✅ Auto-save completed');
         } catch (error) {
@@ -978,7 +1000,6 @@ class CompanyProfileManager {
         const twilioApiKeyInput = document.getElementById('twilioApiKey');
         const twilioApiSecretInput = document.getElementById('twilioApiSecret');
         
-        console.log('🔧 Loading Twilio config:', {
             twilioConfig: this.currentData.twilioConfig,
             flatSid: this.currentData.twilioAccountSid,
             flatToken: this.currentData.twilioAuthToken,
@@ -988,7 +1009,6 @@ class CompanyProfileManager {
         // Check nested structure first, then flat structure for backward compatibility
         const twilioConfig = this.currentData.twilioConfig || {};
         
-        console.log('🔧 DEBUG: About to process Auth Token:', {
             twilioTokenInput: !!twilioTokenInput,
             authToken: twilioConfig.authToken,
             flatAuthToken: this.currentData.twilioAuthToken,
@@ -1006,19 +1026,15 @@ class CompanyProfileManager {
             if (savedToken && savedToken.length > 4) {
                 twilioTokenInput.value = '••••••••••••' + savedToken.slice(-4);
                 twilioTokenInput.dataset.hasToken = 'true';
-                console.log('🔧 Loaded Twilio Auth Token (showing last 4):', '••••••••••••' + savedToken.slice(-4));
-                console.log('🔧 Full token for debug:', savedToken);
             } else {
                 twilioTokenInput.value = '••••••••••••••••';
                 twilioTokenInput.dataset.hasToken = 'true';
-                console.log('🔧 Loaded Twilio Auth Token (fully masked - short token)');
             }
         } else {
             if (twilioTokenInput) {
                 twilioTokenInput.value = '';
                 twilioTokenInput.placeholder = 'Enter Auth Token';
                 twilioTokenInput.dataset.hasToken = 'false';
-                console.log('🔧 No Twilio Auth Token found - field empty');
             }
         }
         
@@ -1028,18 +1044,15 @@ class CompanyProfileManager {
             if (savedApiKey && savedApiKey.length > 4) {
                 twilioApiKeyInput.value = '••••••••••••' + savedApiKey.slice(-4);
                 twilioApiKeyInput.dataset.hasApiKey = 'true';
-                console.log('🔧 Loaded Twilio API Key (showing last 4):', '••••••••••••' + savedApiKey.slice(-4));
             } else {
                 twilioApiKeyInput.value = '••••••••••••••••';
                 twilioApiKeyInput.dataset.hasApiKey = 'true';
-                console.log('🔧 Loaded Twilio API Key (fully masked - short key)');
             }
         } else {
             if (twilioApiKeyInput) {
                 twilioApiKeyInput.value = '';
                 twilioApiKeyInput.placeholder = 'Enter API Key';
                 twilioApiKeyInput.dataset.hasApiKey = 'false';
-                console.log('🔧 No Twilio API Key found - field empty');
             }
         }
         
@@ -1049,18 +1062,15 @@ class CompanyProfileManager {
             if (savedSecret && savedSecret.length > 4) {
                 twilioApiSecretInput.value = '••••••••••••' + savedSecret.slice(-4);
                 twilioApiSecretInput.dataset.hasSecret = 'true';
-                console.log('🔧 Loaded Twilio API Secret (showing last 4):', '••••••••••••' + savedSecret.slice(-4));
             } else {
                 twilioApiSecretInput.value = '••••••••••••••••';
                 twilioApiSecretInput.dataset.hasSecret = 'true';
-                console.log('🔧 Loaded Twilio API Secret (fully masked - short secret)');
             }
         } else {
             if (twilioApiSecretInput) {
                 twilioApiSecretInput.value = '';
                 twilioApiSecretInput.placeholder = 'Enter API Secret';
                 twilioApiSecretInput.dataset.hasSecret = 'false';
-                console.log('🔧 No Twilio API Secret found - field empty');
             }
         }
 
@@ -1078,7 +1088,6 @@ class CompanyProfileManager {
      */
     setupPhoneNumbersManagement() {
         try {
-            console.log('📞 Setting up phone numbers management...');
             
             const addPhoneBtn = document.getElementById('addPhoneNumberBtn');
             if (addPhoneBtn) {
@@ -1089,7 +1098,6 @@ class CompanyProfileManager {
                 newAddPhoneBtn.addEventListener('click', () => {
                     this.addPhoneNumber();
                 });
-                console.log('📞 Add phone button listener attached');
             } else {
                 console.warn('📞 Add phone button not found');
             }
@@ -1100,7 +1108,6 @@ class CompanyProfileManager {
             // Setup event listeners for existing phone number items
             this.setupPhoneNumberEventListeners();
             
-            console.log('✅ Phone numbers management setup complete');
         } catch (error) {
             console.error('❌ Error setting up phone numbers management:', error);
             // Continue execution but log the error
@@ -1112,7 +1119,6 @@ class CompanyProfileManager {
      */
     setupPhoneNumberEventListeners() {
         const phoneNumberItems = document.querySelectorAll('.phone-number-item');
-        console.log(`📞 Setting up event listeners for ${phoneNumberItems.length} phone number items`);
         
         phoneNumberItems.forEach((item, index) => {
             this.setupSinglePhoneNumberListeners(item);
@@ -1147,7 +1153,6 @@ class CompanyProfileManager {
                           this.currentData?.phoneNumbers || [];
         }
         
-        console.log('📞 Rendering phone numbers:', phoneNumbers);
 
         // If no phone numbers exist, add a default empty one
         if (phoneNumbers.length === 0) {
@@ -1161,7 +1166,6 @@ class CompanyProfileManager {
 
         // Render each phone number
         phoneNumbers.forEach((phone, index) => {
-            console.log(`📞 Adding phone number ${index + 1}:`, phone);
             this.addPhoneNumberWithData(phone, index === 0);
         });
     }
@@ -1218,7 +1222,6 @@ class CompanyProfileManager {
             newDeleteBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('📞 Delete button clicked');
                 this.removePhoneNumber(item);
             });
         }
@@ -1232,7 +1235,6 @@ class CompanyProfileManager {
             newSetPrimaryBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('📞 Set primary button clicked');
                 this.setPrimaryNumber(item);
             });
         }
@@ -1409,7 +1411,6 @@ class CompanyProfileManager {
             }
         });
         
-        console.log('✅ Webhook toggle setup complete');
     }
 
     /**
@@ -2313,7 +2314,6 @@ class CompanyProfileManager {
         // Setup operating hours
         this.setupOperatingHours();
         
-        console.log('✅ Calendar tab configured');
     }
 
     /**
@@ -2508,7 +2508,6 @@ class CompanyProfileManager {
         // Setup TTS provider selection
         this.setupTTSProviderConfig();
         
-        console.log('✅ AI Settings tab configured');
     }
 
     /**
@@ -2583,7 +2582,6 @@ class CompanyProfileManager {
         // Setup voice testing
         this.setupVoiceTesting();
         
-        console.log('✅ Voice tab configured');
     }
 
     /**
@@ -2743,7 +2741,6 @@ class CompanyProfileManager {
                 // Update display value
                 valueElement.textContent = parseFloat(value).toFixed(1);
                 
-                console.log(`🎛️ Initialized ${slider.name} slider: ${value}`);
             } else {
                 console.warn(`⚠️ Could not find slider elements for ${slider.name}:`, {
                     inputFound: !!inputElement,
@@ -2884,7 +2881,6 @@ class CompanyProfileManager {
         // Setup personality response fields
         this.setupPersonalityResponses();
         
-        console.log('✅ Personality tab configured');
     }
 
     /**
@@ -3466,7 +3462,6 @@ class CompanyProfileManager {
         // Initialize agent logic notes (separate from general notes)
         this.initializeAgentLogicNotes();
         
-        console.log('✅ Agent Logic tab configured');
     }
 
     /**
