@@ -1104,6 +1104,7 @@ git push origin main
 
 ### **📁 KEY FILES TO KNOW:**
 - `CLIENTSVIA_CODING_MANUAL.md` - This file (update after every session)
+- `CLIENTSVIA_ARCHITECTURAL_STRUCTURE.md` - **NEW:** Complete platform architecture reference
 - `production-ready-checklist.md` - Production status and tasks
 - `public/company-profile.html` - Main company profile page
 - `public/js/company-profile-modern.js` - Company profile JavaScript
