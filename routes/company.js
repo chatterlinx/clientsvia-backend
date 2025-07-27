@@ -141,10 +141,13 @@ router.post('/companies', async (req, res) => {
 // SECURITY NOTE: This endpoint has been disabled due to data exposure vulnerability
 // Previously exposed all company data publicly without authentication
 // For admin access, implement proper authentication middleware first
+// FIXED: July 27, 2025 19:55 PST - Force deployment refresh
 router.get('/companies', async (req, res) => {
     res.status(403).json({ 
         message: 'This endpoint has been disabled for security reasons. Please use authenticated admin endpoints instead.',
-        error: 'ENDPOINT_DISABLED_FOR_SECURITY'
+        error: 'ENDPOINT_DISABLED_FOR_SECURITY',
+        timestamp: new Date().toISOString(),
+        remediation: 'Implement proper authentication middleware for admin access'
     });
 });
 
