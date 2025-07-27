@@ -2166,6 +2166,7 @@
                 }, 300);
             }, 5000);
             
+            console.log(`📢 Notification (${type}): ${message}`);
         }
 
         // 🎙️ ELEVENLABS VOICE FUNCTIONS
@@ -2186,6 +2187,7 @@
                 button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Testing...';
                 button.disabled = true;
 
+                console.log('🔧 Testing ElevenLabs connection...');
                 
                 const response = await fetch(`/api/elevenlabs/companies/${companyId}/test-connection`, {
                     method: 'POST',
@@ -2229,6 +2231,7 @@
                 button.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Loading...';
                 button.disabled = true;
 
+                console.log('🎙️ Refreshing ElevenLabs voices...');
                 
                 const response = await fetch(`/api/elevenlabs/companies/${companyId}/voices`);
                 const result = await response.json();
@@ -2277,12 +2280,14 @@
                 refreshButton.innerHTML = '<i class="fas fa-sync mr-1"></i>Refresh Voices';
                 refreshButton.disabled = false;
                 refreshButton.classList.remove('opacity-50');
+                console.log('🔧 Refresh button state restored');
             }
 
             // Add voice options
             availableVoices.forEach((voice, index) => {
                 // Debug voice structure for first few voices
                 if (index < 3) {
+                    console.log(`🔍 Voice ${index} structure:`, {
                         voice_id: voice.voice_id,
                         id: voice.id,
                         name: voice.name,
@@ -2304,6 +2309,7 @@
                 
                 // Debug logging for voice options
                 if (voice.name.toLowerCase().includes('mark') || index < 3) {
+                    console.log(`🎙️ Voice option ${index}: ${voice.name} = ${voice.voice_id}`);
                 }
                 
                 selector.appendChild(option);
@@ -2315,6 +2321,7 @@
             // Method 1: Check data attribute first (set by setupElevenLabsConfig)
             if (selector.getAttribute('data-saved-voice-id')) {
                 savedVoiceId = selector.getAttribute('data-saved-voice-id');
+                console.log('🎙️ Found saved voice ID from data attribute:', savedVoiceId);
             } 
             
             // Method 2: Try to get saved voice ID from the global company profile manager
@@ -2322,13 +2329,17 @@
                 const data = window.companyProfileManager.currentData;
                 if (data.elevenLabsVoiceId) {
                     savedVoiceId = data.elevenLabsVoiceId;
+                    console.log('🎙️ Found saved voice ID from elevenLabsVoiceId:', savedVoiceId);
                 } else if (data.aiSettings?.elevenLabs?.voiceId) {
                     savedVoiceId = data.aiSettings.elevenLabs.voiceId;
+                    console.log('🎙️ Found saved voice ID from aiSettings.elevenLabs.voiceId:', savedVoiceId);
                 } else if (data.voiceSettings?.voiceId) {
                     savedVoiceId = data.voiceSettings.voiceId;
+                    console.log('🎙️ Found saved voice ID from voiceSettings.voiceId:', savedVoiceId);
                 }
             }
             
+            console.log('🔍 Checking for saved voice during population:', {
                 savedVoiceId: savedVoiceId,
                 currentSelectorValue: selector.value,
                 availableVoicesCount: availableVoices.length,
@@ -2341,6 +2352,7 @@
                 const savedVoice = availableVoices.find(v => v.voice_id === savedVoiceId);
                 if (savedVoice) {
                     selector.value = savedVoiceId;
+                    console.log(`🎯 Restored saved voice: ${savedVoice.name} (${savedVoiceId})`);
                     
                     // Trigger the change event to show voice preview
                     setTimeout(() => {
@@ -2379,6 +2391,7 @@
                 }
             }
 
+            console.log(`📝 Populated voice selector with ${availableVoices.length} voices`);
         }
 
         // Filter voices based on gender and category
@@ -2497,6 +2510,7 @@
                 refreshButton.innerHTML = '<i class="fas fa-sync mr-1"></i>Refresh Voices';
                 refreshButton.disabled = false;
                 refreshButton.classList.remove('opacity-50');
+                console.log('🔧 Force reset refresh button state');
             }
         }
 
@@ -2821,12 +2835,14 @@
             const testButton = document.getElementById('test-api-connection');
             if (testButton) {
                 testButton.addEventListener('click', testElevenLabsConnection);
+                console.log('✅ Test API Connection button listener attached');
             }
 
             // Refresh Voices button
             const refreshButton = document.getElementById('refresh-voices');
             if (refreshButton) {
                 refreshButton.addEventListener('click', refreshVoices);
+                console.log('✅ Refresh Voices button listener attached');
             }
 
             // Voice filter dropdowns
@@ -2835,45 +2851,53 @@
             
             if (genderFilter) {
                 genderFilter.addEventListener('change', filterVoices);
+                console.log('✅ Gender filter listener attached');
             }
             
             if (categoryFilter) {
                 categoryFilter.addEventListener('change', filterVoices);
+                console.log('✅ Category filter listener attached');
             }
 
             // Voice selector
             const voiceSelector = document.getElementById('voice-selector');
             if (voiceSelector) {
                 voiceSelector.addEventListener('change', handleVoiceChange);
+                console.log('✅ Voice selector listener attached');
             }
 
             // API Key toggle
             const apiToggle = document.getElementById('useOwnApiKey');
             if (apiToggle) {
                 apiToggle.addEventListener('change', toggleApiKeySource);
+                console.log('✅ API key toggle listener attached');
             }
 
             // Test voice button
             const testVoiceBtn = document.getElementById('test-voice-btn');
             if (testVoiceBtn) {
                 testVoiceBtn.addEventListener('click', generateTestAudio);
+                console.log('✅ Test voice button listener attached');
             }
 
             // Stream test button
             const streamTestBtn = document.getElementById('stream-test-btn');
             if (streamTestBtn) {
                 streamTestBtn.addEventListener('click', streamTestAudio);
+                console.log('✅ Stream test button listener attached');
             }
 
             // Play voice sample button
             const playSampleBtn = document.getElementById('play-voice-sample');
             if (playSampleBtn) {
                 playSampleBtn.addEventListener('click', playVoiceSample);
+                console.log('✅ Play voice sample button listener attached');
             }
 
             // Auto-load voices when page loads
             setTimeout(() => {
                 if (document.getElementById('voice-selector')) {
+                    console.log('🎙️ Auto-loading voices on page load...');
                     
                     // Reset any stuck button states first
                     resetButtonStates();
@@ -2928,6 +2952,7 @@
             }, 1000);
             
             // Debug: Log all available elements for troubleshooting
+            console.log('🔍 ElevenLabs UI Elements Check:');
             console.log('  - Test API Connection button:', !!document.getElementById('test-api-connection'));
             console.log('  - Refresh Voices button:', !!document.getElementById('refresh-voices')); 
             console.log('  - Voice selector:', !!document.getElementById('voice-selector'));
