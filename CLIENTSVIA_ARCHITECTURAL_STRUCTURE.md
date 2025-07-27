@@ -349,27 +349,50 @@ const entries = await KnowledgeEntry.find({ companyId }).sort({ createdAt: -1 })
 const entries = await KnowledgeEntry.find({}).sort({ createdAt: -1 });  // ❌ DANGEROUS
 ```
 
-### **Authentication Architecture (Future):**
+### **Authentication Architecture - ✅ IMPLEMENTED:**
 ```javascript
-// PLANNED: Authentication middleware for admin endpoints
-const authenticateAdmin = async (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ message: 'No token provided' });
-  
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    res.status(401).json({ message: 'Invalid token' });
-  }
-};
+// ✅ COMPLETED: JWT-based authentication system with role-based access control
+const { authenticateJWT, requireRole } = require('../middleware/auth');
 
-// FUTURE: Secure admin endpoints
-router.get('/admin/companies', authenticateAdmin, async (req, res) => {
-  const companies = await Company.find({});  // ✅ Safe with authentication
-  res.json(companies);
+// User Model with roles
+const userSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  password: { type: String }, // bcrypt hashed (12 rounds)
+  role: { type: String, enum: ['admin', 'manager', 'staff'], default: 'admin' },
+  status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+  lastLogin: { type: Date }
 });
+
+// Authentication Routes (implemented)
+router.post('/api/auth/register', async (req, res) => {
+  // Register new users with secure password hashing
+});
+router.post('/api/auth/login', async (req, res) => {
+  // Login with JWT token generation (24h expiration)
+});
+router.get('/api/auth/me', authenticateJWT, async (req, res) => {
+  // Get current user profile
+});
+
+// ✅ SECURED: Admin endpoints with JWT authentication
+router.get('/api/admin/companies', authenticateJWT, requireRole('admin'), async (req, res) => {
+  const companies = await Company.find({}, { 
+    // Exclude sensitive fields (API keys, tokens)
+    projection: { companyName: 1, tradeTypes: 1, status: 1 }
+  });
+  res.json({ success: true, data: companies });
+});
+
+// ✅ SECURED: All previously disabled endpoints restored with authentication
+router.get('/api/companies', authenticateJWT, requireRole('admin'), companiesHandler);
+router.get('/api/alerts', authenticateJWT, requireRole('admin'), alertsHandler); 
+router.get('/api/suggestions', authenticateJWT, requireRole('admin'), suggestionsHandler);
+
+// Role-Based Access Control (RBAC)
+// - admin: Full platform access to all companies and data
+// - manager: Company-specific access (future implementation)
+// - staff: Limited read-only access (future implementation)
 ```
 
 ---
