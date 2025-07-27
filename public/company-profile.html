@@ -3634,5 +3634,46 @@
     
     <script src="/js/company-profile-modern.js?v=2.1"></script>
     
+    <!-- Main Page Initialization Script -->
+    <script>
+        // Main initialization when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
+            
+            // Get company ID from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const companyId = urlParams.get('id');
+            
+            if (companyId) {
+                console.log('✅ Company ID found in URL:', companyId);
+                
+                // Set global company ID
+                window.companyId = companyId;
+                
+                // Initialize CompanyProfileManager and start loading data
+                try {
+                    console.log('📡 Creating CompanyProfileManager instance...');
+                    window.companyProfileManager = new CompanyProfileManager();
+                    
+                    // Initialize the manager (this will call loadCompanyData internally)
+                    window.companyProfileManager.init()
+                        .then(() => {
+                            console.log('✅ Company Profile Manager initialized successfully');
+                        })
+                        .catch(error => {
+                            console.error('❌ Error initializing Company Profile Manager:', error);
+                        });
+                        
+                } catch (error) {
+                    console.error('❌ Error creating CompanyProfileManager:', error);
+                }
+            } else {
+                console.error('❌ No company ID found in URL');
+                document.getElementById('company-name-header').textContent = 'Error: No company ID provided';
+                document.getElementById('company-id-subheader').textContent = 'Please access this page with a valid company ID.';
+            }
+        });
+    </script>
+    
     <!-- Modern implementation handles all initialization -->
 </body>
