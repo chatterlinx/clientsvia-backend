@@ -91,6 +91,15 @@ console.log('Debug:', {
 **LESSON:** Manual console.log removal only, never automated sed/regex on complex JavaScript
 **RECOVERY:** `git checkout 7b8105a2 -- public/js/company-profile-modern.js public/company-profile.html`
 
+**SECOND DISASTER - JULY 27, 2025 (16:45 PST):**
+**MISTAKE:** After restoring files, manually tried to fix sed-broken syntax but MORE orphaned objects found
+**RESULT:** Even more JavaScript syntax errors, production still broken
+**CAUSE:** The sed damage was extensive - orphaned object literals throughout multiple functions
+**LESSON:** When sed breaks syntax, don't try to patch individual lines - FULL RESTORE needed
+**RECOVERY:** `git checkout HEAD~2 -- public/js/company-profile-modern.js public/company-profile.html`
+**COMMIT:** 80373538 - "SECOND HOTFIX: Restore files to working state before console cleanup"
+**PROTOCOL:** When sed breaks code, immediately restore to last known good commit, don't attempt repairs
+
 ### **🔑 KEY API ENDPOINTS PATTERN:**
 ```javascript
 // CORRECT: Company-specific endpoints
