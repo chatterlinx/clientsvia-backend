@@ -34,9 +34,9 @@ class BackupManager {
       const client = new MongoClient(this.mongoUri);
       await client.connect();
       
-      // For Atlas, we can check database stats and connection
-      const admin = client.db().admin();
-      const status = await admin.serverStatus();
+      // Simple connectivity test for Atlas without admin permissions
+      const db = client.db();
+      await db.collection('companies').estimatedDocumentCount();
       
       await client.close();
       
