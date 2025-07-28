@@ -71,13 +71,13 @@ class BackupMonitoringService {
       const healthCheck = await this.backupManager.verifyDatabaseHealth();
       const atlasStatus = await this.backupManager.checkAtlasBackupStatus();
       
-      if (healthCheck.status === 'healthy' && atlasStatus.status === 'atlas_connected') {
+      if (healthCheck.status === 'success' && atlasStatus.status === 'atlas_connected') {
         logger.info('✅ Daily backup check: All systems healthy');
         logger.backup('Daily backup verification passed', {
           database_health: healthCheck.status,
           atlas_status: atlasStatus.status,
-          collections: healthCheck.details?.collections || 0,
-          total_documents: healthCheck.details?.total_documents || 0
+          collections: healthCheck.health?.key_collections?.companies || 0,
+          total_documents: healthCheck.health?.key_collections?.total_documents || 0
         });
       } else {
         logger.error('❌ Daily backup check: Issues detected', {
