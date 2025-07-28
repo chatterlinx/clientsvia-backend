@@ -3000,20 +3000,46 @@
                 const response = await fetch('/api/trade-categories/');
                 const categories = await response.json();
                 
+                // Populate the original dropdown (for compatibility)
                 const selector = document.getElementById('agent-trade-categories');
                 selector.innerHTML = '';
                 
+                // Populate the new checkboxes container
+                const checkboxContainer = document.getElementById('trade-categories-checkboxes');
+                checkboxContainer.innerHTML = '';
+                
                 categories.forEach(category => {
+                    // Add to dropdown
                     const option = document.createElement('option');
                     option.value = category.name;
                     const qaCount = category.commonQAs ? category.commonQAs.length : 0;
                     option.textContent = `${category.name} (${qaCount} Q&As)`;
                     selector.appendChild(option);
+                    
+                    // Add to checkboxes
+                    const checkboxDiv = document.createElement('div');
+                    checkboxDiv.className = 'flex items-center space-x-3 p-2 hover:bg-gray-100 rounded';
+                    checkboxDiv.innerHTML = `
+                        <input type="checkbox" 
+                               id="trade-cat-${category.name}" 
+                               value="${category.name}" 
+                               onchange="handleTradeCheckboxChange()"
+                               class="form-checkbox h-4 w-4 text-blue-600">
+                        <label for="trade-cat-${category.name}" class="flex-1 text-sm text-gray-700 cursor-pointer">
+                            ${category.name} <span class="text-gray-500">(${qaCount} Q&As)</span>
+                        </label>
+                    `;
+                    checkboxContainer.appendChild(checkboxDiv);
                 });
                 
-                console.log('✅ Global trade categories loaded for agent configuration');
+                console.log('✅ Global trade categories loaded for agent configuration (dropdown + checkboxes)');
             } catch (error) {
                 console.error('❌ Failed to load trade categories:', error);
+                // Show error in checkboxes container
+                const checkboxContainer = document.getElementById('trade-categories-checkboxes');
+                if (checkboxContainer) {
+                    checkboxContainer.innerHTML = '<div class="text-center text-red-500"><i class="fas fa-exclamation-triangle mr-2"></i>Failed to load categories</div>';
+                }
             }
         }
 
@@ -3029,6 +3055,50 @@
             // This function maintains compatibility with the original system
         }
 
+        // Handle checkbox change for trade categories
+        function handleTradeCheckboxChange() {
+            const checkboxes = document.querySelectorAll('#trade-categories-checkboxes input[type="checkbox"]');
+            const selectedCategories = Array.from(checkboxes)
+                .filter(cb => cb.checked)
+                .map(cb => cb.value);
+            
+            console.log('🔄 Trade categories checkbox selection changed:', selectedCategories);
+            
+            // Update the selected categories display
+            updateSelectedCategoriesDisplay(selectedCategories);
+            
+            // Sync with dropdown for compatibility
+            const dropdown = document.getElementById('agent-trade-categories');
+            if (dropdown) {
+                Array.from(dropdown.options).forEach(option => {
+                    option.selected = selectedCategories.includes(option.value);
+                });
+            }
+        }
+
+        // Update the selected categories display
+        function updateSelectedCategoriesDisplay(selectedCategories) {
+            const countElement = document.getElementById('selected-categories-count');
+            const listElement = document.getElementById('selected-categories-list');
+            
+            if (countElement) {
+                countElement.textContent = `${selectedCategories.length} selected`;
+            }
+            
+            if (listElement) {
+                if (selectedCategories.length === 0) {
+                    listElement.innerHTML = '<div class="text-gray-400 text-sm italic">No categories selected</div>';
+                } else {
+                    const categoriesHTML = selectedCategories.map(category => 
+                        `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2 mb-2">
+                            ${category}
+                        </span>`
+                    ).join('');
+                    listElement.innerHTML = categoriesHTML;
+                }
+            }
+        }
+
         // Load current agent settings
         async function loadAgentSettings() {
             const companyId = getCurrentCompanyId();
@@ -3042,9 +3112,19 @@
                 const tradeSelector = document.getElementById('agent-trade-categories');
                 const selectedTrades = data.tradeCategories || [];
                 
+                // Update dropdown selections
                 Array.from(tradeSelector.options).forEach(option => {
                     option.selected = selectedTrades.includes(option.value);
                 });
+
+                // Update checkbox selections
+                const checkboxes = document.querySelectorAll('#trade-categories-checkboxes input[type="checkbox"]');
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = selectedTrades.includes(checkbox.value);
+                });
+
+                // Update the selected categories display
+                updateSelectedCategoriesDisplay(selectedTrades);
 
                 // Populate agent settings with safety checks
                 const settings = data.agentSettings || {};

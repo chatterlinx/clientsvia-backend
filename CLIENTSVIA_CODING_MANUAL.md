@@ -571,34 +571,88 @@ Backup monitoring system now runs completely error-free in production environmen
 
 ---
 
-## 🏗️ **TRADE CATEGORY SYSTEM - DYNAMIC IMPLEMENTATION**
+## 🚨 CRITICAL RECOVERY PROCEDURES
 
-### **CRITICAL SUCCESS - JULY 27, 2025**
-The trade category selection system has been redesigned to be fully dynamic:
+### Trade Categories List Disappearing from AI Agent Logic Tab
 
-#### **Frontend Changes:**
-- `company-profile.html`: Checkbox-based trade category selection UI
-- `company-profile.js`: 
-  - `loadCompanyTradeCategories()` - updates checkboxes based on saved selections
-  - `saveAgentSettings()` - collects checked categories and persists them
-- Real-time selected categories display updates as checkboxes are checked/unchecked
+**PROBLEM:** The trade categories dropdown in the AI Agent Logic tab disappears or shows no options.
 
-#### **Backend/Agent Changes:**
-- `services/agent.js`: Always uses company's `tradeTypes` for Q&A lookup and prompt context
-- `middleware/checkCustomKB.js`: Searches ALL selected trade categories for matches
-- `middleware/checkKBWithOllama.js`: Passes trade categories to LLM for context
+**SYMPTOMS:**
+- Empty dropdown in AI Agent Logic tab
+- No trade categories visible for agent configuration
+- Categories exist in database but don't appear in UI
 
-#### **Key Implementation Points:**
-1. **Immediate Effect**: Changes to trade categories take effect immediately, no restart required
-2. **Multi-Category Search**: Agent searches all selected categories simultaneously
-3. **Prompt Enhancement**: Agent prompt includes selected trades as areas of expertise
-4. **UI Consistency**: Checkboxes and selected list stay in sync
+**ROOT CAUSE:** Missing or malformed `<select id="agent-trade-categories">` element in company-profile.html
 
-#### **Testing:**
-- Test Company ID: `6886d9313c95e3f88a02c88b`
-- URL: `http://localhost:3000/company-profile.html?id=6886d9313c95e3f88a02c88b`
-- Agent Test: POST to `/api/company/companies/:id/agent-test`
+**RECOVERY STEPS:**
 
-**PREVENTION:** This system prevents agents from responding about trades the company doesn't handle, while allowing dynamic reconfiguration by admins.
+1. **Verify DOM Structure:** Check for this exact element in the AI Agent Logic tab:
+```html
+<select id="agent-trade-categories" multiple style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-height: 120px; font-family: Arial, sans-serif; font-size: 14px;">
+    <!-- Options populated by loadAgentTradeCategories() -->
+</select>
+```
+
+2. **Verify JavaScript Function:** Ensure `loadAgentTradeCategories()` function exists and is called:
+```javascript
+function loadAgentTradeCategories() {
+    fetch('/api/company/trade-categories')
+        .then(response => response.json())
+        .then(categories => {
+            const select = document.getElementById('agent-trade-categories');
+            if (!select) {
+                console.error('Trade categories select element not found');
+                return;
+            }
+            // ... rest of function
+        });
+}
+```
+
+3. **Last Known Working Version Reference:** Deploy 9eb4000 had working trade categories
+
+4. **Test Recovery:** After restoration, verify:
+   - Dropdown shows categories with Q&A counts
+   - Categories can be selected/deselected
+   - Save button appears when changes made
+   - Settings persist after page reload
+
+**COMMIT REFERENCE:** Trade categories restoration commits in git history
 
 ---
+
+### Session Log - Dec 12, 2024 (4:00 PM PST)
+
+**🎯 TASK:** Redesign company profile UI with checkbox selection for trade categories and restore missing AI Agent Logic functionality
+
+**📁 FILES MODIFIED:** 
+- /public/company-profile.html - Added checkboxes container and enhanced UI
+- CLIENTSVIA_CODING_MANUAL.md - Added recovery documentation
+
+**🔍 FINDINGS:** 
+- Trade categories dropdown was missing from AI Agent Logic tab
+- Original dropdown functionality was intact in working deployments (render 9eb4000)
+- System needed both backward compatibility and new checkbox interface
+- Agent settings loading/saving already supported multiple category selection
+
+**🚨 ISSUES FOUND:**
+- Missing `<select id="agent-trade-categories">` element caused empty dropdown
+- No visual indication of selected categories beyond dropdown
+- Difficult user experience for selecting multiple categories
+
+**✅ SOLUTIONS APPLIED:**
+- Restored original dropdown with correct DOM structure and styling
+- Added checkbox-based selection interface alongside dropdown
+- Implemented real-time UI updates when categories are selected/deselected
+- Added "Selected Categories" display section for better UX
+- Enhanced `loadAgentTradeCategories()` to populate both dropdown and checkboxes
+- Created `handleTradeCheckboxChange()` for checkbox interaction handling
+- Updated `loadAgentSettings()` to sync checkbox states with saved settings
+
+**📝 LESSONS LEARNED:**
+- Always maintain DOM element IDs that existing JavaScript depends on
+- Use git history to identify last working configurations
+- Implement backward compatibility when adding new UI features
+- Document critical recovery procedures immediately after fixing issues
+
+**🔗 COMMITS:** Multiple commits for iterative fixes and enhancements
