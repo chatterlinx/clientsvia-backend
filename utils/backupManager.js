@@ -147,12 +147,8 @@ class BackupManager {
       await client.connect();
       
       const db = client.db();
-      const admin = db.admin();
       
-      // Check server status
-      const serverStatus = await admin.serverStatus();
-      
-      // Check key collections
+      // Check key collections (simple connectivity test)
       const companies = await db.collection('companies').countDocuments();
       const conversations = await db.collection('conversations').countDocuments();
       
@@ -161,12 +157,11 @@ class BackupManager {
       const healthReport = {
         timestamp: new Date().toISOString(),
         status: 'healthy',
-        server_version: serverStatus.version,
-        uptime_seconds: serverStatus.uptime,
-        connections: serverStatus.connections,
+        connectivity: 'confirmed',
         key_collections: {
           companies,
-          conversations
+          conversations,
+          total_documents: companies + conversations
         },
         backup_recommendations: this.isAtlas ? [
           'MongoDB Atlas automated backups are active',
