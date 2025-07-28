@@ -1171,6 +1171,15 @@
                                                 </label>
                                                 <p class="text-xs text-gray-500 mb-3">Select the trade categories your AI agent should access for Q&A responses</p>
                                                 
+                                                <!-- Original Trade Categories Dropdown (for backward compatibility) -->
+                                                <div>
+                                                    <label for="agent-trade-categories" class="form-label">Trade Categories</label>
+                                                    <select id="agent-trade-categories" multiple onchange="handleTradeCategoryChange()" class="form-select h-24 text-sm">
+                                                        <!-- Options loaded dynamically -->
+                                                    </select>
+                                                    <p class="text-xs text-gray-500 mt-1">Controls which Q&A categories the agent can access</p>
+                                                </div>
+                                                
                                                 <!-- Trade Categories Checkboxes Container -->
                                                 <div id="trade-categories-checkboxes" class="bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-48 overflow-y-auto">
                                                     <!-- Checkboxes will be populated dynamically -->
@@ -3006,6 +3015,18 @@
             } catch (error) {
                 console.error('❌ Failed to load trade categories:', error);
             }
+        }
+
+        // Handle trade category selection change
+        function handleTradeCategoryChange() {
+            const selector = document.getElementById('agent-trade-categories');
+            if (!selector) return;
+            
+            const selectedCategories = Array.from(selector.selectedOptions).map(option => option.value);
+            console.log('🔄 Trade categories selection changed:', selectedCategories);
+            
+            // Update any related UI or trigger save
+            // This function maintains compatibility with the original system
         }
 
         // Load current agent settings
