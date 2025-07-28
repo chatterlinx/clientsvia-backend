@@ -73,7 +73,7 @@ class BackupMonitoringService {
       
       if (healthCheck.status === 'success' && atlasStatus.status === 'atlas_connected') {
         logger.info('✅ Daily backup check: All systems healthy');
-        logger.backup('Daily backup verification passed', {
+        logger.info('Daily backup verification passed', {
           database_health: healthCheck.status,
           atlas_status: atlasStatus.status,
           collections: healthCheck.health?.key_collections?.companies || 0,
@@ -128,7 +128,7 @@ class BackupMonitoringService {
         weeklyReport.recommendations.push('Monitor collection growth trends');
       }
       
-      logger.backup('Weekly backup verification completed', weeklyReport);
+      logger.info('Weekly backup verification completed', weeklyReport);
       
       // Create manual backup metadata for additional safety
       const manualBackup = await this.backupManager.createManualBackup();
@@ -183,7 +183,7 @@ class BackupMonitoringService {
         });
       }
       
-      logger.backup('Monthly backup strategy review completed', monthlyReport);
+      logger.info('Monthly backup strategy review completed', monthlyReport);
       
     } catch (error) {
       logger.error('Monthly backup strategy review failed:', error);
