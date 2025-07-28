@@ -461,6 +461,26 @@ const companySchema = new mongoose.Schema({
         }
     },
     
+    // 🎯 Phase 1: Agent Priority Configuration (Database Model Only)
+    agentPriorityConfig: {
+        flow: [{
+            id: { 
+                type: String, 
+                required: true,
+                enum: ['company-knowledge', 'trade-categories', 'template-intelligence', 'learning-queue', 'emergency-llm']
+            },
+            priority: { type: Number, required: true, min: 1, max: 10 },
+            enabled: { type: Boolean, default: true }
+        }],
+        settings: {
+            knowledgeFirst: { type: Boolean, default: true },
+            autoLearning: { type: Boolean, default: true },
+            emergencyLLM: { type: Boolean, default: true }
+        },
+        createdAt: { type: Date, default: Date.now },
+        updatedAt: { type: Date, default: Date.now }
+    },
+    
     notes: { type: [noteSchema], default: [] },
     
     // Booking Scripts Configuration
