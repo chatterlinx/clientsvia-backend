@@ -146,24 +146,23 @@ router.get('/companies', authenticateJWT, requireRole('admin'), async (req, res)
     try {
         console.log('[ADMIN API GET /api/companies] Admin user requesting all companies:', req.user.email);
         
-        const db = getDB();
-        const companiesCollection = db.collection('companies');
+        // Use Mongoose model instead of direct collection access for consistency
+        const companies = await Company.find({}, {
+            // Include fields needed by the directory
+            companyName: 1,
+            tradeCategories: 1,
+            isActive: 1,
+            status: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            businessPhone: 1,
+            businessEmail: 1,
+            businessWebsite: 1,
+            address: 1
+            // Sensitive fields like API keys, tokens, etc. are excluded
+        }).lean();
         
-        // Get all companies with basic info (exclude sensitive fields)
-        const companies = await companiesCollection.find({}, {
-            projection: {
-                // Include basic company info
-                companyName: 1,
-                tradeTypes: 1,
-                status: 1,
-                createdAt: 1,
-                updatedAt: 1,
-                companyPhone: 1,
-                companyAddress: 1
-                // Sensitive fields are automatically excluded when using inclusion projection
-            }
-        }).toArray();
-        
+        console.log(`[ADMIN API GET /api/companies] Found ${companies.length} companies in database`);
         console.log(`[ADMIN API GET /api/companies] Returning ${companies.length} companies to admin`);
         
         res.json({
