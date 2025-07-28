@@ -678,26 +678,14 @@ async function loadCompanyTradeCategories() {
         const data = await response.json();
         const selectedCategories = data.tradeCategories || [];
         
-        const select = document.getElementById('agent-trade-categories');
-        if (!select) return;
-        
-        // Clear all selections first
-        for (const option of select.options) {
-            option.selected = false;
-        }
-        
-        // Select the company's categories
-        selectedCategories.forEach(categoryName => {
-            for (const option of select.options) {
-                if (option.value === categoryName) {
-                    option.selected = true;
-                    break;
-                }
-            }
+        // Update checkboxes based on selected categories
+        const checkboxes = document.querySelectorAll('#trade-categories-checkboxes input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = selectedCategories.includes(checkbox.value);
         });
         
-        // Update the count display
-        updateSelectedCategoriesCount();
+        // Update the display
+        updateSelectedCategoriesDisplay();
         
         console.log(`✅ Company has ${selectedCategories.length} trade categories selected:`, selectedCategories);
         
@@ -708,41 +696,135 @@ async function loadCompanyTradeCategories() {
 }
 
 /**
- * Update the display of how many categories are selected
+ * Load available trade categories and render as checkboxes
  */
-function updateSelectedCategoriesCount() {
-    const select = document.getElementById('agent-trade-categories');
-    if (!select) return;
-    
-    const selectedCount = select.selectedOptions.length;
-    const totalCount = select.options.length;
-    
-    // Find or create count display element
-    let countDisplay = document.getElementById('trade-categories-count');
-    if (!countDisplay) {
-        countDisplay = document.createElement('div');
-        countDisplay.id = 'trade-categories-count';
-        countDisplay.className = 'mt-2 text-sm font-medium';
-        select.parentNode.insertBefore(countDisplay, select.nextSibling);
-    }
-    
-    if (selectedCount === 0) {
-        countDisplay.innerHTML = `<span class="text-gray-500"><i class="fas fa-info-circle mr-1"></i>No categories selected</span>`;
-    } else {
-        countDisplay.innerHTML = `<span class="text-indigo-600"><i class="fas fa-check-circle mr-1"></i>${selectedCount} of ${totalCount} categories selected</span>`;
+async function loadTradeCategories() {
+    try {
+        console.log('📋 Loading trade categories for checkbox display...');
+        
+        const response = await fetch('/api/trade-categories/');
+        if (!response.ok) {
+            throw new Error(`Failed to load trade categories: ${response.statusText}`);
+        }
+        
+        const categories = await response.json();
+        renderTradeCategoriesCheckboxes(categories);
+        
+        // Load company's selected categories
+        await loadCompanyTradeCategories();
+        
+        console.log(`✅ Loaded ${categories.length} trade categories`);
+        
+    } catch (error) {
+        console.error('❌ Failed to load trade categories:', error);
+        document.getElementById('trade-categories-checkboxes').innerHTML = 
+            '<div class="text-red-500 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Failed to load categories</div>';
     }
 }
 
 /**
- * Handle selection changes in the multi-select
+ * Render trade categories as checkboxes
  */
-function handleTradeCategoryChange() {
-    updateSelectedCategoriesCount();
+function renderTradeCategoriesCheckboxes(categories) {
+    const container = document.getElementById('trade-categories-checkboxes');
+    if (!container) return;
     
-    const select = document.getElementById('agent-trade-categories');
-    const selectedValues = Array.from(select.selectedOptions).map(opt => opt.value);
+    if (categories.length === 0) {
+        container.innerHTML = '<div class="text-gray-500 text-sm">No trade categories available</div>';
+        return;
+    }
     
-    console.log('📋 Trade categories selection changed:', selectedValues);
+    const checkboxesHtml = categories.map(category => {
+        const qaCount = category.commonQAs ? category.commonQAs.length : 0;
+        return `
+            <div class="flex items-center mb-2">
+                <input 
+                    type="checkbox" 
+                    id="trade-category-${category.name.replace(/\s+/g, '-').toLowerCase()}" 
+                    value="${category.name}" 
+                    onchange="handleTradeCategoryCheckboxChange()"
+                    class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                >
+                <label 
+                    for="trade-category-${category.name.replace(/\s+/g, '-').toLowerCase()}" 
+                    class="ml-2 text-sm text-gray-700 cursor-pointer flex-1"
+                >
+                    <span class="font-medium">${category.name}</span>
+                    <span class="text-gray-500"> (${qaCount} Q&As)</span>
+                </label>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = checkboxesHtml;
+}
+
+/**
+ * Handle trade category checkbox changes
+ */
+function handleTradeCategoryCheckboxChange() {
+    updateSelectedCategoriesDisplay();
+    console.log('📋 Trade category selection changed');
+}
+
+/**
+ * Update the selected categories display
+ */
+function updateSelectedCategoriesDisplay() {
+    const checkboxes = document.querySelectorAll('#trade-categories-checkboxes input[type="checkbox"]');
+    const selectedCategories = [];
+    
+    checkboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+            selectedCategories.push(checkbox.value);
+        }
+    });
+    
+    // Update count display
+    const countElement = document.getElementById('selected-categories-count');
+    if (countElement) {
+        if (selectedCategories.length === 0) {
+            countElement.textContent = '0 selected';
+            countElement.className = 'px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full';
+        } else {
+            countElement.textContent = `${selectedCategories.length} selected`;
+            countElement.className = 'px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded-full';
+        }
+    }
+    
+    // Update selected categories list
+    const listElement = document.getElementById('selected-categories-list');
+    if (listElement) {
+        if (selectedCategories.length === 0) {
+            listElement.innerHTML = '<div class="text-gray-400 text-sm italic">No categories selected</div>';
+        } else {
+            const categoriesHtml = selectedCategories.map(category => `
+                <div class="inline-flex items-center bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-sm font-medium mr-2 mb-2">
+                    <i class="fas fa-briefcase mr-2"></i>${category}
+                    <button 
+                        onclick="removeTradeCategorySelection('${category}')" 
+                        class="ml-2 hover:text-indigo-600 focus:outline-none"
+                        title="Remove category"
+                    >
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+            
+            listElement.innerHTML = categoriesHtml;
+        }
+    }
+}
+
+/**
+ * Remove a trade category selection
+ */
+function removeTradeCategorySelection(categoryName) {
+    const checkbox = document.querySelector(`#trade-categories-checkboxes input[value="${categoryName}"]`);
+    if (checkbox) {
+        checkbox.checked = false;
+        handleTradeCategoryCheckboxChange();
+    }
 }
 
 function populateTradeCategories(selectedCategories) {

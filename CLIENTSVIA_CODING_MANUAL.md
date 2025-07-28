@@ -570,3 +570,35 @@ Backup monitoring system now runs completely error-free in production environmen
 6. **Never Batch Fixes:** One issue, one fix, one test cycle
 
 ---
+
+## 🏗️ **TRADE CATEGORY SYSTEM - DYNAMIC IMPLEMENTATION**
+
+### **CRITICAL SUCCESS - JULY 27, 2025**
+The trade category selection system has been redesigned to be fully dynamic:
+
+#### **Frontend Changes:**
+- `company-profile.html`: Checkbox-based trade category selection UI
+- `company-profile.js`: 
+  - `loadCompanyTradeCategories()` - updates checkboxes based on saved selections
+  - `saveAgentSettings()` - collects checked categories and persists them
+- Real-time selected categories display updates as checkboxes are checked/unchecked
+
+#### **Backend/Agent Changes:**
+- `services/agent.js`: Always uses company's `tradeTypes` for Q&A lookup and prompt context
+- `middleware/checkCustomKB.js`: Searches ALL selected trade categories for matches
+- `middleware/checkKBWithOllama.js`: Passes trade categories to LLM for context
+
+#### **Key Implementation Points:**
+1. **Immediate Effect**: Changes to trade categories take effect immediately, no restart required
+2. **Multi-Category Search**: Agent searches all selected categories simultaneously
+3. **Prompt Enhancement**: Agent prompt includes selected trades as areas of expertise
+4. **UI Consistency**: Checkboxes and selected list stay in sync
+
+#### **Testing:**
+- Test Company ID: `6886d9313c95e3f88a02c88b`
+- URL: `http://localhost:3000/company-profile.html?id=6886d9313c95e3f88a02c88b`
+- Agent Test: POST to `/api/company/companies/:id/agent-test`
+
+**PREVENTION:** This system prevents agents from responding about trades the company doesn't handle, while allowing dynamic reconfiguration by admins.
+
+---

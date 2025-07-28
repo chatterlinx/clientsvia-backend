@@ -1164,13 +1164,31 @@
                                                 <i class="fas fa-cogs mr-2 text-blue-600"></i>AI Core Configuration
                                             </h4>
                                             
-                                            <!-- Trade Categories -->
-                                            <div>
-                                                <label for="agent-trade-categories" class="form-label">Trade Categories</label>
-                                                <select id="agent-trade-categories" multiple onchange="handleTradeCategoryChange()" class="form-select h-24 text-sm">
-                                                    <!-- Options loaded dynamically -->
-                                                </select>
-                                                <p class="text-xs text-gray-500 mt-1">Controls which Q&A categories the agent can access</p>
+                                            <!-- Trade Categories Selection -->
+                                            <div class="space-y-3">
+                                                <label class="form-label">
+                                                    <i class="fas fa-briefcase mr-1 text-blue-600"></i>Trade Categories
+                                                </label>
+                                                <p class="text-xs text-gray-500 mb-3">Select the trade categories your AI agent should access for Q&A responses</p>
+                                                
+                                                <!-- Trade Categories Checkboxes Container -->
+                                                <div id="trade-categories-checkboxes" class="bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-48 overflow-y-auto">
+                                                    <!-- Checkboxes will be populated dynamically -->
+                                                    <div class="text-center text-gray-500">
+                                                        <i class="fas fa-spinner fa-spin mr-2"></i>Loading trade categories...
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Selected Categories Display -->
+                                                <div class="mt-3">
+                                                    <div class="flex items-center justify-between mb-2">
+                                                        <span class="text-sm font-medium text-gray-700">Selected Categories:</span>
+                                                        <span id="selected-categories-count" class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">0 selected</span>
+                                                    </div>
+                                                    <div id="selected-categories-list" class="bg-white border border-gray-200 rounded-lg p-3 min-h-[60px]">
+                                                        <div class="text-gray-400 text-sm italic">No categories selected</div>
+                                                    </div>
+                                                </div>
                                             </div>
 
                                             <!-- Language Selection -->
@@ -3069,9 +3087,9 @@
             }
 
             try {
-                // Collect trade categories
-                const tradeSelector = document.getElementById('agent-trade-categories');
-                const tradeCategories = Array.from(tradeSelector.selectedOptions).map(option => option.value);
+                // Collect trade categories from checkboxes
+                const checkboxes = document.querySelectorAll('#trade-categories-checkboxes input[type="checkbox"]:checked');
+                const tradeCategories = Array.from(checkboxes).map(checkbox => checkbox.value);
 
                 // Helper function to safely get element values
                 const safeGetValue = (id, defaultValue = '') => {
@@ -3620,7 +3638,7 @@
                 aiAgentTab.addEventListener('click', function() {
                     // Add small delay to ensure tab content is visible
                     setTimeout(() => {
-                        loadAgentTradeCategories();
+                        loadTradeCategories(); // Load checkboxes system
                         loadAgentSettings();
                         loadAgentPersonalitySettings(); // Module 1: Load personality settings
                         initKnowledgeSources(); // Module 2: Initialize knowledge source controls

@@ -10,16 +10,17 @@ async function checkKBWithFallback(transcript, companyID, traceLogger, options =
     ollamaFallbackEnabled = true,
     confidenceThreshold = 70,
     company = null,
-    conversationHistory = []
+    conversationHistory = [],
+    selectedTradeCategories = []
   } = options;
 
-  // Step 1: Check Custom Knowledge Base first
-  console.log(`[KB+Ollama] Checking custom knowledge base first...`);
-  const kbResult = await checkCustomKB(transcript, companyID, traceLogger);
+  // Step 1: Check Custom Knowledge Base first with selected trade categories
+  console.log(`[KB+Ollama] Checking custom knowledge base with trade categories: [${selectedTradeCategories.join(', ')}]`);
+  const kbResult = await checkCustomKB(transcript, companyID, traceLogger, { selectedTradeCategories });
   
   // If we have a good KB match, use it
   if (kbResult && kbResult.answer) {
-    console.log(`[KB+Ollama] ✅ Custom KB provided answer`);
+    console.log(`[KB+Ollama] ✅ Custom KB provided answer from selected trade categories`);
     return {
       answer: kbResult.answer,
       source: 'custom_kb',
@@ -57,13 +58,15 @@ async function checkKBWithFallback(transcript, companyID, traceLogger, options =
       };
     }
 
-    // Build context for Ollama
+    // Build context for Ollama with selected trade categories
+    const tradeCategories = selectedTradeCategories.length > 0 ? selectedTradeCategories : [getTradeCategory(company)];
     const context = {
       companyName: company?.companyName || 'the company',
-      tradeCategory: getTradeCategory(company),
+      tradeCategory: tradeCategories.join(', '),
+      tradeCategories: tradeCategories,
       personality: company?.aiSettings?.personality || 'professional and helpful',
       conversationHistory: conversationHistory,
-      customInstructions: `Answer this customer service question based on general ${getTradeCategory(company)} knowledge. Be helpful but acknowledge if you need to connect them with a specialist.`
+      customInstructions: `Answer this customer service question based on general ${tradeCategories.join(', ')} knowledge. Be helpful but acknowledge if you need to connect them with a specialist.`
     };
 
     // Generate response using Ollama

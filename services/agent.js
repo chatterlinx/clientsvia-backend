@@ -198,6 +198,10 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   const { llmFallbackEnabled, customEscalationMessage } = company?.aiSettings || {};
   const placeholders = company?.agentSetup?.placeholders || [];
   
+  // DYNAMIC TRADE CATEGORIES: Use the company's selected trade categories for AI agent context
+  const selectedTradeCategories = company?.tradeTypes || [];
+  console.log(`[Agent] Company ${companyId} - Using Selected Trade Categories: [${selectedTradeCategories.join(', ')}]`);
+  
   // USE SCRIPT FROM COMPANY OBJECT, NOT PARAMETER
   const mainAgentScript = company?.agentSetup?.mainAgentScript || mainAgentScriptParam || '';
   
@@ -265,14 +269,15 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   const customKBResult = await checkKBWithFallback(question, companyId, traceLogger, {
     ollamaFallbackEnabled: ollamaFallbackEnabled,
     company: company,
-    conversationHistory: conversationHistory
+    conversationHistory: conversationHistory,
+    selectedTradeCategories: selectedTradeCategories // Pass selected trade categories for dynamic Q&A lookup
   });
 
   if (customKBResult && customKBResult.answer) {
     const sourceDescription = customKBResult.source === 'ollama_fallback' ? 
       'Ollama LLM Fallback' : 'Custom Knowledge Base';
     
-    console.log(`[Custom KB + Ollama] Found match from ${sourceDescription}: "${customKBResult.answer.substring(0, 100)}..."`);
+    console.log(`[Custom KB + Ollama] Found match from ${sourceDescription} using trade categories [${selectedTradeCategories.join(', ')}]: "${customKBResult.answer.substring(0, 100)}..."`);
     
     responseMethod = customKBResult.source === 'ollama_fallback' ? 'ollama-fallback' : 'custom-trade-kb';
     confidence = customKBResult.confidence;
@@ -282,7 +287,8 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
       fallbackUsed: customKBResult.fallbackUsed,
       ollamaModel: customKBResult.ollamaModel,
       responseTime: customKBResult.responseTime,
-      trace: customKBResult.trace
+      trace: customKBResult.trace,
+      tradeCategories: selectedTradeCategories
     };
     
     await trackPerformance(companyId, originalCallSid, question, customKBResult.answer, responseMethod, confidence, debugInfo, startTime);
@@ -570,8 +576,11 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     fullPrompt += `\n\n**Company Specialties:**\n${companySpecialties}`;
   }
 
-  // Add categories/trade types
-  if (categories && categories.length > 0) {
+  // Add DYNAMIC trade categories/services - prioritize selected trade categories
+  if (selectedTradeCategories && selectedTradeCategories.length > 0) {
+    fullPrompt += `\n\n**Your Selected Trade Categories (Your Areas of Expertise):**\n${selectedTradeCategories.join(', ')}`;
+    fullPrompt += `\n**Note:** You specialize in these areas and should focus Q&A responses from these categories.`;
+  } else if (categories && categories.length > 0) {
     fullPrompt += `\n\n**Services We Offer:**\n${categories.join(', ')}`;
   }
 
@@ -1516,7 +1525,7 @@ function isRepetitiveResponse(newResponse, recentResponses) {
     const similarity = calculateStringSimilarity(newResponseLower, recentLower);
     if (similarity > 0.8) { // 80% similar = repetitive
       console.log(`[Agent] Detected repetitive response (${Math.round(similarity * 100)}% similar)`);
-      return true;
+           return true;
     }
     
     // Check for repeated key phrases
