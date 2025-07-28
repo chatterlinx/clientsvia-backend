@@ -130,12 +130,211 @@
                 }
             });
 
+            // Set active navigation
+            const navDirectory = document.getElementById('nav-directory');
+            if (navDirectory) {
+                navDirectory.classList.add('active-tab');
+            }
+
             // const yearSpan = document.getElementById('current-year');
             // if (yearSpan) {
             //     yearSpan.textContent = new Date().getFullYear();
             // }
         });
     </script>
-    <script src="/js/directory.js"></script>
+    <!-- Modern company profile script -->
+    <script src="/js/company-profile-modern.js?v=2.1"></script>
+    <script>
+        // Initialize directory with modern system
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('[Directory] Initializing modern directory system...');
+            
+            // Create a modern directory manager
+            class DirectoryManager {
+                constructor() {
+                    this.companies = [];
+                    this.filteredCompanies = [];
+                    this.init();
+                }
+                
+                async init() {
+                    await this.loadCompanies();
+                    this.setupEventListeners();
+                    this.renderCompanies();
+                }
+                
+                async loadCompanies() {
+                    try {
+                        const response = await fetch('/api/companies', {
+                            credentials: 'include',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        if (response.status === 401) {
+                            this.showAuthenticationRequired();
+                            return;
+                        }
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        
+                        const data = await response.json();
+                        this.companies = data.data || data;
+                        this.filteredCompanies = [...this.companies];
+                        console.log(`[Directory] Loaded ${this.companies.length} companies`);
+                        
+                    } catch (error) {
+                        console.error('[Directory] Error loading companies:', error);
+                        this.showError('Failed to load companies');
+                    }
+                }
+                
+                showAuthenticationRequired() {
+                    const container = document.getElementById('company-list');
+                    if (container) {
+                        container.innerHTML = `
+                            <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+                                <div class="flex items-center">
+                                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <strong>Authentication Required</strong>
+                                </div>
+                                <div class="mt-2">Please log in as an administrator to view the company directory.</div>
+                            </div>
+                        `;
+                    }
+                }
+                
+                showError(message) {
+                    const container = document.getElementById('company-list');
+                    if (container) {
+                        container.innerHTML = `
+                            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                                <div class="flex items-center">
+                                    <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <strong>Error</strong>
+                                </div>
+                                <div class="mt-2">${message}</div>
+                            </div>
+                        `;
+                    }
+                }
+                
+                setupEventListeners() {
+                    const searchInput = document.getElementById('search-company-input');
+                    const filterSelect = document.getElementById('filter-trade-type');
+                    const showInactiveCheckbox = document.getElementById('show-inactive-checkbox');
+                    
+                    if (searchInput) {
+                        searchInput.addEventListener('input', () => this.filterAndRender());
+                    }
+                    
+                    if (filterSelect) {
+                        filterSelect.addEventListener('change', () => this.filterAndRender());
+                    }
+                    
+                    if (showInactiveCheckbox) {
+                        showInactiveCheckbox.addEventListener('change', () => this.filterAndRender());
+                    }
+                }
+                
+                filterAndRender() {
+                    const searchTerm = document.getElementById('search-company-input')?.value.toLowerCase() || '';
+                    const tradeFilter = document.getElementById('filter-trade-type')?.value || '';
+                    const showInactive = document.getElementById('show-inactive-checkbox')?.checked || false;
+                    
+                    this.filteredCompanies = this.companies.filter(company => {
+                        const matchesSearch = !searchTerm || 
+                            company.companyName?.toLowerCase().includes(searchTerm) ||
+                            company.companyPhone?.includes(searchTerm);
+                        
+                        const matchesTrade = !tradeFilter || 
+                            (company.tradeTypes && company.tradeTypes.includes(tradeFilter));
+                        
+                        const matchesStatus = showInactive || 
+                            company.status !== 'inactive';
+                        
+                        return matchesSearch && matchesTrade && matchesStatus;
+                    });
+                    
+                    this.renderCompanies();
+                }
+                
+                renderCompanies() {
+                    const container = document.getElementById('company-list');
+                    if (!container) return;
+                    
+                    if (this.filteredCompanies.length === 0) {
+                        container.innerHTML = `
+                            <div class="text-center py-8 text-gray-500">
+                                <i class="fas fa-building fa-3x mb-4"></i>
+                                <p class="text-lg">No companies found</p>
+                                <p class="text-sm">Try adjusting your search or filters</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    const companiesHTML = this.filteredCompanies.map(company => this.renderCompanyCard(company)).join('');
+                    container.innerHTML = companiesHTML;
+                }
+                
+                renderCompanyCard(company) {
+                    const statusClass = company.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                    const statusText = company.status === 'active' ? 'Active' : 'Inactive';
+                    
+                    return `
+                        <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <h3 class="text-lg font-semibold text-gray-900">${this.escapeHTML(company.companyName || 'Unknown Company')}</h3>
+                                    <p class="text-sm text-gray-600 mt-1">${this.escapeHTML(company.companyPhone || 'No phone')}</p>
+                                    <p class="text-sm text-gray-600">${this.escapeHTML(company.companyAddress || 'No address')}</p>
+                                    ${company.tradeTypes ? `<p class="text-sm text-blue-600 mt-2">Trade: ${this.escapeHTML(company.tradeTypes.join(', '))}</p>` : ''}
+                                </div>
+                                <div class="flex flex-col items-end space-y-2">
+                                    <span class="px-2 py-1 text-xs font-medium rounded-full ${statusClass}">${statusText}</span>
+                                    <div class="flex space-x-2">
+                                        <button onclick="window.open('/company-profile.html?id=${company._id}', '_blank')" 
+                                                class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
+                                            <i class="fas fa-eye mr-1"></i>View
+                                        </button>
+                                        <button onclick="directoryManager.editCompany('${company._id}')" 
+                                                class="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700">
+                                            <i class="fas fa-edit mr-1"></i>Edit
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                editCompany(companyId) {
+                    window.open(`/company-profile.html?id=${companyId}`, '_blank');
+                }
+                
+                escapeHTML(str) {
+                    if (str === null || str === undefined) return '';
+                    return String(str).replace(/[&<>"']/g, match => ({
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#039;'
+                    })[match]);
+                }
+            }
+            
+            // Initialize the directory manager
+            window.directoryManager = new DirectoryManager();
+        });
+    </script>
 </body>
 </html>
