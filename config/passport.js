@@ -50,8 +50,43 @@ passport.use(new GoogleStrategy({
     const allowedDomains = process.env.ALLOWED_DOMAINS ? 
       process.env.ALLOWED_DOMAINS.split(',').map(d => d.trim()) : [];
     
-    if (allowedDomains.length > 0 && !allowedDomains.includes(domain)) {
+    // Admin email whitelist for Google OAuth
+    const adminEmails = process.env.ADMIN_GOOGLE_EMAILS ? 
+      process.env.ADMIN_GOOGLE_EMAILS.split(',').map(e => e.trim().toLowerCase()) : [];
+    
+    // Check if this is an admin login attempt
+    const isAdminAttempt = adminEmails.length > 0 && adminEmails.includes(email.toLowerCase());
+    
+    if (allowedDomains.length > 0 && !allowedDomains.includes(domain) && !isAdminAttempt) {
       return done(new Error(`Domain ${domain} is not authorized for this application`), null);
+    }
+    
+    // For admin users, check email whitelist
+    if (isAdminAttempt) {
+      // This is an authorized admin - create/update with admin role
+      if (user) {
+        user.googleId = profile.id;
+        user.name = profile.displayName;
+        user.avatar = profile.photos[0]?.value;
+        user.role = 'admin'; // Ensure admin role
+        user.lastLogin = new Date();
+        await user.save();
+        return done(null, user);
+      }
+      
+      // Create new admin user
+      user = new User({
+        googleId: profile.id,
+        email: email,
+        name: profile.displayName,
+        avatar: profile.photos[0]?.value,
+        role: 'admin', // Set admin role
+        allowedDomains: [domain],
+        lastLogin: new Date()
+      });
+      
+      await user.save();
+      return done(null, user);
     }
 
     // Try to find associated company by domain
