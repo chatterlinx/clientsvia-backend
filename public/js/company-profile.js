@@ -217,6 +217,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize ElevenLabs voice settings
     initializeEnhancedVoiceSettings();
     
+    // Initialize Agent Priority Controller
+    initializeAgentPriorityController();
+    
     // Load company data if ID is available (OPTIONAL for platform functionality)
     if (companyId) {
         try {
@@ -1325,7 +1328,7 @@ function populateAgentIntelligenceUI(settings) {
         escalationModeSelect.value = settings.escalationMode || 'ask';
     }
     
-    const rePromptSelect = document.getElementById('agent-rePrompt
+    const rePromptSelect = document.getElementById('agent-rePromptAfterTurns');
     if (rePromptSelect) {
         rePromptSelect.value = settings.rePromptAfterTurns || 2;
     }
