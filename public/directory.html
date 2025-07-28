@@ -130,6 +130,14 @@
 
         // JavaScript for Active Tab Highlighting based on current page
         document.addEventListener('DOMContentLoaded', function() {
+            // Check authentication on page load
+            const token = localStorage.getItem('adminToken');
+            if (!token) {
+                console.log('[Directory] No authentication token found - redirecting to login');
+                window.location.href = '/login.html';
+                return;
+            }
+            
             let currentPath = window.location.pathname.replace(/\/$/, ""); 
             if (currentPath === "") currentPath = "/index.html"; 
 
@@ -200,8 +208,12 @@
                         });
                         
                         if (response.status === 401) {
-                            this.showAuthenticationRequired();
-                            return false; // Authentication failed
+                            // Authentication failed - redirect to login
+                            console.log('[Directory] Authentication failed - redirecting to login');
+                            localStorage.removeItem('adminToken');
+                            localStorage.removeItem('adminUser');
+                            window.location.href = '/login.html';
+                            return false;
                         }
                         
                         if (!response.ok) {

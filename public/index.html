@@ -157,6 +157,15 @@
         // JavaScript for Active Tab Highlighting and Dashboard Stats
         document.addEventListener('DOMContentLoaded', function() {
             console.log('[JS index.html] DOMContentLoaded: Script initiated.');
+            
+            // Check authentication on page load
+            const token = localStorage.getItem('adminToken');
+            if (!token) {
+                console.log('[JS index.html] No authentication token found - redirecting to login');
+                window.location.href = '/login.html';
+                return;
+            }
+            
             // Active Tab Highlighting
             let currentPath = window.location.pathname.replace(/\/$/, ""); 
             if (currentPath === "" || currentPath === "/") currentPath = "/index.html"; 
@@ -216,10 +225,16 @@
                     }); 
 
                     if (response.status === 401) {
-                        // Authentication required - show login prompt
-                        console.log('[JS index.html] Authentication required for admin dashboard');
-                        totalCompaniesCountEl.textContent = 'Login Required';
-                        activeCompaniesCountEl.textContent = 'Login Required';
+                        // Authentication required - redirect to login immediately
+                        console.log('[JS index.html] Authentication required - redirecting to login');
+                        
+                        // Clear any invalid tokens
+                        localStorage.removeItem('adminToken');
+                        localStorage.removeItem('adminUser');
+                        
+                        // Redirect to login page
+                        window.location.href = '/login.html';
+                        return;
                         
                         // Create login message with button
                         const loginMessage = document.createElement('div');
