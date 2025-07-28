@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const { authenticateJWT } = require('../middleware/auth');
 const logger = require('../utils/logger');
+const passport = require('passport');
 
 /**
  * POST /api/auth/register - Register a new admin user
@@ -201,6 +202,77 @@ router.post('/logout', authenticateJWT, async (req, res) => {
             error: err.message 
         });
     }
+});
+
+/**
+ * Google OAuth Routes
+ */
+
+/**
+ * GET /api/auth/google - Initiate Google OAuth flow
+ */
+router.get('/google', 
+    passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+/**
+ * GET /api/auth/google/callback - Handle Google OAuth callback
+ */
+router.get('/google/callback',
+    passport.authenticate('google', { failureRedirect: '/login.html?error=oauth_failed' }),
+    async (req, res) => {
+        try {
+            const user = req.user;
+            
+            // Generate JWT token for the authenticated user
+            const token = jwt.sign(
+                { 
+                    userId: user._id, 
+                    email: user.email, 
+                    role: user.role 
+                },
+                process.env.JWT_SECRET,
+                { expiresIn: '24h' }
+            );
+            
+            // Log successful OAuth login
+            logger.auth('Google OAuth login successful', { 
+                userId: user._id, 
+                email: user.email, 
+                role: user.role,
+                method: 'google_oauth'
+            });
+            
+            // Set JWT token as cookie for frontend
+            res.cookie('authToken', token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+                maxAge: 24 * 60 * 60 * 1000 // 24 hours
+            });
+            
+            // Redirect to dashboard
+            res.redirect('/index.html?auth=success');
+            
+        } catch (err) {
+            logger.error('Google OAuth callback error:', err);
+            res.redirect('/login.html?error=oauth_error');
+        }
+    }
+);
+
+/**
+ * GET /api/auth/google/status - Check Google OAuth configuration
+ */
+router.get('/google/status', (req, res) => {
+    const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+    
+    res.json({
+        googleOAuthEnabled: googleConfigured,
+        message: googleConfigured ? 
+            'Google OAuth is configured and available' : 
+            'Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.'
+    });
 });
 
 module.exports = router;
