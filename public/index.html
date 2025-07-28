@@ -180,12 +180,46 @@
                 try {
                     const apiUrl = `${window.location.origin}/api/companies`; 
                     console.log('[JS index.html] fetchDashboardStats: Fetching from URL:', apiUrl);
-                    const response = await fetch(apiUrl); 
+                    const response = await fetch(apiUrl, {
+                        credentials: 'include', // Include cookies for authentication
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    }); 
+
+                    if (response.status === 401) {
+                        // Authentication required - show login prompt
+                        console.log('[JS index.html] Authentication required for admin dashboard');
+                        totalCompaniesCountEl.textContent = 'Login Required';
+                        activeCompaniesCountEl.textContent = 'Login Required';
+                        
+                        // Create login button or redirect
+                        const loginMessage = document.createElement('div');
+                        loginMessage.className = 'bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mt-4';
+                        loginMessage.innerHTML = `
+                            <div class="flex items-center">
+                                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                </svg>
+                                <strong>Admin Authentication Required</strong>
+                            </div>
+                            <div class="mt-2">Please log in as an administrator to view company statistics.</div>
+                        `;
+                        
+                        // Insert after the stats cards
+                        const statsContainer = document.querySelector('.grid.grid-cols-1.md\\:grid-cols-3');
+                        if (statsContainer && statsContainer.parentNode) {
+                            statsContainer.parentNode.insertBefore(loginMessage, statsContainer.nextSibling);
+                        }
+                        return;
+                    }
 
                     if (!response.ok) {
                         throw new Error(`Failed to fetch companies: ${response.status} ${response.statusText}`);
                     }
-                    const companies = await response.json();
+                    
+                    const data = await response.json();
+                    const companies = data.data || data; // Handle both response formats
                     console.log('[JS index.html] fetchDashboardStats: Companies fetched:', companies);
 
                     const totalCompanies = companies.length;
@@ -200,8 +234,26 @@
 
                 } catch (error) {
                     console.error('[JS index.html] fetchDashboardStats: Error fetching stats:', error);
-                    totalCompaniesCountEl.textContent = 'N/A';
-                    activeCompaniesCountEl.textContent = 'N/A';
+                    totalCompaniesCountEl.textContent = 'Error';
+                    activeCompaniesCountEl.textContent = 'Error';
+                    
+                    // Show error message
+                    const errorMessage = document.createElement('div');
+                    errorMessage.className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mt-4';
+                    errorMessage.innerHTML = `
+                        <div class="flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                            </svg>
+                            <strong>Error Loading Statistics</strong>
+                        </div>
+                        <div class="mt-2">Unable to fetch company data. Please check your connection or contact support.</div>
+                    `;
+                    
+                    const statsContainer = document.querySelector('.grid.grid-cols-1.md\\:grid-cols-3');
+                    if (statsContainer && statsContainer.parentNode) {
+                        statsContainer.parentNode.insertBefore(errorMessage, statsContainer.nextSibling);
+                    }
                 }
             }
 
