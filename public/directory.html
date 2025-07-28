@@ -168,9 +168,11 @@
                 }
                 
                 async init() {
-                    await this.loadCompanies();
+                    const loadSuccess = await this.loadCompanies();
                     this.setupEventListeners();
-                    this.renderCompanies();
+                    if (loadSuccess) {
+                        this.renderCompanies();
+                    }
                 }
                 
                 async loadCompanies() {
@@ -184,7 +186,7 @@
                         
                         if (response.status === 401) {
                             this.showAuthenticationRequired();
-                            return;
+                            return false; // Authentication failed
                         }
                         
                         if (!response.ok) {
@@ -195,10 +197,12 @@
                         this.companies = data.data || data;
                         this.filteredCompanies = [...this.companies];
                         console.log(`[Directory] Loaded ${this.companies.length} companies`);
+                        return true; // Success
                         
                     } catch (error) {
                         console.error('[Directory] Error loading companies:', error);
                         this.showError('Failed to load companies');
+                        return false; // Error occurred
                     }
                 }
                 
