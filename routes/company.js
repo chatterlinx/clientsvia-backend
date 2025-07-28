@@ -1305,91 +1305,11 @@ router.post('/companies/:companyId/ai-settings', async (req, res) => {
 });
 
 // =============================================
-// Phase 2: Agent Priority Configuration API Routes
+// AGENT PRIORITY CONFIG ROUTES INTEGRATION
 // =============================================
 
-router.get('/companies/:companyId/agent-priority-config', async (req, res) => {
-    try {
-        const { companyId } = req.params;
-        
-        console.log(`[Priority API] Getting config for company: ${companyId}`);
-        
-        const company = await Company.findById(companyId).select('agentPriorityConfig');
-        if (!company) {
-            return res.status(404).json({
-                success: false,
-                message: 'Company not found'
-            });
-        }
-        
-        // Return saved configuration or default
-        const config = company.agentPriorityConfig || {
-            flow: [
-                { id: 'company-knowledge', priority: 1, enabled: true },
-                { id: 'trade-categories', priority: 2, enabled: true },
-                { id: 'template-intelligence', priority: 3, enabled: true },
-                { id: 'learning-queue', priority: 4, enabled: true },
-                { id: 'emergency-llm', priority: 5, enabled: true }
-            ],
-            settings: {
-                knowledgeFirst: true,
-                autoLearning: true,
-                emergencyLLM: true
-            }
-        };
-        
-        res.json({
-            success: true,
-            data: config
-        });
-        
-    } catch (error) {
-        console.error('[Priority API] GET Error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to get priority configuration',
-            error: error.message
-        });
-    }
-});
-
-router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
-    try {
-        const { companyId } = req.params;
-        const config = req.body;
-        
-        console.log(`[Priority API] Saving config for company: ${companyId}`);
-        
-        const company = await Company.findByIdAndUpdate(
-            companyId,
-            {
-                agentPriorityConfig: config,
-                updatedAt: new Date()
-            },
-            { new: true }
-        );
-        
-        if (!company) {
-            return res.status(404).json({
-                success: false,
-                message: 'Company not found'
-            });
-        }
-        
-        res.json({
-            success: true,
-            message: 'Priority configuration saved',
-            data: config
-        });
-        
-    } catch (error) {
-        console.error('[Priority API] POST Error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to save priority configuration',
-            error: error.message
-        });
-    }
-});
+// Mount the agent priority config routes
+const agentPriorityConfigRoutes = require('./company/agentPriorityConfig');
+router.use('/api/companies', agentPriorityConfigRoutes);
 
 module.exports = router;
