@@ -452,15 +452,70 @@ class AIIntelligenceEngine {
                 return { type: 'continue', result: 'No semantic match found' };
                 
             case 'provide_answer':
+                // Instead of generic response, try to use local LLM for intelligent response
+                try {
+                    const { localLLMWithContext } = require('../utils/localLLM');
+                    const companyName = company?.companyName || 'our company';
+                    const tradeType = company?.tradeTypes?.[0] || 'service';
+                    
+                    console.log(`[AI Intelligence] Using local LLM for intelligent response to: "${query}"`);
+                    const intelligentResponse = await localLLMWithContext(
+                        query, 
+                        companyName, 
+                        tradeType
+                    );
+                    
+                    if (intelligentResponse && intelligentResponse.length > 10) {
+                        return {
+                            type: 'final_answer',
+                            result: intelligentResponse,
+                            confidence: reasoning.confidence
+                        };
+                    }
+                } catch (error) {
+                    console.error(`[AI Intelligence] Local LLM failed:`, error.message);
+                }
+                
+                // Fallback to contextual response based on query type
+                const contextualResponse = this.generateContextualFallback(query, company);
                 return {
                     type: 'final_answer',
-                    result: 'Based on the analysis, I can help you with that.',
-                    confidence: reasoning.confidence
+                    result: contextualResponse,
+                    confidence: Math.max(0.3, reasoning.confidence)
                 };
                 
             default:
                 return { type: 'continue', result: 'Processing...' };
         }
+    }
+
+    generateContextualFallback(query, company) {
+        const q = query.toLowerCase();
+        const companyName = company?.companyName || 'our company';
+        
+        // Detect query type and provide appropriate response
+        if (q.includes('hour') || q.includes('open') || q.includes('close')) {
+            return `I'd be happy to help you with our hours. Let me connect you with someone who can provide our current schedule.`;
+        }
+        
+        if (q.includes('price') || q.includes('cost') || q.includes('charge') || q.includes('much')) {
+            return `Pricing depends on the specific service needed. I can connect you with someone who can provide an accurate quote.`;
+        }
+        
+        if (q.includes('emergency') || q.includes('urgent') || q.includes('asap')) {
+            return `I understand this is urgent. Let me get you connected with our emergency service team right away.`;
+        }
+        
+        if (q.includes('appointment') || q.includes('schedule') || q.includes('book')) {
+            return `I can help you schedule an appointment. Let me connect you with our scheduling team to find the best time.`;
+        }
+        
+        if (q.includes('leak') || q.includes('broken') || q.includes('not work') || q.includes('problem')) {
+            return `That sounds like something our technicians can definitely help with. Let me connect you with someone who can assess the situation.`;
+        }
+        
+        // Default but more helpful response
+        return `I want to make sure you get the exact help you need. Let me connect you with one of our specialists who can provide detailed assistance.`;
     }
 
     async analyzeSentiment(text) {

@@ -73,7 +73,7 @@ Customer question: ${userInput}
 
 Professional response:`;
 
-  return await localLLM(contextPrompt);
+  return await localLLM(contextPrompt, 'llama3.1:8b-instruct-q4_0'); // Use the actual installed model
 }
 
 /**

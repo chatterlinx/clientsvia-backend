@@ -282,9 +282,14 @@ class AgentMessageProcessor {
     async tryOllama(modelName, companyId, message, settings, conversationHistory, traceLog) {
         try {
             const modelMap = {
-                'ollama-phi3': 'phi3',
-                'ollama-mistral': 'mistral'
+                'ollama-phi3': 'llama3.1:8b-instruct-q4_0',        // Use actual installed model
+                'ollama-mistral': 'llama3.2:3b',                    // Use actual installed model
+                'ollama-llama31': 'llama3.1:8b-instruct-q4_0',     // Direct mapping
+                'ollama-llama32': 'llama3.2:3b'                     // Direct mapping
             };
+
+            const actualModel = modelMap[modelName] || 'llama3.1:8b-instruct-q4_0';
+            traceLog.push(`[${new Date().toISOString()}] Using Ollama model: ${actualModel}`);
 
             const response = await localLLMWithContext(
                 message,
