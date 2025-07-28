@@ -1325,7 +1325,7 @@ function populateAgentIntelligenceUI(settings) {
         escalationModeSelect.value = settings.escalationMode || 'ask';
     }
     
-    const rePromptSelect = document.getElementById('agent-rePromptAfterTurns');
+    const rePromptSelect = document.getElementById('agent-rePrompt
     if (rePromptSelect) {
         rePromptSelect.value = settings.rePromptAfterTurns || 2;
     }
@@ -2388,6 +2388,252 @@ window.updateCheckboxValue = updateCheckboxValue;
 window.handleTradeCategoryChange = handleTradeCategoryChange;
 window.handleLanguageChange = handleLanguageChange;
 
+// =============================================
+// 🎯 AGENT PRIORITY CONTROLLER (PHASE 4)
+// =============================================
+
+let agentPriorityConfig = {
+    priorities: [
+        { type: 'company-knowledge', order: 1, active: true },
+        { type: 'trade-categories', order: 2, active: true },
+        { type: 'template-intelligence', order: 3, active: true },
+        { type: 'learning-queue', order: 4, active: true },
+        { type: 'emergency-llm', order: 5, active: true }
+    ]
+};
+
+/**
+ * Initialize Agent Priority Controller drag-and-drop functionality
+ */
+function initializeAgentPriorityController() {
+    console.log('🎯 Initializing Agent Priority Controller...');
+    
+    const container = document.getElementById('priority-flow-container');
+    if (!container) {
+        console.log('⚠️ Priority flow container not found');
+        return;
+    }
+
+    // Load existing priority configuration
+    loadAgentPriorityConfig();
+
+    // Initialize drag and drop
+    initializeDragAndDrop();
+
+    // Initialize save button
+    initializePrioritySaveButton();
+
+    // Initialize toggle checkboxes
+    initializePriorityToggles();
+
+    console.log('✅ Agent Priority Controller initialized');
+}
+
+/**
+ * Load agent priority configuration from server
+ */
+async function loadAgentPriorityConfig() {
+    try {
+        console.log('📥 Loading agent priority config...');
+        
+        const response = await fetch(`/api/companies/${companyId}/agent-priority-config`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        if (result.success && result.data) {
+            agentPriorityConfig = result.data;
+            updatePriorityUI();
+            console.log('✅ Agent priority config loaded successfully');
+        }
+    } catch (error) {
+        console.error('❌ Error loading agent priority config:', error);
+        // Use default config on error
+        updatePriorityUI();
+    }
+}
+
+/**
+ * Update the UI based on current priority configuration
+ */
+function updatePriorityUI() {
+    const container = document.getElementById('priority-flow-container');
+    if (!container) return;
+
+    // Sort priorities by order
+    const sortedPriorities = [...agentPriorityConfig.priorities].sort((a, b) => a.order - b.order);
+    
+    // Update the DOM order
+    sortedPriorities.forEach((priority, index) => {
+        const element = container.querySelector(`[data-priority-type="${priority.type}"]`);
+        if (element) {
+            // Update order number display
+            const numberElement = element.querySelector('.priority-number span');
+            if (numberElement) {
+                numberElement.textContent = index + 1;
+            }
+            
+            // Update active state
+            const checkbox = element.querySelector('.priority-toggle');
+            if (checkbox) {
+                checkbox.checked = priority.active;
+            }
+            
+            // Move element to correct position
+            container.appendChild(element);
+        }
+    });
+}
+
+/**
+ * Initialize drag and drop functionality
+ */
+function initializeDragAndDrop() {
+    const container = document.getElementById('priority-flow-container');
+    if (!container) return;
+
+    let draggedElement = null;
+
+    // Add drag event listeners to all priority items
+    container.addEventListener('dragstart', (e) => {
+        if (e.target.classList.contains('priority-item')) {
+            draggedElement = e.target;
+            e.target.style.opacity = '0.5';
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', e.target.outerHTML);
+        }
+    });
+
+    container.addEventListener('dragend', (e) => {
+        if (e.target.classList.contains('priority-item')) {
+            e.target.style.opacity = '';
+            draggedElement = null;
+        }
+    });
+
+    container.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        
+        const afterElement = getDragAfterElement(container, e.clientY);
+        if (afterElement == null) {
+            container.appendChild(draggedElement);
+        } else {
+            container.insertBefore(draggedElement, afterElement);
+        }
+    });
+
+    container.addEventListener('drop', (e) => {
+        e.preventDefault();
+        updatePriorityOrderFromDOM();
+        setUnsavedChanges();
+    });
+}
+
+/**
+ * Get the element that should come after the dragged element
+ */
+function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.priority-item:not(.dragging)')];
+    
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+/**
+ * Update priority order based on current DOM order
+ */
+function updatePriorityOrderFromDOM() {
+    const container = document.getElementById('priority-flow-container');
+    if (!container) return;
+
+    const items = container.querySelectorAll('.priority-item');
+    items.forEach((item, index) => {
+        const type = item.dataset.priorityType;
+        const priority = agentPriorityConfig.priorities.find(p => p.type === type);
+        if (priority) {
+            priority.order = index + 1;
+        }
+        
+        // Update visual order number
+        const numberElement = item.querySelector('.priority-number span');
+        if (numberElement) {
+            numberElement.textContent = index + 1;
+        }
+    });
+}
+
+/**
+ * Initialize priority toggle checkboxes
+ */
+function initializePriorityToggles() {
+    const checkboxes = document.querySelectorAll('.priority-toggle');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            const item = e.target.closest('.priority-item');
+            const type = item.dataset.priorityType;
+            const priority = agentPriorityConfig.priorities.find(p => p.type === type);
+            
+            if (priority) {
+                priority.active = e.target.checked;
+                setUnsavedChanges();
+            }
+        });
+    });
+}
+
+/**
+ * Initialize the save button for priority configuration
+ */
+function initializePrioritySaveButton() {
+    const saveButton = document.getElementById('save-priority-config');
+    if (!saveButton) return;
+
+    saveButton.addEventListener('click', async () => {
+        try {
+            console.log('💾 Saving agent priority config...');
+            
+            const response = await fetch(`/api/companies/${companyId}/agent-priority-config`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(agentPriorityConfig)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                showNotification('Agent priority configuration saved successfully', 'success');
+                clearUnsavedChanges();
+                console.log('✅ Agent priority config saved successfully');
+            } else {
+                throw new Error(result.message || 'Failed to save configuration');
+            }
+        } catch (error) {
+            console.error('❌ Error saving agent priority config:', error);
+            showNotification('Failed to save agent priority configuration', 'error');
+        }
+    });
+}
+
+// Expose priority controller functions globally
+window.initializeAgentPriorityController = initializeAgentPriorityController;
+window.loadAgentPriorityConfig = loadAgentPriorityConfig;
+window.updatePriorityUI = updatePriorityUI;
+
 console.log('🌐 Global functions exposed for HTML event handlers');
 console.log('Available functions:', {
     filterVoices: typeof window.filterVoices,
@@ -2395,5 +2641,6 @@ console.log('Available functions:', {
     handleVoiceChange: typeof window.handleVoiceChange,
     updateCheckboxValue: typeof window.updateCheckboxValue,
     handleTradeCategoryChange: typeof window.handleTradeCategoryChange,
-    handleLanguageChange: typeof window.handleLanguageChange
+    handleLanguageChange: typeof window.handleLanguageChange,
+    initializeAgentPriorityController: typeof window.initializeAgentPriorityController
 });

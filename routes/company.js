@@ -1305,11 +1305,119 @@ router.post('/companies/:companyId/ai-settings', async (req, res) => {
 });
 
 // =============================================
-// AGENT PRIORITY CONFIG ROUTES INTEGRATION
+// AGENT PRIORITY CONFIGURATION ENDPOINTS
 // =============================================
 
-// Mount the agent priority config routes
-const agentPriorityConfigRoutes = require('./company/agentPriorityConfig');
-router.use('/api/companies', agentPriorityConfigRoutes);
+// GET Agent Priority Configuration
+router.get('/companies/:companyId/agent-priority-config', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        console.log(`[Agent Priority] 📥 Loading priority config for company: ${companyId}`);
+        
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+        
+        // Return saved priority configuration or defaults
+        const priorityConfig = company.agentPriorityConfig || {
+            enabled: true,
+            processingFlow: [
+                {
+                    id: 'company-knowledge',
+                    name: 'Company Knowledge Base',
+                    type: 'knowledge',
+                    enabled: true,
+                    priority: 1,
+                    description: 'Search company-specific Q&A and knowledge entries'
+                },
+                {
+                    id: 'trade-categories',
+                    name: 'Trade Category Knowledge',
+                    type: 'knowledge',
+                    enabled: true,
+                    priority: 2,
+                    description: 'Search trade-specific knowledge base'
+                },
+                {
+                    id: 'llm-fallback',
+                    name: 'AI Assistant (LLM)',
+                    type: 'llm',
+                    enabled: true,
+                    priority: 3,
+                    description: 'Last resort: Generate response using AI'
+                }
+            ]
+        };
+        
+        console.log(`[Agent Priority] ✅ Priority config loaded successfully`);
+        
+        res.json({
+            success: true,
+            data: priorityConfig
+        });
+        
+    } catch (error) {
+        console.error('[Agent Priority] ❌ Error loading priority config:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to load agent priority configuration',
+            error: error.message
+        });
+    }
+});
+
+// POST Agent Priority Configuration
+router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { processingFlow, enabled } = req.body;
+        
+        console.log(`[Agent Priority] 💾 Saving priority config for company: ${companyId}`);
+        
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+        
+        // Update the agent priority configuration
+        const updatedCompany = await Company.findByIdAndUpdate(
+            companyId,
+            {
+                $set: {
+                    agentPriorityConfig: {
+                        enabled: enabled !== undefined ? enabled : true,
+                        processingFlow: processingFlow || [],
+                        lastUpdated: new Date()
+                    }
+                }
+            },
+            { new: true }
+        );
+        
+        console.log(`[Agent Priority] ✅ Priority config saved successfully`);
+        
+        res.json({
+            success: true,
+            message: 'Agent priority configuration updated successfully',
+            data: updatedCompany.agentPriorityConfig
+        });
+        
+    } catch (error) {
+        console.error('[Agent Priority] ❌ Error saving priority config:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to save agent priority configuration',
+            error: error.message
+        });
+    }
+});
 
 module.exports = router;
