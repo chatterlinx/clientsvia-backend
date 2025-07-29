@@ -105,9 +105,9 @@ A: Our comprehensive maintenance includes: cleaning and inspecting all component
             agentIntelligenceSettings: {
                 tradeCategories: ["hvac-residential", "hvac-commercial", "plumbing"],
                 useLLM: true,
-                primaryLLM: "ollama-phi3",
+                primaryLLM: "gemini-pro",
                 fallbackLLM: "gemini-pro",
-                allowedLLMs: ["ollama-phi3", "gemini-pro"],
+                allowedLLMs: ["gemini-pro"],
                 memoryMode: "conversation",
                 fallbackThreshold: 0.5,
                 escalationMode: "ask",

@@ -291,17 +291,17 @@ const companySchema = new mongoose.Schema({
         useLLM: { type: Boolean, default: true },
         llmModel: { 
             type: String, 
-            default: 'ollama-phi3',
-            enum: ['ollama-phi3', 'ollama-mistral', 'gemini-pro', 'openai-gpt4', 'claude-3']
+            default: 'gemini-pro',
+            enum: ['gemini-pro', 'openai-gpt4', 'claude-3']
         },
         
         // 🚀 ENHANCED LLM SELECTION CONTROLS
         allowedLLMModels: { 
             type: [String], 
-            default: ['ollama-phi3', 'gemini-pro'],
+            default: ['gemini-pro'],
             validate: {
                 validator: function(v) {
-                    const validModels = ['ollama-phi3', 'ollama-mistral', 'gemini-pro', 'openai-gpt4', 'claude-3'];
+                    const validModels = ['gemini-pro', 'openai-gpt4', 'claude-3'];
                     return v.every(model => validModels.includes(model));
                 },
                 message: 'Invalid LLM model in allowedLLMModels'
@@ -309,13 +309,13 @@ const companySchema = new mongoose.Schema({
         },
         primaryLLM: { 
             type: String, 
-            default: 'ollama-phi3',
-            enum: ['ollama-phi3', 'ollama-mistral', 'gemini-pro', 'openai-gpt4', 'claude-3']
+            default: 'gemini-pro',
+            enum: ['gemini-pro', 'openai-gpt4', 'claude-3']
         },
         fallbackLLM: { 
             type: String, 
             default: 'gemini-pro',
-            enum: ['ollama-phi3', 'ollama-mistral', 'gemini-pro', 'openai-gpt4', 'claude-3']
+            enum: ['gemini-pro', 'openai-gpt4', 'claude-3']
         },
         
         // 📚 SELF-LEARNING CONTROLS

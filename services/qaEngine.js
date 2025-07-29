@@ -14,22 +14,6 @@ const { logQASearch } = require('../services/logger'); // optional logging
 class EnhancedQAEngine {
   constructor() {
     this.supportedLLMs = {
-      'ollama-phi3': {
-        name: 'Ollama Phi3',
-        type: 'local',
-        endpoint: process.env.OLLAMA_PHI3_ENDPOINT || 'http://localhost:11434',
-        model: 'phi3',
-        maxTokens: 2048,
-        timeout: 30000
-      },
-      'ollama-mistral': {
-        name: 'Ollama Mistral',
-        type: 'local',
-        endpoint: process.env.OLLAMA_MISTRAL_ENDPOINT || 'http://localhost:11434',
-        model: 'mistral',
-        maxTokens: 4096,
-        timeout: 45000
-      },
       'gemini-pro': {
         name: 'Gemini Pro',
         type: 'cloud',

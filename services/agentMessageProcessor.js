@@ -251,12 +251,7 @@ class AgentMessageProcessor {
         try {
             traceLog.push(`[${new Date().toISOString()}] Trying ${modelName}...`);
 
-            switch (modelName) {
-                case 'ollama-phi3':
-                case 'ollama-mistral':
-                    return await this.tryOllama(modelName, companyId, message, settings, conversationHistory, traceLog);
-                
-                case 'gemini-pro':
+            switch (modelName) {                case 'gemini-pro':
                     return await this.tryGemini(companyId, message, settings, conversationHistory, traceLog);
                 
                 case 'openai-gpt4':

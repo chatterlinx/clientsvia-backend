@@ -317,9 +317,9 @@ router.post('/settings/:companyId/reset', async (req, res) => {
 
         const defaultSettings = {
             useLLM: true,
-            primaryLLM: 'ollama-phi3',
+            primaryLLM: 'gemini-pro',
             fallbackLLM: 'gemini-pro',
-            allowedLLMs: ['ollama-phi3', 'gemini-pro'],
+            allowedLLMs: ['gemini-pro'],
             memoryMode: 'conversation',
             fallbackThreshold: 0.5,
             escalationMode: 'ask',

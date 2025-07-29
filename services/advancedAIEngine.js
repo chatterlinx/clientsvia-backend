@@ -145,7 +145,7 @@ const AdvancedAIEngine = {
      */
     predictFailures(metrics) {
         // Simulate advanced ML prediction algorithm
-        const components = ['qaEngine', 'database', 'ollama', 'api', 'bookingFlow'];
+        const components = ['qaEngine', 'database', 'api', 'bookingFlow'];
         const randomComponent = components[Math.floor(Math.random() * components.length)];
         
         // Simulate failure prediction based on metrics
@@ -288,11 +288,6 @@ const AdvancedAIEngine = {
                 'Checking connection pool',
                 'Clearing query cache',
                 'Reestablishing connections'
-            ],
-            ollama: [
-                'Pinging Ollama service',
-                'Restarting model context',
-                'Switching to fallback model'
             ],
             api: [
                 'Checking API endpoints',

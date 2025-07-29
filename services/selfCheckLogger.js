@@ -26,7 +26,6 @@ const SelfCheckLogger = {
             'transferRouter',
             'agentPersonality',
             'customFields',
-            'ollama',
             'database',
             'api',
             'auth',
@@ -257,9 +256,6 @@ const SelfCheckLogger = {
                 case 'customFields':
                     result = await this.checkCustomFields(companyId);
                     break;
-                case 'ollama':
-                    result = await this.checkOllama();
-                    break;
                 case 'database':
                     result = await this.checkDatabase();
                     break;
@@ -413,23 +409,9 @@ const SelfCheckLogger = {
         }
     },
 
+    // Ollama check disabled - cloud-only operation
     async checkOllama() {
-        try {
-            // Try to reach Ollama API
-            const response = await fetch('/api/ollama/models', { 
-                method: 'GET',
-                timeout: 5000 
-            });
-            
-            if (response.ok) {
-                const models = await response.json();
-                return { status: 'success', message: `Ollama ready (${models.length || 0} models)` };
-            } else {
-                return { status: 'warning', message: 'Ollama offline (using Gemini fallback)' };
-            }
-        } catch (error) {
-            return { status: 'warning', message: 'Ollama unavailable (using cloud fallback)' };
-        }
+        return { status: 'disabled', message: 'Ollama disabled (cloud-only operation)' };
     },
 
     async checkDatabase() {
