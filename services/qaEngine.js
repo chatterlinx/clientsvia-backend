@@ -85,7 +85,7 @@ class EnhancedQAEngine {
 
       const settings = company.agentIntelligenceSettings || {};
       this.addTrace(trace, `⚙️ LLM enabled: ${settings.useLLM}`, 'info');
-      this.addTrace(trace, `🎯 Primary LLM: ${settings.primaryLLM || 'ollama-phi3'}`, 'info');
+      this.addTrace(trace, `🎯 Primary LLM: ${settings.primaryLLM || 'gemini-pro'}`, 'info');
       this.addTrace(trace, `🔄 Fallback threshold: ${settings.fallbackThreshold || 0.5}`, 'info');
 
       // PHASE 1: Search Company-specific Q&As (highest priority)
@@ -156,7 +156,7 @@ class EnhancedQAEngine {
         
         try {
           let llmResponse = await this.queryLLM(
-            settings.primaryLLM || 'ollama-phi3',
+            settings.primaryLLM || 'gemini-pro',
             question,
             companyId,
             settings
@@ -239,7 +239,7 @@ class EnhancedQAEngine {
     }
 
     // Check if model is allowed
-    const allowedModels = settings.allowedLLMModels || ['ollama-phi3'];
+    const allowedModels = settings.allowedLLMModels || ['gemini-pro'];
     if (!allowedModels.includes(modelId)) {
       throw new Error(`LLM model ${modelId} not in allowed models list`);
     }

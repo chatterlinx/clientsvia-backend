@@ -3388,7 +3388,7 @@
                 
                 // Set values safely
                 safeSetValue('agent-useLLM', settings.useLLM !== false ? 'true' : 'false');
-                safeSetValue('agent-llmModel', settings.llmModel || 'ollama-mistral');
+                safeSetValue('agent-llmModel', settings.llmModel || 'gemini-pro');
                 safeSetValue('agent-memoryMode', settings.memoryMode || 'short');
                 safeSetValue('agent-escalationMode', settings.escalationMode || 'ask');
                 safeSetValue('agent-rePromptAfterTurns', settings.rePromptAfterTurns || 3);
@@ -3454,7 +3454,7 @@
                 // Collect agent settings safely
                 const agentSettings = {
                     useLLM: safeGetValue('agent-useLLM') === 'true',
-                    llmModel: safeGetValue('agent-llmModel', 'ollama-mistral'),
+                    llmModel: safeGetValue('agent-llmModel', 'gemini-pro'),
                     memoryMode: safeGetValue('agent-memoryMode', 'short'),
                     fallbackThreshold: parseFloat(safeGetValue('agent-fallbackThreshold', '0.5')),
                     escalationMode: safeGetValue('agent-escalationMode', 'ask'),
@@ -3521,7 +3521,7 @@
 
             // Reset form to defaults
             document.getElementById('agent-useLLM').value = 'true';
-            document.getElementById('agent-llmModel').value = 'ollama-mistral';
+            document.getElementById('agent-llmModel').value = 'gemini-pro';
             document.getElementById('agent-memoryMode').value = 'short';
             document.getElementById('agent-escalationMode').value = 'ask';
             document.getElementById('agent-rePromptAfterTurns').value = '3';

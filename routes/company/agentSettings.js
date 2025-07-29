@@ -27,7 +27,7 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     // Validate agent settings
     const validatedSettings = {
       useLLM: agentIntelligenceSettings.useLLM !== undefined ? agentIntelligenceSettings.useLLM : true,
-      llmModel: agentIntelligenceSettings.llmModel || 'ollama-phi3',
+      llmModel: agentIntelligenceSettings.llmModel || 'gemini-pro',
       memoryMode: ['short', 'conversation'].includes(agentIntelligenceSettings.memoryMode) 
         ? agentIntelligenceSettings.memoryMode : 'short',
       fallbackThreshold: Math.min(Math.max(agentIntelligenceSettings.fallbackThreshold || 0.5, 0), 1),
@@ -141,13 +141,13 @@ router.post('/companies/:id/test-agent', async (req, res) => {
     const mockResponse = {
       message: testMessage,
       processedWith: {
-        llmModel: settings.llmModel || 'ollama-phi3',
+        llmModel: settings.llmModel || 'gemini-pro',
         useLLM: settings.useLLM !== false,
         memoryMode: settings.memoryMode || 'short',
         fallbackThreshold: settings.fallbackThreshold || 0.5
       },
       confidence: Math.random() * 0.4 + 0.6, // Mock confidence between 0.6-1.0
-      response: `Mock AI response using ${settings.llmModel || 'ollama-phi3'} model with ${settings.memoryMode || 'short'} memory mode.`,
+      response: `Mock AI response using ${settings.llmModel || 'gemini-pro'} model with ${settings.memoryMode || 'short'} memory mode.`,
       timestamp: new Date().toISOString()
     };
 

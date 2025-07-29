@@ -27,7 +27,7 @@ router.put('/companies/:companyId/agent-settings', async (req, res) => {
         console.log(`[Enhanced Agent] 📋 Settings:`, JSON.stringify(agentIntelligenceSettings, null, 2));
 
         // Validate LLM settings
-        const validLLMModels = ['ollama-phi3', 'ollama-mistral', 'gemini-pro', 'openai-gpt4', 'claude-3'];
+        const validLLMModels = ['gemini-pro', 'openai-gpt4', 'claude-3'];
         
         if (agentIntelligenceSettings.primaryLLM && !validLLMModels.includes(agentIntelligenceSettings.primaryLLM)) {
             return res.status(400).json({ 
@@ -217,10 +217,10 @@ router.post('/companies/:companyId/reset-agent-settings', async (req, res) => {
         // Default agent intelligence settings
         const defaultSettings = {
             useLLM: true,
-            llmModel: 'ollama-phi3',
-            primaryLLM: 'ollama-phi3',
+            llmModel: 'gemini-pro',
+            primaryLLM: 'gemini-pro',
             fallbackLLM: 'gemini-pro',
-            allowedLLMModels: ['ollama-phi3', 'gemini-pro'],
+            allowedLLMModels: ['gemini-pro'],
             autoLearningEnabled: true,
             learningApprovalMode: 'manual',
             learningConfidenceThreshold: 0.85,
@@ -328,7 +328,7 @@ router.post('/companies/:companyId/agent-test', async (req, res) => {
         }
 
         addTrace(`🚀 Starting agent test with trace ID: ${traceId}`, 'info');
-        addTrace(`📋 Using LLM: ${settings.primaryLLM || 'ollama-phi3'}`, 'info');
+        addTrace(`📋 Using LLM: ${settings.primaryLLM || 'gemini-pro'}`, 'info');
         addTrace(`⚙️ Memory mode: ${settings.memoryMode || 'short'}`, 'info');
         addTrace(`🎯 Fallback threshold: ${settings.fallbackThreshold || 0.5}`, 'info');
 
@@ -387,7 +387,7 @@ router.post('/companies/:companyId/agent-test', async (req, res) => {
             responseTime: responseTime,
             traceId: traceId,
             settings: {
-                llmModel: settings.primaryLLM || 'ollama-phi3',
+                llmModel: settings.primaryLLM || 'gemini-pro',
                 memoryMode: settings.memoryMode || 'short',
                 fallbackThreshold: settings.fallbackThreshold || 0.5,
                 escalationMode: settings.escalationMode || 'ask'
@@ -423,25 +423,9 @@ router.get('/llm-models', async (req, res) => {
 
         const models = [
             {
-                id: 'ollama-phi3',
-                name: 'Ollama Phi3',
-                description: 'Fast responses, privacy-focused',
-                type: 'local',
-                performance: 'fast',
-                cost: 'free'
-            },
-            {
-                id: 'ollama-mistral',
-                name: 'Ollama Mistral',
-                description: 'Advanced reasoning capabilities',
-                type: 'local',
-                performance: 'balanced',
-                cost: 'free'
-            },
-            {
                 id: 'gemini-pro',
                 name: 'Gemini Pro',
-                description: 'Google\'s balanced AI model',
+                description: 'Google\'s balanced AI model (Primary)',
                 type: 'cloud',
                 performance: 'balanced',
                 cost: 'paid'

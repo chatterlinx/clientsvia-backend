@@ -115,9 +115,9 @@ class AgentMessageProcessor {
                 // Core AI Configuration
                 tradeCategories: company.agentIntelligenceSettings?.tradeCategories || [],
                 useLLM: company.agentIntelligenceSettings?.useLLM !== false, // Default true
-                primaryLLM: company.agentIntelligenceSettings?.primaryLLM || 'ollama-phi3',
+                primaryLLM: company.agentIntelligenceSettings?.primaryLLM || 'gemini-pro',
                 fallbackLLM: company.agentIntelligenceSettings?.fallbackLLM || 'gemini-pro',
-                allowedLLMs: company.agentIntelligenceSettings?.allowedLLMs || ['ollama-phi3', 'gemini-pro'],
+                allowedLLMs: company.agentIntelligenceSettings?.allowedLLMs || ['gemini-pro'],
                 memoryMode: company.agentIntelligenceSettings?.memoryMode || 'conversation',
 
                 // Intelligence Thresholds
@@ -153,9 +153,9 @@ class AgentMessageProcessor {
             return {
                 tradeCategories: [],
                 useLLM: true,
-                primaryLLM: 'ollama-phi3',
+                primaryLLM: 'gemini-pro',
                 fallbackLLM: 'gemini-pro',
-                allowedLLMs: ['ollama-phi3', 'gemini-pro'],
+                allowedLLMs: ['gemini-pro'],
                 memoryMode: 'conversation',
                 fallbackThreshold: 0.5,
                 escalationMode: 'ask',
