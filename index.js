@@ -257,9 +257,9 @@ async function startServer() {
         backupMonitoring.start();
         logger.info('🔄 Backup monitoring service initialized');
         
-        const PORT = process.env.PORT || 4000;
-        return app.listen(PORT, () => {
-            console.log(`Admin dashboard listening at http://localhost:${PORT}`);
+        const PORT = process.env.PORT || 3000;
+        return app.listen(PORT, '0.0.0.0', () => {
+            console.log(`Admin dashboard listening at http://0.0.0.0:${PORT}`);
             console.log(`Node environment: ${process.env.NODE_ENV || 'development'}`);
         });
     } catch (err) {
