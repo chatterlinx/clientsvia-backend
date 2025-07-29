@@ -1,4 +1,4 @@
-# 🧠 Agent Einstein Architecture
+# 🧠 Agent ClientsVia Architecture
 ## Enterprise-Grade AI Agent System - Salesforce Style
 
 > **Mission:** Build bulletproof, knowledge-first AI agent system with controlled AI assistance and zero wildcards.
@@ -30,7 +30,7 @@
 ### **Core Components:**
 
 ```javascript
-AgentEinstein/
+AgentClientsVia/
 ├── InHouseIntelligence/
 │   ├── KnowledgeBaseEngine.js     // Company Q&As, Trade Categories
 │   ├── TemplateEngine.js          // Smart pre-written responses
@@ -86,8 +86,8 @@ graph TD
 
 ### **Enhanced Company Model:**
 ```javascript
-// Company Agent Einstein Settings
-agentEinsteinSettings: {
+// Company Agent ClientsVia Settings
+agentClientsViaSettings: {
   // Knowledge Priority Configuration
   knowledgePriority: {
     companyQAs: { enabled: true, weight: 100, timeout: 200 },
@@ -281,7 +281,7 @@ class HealthMonitor {
 
 ### **Monitoring Dashboard:**
 ```
-┌─ Agent Einstein Performance ──────────────────────────┐
+┌─ Agent ClientsVia Performance ──────────────────────────┐
 │ 📊 Knowledge Hit Rate    │ 87.3% ↗️  │ Target: 85%   │
 │ ⚡ Avg Response Time     │ 1.2s      │ Target: <2s   │
 │ 📞 Escalation Rate       │ 12.1% ↘️  │ Target: <15%  │
@@ -363,7 +363,7 @@ const AI_SAFETY_RULES = {
 ## 📝 **Implementation Checklist**
 
 ### **Foundation:**
-- [ ] Create `services/agentEinstein/` directory structure
+- [ ] Create `services/agentClientsVia/` directory structure
 - [ ] Implement `KnowledgeBaseEngine.js`
 - [ ] Build `IntentClassifier.js` with pattern matching
 - [ ] Create `TemplateEngine.js` for smart responses
@@ -376,7 +376,7 @@ const AI_SAFETY_RULES = {
 - [ ] Set up `HealthMonitor.js` for system monitoring
 
 ### **Data & Configuration:**
-- [ ] Update Company model with Einstein settings
+- [ ] Update Company model with ClientsVia settings
 - [ ] Create response templates collection
 - [ ] Build admin UI for knowledge management
 - [ ] Set up performance tracking database
@@ -389,9 +389,9 @@ const AI_SAFETY_RULES = {
 
 ---
 
-## 🎯 **The Einstein Advantage**
+## 🎯 **The ClientsVia Advantage**
 
-Your Agent Einstein system will deliver:
+Your Agent ClientsVia system will deliver:
 
 ✅ **Predictable Responses** - No AI wildcards  
 ✅ **Lightning Fast** - Knowledge-first approach  
