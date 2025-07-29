@@ -1,7 +1,5 @@
-// Enhanced middleware that integrates Ollama as a fallback LLM
+// Enhanced middleware - Local LLM disabled, cloud-only operation
 // when custom knowledge base doesn't have sufficient answers
-
-const localLLM = require('../services/localLLM');
 
 /**
  * Enhanced checkCustomKB with LLM fallback
@@ -46,22 +44,18 @@ Trade: ${company.tradeCategory || 'General Services'}`;
       }
     }
 
-    // Generate LLM response
-    const llmResponse = await localLLM.generateCustomerServiceResponse(
-      transcript,
-      companyContext,
-      '' // No conversation history for now
-    );
+    // Local LLM disabled - use fallback response
+    const fallbackResponse = "Thank you for your inquiry. Our team will review your question and get back to you with detailed information as soon as possible.";
 
     traceLogger.addCheck({ 
-      source: 'Local LLM Response', 
-      details: `Generated response using ${localLLM.model}` 
+      source: 'Fallback Response', 
+      details: 'Local LLM disabled - using standard fallback response' 
     });
 
     return {
-      answer: llmResponse,
-      confidence: 85, // LLM responses get 85% confidence (higher than low KB matches)
-      source: 'LLM',
+      answer: fallbackResponse,
+      confidence: 60, // Lower confidence for fallback responses
+      source: 'Fallback',
       fallbackUsed: true,
       originalKBResult: kbResult,
       trace: traceLogger.toLog()

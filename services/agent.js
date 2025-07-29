@@ -19,7 +19,7 @@ const aiIntelligenceEngine = require('./aiIntelligenceEngine');
 
 // Import the custom KB checker
 const checkCustomKB = require('../middleware/checkCustomKB');
-const { checkKBWithFallback } = require('../middleware/checkKBWithOllama');
+const { checkCustomKB } = require('../middleware/checkCustomKB');
 
 // In-memory cache for parsed Category Q&A by company ID
 const categoryQACache = new Map();
@@ -80,39 +80,12 @@ const MODEL_NAME = MODEL_ID;
 // Default model used when a configured one fails with a not found error
 const FALLBACK_MODEL = MODEL_NAME;
 
-// Call the model - ENHANCED WITH LOCAL LLM FALLBACK
+// Call the model - CLOUD-ONLY (local LLM disabled)
 async function callModel(company, prompt) {
-  const { localLLMWithContext, testOllamaConnection } = require('../utils/localLLM');
   const ResponseTraceLogger = require('../utils/responseTraceLogger');
   
-  // First, try local LLM if available (privacy-first approach)
-  try {
-    console.log(`[LocalLLM] 🧠 Attempting offline LLM first (privacy-first)...`);
-    
-    const isOllamaAvailable = await testOllamaConnection();
-    if (isOllamaAvailable) {
-      console.log(`[LocalLLM] ✅ Ollama is available, using offline LLM`);
-      
-      const startTime = Date.now();
-      const response = await localLLMWithContext(
-        prompt, 
-        company?.companyName || 'Service Company',
-        'hvac-residential'
-      );
-      const processingTime = Date.now() - startTime;
-      
-      console.log(`[LocalLLM] ✅ Local LLM response received (${processingTime}ms): "${response.substring(0, 100)}..."`);
-      
-      return response;
-    } else {
-      console.log(`[LocalLLM] ❌ Ollama not available, falling back to cloud API`);
-    }
-  } catch (localError) {
-    console.error(`[LocalLLM] ❌ Local LLM failed, falling back to cloud API:`, localError.message);
-  }
-
-  // Fallback to Google Vertex AI (original cloud API)
-  console.log(`[CloudAPI] 🌐 Using cloud API fallback...`);
+  // Cloud-only approach - local LLM disabled
+  console.log(`[CloudAPI] 🌐 Using cloud API (local LLM disabled)...`);
   
   const auth = new google.auth.GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/cloud-platform']
@@ -259,27 +232,20 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   }
 
   // NEW STEP 1.5: CHECK CUSTOM KNOWLEDGE BASE WITH OLLAMA FALLBACK
-  console.log(`[Custom KB + Ollama] Checking knowledge base with Ollama fallback for: "${question}"`);
+  console.log(`[Custom KB] Checking knowledge base for: "${question}"`);
 
   const TraceLogger = require('../utils/traceLogger');
   const traceLogger = new TraceLogger();
   
-  // Use enhanced KB with Ollama fallback
-  const ollamaFallbackEnabled = company?.aiSettings?.ollamaFallbackEnabled !== false; // Default to enabled
-  const customKBResult = await checkKBWithFallback(question, companyId, traceLogger, {
-    ollamaFallbackEnabled: ollamaFallbackEnabled,
-    company: company,
-    conversationHistory: conversationHistory,
+  // Use standard KB (Ollama fallback disabled)
+  const customKBResult = await checkCustomKB(question, companyId, traceLogger, {
     selectedTradeCategories: selectedTradeCategories // Pass selected trade categories for dynamic Q&A lookup
   });
 
   if (customKBResult && customKBResult.answer) {
-    const sourceDescription = customKBResult.source === 'ollama_fallback' ? 
-      'Ollama LLM Fallback' : 'Custom Knowledge Base';
+    console.log(`[Custom KB] Found match using trade categories [${selectedTradeCategories.join(', ')}]: "${customKBResult.answer.substring(0, 100)}..."`);
     
-    console.log(`[Custom KB + Ollama] Found match from ${sourceDescription} using trade categories [${selectedTradeCategories.join(', ')}]: "${customKBResult.answer.substring(0, 100)}..."`);
-    
-    responseMethod = customKBResult.source === 'ollama_fallback' ? 'ollama-fallback' : 'custom-trade-kb';
+    responseMethod = 'custom-trade-kb';
     confidence = customKBResult.confidence;
     debugInfo = {
       section: 'custom-kb-ollama',

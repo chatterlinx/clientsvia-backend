@@ -452,31 +452,10 @@ class AIIntelligenceEngine {
                 return { type: 'continue', result: 'No semantic match found' };
                 
             case 'provide_answer':
-                // Instead of generic response, try to use local LLM for intelligent response
-                try {
-                    const { localLLMWithContext } = require('../utils/localLLM');
-                    const companyName = company?.companyName || 'our company';
-                    const tradeType = company?.tradeTypes?.[0] || 'service';
-                    
-                    console.log(`[AI Intelligence] Using local LLM for intelligent response to: "${query}"`);
-                    const intelligentResponse = await localLLMWithContext(
-                        query, 
-                        companyName, 
-                        tradeType
-                    );
-                    
-                    if (intelligentResponse && intelligentResponse.length > 10) {
-                        return {
-                            type: 'final_answer',
-                            result: intelligentResponse,
-                            confidence: reasoning.confidence
-                        };
-                    }
-                } catch (error) {
-                    console.error(`[AI Intelligence] Local LLM failed:`, error.message);
-                }
+                // Local LLM disabled - use contextual fallback directly
+                console.log(`[AI Intelligence] Local LLM disabled - using contextual fallback for: "${query}"`);
                 
-                // Fallback to contextual response based on query type
+                // Generate contextual response based on query type
                 const contextualResponse = this.generateContextualFallback(query, company);
                 return {
                     type: 'final_answer',

@@ -8,8 +8,7 @@ const { ObjectId } = require('mongodb');
 const { getDB } = require('../db');
 const Company = require('../models/Company'); // Use Mongoose model instead of raw MongoDB
 const { answerQuestion } = require('./agent');
-const { localLLMWithContext } = require('../utils/localLLM');
-const ollamaService = require('./ollamaService');
+// Local LLM imports removed - cloud-only operation
 
 class AgentMessageProcessor {
     constructor() {
@@ -277,41 +276,12 @@ class AgentMessageProcessor {
     }
 
     /**
-     * Try Ollama local LLM
+     * Try Ollama local LLM - DISABLED (cloud-only operation)
      */
     async tryOllama(modelName, companyId, message, settings, conversationHistory, traceLog) {
-        try {
-            const modelMap = {
-                'ollama-phi3': 'llama3.1:8b-instruct-q4_0',        // Use actual installed model
-                'ollama-mistral': 'llama3.2:3b',                    // Use actual installed model
-                'ollama-llama31': 'llama3.1:8b-instruct-q4_0',     // Direct mapping
-                'ollama-llama32': 'llama3.2:3b'                     // Direct mapping
-            };
-
-            const actualModel = modelMap[modelName] || 'llama3.1:8b-instruct-q4_0';
-            traceLog.push(`[${new Date().toISOString()}] Using Ollama model: ${actualModel}`);
-
-            const response = await localLLMWithContext(
-                message,
-                settings.companyName,
-                'hvac-residential', // TODO: Make this configurable
-                conversationHistory.slice(-5) // Last 5 messages for context
-            );
-
-            if (response) {
-                return {
-                    text: response,
-                    confidence: 0.8, // Ollama responses are generally reliable
-                    responseMethod: `ollama-${modelMap[modelName]}`,
-                    source: 'local-llm'
-                };
-            }
-
-            return null;
-        } catch (error) {
-            traceLog.push(`[${new Date().toISOString()}] Ollama error: ${error.message}`);
-            return null;
-        }
+        // Local LLM disabled - return null to skip this method
+        traceLog.push(`[${new Date().toISOString()}] Ollama disabled (cloud-only operation) - skipping ${modelName}`);
+        return null;
     }
 
     /**
