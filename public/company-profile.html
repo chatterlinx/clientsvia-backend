@@ -1055,6 +1055,9 @@
                                         <button id="clientsvia-tab-knowledge" class="clientsvia-tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
                                             <i class="fas fa-book-open mr-2"></i>Knowledge Source Controls
                                         </button>
+                                        <button id="clientsvia-tab-personality" class="clientsvia-tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                                            <i class="fas fa-theater-masks mr-2"></i>Agent Personality
+                                        </button>
                                     </div>
                                     
                                     <!-- Tab Content Container -->
@@ -1424,6 +1427,109 @@
                                                 <div class="flex items-center text-sm text-blue-800">
                                                     <i class="fas fa-info-circle mr-2"></i>
                                                     <strong>ClientsVia Knowledge Status:</strong> Advanced knowledge source configuration active. Drag to reorder priority and adjust confidence thresholds.
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- TAB 3: Agent Personality -->
+                                        <div id="clientsvia-personality-content" class="clientsvia-tab-content hidden">
+                                            <div class="mb-6">
+                                                <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
+                                                    <i class="fas fa-theater-masks mr-2 text-pink-600"></i>Agent Personality Configuration
+                                                    <span class="ml-2 text-sm text-gray-600">(Voice tone, pace & behavior)</span>
+                                                </h4>
+                                                
+                                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                                    <!-- Left Column: Voice Settings -->
+                                                    <div class="space-y-4">
+                                                        <h5 class="text-md font-semibold text-gray-700 border-b pb-2">
+                                                            <i class="fas fa-microphone mr-2 text-pink-600"></i>Voice Configuration
+                                                        </h5>
+                                                        
+                                                        <!-- Voice Tone -->
+                                                        <div>
+                                                            <label for="clientsvia-voiceToneSelect" class="form-label">Voice Tone</label>
+                                                            <select id="clientsvia-voiceToneSelect" class="form-select">
+                                                                <option value="friendly">Friendly - Warm and approachable</option>
+                                                                <option value="professional">Professional - Business-focused</option>
+                                                                <option value="playful">Playful - Light and engaging</option>
+                                                            </select>
+                                                            <p class="text-xs text-gray-500 mt-1">Controls word choice and phrasing style</p>
+                                                        </div>
+
+                                                        <!-- Speech Pace -->
+                                                        <div>
+                                                            <label for="clientsvia-speechPaceSelect" class="form-label">Speech Pace</label>
+                                                            <select id="clientsvia-speechPaceSelect" class="form-select">
+                                                                <option value="slow">Slow - Deliberate and clear</option>
+                                                                <option value="normal">Normal - Standard pace</option>
+                                                                <option value="fast">Fast - Quick and efficient</option>
+                                                            </select>
+                                                            <p class="text-xs text-gray-500 mt-1">Adjusts TTS speed for ElevenLabs or Google</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Right Column: Behavior Settings -->
+                                                    <div class="space-y-4">
+                                                        <h5 class="text-md font-semibold text-gray-700 border-b pb-2">
+                                                            <i class="fas fa-user-cog mr-2 text-rose-600"></i>Behavior Controls
+                                                        </h5>
+                                                        
+                                                        <!-- Interactive Behaviors -->
+                                                        <div class="space-y-3">
+                                                            <label class="flex items-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                                                <input type="checkbox" id="clientsvia-bargeInToggle" class="form-checkbox">
+                                                                <div class="ml-3">
+                                                                    <span class="text-sm font-medium text-gray-900">Allow Barge-In</span>
+                                                                    <p class="text-xs text-gray-500">Caller can interrupt AI while speaking</p>
+                                                                </div>
+                                                            </label>
+
+                                                            <label class="flex items-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                                                                <input type="checkbox" id="clientsvia-emotionToggle" class="form-checkbox">
+                                                                <div class="ml-3">
+                                                                    <span class="text-sm font-medium text-gray-900">Acknowledge Emotion</span>
+                                                                    <p class="text-xs text-gray-500">Respond to frustration, urgency, etc.</p>
+                                                                </div>
+                                                            </label>
+
+                                                            <label class="flex items-center p-3 bg-green-50 rounded-lg border border-green-200">
+                                                                <input type="checkbox" id="clientsvia-emojiToggle" class="form-checkbox">
+                                                                <div class="ml-3">
+                                                                    <span class="text-sm font-medium text-gray-900">Use Emojis</span>
+                                                                    <p class="text-xs text-gray-500">Add emojis in SMS/email (👍 😊 ❌)</p>
+                                                                </div>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Action Buttons -->
+                                                <div class="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center">
+                                                    <div class="flex items-center space-x-4">
+                                                        <button type="button" onclick="previewClientsviaPersonality()" class="bg-pink-600 hover:bg-pink-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">
+                                                            <i class="fas fa-play mr-2"></i>Preview Voice
+                                                        </button>
+                                                        <button type="button" onclick="resetClientsviaPersonalityDefaults()" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">
+                                                            <i class="fas fa-undo mr-2"></i>Reset Defaults
+                                                        </button>
+                                                    </div>
+                                                    <div class="flex items-center space-x-3">
+                                                        <span id="clientsvia-personality-settings-saved" class="text-green-600 text-sm hidden">
+                                                            <i class="fas fa-check-circle mr-1"></i>Personality Saved!
+                                                        </span>
+                                                        <button type="button" onclick="saveClientsviaAgentPersonalitySettings()" class="bg-rose-600 hover:bg-rose-700 text-white font-medium py-2 px-6 rounded-md shadow-sm transition duration-150 ease-in-out">
+                                                            <i class="fas fa-save mr-2"></i>Save Personality
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- ClientsVia Personality Status -->
+                                                <div class="mt-6 p-4 bg-pink-50 border border-pink-200 rounded-lg">
+                                                    <div class="flex items-center text-sm text-pink-800">
+                                                        <i class="fas fa-theater-masks mr-2"></i>
+                                                        <strong>ClientsVia Personality Status:</strong> Voice tone and behavioral settings configured. These apply to all conversation flows.
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -2253,103 +2359,6 @@
                                 </div>
                             </div>
 
-                            <!-- 🎭 AGENT PERSONALITY CONFIGURATION - Module 1: Voice & Behavior Control -->
-                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-                                <div class="border-b border-gray-200 bg-gradient-to-r from-pink-50 to-rose-50 px-4 py-3 rounded-t-lg">
-                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
-                                        <i class="fas fa-theater-masks mr-2 text-pink-600"></i>Agent Personality
-                                        <span class="ml-2 px-2 py-1 bg-pink-100 text-pink-800 text-xs font-medium rounded-full">Module 1</span>
-                                    </h3>
-                                    <p class="text-sm text-gray-600 mt-1">Configure voice tone, speech pace, and behavioral characteristics</p>
-                                </div>
-                                
-                                <div class="p-6">
-                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                        <!-- Left Column: Voice Settings -->
-                                        <div class="space-y-4">
-                                            <h4 class="text-md font-semibold text-gray-700 border-b pb-2">
-                                                <i class="fas fa-microphone mr-2 text-pink-600"></i>Voice Configuration
-                                            </h4>
-                                            
-                                            <!-- Voice Tone -->
-                                            <div>
-                                                <label for="voiceToneSelect" class="form-label">Voice Tone</label>
-                                                <select id="voiceToneSelect" class="form-select">
-                                                    <option value="friendly">Friendly - Warm and approachable</option>
-                                                    <option value="professional">Professional - Business-focused</option>
-                                                    <option value="playful">Playful - Light and engaging</option>
-                                                </select>
-                                                <p class="text-xs text-gray-500 mt-1">Controls word choice and phrasing style</p>
-                                            </div>
-
-                                            <!-- Speech Pace -->
-                                            <div>
-                                                <label for="speechPaceSelect" class="form-label">Speech Pace</label>
-                                                <select id="speechPaceSelect" class="form-select">
-                                                    <option value="slow">Slow - Deliberate and clear</option>
-                                                    <option value="normal">Normal - Standard pace</option>
-                                                    <option value="fast">Fast - Quick and efficient</option>
-                                                </select>
-                                                <p class="text-xs text-gray-500 mt-1">Adjusts TTS speed for ElevenLabs or Google</p>
-                                            </div>
-                                        </div>
-
-                                        <!-- Right Column: Behavior Settings -->
-                                        <div class="space-y-4">
-                                            <h4 class="text-md font-semibold text-gray-700 border-b pb-2">
-                                                <i class="fas fa-user-cog mr-2 text-rose-600"></i>Behavior Controls
-                                            </h4>
-                                            
-                                            <!-- Interactive Behaviors -->
-                                            <div class="space-y-3">
-                                                <label class="flex items-center p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                                    <input type="checkbox" id="bargeInToggle" class="form-checkbox">
-                                                    <div class="ml-3">
-                                                        <span class="text-sm font-medium text-gray-900">Allow Barge-In</span>
-                                                        <p class="text-xs text-gray-500">Caller can interrupt AI while speaking</p>
-                                                    </div>
-                                                </label>
-
-                                                <label class="flex items-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                                                    <input type="checkbox" id="emotionToggle" class="form-checkbox">
-                                                    <div class="ml-3">
-                                                        <span class="text-sm font-medium text-gray-900">Acknowledge Emotion</span>
-                                                        <p class="text-xs text-gray-500">Respond to frustration, urgency, etc.</p>
-                                                    </div>
-                                                </label>
-
-                                                <label class="flex items-center p-3 bg-green-50 rounded-lg border border-green-200">
-                                                    <input type="checkbox" id="emojiToggle" class="form-checkbox">
-                                                    <div class="ml-3">
-                                                        <span class="text-sm font-medium text-gray-900">Use Emojis</span>
-                                                        <p class="text-xs text-gray-500">Add emojis in SMS/email (👍 😊 ❌)</p>
-                                                    </div>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Action Buttons -->
-                                    <div class="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center">
-                                        <div class="flex items-center space-x-4">
-                                            <button type="button" onclick="previewPersonality()" class="bg-pink-600 hover:bg-pink-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">
-                                                <i class="fas fa-play mr-2"></i>Preview Voice
-                                            </button>
-                                            <button type="button" onclick="resetPersonalityDefaults()" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out">
-                                                <i class="fas fa-undo mr-2"></i>Reset Defaults
-                                            </button>
-                                        </div>
-                                        <div class="flex items-center space-x-3">
-                                            <span id="personality-settings-saved" class="text-green-600 text-sm hidden">
-                                                <i class="fas fa-check-circle mr-1"></i>Personality Saved!
-                                            </span>
-                                            <button type="button" onclick="saveAgentPersonalitySettings()" class="bg-rose-600 hover:bg-rose-700 text-white font-medium py-2 px-6 rounded-md shadow-sm transition duration-150 ease-in-out">
-                                                <i class="fas fa-save mr-2"></i>Save Personality
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         </section>
                     </div>
 
@@ -3930,7 +3939,104 @@
         }
         
         // 🧠 AGENT CLIENTSVIA INTELLIGENCE FUNCTIONS
+
+        // 🎭 CLIENTSVIA PERSONALITY SETTINGS FUNCTIONS - Tab Interface
         
+        // Preview ClientsVia personality voice
+        async function previewClientsviaPersonality() {
+            const voiceTone = document.getElementById('clientsvia-voiceToneSelect').value;
+            const speechPace = document.getElementById('clientsvia-speechPaceSelect').value;
+            
+            // Generate sample text based on voice tone
+            let sampleText = "";
+            switch(voiceTone) {
+                case 'friendly':
+                    sampleText = "Hi there! Thanks for calling. I'm here to help make your day better. How can I assist you?";
+                    break;
+                case 'professional':
+                    sampleText = "Good day. Thank you for contacting us. I'm ready to assist you with your needs. How may I help?";
+                    break;
+                case 'playful':
+                    sampleText = "Hey! What's up? Ready to get things done? I'm excited to help you out today!";
+                    break;
+            }
+            
+            alert(`🎭 ClientsVia Voice Preview (${voiceTone} tone, ${speechPace} pace):\n\n"${sampleText}"\n\nNote: Full TTS preview will be available in production.`);
+        }
+
+        // Reset ClientsVia personality to defaults
+        function resetClientsviaPersonalityDefaults() {
+            if (!confirm('Reset ClientsVia personality settings to defaults?')) return;
+            
+            document.getElementById('clientsvia-voiceToneSelect').value = 'friendly';
+            document.getElementById('clientsvia-speechPaceSelect').value = 'normal';
+            document.getElementById('clientsvia-bargeInToggle').checked = true;
+            document.getElementById('clientsvia-emotionToggle').checked = true;
+            document.getElementById('clientsvia-emojiToggle').checked = false;
+            
+            console.log('✅ ClientsVia personality settings reset to defaults');
+        }
+
+        // Save ClientsVia agent personality settings
+        async function saveClientsviaAgentPersonalitySettings() {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) return;
+
+            const personalitySettings = {
+                voiceTone: document.getElementById('clientsvia-voiceToneSelect').value,
+                speechPace: document.getElementById('clientsvia-speechPaceSelect').value,
+                bargeIn: document.getElementById('clientsvia-bargeInToggle').checked,
+                acknowledgeEmotion: document.getElementById('clientsvia-emotionToggle').checked,
+                useEmojis: document.getElementById('clientsvia-emojiToggle').checked
+            };
+
+            try {
+                const response = await fetch(`/api/companies/${companyId}/clientsvia-personality`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ personalitySettings })
+                });
+
+                if (response.ok) {
+                    const saved = document.getElementById('clientsvia-personality-settings-saved');
+                    saved.classList.remove('hidden');
+                    setTimeout(() => saved.classList.add('hidden'), 3000);
+                    console.log('✅ ClientsVia personality settings saved successfully');
+                } else {
+                    throw new Error('Failed to save personality settings');
+                }
+            } catch (error) {
+                console.error('❌ Failed to save ClientsVia personality settings:', error);
+                alert(`❌ Failed to save ClientsVia personality settings: ${error.message}`);
+            }
+        }
+
+        // Load ClientsVia agent personality settings
+        async function loadClientsviaAgentPersonalitySettings() {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) return;
+
+            try {
+                const response = await fetch(`/api/companies/${companyId}/clientsvia-personality`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.personalitySettings) {
+                        const settings = data.personalitySettings;
+                        document.getElementById('clientsvia-voiceToneSelect').value = settings.voiceTone || 'friendly';
+                        document.getElementById('clientsvia-speechPaceSelect').value = settings.speechPace || 'normal';
+                        document.getElementById('clientsvia-bargeInToggle').checked = settings.bargeIn !== false;
+                        document.getElementById('clientsvia-emotionToggle').checked = settings.acknowledgeEmotion !== false;
+                        document.getElementById('clientsvia-emojiToggle').checked = settings.useEmojis || false;
+                    }
+                    console.log('✅ ClientsVia personality settings loaded successfully');
+                }
+            } catch (error) {
+                console.error('❌ Failed to load ClientsVia personality settings:', error);
+            }
+        }
+
         // Tab switching functionality
         function initClientsViaTabs() {
             const tabButtons = document.querySelectorAll('.clientsvia-tab-btn');
@@ -4181,6 +4287,7 @@
                         loadAgentTradeCategories(); // Load checkboxes system
                         loadAgentSettings();
                         loadAgentPersonalitySettings(); // Module 1: Load personality settings
+                        loadClientsviaAgentPersonalitySettings(); // ClientsVia: Load personality settings for tab interface
                         initKnowledgeSources(); // Module 2: Initialize knowledge source controls
                         loadKnowledgeSettings(); // Module 2: Load knowledge settings
                         loadAgentAnalytics();
