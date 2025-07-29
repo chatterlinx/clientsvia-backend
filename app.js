@@ -13,7 +13,7 @@ const { secureHeaders } = require('./middleware/helmet');
 const { apiLimiter } = require('./middleware/rateLimit');
 
 const employeeRoutes = require("./routes/employee");
-const uploadRoutes = require("./routes/uploads");
+const uploadRoutes = require("./routes/upload");
 const authRoutes = require('./routes/auth');
 const companyRoutes = require('./routes/company');
 const tradeCategoryRoutes = require('./routes/tradeCategories');
