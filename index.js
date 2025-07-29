@@ -36,48 +36,157 @@ console.log('[INIT] ✅ Database modules loaded');
 
 // Import API routes
 console.log('[INIT] Loading API routes...');
+
+console.log('[INIT] Loading companyRoutes...');
 const companyRoutes = require('./routes/company');
+console.log('[INIT] ✅ companyRoutes loaded');
+
+console.log('[INIT] Loading tradeCategoryRoutes...');
 const tradeCategoryRoutes = require('./routes/tradeCategories');
+console.log('[INIT] ✅ tradeCategoryRoutes loaded');
+
+console.log('[INIT] Loading alertRoutes...');
 const alertRoutes = require('./routes/alerts');
+console.log('[INIT] ✅ alertRoutes loaded');
+
+console.log('[INIT] Loading integrationsRoutes...');
 const integrationsRoutes = require('./routes/integrations');
+console.log('[INIT] ✅ integrationsRoutes loaded');
+
+console.log('[INIT] Loading ttsRoutes...');
 const ttsRoutes = require('./routes/tts');
+console.log('[INIT] ✅ ttsRoutes loaded');
+
+console.log('[INIT] Loading companyQnaRoutes...');
 const companyQnaRoutes = require('./routes/companyQna');
+console.log('[INIT] ✅ companyQnaRoutes loaded');
+
+console.log('[INIT] Loading suggestionRoutes...');
 const suggestionRoutes = require('./routes/suggestions');
+console.log('[INIT] ✅ suggestionRoutes loaded');
+
+console.log('[INIT] Loading twilioRoutes...');
 const twilioRoutes = require('./routes/twilio');
+console.log('[INIT] ✅ twilioRoutes loaded');
+
+console.log('[INIT] Loading aiRoutes...');
 const aiRoutes = require('./routes/ai');
+console.log('[INIT] ✅ aiRoutes loaded');
+
+console.log('[INIT] Loading elevenLabsRoutes...');
 const elevenLabsRoutes = require('./routes/elevenLabs');
+console.log('[INIT] ✅ elevenLabsRoutes loaded');
+
+console.log('[INIT] Loading uploadRoutes...');
 const uploadRoutes = require('./routes/upload');
+console.log('[INIT] ✅ uploadRoutes loaded');
+
+console.log('[INIT] Loading learningRoutes...');
 const learningRoutes = require('./routes/learning');
+console.log('[INIT] ✅ learningRoutes loaded');
+
+console.log('[INIT] Loading agentSettingsRoutes...');
 const agentSettingsRoutes = require('./routes/agentSettings'); // ENTERPRISE: AI Agent Settings
+console.log('[INIT] ✅ agentSettingsRoutes loaded');
+
+console.log('[INIT] Loading companyAgentSettingsRoutes...');
 const companyAgentSettingsRoutes = require('./routes/company/agentSettings'); // ENTERPRISE: Company-specific AI Agent Settings
+console.log('[INIT] ✅ companyAgentSettingsRoutes loaded');
+
+console.log('[INIT] Loading companyPersonalityRoutes...');
 const companyPersonalityRoutes = require('./routes/company/personality'); // MODULE 1: Agent Personality Settings
+console.log('[INIT] ✅ companyPersonalityRoutes loaded');
+
+console.log('[INIT] Loading companyKnowledgeRoutes...');
 const companyKnowledgeRoutes = require('./routes/company/knowledge'); // MODULE 2: Knowledge Q&A Source Controls
+console.log('[INIT] ✅ companyKnowledgeRoutes loaded');
+
+console.log('[INIT] Loading agentTestingRoutes...');
 const agentTestingRoutes = require('./routes/company/agentTesting'); // MODULE 3: AI Agent Testing Console
+console.log('[INIT] ✅ agentTestingRoutes loaded');
 
 // Import new AI Agent routes
+console.log('[INIT] Loading eventHooksRoutes...');
 const eventHooksRoutes = require('./routes/eventHooks'); // Event Hooks Management
+console.log('[INIT] ✅ eventHooksRoutes loaded');
+
+console.log('[INIT] Loading transferRouterRoutes...');
 const transferRouterRoutes = require('./routes/transferRouter'); // Transfer Router Management
+console.log('[INIT] ✅ transferRouterRoutes loaded');
 
 // 🚀 ENHANCED AI AGENT LOGIC - Module Components
+console.log('[INIT] Loading pendingQnARoutes...');
 const pendingQnARoutes = require('./routes/company/pendingQnA'); // MODULE 4: Self-Learning Knowledge Base Approval
-const enhancedAgentSettingsRoutes = require('./routes/company/enhancedAgentSettings'); // Enhanced LLM Selector & Agent Settings
+console.log('[INIT] ✅ pendingQnARoutes loaded');
 
+console.log('[INIT] Loading enhancedAgentSettingsRoutes...');
+const enhancedAgentSettingsRoutes = require('./routes/company/enhancedAgentSettings'); // Enhanced LLM Selector & Agent Settings
+console.log('[INIT] ✅ enhancedAgentSettingsRoutes loaded');
+
+console.log('[INIT] Loading aiAgentWorkflowRoutes...');
 const aiAgentWorkflowRoutes = require('./routes/aiAgentWorkflows');
+console.log('[INIT] ✅ aiAgentWorkflowRoutes loaded');
+
+console.log('[INIT] Loading aiAgentAnalyticsRoutes...');
 const aiAgentAnalyticsRoutes = require('./routes/aiAgentAnalytics');
+console.log('[INIT] ✅ aiAgentAnalyticsRoutes loaded');
+
+console.log('[INIT] Loading knowledgeAutoPopulationRoutes...');
 const knowledgeAutoPopulationRoutes = require('./routes/knowledgeAutoPopulation');
+console.log('[INIT] ✅ knowledgeAutoPopulationRoutes loaded');
+
+console.log('[INIT] Loading enhancedAIAgentRoutes...');
 const enhancedAIAgentRoutes = require('./routes/enhancedAIAgent');
+console.log('[INIT] ✅ enhancedAIAgentRoutes loaded');
+
+console.log('[INIT] Loading aiAgentHandlerRoutes...');
 const aiAgentHandlerRoutes = require('./routes/aiAgentHandler');
+console.log('[INIT] ✅ aiAgentHandlerRoutes loaded');
+
+console.log('[INIT] Loading agentPerformanceRoutes...');
 const agentPerformanceRoutes = require('./routes/agentPerformance');
+console.log('[INIT] ✅ agentPerformanceRoutes loaded');
+
+console.log('[INIT] Loading intentRoutingRoutes...');
 const intentRoutingRoutes = require('./routes/intentRouting'); // Intent Routing & Flow Control
+console.log('[INIT] ✅ intentRoutingRoutes loaded');
+
+console.log('[INIT] Loading bookingScriptsRoutes...');
 const bookingScriptsRoutes = require('./routes/bookingScripts'); // Booking Scripts Configuration
+console.log('[INIT] ✅ bookingScriptsRoutes loaded');
+
+console.log('[INIT] Loading bookingHandlerRoutes...');
 const bookingHandlerRoutes = require('./routes/bookingHandler'); // Booking Handler API
+console.log('[INIT] ✅ bookingHandlerRoutes loaded');
+
+console.log('[INIT] Loading aiIntelligenceRoutes...');
 const aiIntelligenceRoutes = require('./routes/aiIntelligence'); // AI Intelligence Engine
+console.log('[INIT] ✅ aiIntelligenceRoutes loaded');
+
+console.log('[INIT] Loading monitoringRoutes...');
 const monitoringRoutes = require('./routes/monitoring'); // Agent Monitoring System
+console.log('[INIT] ✅ monitoringRoutes loaded');
+
+console.log('[INIT] Loading notesRoutes...');
 const notesRoutes = require('./routes/notes'); // GOLD STANDARD: Enterprise Notes Management
+console.log('[INIT] ✅ notesRoutes loaded');
+
+console.log('[INIT] Loading agentProcessorRoutes...');
 const agentProcessorRoutes = require('./routes/agentProcessor'); // NEW: Central agent processing
+console.log('[INIT] ✅ agentProcessorRoutes loaded');
+
+console.log('[INIT] Loading adminRoutes...');
 const adminRoutes = require('./routes/admin'); // ADMIN: Authentication-protected admin endpoints
+console.log('[INIT] ✅ adminRoutes loaded');
+
+console.log('[INIT] Loading authRoutes...');
 const authRoutes = require('./routes/auth'); // AUTH: User authentication and JWT management
+console.log('[INIT] ✅ authRoutes loaded');
+
+console.log('[INIT] Loading backupRoutes...');
 const backupRoutes = require('./routes/backup'); // BACKUP: Automated backup monitoring and management
+console.log('[INIT] ✅ backupRoutes loaded');
+
 console.log('[INIT] ✅ All routes loaded successfully');
 
 // Initialize Express app
