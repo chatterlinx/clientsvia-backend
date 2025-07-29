@@ -249,21 +249,56 @@ app.get('/:pageName.html', (req, res, next) => {
 // --- Database Connection and Server Start ---
 async function startServer() {
     try {
-        await connectDB();
-        await AgentPromptService.loadAll();
+        console.log('[Server] 🚀 STARTING SERVER INITIALIZATION SEQUENCE...');
+        console.log('[Server] Environment:', process.env.NODE_ENV || 'development');
+        console.log('[Server] Port target:', process.env.PORT || 3000);
         
-        // Initialize backup monitoring service for production readiness
+        console.log('[Server] Step 1/5: Starting database connection...');
+        const dbStart = Date.now();
+        await connectDB();
+        console.log(`[Server] ✅ Step 1 COMPLETE: Database connected in ${Date.now() - dbStart}ms`);
+        
+        console.log('[Server] Step 2/5: Loading agent prompts...');
+        const promptStart = Date.now();
+        
+        // Add timeout to prevent hanging
+        const promptTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('AgentPromptService.loadAll() timed out after 30 seconds')), 30000)
+        );
+        
+        await Promise.race([AgentPromptService.loadAll(), promptTimeout]);
+        console.log(`[Server] ✅ Step 2 COMPLETE: Agent prompts loaded in ${Date.now() - promptStart}ms`);
+        
+        console.log('[Server] Step 3/5: Initializing backup monitoring...');
+        const backupStart = Date.now();
         const backupMonitoring = new BackupMonitoringService();
         backupMonitoring.start();
         logger.info('🔄 Backup monitoring service initialized');
+        console.log(`[Server] ✅ Step 3 COMPLETE: Backup monitoring initialized in ${Date.now() - backupStart}ms`);
         
+        console.log('[Server] Step 4/5: Preparing to bind to port...');
         const PORT = process.env.PORT || 3000;
+        console.log(`[Server] Target port: ${PORT}, bind address: 0.0.0.0`);
+        
+        console.log('[Server] Step 5/5: Starting HTTP server...');
+        const serverStart = Date.now();
+        
         return app.listen(PORT, '0.0.0.0', () => {
-            console.log(`Admin dashboard listening at http://0.0.0.0:${PORT}`);
-            console.log(`Node environment: ${process.env.NODE_ENV || 'development'}`);
+            console.log(`[Server] ✅ Step 5 COMPLETE: HTTP server bound in ${Date.now() - serverStart}ms`);
+            console.log(`🎉 SERVER FULLY OPERATIONAL!`);
+            console.log(`🌐 Admin dashboard listening at http://0.0.0.0:${PORT}`);
+            console.log(`📊 Node environment: ${process.env.NODE_ENV || 'development'}`);
+            console.log(`🎯 Server ready to accept connections on port ${PORT}`);
+            console.log(`⏱️  Total startup time: ${Date.now() - dbStart}ms`);
         });
     } catch (err) {
-        console.error('[Server Startup] Failed to connect to DB, server not started.', err);
+        console.error('[Server Startup] ❌ CRITICAL ERROR - Server startup failed!');
+        console.error('[Server Startup] Error details:', err.message);
+        console.error('[Server Startup] Stack trace:', err.stack);
+        console.error('[Server Startup] Environment variables check:');
+        console.error('  - PORT:', process.env.PORT);
+        console.error('  - NODE_ENV:', process.env.NODE_ENV);
+        console.error('  - MONGODB_URI present:', !!process.env.MONGODB_URI);
         throw err;
     }
 }

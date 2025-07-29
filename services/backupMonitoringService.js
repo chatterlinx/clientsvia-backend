@@ -18,33 +18,48 @@ class BackupMonitoringService {
    * Start the backup monitoring service
    */
   start() {
+    console.log('[BackupMonitoringService] Attempting to start...');
+    
     if (this.isRunning) {
+      console.log('[BackupMonitoringService] Service already running, skipping start');
       logger.info('Backup monitoring service is already running');
       return;
     }
 
+    console.log('[BackupMonitoringService] Initializing cron scheduler...');
     logger.info('🔄 Starting automated backup monitoring service...');
     
-    // Run daily backup health check at 2 AM
-    cron.schedule('0 2 * * *', async () => {
-      await this.performDailyBackupCheck();
-    });
+    try {
+      // Run daily backup health check at 2 AM
+      console.log('[BackupMonitoringService] Setting up daily cron job (2 AM)...');
+      cron.schedule('0 2 * * *', async () => {
+        await this.performDailyBackupCheck();
+      });
 
-    // Run weekly backup verification at 3 AM on Sundays  
-    cron.schedule('0 3 * * 0', async () => {
-      await this.performWeeklyBackupVerification();
-    });
+      // Run weekly backup verification at 3 AM on Sundays  
+      console.log('[BackupMonitoringService] Setting up weekly cron job (3 AM Sundays)...');
+      cron.schedule('0 3 * * 0', async () => {
+        await this.performWeeklyBackupVerification();
+      });
 
-    // Run monthly backup strategy review at 4 AM on 1st of month
-    cron.schedule('0 4 1 * *', async () => {
-      await this.performMonthlyBackupReview();
-    });
+      // Run monthly backup strategy review at 4 AM on 1st of month
+      console.log('[BackupMonitoringService] Setting up monthly cron job (4 AM on 1st)...');
+      cron.schedule('0 4 1 * *', async () => {
+        await this.performMonthlyBackupReview();
+      });
 
-    this.isRunning = true;
-    logger.info('✅ Backup monitoring service started with scheduled tasks');
-    
-    // Run initial check
-    setTimeout(() => this.performDailyBackupCheck(), 5000);
+      this.isRunning = true;
+      console.log('[BackupMonitoringService] ✅ All cron jobs scheduled successfully');
+      logger.info('✅ Backup monitoring service started with scheduled tasks');
+      
+      // Run initial check
+      console.log('[BackupMonitoringService] Scheduling initial backup check in 5 seconds...');
+      setTimeout(() => this.performDailyBackupCheck(), 5000);
+      
+    } catch (error) {
+      console.error('[BackupMonitoringService] ❌ Error starting service:', error.message);
+      throw error;
+    }
   }
 
   /**
