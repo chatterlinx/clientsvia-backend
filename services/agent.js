@@ -18,7 +18,6 @@ const serviceIssueHandler = new ServiceIssueHandler();
 const aiIntelligenceEngine = require('./aiIntelligenceEngine');
 
 // Import the custom KB checker
-const checkCustomKB = require('../middleware/checkCustomKB');
 const { checkCustomKB } = require('../middleware/checkCustomKB');
 
 // In-memory cache for parsed Category Q&A by company ID
