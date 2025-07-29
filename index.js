@@ -1,27 +1,41 @@
 require('dotenv').config(); // This MUST be the first line
 
+console.log('[INIT] 🚀 Starting module loading sequence...');
+
 // Initialize Sentry for error monitoring (must be early)
+console.log('[INIT] Loading Sentry...');
 const { initializeSentry, getSentryRequestHandler, getSentryErrorHandler } = require('./utils/sentry');
 initializeSentry();
+console.log('[INIT] ✅ Sentry initialized');
 
 // Initialize logger early
+console.log('[INIT] Loading logger...');
 const logger = require('./utils/logger');
 logger.info('--- STARTING CLIENTSVIA BACKEND SERVER - PRODUCTION BUILD ---');
+console.log('[INIT] ✅ Logger initialized');
+
 // admin-dashboard/index.js (Main Express Server)
 
 // Import necessary modules
+console.log('[INIT] Loading Express...');
 const express = require('express');
 const path = require('path');
+console.log('[INIT] ✅ Express loaded');
 
 // Initialize shared clients (Redis, Pinecone)
+console.log('[INIT] Loading clients (Redis, Pinecone)...');
 require('./clients');
+console.log('[INIT] ✅ Clients loaded');
 
 // Import database connection logic
+console.log('[INIT] Loading database modules...');
 const { connectDB } = require('./db');
 const AgentPromptService = require('./services/agentPromptsService');
 const BackupMonitoringService = require('./services/backupMonitoringService');
+console.log('[INIT] ✅ Database modules loaded');
 
 // Import API routes
+console.log('[INIT] Loading API routes...');
 const companyRoutes = require('./routes/company');
 const tradeCategoryRoutes = require('./routes/tradeCategories');
 const alertRoutes = require('./routes/alerts');
@@ -64,14 +78,20 @@ const agentProcessorRoutes = require('./routes/agentProcessor'); // NEW: Central
 const adminRoutes = require('./routes/admin'); // ADMIN: Authentication-protected admin endpoints
 const authRoutes = require('./routes/auth'); // AUTH: User authentication and JWT management
 const backupRoutes = require('./routes/backup'); // BACKUP: Automated backup monitoring and management
+console.log('[INIT] ✅ All routes loaded successfully');
 
 // Initialize Express app
+console.log('[INIT] Initializing Express app...');
 const app = express();
+console.log('[INIT] ✅ Express app initialized');
 
 // --- Sentry Middleware (must be first) ---
+console.log('[INIT] Setting up Sentry middleware...');
 app.use(getSentryRequestHandler());
+console.log('[INIT] ✅ Sentry middleware configured');
 
 // --- Middleware ---
+console.log('[INIT] Setting up Express middleware...');
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -148,8 +168,10 @@ app.post('/api/twilio/voice', (req, res) => {
 
 // This line will now correctly handle all /api/twilio requests
 app.use('/api/twilio', twilioRoutes);
+console.log('[INIT] ✅ All API routes registered');
 
 // --- Enhanced Health Check Endpoint ---
+console.log('[INIT] Setting up health check endpoint...');
 app.get('/health', async (req, res) => {
     const healthCheck = {
         timestamp: new Date().toISOString(),
@@ -245,6 +267,9 @@ app.get('/:pageName.html', (req, res, next) => {
         }
     });
 });
+
+console.log('[INIT] 🎉 MODULE LOADING COMPLETE - All modules loaded successfully!');
+console.log('[INIT] Ready to start server when called from server.js');
 
 // --- Database Connection and Server Start ---
 async function startServer() {
