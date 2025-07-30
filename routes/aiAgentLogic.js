@@ -11,7 +11,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticateJWT } = require('../middleware/auth');
+const { authenticateSingleSession } = require('../middleware/auth'); // Use single session auth
 const ClientsViaIntelligenceEngine = require('../services/clientsViaIntelligenceEngine');
 const Company = require('../models/Company');
 
@@ -23,7 +23,7 @@ const intelligenceEngine = new ClientsViaIntelligenceEngine();
  */
 
 // Get current priority flow configuration
-router.get('/priority-flow/:companyId', authenticateJWT, async (req, res) => {
+router.get('/priority-flow/:companyId', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId } = req.params;
         const company = await Company.findById(companyId);
@@ -118,7 +118,7 @@ router.get('/priority-flow/:companyId', authenticateJWT, async (req, res) => {
 });
 
 // Update priority flow configuration
-router.post('/priority-flow/:companyId', authenticateJWT, async (req, res) => {
+router.post('/priority-flow/:companyId', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { priorityFlow, autoOptimize = false } = req.body;
@@ -140,7 +140,7 @@ router.post('/priority-flow/:companyId', authenticateJWT, async (req, res) => {
 });
 
 // Toggle knowledge source active/inactive
-router.post('/priority-flow/:companyId/toggle', authenticateJWT, async (req, res) => {
+router.post('/priority-flow/:companyId/toggle', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { sourceId, active } = req.body;
@@ -180,7 +180,7 @@ router.post('/priority-flow/:companyId/toggle', authenticateJWT, async (req, res
 });
 
 // Reorder priority flow (drag & drop)  
-router.post('/priority-flow/:companyId/reorder', authenticateJWT, async (req, res) => {
+router.post('/priority-flow/:companyId/reorder', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { order } = req.body; // Array of source IDs in new order
@@ -223,7 +223,7 @@ router.post('/priority-flow/:companyId/reorder', authenticateJWT, async (req, re
  */
 
 // Get knowledge source configuration
-router.get('/knowledge-source/:companyId/:sourceType', authenticateJWT, async (req, res) => {
+router.get('/knowledge-source/:companyId/:sourceType', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId, sourceType } = req.params;
         const company = await Company.findById(companyId);
@@ -268,7 +268,7 @@ router.get('/knowledge-source/:companyId/:sourceType', authenticateJWT, async (r
 });
 
 // Update knowledge source configuration
-router.post('/knowledge-source/:companyId/:sourceType', authenticateJWT, async (req, res) => {
+router.post('/knowledge-source/:companyId/:sourceType', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId, sourceType } = req.params;
         const { configuration } = req.body;
@@ -292,7 +292,7 @@ router.post('/knowledge-source/:companyId/:sourceType', authenticateJWT, async (
  */
 
 // Get comprehensive performance analytics
-router.get('/analytics/:companyId', authenticateJWT, async (req, res) => {
+router.get('/analytics/:companyId', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { timeframe = '7d' } = req.query;
@@ -313,7 +313,7 @@ router.get('/analytics/:companyId', authenticateJWT, async (req, res) => {
 });
 
 // Get real-time performance metrics
-router.get('/metrics/:companyId/realtime', authenticateJWT, async (req, res) => {
+router.get('/metrics/:companyId/realtime', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -347,7 +347,7 @@ router.get('/metrics/:companyId/realtime', authenticateJWT, async (req, res) => 
  */
 
 // Get template intelligence configuration
-router.get('/template-intelligence/:companyId', authenticateJWT, async (req, res) => {
+router.get('/template-intelligence/:companyId', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId } = req.params;
         const company = await Company.findById(companyId);
@@ -389,7 +389,7 @@ router.get('/template-intelligence/:companyId', authenticateJWT, async (req, res
 });
 
 // Update template intelligence configuration
-router.post('/template-intelligence/:companyId', authenticateJWT, async (req, res) => {
+router.post('/template-intelligence/:companyId', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { configuration } = req.body;
@@ -409,7 +409,7 @@ router.post('/template-intelligence/:companyId', authenticateJWT, async (req, re
  */
 
 // Apply optimization suggestions
-router.post('/optimize/:companyId', authenticateJWT, async (req, res) => {
+router.post('/optimize/:companyId', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { optimizationType, autoApply = false } = req.body;
@@ -433,7 +433,7 @@ router.post('/optimize/:companyId', authenticateJWT, async (req, res) => {
 });
 
 // Reset to intelligent defaults
-router.post('/reset-defaults/:companyId', authenticateJWT, async (req, res) => {
+router.post('/reset-defaults/:companyId', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId } = req.params;
         const company = await Company.findById(companyId);
@@ -474,7 +474,7 @@ router.post('/reset-defaults/:companyId', authenticateJWT, async (req, res) => {
 });
 
 // Reset to defaults endpoint (frontend expects this path)
-router.post('/priority-flow/:companyId/reset', authenticateJWT, async (req, res) => {
+router.post('/priority-flow/:companyId/reset', authenticateSingleSession, async (req, res) => {
     try {
         const { companyId } = req.params;
         const company = await Company.findById(companyId);

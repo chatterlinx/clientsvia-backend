@@ -3,7 +3,8 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
-const { authenticateJWT } = require('../middleware/auth');
+const { authenticateJWT, authenticateSingleSession } = require('../middleware/auth');
+const sessionManager = require('../middleware/singleSessionManager');
 const logger = require('../utils/logger');
 const passport = require('passport');
 
@@ -114,34 +115,36 @@ router.post('/login', async (req, res) => {
         user.lastLogin = new Date();
         await user.save();
         
-        // Generate JWT token
-        const token = jwt.sign(
-            { 
-                userId: user._id, 
-                email: user.email, 
-                role: user.role 
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
+        // Create single session (kills all existing sessions)
+        const deviceInfo = {
+            userAgent: req.headers['user-agent'],
+            ipAddress: req.ip || req.connection.remoteAddress,
+            location: req.headers['cf-ipcountry'] || 'Unknown'
+        };
         
-        // Log successful login
-        logger.auth('Login successful', { 
+        const sessionResult = sessionManager.createSession(user._id.toString(), deviceInfo);
+        
+        // Log successful login with session info
+        logger.auth('Login successful - new session created', { 
             userId: user._id, 
             email: user.email, 
-            role: user.role 
+            role: user.role,
+            sessionId: sessionResult.sessionId,
+            location: deviceInfo.location
         });
         
         res.json({
             success: true,
-            message: 'Login successful',
-            token,
+            message: 'Login successful - all other sessions terminated',
+            token: sessionResult.token,
+            sessionId: sessionResult.sessionId,
             user: {
                 id: user._id,
                 email: user.email,
                 name: user.name,
                 role: user.role,
-                lastLogin: user.lastLogin
+                lastLogin: user.lastLogin,
+                companyId: user.companyId
             }
         });
         
@@ -182,25 +185,28 @@ router.get('/me', authenticateJWT, async (req, res) => {
 /**
  * POST /api/auth/logout - Logout user (client-side token removal)
  */
-router.post('/logout', authenticateJWT, async (req, res) => {
+router.post('/logout', authenticateSingleSession, async (req, res) => {
     try {
-        // Log logout
-        logger.auth('User logged out', { 
-            userId: req.user._id, 
-            email: req.user.email 
-        });
+        const sessionId = req.sessionInfo?.sessionId;
         
+        if (sessionId) {
+            // Kill the specific session
+            sessionManager.activeSessions.delete(sessionId);
+            
+            logger.auth('User logged out - session terminated', {
+                userId: req.user._id,
+                sessionId: sessionId
+            });
+        }
+
         res.json({
             success: true,
-            message: 'Logged out successfully'
+            message: 'Logged out successfully - session terminated'
         });
-        
-    } catch (err) {
-        logger.error('Logout error:', err);
-        res.status(500).json({ 
-            message: 'Server error during logout',
-            error: err.message 
-        });
+
+    } catch (error) {
+        logger.error('Logout error:', error);
+        res.status(500).json({ message: 'Logout failed' });
     }
 });
 
@@ -273,6 +279,123 @@ router.get('/google/status', (req, res) => {
             'Google OAuth is configured and available' : 
             'Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.'
     });
+});
+
+/**
+ * Emergency bypass routes for server-level access
+ * Only accessible from localhost with master key
+ */
+
+// Emergency bypass login (server access only)
+router.post('/emergency-bypass', async (req, res) => {
+    try {
+        // Only allow from localhost
+        const clientIP = req.ip || req.connection.remoteAddress;
+        if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(clientIP)) {
+            return res.status(403).json({ message: 'Emergency bypass only available from localhost' });
+        }
+
+        const { masterKey, userId } = req.body;
+        
+        if (masterKey !== process.env.EMERGENCY_BYPASS_KEY) {
+            return res.status(403).json({ message: 'Invalid master key' });
+        }
+
+        // Generate emergency bypass token
+        const bypassToken = sessionManager.emergencyBypass(userId);
+        
+        logger.auth('🚨 EMERGENCY BYPASS activated', { 
+            userId, 
+            clientIP,
+            timestamp: new Date()
+        });
+
+        res.json({
+            success: true,
+            message: 'Emergency bypass granted',
+            token: bypassToken,
+            warning: 'This token expires in 1 hour'
+        });
+
+    } catch (error) {
+        logger.error('Emergency bypass error:', error);
+        res.status(500).json({ message: 'Emergency bypass failed' });
+    }
+});
+
+// Get active sessions (admin only)
+router.get('/sessions', authenticateSingleSession, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin' && !req.user.emergency) {
+            return res.status(403).json({ message: 'Admin access required' });
+        }
+
+        const sessions = sessionManager.getAllActiveSessions();
+        res.json({
+            success: true,
+            activeSessions: sessions,
+            totalSessions: sessions.length
+        });
+
+    } catch (error) {
+        console.error('Get sessions error:', error);
+        res.status(500).json({ error: 'Failed to get active sessions' });
+    }
+});
+
+// Kill all sessions (emergency use)
+router.post('/kill-all-sessions', authenticateSingleSession, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin' && !req.user.emergency) {
+            return res.status(403).json({ message: 'Admin access required' });
+        }
+
+        const { userId } = req.body;
+        const killedCount = sessionManager.killAllUserSessions(userId);
+
+        logger.auth('🧹 All sessions killed by admin', { 
+            adminId: req.user._id,
+            targetUserId: userId,
+            killedCount
+        });
+
+        res.json({
+            success: true,
+            message: `Killed ${killedCount} sessions for user ${userId}`,
+            killedCount
+        });
+
+    } catch (error) {
+        console.error('Kill sessions error:', error);
+        res.status(500).json({ error: 'Failed to kill sessions' });
+    }
+});
+
+// Token refresh endpoint
+router.post('/refresh', async (req, res) => {
+    try {
+        const token = getTokenFromRequest(req);
+        
+        if (!token) {
+            return res.status(401).json({ message: 'Token required for refresh' });
+        }
+
+        const refreshResult = sessionManager.refreshSession(token);
+        
+        if (!refreshResult.success) {
+            return res.status(401).json({ message: refreshResult.error });
+        }
+
+        res.json({
+            success: true,
+            token: refreshResult.token,
+            message: 'Token refreshed successfully'
+        });
+
+    } catch (error) {
+        logger.error('Token refresh error:', error);
+        res.status(500).json({ message: 'Token refresh failed' });
+    }
 });
 
 module.exports = router;
