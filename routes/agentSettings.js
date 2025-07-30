@@ -27,7 +27,7 @@ router.get('/companies/:companyId/agent-settings', async (req, res) => {
       tradeCategories: company.tradeCategories || [],
       agentSettings: company.agentSettings || {
         useLLM: true,
-        llmModel: 'ollama-mistral',
+        llmModel: 'gemini-pro',
         memoryMode: 'short',
         fallbackThreshold: 0.5,
         escalationMode: 'ask',
@@ -80,7 +80,7 @@ router.post('/companies/:companyId/agent-settings', async (req, res) => {
     // Validate agent settings with enterprise-grade validation
     const validatedSettings = {
       useLLM: agentSettings.useLLM !== undefined ? Boolean(agentSettings.useLLM) : true,
-      llmModel: agentSettings.llmModel || 'ollama-mistral',
+      llmModel: agentSettings.llmModel || 'gemini-pro',
       memoryMode: ['short', 'conversation'].includes(agentSettings.memoryMode) ? agentSettings.memoryMode : 'short',
       fallbackThreshold: Math.max(0, Math.min(1, parseFloat(agentSettings.fallbackThreshold) || 0.5)),
       escalationMode: ['ask', 'auto'].includes(agentSettings.escalationMode) ? agentSettings.escalationMode : 'ask',

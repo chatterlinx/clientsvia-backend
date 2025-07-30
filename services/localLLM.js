@@ -1,6 +1,6 @@
 // localLLM.js - STUBBED - Local LLM functionality disabled
 // This service now provides stub functions for cloud-only operation
-// All functions return fallback responses instead of using Ollama
+// All functions return fallback responses instead of using local LLM
 
 console.log('🔒 Local LLM service stubbed - cloud-only operation mode');
 
@@ -12,7 +12,7 @@ class LocalLLMService {
   }
 
   /**
-   * Check if Ollama service is available - ALWAYS FALSE (stubbed)
+   * Check if local LLM service is available - ALWAYS FALSE (stubbed)
    * @returns {Promise<boolean>}
    */
   async isAvailable() {

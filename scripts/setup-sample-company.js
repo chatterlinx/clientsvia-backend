@@ -80,7 +80,7 @@ A: Our comprehensive maintenance includes: cleaning and inspecting all component
                 model: "gemini-1.5-flash-002",
                 fuzzyMatchThreshold: 0.15,
                 llmFallbackEnabled: true,
-                ollamaFallbackEnabled: true,
+                cloudFallbackEnabled: true,
                 customEscalationMessage: "Let me connect you with one of our experienced technicians who can provide specialized assistance.",
                 personality: "professional and helpful",
                 

@@ -25,7 +25,7 @@ const knowledgeAutoPopulationRoutes = require('./routes/knowledgeAutoPopulation'
 const enhancedAIAgentRoutes = require('./routes/enhancedAIAgent');
 const aiAgentHandlerRoutes = require('./routes/aiAgentHandler');
 const monitoringRoutes = require('./routes/monitoring');
-// Ollama routes removed - cloud-only LLM approach
+// Local LLM routes removed - cloud-only LLM approach
 const llmRoutes = require('./routes/llm');
 const bookingRoutes = require('./routes/booking');
 const transferRoutes = require('./routes/transfer');
@@ -151,7 +151,7 @@ app.use('/api/knowledge-auto-population', knowledgeAutoPopulationRoutes);
 app.use('/api/enhanced-ai-agent', enhancedAIAgentRoutes);
 app.use('/api/ai-agent', aiAgentHandlerRoutes);
 app.use('/api/monitoring', monitoringRoutes);
-// Ollama routes removed - cloud-only LLM approach
+// Local LLM routes removed - cloud-only LLM approach
 app.use('/api/llm', llmRoutes);
 app.use('/api/booking', bookingRoutes);
 app.use('/api/transfer', transferRoutes);
@@ -161,7 +161,7 @@ app.use('/api/event-hooks', eventHooksRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/qna-learning', qnaLearningRoutes);
 console.log('✅ Monitoring routes registered at /api/monitoring');
-console.log('🔒 Cloud-only LLM configuration - Ollama routes removed');
+console.log('🔒 Cloud-only LLM configuration - Local LLM routes removed');
 console.log('✅ LLM routes registered at /api/llm');
 console.log('✅ Booking routes registered at /api/booking');
 console.log('✅ Transfer routes registered at /api/transfer');

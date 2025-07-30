@@ -230,13 +230,13 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     };
   }
 
-  // NEW STEP 1.5: CHECK CUSTOM KNOWLEDGE BASE WITH OLLAMA FALLBACK
+  // NEW STEP 1.5: CHECK CUSTOM KNOWLEDGE BASE WITH CLOUD FALLBACK
   console.log(`[Custom KB] Checking knowledge base for: "${question}"`);
 
   const TraceLogger = require('../utils/traceLogger');
   const traceLogger = new TraceLogger();
   
-  // Use standard KB (Ollama fallback disabled)
+  // Use standard KB (cloud fallback disabled)
   const customKBResult = await checkCustomKB(question, companyId, traceLogger, {
     selectedTradeCategories: selectedTradeCategories // Pass selected trade categories for dynamic Q&A lookup
   });
@@ -247,10 +247,10 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     responseMethod = 'custom-trade-kb';
     confidence = customKBResult.confidence;
     debugInfo = {
-      section: 'custom-kb-ollama',
+      section: 'custom-trade-kb',
       source: customKBResult.source,
       fallbackUsed: customKBResult.fallbackUsed,
-      ollamaModel: customKBResult.ollamaModel,
+      cloudModel: customKBResult.cloudModel,
       responseTime: customKBResult.responseTime,
       trace: customKBResult.trace,
       tradeCategories: selectedTradeCategories
@@ -263,7 +263,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
       escalate: false,
       responseMethod: responseMethod,
       trace: customKBResult.trace,
-      ollamaFallbackUsed: customKBResult.fallbackUsed
+      cloudFallbackUsed: customKBResult.fallbackUsed
     };
   }
 

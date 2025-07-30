@@ -1,13 +1,13 @@
 // utils/localLLM.js - STUBBED - Local LLM functionality disabled
 // This utility now provides stub functions for cloud-only operation
-// All functions return fallback responses instead of using Ollama
+// All functions return fallback responses instead of using local LLM
 
 console.log('🔒 Local LLM utilities stubbed - cloud-only operation mode');
 
 /**
  * Local LLM fallback - STUBBED (returns fallback response)
  * @param {string} prompt - The user input/prompt to send to the LLM
- * @param {string} model - The Ollama model to use (ignored in stub)
+ * @param {string} model - The local LLM model to use (ignored in stub)
  * @param {object} options - Additional options for the LLM (ignored in stub)
  * @returns {Promise<string>} - The LLM response
  */
@@ -31,11 +31,11 @@ async function localLLMWithContext(userInput, companyName = '', tradeCategory = 
 }
 
 /**
- * Test if Ollama is running - STUBBED (always returns false)
+ * Test if local LLM is running - STUBBED (always returns false)
  * @returns {Promise<boolean>} - Always false in stub mode
  */
 async function testOllamaConnection() {
-  console.log(`[LocalLLM-STUB] 🔒 Ollama connection test disabled - returning false`);
+  console.log(`[LocalLLM-STUB] 🔒 Local LLM connection test disabled - returning false`);
   return false; // Always false - local LLM disabled
 }
 

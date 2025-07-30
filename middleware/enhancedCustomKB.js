@@ -3,7 +3,7 @@
 
 /**
  * Enhanced checkCustomKB with LLM fallback
- * This wraps your existing checkCustomKB and adds Ollama as a fallback
+ * This wraps your existing checkCustomKB and adds cloud LLM as a fallback
  */
 async function checkCustomKBWithLLMFallback(transcript, companyID, traceLogger) {
   // Import the original checkCustomKB function
@@ -21,7 +21,7 @@ async function checkCustomKBWithLLMFallback(transcript, companyID, traceLogger) 
     return kbResult;
   }
   
-  // If KB has low confidence or no answer, try Ollama fallback
+  // If KB has low confidence or no answer, try cloud LLM fallback
   try {
     traceLogger.addCheck({ 
       source: 'LLM Fallback Decision', 

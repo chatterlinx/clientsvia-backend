@@ -409,9 +409,9 @@ const SelfCheckLogger = {
         }
     },
 
-    // Ollama check disabled - cloud-only operation
+    // Local LLM check disabled - cloud-only operation
     async checkOllama() {
-        return { status: 'disabled', message: 'Ollama disabled (cloud-only operation)' };
+        return { status: 'disabled', message: 'Local LLM disabled (cloud-only operation)' };
     },
 
     async checkDatabase() {
