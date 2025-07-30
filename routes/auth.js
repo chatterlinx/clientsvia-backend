@@ -6,6 +6,8 @@ const User = require('../models/User');
 const { authenticateJWT, authenticateSingleSession } = require('../middleware/auth');
 const sessionManager = require('../middleware/singleSessionManager');
 const logger = require('../utils/logger');
+// Import configured passport (this loads the strategies)
+require('../config/passport');
 const passport = require('passport');
 
 /**
