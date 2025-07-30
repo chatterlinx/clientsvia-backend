@@ -4614,6 +4614,111 @@
                 document.getElementById('company-id-subheader').textContent = 'Please access this page with a valid company ID.';
             }
         });
+
+        // Response Categories Functions
+        window.switchResponseCategory = function(category) {
+            console.log('switchResponseCategory called with:', category);
+            try {
+                // Update tab buttons
+                document.querySelectorAll('.response-category-tab').forEach(btn => {
+                    btn.classList.remove('active', 'bg-purple-600', 'text-white');
+                    btn.classList.add('bg-white', 'text-purple-600', 'hover:bg-purple-50');
+                });
+                
+                // Activate clicked tab
+                event.target.classList.add('active', 'bg-purple-600', 'text-white');
+                event.target.classList.remove('bg-white', 'text-purple-600', 'hover:bg-purple-50');
+                
+                // Show/hide content sections
+                document.querySelectorAll('.response-category-content').forEach(content => {
+                    content.style.display = 'none';
+                });
+                
+                const targetContent = document.getElementById(category + '-responses');
+                if (targetContent) {
+                    targetContent.style.display = 'block';
+                    console.log('Successfully switched to:', category);
+                } else {
+                    console.error('Content section not found:', category + '-responses');
+                }
+            } catch (error) {
+                console.error('Error in switchResponseCategory:', error);
+            }
+        };
+
+        window.toggleResponsePreview = function() {
+            console.log('toggleResponsePreview called');
+            try {
+                const button = event.target;
+                const isLiveMode = button.textContent.includes('Stop');
+                
+                if (isLiveMode) {
+                    button.innerHTML = '<i class="fas fa-eye mr-2"></i>Live Preview';
+                    button.classList.remove('bg-red-600', 'hover:bg-red-700');
+                    button.classList.add('bg-purple-600', 'hover:bg-purple-700');
+                    console.log('Live preview disabled');
+                } else {
+                    button.innerHTML = '<i class="fas fa-eye-slash mr-2"></i>Stop Preview';
+                    button.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+                    button.classList.add('bg-red-600', 'hover:bg-red-700');
+                    console.log('Live preview enabled');
+                }
+            } catch (error) {
+                console.error('Error in toggleResponsePreview:', error);
+            }
+        };
+
+        window.insertResponseVariable = function(textareaId, variable) {
+            console.log('insertResponseVariable called:', textareaId, variable);
+            try {
+                const textarea = document.getElementById(textareaId);
+                if (!textarea) {
+                    console.error('Textarea not found:', textareaId);
+                    return;
+                }
+                
+                const cursorPosition = textarea.selectionStart;
+                const textBefore = textarea.value.substring(0, cursorPosition);
+                const textAfter = textarea.value.substring(textarea.selectionEnd);
+                
+                textarea.value = textBefore + variable + textAfter;
+                textarea.focus();
+                
+                const newPosition = cursorPosition + variable.length;
+                textarea.setSelectionRange(newPosition, newPosition);
+                
+                console.log('Variable inserted successfully:', variable);
+            } catch (error) {
+                console.error('Error in insertResponseVariable:', error);
+            }
+        };
+
+        window.previewResponse = function(textareaId) {
+            console.log('previewResponse called:', textareaId);
+            try {
+                const textarea = document.getElementById(textareaId);
+                if (!textarea) {
+                    console.error('Textarea not found for preview:', textareaId);
+                    return;
+                }
+                
+                const template = textarea.value;
+                const preview = template
+                    .replace(/\{\{callerName\}\}/g, 'John Smith')
+                    .replace(/\{\{companyName\}\}/g, 'ClientsVia Solutions')
+                    .replace(/\{\{businessHours\}\}/g, 'Monday-Friday 9AM-5PM')
+                    .replace(/\{\{website\}\}/g, 'www.clientsvia.com')
+                    .replace(/\{\{departmentName\}\}/g, 'Technical Support')
+                    .replace(/\{\{estimatedTime\}\}/g, '2-3 minutes');
+                
+                alert('Preview:\n\n' + preview);
+                console.log('Preview shown for:', textareaId);
+            } catch (error) {
+                console.error('Error in previewResponse:', error);
+            }
+        };
+
+        console.log('✅ Response Categories functions loaded successfully');
     </script>
     
     <!-- Modern implementation handles all initialization -->
