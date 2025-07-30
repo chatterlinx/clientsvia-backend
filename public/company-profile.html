@@ -4729,12 +4729,12 @@
                 
                 // Get current company and voice settings
                 const companyId = getCurrentCompanyId();
-                const voiceSelect = document.getElementById('voiceSelect');
+                const voiceSelect = document.getElementById('voice-selector');
                 const voiceId = voiceSelect ? voiceSelect.value : null;
                 
                 if (!voiceId) {
                     // Fallback to text preview if no voice selected
-                    alert('🎙️ Voice Preview:\n\n' + previewText + '\n\n(Select a voice in Voice Selection to hear audio preview)');
+                    alert('🎙️ Voice Preview:\n\n' + previewText + '\n\n(Select a voice in AI Voice Settings tab to hear audio preview)');
                     return;
                 }
                 
