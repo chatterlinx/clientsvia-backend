@@ -510,7 +510,9 @@ const companySchema = new mongoose.Schema({
                     'greeting-response': 'Hi {{callerName}}! Thanks for calling {{companyName}}. How can I help you today?',
                     'farewell-response': 'Thanks for calling {{companyName}}! Have a great day!',
                     'transfer-response': 'Let me connect you with {{departmentName}} who can better assist you.',
-                    'service-unavailable-response': 'I\'m sorry, {{serviceType}} isn\'t available right now. Can I help with something else?'
+                    'service-unavailable-response': 'I\'m sorry, {{serviceType}} isn\'t available right now. Can I help with something else?',
+                    'hold-response': 'Please hold for just a moment while I look that up for you.',
+                    'business-hours-response': 'We\'re open {{businessHours}}. You can also visit our website at {{website}}.'
                 }
             },
             advanced: {
