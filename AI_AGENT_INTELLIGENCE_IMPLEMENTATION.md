@@ -15,7 +15,7 @@ I've just completed a comprehensive AI Agent Intelligence Settings interface tha
 Every AI agent setting is now exposed and controllable:
 
 #### **LLM & Processing Engine**
-- Primary/Fallback LLM selection (Ollama, Gemini, GPT-4, Claude)
+- Primary/Fallback LLM selection (Cloud LLM, Gemini, GPT-4, Claude)
 - Processing mode toggles (LLM, Semantic Search, Confidence Scoring)
 - Real-time LLM status monitoring
 
@@ -76,7 +76,7 @@ Based on my deep analysis of your codebase, here's the **complete AI agent proce
    - Smart escalation detection
 7. **Confidence Evaluation** → Compare against fallback threshold
 8. **Response Generation**:
-   - Primary LLM (e.g., Ollama Phi-3)
+   - Primary LLM (e.g., Gemini Pro)
    - Fallback LLM (e.g., Gemini Pro)
    - Emergency fallback (Basic Q&A)
 9. **Performance Tracking** → Log metrics and update learning queue
@@ -109,7 +109,7 @@ This generic response occurs when:
 - **0.0-0.4**: Aggressive, will try to answer almost anything
 
 #### **2. Primary LLM Model** (`primaryLLM`)
-- **ollama-phi3**: Fast, local, good for basic questions
+- **gemini-pro**: Fast, cloud-based, good for basic questions
 - **gemini-pro**: Cloud-based, excellent reasoning
 - **openai-gpt4**: Premium, best performance but costs more
 
@@ -148,7 +148,7 @@ The system now tracks:
 ### **For Existing Companies with Issues**:
 1. **Generic Responses** → Lower fallback threshold to 0.4, add more Q&As
 2. **Too Many Escalations** → Lower threshold to 0.3, check knowledge base
-3. **Slow Responses** → Switch to Ollama Phi-3, reduce memory retention
+3. **Slow Responses** → Switch to Gemini Pro, reduce memory retention
 4. **Wrong Information** → Increase threshold to 0.7, review learning queue
 
 ### **For Optimization**:

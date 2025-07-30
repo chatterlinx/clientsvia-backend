@@ -29,7 +29,7 @@
 - **Status**: ✅ Complete - multi-category search implemented
 
 ### 5. LLM Fallback Integration
-- **File**: `/middleware/checkKBWithOllama.js` 
+- **File**: `/middleware/checkKBWithLocalLLM.js` (deprecated) 
 - **Enhancement**: Passes selected trade categories to LLM for context-aware responses
 - **Status**: ✅ Complete - LLM receives trade category context
 

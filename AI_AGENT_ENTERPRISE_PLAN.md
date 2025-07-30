@@ -6,7 +6,7 @@ Building a fortress-level, enterprise-grade multi-tenant AI agent platform that 
 
 ### 🏗️ Architecture Overview
 - **Backend**: Node.js/Express/Mongoose
-- **AI**: Ollama + Pinecone for semantic intelligence
+- **AI**: Cloud LLM + Pinecone for semantic intelligence
 - **Multi-tenant**: Everything per-companyId
 - **Frontend**: HTML/CSS/JS admin interface
 - **Integrations**: Twilio, SendGrid, Google Calendar
