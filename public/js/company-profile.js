@@ -2384,258 +2384,483 @@ window.handleTradeCategoryChange = handleTradeCategoryChange;
 window.handleLanguageChange = handleLanguageChange;
 
 // =============================================
-// 🎯 AGENT PRIORITY CONTROLLER (PHASE 4)
-// =============================================
-
-let agentPriorityConfig = {
-    priorities: [
-        { type: 'company-knowledge', order: 1, active: true },
-        { type: 'trade-categories', order: 2, active: true },
-        { type: 'template-intelligence', order: 3, active: true },
-        { type: 'learning-queue', order: 4, active: true },
-        { type: 'emergency-llm', order: 5, active: true }
-    ]
-};
+// 🎭 AGENT PERSONALITY RESPONSE SYSTEM - ENTERPRISE ENGINE
+// ===========================================
 
 /**
- * Initialize Agent Priority Controller drag-and-drop functionality
+ * Response Category Management
  */
-function initializeAgentPriorityController() {
-    console.log('🎯 Initializing Agent Priority Controller...');
+function switchResponseCategory(category) {
+    // Hide all category contents
+    document.querySelectorAll('.response-category-content').forEach(content => {
+        content.classList.add('hidden');
+    });
     
-    const container = document.getElementById('priority-flow-container');
-    if (!container) {
-        console.log('⚠️ Priority flow container not found');
+    // Remove active class from all tabs
+    document.querySelectorAll('.response-category-tab').forEach(tab => {
+        tab.classList.remove('active', 'bg-purple-600', 'text-white');
+        tab.classList.add('bg-white', 'text-purple-600');
+    });
+    
+    // Show selected category content
+    const targetContent = document.getElementById(`${category}-responses`);
+    if (targetContent) {
+        targetContent.classList.remove('hidden');
+    }
+    
+    // Activate selected tab
+    event.target.classList.add('active', 'bg-purple-600', 'text-white');
+    event.target.classList.remove('bg-white', 'text-purple-600');
+}
+
+/**
+ * Template Variable Insertion
+ */
+function insertVariable(textareaId, variable) {
+    const textarea = document.getElementById(textareaId);
+    if (!textarea) return;
+    
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    
+    // Insert variable at cursor position
+    const newText = text.substring(0, start) + variable + text.substring(end);
+    textarea.value = newText;
+    
+    // Set cursor position after inserted variable
+    textarea.setSelectionRange(start + variable.length, start + variable.length);
+    textarea.focus();
+    
+    // Add subtle animation
+    textarea.style.backgroundColor = '#f3e8ff';
+    setTimeout(() => {
+        textarea.style.backgroundColor = '';
+    }, 200);
+}
+
+/**
+ * Live Response Preview Engine
+ */
+function previewResponse(category) {
+    const textarea = document.getElementById(`response-${category}`);
+    if (!textarea) return;
+    
+    const template = textarea.value;
+    const personality = getCurrentPersonalitySettings();
+    
+    // Show preview panel if hidden
+    const previewPanel = document.getElementById('response-preview-panel');
+    if (previewPanel.classList.contains('hidden')) {
+        toggleResponsePreview();
+    }
+    
+    // Update original template
+    document.getElementById('preview-original').textContent = template;
+    
+    // Generate personalized version
+    const personalized = generatePersonalizedResponse(template, personality, getSampleContextVars());
+    document.getElementById('preview-personalized').innerHTML = personalized;
+    
+    // Add loading animation
+    const personalizedDiv = document.getElementById('preview-personalized');
+    personalizedDiv.style.opacity = '0.5';
+    setTimeout(() => {
+        personalizedDiv.style.opacity = '1';
+    }, 300);
+}
+
+/**
+ * Get Current Personality Settings
+ */
+function getCurrentPersonalitySettings() {
+    return {
+        tone: document.getElementById('clientsvia-voiceToneSelect')?.value || 'friendly',
+        pace: document.getElementById('clientsvia-speechPaceSelect')?.value || 'normal',
+        useEmojis: document.getElementById('clientsvia-emojiToggle')?.checked || false,
+        acknowledgeEmotion: document.getElementById('clientsvia-emotionToggle')?.checked || false,
+        allowBargeIn: document.getElementById('clientsvia-bargeInToggle')?.checked || false
+    };
+}
+
+/**
+ * Sample Context Variables for Preview
+ */
+function getSampleContextVars() {
+    return {
+        callerName: 'Sarah',
+        companyName: getCurrentCompanyName() || 'Your Company',
+        currentTime: new Date().toLocaleTimeString(),
+        businessHours: 'Monday-Friday 9AM-5PM',
+        website: 'www.yourcompany.com',
+        phoneNumber: '(555) 123-4567',
+        departmentName: 'Technical Support',
+        serviceType: 'installation service',
+        estimatedTime: '2-3 minutes',
+        specialistName: 'Mike',
+        alternativeService: 'online chat support',
+        ticketNumber: '#12345',
+        managerName: 'Jennifer',
+        issueType: 'billing inquiry',
+        requestType: 'service request',
+        serviceProvided: 'account setup'
+    };
+}
+
+/**
+ * Advanced Response Generation Engine
+ */
+function generatePersonalizedResponse(template, personality, contextVars) {
+    let response = template;
+    
+    // 1. SUBSTITUTE VARIABLES
+    Object.keys(contextVars).forEach(key => {
+        const regex = new RegExp(`{{${key}}}`, 'g');
+        response = response.replace(regex, `<span class="font-semibold text-purple-700">${contextVars[key]}</span>`);
+    });
+    
+    // 2. APPLY PERSONALITY TONE
+    response = applyPersonalityTone(response, personality.tone);
+    
+    // 3. APPLY EMOJI LOGIC
+    if (personality.useEmojis) {
+        response = applyEmojiLogic(response, template);
+    }
+    
+    // 4. APPLY EMOTION ACKNOWLEDGMENT
+    if (personality.acknowledgeEmotion) {
+        response = applyEmotionAcknowledgment(response, template);
+    }
+    
+    return response;
+}
+
+/**
+ * Apply Personality Tone Modifications
+ */
+function applyPersonalityTone(response, tone) {
+    switch (tone) {
+        case 'friendly':
+            // Add warmth and enthusiasm
+            response = response.replace(/\./g, '!');
+            response = response.replace(/\bI'll\b/g, "I'd be happy to");
+            response = response.replace(/\bCan I\b/g, "I'd love to");
+            break;
+            
+        case 'professional':
+            // Formal and business-focused
+            response = response.replace(/!/g, '.');
+            response = response.replace(/\bhey\b/gi, 'hello');
+            response = response.replace(/\bawesome\b/gi, 'excellent');
+            break;
+            
+        case 'playful':
+            // Light and engaging
+            response = response.replace(/\bhello\b/gi, 'hey there');
+            response = response.replace(/\bgreat\b/gi, 'awesome');
+            break;
+    }
+    return response;
+}
+
+/**
+ * Apply Emoji Logic Based on Response Type
+ */
+function applyEmojiLogic(response, originalTemplate) {
+    const emojiMap = {
+        'greeting': ' 👋',
+        'farewell': ' 😊',
+        'hold': ' ⏳',
+        'transfer': ' 📞',
+        'unavailable': ' ⚠️',
+        'callback': ' 📞',
+        'hours': ' 🕐',
+        'technical': ' 🔧',
+        'escalation': ' ⬆️',
+        'frustrated': ' 💪',
+        'urgent': ' 🚨',
+        'appreciation': ' 🎉'
+    };
+    
+    // Detect response type and add appropriate emoji
+    Object.keys(emojiMap).forEach(type => {
+        if (originalTemplate.includes('{{') || 
+            originalTemplate.toLowerCase().includes(type.substring(0, 4))) {
+            if (!response.includes(emojiMap[type])) {
+                response += emojiMap[type];
+            }
+        }
+    });
+    
+    return response;
+}
+
+/**
+ * Apply Emotion Acknowledgment
+ */
+function applyEmotionAcknowledgment(response, originalTemplate) {
+    const emotionalPrefixes = {
+        'frustrated': "I totally understand how frustrating this must be. ",
+        'unavailable': "I know this isn't the answer you were hoping for. ",
+        'technical': "I can imagine how concerning technical issues can be. ",
+        'urgent': "I can sense the urgency in your request. "
+    };
+    
+    Object.keys(emotionalPrefixes).forEach(emotion => {
+        if (originalTemplate.toLowerCase().includes(emotion)) {
+            if (!response.startsWith(emotionalPrefixes[emotion])) {
+                response = emotionalPrefixes[emotion] + response;
+            }
+        }
+    });
+    
+    return response;
+}
+
+/**
+ * Toggle Response Preview Panel
+ */
+function toggleResponsePreview() {
+    const panel = document.getElementById('response-preview-panel');
+    if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        panel.style.opacity = '0';
+        setTimeout(() => {
+            panel.style.opacity = '1';
+        }, 50);
+    } else {
+        panel.style.opacity = '0';
+        setTimeout(() => {
+            panel.classList.add('hidden');
+        }, 200);
+    }
+}
+
+/**
+ * Save Response Templates with Personality Integration
+ */
+async function saveResponseTemplates() {
+    const companyId = getCurrentCompanyId();
+    if (!companyId) {
+        showNotification('Please select a company first', 'error');
         return;
     }
-
-    // Load existing priority configuration
-    loadAgentPriorityConfig();
-
-    // Initialize drag and drop
-    initializeDragAndDrop();
-
-    // Initialize save button
-    initializePrioritySaveButton();
-
-    // Initialize toggle checkboxes
-    initializePriorityToggles();
-
-    console.log('✅ Agent Priority Controller initialized');
-}
-
-/**
- * Load agent priority configuration from server
- */
-async function loadAgentPriorityConfig() {
+    
+    // Collect all response templates
+    const responseCategories = {
+        greeting: document.getElementById('response-greeting')?.value || '',
+        farewell: document.getElementById('response-farewell')?.value || '',
+        hold: document.getElementById('response-hold')?.value || '',
+        transfer: document.getElementById('response-transfer')?.value || '',
+        unavailable: document.getElementById('response-unavailable')?.value || '',
+        hours: document.getElementById('response-hours')?.value || '',
+        callback: document.getElementById('response-callback')?.value || '',
+        technical: document.getElementById('response-technical')?.value || '',
+        escalation: document.getElementById('response-escalation')?.value || '',
+        frustrated: document.getElementById('response-frustrated')?.value || '',
+        urgent: document.getElementById('response-urgent')?.value || '',
+        appreciation: document.getElementById('response-appreciation')?.value || ''
+    };
+    
+    // Get current personality settings
+    const agentPersonality = getCurrentPersonalitySettings();
+    
+    // Prepare unified data structure
+    const data = {
+        agentPersonality,
+        responseCategories
+    };
+    
     try {
-        console.log('📥 Loading agent priority config...');
+        // Show loading state
+        const saveButton = document.querySelector('[onclick="saveResponseTemplates()"]');
+        const originalText = saveButton.innerHTML;
+        saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+        saveButton.disabled = true;
         
-        const response = await fetch(`/api/companies/${companyId}/agent-priority-config`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        // Send to backend
+        const response = await fetch(`/api/company/${companyId}/personality-responses`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            // Show success feedback
+            document.getElementById('response-templates-saved').classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('response-templates-saved').classList.add('hidden');
+            }, 3000);
+            
+            showNotification('Response templates saved successfully!', 'success');
+        } else {
+            throw new Error('Failed to save templates');
         }
         
-        const result = await response.json();
-        if (result.success && result.data) {
-            agentPriorityConfig = result.data;
-            updatePriorityUI();
-            console.log('✅ Agent priority config loaded successfully');
-        }
+        // Restore button state
+        saveButton.innerHTML = originalText;
+        saveButton.disabled = false;
+        
     } catch (error) {
-        console.error('❌ Error loading agent priority config:', error);
-        // Use default config on error
-        updatePriorityUI();
+        console.error('Error saving response templates:', error);
+        showNotification('Failed to save response templates', 'error');
+        
+        // Restore button state
+        const saveButton = document.querySelector('[onclick="saveResponseTemplates()"]');
+        saveButton.innerHTML = '<i class="fas fa-save mr-2"></i>Save Templates';
+        saveButton.disabled = false;
     }
 }
 
 /**
- * Update the UI based on current priority configuration
+ * Import Response Templates
  */
-function updatePriorityUI() {
-    const container = document.getElementById('priority-flow-container');
-    if (!container) return;
+function importResponseTemplates() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    
+                    // Load response categories
+                    if (data.responseCategories) {
+                        Object.keys(data.responseCategories).forEach(key => {
+                            const element = document.getElementById(`response-${key}`);
+                            if (element) {
+                                element.value = data.responseCategories[key];
+                            }
+                        });
+                    }
+                    
+                    // Load personality settings
+                    if (data.agentPersonality) {
+                        const personality = data.agentPersonality;
+                        if (personality.tone) {
+                            const toneSelect = document.getElementById('clientsvia-voiceToneSelect');
+                            if (toneSelect) toneSelect.value = personality.tone;
+                        }
+                        if (personality.pace) {
+                            const paceSelect = document.getElementById('clientsvia-speechPaceSelect');
+                            if (paceSelect) paceSelect.value = personality.pace;
+                        }
+                        if (personality.useEmojis !== undefined) {
+                            const emojiToggle = document.getElementById('clientsvia-emojiToggle');
+                            if (emojiToggle) emojiToggle.checked = personality.useEmojis;
+                        }
+                        if (personality.acknowledgeEmotion !== undefined) {
+                            const emotionToggle = document.getElementById('clientsvia-emotionToggle');
+                            if (emotionToggle) emotionToggle.checked = personality.acknowledgeEmotion;
+                        }
+                    }
+                    
+                    showNotification('Templates imported successfully!', 'success');
+                } catch (error) {
+                    showNotification('Invalid file format', 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+    };
+    input.click();
+}
 
-    // Sort priorities by order
-    const sortedPriorities = [...agentPriorityConfig.priorities].sort((a, b) => a.order - b.order);
+/**
+ * Export Response Templates
+ */
+function exportResponseTemplates() {
+    const responseCategories = {
+        greeting: document.getElementById('response-greeting')?.value || '',
+        farewell: document.getElementById('response-farewell')?.value || '',
+        hold: document.getElementById('response-hold')?.value || '',
+        transfer: document.getElementById('response-transfer')?.value || '',
+        unavailable: document.getElementById('response-unavailable')?.value || '',
+        hours: document.getElementById('response-hours')?.value || '',
+        callback: document.getElementById('response-callback')?.value || '',
+        technical: document.getElementById('response-technical')?.value || '',
+        escalation: document.getElementById('response-escalation')?.value || '',
+        frustrated: document.getElementById('response-frustrated')?.value || '',
+        urgent: document.getElementById('response-urgent')?.value || '',
+        appreciation: document.getElementById('response-appreciation')?.value || ''
+    };
     
-    // Update the DOM order
-    sortedPriorities.forEach((priority, index) => {
-        const element = container.querySelector(`[data-priority-type="${priority.type}"]`);
-        if (element) {
-            // Update order number display
-            const numberElement = element.querySelector('.priority-number span');
-            if (numberElement) {
-                numberElement.textContent = index + 1;
-            }
-            
-            // Update active state
-            const checkbox = element.querySelector('.priority-toggle');
-            if (checkbox) {
-                checkbox.checked = priority.active;
-            }
-            
-            // Move element to correct position
-            container.appendChild(element);
-        }
-    });
-}
-
-/**
- * Initialize drag and drop functionality
- */
-function initializeDragAndDrop() {
-    const container = document.getElementById('priority-flow-container');
-    if (!container) return;
-
-    let draggedElement = null;
-
-    // Add drag event listeners to all priority items
-    container.addEventListener('dragstart', (e) => {
-        if (e.target.classList.contains('priority-item')) {
-            draggedElement = e.target;
-            e.target.style.opacity = '0.5';
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/html', e.target.outerHTML);
-        }
-    });
-
-    container.addEventListener('dragend', (e) => {
-        if (e.target.classList.contains('priority-item')) {
-            e.target.style.opacity = '';
-            draggedElement = null;
-        }
-    });
-
-    container.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        
-        const afterElement = getDragAfterElement(container, e.clientY);
-        if (afterElement == null) {
-            container.appendChild(draggedElement);
-        } else {
-            container.insertBefore(draggedElement, afterElement);
-        }
-    });
-
-    container.addEventListener('drop', (e) => {
-        e.preventDefault();
-        updatePriorityOrderFromDOM();
-        setUnsavedChanges();
-    });
-}
-
-/**
- * Get the element that should come after the dragged element
- */
-function getDragAfterElement(container, y) {
-    const draggableElements = [...container.querySelectorAll('.priority-item:not(.dragging)')];
+    const agentPersonality = getCurrentPersonalitySettings();
     
-    return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        
-        if (offset < 0 && offset > closest.offset) {
-            return { offset: offset, element: child };
-        } else {
-            return closest;
-        }
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
+    const data = {
+        agentPersonality,
+        responseCategories,
+        exportDate: new Date().toISOString(),
+        version: '1.0'
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `personality-responses-${getCurrentCompanyName() || 'company'}-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showNotification('Templates exported successfully!', 'success');
 }
 
 /**
- * Update priority order based on current DOM order
+ * Helper Functions
  */
-function updatePriorityOrderFromDOM() {
-    const container = document.getElementById('priority-flow-container');
-    if (!container) return;
-
-    const items = container.querySelectorAll('.priority-item');
-    items.forEach((item, index) => {
-        const type = item.dataset.priorityType;
-        const priority = agentPriorityConfig.priorities.find(p => p.type === type);
-        if (priority) {
-            priority.order = index + 1;
-        }
-        
-        // Update visual order number
-        const numberElement = item.querySelector('.priority-number span');
-        if (numberElement) {
-            numberElement.textContent = index + 1;
-        }
-    });
+function getCurrentCompanyId() {
+    return window.currentCompanyId || document.querySelector('[data-company-id]')?.dataset.companyId;
 }
 
-/**
- * Initialize priority toggle checkboxes
- */
-function initializePriorityToggles() {
-    const checkboxes = document.querySelectorAll('.priority-toggle');
-    checkboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', (e) => {
-            const item = e.target.closest('.priority-item');
-            const type = item.dataset.priorityType;
-            const priority = agentPriorityConfig.priorities.find(p => p.type === type);
-            
-            if (priority) {
-                priority.active = e.target.checked;
-                setUnsavedChanges();
-            }
-        });
-    });
+function getCurrentCompanyName() {
+    return document.getElementById('companyName')?.value || 
+           document.querySelector('[data-company-name]')?.dataset.companyName || 
+           'Your Company';
 }
 
-/**
- * Initialize the save button for priority configuration
- */
-function initializePrioritySaveButton() {
-    const saveButton = document.getElementById('save-priority-config');
-    if (!saveButton) return;
-
-    saveButton.addEventListener('click', async () => {
-        try {
-            console.log('💾 Saving agent priority config...');
-            
-            const response = await fetch(`/api/companies/${companyId}/agent-priority-config`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(agentPriorityConfig)
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            if (result.success) {
-                showNotification('Agent priority configuration saved successfully', 'success');
-                clearUnsavedChanges();
-                console.log('✅ Agent priority config saved successfully');
-            } else {
-                throw new Error(result.message || 'Failed to save configuration');
-            }
-        } catch (error) {
-            console.error('❌ Error saving agent priority config:', error);
-            showNotification('Failed to save agent priority configuration', 'error');
-        }
-    });
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300 ${
+        type === 'success' ? 'bg-green-500 text-white' :
+        type === 'error' ? 'bg-red-500 text-white' :
+        'bg-blue-500 text-white'
+    }`;
+    notification.innerHTML = `
+        <div class="flex items-center">
+            <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'times' : 'info'} mr-2"></i>
+            ${message}
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.style.transform = 'translateX(0)';
+    }, 50);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 300);
+    }, 3000);
 }
 
-// Expose priority controller functions globally
-window.initializeAgentPriorityController = initializeAgentPriorityController;
-window.loadAgentPriorityConfig = loadAgentPriorityConfig;
-window.updatePriorityUI = updatePriorityUI;
-
-console.log('🌐 Global functions exposed for HTML event handlers');
-console.log('Available functions:', {
-    filterVoices: typeof window.filterVoices,
-    toggleApiKeySource: typeof window.toggleApiKeySource,
-    handleVoiceChange: typeof window.handleVoiceChange,
-    updateCheckboxValue: typeof window.updateCheckboxValue,
-    handleTradeCategoryChange: typeof window.handleTradeCategoryChange,
-    handleLanguageChange: typeof window.handleLanguageChange,
-    initializeAgentPriorityController: typeof window.initializeAgentPriorityController
+// Initialize Response Categories System
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default active tab
+    const defaultTab = document.querySelector('.response-category-tab.active');
+    if (defaultTab) {
+        switchResponseCategory('core');
+    }
 });
