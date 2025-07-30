@@ -4693,7 +4693,7 @@
             }
         };
 
-        window.previewResponse = function(textareaId) {
+        window.previewResponse = async function(textareaId) {
             console.log('previewResponse called:', textareaId);
             try {
                 const textarea = document.getElementById(textareaId);
@@ -4703,18 +4703,83 @@
                 }
                 
                 const template = textarea.value;
-                const preview = template
+                const previewText = template
                     .replace(/\{\{callerName\}\}/g, 'John Smith')
                     .replace(/\{\{companyName\}\}/g, 'ClientsVia Solutions')
                     .replace(/\{\{businessHours\}\}/g, 'Monday-Friday 9AM-5PM')
                     .replace(/\{\{website\}\}/g, 'www.clientsvia.com')
                     .replace(/\{\{departmentName\}\}/g, 'Technical Support')
+                    .replace(/\{\{serviceType\}\}/g, 'our service')
+                    .replace(/\{\{phoneNumber\}\}/g, 'your number')
+                    .replace(/\{\{managerName\}\}/g, 'Sarah Johnson')
+                    .replace(/\{\{issueType\}\}/g, 'this issue')
+                    .replace(/\{\{requestType\}\}/g, 'your request')
+                    .replace(/\{\{serviceProvided\}\}/g, 'solving your problem')
                     .replace(/\{\{estimatedTime\}\}/g, '2-3 minutes');
                 
-                alert('Preview:\n\n' + preview);
-                console.log('Preview shown for:', textareaId);
+                // Check if preview text is empty
+                if (!previewText.trim()) {
+                    alert('Please enter some text to preview.');
+                    return;
+                }
+                
+                // Get current company and voice settings
+                const companyId = getCurrentCompanyId();
+                const voiceSelect = document.getElementById('voiceSelect');
+                const voiceId = voiceSelect ? voiceSelect.value : null;
+                
+                if (!voiceId) {
+                    // Fallback to text preview if no voice selected
+                    alert('🎙️ Voice Preview:\n\n' + previewText + '\n\n(Select a voice in Voice Selection to hear audio preview)');
+                    return;
+                }
+                
+                // Show loading state
+                const originalText = `Preview: "${previewText.substring(0, 50)}${previewText.length > 50 ? '...' : ''}"`;
+                if (confirm(`🎙️ Generate voice preview?\n\n${originalText}`)) {
+                    
+                    // Generate TTS audio
+                    console.log('🎵 Generating preview audio...', { voiceId, textLength: previewText.length });
+                    
+                    const response = await fetch('/api/elevenlabs/synthesize', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            text: previewText.trim(),
+                            voiceId: voiceId,
+                            companyId: companyId
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        // Create and play audio
+                        const audio = new Audio(result.audioUrl);
+                        audio.play().catch(err => {
+                            console.error('Audio playback failed:', err);
+                            alert('Audio generated but playback failed. Check browser audio permissions.');
+                        });
+                        console.log('🎵 Preview audio playing');
+                    } else {
+                        console.error('TTS generation failed:', result.error);
+                        // Fallback to text preview
+                        alert('🎙️ Voice Preview (TTS unavailable):\n\n' + previewText);
+                    }
+                }
+                
             } catch (error) {
                 console.error('Error in previewResponse:', error);
+                // Fallback to text preview on error
+                const textarea = document.getElementById(textareaId);
+                if (textarea) {
+                    const fallbackText = textarea.value
+                        .replace(/\{\{callerName\}\}/g, 'John Smith')
+                        .replace(/\{\{companyName\}\}/g, 'ClientsVia Solutions');
+                    alert('🎙️ Preview (fallback):\n\n' + fallbackText);
+                }
             }
         };
 
