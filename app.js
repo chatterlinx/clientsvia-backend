@@ -174,6 +174,11 @@ console.log('✅ Q&A Learning routes registered at /api/qna-learning');
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 
+// New AI Agent Logic routes - ClientsVia Intelligence Platform
+const aiAgentLogicRoutes = require('./routes/aiAgentLogic');
+
+app.use('/api/ai-agent-logic', aiAgentLogicRoutes); // ClientsVia Intelligence Platform
+
 // Development routes
 if (process.env.NODE_ENV !== 'production') {
     // Serve selfCheckLogger service
