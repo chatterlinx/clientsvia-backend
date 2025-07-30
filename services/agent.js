@@ -20,6 +20,12 @@ const aiIntelligenceEngine = require('./aiIntelligenceEngine');
 // Import the custom KB checker
 const { checkCustomKB } = require('../middleware/checkCustomKB');
 
+// Import In-House Intelligence Engine
+const InHouseIntelligenceEngine = require('./inHouseIntelligenceEngine');
+
+// Import Template Intelligence Engine
+const TemplateIntelligenceEngine = require('./templateIntelligenceEngine');
+
 // In-memory cache for parsed Category Q&A by company ID
 const categoryQACache = new Map();
 
@@ -397,7 +403,47 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     }
   }
 
-  // STEP 2: Check for specific scenario protocols (moved to second priority)
+  // 🎨 STEP 3: TEMPLATE INTELLIGENCE ENGINE (Answer Priority Flow Tier 3)
+  console.log(`[Template Intelligence] Processing with Template Intelligence Engine...`);
+  
+  const templateEngine = new TemplateIntelligenceEngine();
+  const templateResult = await templateEngine.processQuery(question, companyId, {
+    conversationHistory,
+    callSid: originalCallSid,
+    callerName: context?.callerName,
+    departmentName: context?.departmentName
+  });
+  
+  if (templateResult && templateResult.confidence >= 0.65) {
+    console.log(`[Template Intelligence] Generated ${templateResult.category} response: ${(templateResult.confidence * 100).toFixed(1)}%`);
+    
+    responseMethod = `template-${templateResult.category}`;
+    confidence = templateResult.confidence;
+    debugInfo = { 
+      section: 'template-intelligence', 
+      category: templateResult.category,
+      templateUsed: templateResult.templateUsed,
+      personalityApplied: templateResult.personalityApplied
+    };
+    
+    // Track performance
+    await trackPerformance(companyId, originalCallSid, question, templateResult.response, responseMethod, confidence, debugInfo, startTime);
+    
+    return { 
+      text: templateResult.response,
+      responseMethod: responseMethod,
+      confidence: confidence,
+      debugInfo: debugInfo,
+      templateIntelligence: {
+        category: templateResult.category,
+        confidence: templateResult.confidence,
+        templateUsed: templateResult.templateUsed,
+        personalityApplied: templateResult.personalityApplied
+      }
+    };
+  }
+
+  // STEP 4: Check for specific scenario protocols (moved to lower priority)
   const protocols = company?.agentSetup?.protocols || {};
   const protocolResponse = checkSpecificProtocols(protocols, question, conversationHistory, placeholders);
   if (protocolResponse) {
@@ -412,7 +458,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: protocolResponse, escalate: false };
   }
 
-  // STEP 3: Check personality responses for common scenarios
+  // STEP 5: Check personality responses for common scenarios
   const personalityResponse = await checkPersonalityScenarios(companyId, enhancedQuestion.toLowerCase(), conversationHistory);
   if (personalityResponse) {
     console.log(`[Agent] Using personality response: ${personalityResponse.category}`);
@@ -431,7 +477,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     }
   }
 
-  // STEP 4: Check KnowledgeEntry (approved Q&A entries)
+  // STEP 6: Check KnowledgeEntry (approved Q&A entries)
   const entry = await KnowledgeEntry.findOne({ companyId, 
     category: { $in: categories },
     question: { $regex: new RegExp(question, 'i') },
@@ -450,7 +496,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: finalText, escalate: false };
   }
 
-  // STEP 5: Try quick Q&A reference (cheat sheet approach) with enhanced question
+  // STEP 7: Try quick Q&A reference (cheat sheet approach) with enhanced question
   const quickQAAnswer = extractQuickAnswerFromQA(await KnowledgeEntry.find({ companyId }).exec(), enhancedQuestion, fuzzyThreshold);
   if (quickQAAnswer) {
     console.log(`[Agent] Found quick Q&A reference for: ${enhancedQuestion}`);
@@ -475,7 +521,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     }
   }
 
-  // STEP 6: Try company Q&A from agentSetup.categoryQAs (also as quick reference)
+  // STEP 8: Try company Q&A from agentSetup.categoryQAs (also as quick reference)
   const companyQAs = categoryQACache.get(companyId) || [];
   if (companyQAs.length > 0) {
     const quickCompanyAnswer = extractQuickAnswerFromQA(companyQAs, question, fuzzyThreshold);
@@ -493,7 +539,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     }
   }
 
-  // STEP 7: SMART CONVERSATIONAL BRAIN - NEW INTELLIGENT PROCESSING
+  // STEP 9: SMART CONVERSATIONAL BRAIN - NEW INTELLIGENT PROCESSING
   const smartResponse = await generateSmartConversationalResponse(company, question, conversationHistory, categories, companySpecialties, placeholders);
   if (smartResponse) {
     console.log(`[Agent] Generated smart conversational response for: ${question}`);
@@ -506,7 +552,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: smartResponse, escalate: false };
   }
 
-  // STEP 8: PRIMARY SCRIPT CONTROLLER - mainAgentScript drives responses
+  // STEP 10: PRIMARY SCRIPT CONTROLLER - mainAgentScript drives responses
   const scriptResponse = await processMainAgentScript(company, question, conversationHistory, placeholders);
   if (scriptResponse) {
     console.log(`[Agent] PRIMARY SCRIPT RESPONSE for: ${question}`);
@@ -515,7 +561,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     return { text: scriptResponse.text, escalate: scriptResponse.escalate || false, debugInfo: scriptResponse.debugInfo };
   }
 
-  // STEP 8: Try to understand the context and provide intelligent responses
+  // STEP 11: Try to understand the context and provide intelligent responses
   const parsedCompanyQAs = categoryQACache.get(companyId) || [];
   const intelligentResponse = await generateIntelligentResponse(company, question, conversationHistory, categories, companySpecialties, parsedCompanyQAs);
   if (intelligentResponse) {
@@ -1524,8 +1570,7 @@ function calculateStringSimilarity(str1, str2) {
 }
 
 /**
- * Calculate Levenshtein distance between two strings
- */
+ * Calculate Levenshtein distance between two strings */
 function calculateLevenshteinDistance(str1, str2) {
   const matrix = [];
   
