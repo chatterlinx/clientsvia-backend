@@ -1540,3 +1540,16 @@ This only works from localhost (127.0.0.1)
             console.log('previewAllResponses called');
             showBasicNotification('👁️ Showing preview of all responses...', 'info');
         };
+
+        // Test that all functions are properly loaded
+        console.log('Response Categories functions loaded:');
+        console.log('switchResponseTab:', typeof window.switchResponseTab);
+        console.log('insertVariable:', typeof window.insertVariable);
+        console.log('previewResponse:', typeof window.previewResponse);
+        console.log('toggleLivePreview:', typeof window.toggleLivePreview);
+        console.log('saveResponseCategories:', typeof window.saveResponseCategories);
+        console.log('previewAllResponses:', typeof window.previewAllResponses);
+
+    </script>
+</body>
+</html>
