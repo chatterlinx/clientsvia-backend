@@ -556,4 +556,143 @@ router.post('/priority-flow/:companyId/reset', authenticateSingleSession, async 
     }
 });
 
+/**
+ * 🎭 Response Categories Management
+ */
+
+// Get response categories for a company
+router.get('/response-categories/:companyId', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const company = await Company.findById(companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        // Default response templates if none exist
+        const defaultTemplates = {
+            core: {
+                'greeting-response': 'Hi {{callerName}}! Thanks for calling {{companyName}}. How can I help you today?',
+                'farewell-response': 'Thanks for calling {{companyName}}! Have a great day!',
+                'transfer-response': 'Let me connect you with {{departmentName}} who can better assist you.',
+                'service-unavailable-response': 'I\'m sorry, {{serviceType}} isn\'t available right now. Can I help with something else?'
+            },
+            advanced: {
+                'emergency-response': 'This sounds like an emergency. Let me connect you with our emergency team immediately.',
+                'after-hours-response': 'Thanks for calling! We\'re currently closed but will get back to you first thing in the morning.',
+                'appointment-confirmation': 'Perfect! I\'ve scheduled your appointment for {{appointmentTime}} on {{appointmentDate}}.',
+                'scheduling-conflict': 'That time slot isn\'t available. How about {{alternativeTime}} or {{alternativeTime2}}?'
+            },
+            emotional: {
+                'frustrated-customer': 'I completely understand your frustration, and I\'m here to help make this right for you.',
+                'appreciative-response': 'Thank you so much for your patience and for choosing {{companyName}}. We truly appreciate your business!',
+                'problem-resolution': 'Don\'t worry, we\'ve handled this exact situation many times before. I\'ll make sure we get this resolved for you quickly.',
+                'quality-assurance': 'You can count on us to deliver the highest quality service. We stand behind all our work with a 100% satisfaction guarantee.'
+            }
+        };
+
+        const responseTemplates = company.aiAgentLogic?.responseCategories || defaultTemplates;
+
+        res.json({
+            success: true,
+            data: responseTemplates,
+            message: 'Response categories retrieved successfully'
+        });
+
+    } catch (error) {
+        console.error('Get response categories error:', error);
+        res.status(500).json({ error: 'Failed to retrieve response categories' });
+    }
+});
+
+// Save response categories for a company
+router.post('/response-categories', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyId, responseTemplates } = req.body;
+        
+        if (!companyId || !responseTemplates) {
+            return res.status(400).json({ error: 'Company ID and response templates are required' });
+        }
+
+        const company = await Company.findById(companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        // Validate response templates structure
+        const requiredCategories = ['core', 'advanced', 'emotional'];
+        for (const category of requiredCategories) {
+            if (!responseTemplates[category] || typeof responseTemplates[category] !== 'object') {
+                return res.status(400).json({ 
+                    error: `Invalid response templates structure: missing or invalid ${category} category` 
+                });
+            }
+        }
+
+        // Initialize aiAgentLogic if it doesn't exist
+        company.aiAgentLogic = company.aiAgentLogic || {};
+        
+        // Save response categories
+        company.aiAgentLogic.responseCategories = responseTemplates;
+        company.aiAgentLogic.lastUpdated = new Date();
+        
+        await company.save();
+
+        res.json({
+            success: true,
+            data: responseTemplates,
+            message: 'Response categories saved successfully'
+        });
+
+    } catch (error) {
+        console.error('Save response categories error:', error);
+        res.status(500).json({ error: 'Failed to save response categories' });
+    }
+});
+
+// Update individual response template
+router.patch('/response-categories/:companyId/:category/:templateId', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyId, category, templateId } = req.params;
+        const { template } = req.body;
+        
+        if (!template) {
+            return res.status(400).json({ error: 'Template content is required' });
+        }
+
+        const company = await Company.findById(companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        // Initialize structure if needed
+        company.aiAgentLogic = company.aiAgentLogic || {};
+        company.aiAgentLogic.responseCategories = company.aiAgentLogic.responseCategories || {};
+        company.aiAgentLogic.responseCategories[category] = company.aiAgentLogic.responseCategories[category] || {};
+        
+        // Update specific template
+        company.aiAgentLogic.responseCategories[category][templateId] = template;
+        company.aiAgentLogic.lastUpdated = new Date();
+        
+        await company.save();
+
+        res.json({
+            success: true,
+            data: {
+                category,
+                templateId,
+                template
+            },
+            message: 'Response template updated successfully'
+        });
+
+    } catch (error) {
+        console.error('Update response template error:', error);
+        res.status(500).json({ error: 'Failed to update response template' });
+    }
+});
+
 module.exports = router;

@@ -481,6 +481,67 @@ const companySchema = new mongoose.Schema({
         updatedAt: { type: Date, default: Date.now }
     },
     
+    // 🤖 AI Agent Logic Configuration
+    aiAgentLogic: {
+        // Answer Priority Flow configuration
+        answerPriorityFlow: [{
+            id: { type: String, required: true },
+            name: { type: String, required: true },
+            description: { type: String, default: '' },
+            active: { type: Boolean, default: true },
+            primary: { type: Boolean, default: false },
+            priority: { type: Number, required: true },
+            icon: { type: String, default: 'cog' },
+            category: { type: String, default: 'other' },
+            confidenceThreshold: { type: Number, default: 0.7, min: 0, max: 1 },
+            intelligenceLevel: { type: String, enum: ['high', 'medium', 'low', 'smart'], default: 'medium' },
+            performance: {
+                successRate: { type: Number, default: 0, min: 0, max: 1 },
+                avgConfidence: { type: Number, default: 0, min: 0, max: 1 },
+                usageCount: { type: Number, default: 0, min: 0 }
+            }
+        }],
+        
+        // Response Categories configuration
+        responseCategories: {
+            core: {
+                type: mongoose.Schema.Types.Mixed,
+                default: {
+                    'greeting-response': 'Hi {{callerName}}! Thanks for calling {{companyName}}. How can I help you today?',
+                    'farewell-response': 'Thanks for calling {{companyName}}! Have a great day!',
+                    'transfer-response': 'Let me connect you with {{departmentName}} who can better assist you.',
+                    'service-unavailable-response': 'I\'m sorry, {{serviceType}} isn\'t available right now. Can I help with something else?'
+                }
+            },
+            advanced: {
+                type: mongoose.Schema.Types.Mixed,
+                default: {
+                    'emergency-response': 'This sounds like an emergency. Let me connect you with our emergency team immediately.',
+                    'after-hours-response': 'Thanks for calling! We\'re currently closed but will get back to you first thing in the morning.',
+                    'appointment-confirmation': 'Perfect! I\'ve scheduled your appointment for {{appointmentTime}} on {{appointmentDate}}.',
+                    'scheduling-conflict': 'That time slot isn\'t available. How about {{alternativeTime}} or {{alternativeTime2}}?'
+                }
+            },
+            emotional: {
+                type: mongoose.Schema.Types.Mixed,
+                default: {
+                    'frustrated-customer': 'I completely understand your frustration, and I\'m here to help make this right for you.',
+                    'appreciative-response': 'Thank you so much for your patience and for choosing {{companyName}}. We truly appreciate your business!',
+                    'problem-resolution': 'Don\'t worry, we\'ve handled this exact situation many times before. I\'ll make sure we get this resolved for you quickly.',
+                    'quality-assurance': 'You can count on us to deliver the highest quality service. We stand behind all our work with a 100% satisfaction guarantee.'
+                }
+            }
+        },
+        
+        // Knowledge Source Controls
+        knowledgeSourceControls: {
+            type: mongoose.Schema.Types.Mixed,
+            default: {}
+        },
+        
+        lastUpdated: { type: Date, default: Date.now }
+    },
+    
     notes: { type: [noteSchema], default: [] },
     
     // Booking Scripts Configuration
