@@ -34,7 +34,7 @@ async function localLLMWithContext(userInput, companyName = '', tradeCategory = 
  * Test if local LLM is running - STUBBED (always returns false)
  * @returns {Promise<boolean>} - Always false in stub mode
  */
-async function testOllamaConnection() {
+async function testLocalLLMConnection() {
   console.log(`[LocalLLM-STUB] 🔒 Local LLM connection test disabled - returning false`);
   return false; // Always false - local LLM disabled
 }
@@ -42,5 +42,5 @@ async function testOllamaConnection() {
 module.exports = {
   localLLM,
   localLLMWithContext,
-  testOllamaConnection
+  testLocalLLMConnection
 };

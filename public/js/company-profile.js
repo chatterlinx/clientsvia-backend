@@ -1301,7 +1301,7 @@ function populateAgentIntelligenceUI(settings) {
     
     const primaryLLMSelect = document.getElementById('agent-primaryLLM');
     if (primaryLLMSelect) {
-        primaryLLMSelect.value = settings.primaryLLM || 'ollama-phi3';
+        primaryLLMSelect.value = settings.primaryLLM || 'gemini-pro';
     }
     
     const fallbackLLMSelect = document.getElementById('agent-fallbackLLM');
@@ -1355,10 +1355,8 @@ function populateAgentIntelligenceUI(settings) {
     }
     
     // Allowed LLM Models
-    const allowedLLMs = settings.allowedLLMs || ['ollama-phi3', 'gemini-pro'];
+    const allowedLLMs = settings.allowedLLMs || ['gemini-pro'];
     const modelCheckboxes = [
-        'llm-ollama-phi3',
-        'llm-ollama-mistral', 
         'llm-gemini-pro',
         'llm-openai-gpt4',
         'llm-claude-3'
@@ -1389,7 +1387,7 @@ async function saveAgentSettings() {
         const settings = {
             // Core AI Configuration
             useLLM: document.getElementById('agent-useLLM')?.value === 'true',
-            primaryLLM: document.getElementById('agent-primaryLLM')?.value || 'ollama-phi3',
+            primaryLLM: document.getElementById('agent-primaryLLM')?.value || 'gemini-pro',
             fallbackLLM: document.getElementById('agent-fallbackLLM')?.value || 'gemini-pro',
             memoryMode: document.getElementById('agent-memoryMode')?.value || 'conversation',
             
@@ -1410,8 +1408,6 @@ async function saveAgentSettings() {
         
         // Collect selected LLM models
         const selectedLLMCheckboxes = [
-            { id: 'llm-ollama-phi3', name: 'ollama-phi3' },
-            { id: 'llm-ollama-mistral', name: 'ollama-mistral' },
             { id: 'llm-gemini-pro', name: 'gemini-pro' },
             { id: 'llm-openai-gpt4', name: 'openai-gpt4' },
             { id: 'llm-claude-3', name: 'claude-3' }
@@ -1518,8 +1514,6 @@ async function testAgentConfiguration() {
  */
 function updateActiveModelsCount() {
     const modelCheckboxList = [
-        'llm-ollama-phi3',
-        'llm-ollama-mistral', 
         'llm-gemini-pro',
         'llm-openai-gpt4',
         'llm-claude-3'
@@ -1552,8 +1546,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Add event listeners for LLM checkboxes to update count
     const modelCheckboxIds = [
-        'llm-ollama-phi3',
-        'llm-ollama-mistral', 
         'llm-gemini-pro',
         'llm-openai-gpt4',
         'llm-claude-3'

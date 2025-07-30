@@ -139,9 +139,7 @@
                 <div class="mb-6">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Primary LLM Model</label>
                     <select id="primaryLLM" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                        <option value="ollama-phi3">Ollama Phi-3 (Fast, Local)</option>
-                        <option value="ollama-mistral">Ollama Mistral (Balanced)</option>
-                        <option value="gemini-pro">Gemini Pro (Cloud, Powerful)</option>
+                        <option value="gemini-pro" selected>Gemini Pro (Cloud, Powerful)</option>
                         <option value="openai-gpt4">OpenAI GPT-4 (Premium)</option>
                         <option value="claude-3">Claude-3 (Advanced)</option>
                     </select>
@@ -152,9 +150,7 @@
                 <div class="mb-6">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Fallback LLM Model</label>
                     <select id="fallbackLLM" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                        <option value="gemini-pro">Gemini Pro (Reliable Cloud)</option>
-                        <option value="ollama-phi3">Ollama Phi-3 (Local)</option>
-                        <option value="ollama-mistral">Ollama Mistral (Local)</option>
+                        <option value="gemini-pro" selected>Gemini Pro (Reliable Cloud)</option>
                         <option value="openai-gpt4">OpenAI GPT-4 (Premium)</option>
                         <option value="claude-3">Claude-3 (Advanced)</option>
                     </select>
@@ -185,16 +181,16 @@
                     <h4 class="text-sm font-medium text-gray-700 mb-2">LLM Status</h4>
                     <div class="space-y-2">
                         <div class="flex justify-between items-center">
-                            <span class="text-sm">Ollama (Local)</span>
-                            <span id="ollamaStatus" class="llm-status status-active">Active</span>
-                        </div>
-                        <div class="flex justify-between items-center">
                             <span class="text-sm">Gemini Pro</span>
-                            <span id="geminiStatus" class="llm-status status-fallback">Fallback</span>
+                            <span id="geminiStatus" class="llm-status status-active">Primary</span>
                         </div>
                         <div class="flex justify-between items-center">
                             <span class="text-sm">OpenAI GPT-4</span>
-                            <span id="openaiStatus" class="llm-status status-disabled">Disabled</span>
+                            <span id="openaiStatus" class="llm-status status-fallback">Available</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm">Claude-3</span>
+                            <span id="claudeStatus" class="llm-status status-fallback">Available</span>
                         </div>
                     </div>
                 </div>
@@ -637,7 +633,7 @@
             const aiSettings = company.aiSettings || {};
 
             // LLM Settings
-            document.getElementById('primaryLLM').value = intelligence.primaryLLM || 'ollama-phi3';
+            document.getElementById('primaryLLM').value = intelligence.primaryLLM || 'gemini-pro';
             document.getElementById('fallbackLLM').value = intelligence.fallbackLLM || 'gemini-pro';
             document.getElementById('useLLM').checked = intelligence.useLLM !== false;
             document.getElementById('semanticSearchEnabled').checked = intelligence.semanticSearchEnabled || false;

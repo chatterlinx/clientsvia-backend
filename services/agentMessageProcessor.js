@@ -273,7 +273,7 @@ class AgentMessageProcessor {
     /**
      * Try local LLM - DISABLED (cloud-only operation)
      */
-    async tryOllama(modelName, companyId, message, settings, conversationHistory, traceLog) {
+    async tryLocalLLM(modelName, companyId, message, settings, conversationHistory, traceLog) {
         // Local LLM disabled - return null to skip this method
         traceLog.push(`[${new Date().toISOString()}] Local LLM disabled (cloud-only operation) - skipping ${modelName}`);
         return null;

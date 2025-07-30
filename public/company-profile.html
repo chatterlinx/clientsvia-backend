@@ -417,43 +417,11 @@
                                 <div class="mt-4">
                                     <label class="flex items-center">
                                         <input type="checkbox" id="llmFallbackEnabled" name="llmFallbackEnabled" class="form-checkbox">
-                                        <span class="form-check-label">Enable LLM Chain (Ollama Primary → Gemini Backup)</span>
+                                        <span class="form-check-label">Enable Cloud LLM Chain (Primary → Backup)</span>
                                     </label>
-                                    <p class="text-xs text-gray-500 mt-1">Local AI runs first for privacy, cloud backup for reliability</p>
+                                    <p class="text-xs text-gray-500 mt-1">Cloud AI with intelligent fallback for maximum reliability</p>
                                 </div>
                                 
-                                <!-- Ollama Local LLM Settings -->
-                                <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg" id="ollamaSettingsContainer">
-                                    <h4 class="text-sm font-semibold text-blue-800 mb-3 flex items-center">
-                                        <i class="fas fa-robot mr-2"></i>Local LLM (Ollama) Configuration
-                                    </h4>
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label class="flex items-center">
-                                                <input type="checkbox" id="ollamaEnabled" name="ollamaEnabled" class="form-checkbox">
-                                                <span class="form-check-label">Enable Local Ollama LLM</span>
-                                            </label>
-                                            <p class="text-xs text-gray-600 mt-1">Use local AI for maximum privacy</p>
-                                        </div>
-                                        <div>
-                                            <label for="ollamaModel" class="form-label text-sm">Ollama Model</label>
-                                            <select id="ollamaModel" name="ollamaModel" class="form-select text-sm">
-                                                <option value="llama3.1:8b-instruct-q4_0">Llama 3.1 8B (Recommended)</option>
-                                                <option value="llama3.2:3b">Llama 3.2 3B (Faster)</option>
-                                                <option value="llama3.2:1b">Llama 3.2 1B (Ultra Fast)</option>
-                                                <option value="qwen2.5:7b">Qwen 2.5 7B</option>
-                                                <option value="gemma2:9b">Gemma 2 9B</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="mt-3">
-                                        <label class="flex items-center">
-                                            <input type="checkbox" id="useGeminiBackup" name="useGeminiBackup" class="form-checkbox">
-                                            <span class="form-check-label">Fall back to Gemini if Ollama fails</span>
-                                        </label>
-                                        <p class="text-xs text-gray-600 mt-1">Ensures 99.9% uptime with cloud backup</p>
-                                    </div>
-                                </div>
                                 <div class="mt-4" id="escalationMessageContainer">
                                     <label for="customEscalationMessage" class="form-label">Custom Escalation Message</label>
                                     <textarea id="customEscalationMessage" name="customEscalationMessage" class="form-textarea wider-textbox" rows="3" placeholder="I’m unable to answer that, let me connect you to a team member who can help."></textarea>
@@ -1816,7 +1784,7 @@
                                                         <option value="claude-3">Claude-3 (Premium, Cloud)</option>
                                                         <option value="none">None - Knowledge Base Only</option>
                                                     </select>
-                                                    <p class="text-xs text-gray-500 mt-1">🚨 Ollama removed - Cloud model for emergency fallback only</p>
+                                                    <p class="text-xs text-gray-500 mt-1">� Cloud-based AI for intelligent responses</p>
                                                 </div>
 
                                                 <!-- Fallback LLM Selection -->
@@ -1837,24 +1805,6 @@
                                                         <i class="fas fa-shield-alt mr-2 text-green-600"></i>Allowed LLM Models
                                                     </label>
                                                     <div class="space-y-2 mt-2">
-                                                        <label class="flex items-center p-2 bg-gray-100 rounded border border-gray-300 opacity-50">
-                                                            <input type="checkbox" id="llm-ollama-phi3" class="form-checkbox h-4 w-4 text-blue-600" disabled>
-                                                            <div class="ml-3 flex-1">
-                                                                <span class="text-sm font-medium text-gray-500">Ollama Phi3</span>
-                                                                <span class="ml-2 px-2 py-0.5 bg-red-100 text-red-800 text-xs rounded">❌ Disabled</span>
-                                                                <p class="text-xs text-gray-400">Local dependency removed</p>
-                                                            </div>
-                                                        </label>
-                                                        
-                                                        <label class="flex items-center p-2 bg-gray-100 rounded border border-gray-300 opacity-50">
-                                                            <input type="checkbox" id="llm-ollama-mistral" class="form-checkbox h-4 w-4 text-blue-600" disabled>
-                                                            <div class="ml-3 flex-1">
-                                                                <span class="text-sm font-medium text-gray-500">Ollama Mistral</span>
-                                                                <span class="ml-2 px-2 py-0.5 bg-red-100 text-red-800 text-xs rounded">❌ Disabled</span>
-                                                                <p class="text-xs text-gray-400">Local dependency removed</p>
-                                                            </div>
-                                                        </label>
-                                                        
                                                         <label class="flex items-center p-2 bg-white rounded border border-gray-200 hover:bg-gray-50">
                                                             <input type="checkbox" id="llm-gemini-pro" class="form-checkbox h-4 w-4 text-blue-600" checked>
                                                             <div class="ml-3 flex-1">
@@ -1892,8 +1842,8 @@
                                                         <span id="activeModelsCount" class="font-medium text-green-600">Knowledge Base Priority</span>
                                                     </div>
                                                     <div class="mt-1 text-xs text-gray-500">
-                                                        <i class="fas fa-check-circle mr-1 text-green-500"></i>Ollama dependencies removed
-                                                        <i class="fas fa-cloud ml-3 mr-1 text-blue-500"></i>Cloud fallback configured
+                                                        <i class="fas fa-cloud mr-1 text-blue-500"></i>Cloud-native AI architecture
+                                                        <i class="fas fa-shield-alt ml-3 mr-1 text-green-500"></i>Enterprise-grade reliability
                                                     </div>
                                                 </div>
                                             </div>
