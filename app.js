@@ -81,6 +81,10 @@ app.use(cors({ origin: false })); // Restrict origins
 app.use(apiLimiter);              // Rate limiting
 app.use(express.json());          // Body parsing
 
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public')));
+console.log('✅ Static files served from /public directory');
+
 const redisClient = redis.createClient({ 
   url: process.env.REDIS_URL,
   socket: {

@@ -139,11 +139,51 @@ router.post('/priority-flow/:companyId', authenticateJWT, async (req, res) => {
     }
 });
 
-// Reorder priority flow (drag & drop)
+// Toggle knowledge source active/inactive
+router.post('/priority-flow/:companyId/toggle', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { sourceId, active } = req.body;
+
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        // Update the specific source's active status
+        const priorityFlow = company.aiAgentLogic?.answerPriorityFlow || [];
+        const sourceIndex = priorityFlow.findIndex(s => s.id === sourceId);
+        
+        if (sourceIndex === -1) {
+            return res.status(404).json({ error: 'Knowledge source not found' });
+        }
+
+        priorityFlow[sourceIndex].active = active;
+        
+        company.aiAgentLogic = company.aiAgentLogic || {};
+        company.aiAgentLogic.answerPriorityFlow = priorityFlow;
+        company.aiAgentLogic.lastUpdated = new Date();
+        
+        await company.save();
+
+        res.json({
+            success: true,
+            sourceId,
+            active,
+            message: `${sourceId} ${active ? 'enabled' : 'disabled'} successfully`
+        });
+
+    } catch (error) {
+        console.error('Source toggle error:', error);
+        res.status(500).json({ error: 'Failed to toggle knowledge source' });
+    }
+});
+
+// Reorder priority flow (drag & drop)  
 router.post('/priority-flow/:companyId/reorder', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { sourceOrder } = req.body; // Array of source IDs in new order
+        const { order } = req.body; // Array of source IDs in new order
 
         const company = await Company.findById(companyId);
         if (!company) {
@@ -152,8 +192,11 @@ router.post('/priority-flow/:companyId/reorder', authenticateJWT, async (req, re
 
         // Update priority order
         const priorityFlow = company.aiAgentLogic?.answerPriorityFlow || [];
-        const reorderedFlow = sourceOrder.map((sourceId, index) => {
+        const reorderedFlow = order.map((sourceId, index) => {
             const source = priorityFlow.find(s => s.id === sourceId);
+            if (!source) {
+                throw new Error(`Source ${sourceId} not found`);
+            }
             return { ...source, priority: index + 1 };
         });
 
@@ -422,6 +465,89 @@ router.post('/reset-defaults/:companyId', authenticateJWT, async (req, res) => {
             success: true,
             message: 'AI Agent Logic reset to intelligent defaults',
             configuration: company.aiAgentLogic
+        });
+
+    } catch (error) {
+        console.error('Reset defaults error:', error);
+        res.status(500).json({ error: 'Failed to reset to defaults' });
+    }
+});
+
+// Reset to defaults endpoint (frontend expects this path)
+router.post('/priority-flow/:companyId/reset', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const company = await Company.findById(companyId);
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        // Reset to intelligent defaults
+        const defaultPriorityFlow = [
+            {
+                id: 'company_knowledge',
+                name: 'Company Knowledge Base',
+                description: 'Company-specific Q&A and internal documentation',
+                active: true,
+                primary: true,
+                priority: 1,
+                icon: 'building',
+                category: 'primary',
+                confidenceThreshold: 0.8,
+                intelligenceLevel: 'high',
+                performance: {
+                    successRate: 0.92,
+                    avgConfidence: 0.87,
+                    usageCount: 1247
+                }
+            },
+            {
+                id: 'trade_categories',
+                name: 'Trade Categories Q&A',
+                description: 'Industry-specific questions and answers',
+                active: true,
+                primary: false,
+                priority: 2,
+                icon: 'industry',
+                category: 'industry',
+                confidenceThreshold: 0.75,
+                intelligenceLevel: 'medium',
+                performance: {
+                    successRate: 0.84,
+                    avgConfidence: 0.79,
+                    usageCount: 856
+                }
+            },
+            {
+                id: 'template_intelligence',
+                name: 'Template Intelligence',
+                description: 'Smart templates and conversation patterns',
+                active: true,
+                primary: false,
+                priority: 3,
+                icon: 'edit',
+                category: 'template',
+                confidenceThreshold: 0.65,
+                intelligenceLevel: 'smart',
+                performance: {
+                    successRate: 0.78,
+                    avgConfidence: 0.72,
+                    usageCount: 634
+                }
+            }
+        ];
+
+        company.aiAgentLogic = company.aiAgentLogic || {};
+        company.aiAgentLogic.answerPriorityFlow = defaultPriorityFlow;
+        company.aiAgentLogic.lastUpdated = new Date();
+        
+        await company.save();
+
+        res.json({
+            success: true,
+            priorityFlow: defaultPriorityFlow,
+            message: 'Settings reset to intelligent defaults successfully'
         });
 
     } catch (error) {

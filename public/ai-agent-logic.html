@@ -352,15 +352,204 @@
     </div>
 
     <script>
-        // Initialize drag and drop
-        const priorityContainer = document.getElementById('priority-flow-container');
-        new Sortable(priorityContainer, {
-            animation: 150,
-            handle: '.drag-handle',
-            onEnd: function(evt) {
-                updatePriorityOrder();
-            }
+        // Global state
+        let currentCompanyId = null;
+        let authToken = null;
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', async function() {
+            await initializeAuth();
+            await loadPriorityFlow();
+            initializeDragAndDrop();
         });
+
+        // Authentication and initialization
+        async function initializeAuth() {
+            // Get auth token from localStorage or cookie
+            authToken = localStorage.getItem('authToken') || getCookie('token');
+            if (!authToken) {
+                // Redirect to login if no token
+                window.location.href = '/login.html';
+                return;
+            }
+
+            // Get company ID from token or localStorage
+            currentCompanyId = localStorage.getItem('companyId');
+            if (!currentCompanyId) {
+                try {
+                    // Decode JWT to get company ID (simple version)
+                    const payload = JSON.parse(atob(authToken.split('.')[1]));
+                    currentCompanyId = payload.companyId;
+                    localStorage.setItem('companyId', currentCompanyId);
+                } catch (error) {
+                    console.error('Failed to decode auth token:', error);
+                    window.location.href = '/login.html';
+                    return;
+                }
+            }
+        }
+
+        // Cookie helper
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        // API helper function
+        async function apiCall(endpoint, method = 'GET', data = null) {
+            const options = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                }
+            };
+
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+
+            try {
+                const response = await fetch(`/api/ai-agent-logic${endpoint}`, options);
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        // Token expired, redirect to login
+                        localStorage.removeItem('authToken');
+                        localStorage.removeItem('companyId');
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                    throw new Error(`API call failed: ${response.statusText}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error(`API call to ${endpoint} failed:`, error);
+                showNotification(`Error: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // Load and render priority flow
+        async function loadPriorityFlow() {
+            try {
+                showLoading(true);
+                const data = await apiCall(`/priority-flow/${currentCompanyId}`);
+                renderPriorityFlow(data);
+            } catch (error) {
+                console.error('Failed to load priority flow:', error);
+                showNotification('Failed to load priority flow configuration', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Render priority flow items
+        function renderPriorityFlow(items) {
+            const container = document.getElementById('priority-flow-container');
+            container.innerHTML = '';
+
+            items.forEach(item => {
+                const element = createPriorityFlowItem(item);
+                container.appendChild(element);
+            });
+        }
+
+        // Create priority flow item HTML
+        function createPriorityFlowItem(item) {
+            const div = document.createElement('div');
+            div.className = 'priority-item bg-white border border-gray-200 rounded-lg p-4 flex items-center';
+            div.dataset.source = item.id;
+
+            const iconClass = getIconClass(item.icon);
+            const categoryClass = getCategoryClass(item.category);
+
+            div.innerHTML = `
+                <div class="drag-handle text-gray-400 mr-4">
+                    <i class="fas fa-grip-vertical text-lg"></i>
+                </div>
+                <div class="flex-shrink-0 mr-4">
+                    <div class="w-12 h-12 ${categoryClass.bg} rounded-lg flex items-center justify-center">
+                        <i class="fas ${iconClass} ${categoryClass.text} text-xl"></i>
+                    </div>
+                </div>
+                <div class="flex-grow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="font-semibold text-gray-900 flex items-center">
+                                ${item.name}
+                                ${item.primary ? '<span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">Primary</span>' : ''}
+                                ${item.category === 'industry' ? '<span class="ml-2 px-2 py-1 bg-cyan-100 text-cyan-800 text-xs rounded-full">Industry</span>' : ''}
+                                ${item.primary ? '<i class="fas fa-star text-yellow-500 ml-2"></i>' : ''}
+                            </h3>
+                            <p class="text-gray-600 text-sm">${item.description}</p>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="text-right">
+                                <div class="text-sm font-medium text-green-600">${Math.round(item.performance.successRate * 100)}% Success</div>
+                                <div class="text-xs text-gray-500">${item.performance.usageCount.toLocaleString()} uses</div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" ${item.active ? 'checked' : ''} class="sr-only peer" onchange="toggleSource('${item.id}', this)">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                <span class="ml-3 text-sm font-medium text-gray-900">Active</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-center space-x-4">
+                        <div class="flex-grow">
+                            <div class="flex justify-between text-xs text-gray-600 mb-1">
+                                <span>Confidence: ${Math.round(item.performance.avgConfidence * 100)}%</span>
+                                <span>Intelligence: ${item.intelligenceLevel}</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="performance-bar h-2 rounded-full" style="width: ${Math.round(item.performance.avgConfidence * 100)}%"></div>
+                            </div>
+                        </div>
+                        <button onclick="configureSource('${item.id}')" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                            Configure
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            return div;
+        }
+
+        // Helper functions for styling
+        function getIconClass(icon) {
+            const iconMap = {
+                'building': 'fa-building',
+                'industry': 'fa-industry',
+                'edit': 'fa-edit',
+                'robot': 'fa-robot'
+            };
+            return iconMap[icon] || 'fa-cog';
+        }
+
+        function getCategoryClass(category) {
+            const categoryMap = {
+                'primary': { bg: 'bg-blue-100', text: 'text-blue-600' },
+                'industry': { bg: 'bg-cyan-100', text: 'text-cyan-600' },
+                'template': { bg: 'bg-purple-100', text: 'text-purple-600' },
+                'fallback': { bg: 'bg-gray-100', text: 'text-gray-600' }
+            };
+            return categoryMap[category] || { bg: 'bg-gray-100', text: 'text-gray-600' };
+        }
+
+        // Initialize drag and drop
+        function initializeDragAndDrop() {
+            const priorityContainer = document.getElementById('priority-flow-container');
+            new Sortable(priorityContainer, {
+                animation: 150,
+                handle: '.drag-handle',
+                onEnd: function(evt) {
+                    updatePriorityOrder();
+                }
+            });
+        }
 
         // Tab switching
         function switchTab(tabName) {
@@ -384,46 +573,151 @@
         }
 
         // Toggle knowledge source
-        function toggleSource(sourceId, checkbox) {
-            console.log(`Toggling ${sourceId}: ${checkbox.checked}`);
-            // TODO: API call to update source status
+        async function toggleSource(sourceId, checkbox) {
+            try {
+                await apiCall(`/priority-flow/${currentCompanyId}/toggle`, 'POST', {
+                    sourceId,
+                    active: checkbox.checked
+                });
+                showNotification(`${sourceId} ${checkbox.checked ? 'enabled' : 'disabled'}`, 'success');
+            } catch (error) {
+                // Revert checkbox on error
+                checkbox.checked = !checkbox.checked;
+                showNotification('Failed to update source status', 'error');
+            }
         }
 
         // Configure knowledge source
-        function configureSource(sourceId) {
-            console.log(`Configuring ${sourceId}`);
-            // TODO: Open configuration modal
+        async function configureSource(sourceId) {
+            showNotification('Opening configuration for ' + sourceId, 'info');
+            // TODO: Open configuration modal with real data
         }
 
         // Update priority order after drag and drop
-        function updatePriorityOrder() {
-            const items = priorityContainer.querySelectorAll('.priority-item');
+        async function updatePriorityOrder() {
+            const items = document.querySelectorAll('#priority-flow-container .priority-item');
             const order = Array.from(items).map(item => item.dataset.source);
-            console.log('New priority order:', order);
-            // TODO: API call to update priority flow
-        }
-
-        // Quick actions
-        function optimizeAgent() {
-            alert('Auto-optimization starting... This will analyze performance and apply intelligent improvements.');
-        }
-
-        function analyzePerformance() {
-            alert('Opening performance analytics dashboard...');
-        }
-
-        function testAgent() {
-            alert('Launching agent test interface...');
-        }
-
-        function addKnowledgeSource() {
-            alert('Knowledge source addition interface coming soon...');
-        }
-
-        function resetToDefaults() {
-            if (confirm('Reset all AI Agent Logic settings to intelligent defaults?')) {
-                alert('Resetting to intelligent defaults...');
+            
+            try {
+                await apiCall(`/priority-flow/${currentCompanyId}/reorder`, 'POST', { order });
+                showNotification('Priority order updated successfully', 'success');
+            } catch (error) {
+                showNotification('Failed to update priority order', 'error');
+                // Reload to revert changes
+                await loadPriorityFlow();
             }
+        }
+
+        // Quick actions with real functionality
+        async function optimizeAgent() {
+            try {
+                showLoading(true);
+                showNotification('Starting AI agent optimization...', 'info');
+                
+                const result = await apiCall(`/optimize/${currentCompanyId}`, 'POST');
+                showNotification('Agent optimization completed successfully!', 'success');
+                
+                // Reload priority flow to show optimized settings
+                await loadPriorityFlow();
+            } catch (error) {
+                showNotification('Optimization failed. Please try again.', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function analyzePerformance() {
+            try {
+                showLoading(true);
+                const analytics = await apiCall(`/analytics/${currentCompanyId}`);
+                showNotification('Performance analysis completed', 'success');
+                
+                // TODO: Show analytics dashboard
+                console.log('Analytics data:', analytics);
+            } catch (error) {
+                showNotification('Failed to analyze performance', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function testAgent() {
+            showNotification('Launching agent test interface...', 'info');
+            // TODO: Open agent testing modal
+        }
+
+        async function addKnowledgeSource() {
+            showNotification('Opening knowledge source creation wizard...', 'info');
+            // TODO: Open add knowledge source modal
+        }
+
+        async function resetToDefaults() {
+            if (!confirm('Reset all AI Agent Logic settings to intelligent defaults?')) {
+                return;
+            }
+            
+            try {
+                showLoading(true);
+                await apiCall(`/priority-flow/${currentCompanyId}/reset`, 'POST');
+                showNotification('Settings reset to intelligent defaults', 'success');
+                await loadPriorityFlow();
+            } catch (error) {
+                showNotification('Failed to reset settings', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // UI Helper functions
+        function showLoading(show) {
+            // TODO: Implement loading spinner
+            if (show) {
+                document.body.style.cursor = 'wait';
+            } else {
+                document.body.style.cursor = 'default';
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${getNotificationClass(type)}`;
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas ${getNotificationIcon(type)} mr-2"></i>
+                    <span>${message}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-lg">&times;</button>
+                </div>
+            `;
+
+            document.body.appendChild(notification);
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+
+        function getNotificationClass(type) {
+            const classes = {
+                'success': 'bg-green-500 text-white',
+                'error': 'bg-red-500 text-white',
+                'warning': 'bg-yellow-500 text-black',
+                'info': 'bg-blue-500 text-white'
+            };
+            return classes[type] || classes.info;
+        }
+
+        function getNotificationIcon(type) {
+            const icons = {
+                'success': 'fa-check-circle',
+                'error': 'fa-exclamation-circle',
+                'warning': 'fa-exclamation-triangle',
+                'info': 'fa-info-circle'
+            };
+            return icons[type] || icons.info;
         }
     </script>
 </body>

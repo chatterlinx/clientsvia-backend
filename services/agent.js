@@ -20,8 +20,8 @@ const aiIntelligenceEngine = require('./aiIntelligenceEngine');
 // Import the custom KB checker
 const { checkCustomKB } = require('../middleware/checkCustomKB');
 
-// Import In-House Intelligence Engine
-const InHouseIntelligenceEngine = require('./inHouseIntelligenceEngine');
+// Import ClientsVia Intelligence Engine (replaces old inHouse engine)
+const ClientsViaIntelligenceEngine = require('./clientsViaIntelligenceEngine');
 
 // Import Template Intelligence Engine
 const TemplateIntelligenceEngine = require('./templateIntelligenceEngine');
