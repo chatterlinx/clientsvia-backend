@@ -4389,8 +4389,8 @@
             });
             
             // Set up context retention slider
-            const contextSlider = document.getElementById('contextRetentionSlider');
-            const contextValue = document.getElementById('contextRetentionValue');
+            const contextSlider = document.getElementById('clientsvia-contextRetentionSlider');
+            const contextValue = document.getElementById('clientsvia-contextRetentionValue');
             
             if (contextSlider && contextValue) {
                 contextSlider.addEventListener('input', () => {
@@ -4502,26 +4502,40 @@
                     
                     // Update memory settings
                     if (settings.memoryMode) {
-                        document.getElementById('memoryModeSelect').value = settings.memoryMode;
+                        const memoryModeElement = document.getElementById('clientsvia-memoryModeSelect');
+                        if (memoryModeElement) {
+                            memoryModeElement.value = settings.memoryMode;
+                        }
                     }
                     
                     if (settings.contextRetentionMinutes) {
-                        const slider = document.getElementById('contextRetentionSlider');
-                        const display = document.getElementById('contextRetentionValue');
-                        slider.value = settings.contextRetentionMinutes;
-                        display.textContent = `${settings.contextRetentionMinutes} minutes`;
+                        const slider = document.getElementById('clientsvia-contextRetentionSlider');
+                        const display = document.getElementById('clientsvia-contextRetentionValue');
+                        if (slider && display) {
+                            slider.value = settings.contextRetentionMinutes;
+                            display.textContent = `${settings.contextRetentionMinutes} minutes`;
+                        }
                     }
                     
                     // Update fallback behaviors
-                    document.getElementById('rejectLowConfidenceToggle').checked = 
-                        settings.rejectLowConfidence !== undefined ? settings.rejectLowConfidence : true;
+                    const rejectLowConfidenceElement = document.getElementById('clientsvia-rejectLowConfidenceToggle');
+                    if (rejectLowConfidenceElement) {
+                        rejectLowConfidenceElement.checked = 
+                            settings.rejectLowConfidence !== undefined ? settings.rejectLowConfidence : true;
+                    }
                         
-                    document.getElementById('escalateNoMatchToggle').checked = 
-                        settings.escalateOnNoMatch !== undefined ? settings.escalateOnNoMatch : true;
+                    const escalateNoMatchElement = document.getElementById('clientsvia-escalateNoMatchToggle');
+                    if (escalateNoMatchElement) {
+                        escalateNoMatchElement.checked = 
+                            settings.escalateOnNoMatch !== undefined ? settings.escalateOnNoMatch : true;
+                    }
                     
                     // Update fallback message
                     if (settings.fallbackMessage) {
-                        document.getElementById('fallbackMessageInput').value = settings.fallbackMessage;
+                        const fallbackMessageElement = document.getElementById('clientsvia-fallbackMessageInput');
+                        if (fallbackMessageElement) {
+                            fallbackMessageElement.value = settings.fallbackMessage;
+                        }
                     }
                     
                     console.log('✅ Knowledge settings loaded');
@@ -4555,11 +4569,11 @@
             const knowledgeData = {
                 sourcePriority,
                 confidenceThresholds,
-                memoryMode: document.getElementById('memoryModeSelect').value,
-                contextRetentionMinutes: parseInt(document.getElementById('contextRetentionSlider').value),
-                rejectLowConfidence: document.getElementById('rejectLowConfidenceToggle').checked,
-                escalateOnNoMatch: document.getElementById('escalateNoMatchToggle').checked,
-                fallbackMessage: document.getElementById('fallbackMessageInput').value.trim()
+                memoryMode: document.getElementById('clientsvia-memoryModeSelect')?.value || 'conversational',
+                contextRetentionMinutes: parseInt(document.getElementById('clientsvia-contextRetentionSlider')?.value || '30'),
+                rejectLowConfidence: document.getElementById('clientsvia-rejectLowConfidenceToggle')?.checked || true,
+                escalateOnNoMatch: document.getElementById('clientsvia-escalateNoMatchToggle')?.checked || true,
+                fallbackMessage: document.getElementById('clientsvia-fallbackMessageInput')?.value?.trim() || ''
             };
             
             try {
@@ -4612,17 +4626,27 @@
             document.getElementById('threshold-value-llmFallback').textContent = '0.60';
             
             // Reset memory settings
-            document.getElementById('memoryModeSelect').value = 'conversational';
-            document.getElementById('contextRetentionSlider').value = 30;
-            document.getElementById('contextRetentionValue').textContent = '30 minutes';
+            const memoryModeElement = document.getElementById('clientsvia-memoryModeSelect');
+            const contextSliderElement = document.getElementById('clientsvia-contextRetentionSlider');
+            const contextValueElement = document.getElementById('clientsvia-contextRetentionValue');
+            
+            if (memoryModeElement) memoryModeElement.value = 'conversational';
+            if (contextSliderElement) contextSliderElement.value = 30;
+            if (contextValueElement) contextValueElement.textContent = '30 minutes';
             
             // Reset fallback behaviors
-            document.getElementById('rejectLowConfidenceToggle').checked = true;
-            document.getElementById('escalateNoMatchToggle').checked = true;
+            const rejectLowConfidenceElement = document.getElementById('clientsvia-rejectLowConfidenceToggle');
+            const escalateNoMatchElement = document.getElementById('clientsvia-escalateNoMatchToggle');
+            
+            if (rejectLowConfidenceElement) rejectLowConfidenceElement.checked = true;
+            if (escalateNoMatchElement) escalateNoMatchElement.checked = true;
             
             // Reset fallback message
-            document.getElementById('fallbackMessageInput').value = 
-                "I want to make sure I give you accurate information. Let me connect you with a specialist who can help.";
+            const fallbackMessageElement = document.getElementById('clientsvia-fallbackMessageInput');
+            if (fallbackMessageElement) {
+                fallbackMessageElement.value = 
+                    "I want to make sure I give you accurate information. Let me connect you with a specialist who can help.";
+            }
             
             console.log('✅ Knowledge settings reset to defaults');
         }
