@@ -281,8 +281,24 @@ router.get('/google/callback', requireGoogleOAuth,
             });
             console.log('🔍 OAUTH CHECKPOINT 7: Cookie set, redirecting...');
             
-            // Redirect to dashboard
-            res.redirect('/index.html?auth=success');
+            // Send HTML page that sets localStorage and redirects
+            res.send(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Authentication Success</title>
+                </head>
+                <body>
+                    <script>
+                        console.log('🔍 OAuth Success: Setting localStorage token...');
+                        localStorage.setItem('adminToken', '${token}');
+                        console.log('🔍 OAuth Success: Token stored, redirecting to dashboard...');
+                        window.location.href = '/index.html';
+                    </script>
+                    <p>Authentication successful, redirecting...</p>
+                </body>
+                </html>
+            `);
             
         } catch (err) {
             console.error('🔍 OAUTH CHECKPOINT ERROR:', err);
