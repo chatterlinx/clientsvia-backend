@@ -85,32 +85,8 @@ app.use(express.json());          // Body parsing
 app.use(express.static(path.join(__dirname, 'public')));
 console.log('✅ Static files served from /public directory');
 
-const redisClient = redis.createClient({ 
-  url: process.env.REDIS_URL,
-  socket: {
-    connectTimeout: 60000,
-    lazyConnect: true,
-    reconnectDelay: 1000,
-    reconnectAttempts: 5,
-    keepAlive: 30000,
-  },
-  retry_unfulfilled_commands: true,
-  enable_offline_queue: false
-});
-
-// Handle Redis connection errors gracefully
-redisClient.on('error', (err) => {
-  console.error('Session Redis Client Error:', err);
-  // Don't crash the application
-});
-
-redisClient.on('connect', () => {
-  console.log('✅ Session Redis connected successfully');
-});
-
-redisClient.on('reconnecting', () => {
-  console.log('🔄 Session Redis reconnecting...');
-});
+// TEMPORARILY DISABLE REDIS FOR DEBUGGING
+console.log('⚠️ Redis disabled for debugging - using memory store only');
 
 console.log('🔍 CHECKPOINT 1: Starting session configuration...');
 console.log('SESSION_SECRET exists:', !!process.env.SESSION_SECRET);
