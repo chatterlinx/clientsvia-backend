@@ -712,6 +712,9 @@
                     <button onclick="previewAllResponses()" class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors">
                         <i class="fas fa-eye mr-2"></i>Preview All
                     </button>
+                    <button onclick="verifyConfiguration()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-search mr-2"></i>Verify Saved Data
+                    </button>
                     <button onclick="saveResponseCategories()" class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
                         <i class="fas fa-save mr-2"></i>Save Changes
                     </button>
@@ -1674,6 +1677,48 @@ This only works from localhost (127.0.0.1)
             showBasicNotification('👁️ Showing preview of all responses...', 'info');
         };
 
+        // Verify what's actually saved in the database
+        window.verifyConfiguration = async function() {
+            console.log('verifyConfiguration called');
+            showBasicNotification('🔍 Checking what\'s actually saved in database...', 'info');
+            
+            try {
+                const response = await fetch('/api/ai-agent-logic/verify-config', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('📊 VERIFICATION RESULT - What\'s actually in the database:', result);
+                    
+                    const config = result.currentConfiguration;
+                    
+                    showBasicNotification(`✅ Database Check Complete! Version: ${config.version}, Last Updated: ${config.lastUpdated ? new Date(config.lastUpdated).toLocaleString() : 'Never'}`, 'success');
+                    
+                    // Log detailed breakdown
+                    console.log('🔍 DETAILED VERIFICATION:');
+                    console.log('Voice Tone:', config.agentPersonality?.voiceTone || 'Not set');
+                    console.log('Speech Pace:', config.agentPersonality?.speechPace || 'Not set');
+                    console.log('Allow Barge-In:', config.behaviorControls?.allowBargeIn || false);
+                    console.log('Acknowledge Emotion:', config.behaviorControls?.acknowledgeEmotion || false);
+                    console.log('Use Emails:', config.behaviorControls?.useEmails || false);
+                    console.log('Priority Flow Items:', config.answerPriorityFlow?.length || 0);
+                    
+                } else {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+                }
+                
+            } catch (error) {
+                console.error('Verification failed:', error);
+                showBasicNotification(`❌ Verification failed: ${error.message}`, 'error');
+            }
+        };
+
         // Test that all functions are properly loaded
         console.log('Response Categories functions loaded:');
         console.log('switchResponseTab:', typeof window.switchResponseTab);
@@ -1682,6 +1727,7 @@ This only works from localhost (127.0.0.1)
         console.log('toggleLivePreview:', typeof window.toggleLivePreview);
         console.log('saveResponseCategories:', typeof window.saveResponseCategories);
         console.log('previewAllResponses:', typeof window.previewAllResponses);
+        console.log('verifyConfiguration:', typeof window.verifyConfiguration);
 
     </script>
 </body>

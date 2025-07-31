@@ -771,6 +771,29 @@ router.post('/save-config', authenticateSingleSession, async (req, res) => {
         await company.save();
 
         console.log(`✅ AI Agent configuration saved successfully for company ${companyId}`);
+        
+        // VERIFICATION: Read back the saved data to confirm persistence
+        console.log('🔍 VERIFICATION: Reading back saved data from database...');
+        const verifyCompany = await Company.findById(companyId);
+        
+        if (verifyCompany && verifyCompany.aiAgentLogic) {
+            console.log('✅ VERIFICATION SUCCESSFUL: Data confirmed in database:', {
+                version: verifyCompany.aiAgentLogic.version,
+                lastUpdated: verifyCompany.aiAgentLogic.lastUpdated,
+                hasAnswerPriorityFlow: !!verifyCompany.aiAgentLogic.answerPriorityFlow,
+                hasAgentPersonality: !!verifyCompany.aiAgentLogic.agentPersonality,
+                hasBehaviorControls: !!verifyCompany.aiAgentLogic.behaviorControls,
+                actualData: {
+                    voiceTone: verifyCompany.aiAgentLogic.agentPersonality?.voiceTone,
+                    speechPace: verifyCompany.aiAgentLogic.agentPersonality?.speechPace,
+                    allowBargeIn: verifyCompany.aiAgentLogic.behaviorControls?.allowBargeIn,
+                    acknowledgeEmotion: verifyCompany.aiAgentLogic.behaviorControls?.acknowledgeEmotion,
+                    useEmails: verifyCompany.aiAgentLogic.behaviorControls?.useEmails
+                }
+            });
+        } else {
+            console.log('❌ VERIFICATION FAILED: Data not found in database after save!');
+        }
 
         res.json({
             success: true,
@@ -786,6 +809,53 @@ router.post('/save-config', authenticateSingleSession, async (req, res) => {
         console.error('Save AI Agent config error:', error);
         res.status(500).json({ 
             error: 'Failed to save AI Agent configuration',
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * 🔍 Verify AI Agent Configuration
+ * Returns the current saved configuration for debugging
+ */
+router.get('/verify-config', authenticateSingleSession, async (req, res) => {
+    try {
+        // Get company ID - handle both populated and non-populated cases
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ error: 'Company ID is required' });
+        }
+
+        // Find the company
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const currentConfig = company.aiAgentLogic || {};
+        
+        console.log('🔍 Configuration verification requested for company:', companyId);
+        console.log('Current AI Agent Logic config:', currentConfig);
+
+        res.json({
+            success: true,
+            companyId,
+            companyName: company.companyName || company.name,
+            currentConfiguration: {
+                version: currentConfig.version || 0,
+                lastUpdated: currentConfig.lastUpdated,
+                answerPriorityFlow: currentConfig.answerPriorityFlow || [],
+                agentPersonality: currentConfig.agentPersonality || {},
+                behaviorControls: currentConfig.behaviorControls || {},
+                fullConfig: currentConfig
+            }
+        });
+
+    } catch (error) {
+        console.error('Verify config error:', error);
+        res.status(500).json({ 
+            error: 'Failed to verify configuration',
             details: error.message 
         });
     }
