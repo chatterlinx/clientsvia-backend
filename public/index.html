@@ -315,8 +315,27 @@
             }
 
             // Logout function
-            function logout() {
-                // Clear stored tokens
+            async function logout() {
+                try {
+                    // Call backend logout endpoint to clear session and cookies
+                    const response = await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        credentials: 'include', // Include cookies
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (response.ok) {
+                        console.log('Server logout successful');
+                    } else {
+                        console.warn('Server logout failed, continuing with client-side logout');
+                    }
+                } catch (error) {
+                    console.warn('Logout request failed:', error, 'Continuing with client-side logout');
+                }
+
+                // Clear stored tokens (always do this regardless of server response)
                 localStorage.removeItem('adminToken');
                 localStorage.removeItem('adminUser');
                 

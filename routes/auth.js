@@ -195,9 +195,25 @@ router.post('/logout', authenticateSingleSession, async (req, res) => {
             // Kill the specific session
             sessionManager.activeSessions.delete(sessionId);
             
-            logger.auth('User logged out - session terminated', {
+            logger.info('User logged out - session terminated', {
                 userId: req.user._id,
                 sessionId: sessionId
+            });
+        }
+
+        // Clear the HTTP-only cookie
+        res.clearCookie('authToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict'
+        });
+
+        // Destroy session
+        if (req.session) {
+            req.session.destroy((err) => {
+                if (err) {
+                    logger.error('Session destruction error:', err);
+                }
             });
         }
 
