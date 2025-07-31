@@ -112,11 +112,18 @@ class CompanyProfileManager {
      * Validate that required DOM elements exist
      */
     validateDOMElements() {
-        const requiredElements = ['editFormContainer', 'editButton'];
+        const requiredElements = ['editFormContainer'];
+        const optionalElements = ['editButton']; // Non-critical elements
+        
         const missing = requiredElements.filter(key => !this.domElements[key]);
+        const missingOptional = optionalElements.filter(key => !this.domElements[key]);
         
         if (missing.length > 0) {
-            console.warn('⚠️ Missing DOM elements:', missing);
+            console.warn('⚠️ Missing required DOM elements:', missing);
+        }
+        
+        if (missingOptional.length > 0) {
+            console.log('ℹ️ Optional DOM elements not found (this is normal):', missingOptional);
         }
     }
 
