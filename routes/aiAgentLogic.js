@@ -697,4 +697,75 @@ router.patch('/response-categories/:companyId/:category/:templateId', authentica
     }
 });
 
+/**
+ * 💾 Save Complete AI Agent Configuration
+ * Saves all agent settings including priority flow, personality, and behavior controls
+ */
+router.post('/save-config', authenticateSingleSession, async (req, res) => {
+    try {
+        const { answerPriorityFlow, agentPersonality, behaviorControls } = req.body;
+        const companyId = req.user.companyId;
+
+        if (!companyId) {
+            return res.status(400).json({ error: 'Company ID is required' });
+        }
+
+        // Find the company
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        // Initialize aiAgentLogic if it doesn't exist
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+
+        // Update the configuration
+        if (answerPriorityFlow) {
+            company.aiAgentLogic.answerPriorityFlow = answerPriorityFlow;
+        }
+        
+        if (agentPersonality) {
+            company.aiAgentLogic.agentPersonality = {
+                ...company.aiAgentLogic.agentPersonality,
+                ...agentPersonality
+            };
+        }
+        
+        if (behaviorControls) {
+            company.aiAgentLogic.behaviorControls = {
+                ...company.aiAgentLogic.behaviorControls,
+                ...behaviorControls
+            };
+        }
+
+        // Add metadata
+        company.aiAgentLogic.lastUpdated = new Date();
+        company.aiAgentLogic.version = (company.aiAgentLogic.version || 0) + 1;
+
+        // Save the company
+        await company.save();
+
+        console.log(`✅ AI Agent configuration saved for company ${companyId}`);
+
+        res.json({
+            success: true,
+            message: 'AI Agent configuration saved successfully',
+            data: {
+                companyId,
+                version: company.aiAgentLogic.version,
+                lastUpdated: company.aiAgentLogic.lastUpdated
+            }
+        });
+
+    } catch (error) {
+        console.error('Save AI Agent config error:', error);
+        res.status(500).json({ 
+            error: 'Failed to save AI Agent configuration',
+            details: error.message 
+        });
+    }
+});
+
 module.exports = router;
