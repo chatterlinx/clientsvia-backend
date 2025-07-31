@@ -314,49 +314,49 @@
                 }
             }
 
-            // Logout function
-            async function logout() {
-                console.log('🔍 Logout initiated...');
-                
-                try {
-                    console.log('🔍 Calling backend logout endpoint...');
-                    // Call backend logout endpoint to clear session and cookies
-                    const response = await fetch('/api/auth/logout', {
-                        method: 'POST',
-                        credentials: 'include', // Include cookies
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
-                        }
-                    });
-
-                    const result = await response.json();
-                    
-                    if (response.ok) {
-                        console.log('🔍 Server logout successful:', result.message);
-                    } else {
-                        console.warn('🔍 Server logout returned error:', result);
-                    }
-                } catch (error) {
-                    console.warn('🔍 Logout request failed:', error.message, 'Continuing with client-side logout');
-                }
-
-                // Clear stored tokens (always do this regardless of server response)
-                console.log('🔍 Clearing localStorage tokens...');
-                localStorage.removeItem('adminToken');
-                localStorage.removeItem('adminUser');
-                
-                // Additional cleanup - clear any other auth-related storage
-                localStorage.removeItem('authToken'); // Legacy cleanup
-                sessionStorage.clear(); // Clear session storage too
-                
-                console.log('🔍 Redirecting to login page...');
-                // Redirect to login page
-                window.location.href = '/login.html';
-            }
-
             fetchDashboardStats(); 
         });
+
+        // Logout function - Global scope so onclick can access it
+        async function logout() {
+            console.log('🔍 Logout initiated...');
+            
+            try {
+                console.log('🔍 Calling backend logout endpoint...');
+                // Call backend logout endpoint to clear session and cookies
+                const response = await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include', // Include cookies
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    console.log('🔍 Server logout successful:', result.message);
+                } else {
+                    console.warn('🔍 Server logout returned error:', result);
+                }
+            } catch (error) {
+                console.warn('🔍 Logout request failed:', error.message, 'Continuing with client-side logout');
+            }
+
+            // Clear stored tokens (always do this regardless of server response)
+            console.log('🔍 Clearing localStorage tokens...');
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('adminUser');
+            
+            // Additional cleanup - clear any other auth-related storage
+            localStorage.removeItem('authToken'); // Legacy cleanup
+            sessionStorage.clear(); // Clear session storage too
+            
+            console.log('🔍 Redirecting to login page...');
+            // Redirect to login page
+            window.location.href = '/login.html';
+        }
     </script>
 </body>
 </html>
