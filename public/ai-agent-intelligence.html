@@ -517,7 +517,7 @@
         });
 
         function checkAuthentication() {
-            const token = localStorage.getItem('authToken');
+            const token = localStorage.getItem('adminToken');
             if (!token) {
                 window.location.href = '/login.html';
                 return;
@@ -526,7 +526,7 @@
 
         async function loadCompanies() {
             try {
-                const token = localStorage.getItem('authToken');
+                const token = localStorage.getItem('adminToken');
                 const response = await fetch('/api/company/companies', {
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -579,7 +579,7 @@
 
         async function loadCompanySettings(companyId) {
             try {
-                const token = localStorage.getItem('authToken');
+                const token = localStorage.getItem('adminToken');
                 const response = await fetch(`/api/company/companies/${companyId}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -707,7 +707,7 @@
 
             try {
                 const settings = collectAllSettings();
-                const token = localStorage.getItem('authToken');
+                const token = localStorage.getItem('adminToken');
                 
                 const response = await fetch(`/api/company/companies/${currentCompanyId}`, {
                     method: 'PUT',
@@ -789,7 +789,7 @@
             }
 
             try {
-                const token = localStorage.getItem('authToken');
+                const token = localStorage.getItem('adminToken');
                 const startTime = Date.now();
                 
                 const response = await fetch('/api/ai-agent/test', {
