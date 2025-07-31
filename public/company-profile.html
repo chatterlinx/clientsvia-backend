@@ -6039,6 +6039,104 @@
             console.log('✅ Response Placeholders table populated with', defaultPlaceholders.length, 'placeholders');
         }
 
+        // Get available placeholders for variable insertion
+        function getAvailablePlaceholders() {
+            const companyData = window.companyProfileManager?.companyData;
+            
+            return [
+                {
+                    placeholder: '{companyname}',
+                    display: 'Company Name',
+                    value: companyData?.companyName || 'atlas air',
+                    description: 'The name of your company'
+                },
+                {
+                    placeholder: '{businessphone}',
+                    display: 'Business Phone',
+                    value: companyData?.primaryContact?.phoneNumber || '+12395652202',
+                    description: 'Main business phone number'
+                },
+                {
+                    placeholder: '{businessemail}',
+                    display: 'Business Email',
+                    value: companyData?.primaryContact?.email || 'mypenguinair@gmail.com',
+                    description: 'Main business email address'
+                },
+                {
+                    placeholder: '{businesshours}',
+                    display: 'Business Hours',
+                    value: companyData?.businessHours || 'm-f 9-5',
+                    description: 'Standard business operating hours'
+                },
+                {
+                    placeholder: '{website}',
+                    display: 'Website',
+                    value: companyData?.website || 'www.atlasair.com',
+                    description: 'Company website URL'
+                },
+                {
+                    placeholder: '{callername}',
+                    display: 'Caller Name',
+                    value: 'John Doe',
+                    description: 'Name of the caller (AI asks during call)'
+                },
+                {
+                    placeholder: '{currenttime}',
+                    display: 'Current Time',
+                    value: new Date().toLocaleTimeString(),
+                    description: 'Current time (dynamic)'
+                },
+                {
+                    placeholder: '{departmentname}',
+                    display: 'Department',
+                    value: 'Customer Service',
+                    description: 'Department name for transfers'
+                },
+                {
+                    placeholder: '{specialistname}',
+                    display: 'Specialist',
+                    value: 'Sarah Wilson',
+                    description: 'Specialist name for transfers'
+                },
+                {
+                    placeholder: '{servicetype}',
+                    display: 'Service Type',
+                    value: 'Technical Support',
+                    description: 'Type of service requested'
+                },
+                {
+                    placeholder: '{estimatedtime}',
+                    display: 'Wait Time',
+                    value: '5-10 minutes',
+                    description: 'Estimated wait or processing time'
+                },
+                {
+                    placeholder: '{phonenumber}',
+                    display: 'Phone Number',
+                    value: '+1-234-567-8900',
+                    description: 'Caller\'s phone number'
+                },
+                {
+                    placeholder: '{ticketnumber}',
+                    display: 'Ticket Number',
+                    value: 'TK-12345',
+                    description: 'Support ticket number'
+                },
+                {
+                    placeholder: '{issuetype}',
+                    display: 'Issue Type',
+                    value: 'billing inquiry',
+                    description: 'Type of issue identified'
+                },
+                {
+                    placeholder: '{requesttype}',
+                    display: 'Request Type',
+                    value: 'account update',
+                    description: 'Type of request made'
+                }
+            ];
+        }
+
         // Update variable insertion buttons in Response Categories
         function updateVariableInsertionButtons() {
             const placeholders = getAvailablePlaceholders();
