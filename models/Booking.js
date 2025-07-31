@@ -196,7 +196,7 @@ const bookingSchema = new mongoose.Schema({
 bookingSchema.index({ companyId: 1, 'scheduling.confirmedDate': 1 });
 bookingSchema.index({ 'customer.phone': 1 });
 bookingSchema.index({ 'status.current': 1, companyId: 1 });
-bookingSchema.index({ bookingId: 1 });
+// bookingId already indexed due to unique: true constraint
 bookingSchema.index({ 'aiInteraction.conversationId': 1 });
 
 // Virtual for human-readable booking reference

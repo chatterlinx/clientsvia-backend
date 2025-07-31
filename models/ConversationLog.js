@@ -189,7 +189,7 @@ const conversationLogSchema = new mongoose.Schema({
 
 // Indexes for performance
 conversationLogSchema.index({ companyId: 1, createdAt: -1 });
-conversationLogSchema.index({ conversationId: 1 });
+// conversationId already indexed due to unique: true constraint
 conversationLogSchema.index({ 'session.customerPhone': 1 });
 conversationLogSchema.index({ 'analysis.primaryIntent': 1, companyId: 1 });
 conversationLogSchema.index({ 'outcomes.bookingCreated': 1, companyId: 1 });
