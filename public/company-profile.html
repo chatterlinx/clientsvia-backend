@@ -4467,7 +4467,7 @@
             if (!companyId) return;
             
             try {
-                const response = await fetch(`/api/company/companies/${companyId}/knowledge`);
+                const response = await fetch(`/api/company/${companyId}/knowledge`);
                 if (!response.ok) {
                     console.log('Using default knowledge settings');
                     return;
