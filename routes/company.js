@@ -1214,4 +1214,8 @@ router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
 const personalityRoutes = require('./company/personality');
 router.use('/', personalityRoutes);
 
+// Include knowledge routes
+const knowledgeRoutes = require('./company/knowledge');
+router.use('/', knowledgeRoutes);
+
 module.exports = router;
