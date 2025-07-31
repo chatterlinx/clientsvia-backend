@@ -115,9 +115,13 @@ redisClient.on('reconnecting', () => {
 // Use MemoryStore as fallback if Redis fails
 let sessionStore;
 try {
-  const redisStore = new RedisStore({ client: redisClient });
-  sessionStore = redisStore;
-  console.log('📦 Using Redis for session storage');
+  if (process.env.REDIS_URL && redisClient) {
+    const redisStore = new RedisStore({ client: redisClient });
+    sessionStore = redisStore;
+    console.log('📦 Using Redis for session storage');
+  } else {
+    throw new Error('Redis not configured, using memory store');
+  }
 } catch (error) {
   console.warn('⚠️ Redis session store failed, using memory store:', error.message);
   sessionStore = new session.MemoryStore();
@@ -130,7 +134,7 @@ app.use(session({
   cookie: {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
