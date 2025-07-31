@@ -4649,19 +4649,36 @@
         window.toggleResponsePreview = function() {
             console.log('toggleResponsePreview called');
             try {
-                const button = event.target;
+                const button = event.target.closest('button');
+                const previewPanel = document.getElementById('response-preview-panel');
                 const isLiveMode = button.textContent.includes('Stop');
                 
+                if (!previewPanel) {
+                    console.error('Preview panel not found!');
+                    return;
+                }
+                
                 if (isLiveMode) {
+                    // Hide live preview panel
+                    previewPanel.classList.add('hidden');
                     button.innerHTML = '<i class="fas fa-eye mr-2"></i>Live Preview';
                     button.classList.remove('bg-red-600', 'hover:bg-red-700');
                     button.classList.add('bg-purple-600', 'hover:bg-purple-700');
-                    console.log('Live preview disabled');
+                    console.log('Live preview disabled - panel hidden');
                 } else {
+                    // Show live preview panel
+                    previewPanel.classList.remove('hidden');
                     button.innerHTML = '<i class="fas fa-eye-slash mr-2"></i>Stop Preview';
                     button.classList.remove('bg-purple-600', 'hover:bg-purple-700');
                     button.classList.add('bg-red-600', 'hover:bg-red-700');
-                    console.log('Live preview enabled');
+                    
+                    // Initialize preview content
+                    const originalDiv = document.getElementById('preview-original');
+                    const personalizedDiv = document.getElementById('preview-personalized');
+                    if (originalDiv) originalDiv.textContent = 'Click on any response to see live preview...';
+                    if (personalizedDiv) personalizedDiv.textContent = 'Personality-enhanced version will appear here...';
+                    
+                    console.log('Live preview enabled - panel shown');
                 }
             } catch (error) {
                 console.error('Error in toggleResponsePreview:', error);
@@ -4787,6 +4804,61 @@
                 }
             }
         };
+
+        // Function to update live preview panel
+        window.updateLivePreview = function(textareaId) {
+            const previewPanel = document.getElementById('response-preview-panel');
+            if (!previewPanel || previewPanel.classList.contains('hidden')) {
+                return; // Live preview is not active
+            }
+            
+            const textarea = document.getElementById(textareaId);
+            if (!textarea) return;
+            
+            const originalDiv = document.getElementById('preview-original');
+            const personalizedDiv = document.getElementById('preview-personalized');
+            
+            if (originalDiv && personalizedDiv) {
+                const template = textarea.value;
+                
+                // Show original template
+                originalDiv.innerHTML = `<strong>${textareaId.replace('response-', '').replace('-', ' ')}:</strong><br>${template || 'Empty response...'}`;
+                
+                // Show personalized version with sample data
+                const personalizedText = template
+                    .replace(/\{\{callerName\}\}/g, 'John Smith')
+                    .replace(/\{companyname\}/g, 'ClientsVia Solutions')
+                    .replace(/\{\{companyName\}\}/g, 'ClientsVia Solutions')
+                    .replace(/\{businessphone\}/g, '+1-234-567-8900')
+                    .replace(/\{businessemail\}/g, 'info@clientsvia.com')
+                    .replace(/\{businesshours\}/g, 'Monday-Friday 9AM-5PM')
+                    .replace(/\{\{businessHours\}\}/g, 'Monday-Friday 9AM-5PM')
+                    .replace(/\{\{website\}\}/g, 'www.clientsvia.com')
+                    .replace(/\{\{departmentName\}\}/g, 'Technical Support')
+                    .replace(/\{\{serviceType\}\}/g, 'our service')
+                    .replace(/\{\{phoneNumber\}\}/g, 'your number')
+                    .replace(/\{\{managerName\}\}/g, 'Sarah Johnson')
+                    .replace(/\{\{issueType\}\}/g, 'this issue')
+                    .replace(/\{\{requestType\}\}/g, 'your request')
+                    .replace(/\{\{serviceProvided\}\}/g, 'solving your problem')
+                    .replace(/\{\{estimatedTime\}\}/g, '2-3 minutes');
+                
+                personalizedDiv.innerHTML = `<strong>With Sample Data:</strong><br>${personalizedText || 'Empty response...'}`;
+            }
+        };
+        
+        // Attach event listeners to all response textareas
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                const responseTextareas = document.querySelectorAll('[id^="response-"]');
+                responseTextareas.forEach(textarea => {
+                    // Update live preview on focus and input
+                    textarea.addEventListener('focus', () => updateLivePreview(textarea.id));
+                    textarea.addEventListener('input', () => updateLivePreview(textarea.id));
+                });
+                console.log(`🎭 Live preview listeners attached to ${responseTextareas.length} response textareas`);
+            }, 1000); // Delay to ensure all elements are loaded
+        });
 
         console.log('✅ Response Categories functions loaded successfully');
     </script>
