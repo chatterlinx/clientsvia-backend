@@ -4775,17 +4775,47 @@
                     });
                     
                     const result = await response.json();
+                    console.log('🔍 Full server response:', result);
                     
                     if (result.success) {
-                        // Create and play audio
-                        console.log('🔊 Creating audio element with URL:', result.audioUrl);
-                        const audio = new Audio(result.audioUrl);
+                        let audioUrl;
+                        
+                        // Handle different response formats
+                        if (result.audioUrl) {
+                            // Direct URL format
+                            audioUrl = result.audioUrl;
+                            console.log('🔊 Using direct audio URL:', audioUrl);
+                        } else if (result.audioContent) {
+                            // Base64 audio content - create blob URL
+                            console.log('🔊 Converting base64 audio content to blob URL');
+                            const binaryString = atob(result.audioContent);
+                            const bytes = new Uint8Array(binaryString.length);
+                            for (let i = 0; i < binaryString.length; i++) {
+                                bytes[i] = binaryString.charCodeAt(i);
+                            }
+                            const blob = new Blob([bytes], { type: 'audio/mpeg' });
+                            audioUrl = URL.createObjectURL(blob);
+                            console.log('🔊 Created blob URL:', audioUrl);
+                        } else {
+                            console.error('🚫 No audio URL or content found in response:', result);
+                            alert('Audio generated but no playback data received from server.');
+                            return;
+                        }
+                        
+                        const audio = new Audio(audioUrl);
                         
                         // Add event listeners for debugging
                         audio.addEventListener('loadstart', () => console.log('🔊 Audio loadstart'));
                         audio.addEventListener('canplay', () => console.log('🔊 Audio canplay'));
                         audio.addEventListener('play', () => console.log('🔊 Audio started playing'));
-                        audio.addEventListener('ended', () => console.log('🔊 Audio finished playing'));
+                        audio.addEventListener('ended', () => {
+                            console.log('🔊 Audio finished playing');
+                            // Clean up blob URL if it was created from base64
+                            if (result.audioContent && audioUrl.startsWith('blob:')) {
+                                URL.revokeObjectURL(audioUrl);
+                                console.log('🧹 Cleaned up blob URL');
+                            }
+                        });
                         audio.addEventListener('error', (e) => console.error('🚫 Audio error:', e));
                         
                         // Attempt to play with user feedback
