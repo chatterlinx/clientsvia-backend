@@ -821,7 +821,8 @@
                                     </ul>
                                     <p class="text-xs text-blue-600 mt-2">
                                         <i class="fas fa-info-circle mr-1"></i>
-                                        Dynamic placeholders like <code>{callername}</code> are filled by the AI agent during actual phone conversations.
+                                        Dynamic placeholders like <code>{callername}</code> will be filled by the AI agent during phone conversations. 
+                                        <strong>Contact database lookup is available but not yet integrated with real-time calls.</strong>
                                     </p>
                                 </div>
                                 
@@ -4785,7 +4786,7 @@
                 {
                     placeholder: '{callername}',
                     value: 'John Doe',
-                    description: 'Name of the caller (obtained during call via Caller ID, CRM lookup, or by asking)',
+                    description: 'Name of the caller (AI asks during call - contact lookup integration pending)',
                     type: 'dynamic'
                 },
                 {

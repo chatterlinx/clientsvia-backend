@@ -175,6 +175,12 @@ console.log('✅ Agent Settings routes registered at /api/agent'); // ENTERPRISE
 console.log('✅ Event Hooks routes registered at /api/event-hooks');
 console.log('✅ Notification routes registered at /api/notifications');
 console.log('✅ Q&A Learning routes registered at /api/qna-learning');
+
+// Contact Lookup for Real-time Caller Identification
+const contactLookupRoutes = require('./routes/contactLookup');
+app.use('/api/contact-lookup', contactLookupRoutes);
+console.log('✅ Contact Lookup routes registered at /api/contact-lookup');
+
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 
