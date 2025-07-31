@@ -87,6 +87,7 @@ console.log('✅ Static files served from /public directory');
 
 // TEMPORARILY DISABLE REDIS FOR DEBUGGING
 console.log('⚠️ Redis disabled for debugging - using memory store only');
+console.log('🔍 PRE-SESSION CHECKPOINT: About to configure session...');
 
 console.log('🔍 CHECKPOINT 1: Starting session configuration...');
 console.log('SESSION_SECRET exists:', !!process.env.SESSION_SECRET);
