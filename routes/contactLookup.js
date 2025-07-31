@@ -179,4 +179,179 @@ router.get('/recent-callers', auth, async (req, res) => {
     }
 });
 
+/**
+ * POST /api/contact-lookup/live-call-update
+ * Update contact during live call with real-time data
+ */
+router.post('/live-call-update', auth, async (req, res) => {
+    try {
+        const { phoneNumber, callSid, callData } = req.body;
+        const { companyId } = req.user;
+        
+        if (!phoneNumber || !callSid) {
+            return res.status(400).json({ error: 'Phone number and call SID required' });
+        }
+        
+        // Clean phone number
+        const cleanPhone = phoneNumber.replace(/\D/g, '');
+        
+        // Find or create contact
+        let contact = await Contact.findOne({
+            companyId,
+            $or: [
+                { primaryPhone: { $regex: cleanPhone, $options: 'i' } },
+                { alternatePhone: { $regex: cleanPhone, $options: 'i' } }
+            ]
+        });
+        
+        if (!contact) {
+            // Create new contact during live call
+            contact = new Contact({
+                companyId,
+                primaryPhone: phoneNumber,
+                fullName: callData.callerName || 'Live Caller',
+                status: 'new_lead',
+                leadSource: 'live_call',
+                customerType: 'residential'
+            });
+        }
+        
+        // Update live call data
+        if (callData.callerName && !contact.fullName) {
+            contact.fullName = callData.callerName;
+        }
+        
+        // Add or update current interaction
+        const existingInteractionIndex = contact.interactions.findIndex(
+            interaction => interaction.twilioCallSid === callSid
+        );
+        
+        const currentInteraction = {
+            type: 'call',
+            direction: 'inbound',
+            timestamp: new Date(),
+            summary: callData.summary || 'Call in progress',
+            outcome: callData.outcome || 'in_progress',
+            twilioCallSid: callSid,
+            duration: callData.duration || 0,
+            agentNotes: callData.notes || '',
+            metadata: {
+                ...callData.metadata,
+                isLiveCall: true,
+                lastUpdate: new Date()
+            }
+        };
+        
+        if (existingInteractionIndex >= 0) {
+            // Update existing interaction
+            contact.interactions[existingInteractionIndex] = currentInteraction;
+        } else {
+            // Add new interaction
+            contact.interactions.push(currentInteraction);
+        }
+        
+        // Update contact metadata
+        contact.lastContactDate = new Date();
+        if (callData.extractedData) {
+            contact.extractedData = { ...contact.extractedData, ...callData.extractedData };
+        }
+        
+        await contact.save();
+        
+        res.json({
+            success: true,
+            contactId: contact._id,
+            contactName: contact.fullName,
+            isNewContact: existingInteractionIndex < 0,
+            message: 'Live call data updated successfully'
+        });
+        
+    } catch (error) {
+        console.error('Live call update error:', error);
+        res.status(500).json({ error: 'Failed to update live call data' });
+    }
+});
+
+/**
+ * POST /api/contact-lookup/call-completed
+ * Finalize contact record when call completes
+ */
+router.post('/call-completed', auth, async (req, res) => {
+    try {
+        const { phoneNumber, callSid, finalData } = req.body;
+        const { companyId } = req.user;
+        
+        if (!phoneNumber || !callSid) {
+            return res.status(400).json({ error: 'Phone number and call SID required' });
+        }
+        
+        // Clean phone number
+        const cleanPhone = phoneNumber.replace(/\D/g, '');
+        
+        // Find contact
+        const contact = await Contact.findOne({
+            companyId,
+            $or: [
+                { primaryPhone: { $regex: cleanPhone, $options: 'i' } },
+                { alternatePhone: { $regex: cleanPhone, $options: 'i' } }
+            ]
+        });
+        
+        if (!contact) {
+            return res.status(404).json({ error: 'Contact not found' });
+        }
+        
+        // Find and finalize the interaction
+        const interactionIndex = contact.interactions.findIndex(
+            interaction => interaction.twilioCallSid === callSid
+        );
+        
+        if (interactionIndex >= 0) {
+            // Update final call data
+            contact.interactions[interactionIndex] = {
+                ...contact.interactions[interactionIndex],
+                duration: finalData.duration || contact.interactions[interactionIndex].duration,
+                summary: finalData.summary || contact.interactions[interactionIndex].summary,
+                outcome: finalData.outcome || 'completed',
+                agentNotes: finalData.notes || contact.interactions[interactionIndex].agentNotes,
+                metadata: {
+                    ...contact.interactions[interactionIndex].metadata,
+                    ...finalData.metadata,
+                    isLiveCall: false,
+                    completedAt: new Date()
+                }
+            };
+            
+            // Update contact totals
+            contact.totalCalls = (contact.totalCalls || 0) + 1;
+            contact.lastContactDate = new Date();
+            
+            // Update extracted data
+            if (finalData.extractedData) {
+                contact.extractedData = { ...contact.extractedData, ...finalData.extractedData };
+            }
+            
+            // Update status if needed
+            if (finalData.newStatus) {
+                contact.status = finalData.newStatus;
+            }
+            
+            await contact.save();
+            
+            res.json({
+                success: true,
+                contactId: contact._id,
+                finalCallDuration: contact.interactions[interactionIndex].duration,
+                message: 'Call completed and contact updated'
+            });
+        } else {
+            res.status(404).json({ error: 'Call interaction not found' });
+        }
+        
+    } catch (error) {
+        console.error('Call completion error:', error);
+        res.status(500).json({ error: 'Failed to finalize call data' });
+    }
+});
+
 module.exports = router;

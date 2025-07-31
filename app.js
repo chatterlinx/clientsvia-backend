@@ -181,6 +181,11 @@ const contactLookupRoutes = require('./routes/contactLookup');
 app.use('/api/contact-lookup', contactLookupRoutes);
 console.log('✅ Contact Lookup routes registered at /api/contact-lookup');
 
+// CRM Management System for Enterprise Contact Management
+const crmManagementRoutes = require('./routes/crmManagement');
+app.use('/api/crm', crmManagementRoutes);
+console.log('✅ CRM Management routes registered at /api/crm');
+
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 

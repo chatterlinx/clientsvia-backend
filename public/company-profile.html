@@ -194,6 +194,9 @@
                             <button class="tab-button tab-button-inactive" id="tab-ai-agent-logic" data-tab="ai-agent-logic">
                                 <i class="fas fa-brain mr-1"></i>AI Agent Logic
                             </button>
+                            <button class="tab-button tab-button-inactive" id="tab-crm" data-tab="crm">
+                                <i class="fas fa-users mr-1"></i>CRM & Contacts
+                            </button>
 
                         </nav>
                     </div>
@@ -2643,12 +2646,169 @@
                             </div>
 
                         </section>
+                        </div>
                     </div>
-
                 </div>
             </div>
-        </div>
-    </body>
+    
+            <!-- Contact Details Modal -->
+            <div id="contact-details-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+                <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+                    <div class="mt-3">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-medium text-gray-900">Contact Details</h3>
+                            <button onclick="closeContactDetailsModal()" class="text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        <div id="contact-details-content">
+                            <!-- Contact details will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+    
+            <!-- Add/Edit Contact Modal -->
+            <div id="add-edit-contact-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+                <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+                    <div class="mt-3">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 id="contact-modal-title" class="text-lg font-medium text-gray-900">Add New Contact</h3>
+                            <button onclick="closeAddEditContactModal()" class="text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        <form id="contact-form" onsubmit="saveContact(event)">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="contact-first-name" class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                                    <input type="text" id="contact-first-name" name="firstName" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label for="contact-last-name" class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                                    <input type="text" id="contact-last-name" name="lastName" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label for="contact-phone" class="block text-sm font-medium text-gray-700 mb-1">Primary Phone *</label>
+                                    <input type="tel" id="contact-phone" name="primaryPhone" required
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label for="contact-email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                    <input type="email" id="contact-email" name="email" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label for="contact-status" class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                    <select id="contact-status" name="status" 
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                        <option value="new_lead">New Lead</option>
+                                        <option value="contacted">Contacted</option>
+                                        <option value="quoted">Quoted</option>
+                                        <option value="customer">Customer</option>
+                                        <option value="inactive">Inactive</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="contact-type" class="block text-sm font-medium text-gray-700 mb-1">Customer Type</label>
+                                    <select id="contact-type" name="customerType" 
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                        <option value="residential">Residential</option>
+                                        <option value="commercial">Commercial</option>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label for="contact-address" class="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                                    <textarea id="contact-address" name="address" rows="2"
+                                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label for="contact-notes" class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                                    <textarea id="contact-notes" name="notes" rows="3"
+                                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                                </div>
+                            </div>
+                            <div class="flex justify-end space-x-3 mt-6">
+                                <button type="button" onclick="closeAddEditContactModal()" 
+                                        class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                                    Cancel
+                                </button>
+                                <button type="submit" 
+                                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                                    <i class="fas fa-save mr-2"></i>Save Contact
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+    
+            <!-- API Documentation Modal -->
+            <div id="api-docs-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+                <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-4/5 lg:w-3/4 shadow-lg rounded-md bg-white">
+                    <div class="mt-3">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-medium text-gray-900">CRM API Documentation</h3>
+                            <button onclick="closeAPIDocsModal()" class="text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        <div class="max-h-96 overflow-y-auto">
+                            <div class="prose max-w-none">
+                                <h4>Contact Management API</h4>
+                                <p>Access your CRM data programmatically through our REST API.</p>
+                                
+                                <h5>Endpoints</h5>
+                                <div class="bg-gray-100 p-4 rounded-lg mb-4">
+                                    <div class="font-mono text-sm">
+                                        <div class="mb-2"><strong>GET</strong> /api/crm/contacts - List all contacts</div>
+                                        <div class="mb-2"><strong>GET</strong> /api/crm/contacts/:id - Get contact details</div>
+                                        <div class="mb-2"><strong>POST</strong> /api/crm/contacts - Create new contact</div>
+                                        <div class="mb-2"><strong>PUT</strong> /api/crm/contacts/:id - Update contact</div>
+                                        <div class="mb-2"><strong>DELETE</strong> /api/crm/contacts/:id - Delete contact</div>
+                                        <div class="mb-2"><strong>GET</strong> /api/crm/dashboard-stats - Get dashboard statistics</div>
+                                        <div class="mb-2"><strong>GET</strong> /api/crm/export/csv - Export contacts as CSV</div>
+                                        <div><strong>GET</strong> /api/crm/export/salesforce - Export for Salesforce</div>
+                                    </div>
+                                </div>
+                                
+                                <h5>Authentication</h5>
+                                <p>All API requests require authentication using your company token:</p>
+                                <div class="bg-gray-100 p-4 rounded-lg mb-4">
+                                    <code>Authorization: Bearer YOUR_COMPANY_TOKEN</code>
+                                </div>
+                                
+                                <h5>Example Response</h5>
+                                <div class="bg-gray-100 p-4 rounded-lg">
+                                    <pre class="text-sm">{
+      "contacts": [
+        {
+          "id": "contact_id",
+          "firstName": "John",
+          "lastName": "Doe",
+          "primaryPhone": "+1234567890",
+          "email": "john@example.com",
+          "status": "customer",
+          "customerType": "residential",
+          "totalCalls": 5,
+          "lastContactDate": "2024-01-15T10:30:00Z"
+        }
+      ],
+      "pagination": {
+        "currentPage": 1,
+        "totalPages": 3,
+        "totalCount": 25
+      }
+    }</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </body>
 
     <script>
         // Global function to get current company ID
@@ -4245,7 +4405,741 @@
         // 🧠 AGENT CLIENTSVIA INTELLIGENCE FUNCTIONS
 
         // 🎭 CLIENTSVIA PERSONALITY SETTINGS FUNCTIONS - Tab Interface
+
+        // 🏢 CRM MANAGEMENT FUNCTIONS
         
+        // Load CRM dashboard statistics
+        async function loadCRMDashboard() {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) return;
+            
+            try {
+                const response = await fetch(`/api/crm/dashboard-stats`);
+                if (response.ok) {
+                    const stats = await response.json();
+                    
+                    // Update dashboard stats
+                    document.getElementById('total-contacts').textContent = stats.totalContacts || 0;
+                    document.getElementById('total-calls').textContent = stats.totalCalls || 0;
+                    document.getElementById('active-customers').textContent = stats.contactsByStatus?.customer?.count || 0;
+                    document.getElementById('new-leads').textContent = stats.contactsByStatus?.new_lead?.count || 0;
+                    document.getElementById('total-revenue').textContent = `$${(stats.totalRevenue || 0).toLocaleString()}`;
+                    
+                    // Update pipeline stats
+                    document.getElementById('pipeline-new').textContent = stats.pipeline.new_lead || 0;
+                    document.getElementById('pipeline-contacted').textContent = stats.pipeline.contacted || 0;
+                    document.getElementById('pipeline-quoted').textContent = stats.pipeline.quoted || 0;
+                    document.getElementById('pipeline-customer').textContent = stats.pipeline.customer || 0;
+                    document.getElementById('pipeline-inactive').textContent = stats.pipeline.inactive || 0;
+                    
+                    console.log('✅ CRM dashboard loaded:', stats);
+                } else {
+                    console.warn('⚠️ Failed to load CRM dashboard stats');
+                }
+            } catch (error) {
+                console.error('❌ CRM dashboard error:', error);
+            }
+        }
+        
+        // Load contacts with pagination and filters
+        async function loadContacts(page = 1) {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) return;
+            
+            try {
+                // Get filter values
+                const search = document.getElementById('contact-search')?.value || '';
+                const status = document.getElementById('status-filter')?.value || '';
+                const type = document.getElementById('type-filter')?.value || '';
+                
+                const params = new URLSearchParams({
+                    page,
+                    limit: 25,
+                    search,
+                    status,
+                    customerType: type
+                });
+                
+                const response = await fetch(`/api/crm/contacts?${params}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    renderContactsTable(data.contacts);
+                    updateContactsPagination(data.pagination);
+                    console.log('✅ Contacts loaded:', data.contacts.length, 'contacts');
+                } else {
+                    console.warn('⚠️ Failed to load contacts');
+                    document.getElementById('contacts-table-body').innerHTML = 
+                        '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">Failed to load contacts</td></tr>';
+                }
+            } catch (error) {
+                console.error('❌ Load contacts error:', error);
+            }
+        }
+        
+        // Render contacts table
+        function renderContactsTable(contacts) {
+            const tbody = document.getElementById('contacts-table-body');
+            if (!tbody || !contacts) return;
+            
+            if (contacts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No contacts found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = contacts.map(contact => {
+                const statusColor = {
+                    'new_lead': 'bg-blue-100 text-blue-800',
+                    'contacted': 'bg-yellow-100 text-yellow-800',
+                    'quoted': 'bg-purple-100 text-purple-800',
+                    'customer': 'bg-green-100 text-green-800',
+                    'inactive': 'bg-red-100 text-red-800'
+                };
+                
+                const lastContact = contact.lastContactDate ? 
+                    new Date(contact.lastContactDate).toLocaleDateString() : 'Never';
+                    
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3">
+                            <div class="flex items-center">
+                                <div>
+                                    <div class="font-medium text-gray-900">${contact.fullName || 'Unknown'}</div>
+                                    <div class="text-sm text-gray-500">${contact.email || ''}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-900">${contact.primaryPhone || ''}</td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusColor[contact.status] || 'bg-gray-100 text-gray-800'}">
+                                ${contact.status || 'unknown'}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-900">${lastContact}</td>
+                        <td class="px-4 py-3 text-sm text-gray-900">${contact.totalCalls || 0}</td>
+                        <td class="px-4 py-3 text-sm font-medium space-x-2">
+                            <button onclick="viewContactDetails('${contact._id}')" class="text-blue-600 hover:text-blue-900">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button onclick="editContact('${contact._id}')" class="text-indigo-600 hover:text-indigo-900">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="callContact('${contact.primaryPhone}')" class="text-green-600 hover:text-green-900">
+                                <i class="fas fa-phone"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        // Update contacts pagination
+        function updateContactsPagination(pagination) {
+            const start = ((pagination.currentPage - 1) * 25) + 1;
+            const end = Math.min(pagination.currentPage * 25, pagination.totalCount);
+            
+            document.getElementById('contacts-start').textContent = start;
+            document.getElementById('contacts-end').textContent = end;
+            document.getElementById('contacts-total').textContent = pagination.totalCount;
+            document.getElementById('current-page').textContent = pagination.currentPage;
+        }
+        
+        // Load contacts page (prev/next)
+        function loadContactsPage(direction) {
+            const currentPage = parseInt(document.getElementById('current-page').textContent);
+            const newPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
+            if (newPage > 0) {
+                loadContacts(newPage);
+            }
+        }
+        
+        // Export contacts to Salesforce format
+        async function exportToSalesforce() {
+            try {
+                const response = await fetch('/api/crm/export/salesforce');
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Create downloadable JSON file
+                    const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `salesforce-import-${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    showNotification(`Exported ${data.recordCount} contacts to Salesforce format`, 'success');
+                    console.log('✅ Salesforce export completed:', data.recordCount, 'records');
+                } else {
+                    throw new Error('Export failed');
+                }
+            } catch (error) {
+                console.error('❌ Salesforce export error:', error);
+                showNotification('Failed to export to Salesforce format', 'error');
+            }
+        }
+        
+        // Export contacts to CSV
+        async function exportToCSV() {
+            try {
+                const response = await fetch('/api/crm/export/csv');
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `contacts-export-${new Date().toISOString().split('T')[0]}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    showNotification('CSV export downloaded successfully', 'success');
+                    console.log('✅ CSV export completed');
+                } else {
+                    throw new Error('CSV export failed');
+                }
+            } catch (error) {
+                console.error('❌ CSV export error:', error);
+                showNotification('Failed to export CSV', 'error');
+            }
+        }
+
+        // 🏢 CRM MODAL FUNCTIONS
+        
+        // Show contact details modal
+        async function viewContactDetails(contactId) {
+            try {
+                const response = await fetch(`/api/crm/contacts/${contactId}`);
+                if (response.ok) {
+                    const contact = await response.json();
+                    
+                    const modalContent = `
+                        <div class="space-y-6">
+                            <!-- Contact Header -->
+                            <div class="flex items-center space-x-4 pb-4 border-b border-gray-200">
+                                <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
+                                    ${(contact.firstName?.[0] || '') + (contact.lastName?.[0] || '')}
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-semibold text-gray-900">${contact.fullName || 'Unknown Contact'}</h3>
+                                    <p class="text-sm text-gray-600">${contact.customerType} • ${contact.status}</p>
+                                    <div class="flex items-center mt-1 space-x-3">
+                                        <span class="text-sm text-gray-500">
+                                            <i class="fas fa-phone mr-1"></i>${contact.primaryPhone}
+                                        </span>
+                                        ${contact.email ? `<span class="text-sm text-gray-500">
+                                            <i class="fas fa-envelope mr-1"></i>${contact.email}
+                                        </span>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Contact Stats -->
+                            <div class="grid grid-cols-3 gap-4">
+                                <div class="text-center p-3 bg-blue-50 rounded-lg">
+                                    <div class="text-2xl font-bold text-blue-600">${contact.totalCalls || 0}</div>
+                                    <div class="text-xs text-blue-600">Total Calls</div>
+                                </div>
+                                <div class="text-center p-3 bg-green-50 rounded-lg">
+                                    <div class="text-2xl font-bold text-green-600">${contact.interactions?.length || 0}</div>
+                                    <div class="text-xs text-green-600">Interactions</div>
+                                </div>
+                                <div class="text-center p-3 bg-purple-50 rounded-lg">
+                                    <div class="text-2xl font-bold text-purple-600">${contact.serviceRequests?.length || 0}</div>
+                                    <div class="text-xs text-purple-600">Service Requests</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Recent Interactions -->
+                            <div>
+                                <h4 class="text-md font-semibold text-gray-700 mb-3">Recent Interactions</h4>
+                                <div class="space-y-2 max-h-48 overflow-y-auto">
+                                    ${contact.interactions?.slice(0, 5).map(interaction => `
+                                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                            <div>
+                                                <div class="flex items-center space-x-2">
+                                                    <i class="fas fa-${interaction.type === 'call' ? 'phone' : 'comment'} text-gray-500"></i>
+                                                    <span class="text-sm font-medium">${interaction.type}</span>
+                                                    <span class="text-xs text-gray-500">${interaction.direction}</span>
+                                                </div>
+                                                <p class="text-sm text-gray-600 mt-1">${interaction.summary || 'No summary available'}</p>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="text-xs text-gray-500">${new Date(interaction.timestamp).toLocaleDateString()}</div>
+                                                ${interaction.duration ? `<div class="text-xs text-gray-400">${Math.floor(interaction.duration / 60)}:${(interaction.duration % 60).toString().padStart(2, '0')}</div>` : ''}
+                                            </div>
+                                        </div>
+                                    `).join('') || '<p class="text-gray-500 text-center py-4">No interactions recorded</p>'}
+                                </div>
+                            </div>
+                            
+                            <!-- Action Buttons -->
+                            <div class="flex space-x-3 pt-4 border-t border-gray-200">
+                                <button onclick="editContact('${contact._id}')" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg">
+                                    <i class="fas fa-edit mr-2"></i>Edit Contact
+                                </button>
+                                <button onclick="callContact('${contact.primaryPhone}')" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg">
+                                    <i class="fas fa-phone mr-2"></i>Call Now
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('contact-details-content').innerHTML = modalContent;
+                    document.getElementById('contact-details-modal').classList.remove('hidden');
+                } else {
+                    showNotification('Failed to load contact details', 'error');
+                }
+            } catch (error) {
+                console.error('❌ View contact details error:', error);
+                showNotification('Error loading contact details', 'error');
+            }
+        }
+        
+        // Close contact details modal
+        function closeContactDetailsModal() {
+            document.getElementById('contact-details-modal').classList.add('hidden');
+        }
+        
+        // Show add/edit contact modal
+        function addNewContact() {
+            // Reset form
+            document.getElementById('contact-form').reset();
+            document.getElementById('contact-modal-title').textContent = 'Add New Contact';
+            document.getElementById('contact-form').setAttribute('data-contact-id', '');
+            document.getElementById('add-edit-contact-modal').classList.remove('hidden');
+        }
+        
+        // Edit existing contact
+        async function editContact(contactId) {
+            try {
+                const response = await fetch(`/api/crm/contacts/${contactId}`);
+                if (response.ok) {
+                    const contact = await response.json();
+                    
+                    // Populate form with contact data
+                    document.getElementById('contact-first-name').value = contact.firstName || '';
+                    document.getElementById('contact-last-name').value = contact.lastName || '';
+                    document.getElementById('contact-phone').value = contact.primaryPhone || '';
+                    document.getElementById('contact-email').value = contact.email || '';
+                    document.getElementById('contact-status').value = contact.status || 'new_lead';
+                    document.getElementById('contact-type').value = contact.customerType || 'residential';
+                    document.getElementById('contact-address').value = contact.address || '';
+                    document.getElementById('contact-notes').value = contact.notes?.map(n => n.text).join('\n') || '';
+                    
+                    document.getElementById('contact-modal-title').textContent = 'Edit Contact';
+                    document.getElementById('contact-form').setAttribute('data-contact-id', contactId);
+                    document.getElementById('add-edit-contact-modal').classList.remove('hidden');
+                    
+                    // Close details modal if open
+                    closeContactDetailsModal();
+                } else {
+                    showNotification('Failed to load contact for editing', 'error');
+                }
+            } catch (error) {
+                console.error('❌ Edit contact error:', error);
+                showNotification('Error loading contact for editing', 'error');
+            }
+        }
+        
+        // Close add/edit contact modal
+        function closeAddEditContactModal() {
+            document.getElementById('add-edit-contact-modal').classList.add('hidden');
+        }
+        
+        // Save contact (create or update)
+        async function saveContact(event) {
+            event.preventDefault();
+            
+            const form = event.target;
+            const contactId = form.getAttribute('data-contact-id');
+            const isEdit = !!contactId;
+            
+            const contactData = {
+                firstName: form.firstName.value,
+                lastName: form.lastName.value,
+                primaryPhone: form.primaryPhone.value,
+                email: form.email.value,
+                status: form.status.value,
+                customerType: form.customerType.value,
+                address: form.address.value
+            };
+            
+            // Add notes if provided
+            if (form.notes.value.trim()) {
+                contactData.notes = [{ text: form.notes.value.trim() }];
+            }
+            
+            try {
+                const url = isEdit ? `/api/crm/contacts/${contactId}` : '/api/crm/contacts';
+                const method = isEdit ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(contactData)
+                });
+                
+                if (response.ok) {
+                    showNotification(`Contact ${isEdit ? 'updated' : 'created'} successfully`, 'success');
+                    closeAddEditContactModal();
+                    loadContacts(1); // Refresh contacts list
+                    if (isEdit) {
+                        loadCRMDashboard(); // Refresh dashboard stats
+                    }
+                } else {
+                    const error = await response.json();
+                    showNotification(error.message || `Failed to ${isEdit ? 'update' : 'create'} contact`, 'error');
+                }
+            } catch (error) {
+                console.error('❌ Save contact error:', error);
+                showNotification(`Error ${isEdit ? 'updating' : 'creating'} contact`, 'error');
+            }
+        }
+        
+        // Show API documentation modal
+        function showAPIDocumentation() {
+            document.getElementById('api-docs-modal').classList.remove('hidden');
+        }
+        
+        // Close API documentation modal
+        function closeAPIDocsModal() {
+            document.getElementById('api-docs-modal').classList.add('hidden');
+        }
+        
+        // Call contact with system integration
+        function callContact(phoneNumber) {
+            // This would integrate with Twilio or the phone system
+            console.log('📞 Initiating call to:', phoneNumber);
+            showNotification(`Calling ${phoneNumber} - Twilio integration coming soon`, 'info');
+        }
+
+        // 🏢 CALL HISTORY FUNCTIONS
+        
+        // Load call history
+        async function loadCallHistory(page = 1) {
+            try {
+                // Get filter values
+                const search = document.getElementById('call-search')?.value || '';
+                const dateFilter = document.getElementById('call-date-filter')?.value || 'month';
+                const outcome = document.getElementById('call-outcome-filter')?.value || '';
+                
+                const params = new URLSearchParams({
+                    page,
+                    limit: 20,
+                    search,
+                    dateFilter,
+                    outcome
+                });
+                
+                const response = await fetch(`/api/crm/call-history?${params}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    renderCallHistoryTable(data.calls);
+                    updateCallHistoryPagination(data.pagination);
+                    console.log('✅ Call history loaded:', data.calls.length, 'calls');
+                } else {
+                    console.warn('⚠️ Failed to load call history');
+                    document.getElementById('call-history-table-body').innerHTML = 
+                        '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">Failed to load call history</td></tr>';
+                }
+            } catch (error) {
+                console.error('❌ Load call history error:', error);
+                document.getElementById('call-history-table-body').innerHTML = 
+                    '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">Error loading call history</td></tr>';
+            }
+        }
+        
+        // Render call history table
+        function renderCallHistoryTable(calls) {
+            const tbody = document.getElementById('call-history-table-body');
+            if (!tbody || !calls) return;
+            
+            if (calls.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">No call history found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = calls.map(call => {
+                const outcomeColor = {
+                    'resolved': 'bg-green-100 text-green-800',
+                    'partial': 'bg-yellow-100 text-yellow-800',
+                    'unresolved': 'bg-red-100 text-red-800',
+                    'escalated': 'bg-purple-100 text-purple-800',
+                    'transferred': 'bg-blue-100 text-blue-800'
+                };
+                
+                const formatDuration = (seconds) => {
+                    if (!seconds) return '0:00';
+                    const mins = Math.floor(seconds / 60);
+                    const secs = seconds % 60;
+                    return `${mins}:${secs.toString().padStart(2, '0')}`;
+                };
+                
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 text-sm text-gray-900">
+                            <div>${new Date(call.timestamp).toLocaleDateString()}</div>
+                            <div class="text-xs text-gray-500">${new Date(call.timestamp).toLocaleTimeString()}</div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="text-sm font-medium text-gray-900">${call.contactName}</div>
+                            <div class="text-xs text-gray-500">${call.contactPhone}</div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-900">${formatDuration(call.duration)}</td>
+                        <td class="px-4 py-3">
+                            <div class="text-sm text-gray-900">${call.summary}</div>
+                            ${call.sentiment ? `<div class="text-xs text-gray-500">Sentiment: ${call.sentiment}</div>` : ''}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${outcomeColor[call.outcome] || 'bg-gray-100 text-gray-800'}">
+                                ${call.outcome}
+                            </span>
+                            ${call.bookingCreated ? '<div class="text-xs text-green-600 mt-1">📅 Booking Created</div>' : ''}
+                        </td>
+                        <td class="px-4 py-3 text-sm font-medium space-x-2">
+                            ${call.audioUrl ? `<button onclick="playCallAudio('${call.callSid}')" class="text-purple-600 hover:text-purple-900" title="Play Audio">
+                                <i class="fas fa-play"></i>
+                            </button>` : ''}
+                            ${call.transcriptUrl ? `<button onclick="viewCallTranscript('${call.conversationId}')" class="text-blue-600 hover:text-blue-900" title="View Transcript">
+                                <i class="fas fa-file-alt"></i>
+                            </button>` : ''}
+                            <button onclick="viewCallDetails('${call.id}')" class="text-green-600 hover:text-green-900" title="Call Details">
+                                <i class="fas fa-info-circle"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        // Update call history pagination
+        function updateCallHistoryPagination(pagination) {
+            const start = ((pagination.currentPage - 1) * 20) + 1;
+            const end = Math.min(pagination.currentPage * 20, pagination.totalCount);
+            
+            document.getElementById('calls-start').textContent = start;
+            document.getElementById('calls-end').textContent = end;
+            document.getElementById('calls-total').textContent = pagination.totalCount;
+            document.getElementById('current-call-page').textContent = pagination.currentPage;
+        }
+        
+        // Load call history page (prev/next)
+        function loadCallHistoryPage(direction) {
+            const currentPage = parseInt(document.getElementById('current-call-page').textContent);
+            const newPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
+            if (newPage > 0) {
+                loadCallHistory(newPage);
+            }
+        }
+        
+        // Play call audio
+        async function playCallAudio(callSid) {
+            try {
+                console.log('🔊 Playing call audio for:', callSid);
+                
+                const response = await fetch(`/api/crm/call-audio/${callSid}`);
+                if (response.ok) {
+                    const audioData = await response.json();
+                    
+                    if (audioData.audioUrl) {
+                        // Create audio player modal or direct audio element
+                        const audio = new Audio(audioData.audioUrl);
+                        audio.play().catch(error => {
+                            console.error('Audio playback error:', error);
+                            showNotification('Audio playback failed - integration pending', 'warning');
+                        });
+                        
+                        showNotification(`Playing call recording (${Math.floor(audioData.duration / 60)}:${(audioData.duration % 60).toString().padStart(2, '0')})`, 'info');
+                    } else {
+                        showNotification(audioData.message || 'Audio not available', 'info');
+                    }
+                } else {
+                    showNotification('Failed to load call audio', 'error');
+                }
+            } catch (error) {
+                console.error('❌ Play call audio error:', error);
+                showNotification('Error playing call audio', 'error');
+            }
+        }
+        
+        // View call transcript
+        async function viewCallTranscript(conversationId) {
+            try {
+                console.log('📄 Loading transcript for:', conversationId);
+                
+                const response = await fetch(`/api/crm/call-transcript/${conversationId}`);
+                if (response.ok) {
+                    const transcript = await response.json();
+                    showTranscriptModal(transcript);
+                } else {
+                    showNotification('Failed to load transcript', 'error');
+                }
+            } catch (error) {
+                console.error('❌ View transcript error:', error);
+                showNotification('Error loading transcript', 'error');
+            }
+        }
+        
+        // Show transcript modal
+        function showTranscriptModal(transcript) {
+            const modalContent = `
+                <div class="space-y-4">
+                    <!-- Transcript Header -->
+                    <div class="border-b border-gray-200 pb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">Call Transcript</h3>
+                        <div class="text-sm text-gray-600 mt-1">
+                            <div>Date: ${new Date(transcript.timestamp).toLocaleString()}</div>
+                            <div>Duration: ${Math.floor(transcript.duration / 60)}:${(transcript.duration % 60).toString().padStart(2, '0')}</div>
+                            <div>Phone: ${transcript.customerPhone}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Analysis Summary -->
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h4 class="font-medium text-gray-700 mb-2">Call Analysis</h4>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="text-gray-600">Intent:</span>
+                                <span class="font-medium">${transcript.analysis.primaryIntent || 'Unknown'}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Sentiment:</span>
+                                <span class="font-medium">${transcript.analysis.sentiment || 'Neutral'}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Resolution:</span>
+                                <span class="font-medium">${transcript.analysis.resolutionStatus || 'Unknown'}</span>
+                            </div>
+                            ${transcript.analysis.customerSatisfaction ? `<div>
+                                <span class="text-gray-600">Satisfaction:</span>
+                                <span class="font-medium">${transcript.analysis.customerSatisfaction}/5</span>
+                            </div>` : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- Transcript Messages -->
+                    <div class="max-h-96 overflow-y-auto">
+                        <h4 class="font-medium text-gray-700 mb-3">Conversation</h4>
+                        <div class="space-y-3">
+                            ${transcript.messages.map(msg => `
+                                <div class="flex ${msg.speaker === 'customer' ? 'justify-end' : 'justify-start'}">
+                                    <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                                        msg.speaker === 'customer' 
+                                            ? 'bg-blue-100 text-blue-900' 
+                                            : 'bg-gray-100 text-gray-900'
+                                    }">
+                                        <div class="text-xs text-gray-600 mb-1">
+                                            ${msg.speaker.charAt(0).toUpperCase() + msg.speaker.slice(1)} 
+                                            • ${new Date(msg.timestamp).toLocaleTimeString()}
+                                            ${msg.confidence ? ` • ${Math.round(msg.confidence * 100)}% confidence` : ''}
+                                        </div>
+                                        <div class="text-sm">${msg.text}</div>
+                                        ${msg.intent ? `<div class="text-xs text-gray-500 mt-1">Intent: ${msg.intent}</div>` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <!-- Outcomes -->
+                    ${transcript.outcomes && Object.keys(transcript.outcomes).length > 0 ? `
+                    <div class="bg-green-50 p-4 rounded-lg">
+                        <h4 class="font-medium text-gray-700 mb-2">Call Outcomes</h4>
+                        <div class="text-sm space-y-1">
+                            ${transcript.outcomes.bookingCreated ? '<div class="text-green-700">✅ Booking Created</div>' : ''}
+                            ${transcript.outcomes.leadGenerated ? '<div class="text-blue-700">🎯 Lead Generated</div>' : ''}
+                            ${transcript.outcomes.followUpRequired ? '<div class="text-yellow-700">📞 Follow-up Required</div>' : ''}
+                            ${transcript.outcomes.transferCompleted ? '<div class="text-purple-700">📋 Call Transferred</div>' : ''}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            // Create and show modal (reuse existing modal structure)
+            const modal = document.getElementById('contact-details-modal');
+            document.getElementById('contact-details-content').innerHTML = modalContent;
+            modal.classList.remove('hidden');
+        }
+        
+        // View call details
+        function viewCallDetails(callId) {
+            console.log('📋 View call details for:', callId);
+            showNotification('Detailed call analytics view coming soon', 'info');
+        }
+        
+        // Export contacts to Salesforce (alias for button)
+        function exportContactsToSalesforce() {
+            exportToSalesforce();
+        }
+        
+        // Initialize CRM tab when activated
+        function initializeCRMTab() {
+            console.log('🏢 Initializing CRM tab...');
+            
+            // Load dashboard data
+            loadCRMDashboard();
+            
+            // Load contacts
+            loadContacts(1);
+            
+            // Load call history
+            loadCallHistory(1);
+            
+            // Set up contacts search listeners
+            const searchInput = document.getElementById('contact-search');
+            const statusFilter = document.getElementById('status-filter');
+            const typeFilter = document.getElementById('type-filter');
+            
+            if (searchInput) {
+                searchInput.addEventListener('input', debounce(() => loadContacts(1), 500));
+            }
+            if (statusFilter) {
+                statusFilter.addEventListener('change', () => loadContacts(1));
+            }
+            if (typeFilter) {
+                typeFilter.addEventListener('change', () => loadContacts(1));
+            }
+            
+            // Set up call history search listeners
+            const callSearchInput = document.getElementById('call-search');
+            const callDateFilter = document.getElementById('call-date-filter');
+            const callOutcomeFilter = document.getElementById('call-outcome-filter');
+            
+            if (callSearchInput) {
+                callSearchInput.addEventListener('input', debounce(() => loadCallHistory(1), 500));
+            }
+            if (callDateFilter) {
+                callDateFilter.addEventListener('change', () => loadCallHistory(1));
+            }
+            if (callOutcomeFilter) {
+                callOutcomeFilter.addEventListener('change', () => loadCallHistory(1));
+            }
+            
+            console.log('✅ CRM tab initialized with contacts and call history');
+        }
+        
+        // Debounce function for search
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // ...existing code...
+
         // Preview ClientsVia personality voice
         async function previewClientsviaPersonality() {
             const voiceTone = document.getElementById('clientsvia-voiceToneSelect').value;
