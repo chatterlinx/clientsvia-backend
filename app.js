@@ -112,36 +112,34 @@ redisClient.on('reconnecting', () => {
   console.log('🔄 Session Redis reconnecting...');
 });
 
-// Use MemoryStore as fallback if Redis fails
-let sessionStore;
-try {
-  if (process.env.REDIS_URL && redisClient) {
-    const redisStore = new RedisStore({ client: redisClient });
-    sessionStore = redisStore;
-    console.log('📦 Using Redis for session storage');
-  } else {
-    throw new Error('Redis not configured, using memory store');
-  }
-} catch (error) {
-  console.warn('⚠️ Redis session store failed, using memory store:', error.message);
-  sessionStore = new session.MemoryStore();
-}
+console.log('🔍 CHECKPOINT 1: Starting session configuration...');
+console.log('SESSION_SECRET exists:', !!process.env.SESSION_SECRET);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+
+// Simple session configuration for OAuth
+console.log('🔍 CHECKPOINT 2: Creating session middleware...');
 app.use(session({
-  store: sessionStore,
-  secret: process.env.SESSION_SECRET,
+  store: new session.MemoryStore(),
+  secret: process.env.SESSION_SECRET || 'fallback-secret-key',
   resave: false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: false, // Set to false for now to avoid issues
     sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
+console.log('🔍 CHECKPOINT 3: Session middleware applied successfully');
 
 // Initialize Passport
+console.log('🔍 CHECKPOINT 4: Initializing Passport...');
 app.use(passport.initialize());
+console.log('🔍 CHECKPOINT 5: Passport initialized');
 app.use(passport.session());
+console.log('🔍 CHECKPOINT 6: Passport session middleware applied');
+
+console.log('🔍 CHECKPOINT 7: Connecting to MongoDB...');
 
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,

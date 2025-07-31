@@ -239,10 +239,18 @@ router.get('/google', requireGoogleOAuth,
  * GET /api/auth/google/callback - Handle Google OAuth callback
  */
 router.get('/google/callback', requireGoogleOAuth,
+    (req, res, next) => {
+        console.log('🔍 OAUTH CHECKPOINT 1: Entering callback route');
+        console.log('🔍 OAUTH CHECKPOINT 2: Session exists:', !!req.session);
+        console.log('🔍 OAUTH CHECKPOINT 3: Session ID:', req.session?.id);
+        next();
+    },
     passport.authenticate('google', { failureRedirect: '/login.html?error=oauth_failed' }),
     async (req, res) => {
+        console.log('🔍 OAUTH CHECKPOINT 4: Authentication successful, processing user...');
         try {
             const user = req.user;
+            console.log('🔍 OAUTH CHECKPOINT 5: User object received:', !!user);
             
             // Generate JWT token for the authenticated user
             const token = jwt.sign(
@@ -254,6 +262,7 @@ router.get('/google/callback', requireGoogleOAuth,
                 process.env.JWT_SECRET,
                 { expiresIn: '24h' }
             );
+            console.log('🔍 OAUTH CHECKPOINT 6: JWT token generated');
             
             // Log successful OAuth login
             logger.auth('Google OAuth login successful', { 
@@ -270,11 +279,13 @@ router.get('/google/callback', requireGoogleOAuth,
                 sameSite: 'strict',
                 maxAge: 24 * 60 * 60 * 1000 // 24 hours
             });
+            console.log('🔍 OAUTH CHECKPOINT 7: Cookie set, redirecting...');
             
             // Redirect to dashboard
             res.redirect('/index.html?auth=success');
             
         } catch (err) {
+            console.error('🔍 OAUTH CHECKPOINT ERROR:', err);
             logger.error('Google OAuth callback error:', err);
             res.redirect('/login.html?error=oauth_error');
         }
