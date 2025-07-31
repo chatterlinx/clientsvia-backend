@@ -4282,11 +4282,18 @@
                 if (response.ok) {
                     const data = await response.json();
                     
-                    document.getElementById('voiceToneSelect').value = data.voiceTone || 'friendly';
-                    document.getElementById('speechPaceSelect').value = data.speechPace || 'normal';
-                    document.getElementById('bargeInToggle').checked = data.bargeInMode ?? true;
-                    document.getElementById('emotionToggle').checked = data.acknowledgeEmotion ?? true;
-                    document.getElementById('emojiToggle').checked = data.useEmojis ?? false;
+                    // Use correct element IDs with clientsvia- prefix
+                    const voiceToneElement = document.getElementById('clientsvia-voiceToneSelect');
+                    const speechPaceElement = document.getElementById('clientsvia-speechPaceSelect');
+                    const bargeInElement = document.getElementById('clientsvia-bargeInToggle');
+                    const emotionElement = document.getElementById('clientsvia-emotionToggle');
+                    const emojiElement = document.getElementById('clientsvia-emojiToggle');
+                    
+                    if (voiceToneElement) voiceToneElement.value = data.voiceTone || 'friendly';
+                    if (speechPaceElement) speechPaceElement.value = data.speechPace || 'normal';
+                    if (bargeInElement) bargeInElement.checked = data.bargeInMode ?? true;
+                    if (emotionElement) emotionElement.checked = data.acknowledgeEmotion ?? true;
+                    if (emojiElement) emojiElement.checked = data.useEmojis ?? false;
                     
                     console.log('✅ Personality settings loaded');
                 } else if (response.status === 404) {
@@ -4305,11 +4312,11 @@
             if (!companyId) return;
 
             const personalityData = {
-                voiceTone: document.getElementById('voiceToneSelect').value,
-                speechPace: document.getElementById('speechPaceSelect').value,
-                bargeInMode: document.getElementById('bargeInToggle').checked,
-                acknowledgeEmotion: document.getElementById('emotionToggle').checked,
-                useEmojis: document.getElementById('emojiToggle').checked
+                voiceTone: document.getElementById('clientsvia-voiceToneSelect')?.value || 'friendly',
+                speechPace: document.getElementById('clientsvia-speechPaceSelect')?.value || 'normal',
+                bargeInMode: document.getElementById('clientsvia-bargeInToggle')?.checked ?? true,
+                acknowledgeEmotion: document.getElementById('clientsvia-emotionToggle')?.checked ?? true,
+                useEmojis: document.getElementById('clientsvia-emojiToggle')?.checked ?? false
             };
 
             try {
@@ -4338,8 +4345,8 @@
 
         // Preview personality voice
         async function previewPersonality() {
-            const voiceTone = document.getElementById('voiceToneSelect').value;
-            const speechPace = document.getElementById('speechPaceSelect').value;
+            const voiceTone = document.getElementById('clientsvia-voiceToneSelect')?.value || 'friendly';
+            const speechPace = document.getElementById('clientsvia-speechPaceSelect')?.value || 'normal';
             
             // Generate sample text based on voice tone
             let sampleText = "";
@@ -4362,11 +4369,17 @@
         function resetPersonalityDefaults() {
             if (!confirm('Reset personality settings to defaults?')) return;
             
-            document.getElementById('voiceToneSelect').value = 'friendly';
-            document.getElementById('speechPaceSelect').value = 'normal';
-            document.getElementById('bargeInToggle').checked = true;
-            document.getElementById('emotionToggle').checked = true;
-            document.getElementById('emojiToggle').checked = false;
+            const voiceToneElement = document.getElementById('clientsvia-voiceToneSelect');
+            const speechPaceElement = document.getElementById('clientsvia-speechPaceSelect');
+            const bargeInElement = document.getElementById('clientsvia-bargeInToggle');
+            const emotionElement = document.getElementById('clientsvia-emotionToggle');
+            const emojiElement = document.getElementById('clientsvia-emojiToggle');
+            
+            if (voiceToneElement) voiceToneElement.value = 'friendly';
+            if (speechPaceElement) speechPaceElement.value = 'normal';
+            if (bargeInElement) bargeInElement.checked = true;
+            if (emotionElement) emotionElement.checked = true;
+            if (emojiElement) emojiElement.checked = false;
             
             console.log('✅ Personality settings reset to defaults');
         }
