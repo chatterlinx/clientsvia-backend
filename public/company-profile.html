@@ -5473,7 +5473,7 @@
             if (!companyId) return;
 
             try {
-                const response = await fetch(`/api/companies/${companyId}/clientsvia-personality`);
+                const response = await fetch(`/api/company/${companyId}/personality`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data.personalitySettings) {
