@@ -1527,12 +1527,10 @@
                                                                     <label class="block text-sm font-medium text-gray-700 mb-2">
                                                                         <i class="fas fa-hand-wave mr-2 text-green-500"></i>Greeting Response
                                                                     </label>
-                                                                    <textarea id="response-greeting" class="form-textarea w-full h-20 text-sm" placeholder="Hi {{callerName}}! Thanks for calling {companyname}. How can I help you today?">Hi {{callerName}}! Thanks for calling {companyname}. How can I help you today?</textarea>
+                                                                    <textarea id="response-greeting" class="form-textarea w-full h-20 text-sm" placeholder="Hi {callername}! Thanks for calling {companyname}. How can I help you today?">Hi {callername}! Thanks for calling {companyname}. How can I help you today?</textarea>
                                                                     <div class="flex items-center justify-between mt-2">
-                                                                        <div class="flex flex-wrap gap-1">
-                                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 cursor-pointer" onclick="insertResponseVariable('response-greeting', '{{callerName}}')">{{callerName}}</span>
-                                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 cursor-pointer" onclick="insertResponseVariable('response-greeting', '{companyname}')">{companyname}</span>
-                                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 cursor-pointer" onclick="insertResponseVariable('response-greeting', '{{currentTime}}')">{{currentTime}}</span>
+                                                                        <div class="flex flex-wrap gap-1" data-response-variables="response-greeting">
+                                                                            <!-- Variable buttons will be populated dynamically -->
                                                                         </div>
                                                                         <button onclick="previewResponse('response-greeting')" class="text-purple-600 hover:text-purple-800 text-xs font-medium">
                                                                             <i class="fas fa-play mr-1"></i>Preview
@@ -1547,9 +1545,8 @@
                                                                     </label>
                                                                     <textarea id="response-farewell" class="form-textarea w-full h-20 text-sm" placeholder="Thanks for calling {companyname}! Have a great day!">Thanks for calling {companyname}! Have a great day!</textarea>
                                                                     <div class="flex items-center justify-between mt-2">
-                                                                        <div class="flex flex-wrap gap-1">
-                                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 cursor-pointer" onclick="insertResponseVariable('response-farewell', '{companyname}')">{companyname}</span>
-                                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 cursor-pointer" onclick="insertResponseVariable('response-farewell', '{{callerName}}')">{{callerName}}</span>
+                                                                        <div class="flex flex-wrap gap-1" data-response-variables="response-farewell">
+                                                                            <!-- Variable buttons will be populated dynamically -->
                                                                         </div>
                                                                         <button onclick="previewResponse('response-farewell')" class="text-purple-600 hover:text-purple-800 text-xs font-medium">
                                                                             <i class="fas fa-play mr-1"></i>Preview
@@ -1564,8 +1561,8 @@
                                                                     </label>
                                                                     <textarea id="response-hold" class="form-textarea w-full h-20 text-sm" placeholder="Please hold for just a moment while I look that up for you.">Please hold for just a moment while I look that up for you.</textarea>
                                                                     <div class="flex items-center justify-between mt-2">
-                                                                        <div class="flex flex-wrap gap-1">
-                                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 cursor-pointer" onclick="insertVariable('response-hold', '{{estimatedTime}}')">{{estimatedTime}}</span>
+                                                                        <div class="flex flex-wrap gap-1" data-response-variables="response-hold">
+                                                                            <!-- Variable buttons will be populated dynamically -->
                                                                         </div>
                                                                         <button onclick="previewResponse('response-hold')" class="text-purple-600 hover:text-purple-800 text-xs font-medium">
                                                                             <i class="fas fa-play mr-1"></i>Preview
@@ -1585,11 +1582,10 @@
                                                                     <label class="block text-sm font-medium text-gray-700 mb-2">
                                                                         <i class="fas fa-phone-alt mr-2 text-indigo-500"></i>Transfer Response
                                                                     </label>
-                                                                    <textarea id="response-transfer" class="form-textarea w-full h-20 text-sm" placeholder="Let me connect you with {{departmentName}} who can better assist you.">Let me connect you with {{departmentName}} who can better assist you.</textarea>
+                                                                    <textarea id="response-transfer" class="form-textarea w-full h-20 text-sm" placeholder="Let me connect you with {departmentname} who can better assist you.">Let me connect you with {departmentname} who can better assist you.</textarea>
                                                                     <div class="flex items-center justify-between mt-2">
-                                                                        <div class="flex flex-wrap gap-1">
-                                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 cursor-pointer" onclick="insertVariable('response-transfer', '{{departmentName}}')">{{departmentName}}</span>
-                                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 cursor-pointer" onclick="insertVariable('response-transfer', '{{specialistName}}')">{{specialistName}}</span>
+                                                                        <div class="flex flex-wrap gap-1" data-response-variables="response-transfer">
+                                                                            <!-- Variable buttons will be populated dynamically -->
                                                                         </div>
                                                                         <button onclick="previewResponse('response-transfer')" class="text-purple-600 hover:text-purple-800 text-xs font-medium">
                                                                             <i class="fas fa-play mr-1"></i>Preview
@@ -4740,6 +4736,183 @@
             }
         };
 
+        // Populate the Response Placeholders table with company data
+        function populateResponsePlaceholdersTable() {
+            const tableBody = document.getElementById('placeholders-table-body');
+            if (!tableBody) return;
+            
+            // Get company data (this should be loaded from the CompanyProfileManager)
+            const companyData = window.companyProfileManager?.companyData;
+            
+            const defaultPlaceholders = [
+                {
+                    placeholder: '{companyname}',
+                    value: companyData?.companyName || 'atlas air',
+                    description: 'The name of your company',
+                    type: 'system'
+                },
+                {
+                    placeholder: '{businessphone}',
+                    value: companyData?.primaryContact?.phoneNumber || '+12395652202',
+                    description: 'Main business phone number',
+                    type: 'system'
+                },
+                {
+                    placeholder: '{businessemail}',
+                    value: companyData?.primaryContact?.email || 'mypenguinair@gmail.com',
+                    description: 'Main business email address',
+                    type: 'system'
+                },
+                {
+                    placeholder: '{businesshours}',
+                    value: companyData?.businessHours || 'm-f 9-5',
+                    description: 'Standard business operating hours',
+                    type: 'system'
+                },
+                {
+                    placeholder: '{callername}',
+                    value: 'John Doe',
+                    description: 'Name of the caller (dynamic)',
+                    type: 'dynamic'
+                },
+                {
+                    placeholder: '{currenttime}',
+                    value: new Date().toLocaleTimeString(),
+                    description: 'Current time (dynamic)',
+                    type: 'dynamic'
+                },
+                {
+                    placeholder: '{departmentname}',
+                    value: 'Customer Service',
+                    description: 'Name of the department for transfers',
+                    type: 'dynamic'
+                },
+                {
+                    placeholder: '{specialistname}',
+                    value: 'Sarah Wilson',
+                    description: 'Name of specialist for transfers',
+                    type: 'dynamic'
+                },
+                {
+                    placeholder: '{servicetype}',
+                    value: 'Technical Support',
+                    description: 'Type of service being requested',
+                    type: 'dynamic'
+                },
+                {
+                    placeholder: '{alternativeservice}',
+                    value: 'General Inquiries',
+                    description: 'Alternative service option',
+                    type: 'dynamic'
+                },
+                {
+                    placeholder: '{estimatedtime}',
+                    value: '5-10 minutes',
+                    description: 'Estimated wait or processing time',
+                    type: 'dynamic'
+                },
+                {
+                    placeholder: '{website}',
+                    value: companyData?.website || 'www.atlasair.com',
+                    description: 'Company website URL',
+                    type: 'system'
+                }
+            ];
+            
+            // Clear existing content
+            tableBody.innerHTML = '';
+            
+            // Populate table with placeholders
+            defaultPlaceholders.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                
+                row.innerHTML = `
+                    <td class="px-4 py-3 text-sm font-mono text-purple-700">${item.placeholder}</td>
+                    <td class="px-4 py-3 text-sm text-gray-900">
+                        <div>${item.value}</div>
+                        <div class="text-xs text-gray-500">${item.description}</div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            item.type === 'system' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                        }">
+                            ${item.type}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-right text-sm font-medium">
+                        <button type="button" class="text-indigo-600 hover:text-indigo-900">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+            
+            console.log('✅ Response Placeholders table populated with', defaultPlaceholders.length, 'placeholders');
+        }
+
+        // Update variable insertion buttons in Response Categories
+        function updateVariableInsertionButtons() {
+            const placeholders = getAvailablePlaceholders();
+            const buttonContainers = document.querySelectorAll('[data-response-variables]');
+            
+            buttonContainers.forEach(container => {
+                const textareaId = container.getAttribute('data-response-variables');
+                
+                // Clear existing buttons
+                container.innerHTML = '';
+                
+                // Add buttons for each placeholder
+                placeholders.slice(0, 8).forEach(placeholder => { // Limit to 8 most common
+                    const button = document.createElement('span');
+                    button.className = 'inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 cursor-pointer hover:bg-blue-200 transition-colors';
+                    button.textContent = placeholder.display;
+                    button.onclick = () => insertResponseVariable(textareaId, placeholder.placeholder);
+                    container.appendChild(button);
+                });
+                
+                // Add a "More..." button if there are more placeholders
+                if (placeholders.length > 8) {
+                    const moreButton = document.createElement('span');
+                    moreButton.className = 'inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors';
+                    moreButton.innerHTML = '<i class="fas fa-ellipsis-h mr-1"></i>More';
+                    moreButton.onclick = () => showAllPlaceholders(textareaId);
+                    container.appendChild(moreButton);
+                }
+            });
+            
+            console.log('✅ Variable insertion buttons updated for Response Categories');
+        }
+        
+        // Show all placeholders in a modal/dropdown
+        function showAllPlaceholders(textareaId) {
+            const placeholders = getAvailablePlaceholders();
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-96 overflow-y-auto">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium">Insert Placeholder</h3>
+                        <button class="text-gray-400 hover:text-gray-600" onclick="this.closest('.fixed').remove()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        ${placeholders.map(p => `
+                            <button class="text-left p-2 rounded border hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                                    onclick="insertResponseVariable('${textareaId}', '${p.placeholder}'); this.closest('.fixed').remove();">
+                                <div class="font-mono text-sm text-blue-600">${p.display}</div>
+                                <div class="text-xs text-gray-500 truncate">${p.value}</div>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
         window.previewResponse = async function(textareaId) {
             console.log('previewResponse called:', textareaId);
             try {
@@ -4750,23 +4923,29 @@
                 }
                 
                 const template = textarea.value;
-                const previewText = template
+                
+                // Get placeholders and their values
+                const placeholders = getAvailablePlaceholders();
+                let previewText = template;
+                
+                // Replace all placeholders with their actual values
+                placeholders.forEach(placeholder => {
+                    const regex = new RegExp(placeholder.placeholder.replace(/[{}]/g, '\\$&'), 'g');
+                    previewText = previewText.replace(regex, placeholder.value);
+                });
+                
+                // Also handle legacy double-brace formats for backward compatibility
+                previewText = previewText
                     .replace(/\{\{callerName\}\}/g, 'John Smith')
-                    .replace(/\{companyname\}/g, 'ClientsVia Solutions')
                     .replace(/\{\{companyName\}\}/g, 'ClientsVia Solutions')
-                    .replace(/\{businessphone\}/g, '+1-234-567-8900')
-                    .replace(/\{businessemail\}/g, 'info@clientsvia.com')
-                    .replace(/\{businesshours\}/g, 'Monday-Friday 9AM-5PM')
+                    .replace(/\{\{currentTime\}\}/g, new Date().toLocaleTimeString())
                     .replace(/\{\{businessHours\}\}/g, 'Monday-Friday 9AM-5PM')
                     .replace(/\{\{website\}\}/g, 'www.clientsvia.com')
                     .replace(/\{\{departmentName\}\}/g, 'Technical Support')
+                    .replace(/\{\{specialistName\}\}/g, 'Sarah Wilson')
                     .replace(/\{\{serviceType\}\}/g, 'our service')
-                    .replace(/\{\{phoneNumber\}\}/g, 'your number')
-                    .replace(/\{\{managerName\}\}/g, 'Sarah Johnson')
-                    .replace(/\{\{issueType\}\}/g, 'this issue')
-                    .replace(/\{\{requestType\}\}/g, 'your request')
-                    .replace(/\{\{serviceProvided\}\}/g, 'solving your problem')
-                    .replace(/\{\{estimatedTime\}\}/g, '2-3 minutes');
+                    .replace(/\{\{alternativeService\}\}/g, 'General Inquiries')
+                    .replace(/\{\{estimatedTime\}\}/g, '5-10 minutes');
                 
                 // Check if preview text is empty
                 if (!previewText.trim()) {
@@ -4923,6 +5102,82 @@
                 personalizedDiv.innerHTML = `<strong>With Sample Data:</strong><br>${personalizedText || 'Empty response...'}`;
             }
         };
+
+        // Initialize Response Categories with dynamic placeholders
+        function initializeResponseCategories() {
+            console.log('🎭 Initializing Response Categories with dynamic placeholders...');
+            
+            // Convert all existing hard-coded variable buttons to data-response-variables containers
+            const hardcodedContainers = document.querySelectorAll('.flex.flex-wrap.gap-1:not([data-response-variables])');
+            
+            hardcodedContainers.forEach(container => {
+                // Check if this container has variable buttons (spans with onclick)
+                const hasVariableButtons = container.querySelector('span[onclick*="insertVariable"], span[onclick*="insertResponseVariable"]');
+                
+                if (hasVariableButtons) {
+                    // Find the associated textarea
+                    const parentDiv = container.closest('.bg-white');
+                    const textarea = parentDiv ? parentDiv.querySelector('textarea[id^="response-"]') : null;
+                    
+                    if (textarea) {
+                        const textareaId = textarea.id;
+                        container.setAttribute('data-response-variables', textareaId);
+                        console.log(`✅ Converted container for ${textareaId}`);
+                    }
+                }
+            });
+            
+            // Update all variable insertion buttons
+            updateVariableInsertionButtons();
+            
+            // Also standardize all textarea content to use single-brace format
+            const responseTextareas = document.querySelectorAll('textarea[id^="response-"]');
+            responseTextareas.forEach(textarea => {
+                if (textarea.value) {
+                    textarea.value = textarea.value
+                        .replace(/\{\{callerName\}\}/g, '{callername}')
+                        .replace(/\{\{companyName\}\}/g, '{companyname}')
+                        .replace(/\{\{currentTime\}\}/g, '{currenttime}')
+                        .replace(/\{\{businessHours\}\}/g, '{businesshours}')
+                        .replace(/\{\{website\}\}/g, '{website}')
+                        .replace(/\{\{departmentName\}\}/g, '{departmentname}')
+                        .replace(/\{\{specialistName\}\}/g, '{specialistname}')
+                        .replace(/\{\{serviceType\}\}/g, '{servicetype}')
+                        .replace(/\{\{alternativeService\}\}/g, '{alternativeservice}')
+                        .replace(/\{\{estimatedTime\}\}/g, '{estimatedtime}')
+                        .replace(/\{\{phoneNumber\}\}/g, '{phonenumber}')
+                        .replace(/\{\{preferredTime\}\}/g, '{preferredtime}')
+                        .replace(/\{\{ticketNumber\}\}/g, '{ticketnumber}')
+                        .replace(/\{\{managerName\}\}/g, '{managername}')
+                        .replace(/\{\{issueType\}\}/g, '{issuetype}')
+                        .replace(/\{\{requestType\}\}/g, '{requesttype}')
+                        .replace(/\{\{serviceProvided\}\}/g, '{serviceprovided}');
+                }
+                
+                if (textarea.placeholder) {
+                    textarea.placeholder = textarea.placeholder
+                        .replace(/\{\{callerName\}\}/g, '{callername}')
+                        .replace(/\{\{companyName\}\}/g, '{companyname}')
+                        .replace(/\{\{currentTime\}\}/g, '{currenttime}')
+                        .replace(/\{\{businessHours\}\}/g, '{businesshours}')
+                        .replace(/\{\{website\}\}/g, '{website}')
+                        .replace(/\{\{departmentName\}\}/g, '{departmentname}')
+                        .replace(/\{\{specialistName\}\}/g, '{specialistname}')
+                        .replace(/\{\{serviceType\}\}/g, '{servicetype}')
+                        .replace(/\{\{alternativeService\}\}/g, '{alternativeservice}')
+                        .replace(/\{\{estimatedTime\}\}/g, '{estimatedtime}')
+                        .replace(/\{\{phoneNumber\}\}/g, '{phonenumber}')
+                        .replace(/\{\{preferredTime\}\}/g, '{preferredtime}')
+                        .replace(/\{\{ticketNumber\}\}/g, '{ticketnumber}')
+                        .replace(/\{\{managerName\}\}/g, '{managername}')
+                        .replace(/\{\{issueType\}\}/g, '{issuetype}')
+                        .replace(/\{\{requestType\}\}/g, '{requesttype}')
+                        .replace(/\{\{serviceProvided\}\}/g, '{serviceprovided}');
+                }
+            });
+            
+            console.log('✅ Response Categories initialization complete');
+        }
         
         // Attach event listeners to all response textareas
         document.addEventListener('DOMContentLoaded', function() {
@@ -4935,6 +5190,13 @@
                 });
                 console.log(`🎭 Live preview listeners attached to ${responseTextareas.length} response textareas`);
             }, 1000); // Delay to ensure all elements are loaded
+
+            // Initialize Response Categories with dynamic placeholders
+            setTimeout(() => {
+                populateResponsePlaceholdersTable(); // Populate table first
+                initializeResponseCategories(); // Then convert existing elements
+                updateVariableInsertionButtons(); // Finally update the buttons
+            }, 1200);
         });
 
         console.log('✅ Response Categories functions loaded successfully');
