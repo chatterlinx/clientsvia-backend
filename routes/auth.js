@@ -187,34 +187,50 @@ router.get('/me', authenticateJWT, async (req, res) => {
 /**
  * POST /api/auth/logout - Logout user (client-side token removal)
  */
-router.post('/logout', authenticateSingleSession, async (req, res) => {
+router.post('/logout', async (req, res) => {
     try {
-        const sessionId = req.sessionInfo?.sessionId;
-        
-        if (sessionId) {
-            // Kill the specific session
-            sessionManager.activeSessions.delete(sessionId);
-            
-            logger.info('User logged out - session terminated', {
-                userId: req.user._id,
-                sessionId: sessionId
-            });
+        // Try to get session info if available, but don't require authentication
+        let sessionId = null;
+        let userId = null;
+
+        // Attempt to extract session info without throwing errors
+        try {
+            if (req.sessionInfo?.sessionId) {
+                sessionId = req.sessionInfo.sessionId;
+                sessionManager.activeSessions.delete(sessionId);
+            }
+            if (req.user?._id) {
+                userId = req.user._id;
+            }
+        } catch (err) {
+            // Ignore authentication errors during logout
+            console.log('Session cleanup during logout (non-critical):', err.message);
         }
 
-        // Clear the HTTP-only cookie
+        // Clear the HTTP-only cookie (always do this)
         res.clearCookie('authToken', {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict'
         });
 
-        // Destroy session
+        // Destroy session if it exists
         if (req.session) {
             req.session.destroy((err) => {
                 if (err) {
                     logger.error('Session destruction error:', err);
                 }
             });
+        }
+
+        // Log successful logout if we have user info
+        if (userId || sessionId) {
+            logger.info('User logged out - session terminated', {
+                userId: userId,
+                sessionId: sessionId
+            });
+        } else {
+            logger.info('Logout request processed - cleared cookies and session');
         }
 
         res.json({
@@ -224,7 +240,16 @@ router.post('/logout', authenticateSingleSession, async (req, res) => {
 
     } catch (error) {
         logger.error('Logout error:', error);
-        res.status(500).json({ message: 'Logout failed' });
+        // Even if there's an error, still try to clear the cookie
+        res.clearCookie('authToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict'
+        });
+        res.json({
+            success: true,
+            message: 'Logout completed with partial cleanup'
+        });
     }
 });
 
