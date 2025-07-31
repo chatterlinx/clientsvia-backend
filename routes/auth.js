@@ -265,7 +265,7 @@ router.get('/google/callback', requireGoogleOAuth,
             console.log('🔍 OAUTH CHECKPOINT 6: JWT token generated');
             
             // Log successful OAuth login
-            logger.auth('Google OAuth login successful', { 
+            logger.info('Google OAuth login successful', { 
                 userId: user._id, 
                 email: user.email, 
                 role: user.role,
