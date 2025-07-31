@@ -703,18 +703,31 @@ router.patch('/response-categories/:companyId/:category/:templateId', authentica
  */
 router.post('/save-config', authenticateSingleSession, async (req, res) => {
     try {
+        console.log('🔧 Save config request received');
+        console.log('Request body:', req.body);
+        console.log('User object:', req.user);
+        
         const { answerPriorityFlow, agentPersonality, behaviorControls } = req.body;
-        const companyId = req.user.companyId;
+        
+        // Get company ID - handle both populated and non-populated cases
+        const companyId = req.user.companyId?._id || req.user.companyId;
+
+        console.log('Extracted companyId:', companyId);
 
         if (!companyId) {
+            console.log('❌ No company ID found in user object');
             return res.status(400).json({ error: 'Company ID is required' });
         }
 
         // Find the company
+        console.log('🔍 Looking for company with ID:', companyId);
         const company = await Company.findById(companyId);
         if (!company) {
+            console.log('❌ Company not found with ID:', companyId);
             return res.status(404).json({ error: 'Company not found' });
         }
+        
+        console.log('✅ Company found:', company.companyName || company.name || 'Unnamed Company');
 
         // Initialize aiAgentLogic if it doesn't exist
         if (!company.aiAgentLogic) {
@@ -744,10 +757,20 @@ router.post('/save-config', authenticateSingleSession, async (req, res) => {
         company.aiAgentLogic.lastUpdated = new Date();
         company.aiAgentLogic.version = (company.aiAgentLogic.version || 0) + 1;
 
+        console.log('💾 Saving company with updated AI Agent Logic:', {
+            companyId,
+            version: company.aiAgentLogic.version,
+            sections: {
+                answerPriorityFlow: !!answerPriorityFlow,
+                agentPersonality: !!agentPersonality,
+                behaviorControls: !!behaviorControls
+            }
+        });
+
         // Save the company
         await company.save();
 
-        console.log(`✅ AI Agent configuration saved for company ${companyId}`);
+        console.log(`✅ AI Agent configuration saved successfully for company ${companyId}`);
 
         res.json({
             success: true,

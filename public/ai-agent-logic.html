@@ -1618,8 +1618,11 @@ This only works from localhost (127.0.0.1)
                     }
                 };
                 
+                console.log('Form data collected:', formData);
+                
                 // Get priority flow items if they exist
                 const priorityItems = document.querySelectorAll('.priority-item');
+                console.log('Priority items found:', priorityItems.length);
                 priorityItems.forEach((item, index) => {
                     const title = item.querySelector('h3')?.textContent?.trim();
                     const description = item.querySelector('p')?.textContent?.trim();
@@ -1633,26 +1636,35 @@ This only works from localhost (127.0.0.1)
                     }
                 });
                 
+                console.log('Final form data:', formData);
+                
                 // Save to backend
+                console.log('Making API request to /api/ai-agent-logic/save-config');
                 const response = await fetch('/api/ai-agent-logic/save-config', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
+                    credentials: 'include', // Include cookies for authentication
                     body: JSON.stringify(formData)
                 });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', [...response.headers.entries()]);
                 
                 if (response.ok) {
                     const result = await response.json();
                     showBasicNotification('✅ Configuration saved successfully!', 'success');
                     console.log('Save successful:', result);
                 } else {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    const errorText = await response.text();
+                    console.error('Response error text:', errorText);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
                 }
                 
             } catch (error) {
                 console.error('Save failed:', error);
-                showBasicNotification('❌ Failed to save configuration. Please try again.', 'error');
+                showBasicNotification(`❌ Failed to save: ${error.message}`, 'error');
             }
         };
 
