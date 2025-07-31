@@ -4577,7 +4577,7 @@
             };
             
             try {
-                const response = await fetch(`/api/company/companies/${companyId}/knowledge`, {
+                const response = await fetch(`/api/company/${companyId}/knowledge`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(knowledgeData)
