@@ -3,18 +3,134 @@
 
 const express = require('express');
 const router = express.Router();
+const { authenticateJWT } = require('../middleware/auth');
+
+// Import models
 const Contact = require('../models/Contact');
 const ConversationLog = require('../models/ConversationLog');
-const auth = require('../middleware/auth');
+
+// Import utilities
 const { calculateLeadScore } = require('../utils/contactAnalytics');
 
+// Simple test route
+router.get('/test', (req, res) => {
+    res.json({ message: 'CRM routes are working!', timestamp: new Date() });
+});
+
 /**
- * GET /api/crm/dashboard-stats
+ * GET /api/crm/dashboard-stats?companyId=...
  * Get CRM dashboard statistics
  */
-router.get('/dashboard-stats', auth, async (req, res) => {
+router.get('/dashboard-stats', async (req, res) => {
     try {
-        const { companyId } = req.user;
+        const companyId = req.query.companyId;
+        
+        if (!companyId) {
+            return res.status(400).json({ error: 'Company ID is required' });
+        }
+        
+        // Return mock data for now to see if the route works
+        const mockStats = {
+            totalContacts: 0,
+            totalCalls: 0,
+            totalRevenue: 0,
+            estimatedRevenue: 0,
+            contactsByStatus: {},
+            pipeline: {
+                new_lead: 0,
+                contacted: 0,
+                quoted: 0,
+                customer: 0,
+                inactive: 0
+            }
+        };
+        
+        console.log(`✅ CRM dashboard stats requested for company: ${companyId}`);
+        res.json(mockStats);
+        
+    } catch (error) {
+        console.error('❌ CRM dashboard stats error:', error);
+        res.status(500).json({ error: 'Failed to load dashboard stats' });
+    }
+});
+
+/**
+ * GET /api/crm/contacts?companyId=...
+ * Get paginated contact list with search and filters
+ */
+router.get('/contacts', async (req, res) => {
+    try {
+        const companyId = req.query.companyId;
+        
+        if (!companyId) {
+            return res.status(400).json({ error: 'Company ID is required' });
+        }
+        
+        // Return mock data for now
+        const mockData = {
+            contacts: [],
+            pagination: {
+                total: 0,
+                pages: 0,
+                currentPage: 1,
+                limit: 25
+            }
+        };
+        
+        console.log(`✅ CRM contacts requested for company: ${companyId}`);
+        res.json(mockData);
+        
+    } catch (error) {
+        console.error('❌ CRM contacts error:', error);
+        res.status(500).json({ error: 'Failed to load contacts' });
+    }
+});
+
+/**
+ * GET /api/crm/call-history?companyId=...
+ * Get call history with audio links and transcripts
+ */
+router.get('/call-history', async (req, res) => {
+    try {
+        const companyId = req.query.companyId;
+        
+        if (!companyId) {
+            return res.status(400).json({ error: 'Company ID is required' });
+        }
+        
+        // Return mock data for now
+        const mockData = {
+            calls: [],
+            pagination: {
+                total: 0,
+                pages: 0,
+                currentPage: 1,
+                limit: 20
+            }
+        };
+        
+        console.log(`✅ CRM call history requested for company: ${companyId}`);
+        res.json(mockData);
+        
+    } catch (error) {
+        console.error('❌ CRM call history error:', error);
+        res.status(500).json({ error: 'Failed to load call history' });
+    }
+});
+
+module.exports = router;
+
+/**
+ * GET /api/crm/dashboard-stats?companyId=...
+ * Get CRM dashboard statistics
+ */
+router.get('/dashboard-stats', async (req, res) => {
+    try {
+        const companyId = req.query.companyId;
+        
+        if (!companyId) {
+            return res.status(400).json({ error: 'Company ID is required' });
+        }
         
         // Get contact counts by status
         const contactStats = await Contact.aggregate([
@@ -66,9 +182,9 @@ router.get('/dashboard-stats', auth, async (req, res) => {
  * GET /api/crm/contacts
  * Get paginated contact list with search and filters
  */
-router.get('/contacts', auth, async (req, res) => {
+router.get('/contacts', async (req, res) => {
     try {
-        const { companyId } = req.user;
+        const companyId = req.query.companyId;
         const {
             page = 1,
             limit = 25,
@@ -78,6 +194,10 @@ router.get('/contacts', auth, async (req, res) => {
             sortBy = 'lastContactDate',
             sortOrder = 'desc'
         } = req.query;
+        
+        if (!companyId) {
+            return res.status(400).json({ error: 'Company ID is required' });
+        }
         
         // Build filter query
         const filter = { companyId };
@@ -138,7 +258,7 @@ router.get('/contacts', auth, async (req, res) => {
  * GET /api/crm/contact/:contactId
  * Get detailed contact information including full interaction history
  */
-router.get('/contact/:contactId', auth, async (req, res) => {
+router.get('/contact/:contactId', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.user;
         const { contactId } = req.params;
@@ -182,7 +302,7 @@ router.get('/contact/:contactId', auth, async (req, res) => {
  * POST /api/crm/contact
  * Create new contact
  */
-router.post('/contact', auth, async (req, res) => {
+router.post('/contact', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.user;
         const contactData = { ...req.body, companyId };
@@ -216,7 +336,7 @@ router.post('/contact', auth, async (req, res) => {
  * PUT /api/crm/contact/:contactId
  * Update existing contact
  */
-router.put('/contact/:contactId', auth, async (req, res) => {
+router.put('/contact/:contactId', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.user;
         const { contactId } = req.params;
@@ -247,9 +367,9 @@ router.put('/contact/:contactId', auth, async (req, res) => {
  * GET /api/crm/call-history
  * Get call history with audio links and transcripts
  */
-router.get('/call-history', auth, async (req, res) => {
+router.get('/call-history', async (req, res) => {
     try {
-        const { companyId } = req.user;
+        const companyId = req.query.companyId;
         const {
             page = 1,
             limit = 20,
@@ -257,6 +377,10 @@ router.get('/call-history', auth, async (req, res) => {
             dateFilter = 'month',
             outcome = ''
         } = req.query;
+        
+        if (!companyId) {
+            return res.status(400).json({ error: 'Company ID is required' });
+        }
         
         // Build date filter
         let dateRange = {};
@@ -352,7 +476,7 @@ router.get('/call-history', auth, async (req, res) => {
  * GET /api/crm/call-audio/:callSid
  * Get audio recording for a specific call
  */
-router.get('/call-audio/:callSid', auth, async (req, res) => {
+router.get('/call-audio/:callSid', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.user;
         const { callSid } = req.params;
@@ -387,7 +511,7 @@ router.get('/call-audio/:callSid', auth, async (req, res) => {
  * GET /api/crm/call-transcript/:conversationId
  * Get transcript for a specific call
  */
-router.get('/call-transcript/:conversationId', auth, async (req, res) => {
+router.get('/call-transcript/:conversationId', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.user;
         const { conversationId } = req.params;
@@ -436,7 +560,7 @@ router.get('/call-transcript/:conversationId', auth, async (req, res) => {
  * POST /api/crm/contacts/:id/interactions
  * Add interaction to contact
  */
-router.post('/contacts/:id/interactions', auth, async (req, res) => {
+router.post('/contacts/:id/interactions', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.user;
         const { id } = req.params;

@@ -182,9 +182,14 @@ app.use('/api/contact-lookup', contactLookupRoutes);
 console.log('✅ Contact Lookup routes registered at /api/contact-lookup');
 
 // CRM Management System for Enterprise Contact Management
-const crmManagementRoutes = require('./routes/crmManagement');
-app.use('/api/crm', crmManagementRoutes);
-console.log('✅ CRM Management routes registered at /api/crm');
+console.log('🔍 About to load CRM Management routes...');
+try {
+    const crmManagementRoutes = require('./routes/crmManagement');
+    app.use('/api/crm', crmManagementRoutes);
+    console.log('✅ CRM Management routes registered at /api/crm');
+} catch (error) {
+    console.error('❌ Failed to load CRM Management routes:', error);
+}
 
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);

@@ -98,6 +98,7 @@ async function loadAllRoutes() {
         routes.adminRoutes = await loadRouteWithTimeout('./routes/admin', 'adminRoutes');
         routes.authRoutes = await loadRouteWithTimeout('./routes/auth', 'authRoutes');
         routes.backupRoutes = await loadRouteWithTimeout('./routes/backup', 'backupRoutes');
+        routes.crmManagementRoutes = await loadRouteWithTimeout('./routes/crmManagement', 'crmManagementRoutes');
         
         console.log('[INIT] ✅ All routes loaded successfully');
         return routes;
@@ -202,6 +203,9 @@ function registerRoutes(routes) {
 
     // This line will now correctly handle all /api/twilio requests
     app.use('/api/twilio', routes.twilioRoutes);
+    
+    // CRM Management System for Enterprise Contact Management
+    app.use('/api/crm', routes.crmManagementRoutes);
     
     console.log('[INIT] ✅ All API routes registered successfully');
 }
