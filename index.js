@@ -126,6 +126,33 @@ console.log('[INIT] Setting up Express middleware...');
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// SESSION CONFIGURATION FOR OAUTH
+console.log('🔍 SESSION CHECKPOINT 1: Starting session configuration in index.js...');
+const session = require('express-session');
+const passport = require('./config/passport');
+
+console.log('🔍 SESSION CHECKPOINT 2: Creating session middleware...');
+app.use(session({
+  store: new session.MemoryStore(),
+  secret: process.env.SESSION_SECRET || 'fallback-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: false, // Set to false for now to avoid issues
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+console.log('🔍 SESSION CHECKPOINT 3: Session middleware applied successfully');
+
+// Initialize Passport
+console.log('🔍 SESSION CHECKPOINT 4: Initializing Passport...');
+app.use(passport.initialize());
+console.log('🔍 SESSION CHECKPOINT 5: Passport initialized');
+app.use(passport.session());
+console.log('🔍 SESSION CHECKPOINT 6: Passport session middleware applied');
+
 // Add compression for better performance
 const compression = require('compression');
 app.use(compression());
