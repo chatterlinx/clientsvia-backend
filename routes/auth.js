@@ -216,17 +216,29 @@ router.post('/logout', authenticateSingleSession, async (req, res) => {
  * Google OAuth Routes
  */
 
+// Middleware to check if Google OAuth is configured
+const requireGoogleOAuth = (req, res, next) => {
+    const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+    if (!googleConfigured) {
+        return res.status(503).json({
+            error: 'Google OAuth not configured',
+            message: 'Google OAuth is not available. Please contact administrator.'
+        });
+    }
+    next();
+};
+
 /**
  * GET /api/auth/google - Initiate Google OAuth flow
  */
-router.get('/google', 
+router.get('/google', requireGoogleOAuth,
     passport.authenticate('google', { scope: ['profile', 'email'] })
 );
 
 /**
  * GET /api/auth/google/callback - Handle Google OAuth callback
  */
-router.get('/google/callback',
+router.get('/google/callback', requireGoogleOAuth,
     passport.authenticate('google', { failureRedirect: '/login.html?error=oauth_failed' }),
     async (req, res) => {
         try {
