@@ -14,10 +14,10 @@ const router = express.Router();
 const Company = require('../../models/Company');
 
 /**
- * GET /api/company/companies/:id/knowledge
+ * GET /api/company/:id/knowledge
  * Retrieve knowledge Q&A settings for a specific company
  */
-router.get('/companies/:id/knowledge', async (req, res) => {
+router.get('/:id/knowledge', async (req, res) => {
     try {
         const { id } = req.params;
         
@@ -74,10 +74,10 @@ router.get('/companies/:id/knowledge', async (req, res) => {
 });
 
 /**
- * PUT /api/company/companies/:id/knowledge
+ * PUT /api/company/:id/knowledge
  * Update knowledge Q&A settings for a specific company
  */
-router.put('/companies/:id/knowledge', async (req, res) => {
+router.put('/:id/knowledge', async (req, res) => {
     try {
         const { id } = req.params;
         const knowledgeUpdates = req.body;
