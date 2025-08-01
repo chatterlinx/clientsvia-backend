@@ -179,8 +179,8 @@ The system now tracks:
 
 ## 📋 Documentation Available
 
-1. **Full Guide**: `/docs/ai-agent-intelligence-guide.md` (Complete technical documentation)
-2. **Quick Troubleshooting**: `/docs/ai-agent-quick-troubleshooting.md` (Instant fixes)
+1. **Full Guide**: `/AI_AGENT_LOGIC_TAB_MANUAL.md` (Complete technical documentation and troubleshooting cheat sheet)
+2. **Quick Troubleshooting**: Integrated into `/AI_AGENT_LOGIC_TAB_MANUAL.md` (Instant fixes section)
 3. **This Summary**: How everything works and how to use it
 
 ## 🔗 Access Points
