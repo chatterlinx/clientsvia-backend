@@ -24,6 +24,95 @@ const { findCachedAnswer } = require('../utils/aiAgent');
 
 class AIAgentRuntime {
   /**
+   * Initialize a new call and generate greeting
+   * @param {string} companyID - Company identifier  
+   * @param {string} callId - Twilio call SID
+   * @param {string} from - Caller phone number
+   * @param {string} to - Called phone number
+   * @returns {Object} Initialization result with greeting and call state
+   */
+  static async initializeCall(companyID, callId, from, to) {
+    const startTime = Date.now();
+    
+    try {
+      console.log(`[AI AGENT INIT] Initializing call for company ${companyID}, CallSid: ${callId}`);
+      
+      // Load AI configuration
+      const config = await aiLoader.get(companyID);
+      if (!config) {
+        console.log(`[AI AGENT INIT] No AI config found for company ${companyID}, using default greeting`);
+        return {
+          greeting: "Hello! Thank you for calling. How can I help you today?",
+          callState: {
+            callId,
+            from,
+            to,
+            startTime: new Date(),
+            stage: 'greeting'
+          }
+        };
+      }
+
+      // Generate personalized greeting from AI Agent Logic
+      let greeting = "Hello! Thank you for calling. How can I help you today?";
+      
+      // Check if company has AI Agent Logic greeting configured
+      if (config.aiAgentLogic?.responseCategories?.core?.['greeting-response']) {
+        greeting = config.aiAgentLogic.responseCategories.core['greeting-response'];
+      } else if (config.aiAgentLogic?.responseCategories?.greeting?.template) {
+        greeting = config.aiAgentLogic.responseCategories.greeting.template;
+      } else if (config.agentSetup?.agentGreeting) {
+        greeting = config.agentSetup.agentGreeting;
+      }
+      
+      // Apply company name placeholder if available
+      if (config.businessName || config.companyName) {
+        const companyName = config.businessName || config.companyName;
+        greeting = greeting.replace(/\{companyname\}/gi, companyName);
+        greeting = greeting.replace(/\{companyName\}/gi, companyName);
+        greeting = greeting.replace(/\{\{companyName\}\}/gi, companyName);
+      }
+
+      console.log(`[AI AGENT INIT] Generated greeting: "${greeting}"`);
+
+      // Initialize call state
+      const callState = {
+        callId,
+        from,
+        to,
+        startTime: new Date(),
+        stage: 'greeting',
+        consecutiveSilences: 0,
+        failedAttempts: 0,
+        context: {}
+      };
+
+      const initTime = Date.now() - startTime;
+      console.log(`[AI AGENT INIT] Call initialized in ${initTime}ms`);
+
+      return {
+        greeting,
+        callState
+      };
+
+    } catch (error) {
+      console.error(`[AI AGENT INIT ERROR] Failed to initialize call: ${error.message}`);
+      
+      // Fallback to basic greeting
+      return {
+        greeting: "Hello! Thank you for calling. How can I help you today?",
+        callState: {
+          callId,
+          from,
+          to,
+          startTime: new Date(),
+          stage: 'greeting'
+        }
+      };
+    }
+  }
+
+  /**
    * Process a voice call turn through the enhanced AI pipeline
    * @param {string} companyID - Company identifier
    * @param {string} callId - Twilio call SID
@@ -480,6 +569,9 @@ class AIAgentRuntime {
 }
 
 module.exports = {
+  initializeCall: async (companyID, callId, from, to) => {
+    return await AIAgentRuntime.initializeCall(companyID, callId, from, to);
+  },
   processCallTurn: async (companyID, callId, userText, callState, company) => {
     return await AIAgentRuntime.processCallTurn(companyID, callId, userText, callState, company);
   },
