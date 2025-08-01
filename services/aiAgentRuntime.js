@@ -17,10 +17,48 @@ const { apply: applyBehavior, updateCallState } = require('../src/runtime/Behavi
 const { start: startBooking, next: nextBooking } = require('../src/runtime/BookingHandler');
 const { ResponseTraceLogger } = require('../src/runtime/ResponseTrace');
 const aiLoader = require('../src/config/aiLoader');
+const Company = require('../models/Company');
 
 // Import existing services for backwards compatibility
 const { answerQuestion } = require('./agent');
 const { findCachedAnswer } = require('../utils/aiAgent');
+
+/**
+ * Helper function to check if call transfer is enabled for a company
+ * @param {string} companyID - Company identifier
+ * @returns {boolean} - Whether transfer is enabled
+ */
+async function isTransferEnabled(companyID) {
+  try {
+    const company = await Company.findById(companyID);
+    return company?.aiAgentLogic?.callTransferConfig?.dialOutEnabled === true;
+  } catch (error) {
+    console.error('[AI AGENT] Error checking transfer status:', error);
+    return false;
+  }
+}
+
+/**
+ * Helper function to create appropriate response when transfer is disabled
+ * @param {string} originalText - Original transfer message
+ * @param {string} scenario - Scenario type (emergency, booking, etc.)
+ * @returns {Object} - Response object with transfer disabled
+ */
+function createNonTransferResponse(originalText, scenario = 'general') {
+  const fallbackMessages = {
+    emergency: "I understand this is urgent. Please call our emergency number directly at your earliest convenience, or visit our website for immediate contact information.",
+    booking: "I'm having trouble with the booking system. Please try our online booking system or call back later to schedule your appointment.",
+    transfer: "I apologize, but I cannot transfer your call at this time. Please visit our website or try calling back later for assistance.",
+    general: "I apologize, but I cannot assist further at this time. Please visit our website or try calling back later."
+  };
+  
+  return {
+    text: fallbackMessages[scenario] || fallbackMessages.general,
+    shouldTransfer: false,
+    shouldHangup: true,
+    transferDisabled: true
+  };
+}
 
 class AIAgentRuntime {
   /**
@@ -238,12 +276,23 @@ class AIAgentRuntime {
     } catch (error) {
       console.error('Error handling booking intent:', error);
       
-      const errorResponse = {
-        text: "I'm having trouble with the booking system right now. Let me transfer you to someone who can help you schedule your appointment.",
-        shouldTransfer: true
-      };
+      // Check if transfer is enabled for booking errors
+      const transferEnabled = await isTransferEnabled(companyID);
       
-      return await this.applyBehaviorAndFinalize(config, callState, errorResponse, trace);
+      let errorResponse;
+      if (transferEnabled) {
+        errorResponse = {
+          text: "I'm having trouble with the booking system right now. Let me transfer you to someone who can help you schedule your appointment.",
+          shouldTransfer: true
+        };
+      } else {
+        errorResponse = createNonTransferResponse(
+          "I'm having trouble with the booking system right now.", 
+          'booking'
+        );
+      }
+      
+      return await this.applyBehaviorAndFinalize(config, callState, errorResponse, trace, companyID);
     }
   }
 
@@ -294,6 +343,19 @@ class AIAgentRuntime {
    * Handle transfer intent
    */
   static async handleTransferIntent(companyID, callId, userText, callState, trace, config) {
+    // Check if transfer is enabled
+    const transferEnabled = await isTransferEnabled(companyID);
+    
+    if (!transferEnabled) {
+      console.log('[AI AGENT] Transfer requested but disabled for company:', companyID);
+      const response = createNonTransferResponse(
+        "I understand you'd like to speak with someone else.", 
+        'transfer'
+      );
+      ResponseTraceLogger.setResponse(trace, response, 'transfer_disabled');
+      return await this.applyBehaviorAndFinalize(config, callState, response, trace, companyID);
+    }
+    
     const transferMessage = config.behaviorControls?.escalationPolicy?.keywordMessage || 
       "I'll transfer you to one of our team members who can better assist you. Please hold while I connect you.";
     
@@ -305,13 +367,26 @@ class AIAgentRuntime {
     
     ResponseTraceLogger.setResponse(trace, response, 'transfer_request');
     
-    return await this.applyBehaviorAndFinalize(config, callState, response, trace);
+    return await this.applyBehaviorAndFinalize(config, callState, response, trace, companyID);
   }
 
   /**
    * Handle emergency intent
    */
   static async handleEmergencyIntent(companyID, callId, userText, callState, trace, config) {
+    // Check if transfer is enabled
+    const transferEnabled = await isTransferEnabled(companyID);
+    
+    if (!transferEnabled) {
+      console.log('[AI AGENT] Emergency transfer requested but disabled for company:', companyID);
+      const response = createNonTransferResponse(
+        "I understand this is an emergency.", 
+        'emergency'
+      );
+      ResponseTraceLogger.setResponse(trace, response, 'emergency_transfer_disabled');
+      return await this.applyBehaviorAndFinalize(config, callState, response, trace, companyID);
+    }
+    
     const emergencyMessage = config.responseCategories?.emergency?.template || 
       "I understand this is an emergency. I'm connecting you with our emergency service team right away.";
     
@@ -324,7 +399,7 @@ class AIAgentRuntime {
     
     ResponseTraceLogger.setResponse(trace, response, 'emergency_response');
     
-    return await this.applyBehaviorAndFinalize(config, callState, response, trace);
+    return await this.applyBehaviorAndFinalize(config, callState, response, trace, companyID);
   }
 
   /**
@@ -449,12 +524,25 @@ class AIAgentRuntime {
       
       await ResponseTraceLogger.saveTrace(trace);
       
-      return {
-        text: response.text || "I'm sorry, I'm having technical difficulties. Please hold while I transfer you.",
-        shouldTransfer: true,
-        callState: callState,
-        error: error.message
-      };
+      // Check if transfer is enabled before setting shouldTransfer
+      const transferEnabled = companyID ? await isTransferEnabled(companyID) : false;
+      
+      if (transferEnabled) {
+        return {
+          text: response.text || "I'm sorry, I'm having technical difficulties. Please hold while I transfer you.",
+          shouldTransfer: true,
+          callState: callState,
+          error: error.message
+        };
+      } else {
+        return {
+          text: "I'm sorry, I'm having technical difficulties. Please try calling back later or visit our website for assistance.",
+          shouldTransfer: false,
+          shouldHangup: true,
+          callState: callState,
+          error: error.message
+        };
+      }
     }
   }
 
@@ -485,22 +573,48 @@ class AIAgentRuntime {
         };
       }
       
-      return {
-        text: "I'm sorry, I'm having trouble accessing my knowledge base right now. Let me transfer you to someone who can help.",
-        confidence: 0.5,
-        shouldTransfer: true,
-        source: 'fallback_message'
-      };
+      // Check if transfer is enabled for fallback scenarios
+      const transferEnabled = await isTransferEnabled(companyID);
+      
+      if (transferEnabled) {
+        return {
+          text: "I'm sorry, I'm having trouble accessing my knowledge base right now. Let me transfer you to someone who can help.",
+          confidence: 0.5,
+          shouldTransfer: true,
+          source: 'fallback_message'
+        };
+      } else {
+        return {
+          text: "I'm sorry, I'm having trouble accessing my knowledge base right now. Please try calling back later or visit our website for assistance.",
+          confidence: 0.5,
+          shouldTransfer: false,
+          shouldHangup: true,
+          source: 'fallback_message_no_transfer'
+        };
+      }
       
     } catch (error) {
       console.error('Error in legacy fallback:', error);
       
-      return {
-        text: "I apologize, but I'm experiencing technical difficulties. Please hold while I transfer you to a team member.",
-        confidence: 0.3,
-        shouldTransfer: true,
-        source: 'error_fallback'
-      };
+      // Check if transfer is enabled for error scenarios
+      const transferEnabled = await isTransferEnabled(companyID);
+      
+      if (transferEnabled) {
+        return {
+          text: "I apologize, but I'm experiencing technical difficulties. Please hold while I transfer you to a team member.",
+          confidence: 0.3,
+          shouldTransfer: true,
+          source: 'error_fallback'
+        };
+      } else {
+        return {
+          text: "I apologize, but I'm experiencing technical difficulties. Please try calling back later or visit our website for assistance.",
+          confidence: 0.3,
+          shouldTransfer: false,
+          shouldHangup: true,
+          source: 'error_fallback_no_transfer'
+        };
+      }
     }
   }
 
