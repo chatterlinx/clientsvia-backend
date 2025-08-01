@@ -2389,6 +2389,9 @@
                                             <span id="agent-settings-saved" class="text-green-600 text-sm hidden">
                                                 <i class="fas fa-check-circle mr-1"></i>Settings Saved!
                                             </span>
+                                            <button type="button" onclick="testApiAccess()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-3 rounded-md shadow-sm transition duration-150 ease-in-out mr-2 text-xs">
+                                                <i class="fas fa-bug mr-1"></i>Debug API
+                                            </button>
                                             <button type="button" onclick="saveClientsViaConfiguration()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-md shadow-sm transition duration-150 ease-in-out">
                                                 <i class="fas fa-save mr-2"></i>Save AI Settings
                                             </button>
@@ -5916,6 +5919,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
+                    credentials: 'include', // Include cookies for authentication
                     body: JSON.stringify(clientsViaConfig)
                 });
                 
@@ -6091,6 +6095,57 @@
             
             console.log('🧠 ClientsVia Intelligence fully initialized');
         }
+
+        // Debug function to test endpoint accessibility
+        async function testApiAccess() {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) {
+                console.log('❌ No company ID found');
+                return;
+            }
+            
+            try {
+                console.log('🔍 Testing authentication and API access...');
+                console.log('🍪 Cookies:', document.cookie);
+                console.log('🏢 Company ID:', companyId);
+                
+                console.log('🔍 Testing GET endpoint access...');
+                const getResponse = await fetch(`/api/admin/${companyId}/ai-settings`, {
+                    method: 'GET',
+                    credentials: 'include' // Include cookies
+                });
+                console.log('GET Response status:', getResponse.status);
+                console.log('GET Response headers:', [...getResponse.headers.entries()]);
+                
+                if (getResponse.ok) {
+                    const data = await getResponse.json();
+                    console.log('✅ GET successful, data:', data);
+                } else {
+                    const errorText = await getResponse.text();
+                    console.log('❌ GET failed:', getResponse.status, errorText);
+                    
+                    // Try with explicit headers
+                    console.log('🔍 Testing with explicit Content-Type...');
+                    const getResponse2 = await fetch(`/api/admin/${companyId}/ai-settings`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        credentials: 'include'
+                    });
+                    console.log('GET Response 2 status:', getResponse2.status);
+                    if (!getResponse2.ok) {
+                        const errorText2 = await getResponse2.text();
+                        console.log('❌ GET 2 failed:', getResponse2.status, errorText2);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Test API access error:', error);
+            }
+        }
+        
+        // Call test function when page loads
+        testApiAccess();
         
         // Load ClientsVia configuration from backend
         async function loadClientsViaConfiguration() {
