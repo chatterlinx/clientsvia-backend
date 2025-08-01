@@ -813,6 +813,12 @@
         </div>
     </div>
 
+    <!-- TEST PHONE SECTION - DEBUG -->
+    <div style="background: #ffeb3b; border: 4px solid #f44336; color: #222; font-size: 28px; font-weight: bold; padding: 24px; margin: 24px 0; text-align: center;">
+        TEST PHONE SECTION<br>
+        <input type="text" placeholder="Phone number here" style="margin-top: 16px; font-size: 22px; padding: 10px; border: 2px solid #222; width: 60%;">
+    </div>
+
     <script>
         // Global state
         let currentCompanyId = null;
@@ -1341,12 +1347,6 @@
                 container.appendChild(element);
             });
         }
-
-        // Create priority flow item HTML
-        function createPriorityFlowItem(item) {
-            const div = document.createElement('div');
-            div.className = 'priority-item bg-white border border-gray-200 rounded-lg p-4 flex items-center';
-            div.dataset.source = item.id;
 
             const iconClass = getIconClass(item.icon);
             const categoryClass = getCategoryClass(item.category);
