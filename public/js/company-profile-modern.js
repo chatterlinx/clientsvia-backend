@@ -449,14 +449,13 @@ class CompanyProfileManager {
                                 Website
                             </label>
                             <input 
-                                type="url" 
+                                type="text" 
                                 id="edit-business-website" 
                                 name="businessWebsite"
                                 class="form-input enterprise-input" 
                                 value="${this.escapeHtml(data.businessWebsite || '')}"
-                                placeholder="https://www.yourcompany.com"
+                                placeholder="www.yourcompany.com"
                                 aria-describedby="business-website-help"
-                                data-validate="url"
                             >
                             <div id="business-website-help" class="form-help">
                                 Your company's website URL
@@ -3913,7 +3912,6 @@ class CompanyProfileManager {
                 },
                 'edit-business-website': { 
                     key: 'businessWebsite', 
-                    format: 'url',
                     sanitize: true 
                 },
                 'edit-business-address': { 
