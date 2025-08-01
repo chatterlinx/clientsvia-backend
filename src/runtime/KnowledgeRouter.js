@@ -411,7 +411,8 @@ class KnowledgeRouter {
 
 module.exports = {
   route: async (params) => {
-    return await KnowledgeRouter.route(params);
+    const router = new KnowledgeRouter();
+    return await router.route(params);
   },
   KnowledgeRouter
 };

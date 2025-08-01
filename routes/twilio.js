@@ -22,6 +22,34 @@ const { getRandomPersonalityResponse, getPersonalityResponse, fetchCompanyRespon
 
 const router = express.Router();
 
+// Helper function to get the configured transfer number
+function getTransferNumber(company) {
+  // First try the AI Agent Logic configured dial-out number
+  if (company?.aiAgentLogic?.callTransferConfig?.dialOutEnabled && 
+      company?.aiAgentLogic?.callTransferConfig?.dialOutNumber) {
+    console.log('[AI AGENT] Using configured dial-out number:', company.aiAgentLogic.callTransferConfig.dialOutNumber);
+    return company.aiAgentLogic.callTransferConfig.dialOutNumber;
+  }
+  
+  // Fall back to Twilio config fallback number
+  if (company?.twilioConfig?.fallbackNumber) {
+    console.log('[AI AGENT] Using Twilio fallback number:', company.twilioConfig.fallbackNumber);
+    return company.twilioConfig.fallbackNumber;
+  }
+  
+  // Final fallback
+  console.log('[AI AGENT] Using default fallback number');
+  return '+18005551234';
+}
+
+// Helper function to get the configured transfer message
+function getTransferMessage(company) {
+  if (company?.aiAgentLogic?.callTransferConfig?.transferMessage) {
+    return company.aiAgentLogic.callTransferConfig.transferMessage;
+  }
+  return "Let me connect you with someone who can better assist you.";
+}
+
 // Helper function to escape text for TwiML Say verb
 function escapeTwiML(text) {
   if (!text) return '';
@@ -785,8 +813,10 @@ router.post('/voice/:companyID', async (req, res) => {
       gather.say('');
       
       // Fallback if no input
-      twiml.say("I didn't hear anything. Let me transfer you to someone who can help.");
-      twiml.dial(company.twilioConfig?.fallbackNumber || '+18005551234');
+      const transferMessage = getTransferMessage(company);
+      const transferNumber = getTransferNumber(company);
+      twiml.say(transferMessage);
+      twiml.dial(transferNumber);
       
     } else {
       // Fall back to existing voice flow
@@ -862,7 +892,7 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       
       // Get company transfer number
       const company = await Company.findById(companyID);
-      const transferNumber = company?.twilioConfig?.fallbackNumber || '+18005551234';
+      const transferNumber = getTransferNumber(company);
       
       twiml.dial(transferNumber);
     } else {
@@ -883,8 +913,10 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       gather.say('');
       
       // Fallback
-      twiml.say("I didn't catch that. Let me transfer you to someone who can help.");
-      twiml.dial(company?.twilioConfig?.fallbackNumber || '+18005551234');
+      const transferMessage = getTransferMessage(company);
+      const transferNumber = getTransferNumber(company);
+      twiml.say(transferMessage);
+      twiml.dial(transferNumber);
     }
     
     res.type('text/xml');
@@ -894,7 +926,17 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
     console.error('[ERROR] AI Agent Respond error:', error);
     const twiml = new twilio.twiml.VoiceResponse();
     twiml.say("I'm sorry, I'm having trouble processing your request. Let me transfer you.");
-    twiml.dial('+18005551234');
+    
+    // Try to get the company and use configured transfer number, fall back to default
+    try {
+      const company = await Company.findById(companyID);
+      const transferNumber = getTransferNumber(company);
+      twiml.dial(transferNumber);
+    } catch (companyError) {
+      console.error('[ERROR] Could not load company for transfer:', companyError);
+      twiml.dial('+18005551234'); // Final fallback
+    }
+    
     res.type('text/xml');
     res.send(twiml.toString());
   }

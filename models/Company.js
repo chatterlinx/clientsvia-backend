@@ -563,6 +563,28 @@ const companySchema = new mongoose.Schema({
             useEmails: { type: Boolean, default: false }
         },
         
+        // Call Transfer & Escalation Configuration
+        callTransferConfig: {
+            dialOutNumber: { 
+                type: String, 
+                trim: true,
+                default: '',
+                validate: {
+                    validator: function(v) {
+                        // Allow empty string or valid phone number format
+                        return !v || /^\+?[\d\s\-\(\)]{10,20}$/.test(v);
+                    },
+                    message: 'Dial-out number must be a valid phone number format'
+                }
+            },
+            dialOutEnabled: { type: Boolean, default: false },
+            transferMessage: { 
+                type: String, 
+                trim: true, 
+                default: 'Let me connect you with someone who can better assist you.' 
+            }
+        },
+        
         // Knowledge Source Controls
         knowledgeSourceControls: {
             type: mongoose.Schema.Types.Mixed,

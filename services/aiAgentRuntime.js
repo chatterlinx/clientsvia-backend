@@ -207,7 +207,7 @@ class AIAgentRuntime {
         ResponseTraceLogger.setResponse(trace, { text: response }, 'booking_flow');
         
         const finalResponse = await this.applyBehaviorAndFinalize(
-          config, callState, { text: response }, trace
+          config, callState, { text: response }, trace, companyID
         );
         
         return finalResponse;
@@ -364,9 +364,12 @@ class AIAgentRuntime {
   /**
    * Apply behavior controls and finalize response
    */
-  static async applyBehaviorAndFinalize(config, callState, response, trace) {
+  static async applyBehaviorAndFinalize(config, callState, response, trace, companyID = null) {
     try {
       const behaviorStart = Date.now();
+      
+      // Extract companyID from config if not provided
+      const effectiveCompanyID = companyID || config?.companyID || callState?.companyID || 'unknown';
       
       // Apply behavior engine
       const behaviorResult = await applyBehavior(
@@ -379,7 +382,7 @@ class AIAgentRuntime {
           silenceDetected: callState.consecutiveSilences > 0,
           bargeInDetected: callState.lastBargeIn,
           failedAttempts: callState.failedAttempts || 0,
-          companyID // Add companyID for isolation
+          companyID: effectiveCompanyID // Use effective companyID
         }
       );
       
