@@ -2392,7 +2392,7 @@
                                             <button type="button" onclick="testApiAccess()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-3 rounded-md shadow-sm transition duration-150 ease-in-out mr-2 text-xs">
                                                 <i class="fas fa-bug mr-1"></i>Debug API
                                             </button>
-                                            <button type="button" onclick="saveClientsViaConfiguration()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-md shadow-sm transition duration-150 ease-in-out">
+                                            <button type="button" onclick="saveAISettingsOnly(event)" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-md shadow-sm transition duration-150 ease-in-out">
                                                 <i class="fas fa-save mr-2"></i>Save AI Settings
                                             </button>
                                         </div>
@@ -6283,6 +6283,18 @@
     
     <!-- Main Page Initialization Script -->
     <script>
+        // Add debugging for form validation errors
+        document.addEventListener('invalid', function(event) {
+            console.log('❌ Form validation error detected:', {
+                element: event.target,
+                id: event.target.id,
+                name: event.target.name,
+                type: event.target.type,
+                value: event.target.value,
+                validationMessage: event.target.validationMessage
+            });
+        }, true);
+
         // Main initialization when page loads
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
