@@ -177,6 +177,7 @@ app.use("/api/uploads", uploadRoutes);
 const aiAgentLogicRoutes = require('./routes/aiAgentLogic');
 
 app.use('/api/ai-agent-logic', aiAgentLogicRoutes); // ClientsVia Intelligence Platform
+app.use('/api', aiAgentLogicRoutes); // Also mount for direct API access (includes /api/tradeqa)
 
 // Development routes
 if (process.env.NODE_ENV !== 'production') {

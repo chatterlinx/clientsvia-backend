@@ -535,6 +535,27 @@ const companySchema = new mongoose.Schema({
             }
         },
         
+        // Agent Personality Configuration
+        agentPersonality: {
+            voiceTone: { 
+                type: String, 
+                enum: ['friendly', 'professional', 'casual', 'enthusiastic', 'empathetic'], 
+                default: 'friendly' 
+            },
+            speechPace: { 
+                type: String, 
+                enum: ['slow', 'moderate', 'fast'], 
+                default: 'moderate' 
+            }
+        },
+        
+        // Behavior Controls Configuration
+        behaviorControls: {
+            allowBargeIn: { type: Boolean, default: false },
+            acknowledgeEmotion: { type: Boolean, default: false },
+            useEmails: { type: Boolean, default: false }
+        },
+        
         // Knowledge Source Controls
         knowledgeSourceControls: {
             type: mongoose.Schema.Types.Mixed,

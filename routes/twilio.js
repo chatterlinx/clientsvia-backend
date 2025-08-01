@@ -755,4 +755,188 @@ router.get('/audio/:type/:callSid', async (req, res) => {
 // For optimization: use company profile → AI Voice Settings → Agent Performance Controls
 // NO HARDCODING - all tuning happens through the live dashboard
 
-module.exports = router;
+// Add company-specific voice endpoint for Blueprint compliance
+router.post('/voice/:companyID', async (req, res) => {
+  const callStartTime = Date.now();
+  const { companyID } = req.params;
+  
+  console.log(`[AI AGENT VOICE] [CALL] New call for company ${companyID} at: ${new Date().toISOString()}`);
+  console.log(`[AI AGENT DEBUG] From: ${req.body.From} → CallSid: ${req.body.CallSid}`);
+  
+  try {
+    const twiml = new twilio.twiml.VoiceResponse();
+    
+    // Load company by ID
+    const company = await Company.findById(companyID);
+    if (!company) {
+      console.log(`[ERROR] Company not found: ${companyID}`);
+      twiml.say("I'm sorry, there was an error connecting your call. Please try again.");
+      twiml.hangup();
+      res.type('text/xml');
+      return res.send(twiml.toString());
+    }
+
+    console.log(`[AI AGENT COMPANY] ${company.businessName || company.companyName} (ID: ${companyID})`);
+    
+    // Check if AI Agent Logic is enabled
+    if (company.aiAgentLogic?.enabled) {
+      console.log(`[AI AGENT LOGIC] Enabled for company ${companyID}`);
+      
+      // Use new AI Agent Logic greeting
+      const greeting = company.aiAgentLogic.responseCategories?.greeting?.template || 
+        `Hello! Thank you for calling ${company.businessName || company.companyName}. I'm your AI assistant. How can I help you today?`;
+      
+      // Apply placeholder replacement
+      const finalGreeting = greeting.replace('{companyName}', company.businessName || company.companyName);
+      
+      twiml.say({
+        voice: company.aiAgentLogic.agentPersonality?.voice?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
+      }, escapeTwiML(finalGreeting));
+      
+      // Set up gather for AI Agent Logic flow
+      const gather = twiml.gather({
+        input: 'speech',
+        speechTimeout: 'auto',
+        speechModel: 'phone_call',
+        action: `/api/twilio/ai-agent-respond/${companyID}`,
+        method: 'POST',
+        partialResultCallback: `/api/twilio/ai-agent-partial/${companyID}`,
+        partialResultCallbackMethod: 'POST'
+      });
+      
+      gather.say('');
+      
+      // Fallback if no input
+      twiml.say("I didn't hear anything. Let me transfer you to someone who can help.");
+      twiml.dial(company.twilioConfig?.fallbackNumber || '+18005551234');
+      
+    } else {
+      // Fall back to existing voice flow
+      console.log(`[AI AGENT LOGIC] Not enabled, using legacy flow for company ${companyID}`);
+      
+      // Redirect to existing voice handler with company phone number
+      const companyPhone = company.twilioConfig?.phoneNumber || 
+                          (company.twilioConfig?.phoneNumbers && company.twilioConfig.phoneNumbers[0]?.phoneNumber);
+      
+      if (companyPhone) {
+        // Simulate call to existing endpoint with company phone
+        req.body.To = companyPhone;
+        return router.post('/voice')(req, res);
+      } else {
+        twiml.say("I'm sorry, this service is not properly configured. Please try again later.");
+        twiml.hangup();
+      }
+    }
+    
+    res.type('text/xml');
+    res.send(twiml.toString());
+    
+  } catch (error) {
+    console.error(`[ERROR] AI Agent Voice error for company ${companyID}:`, error);
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.say("I'm sorry, there was a technical error. Please try calling back.");
+    twiml.hangup();
+    res.type('text/xml');
+    res.send(twiml.toString());
+  }
+});
+
+// AI Agent Logic response handler
+router.post('/ai-agent-respond/:companyID', async (req, res) => {
+  try {
+    const { companyID } = req.params;
+    const { SpeechResult, CallSid, From } = req.body;
+    
+    console.log(`[AI AGENT RESPOND] Company: ${companyID}, CallSid: ${CallSid}, Speech: "${SpeechResult}"`);
+    
+    // Import AI Agent Runtime
+    const { processCallTurn } = require('../services/aiAgentRuntime');
+    
+    // Get or initialize call state
+    let callState = req.session?.callState || {
+      callId: CallSid,
+      from: From,
+      consecutiveSilences: 0,
+      failedAttempts: 0,
+      startTime: new Date()
+    };
+    
+    // Process the call turn through AI Agent Runtime
+    const result = await processCallTurn(
+      companyID,
+      CallSid,
+      SpeechResult || '',
+      callState
+    );
+    
+    // Update call state
+    req.session = req.session || {};
+    req.session.callState = result.callState;
+    
+    const twiml = new twilio.twiml.VoiceResponse();
+    
+    // Handle different response types
+    if (result.shouldHangup) {
+      twiml.say(escapeTwiML(result.text));
+      twiml.hangup();
+    } else if (result.shouldTransfer) {
+      twiml.say(escapeTwiML(result.text));
+      
+      // Get company transfer number
+      const company = await Company.findById(companyID);
+      const transferNumber = company?.twilioConfig?.fallbackNumber || '+18005551234';
+      
+      twiml.dial(transferNumber);
+    } else {
+      // Continue conversation
+      twiml.say({
+        voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
+      }, escapeTwiML(result.text));
+      
+      // Set up next gather
+      const gather = twiml.gather({
+        input: 'speech',
+        speechTimeout: 'auto',
+        speechModel: 'phone_call',
+        action: `/api/twilio/ai-agent-respond/${companyID}`,
+        method: 'POST'
+      });
+      
+      gather.say('');
+      
+      // Fallback
+      twiml.say("I didn't catch that. Let me transfer you to someone who can help.");
+      twiml.dial(company?.twilioConfig?.fallbackNumber || '+18005551234');
+    }
+    
+    res.type('text/xml');
+    res.send(twiml.toString());
+    
+  } catch (error) {
+    console.error('[ERROR] AI Agent Respond error:', error);
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.say("I'm sorry, I'm having trouble processing your request. Let me transfer you.");
+    twiml.dial('+18005551234');
+    res.type('text/xml');
+    res.send(twiml.toString());
+  }
+});
+
+// AI Agent Logic partial results handler (for real-time processing)
+router.post('/ai-agent-partial/:companyID', async (req, res) => {
+  try {
+    const { companyID } = req.params;
+    const { PartialSpeechResult, CallSid } = req.body;
+    
+    console.log(`[AI AGENT PARTIAL] Company: ${companyID}, CallSid: ${CallSid}, Partial: "${PartialSpeechResult}"`);
+    
+    // For now, just acknowledge - could be used for real-time intent detection
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('[ERROR] AI Agent Partial error:', error);
+    res.json({ success: false });
+  }
+});
+
+// ...existing code...

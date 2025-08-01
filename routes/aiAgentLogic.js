@@ -19,6 +19,163 @@ const Company = require('../models/Company');
 const intelligenceEngine = new ClientsViaIntelligenceEngine();
 
 /**
+ * 🎯 BLUEPRINT COMPLIANCE: Admin AI Settings Endpoints
+ * These endpoints match the Blueprint specification for multi-tenant AI settings
+ */
+
+/**
+ * GET /api/admin/:companyID/ai-settings
+ * Load AI settings for a specific company (Blueprint compliance)
+ */
+router.get('/admin/:companyID/ai-settings', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyID } = req.params;
+        
+        console.log('🔍 Loading AI settings for company:', companyID);
+        
+        // Find the company
+        const company = await Company.findById(companyID);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        // Return Blueprint-compliant AI settings structure
+        const aiSettings = company.aiAgentLogic || {};
+        
+        const response = {
+            success: true,
+            companyID,
+            answerPriority: aiSettings.answerPriorityFlow?.map(item => item.id) || [
+                "companyKB", "tradeQA", "templates", "learning", "llmFallback"
+            ],
+            thresholds: {
+                companyKB: 0.80,
+                tradeQA: 0.75,
+                vector: 0.70,
+                llmFallback: 0.60,
+                ...aiSettings.thresholds
+            },
+            memory: { 
+                mode: "conversational", 
+                retentionMinutes: 30,
+                ...aiSettings.memory 
+            },
+            escalation: { 
+                onNoMatch: true, 
+                strategy: "ask-confirm",
+                ...aiSettings.escalation 
+            },
+            rePromptAfterTurns: aiSettings.rePromptAfterTurns || 3,
+            maxPromptsPerCall: aiSettings.maxPromptsPerCall || 2,
+            modelConfig: {
+                primary: "gemini-pro",
+                fallback: "gpt-4o-mini",
+                allowed: ["gemini-pro", "gpt-4o-mini", "claude-3-haiku"],
+                ...aiSettings.modelConfig
+            },
+            tradeCategories: company.tradeCategories || ["HVAC Residential", "Plumbing Residential"],
+            agentPersonality: aiSettings.agentPersonality || {},
+            behaviorControls: aiSettings.behaviorControls || {},
+            responseCategories: aiSettings.responseCategories || {}
+        };
+
+        console.log('✅ AI settings loaded successfully for company:', companyID);
+        res.json(response);
+
+    } catch (error) {
+        console.error('Error loading AI settings:', error);
+        res.status(500).json({ 
+            error: 'Failed to load AI settings',
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * PUT /api/admin/:companyID/ai-settings
+ * Update AI settings for a specific company (Blueprint compliance)
+ */
+router.put('/admin/:companyID/ai-settings', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyID } = req.params;
+        const updates = req.body;
+        
+        console.log('💾 Updating AI settings for company:', companyID);
+        console.log('Updates:', updates);
+        
+        // Find the company
+        const company = await Company.findById(companyID);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        // Initialize aiAgentLogic if it doesn't exist
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+
+        // Update all provided fields (Blueprint compliance)
+        if (updates.answerPriority) {
+            company.aiAgentLogic.answerPriority = updates.answerPriority;
+        }
+        if (updates.thresholds) {
+            company.aiAgentLogic.thresholds = { ...company.aiAgentLogic.thresholds, ...updates.thresholds };
+        }
+        if (updates.memory) {
+            company.aiAgentLogic.memory = { ...company.aiAgentLogic.memory, ...updates.memory };
+        }
+        if (updates.escalation) {
+            company.aiAgentLogic.escalation = { ...company.aiAgentLogic.escalation, ...updates.escalation };
+        }
+        if (updates.rePromptAfterTurns !== undefined) {
+            company.aiAgentLogic.rePromptAfterTurns = updates.rePromptAfterTurns;
+        }
+        if (updates.maxPromptsPerCall !== undefined) {
+            company.aiAgentLogic.maxPromptsPerCall = updates.maxPromptsPerCall;
+        }
+        if (updates.modelConfig) {
+            company.aiAgentLogic.modelConfig = { ...company.aiAgentLogic.modelConfig, ...updates.modelConfig };
+        }
+        if (updates.tradeCategories) {
+            company.tradeCategories = updates.tradeCategories;
+        }
+        if (updates.agentPersonality) {
+            company.aiAgentLogic.agentPersonality = { ...company.aiAgentLogic.agentPersonality, ...updates.agentPersonality };
+        }
+        if (updates.behaviorControls) {
+            company.aiAgentLogic.behaviorControls = { ...company.aiAgentLogic.behaviorControls, ...updates.behaviorControls };
+        }
+        if (updates.responseCategories) {
+            company.aiAgentLogic.responseCategories = { ...company.aiAgentLogic.responseCategories, ...updates.responseCategories };
+        }
+
+        // Update metadata
+        company.aiAgentLogic.lastUpdated = new Date();
+        company.aiAgentLogic.version = (company.aiAgentLogic.version || 0) + 1;
+
+        // Save to database
+        await company.save();
+
+        console.log('✅ AI settings updated successfully for company:', companyID);
+        
+        res.json({
+            success: true,
+            message: 'AI settings updated successfully',
+            companyID,
+            version: company.aiAgentLogic.version,
+            lastUpdated: company.aiAgentLogic.lastUpdated
+        });
+
+    } catch (error) {
+        console.error('Error updating AI settings:', error);
+        res.status(500).json({ 
+            error: 'Failed to update AI settings',
+            details: error.message 
+        });
+    }
+});
+
+/**
  * 🎯 Answer Priority Flow Management
  */
 
@@ -857,6 +1014,423 @@ router.get('/verify-config', authenticateSingleSession, async (req, res) => {
         res.status(500).json({ 
             error: 'Failed to verify configuration',
             details: error.message 
+        });
+    }
+});
+
+/**
+ * 🎯 BLUEPRINT COMPLIANCE: Company Knowledge Base Endpoints
+ * Company-specific Q&A management
+ */
+
+/**
+ * GET /api/admin/:companyID/kb?query=thermostat
+ * Search company knowledge base
+ */
+router.get('/admin/:companyID/kb', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyID } = req.params;
+        const { query } = req.query;
+        
+        const company = await Company.findById(companyID);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        // Get company KB entries (placeholder - implement actual KB collection)
+        const kbEntries = company.aiAgentLogic?.knowledgeBase || [];
+        
+        let results = kbEntries;
+        if (query) {
+            results = kbEntries.filter(entry => 
+                entry.question.toLowerCase().includes(query.toLowerCase()) ||
+                entry.answer.toLowerCase().includes(query.toLowerCase()) ||
+                entry.keywords?.some(keyword => keyword.toLowerCase().includes(query.toLowerCase()))
+            );
+        }
+
+        res.json({
+            success: true,
+            companyID,
+            query,
+            results,
+            total: results.length
+        });
+
+    } catch (error) {
+        console.error('Error searching company KB:', error);
+        res.status(500).json({ error: 'Failed to search knowledge base', details: error.message });
+    }
+});
+
+/**
+ * POST /api/admin/:companyID/kb
+ * Add new company knowledge base entry
+ */
+router.post('/admin/:companyID/kb', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyID } = req.params;
+        const { question, answer, keywords } = req.body;
+        
+        const company = await Company.findById(companyID);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+        if (!company.aiAgentLogic.knowledgeBase) {
+            company.aiAgentLogic.knowledgeBase = [];
+        }
+
+        const newEntry = {
+            id: Date.now().toString(),
+            question,
+            answer,
+            keywords: keywords || [],
+            createdAt: new Date(),
+            lastUpdated: new Date()
+        };
+
+        company.aiAgentLogic.knowledgeBase.push(newEntry);
+        await company.save();
+
+        res.json({
+            success: true,
+            message: 'Knowledge base entry added successfully',
+            entry: newEntry
+        });
+
+    } catch (error) {
+        console.error('Error adding KB entry:', error);
+        res.status(500).json({ error: 'Failed to add knowledge base entry', details: error.message });
+    }
+});
+
+/**
+ * PUT /api/admin/:companyID/kb/:id
+ * Update company knowledge base entry
+ */
+router.put('/admin/:companyID/kb/:id', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyID, id } = req.params;
+        const { question, answer, keywords } = req.body;
+        
+        const company = await Company.findById(companyID);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const kbEntry = company.aiAgentLogic?.knowledgeBase?.find(entry => entry.id === id);
+        if (!kbEntry) {
+            return res.status(404).json({ error: 'Knowledge base entry not found' });
+        }
+
+        // Update the entry
+        kbEntry.question = question || kbEntry.question;
+        kbEntry.answer = answer || kbEntry.answer;
+        kbEntry.keywords = keywords || kbEntry.keywords;
+        kbEntry.lastUpdated = new Date();
+
+        await company.save();
+
+        res.json({
+            success: true,
+            message: 'Knowledge base entry updated successfully',
+            entry: kbEntry
+        });
+
+    } catch (error) {
+        console.error('Error updating KB entry:', error);
+        res.status(500).json({ error: 'Failed to update knowledge base entry', details: error.message });
+    }
+});
+
+/**
+ * DELETE /api/admin/:companyID/kb/:id
+ * Delete company knowledge base entry
+ */
+router.delete('/admin/:companyID/kb/:id', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyID, id } = req.params;
+        
+        const company = await Company.findById(companyID);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        if (!company.aiAgentLogic?.knowledgeBase) {
+            return res.status(404).json({ error: 'Knowledge base entry not found' });
+        }
+
+        const entryIndex = company.aiAgentLogic.knowledgeBase.findIndex(entry => entry.id === id);
+        if (entryIndex === -1) {
+            return res.status(404).json({ error: 'Knowledge base entry not found' });
+        }
+
+        company.aiAgentLogic.knowledgeBase.splice(entryIndex, 1);
+        await company.save();
+
+        res.json({
+            success: true,
+            message: 'Knowledge base entry deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('Error deleting KB entry:', error);
+        res.status(500).json({ error: 'Failed to delete knowledge base entry', details: error.message });
+    }
+});
+
+/**
+ * 🎯 BLUEPRINT COMPLIANCE: Booking Flow Endpoints
+ */
+
+/**
+ * GET /api/admin/:companyID/booking-flow
+ * Get booking flow configuration
+ */
+router.get('/admin/:companyID/booking-flow', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyID } = req.params;
+        
+        const company = await Company.findById(companyID);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const bookingFlow = company.aiAgentLogic?.bookingFlow || {
+            steps: [
+                { prompt: "What's your full name?", field: "fullName", required: true },
+                { prompt: "What's the service address?", field: "address", required: true },
+                { prompt: "What service do you need?", field: "serviceType", required: true },
+                { prompt: "Best callback number?", field: "phone", required: true },
+                { prompt: "Morning or afternoon?", field: "timePref", required: false }
+            ]
+        };
+
+        res.json({
+            success: true,
+            companyID,
+            bookingFlow
+        });
+
+    } catch (error) {
+        console.error('Error loading booking flow:', error);
+        res.status(500).json({ error: 'Failed to load booking flow', details: error.message });
+    }
+});
+
+/**
+ * PUT /api/admin/:companyID/booking-flow
+ * Update booking flow configuration
+ */
+router.put('/admin/:companyID/booking-flow', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyID } = req.params;
+        const { steps } = req.body;
+        
+        const company = await Company.findById(companyID);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+
+        company.aiAgentLogic.bookingFlow = {
+            steps: steps || [],
+            lastUpdated: new Date()
+        };
+
+        await company.save();
+
+        res.json({
+            success: true,
+            message: 'Booking flow updated successfully',
+            companyID,
+            bookingFlow: company.aiAgentLogic.bookingFlow
+        });
+
+    } catch (error) {
+        console.error('Error updating booking flow:', error);
+        res.status(500).json({ error: 'Failed to update booking flow', details: error.message });
+    }
+});
+
+/**
+ * 🎯 BLUEPRINT COMPLIANCE: Response Trace Endpoints
+ */
+
+/**
+ * POST /api/agent/:companyID/trace
+ * Write debug trace for AI agent decisions
+ */
+router.post('/agent/:companyID/trace', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyID } = req.params;
+        const { callId, steps, finalSource, finalAnswerId } = req.body;
+        
+        const company = await Company.findById(companyID);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+        if (!company.aiAgentLogic.responseTraces) {
+            company.aiAgentLogic.responseTraces = [];
+        }
+
+        const trace = {
+            callId,
+            companyID,
+            steps,
+            finalSource,
+            finalAnswerId,
+            createdAt: new Date()
+        };
+
+        company.aiAgentLogic.responseTraces.push(trace);
+        
+        // Keep only last 100 traces to prevent bloat
+        if (company.aiAgentLogic.responseTraces.length > 100) {
+            company.aiAgentLogic.responseTraces = company.aiAgentLogic.responseTraces.slice(-100);
+        }
+
+        await company.save();
+
+        res.json({
+            success: true,
+            message: 'Response trace recorded successfully',
+            traceId: trace.callId
+        });
+
+    } catch (error) {
+        console.error('Error recording response trace:', error);
+        res.status(500).json({ error: 'Failed to record response trace', details: error.message });
+    }
+});
+
+/**
+ * GET /api/agent/:companyID/trace/:callId
+ * Fetch response trace for debugging
+ */
+router.get('/agent/:companyID/trace/:callId', authenticateSingleSession, async (req, res) => {
+    try {
+        const { companyID, callId } = req.params;
+        
+        const company = await Company.findById(companyID);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const trace = company.aiAgentLogic?.responseTraces?.find(t => t.callId === callId);
+        if (!trace) {
+            return res.status(404).json({ error: 'Response trace not found' });
+        }
+
+        res.json({
+            success: true,
+            callId,
+            trace
+        });
+
+    } catch (error) {
+        console.error('Error fetching response trace:', error);
+        res.status(500).json({ error: 'Failed to fetch response trace', details: error.message });
+    }
+});
+
+/**
+ * 🎯 BLUEPRINT COMPLIANCE: Trade QA Endpoint
+ * GET /api/tradeqa/:trade?query=<query>
+ * Public endpoint for accessing trade-specific Q&A knowledge
+ */
+router.get('/tradeqa/:trade', async (req, res) => {
+    try {
+        const { trade } = req.params;
+        const { query } = req.query;
+        
+        console.log(`🔍 TradeQA lookup: trade=${trade}, query=${query}`);
+        
+        // Import TradeQnA model
+        const TradeQnA = require('../models/TradeQnA');
+        
+        // Build search criteria
+        const searchCriteria = {
+            trade: trade.toLowerCase(),
+            isActive: true
+        };
+        
+        let results = [];
+        
+        if (query) {
+            // Search by query in question, answer, or keywords
+            const searchRegex = new RegExp(query.split(' ').join('|'), 'i');
+            
+            results = await TradeQnA.find({
+                ...searchCriteria,
+                $or: [
+                    { question: searchRegex },
+                    { answer: searchRegex },
+                    { keywords: { $in: [searchRegex] } }
+                ]
+            })
+            .limit(20)
+            .sort({ createdAt: -1 });
+            
+            // Calculate simple relevance scores
+            results = results.map(item => {
+                const questionMatch = (item.question.toLowerCase().match(new RegExp(query.toLowerCase().split(' ').join('|'), 'g')) || []).length;
+                const keywordMatch = item.keywords.filter(k => k.toLowerCase().includes(query.toLowerCase())).length;
+                const score = (questionMatch * 0.7) + (keywordMatch * 0.3);
+                
+                return {
+                    _id: item._id,
+                    trade: item.trade,
+                    question: item.question,
+                    answer: item.answer,
+                    keywords: item.keywords,
+                    score: Math.min(score / query.split(' ').length, 1),
+                    createdAt: item.createdAt
+                };
+            }).sort((a, b) => b.score - a.score);
+        } else {
+            // Return all entries for the trade
+            results = await TradeQnA.find(searchCriteria)
+                .limit(50)
+                .sort({ createdAt: -1 });
+                
+            results = results.map(item => ({
+                _id: item._id,
+                trade: item.trade,
+                question: item.question,
+                answer: item.answer,
+                keywords: item.keywords,
+                score: 1,
+                createdAt: item.createdAt
+            }));
+        }
+        
+        res.json({
+            success: true,
+            trade,
+            query: query || 'all',
+            results,
+            count: results.length,
+            totalAvailable: await TradeQnA.countDocuments(searchCriteria)
+        });
+        
+    } catch (error) {
+        console.error('Error in TradeQA lookup:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Trade QA lookup failed',
+            details: error.message
         });
     }
 });
