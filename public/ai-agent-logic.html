@@ -25,6 +25,32 @@
 </head>
 <body class="bg-gray-50">
     <div class="max-w-7xl mx-auto p-6">
+        
+        <!-- EMERGENCY CALL TRANSFER SECTION AT TOP -->
+        <div style="background: linear-gradient(45deg, #ff0000, #ff6600); border: 10px solid #000000; padding: 30px; margin: 20px 0; text-align: center; box-shadow: 0 0 20px rgba(255,0,0,0.8);">
+            <h1 style="color: white; font-size: 36px; font-weight: bold; text-shadow: 2px 2px 4px #000;">
+                🚨🚨🚨 CALL TRANSFER CONFIGURATION 🚨🚨🚨
+            </h1>
+            <div style="background: white; padding: 20px; margin: 20px 0; border-radius: 10px; border: 3px solid #000;">
+                <label style="color: #000; font-size: 20px; font-weight: bold; display: block; margin-bottom: 10px;">
+                    📞 Enter Transfer Phone Number:
+                </label>
+                <input type="text" id="dialout-number-top" placeholder="+1 (555) 123-4567" 
+                       style="width: 100%; padding: 15px; font-size: 18px; border: 3px solid #ff0000; border-radius: 5px;">
+                <br><br>
+                <label style="color: #000; font-size: 20px; font-weight: bold; display: block; margin-bottom: 10px;">
+                    💬 Transfer Message:
+                </label>
+                <textarea id="transfer-message-top" placeholder="Let me connect you with someone who can better assist you."
+                          style="width: 100%; padding: 15px; font-size: 16px; border: 3px solid #ff0000; border-radius: 5px; height: 100px;"></textarea>
+                <br><br>
+                <button onclick="alert('Phone: ' + document.getElementById('dialout-number-top').value + '\\nMessage: ' + document.getElementById('transfer-message-top').value)" 
+                        style="background: #00ff00; color: #000; padding: 15px 30px; font-size: 18px; font-weight: bold; border: 3px solid #000; border-radius: 5px; cursor: pointer;">
+                    🧪 TEST CONFIGURATION
+                </button>
+            </div>
+        </div>
+        
         <!-- Header -->
         <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
             <div class="flex items-center justify-between">
