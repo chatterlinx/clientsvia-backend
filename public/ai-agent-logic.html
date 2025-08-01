@@ -426,8 +426,25 @@
                         <div class="flex items-start p-4 bg-gray-50 border border-gray-200 rounded-lg">
                             <input type="checkbox" id="use-emails" class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                             <div class="ml-3">
-                                <label for="use-emails" class="text-sm font-medium text-gray-900">Use Emails</label>
-                                <p class="text-sm text-gray-600">Enable email-based interactions</p>
+                                <label for="use-emails" class="text-sm font-medium text-gray-900">Use Emojis</label>
+                                <p class="text-sm text-gray-600">Add emojis in SMS/email (👍😊❌)</p>
+                            </div>
+                        </div>
+
+                        <!-- CALL TRANSFER SECTION - SHOULD BE VISIBLE HERE -->
+                        <div class="flex items-start p-4" style="background-color: #ff0000; border: 5px solid #000000; color: white; font-size: 20px; font-weight: bold;">
+                            <div class="ml-3">
+                                <h2 style="color: white; font-size: 24px;">🚨 CALL TRANSFER SECTION 🚨</h2>
+                                <div style="margin-top: 20px;">
+                                    <label style="color: white; font-size: 18px;">📞 Transfer Phone Number:</label>
+                                    <input type="text" id="dialout-number" placeholder="+1 (555) 123-4567" 
+                                           style="width: 100%; padding: 10px; margin-top: 10px; font-size: 16px; border: 3px solid yellow;">
+                                </div>
+                                <div style="margin-top: 20px;">
+                                    <label style="color: white; font-size: 18px;">💬 Transfer Message:</label>
+                                    <textarea id="transfer-message" placeholder="Let me connect you with someone who can better assist you."
+                                              style="width: 100%; padding: 10px; margin-top: 10px; font-size: 16px; border: 3px solid yellow; height: 80px;"></textarea>
+                                </div>
                             </div>
                         </div>
                     </div>
