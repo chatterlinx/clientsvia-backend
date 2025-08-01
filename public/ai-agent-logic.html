@@ -468,36 +468,17 @@
                                 <p class="text-sm text-gray-600">Add emojis in SMS/email (👍😊❌)</p>
                             </div>
                         </div>
-
-                        <!-- CALL TRANSFER SECTION - SHOULD BE VISIBLE HERE -->
-                        <div class="flex items-start p-4" style="background-color: #ff0000; border: 5px solid #000000; color: white; font-size: 20px; font-weight: bold;">
-                            <div class="ml-3">
-                                <h2 style="color: white; font-size: 24px;">🚨 CALL TRANSFER SECTION 🚨</h2>
-                                <div style="margin-top: 20px;">
-                                    <label style="color: white; font-size: 18px;">📞 Transfer Phone Number:</label>
-                                    <input type="text" id="dialout-number" placeholder="+1 (555) 123-4567" 
-                                           style="width: 100%; padding: 10px; margin-top: 10px; font-size: 16px; border: 3px solid yellow;">
-                                </div>
-                                <div style="margin-top: 20px;">
-                                    <label style="color: white; font-size: 18px;">💬 Transfer Message:</label>
-                                    <textarea id="transfer-message" placeholder="Let me connect you with someone who can better assist you."
-                                              style="width: 100%; padding: 10px; margin-top: 10px; font-size: 16px; border: 3px solid yellow; height: 80px;"></textarea>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
                 <!-- Call Transfer & Escalation Configuration -->
-                <div class="mb-8" style="border: 3px solid red; background-color: #ffe6e6; padding: 20px;">
+                <div class="mb-8 p-6 bg-white rounded-lg shadow border-2 border-blue-500">
                     <div class="flex items-center mb-4">
                         <i class="fas fa-phone-alt text-green-600 mr-3 text-xl"></i>
-                        <h3 class="text-lg font-semibold text-gray-900">📞 Call Transfer & Escalation</h3>
+                        <h3 class="text-lg font-semibold text-gray-900">Call Transfer & Escalation</h3>
                     </div>
                     <p class="text-sm text-gray-600 mb-4">Configure where the AI agent should transfer calls when needed</p>
-                    
                     <div class="space-y-4">
-                        <!-- Enable Dial-Out -->
                         <div class="flex items-start p-4 bg-green-50 border border-green-200 rounded-lg">
                             <input type="checkbox" id="dialout-enabled" class="mt-1 h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded">
                             <div class="ml-3 flex-1">
@@ -505,9 +486,7 @@
                                 <p class="text-sm text-gray-600">Allow AI agent to transfer calls to a designated number</p>
                             </div>
                         </div>
-                        
-                        <!-- Dial-Out Number Configuration -->
-                        <div id="dialout-config" class="p-4 bg-gray-50 border border-gray-200 rounded-lg" style="opacity: 1 !important; pointer-events: auto !important; border: 2px solid blue !important;">
+                        <div id="dialout-config" class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
                             <div class="grid grid-cols-1 gap-4">
                                 <div>
                                     <label for="dialout-number" class="block text-sm font-medium text-gray-700 mb-2">
@@ -521,7 +500,6 @@
                                     >
                                     <p class="text-xs text-gray-500 mt-1">Include country code (e.g., +1 for US)</p>
                                 </div>
-                                
                                 <div>
                                     <label for="transfer-message" class="block text-sm font-medium text-gray-700 mb-2">
                                         <i class="fas fa-comment mr-2 text-blue-600"></i>Transfer Message
@@ -535,8 +513,6 @@
                                     <p class="text-xs text-gray-500 mt-1">What the AI says before transferring the call</p>
                                 </div>
                             </div>
-                            
-                            <!-- Test Transfer Button -->
                             <div class="mt-4 pt-4 border-t border-gray-200">
                                 <button onclick="testDialOut()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center">
                                     <i class="fas fa-phone-alt mr-2"></i>Test Transfer Number
