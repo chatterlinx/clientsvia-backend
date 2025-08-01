@@ -730,8 +730,53 @@
         let ultraSecureSession = null;
         let securityInitialized = false;
 
+        // Function to get company ID from URL or current user
+        function getCurrentCompanyId() {
+            // First check URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const companyId = urlParams.get('id') || urlParams.get('companyId');
+            
+            if (companyId) {
+                console.log('✅ Company ID from URL:', companyId);
+                return companyId;
+            }
+
+            // Check localStorage for real company ID
+            const storedId = localStorage.getItem('companyId');
+            if (storedId && storedId !== 'demo-company' && storedId !== 'demo-company-123') {
+                console.log('✅ Company ID from localStorage:', storedId);
+                return storedId;
+            }
+
+            // Check if set globally
+            if (window.currentCompanyId && window.currentCompanyId !== 'demo-company') {
+                console.log('✅ Company ID from window:', window.currentCompanyId);
+                return window.currentCompanyId;
+            }
+
+            // Try to get from authentication token
+            if (authToken) {
+                try {
+                    const payload = JSON.parse(atob(authToken.split('.')[1]));
+                    if (payload.companyId) {
+                        console.log('✅ Company ID from token:', payload.companyId);
+                        return payload.companyId;
+                    }
+                } catch (e) {
+                    console.warn('Could not parse token for company ID');
+                }
+            }
+
+            console.warn('❌ No valid company ID found - using demo mode');
+            return 'demo-company';
+        }
+
         // Initialize the application with ultra-security
         document.addEventListener('DOMContentLoaded', async function() {
+            // Get company ID first
+            currentCompanyId = getCurrentCompanyId();
+            console.log('Initialized with company ID:', currentCompanyId);
+            
             await initializeUltraSecurity();
             await initializeAuth();
             await loadPriorityFlow();
@@ -897,10 +942,24 @@
             // Get auth token from localStorage or cookie (check both adminToken and authToken)
             authToken = localStorage.getItem('authToken') || localStorage.getItem('adminToken') || getCookie('token');
             
+            // Get company ID using the proper function
+            currentCompanyId = getCurrentCompanyId();
+            
             if (!authToken) {
+                console.log('❌ No auth token found, showing security challenge');
                 showSecurityChallenge();
                 return;
             }
+
+            if (!currentCompanyId || currentCompanyId === 'demo-company') {
+                console.log('⚠️ Using demo mode - no valid company ID');
+                currentCompanyId = 'demo-company';
+            }
+
+            console.log('✅ Authentication initialized:', {
+                hasToken: !!authToken,
+                companyId: currentCompanyId
+            });
 
             // Enhanced security validation
             if (securityInitialized && ultraSecureSession) {
@@ -1607,8 +1666,18 @@ This only works from localhost (127.0.0.1)
             showBasicNotification('💾 Saving response categories...', 'info');
             
             try {
+                // Get current company ID
+                const companyId = getCurrentCompanyId();
+                if (!companyId || companyId === 'demo-company') {
+                    showBasicNotification('❌ No valid company ID found. Please access this page with a proper company ID in the URL (?id=YOUR_COMPANY_ID)', 'error');
+                    return;
+                }
+                
+                console.log('Using company ID:', companyId);
+                
                 // Collect all form data
                 const formData = {
+                    enabled: true, // AI Agent Logic is enabled
                     answerPriorityFlow: [],
                     agentPersonality: {
                         voiceTone: document.getElementById('voice-tone')?.value || 'friendly',
@@ -1618,6 +1687,28 @@ This only works from localhost (127.0.0.1)
                         allowBargeIn: document.getElementById('allow-barge-in')?.checked || false,
                         acknowledgeEmotion: document.getElementById('acknowledge-emotion')?.checked || false,
                         useEmails: document.getElementById('use-emails')?.checked || false
+                    },
+                    responseCategories: {
+                        core: {
+                            greeting: document.getElementById('greeting-response')?.value || '',
+                            farewell: document.getElementById('farewell-response')?.value || '',
+                            transfer: document.getElementById('transfer-response')?.value || '',
+                            serviceUnavailable: document.getElementById('service-unavailable-response')?.value || '',
+                            hold: document.getElementById('hold-response')?.value || '',
+                            businessHours: document.getElementById('business-hours-response')?.value || ''
+                        },
+                        advanced: {
+                            emergency: document.getElementById('emergency-response')?.value || '',
+                            afterHours: document.getElementById('after-hours-response')?.value || '',
+                            appointmentConfirmation: document.getElementById('appointment-confirmation')?.value || '',
+                            schedulingConflict: document.getElementById('scheduling-conflict')?.value || ''
+                        },
+                        emotional: {
+                            frustrated: document.getElementById('frustrated-customer')?.value || '',
+                            appreciative: document.getElementById('appreciative-response')?.value || '',
+                            problemResolution: document.getElementById('problem-resolution')?.value || '',
+                            qualityAssurance: document.getElementById('quality-assurance')?.value || ''
+                        }
                     }
                 };
                 
@@ -1627,30 +1718,89 @@ This only works from localhost (127.0.0.1)
                 const priorityItems = document.querySelectorAll('.priority-item');
                 console.log('Priority items found:', priorityItems.length);
                 priorityItems.forEach((item, index) => {
-                    const title = item.querySelector('h3')?.textContent?.trim();
-                    const description = item.querySelector('p')?.textContent?.trim();
-                    if (title) {
+                    const sourceId = item.dataset.source;
+                    const titleElement = item.querySelector('h3');
+                    const descriptionElement = item.querySelector('p');
+                    const isActive = item.querySelector('input[type="checkbox"]')?.checked || false;
+                    
+                    if (titleElement) {
+                        const name = titleElement.textContent?.trim();
+                        const description = descriptionElement?.textContent?.trim() || '';
+                        
                         formData.answerPriorityFlow.push({
-                            order: index + 1,
-                            title: title,
+                            id: sourceId,
+                            name: name,
                             description: description,
-                            enabled: true
+                            active: isActive,
+                            primary: index === 0, // First item is primary
+                            priority: index + 1,
+                            icon: sourceId.includes('company') ? 'building' : 
+                                  sourceId.includes('trade') ? 'industry' : 
+                                  sourceId.includes('template') ? 'edit' : 'cog',
+                            category: sourceId.includes('company') ? 'primary' : 
+                                     sourceId.includes('trade') ? 'industry' : 
+                                     sourceId.includes('template') ? 'template' : 'other',
+                            confidenceThreshold: 0.7,
+                            intelligenceLevel: 'medium',
+                            performance: {
+                                successRate: 0,
+                                avgConfidence: 0,
+                                usageCount: 0
+                            }
                         });
                     }
                 });
                 
                 console.log('Final form data:', formData);
                 
-                // Save to backend
-                console.log('Making API request to /api/ai-agent-logic/save-config');
-                const response = await fetch('/api/ai-agent-logic/save-config', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    credentials: 'include', // Include cookies for authentication
-                    body: JSON.stringify(formData)
-                });
+                // Add metadata
+                formData.lastUpdated = new Date().toISOString();
+                formData.version = (formData.version || 0) + 1; // Increment version
+                
+                // Try both API endpoints for compatibility
+                let response;
+                let endpoint = `/api/admin/${companyId}/ai-settings`;
+                
+                try {
+                    // First try the Blueprint-compliant endpoint
+                    console.log('Trying Blueprint endpoint:', endpoint);
+                    response = await fetch(endpoint, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    if (!response.ok && response.status === 401) {
+                        throw new Error('Authentication required');
+                    }
+                } catch (error) {
+                    console.log('Blueprint endpoint failed, trying simple endpoint');
+                    endpoint = `/api/simple/admin/${companyId}/ai-settings`;
+                    try {
+                        response = await fetch(endpoint, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            credentials: 'include',
+                            body: JSON.stringify(formData)
+                        });
+                    } catch (simpleError) {
+                        console.log('Simple endpoint failed, trying legacy endpoint');
+                        endpoint = '/api/ai-agent-logic/save-config';
+                        response = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            credentials: 'include',
+                            body: JSON.stringify(formData)
+                        });
+                    }
+                }
                 
                 console.log('Response status:', response.status);
                 console.log('Response headers:', [...response.headers.entries()]);

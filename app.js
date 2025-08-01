@@ -179,6 +179,15 @@ const aiAgentLogicRoutes = require('./routes/aiAgentLogic');
 app.use('/api/ai-agent-logic', aiAgentLogicRoutes); // ClientsVia Intelligence Platform
 app.use('/api', aiAgentLogicRoutes); // Also mount for direct API access (includes /api/tradeqa)
 
+// Add simplified AI Agent Logic routes as fallback (no auth required for basic functionality)
+try {
+    const aiAgentLogicSimpleRoutes = require('./routes/aiAgentLogicSimple');
+    app.use('/api/simple', aiAgentLogicSimpleRoutes); // Simple routes without complex auth
+    console.log('✅ AI Agent Logic Simple routes loaded as fallback');
+} catch (error) {
+    console.log('ℹ️ AI Agent Logic Simple routes not found (optional)');
+}
+
 // Development routes
 if (process.env.NODE_ENV !== 'production') {
     // Serve selfCheckLogger service

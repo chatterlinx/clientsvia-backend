@@ -483,6 +483,13 @@ const companySchema = new mongoose.Schema({
     
     // 🤖 AI Agent Logic Configuration
     aiAgentLogic: {
+        // Enable/disable AI Agent Logic system
+        enabled: { type: Boolean, default: true },
+        
+        // Versioning for configuration tracking
+        version: { type: Number, default: 1 },
+        lastUpdated: { type: Date, default: Date.now },
+        
         // Answer Priority Flow configuration
         answerPriorityFlow: [{
             id: { type: String, required: true },
