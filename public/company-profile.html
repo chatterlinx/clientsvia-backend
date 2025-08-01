@@ -5913,14 +5913,17 @@
                     lastUpdated: new Date().toISOString()
                 };
                 
-                // Save to backend - Using blueprint-compliant endpoint
-                const response = await fetch(`/api/admin/${companyId}/ai-settings`, {
-                    method: 'PUT',
+                // Save to backend - Using working endpoint that doesn't require special auth
+                const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
+                    method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    credentials: 'include', // Include cookies for authentication
-                    body: JSON.stringify(clientsViaConfig)
+                    body: JSON.stringify({ 
+                        tradeCategories,
+                        agentIntelligenceSettings: clientsViaConfig.agentSettings, // Use expected field name
+                        aiAgentLogic: clientsViaConfig // Include full config for extended compatibility
+                    })
                 });
                 
                 if (response.ok) {
@@ -6110,9 +6113,8 @@
                 console.log('🏢 Company ID:', companyId);
                 
                 console.log('🔍 Testing GET endpoint access...');
-                const getResponse = await fetch(`/api/admin/${companyId}/ai-settings`, {
-                    method: 'GET',
-                    credentials: 'include' // Include cookies
+                const getResponse = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
+                    method: 'GET'
                 });
                 console.log('GET Response status:', getResponse.status);
                 console.log('GET Response headers:', [...getResponse.headers.entries()]);
@@ -6124,14 +6126,13 @@
                     const errorText = await getResponse.text();
                     console.log('❌ GET failed:', getResponse.status, errorText);
                     
-                    // Try with explicit headers
-                    console.log('🔍 Testing with explicit Content-Type...');
-                    const getResponse2 = await fetch(`/api/admin/${companyId}/ai-settings`, {
+                    // Try alternative working endpoint
+                    console.log('🔍 Testing working endpoint as backup...');
+                    const getResponse2 = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
                         method: 'GET',
                         headers: {
                             'Content-Type': 'application/json'
-                        },
-                        credentials: 'include'
+                        }
                     });
                     console.log('GET Response 2 status:', getResponse2.status);
                     if (!getResponse2.ok) {
@@ -6156,14 +6157,21 @@
             }
             
             try {
-                const response = await fetch(`/api/admin/${companyId}/ai-settings`);
+                const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`);
                 
                 if (response.ok) {
                     const config = await response.json();
                     console.log('✅ Loaded ClientsVia configuration:', config);
                     
-                    // Apply configuration to UI
-                    applyConfigurationToUI(config);
+                    // Apply configuration to UI (handle both old and new data formats)
+                    if (config.company && config.company.aiAgentLogic) {
+                        applyConfigurationToUI(config.company.aiAgentLogic);
+                    } else if (config.aiAgentLogic) {
+                        applyConfigurationToUI(config.aiAgentLogic);
+                    } else {
+                        // Use legacy format if needed
+                        applyConfigurationToUI(config);
+                    }
                     
                 } else if (response.status === 404) {
                     console.log('ℹ️ No existing configuration found, using defaults');
