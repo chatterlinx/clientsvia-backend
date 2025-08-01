@@ -173,12 +173,11 @@ try {
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 
-// TEMPORARILY DISABLED - Debugging router middleware error
-// New AI Agent Logic routes - ClientsVia Intelligence Platform
-// const aiAgentLogicRoutes = require('./routes/aiAgentLogic');
+// PRODUCTION SAFE - Simple AI Agent Logic routes
+const aiAgentLogicRoutes = require('./routes/aiAgentLogicSimple');
 
-// app.use('/api/ai-agent-logic', aiAgentLogicRoutes); // ClientsVia Intelligence Platform
-// app.use('/api', aiAgentLogicRoutes); // Also mount for direct API access (includes /api/tradeqa)
+app.use('/api/ai-agent-logic', aiAgentLogicRoutes);
+app.use('/api', aiAgentLogicRoutes); // Also mount for direct API access (includes /api/tradeqa)
 
 // Development routes
 if (process.env.NODE_ENV !== 'production') {
