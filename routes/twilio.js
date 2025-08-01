@@ -155,91 +155,53 @@ router.post('/voice', async (req, res) => {
     if (!company) {
       console.log(`[ERROR] [ERROR] No company found for phone number: ${calledNumber}`);
       const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
-      const fallbackMessage = `<Say>${escapeTwiML(msg)}</Say>`;
+      twiml.say(escapeTwiML(msg));
       twiml.hangup();
       res.type('text/xml');
-      res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackMessage}</Response>`);
+      res.send(twiml.toString());
       return;
     }
 
     console.log(`[COMPANY FOUND] [OK] Company: ${company.companyName} (ID: ${company._id})`);
-    console.log(`[AI SETTINGS] Voice ID: ${company.aiSettings?.elevenLabs?.voiceId || 'default'} | Personality: ${company.aiSettings?.personality || 'friendly'}`);
+    console.log(`[AI AGENT LOGIC] Using new AI Agent Logic system for company: ${company._id}`);
     
-    // [TARGET] COMPREHENSIVE PERFORMANCE SETTINGS REPORT
-    const speechThreshold = company.aiSettings?.twilioSpeechConfidenceThreshold ?? 0.4;
-    const fuzzyThreshold = company.aiSettings?.fuzzyMatchThreshold ?? 0.25; // Lowered for better Q&A matching
-    console.log(`[PERFORMANCE SETTINGS] [TARGET] Speech Confidence: ${speechThreshold} | Fuzzy Match: ${fuzzyThreshold}`);
-    console.log(`[THRESHOLDS] Confidence: ${speechThreshold}`); // Keep legacy log for compatibility
+    // 🚀 USE NEW AI AGENT LOGIC SYSTEM
+    try {
+      // Import AI Agent Runtime
+      const { initializeCall } = require('../services/aiAgentRuntime');
+      
+      // Initialize call with AI Agent Logic
+      const initResult = await initializeCall(
+        company._id.toString(),
+        req.body.CallSid,
+        req.body.From,
+        req.body.To
+      );
+      
+      console.log(`[AI AGENT LOGIC] Call initialized, greeting: "${initResult.greeting}"`);
+      
+      // Set up speech gathering with AI Agent Logic response handler
+      const gather = twiml.gather({
+        input: 'speech',
+        action: `https://${req.get('host')}/api/twilio/ai-agent-respond/${company._id}`,
+        method: 'POST',
+        bargeIn: company.aiSettings?.bargeIn ?? false,
+        timeout: 5,
+        speechTimeout: 'auto',
+        enhanced: true,
+        speechModel: 'phone_call',
+        partialResultCallback: `https://${req.get('host')}/api/twilio/ai-agent-partial/${company._id}`
+      });
 
-    // BYPASS: Check for new AI Agent Setup greeting first, then fall back to old agent setup
-    let rawGreeting;
-    let greetingType = 'tts';
-    let greetingAudioUrl = '';
-    let placeholders = [];
-    
-    // Check if company has new AI Agent Setup with greeting
-    if (company.aiAgentSetup && (company.aiAgentSetup.agentInitialMessage || company.aiAgentSetup.greeting)) {
-        console.log(`[AI AGENT SETUP] Using new AI agent greeting`);
-        rawGreeting = company.aiAgentSetup.agentInitialMessage || company.aiAgentSetup.greeting;
-        greetingType = company.aiAgentSetup.greetingType || 'tts';
-        greetingAudioUrl = company.aiAgentSetup.greetingAudioUrl || '';
-        placeholders = company.aiAgentSetup.placeholders || [];
-    } else if (company.aiAgentSetup && company.aiAgentSetup.template) {
-        // Check if there's a template with a greeting
-        console.log(`[AI AGENT SETUP] Using template greeting for template: ${company.aiAgentSetup.template}`);
-        const AIAgentSetupService = require('../services/aiAgentSetup');
-        const templates = AIAgentSetupService.getBusinessTemplates();
-        const template = templates[company.aiAgentSetup.template];
-        if (template && template.greeting) {
-            rawGreeting = template.greeting;
-            greetingType = 'tts';
-            greetingAudioUrl = '';
-            placeholders = [];
-        } else {
-            // Template doesn't have greeting, use default
-            rawGreeting = "Hello, thank you for calling. How can I help you today?";
-        }
-    } else {
-        console.log(`[LEGACY AGENT SETUP] Using legacy agent setup greeting`);
-        greetingType = company.agentSetup?.greetingType || 'tts';
-        greetingAudioUrl = company.agentSetup?.greetingAudioUrl || '';
-        placeholders = company.agentSetup?.placeholders || [];
-        rawGreeting = company.agentSetup?.agentGreeting || "Hello, thank you for calling. How can I help you today?";
-    }
-    
-    console.log(`[GREETING TYPE] [TTS] Type: ${greetingType} | Audio URL: ${greetingAudioUrl || 'none'}`);
-    
-    // Import the placeholders utility
-    const { applyPlaceholders } = require('../utils/placeholders');
-    
-    // Apply the placeholders to the greeting
-    let greeting = applyPlaceholders(rawGreeting, placeholders);
-    
-    console.log(`[Twilio Voice] Greeting type: ${greetingType}`);
-
-    const gather = twiml.gather({
-      input: 'speech',
-      action: `https://${req.get('host')}/api/twilio/handle-speech`,
-      method: 'POST',
-      bargeIn: company.aiSettings?.bargeIn ?? false,
-      timeout: 5, // Globally optimized for fast response
-      speechTimeout: 'auto',
-      enhanced: true,
-      speechModel: 'phone_call',
-      partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
-    });
-
-    if (greetingType === 'audio' && greetingAudioUrl) {
-      gather.play(greetingAudioUrl);
-    } else {
+      // Use AI Agent Logic greeting with TTS
       const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
-      if (elevenLabsVoice) {
+      if (elevenLabsVoice && initResult.greeting) {
         try {
-          console.log(`[TTS START] [TTS] Starting greeting TTS synthesis...`);
+          console.log(`[TTS START] [TTS] Starting AI Agent Logic greeting TTS synthesis...`);
           const ttsStartTime = Date.now();
           
           const buffer = await synthesizeSpeech({
-            text: greeting,
+            text: initResult.greeting,
             voiceId: elevenLabsVoice,
             stability: company.aiSettings.elevenLabs?.stability,
             similarity_boost: company.aiSettings.elevenLabs?.similarityBoost,
@@ -249,41 +211,55 @@ router.post('/voice', async (req, res) => {
           });
           
           const ttsTime = Date.now() - ttsStartTime;
-          console.log(`[TTS COMPLETE] [OK] Greeting TTS completed in ${ttsTime}ms`);
+          console.log(`[TTS COMPLETE] [OK] AI Agent Logic greeting TTS completed in ${ttsTime}ms`);
           
-          const fileName = `greet_${Date.now()}.mp3`;
+          const fileName = `ai_greet_${Date.now()}.mp3`;
           const audioDir = path.join(__dirname, '../public/audio');
           if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
           const filePath = path.join(audioDir, fileName);
           fs.writeFileSync(filePath, buffer);
           gather.play(`${req.protocol}://${req.get('host')}/audio/${fileName}`);
         } catch (err) {
-          console.error('ElevenLabs TTS failed:', err);
-          const fallbackText = `<Say>${escapeTwiML(greeting)}</Say>`;
-          res.type('text/xml');
-          res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
-          return;
+          console.error('AI Agent Logic TTS failed, using Say:', err);
+          gather.say(escapeTwiML(initResult.greeting));
         }
       } else {
-        const fallbackText = `<Say>${escapeTwiML(greeting)}</Say>`;
-        res.type('text/xml');
-        res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
-        return;
+        // Fallback to Say if no voice or greeting
+        const fallbackGreeting = initResult.greeting || "Hello! Thank you for calling. How can I help you today?";
+        gather.say(escapeTwiML(fallbackGreeting));
       }
+      
+    } catch (aiError) {
+      console.error(`[AI AGENT LOGIC ERROR] Failed to initialize AI Agent Logic: ${aiError.message}`);
+      console.log(`[FALLBACK] Using legacy system for call`);
+      
+      // Fallback to simple greeting if AI Agent Logic fails
+      const fallbackGreeting = "Hello! Thank you for calling. How can I help you today?";
+      const gather = twiml.gather({
+        input: 'speech',
+        action: `https://${req.get('host')}/api/twilio/handle-speech`,
+        method: 'POST',
+        bargeIn: false,
+        timeout: 5,
+        speechTimeout: 'auto',
+        enhanced: true,
+        speechModel: 'phone_call'
+      });
+      gather.say(escapeTwiML(fallbackGreeting));
     }
 
     res.type('text/xml');
     const twimlString = twiml.toString();
-    console.log(`[Twilio Voice] Sending TwiML: ${twimlString}`);
+    console.log(`[Twilio Voice] Sending AI Agent Logic TwiML: ${twimlString}`);
     res.send(twimlString);
-  } catch (err) {
-    console.error('[POST /api/twilio/voice] Error:', err.message, err.stack);
+    
+  } catch (error) {
+    console.error(`[ERROR] [CRITICAL] Voice endpoint error: ${error.message}`);
     const twiml = new twilio.twiml.VoiceResponse();
-    const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
-    const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
+    twiml.say('I apologize, but I\'m experiencing technical difficulties. Please try calling again in a moment.');
     twiml.hangup();
     res.type('text/xml');
-    res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
+    res.send(twiml.toString());
   }
 });
 
