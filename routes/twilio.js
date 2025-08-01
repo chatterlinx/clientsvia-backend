@@ -9,6 +9,7 @@ const express = require('express');
 const twilio = require('twilio');
 const Company = require('../models/Company');
 const { answerQuestion, loadCompanyQAs } = require('../services/agent');
+const aiAgentRuntime = require('../services/aiAgentRuntime');
 const { findCachedAnswer } = require('../utils/aiAgent');
 const KnowledgeEntry = require('../models/KnowledgeEntry');
 const fs = require('fs');
@@ -557,26 +558,27 @@ router.post('/handle-speech', async (req, res) => {
 
     // No need to store context in Redis anymore - processing synchronously
 
-    // Process AI response synchronously (no polling needed)
-    console.log(`[AI PROCESSING] 🤖 Starting AI response generation...`);
+    // Process AI response using new AI Agent Logic system
+    console.log(`[AI AGENT LOGIC] 🤖 Starting AI response generation...`);
     const aiStartTime = Date.now();
     
     let answerObj;
     try {
-      answerObj = await answerQuestion(
-        companyId,
+      answerObj = await aiAgentRuntime.processUserInput(
+        company._id.toString(),
+        callSid,
         speechText,
-        responseLength,
-        conversationHistory,
-        mainAgentScript,
-        personality,
-        companySpecialties,
-        categoryQAs,
-        callSid
+        {
+          fromPhone: fromPhone,
+          toPhone: company.twilioConfig?.phoneNumber || toPhone,
+          conversationHistory: conversationHistory,
+          personality: personality,
+          companySpecialties: companySpecialties
+        }
       );
       
       const aiEndTime = Date.now();
-      console.log(`[AI SUCCESS] [OK] AI response generated in ${aiEndTime - aiStartTime}ms`);
+      console.log(`[AI AGENT LOGIC] [OK] AI response generated in ${aiEndTime - aiStartTime}ms`);
       console.log(`[AI] answerQuestion result for ${callSid}:`, answerObj);
 
       // Add AI response to history
