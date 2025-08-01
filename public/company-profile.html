@@ -5800,12 +5800,59 @@
             console.log('✅ ClientsVia Knowledge Sources initialized');
         }
         
+        // AI Settings Only Save Function - Prevents main form validation interference
+        async function saveAISettingsOnly(event) {
+            // Prevent any form submission or validation
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+            }
+            
+            console.log('🛡️ AI Settings Only save - preventing form validation interference');
+            
+            // Call our AI-specific save function
+            await saveClientsViaConfigurationSafe();
+        }
+        
         // Save ClientsVia configuration
+        // Enhanced save function that prevents form validation interference
+        async function saveClientsViaConfigurationSafe() {
+            // Prevent any form submission or validation
+            event?.preventDefault();
+            event?.stopPropagation();
+            event?.stopImmediatePropagation();
+            
+            console.log('🛡️ Safe save function called - preventing form validation interference');
+            
+            // Call our actual save function
+            await saveClientsViaConfiguration();
+        }
+        
         async function saveClientsViaConfiguration() {
             const companyId = getCurrentCompanyId();
             if (!companyId) {
                 showNotification('Error: Company ID not found', 'error');
                 return;
+            }
+
+            console.log('🚀 Starting saveClientsViaConfiguration...');
+            console.log('Company ID:', companyId);
+            
+            // Temporarily disable global form validation to prevent interference
+            if (window.companyProfileManager) {
+                console.log('🛡️ Temporarily disabling global form validation');
+                const originalCollectData = window.companyProfileManager.collectOverviewData;
+                window.companyProfileManager.collectOverviewData = function() {
+                    console.log('🛡️ Skipping Overview validation during AI save');
+                    return {};
+                };
+                
+                // Restore after our save completes
+                setTimeout(() => {
+                    window.companyProfileManager.collectOverviewData = originalCollectData;
+                    console.log('🛡️ Restored global form validation');
+                }, 1000);
             }
             
             try {
