@@ -173,10 +173,10 @@ try {
 app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 
-// PRODUCTION SAFE - Simple AI Agent Logic routes
-const aiAgentLogicRoutes = require('./routes/aiAgentLogicSimple');
+// RESTORED - Full AI Agent Logic routes (issue was in Twilio routes, not here)
+const aiAgentLogicRoutes = require('./routes/aiAgentLogic');
 
-app.use('/api/ai-agent-logic', aiAgentLogicRoutes);
+app.use('/api/ai-agent-logic', aiAgentLogicRoutes); // ClientsVia Intelligence Platform
 app.use('/api', aiAgentLogicRoutes); // Also mount for direct API access (includes /api/tradeqa)
 
 // Development routes
