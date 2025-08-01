@@ -1091,9 +1091,6 @@
                                             </div>
                                         </div>
                                         <div class="flex items-center space-x-3">
-                                            <button id="save-clientsvia-all-config" class="px-4 py-2 bg-white/20 hover:bg-white/30 text-blue-400 font-semibold rounded-lg backdrop-blur-sm transition-all duration-200 border border-white/30">
-                                                <i class="fas fa-save mr-2"></i>Save All ClientsVia Settings
-                                            </button>
                                             <span class="px-3 py-1 bg-white/20 text-green-400 text-xs font-medium rounded-full backdrop-blur-sm">
                                                 <i class="fas fa-rocket mr-1"></i>ClientsVia Unified
                                             </span>
@@ -2392,7 +2389,7 @@
                                             <span id="agent-settings-saved" class="text-green-600 text-sm hidden">
                                                 <i class="fas fa-check-circle mr-1"></i>Settings Saved!
                                             </span>
-                                            <button type="button" onclick="saveAgentSettings()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-md shadow-sm transition duration-150 ease-in-out">
+                                            <button type="button" onclick="saveClientsViaConfiguration()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-md shadow-sm transition duration-150 ease-in-out">
                                                 <i class="fas fa-save mr-2"></i>Save AI Settings
                                             </button>
                                         </div>
@@ -5860,8 +5857,44 @@
                     allowed: ["gemini-pro", "gpt-4o-mini", "claude-3-haiku"]
                 };
                 
-                // Get selected trade categories (should come from another UI section)
-                const tradeCategories = ["HVAC Residential", "Plumbing Residential"]; // TODO: Make this dynamic
+                // Get selected trade categories from checkboxes
+                const checkboxes = document.querySelectorAll('#trade-categories-checkboxes input[type="checkbox"]:checked');
+                const tradeCategories = Array.from(checkboxes).map(checkbox => checkbox.value);
+                
+                // Helper function to safely get element values
+                const safeGetValue = (id, defaultValue = '') => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        return element.value;
+                    } else {
+                        console.warn(`⚠️ Element not found during save: ${id}, using default: ${defaultValue}`);
+                        return defaultValue;
+                    }
+                };
+                
+                const safeGetChecked = (id, defaultValue = false) => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        return element.checked;
+                    } else {
+                        console.warn(`⚠️ Element not found during save: ${id}, using default: ${defaultValue}`);
+                        return defaultValue;
+                    }
+                };
+
+                // Collect comprehensive agent settings
+                const agentSettings = {
+                    useLLM: safeGetValue('agent-useLLM') === 'true',
+                    llmModel: safeGetValue('agent-llmModel', 'gemini-pro'),
+                    memoryMode: safeGetValue('agent-memoryMode', 'short'),
+                    fallbackThreshold: parseFloat(safeGetValue('agent-fallbackThreshold', '0.5')),
+                    escalationMode: safeGetValue('agent-escalationMode', 'ask'),
+                    rePromptAfterTurns: parseInt(safeGetValue('agent-rePromptAfterTurns', '3')),
+                    maxPromptsPerCall: parseInt(safeGetValue('agent-maxPromptsPerCall', '2')),
+                    semanticSearchEnabled: safeGetChecked('agent-semanticSearchEnabled', true),
+                    confidenceScoring: safeGetChecked('agent-confidenceScoring', true),
+                    autoLearningQueue: safeGetChecked('agent-autoLearningQueue', true)
+                };
                 
                 // Blueprint-compliant configuration
                 const clientsViaConfig = {
@@ -5869,10 +5902,11 @@
                     thresholds,
                     memory,
                     escalation,
-                    rePromptAfterTurns: 3,  // Blueprint default
-                    maxPromptsPerCall: 2,   // Blueprint default
+                    rePromptAfterTurns: agentSettings.rePromptAfterTurns,
+                    maxPromptsPerCall: agentSettings.maxPromptsPerCall,
                     modelConfig,
                     tradeCategories,
+                    agentSettings,  // Include all agent settings
                     lastUpdated: new Date().toISOString()
                 };
                 
@@ -6051,12 +6085,6 @@
             initClientsViaTabs();
             initClientsViaPriorityFlow();
             initClientsViaKnowledgeSources();
-            
-            // Bind save button
-            const saveButton = document.getElementById('save-clientsvia-all-config');
-            if (saveButton) {
-                saveButton.addEventListener('click', saveClientsViaConfiguration);
-            }
             
             // Load existing configuration
             loadClientsViaConfiguration();
