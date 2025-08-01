@@ -22,6 +22,11 @@ const { getRandomPersonalityResponse, getPersonalityResponse, fetchCompanyRespon
 
 const router = express.Router();
 
+// Helper function to check if transfer is enabled
+function isTransferEnabled(company) {
+  return company?.aiAgentLogic?.callTransferConfig?.dialOutEnabled === true;
+}
+
 // Helper function to get the configured transfer number
 function getTransferNumber(company) {
   // First try the AI Agent Logic configured dial-out number
@@ -48,6 +53,21 @@ function getTransferMessage(company) {
     return company.aiAgentLogic.callTransferConfig.transferMessage;
   }
   return "Let me connect you with someone who can better assist you.";
+}
+
+// Helper function to handle transfer logic with enabled check
+function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I cannot assist further at this time. Please try calling back later.") {
+  if (isTransferEnabled(company)) {
+    const transferMessage = getTransferMessage(company);
+    const transferNumber = getTransferNumber(company);
+    console.log('[AI AGENT] Transfer enabled, transferring to:', transferNumber);
+    twiml.say(transferMessage);
+    twiml.dial(transferNumber);
+  } else {
+    console.log('[AI AGENT] Transfer disabled, providing fallback message');
+    twiml.say(fallbackMessage);
+    twiml.hangup();
+  }
 }
 
 // Helper function to escape text for TwiML Say verb
@@ -812,11 +832,8 @@ router.post('/voice/:companyID', async (req, res) => {
       
       gather.say('');
       
-      // Fallback if no input
-      const transferMessage = getTransferMessage(company);
-      const transferNumber = getTransferNumber(company);
-      twiml.say(transferMessage);
-      twiml.dial(transferNumber);
+      // Fallback if no input - only transfer if enabled
+      handleTransfer(twiml, company, "Thank you for calling. Please try again later or visit our website.");
       
     } else {
       // Fall back to existing voice flow
@@ -890,11 +907,9 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
     } else if (result.shouldTransfer) {
       twiml.say(escapeTwiML(result.text));
       
-      // Get company transfer number
+      // Get company transfer number and check if transfer is enabled
       const company = await Company.findById(companyID);
-      const transferNumber = getTransferNumber(company);
-      
-      twiml.dial(transferNumber);
+      handleTransfer(twiml, company, "I apologize, but I cannot transfer you at this time. Please try calling back later or visiting our website for assistance.");
     } else {
       // Continue conversation
       twiml.say({
@@ -912,11 +927,9 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       
       gather.say('');
       
-      // Fallback
-      const transferMessage = getTransferMessage(company);
-      const transferNumber = getTransferNumber(company);
-      twiml.say(transferMessage);
-      twiml.dial(transferNumber);
+      // Fallback - only transfer if enabled
+      const company = await Company.findById(companyID);
+      handleTransfer(twiml, company, "Thank you for calling. Please try again later.");
     }
     
     res.type('text/xml');
@@ -925,16 +938,18 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
   } catch (error) {
     console.error('[ERROR] AI Agent Respond error:', error);
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say("I'm sorry, I'm having trouble processing your request. Let me transfer you.");
     
-    // Try to get the company and use configured transfer number, fall back to default
+    // Try to get the company and check if transfer is enabled
     try {
+      const { companyID } = req.params; // Get companyID from request params
       const company = await Company.findById(companyID);
-      const transferNumber = getTransferNumber(company);
-      twiml.dial(transferNumber);
+      
+      twiml.say("I'm sorry, I'm having trouble processing your request.");
+      handleTransfer(twiml, company, "Please try calling back later or visit our website for assistance.");
     } catch (companyError) {
       console.error('[ERROR] Could not load company for transfer:', companyError);
-      twiml.dial('+18005551234'); // Final fallback
+      twiml.say("I'm sorry, I'm having trouble processing your request. Please try calling back later.");
+      twiml.hangup();
     }
     
     res.type('text/xml');
