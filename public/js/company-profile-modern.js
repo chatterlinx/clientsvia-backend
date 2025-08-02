@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.10 - Added debounce utility method');
+console.log('🚀 Loading company-profile-modern.js v2.11 - Added missing populate methods');
 
 /**
  * Modern Company Profile Management System
@@ -242,7 +242,7 @@ class CompanyProfileManager {
             this.populateOverviewTab();
             this.populateConfigTab();
             this.populateNotesTab();
-            this.populateCalendarTab();
+            this.populateCalendarSettingsTab();
             this.populateAISettingsTab();
             this.populateVoiceTab();
             this.populatePersonalityTab();
