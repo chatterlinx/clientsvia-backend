@@ -4181,12 +4181,17 @@
             if (!companyId) return;
 
             try {
+                console.log('🔄 Loading agent settings for company:', companyId);
                 const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`);
                 const data = await response.json();
+                
+                console.log('📥 Received agent settings data:', data);
                 
                 // Populate trade categories
                 const tradeSelector = document.getElementById('agent-trade-categories');
                 const selectedTrades = data.tradeCategories || [];
+                
+                console.log('📋 Trade categories to set:', selectedTrades);
                 
                 // Update dropdown selections
                 Array.from(tradeSelector.options).forEach(option => {
@@ -4205,11 +4210,14 @@
                 // Populate agent settings with safety checks
                 const settings = data.agentSettings || {};
                 
+                console.log('⚙️ Agent settings to apply:', settings);
+                
                 // Helper function to safely set element values
                 const safeSetValue = (id, value) => {
                     const element = document.getElementById(id);
                     if (element) {
                         element.value = value;
+                        console.log(`✓ Set ${id} = ${value}`);
                     } else {
                         // Only warn for critical elements, others are optional
                         if (!['agent-llmModel'].includes(id)) {
@@ -4222,6 +4230,7 @@
                     const element = document.getElementById(id);
                     if (element) {
                         element.checked = checked;
+                        console.log(`✓ Set ${id} checked = ${checked}`);
                     } else {
                         console.warn(`⚠️ Element not found: ${id}`);
                     }
@@ -4256,9 +4265,7 @@
                 console.error('❌ Failed to load agent settings:', error);
                 alert('Failed to load agent settings. Please refresh the page.');
             }
-        }
-
-        // Save agent settings
+        }        // Save agent settings
         async function saveAgentSettings() {
             const companyId = getCurrentCompanyId();
             if (!companyId) {
@@ -4281,7 +4288,7 @@
                         return defaultValue;
                     }
                 };
-                
+
                 const safeGetChecked = (id, defaultValue = false) => {
                     const element = document.getElementById(id);
                     if (element) {
@@ -4306,20 +4313,28 @@
                     autoLearningQueue: safeGetChecked('agent-autoLearningQueue', true)
                 };
 
+                console.log('🔄 About to save agent settings:', { companyId, tradeCategories, agentSettings });
+
                 const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ tradeCategories, agentSettings })
                 });
 
+                const responseData = await response.json();
+                console.log('📥 Save response:', responseData);
+
                 if (response.ok) {
                     const savedIndicator = document.getElementById('agent-settings-saved');
                     savedIndicator.classList.remove('hidden');
                     setTimeout(() => savedIndicator.classList.add('hidden'), 3000);
                     console.log('✅ Agent settings saved successfully');
+                    
+                    // Reload settings to verify they were saved
+                    console.log('🔄 Reloading settings to verify save...');
+                    setTimeout(() => loadAgentSettings(), 1000);
                 } else {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to save settings');
+                    throw new Error(responseData.error || 'Failed to save settings');
                 }
 
             } catch (error) {

@@ -607,7 +607,49 @@ const companySchema = new mongoose.Schema({
     
     isActive: { type: Boolean, default: true },
     createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
+    updatedAt: { type: Date, default: Date.now },
+    
+    // Agent Settings for AI Agent Logic Tab
+    agentSettings: {
+        useLLM: { type: Boolean, default: true },
+        llmModel: { 
+            type: String, 
+            default: 'gemini-pro',
+            enum: ['gemini-pro', 'gpt-4o-mini', 'claude-3-haiku']
+        },
+        memoryMode: { 
+            type: String, 
+            enum: ['short', 'conversation'], 
+            default: 'short' 
+        },
+        fallbackThreshold: { 
+            type: Number, 
+            min: 0, 
+            max: 1, 
+            default: 0.5 
+        },
+        escalationMode: { 
+            type: String, 
+            enum: ['ask', 'auto'], 
+            default: 'ask' 
+        },
+        rePromptAfterTurns: { 
+            type: Number, 
+            min: 1, 
+            max: 10, 
+            default: 3 
+        },
+        maxPromptsPerCall: { 
+            type: Number, 
+            min: 1, 
+            max: 10, 
+            default: 2 
+        },
+        firstPromptSoft: { type: Boolean, default: true },
+        semanticSearchEnabled: { type: Boolean, default: true },
+        confidenceScoring: { type: Boolean, default: true },
+        autoLearningQueue: { type: Boolean, default: true }
+    }
 });
 
 // --- Middleware ---
