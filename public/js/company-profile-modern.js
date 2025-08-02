@@ -49,7 +49,7 @@ class CompanyProfileManager {
             // Initialize DOM elements and event listeners
             this.initializeDOM();
             this.setupEventListeners();
-            this.createSaveButton();
+            // 🗑️ REMOVED: this.createSaveButton(); - Using dedicated section-specific save buttons instead
             
             // Load company data
             await this.loadCompanyData();
