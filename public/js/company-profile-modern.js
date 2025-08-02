@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.1 - Auth Token Fix');
+console.log('🚀 Loading company-profile-modern.js v2.2 - Character Counter Fix');
 
 /**
  * Modern Company Profile Management System
@@ -24,11 +24,6 @@ class CompanyProfileManager {
         this.currentTab = 'overview';
         this.saveButton = null;
         this.initialized = false;
-
-        // Bind methods to preserve context
-        this.handleFormChange = this.handleFormChange.bind(this);
-        this.handleBeforeUnload = this.handleBeforeUnload.bind(this);
-        this.handleTabSwitch = this.handleTabSwitch.bind(this);
     }
 
     /**
@@ -131,15 +126,15 @@ class CompanyProfileManager {
      */
     setupEventListeners() {
         // Form change tracking
-        document.addEventListener('input', this.handleFormChange);
-        document.addEventListener('change', this.handleFormChange);
+        document.addEventListener('input', (event) => this.handleFormChange(event));
+        document.addEventListener('change', (event) => this.handleFormChange(event));
         
         // Before unload warning
-        window.addEventListener('beforeunload', this.handleBeforeUnload);
+        window.addEventListener('beforeunload', (event) => this.handleBeforeUnload(event));
         
         // Tab switching
         this.domElements.tabButtons.forEach(button => {
-            button.addEventListener('click', this.handleTabSwitch);
+            button.addEventListener('click', (event) => this.handleTabSwitch(event));
         });
 
         // Edit button (legacy - now hidden since form is always editable)
@@ -568,7 +563,7 @@ class CompanyProfileManager {
         // Special handling for description character counter
         const descriptionField = document.getElementById('edit-description');
         if (descriptionField) {
-            descriptionField.addEventListener('input', this.updateCharacterCounter.bind(this));
+            descriptionField.addEventListener('input', () => this.updateCharacterCounter());
         }
 
         console.log('🔧 Enterprise validation setup complete');
