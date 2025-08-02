@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.12 - Added escapeHtml utility method');
+console.log('🚀 Loading company-profile-modern.js v2.13 - Fixed tab switching functionality');
 
 /**
  * Modern Company Profile Management System
@@ -2308,7 +2308,6 @@ class CompanyProfileManager {
         
         // Setup tab switching logic if not already handled by HTML
         const tabButtons = document.querySelectorAll('[data-tab]');
-        const tabPanes = document.querySelectorAll('.tab-pane');
         
         tabButtons.forEach(button => {
             button.addEventListener('click', (e) => {
@@ -2317,6 +2316,9 @@ class CompanyProfileManager {
                 this.switchTab(targetTab);
             });
         });
+        
+        // Set initial tab to overview
+        this.switchTab('overview');
         
         console.log('✅ Tabs system initialized');
     }
@@ -2329,20 +2331,31 @@ class CompanyProfileManager {
         // Update current tab
         this.currentTab = tabName;
         
-        // Update active states
+        // Update active states for tab buttons
         document.querySelectorAll('[data-tab]').forEach(btn => {
             btn.classList.remove('active');
         });
-        document.querySelectorAll('.tab-pane').forEach(pane => {
-            pane.classList.remove('active');
+        
+        // Hide all tab content items
+        document.querySelectorAll('.tab-content-item').forEach(pane => {
+            pane.classList.add('hidden');
         });
         
-        // Activate target tab
+        // Activate target tab button
         const targetButton = document.querySelector(`[data-tab="${tabName}"]`);
-        const targetPane = document.getElementById(tabName);
-        
         if (targetButton) targetButton.classList.add('active');
-        if (targetPane) targetPane.classList.add('active');
+        
+        // Show target tab content
+        const targetPane = document.getElementById(`${tabName}-content`);
+        if (targetPane) {
+            targetPane.classList.remove('hidden');
+        } else {
+            // Fallback: try with exact tabName as ID
+            const fallbackPane = document.getElementById(tabName);
+            if (fallbackPane) {
+                fallbackPane.classList.remove('hidden');
+            }
+        }
         
         console.log(`📑 Switched to tab: ${tabName}`);
     }
