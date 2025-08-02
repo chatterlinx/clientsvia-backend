@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.7 - Restored Missing Utility Methods');
+console.log('🚀 Loading company-profile-modern.js v2.8 - Clean Method Definitions');
 
 /**
  * Modern Company Profile Management System
@@ -52,6 +52,15 @@ class CompanyProfileManager {
             this.initializeTabs();
             
             this.initialized = true;
+            
+            // Debug: Check all required methods exist
+            const requiredMethods = ['showLoading', 'showNotification', 'debounce', 'renderEnterpriseContactsSection', 'updateHeaderElements', 'initializeTabs'];
+            const missingMethods = requiredMethods.filter(method => typeof this[method] !== 'function');
+            if (missingMethods.length > 0) {
+                console.error('❌ Missing methods:', missingMethods);
+            } else {
+                console.log('✅ All required methods available');
+            }
             console.log('✅ Company Profile Manager initialized successfully');
             
         } catch (error) {
@@ -730,1492 +739,1492 @@ class CompanyProfileManager {
     }
 
     /**
-     * GOLD STANDARD: Validation utility methods
+     * Render enterprise contacts section
      */
-    isValidEmail(email) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
-    }
-
-    isValidPhone(phone) {
-        // Remove all non-digits for validation
-        const cleaned = phone.replace(/\D/g, '');
-        return cleaned.length >= 10 && cleaned.length <= 15;
-    }
-
-    isValidUrl(url) {
-        try {
-            new URL(url);
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    /**
-     * GOLD STANDARD: Update character counter for description field
-     */
-    updateCharacterCounter() {
-        const descriptionField = document.getElementById('edit-description');
-        const counter = document.getElementById('description-counter');
+    renderEnterpriseContactsSection() {
+        console.log('👥 Rendering enterprise contacts section...');
         
-        if (descriptionField && counter) {
-            const length = descriptionField.value.length;
-            const maxLength = 1000;
-            
-            counter.textContent = `${length}/${maxLength} characters`;
-            
-            // Color coding based on usage
-            if (length > maxLength * 0.9) {
-                counter.className = 'text-xs text-red-600 font-medium';
-            } else if (length > maxLength * 0.75) {
-                counter.className = 'text-xs text-yellow-600';
-            } else {
-                counter.className = 'text-xs text-gray-500';
-            }
-        }
-    }
-
-    /**
-     * GOLD STANDARD: Show field validation errors
-     */
-    showFieldErrors(field, errors) {
-        const validationContainer = field.parentNode.querySelector('.field-validation');
-        if (!validationContainer) return;
-
-        validationContainer.innerHTML = errors.map(error => 
-            `<div class="text-red-600 text-xs mt-1 flex items-center">
-                <i class="fas fa-exclamation-circle mr-1"></i>
-                ${error}
-            </div>`
-        ).join('');
-        
-        validationContainer.classList.remove('hidden');
-        field.classList.add('border-red-300');
-        field.classList.remove('border-green-300');
-    }
-
-    /**
-     * GOLD STANDARD: Show field validation success
-     */
-    showFieldSuccess(field) {
-        const validationContainer = field.parentNode.querySelector('.field-validation');
-        if (validationContainer) {
-            validationContainer.classList.add('hidden');
+        const contactsContainer = document.getElementById('contacts-container');
+        if (!contactsContainer) {
+            console.warn('⚠️ Contacts container not found');
+            return;
         }
         
-        field.classList.remove('border-red-300');
-        field.classList.add('border-green-300');
-    }
-
-    /**
-     * GOLD STANDARD: Clear field errors on focus
-     */
-    clearFieldErrors(field) {
-        const validationContainer = field.parentNode.querySelector('.field-validation');
-        if (validationContainer) {
-            validationContainer.classList.add('hidden');
+        const contacts = this.currentData?.contacts || [];
+        
+        if (contacts.length === 0) {
+            contactsContainer.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <div class="text-4xl mb-4">👥</div>
+                    <p>No contacts added yet</p>
+                    <button class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                            onclick="addNewContact()">
+                        Add First Contact
+                    </button>
+                </div>
+            `;
+            return;
         }
         
-        field.classList.remove('border-red-300', 'border-green-300');
-    }
-
-    /**
-     * GOLD STANDARD: Set form status indicator
-     */
-    setFormStatus(status, message) {
-        const statusElement = document.getElementById('form-status');
-        if (!statusElement) return;
-
-        const statusConfigs = {
-            ready: { color: 'text-green-700', bgColor: 'bg-green-500', icon: 'fas fa-check-circle' },
-            typing: { color: 'text-blue-700', bgColor: 'bg-blue-500', icon: 'fas fa-edit' },
-            pending: { color: 'text-yellow-700', bgColor: 'bg-yellow-500', icon: 'fas fa-clock' },
-            saved: { color: 'text-green-700', bgColor: 'bg-green-500', icon: 'fas fa-check-circle' },
-            error: { color: 'text-red-700', bgColor: 'bg-red-500', icon: 'fas fa-exclamation-circle' }
-        };
-
-        const config = statusConfigs[status] || statusConfigs.ready;
+        // Render contacts list
+        const contactsHTML = contacts.map((contact, index) => `
+            <div class="bg-white border rounded-lg p-4 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <h4 class="font-semibold text-gray-900">${contact.name || 'Unnamed Contact'}</h4>
+                        <p class="text-sm text-gray-600">${contact.role || 'No role specified'}</p>
+                        <div class="mt-2 space-y-1">
+                            ${contact.email ? `<p class="text-sm text-gray-700">📧 ${contact.email}</p>` : ''}
+                            ${contact.phone ? `<p class="text-sm text-gray-700">📞 ${contact.phone}</p>` : ''}
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="editContact(${index})" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
+                        <button onclick="deleteContact(${index})" 
+                                class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
         
-        statusElement.innerHTML = `
-            <div class="w-2 h-2 ${config.bgColor} rounded-full mr-2 ${status === 'pending' ? 'animate-pulse' : ''}"></div>
-            <span class="${config.color} font-medium">${message}</span>
+        contactsContainer.innerHTML = `
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium">Contacts (${contacts.length})</h3>
+                    <button onclick="addNewContact()" 
+                            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+                        Add Contact
+                    </button>
+                </div>
+                <div class="space-y-3">
+                    ${contactsHTML}
+                </div>
+            </div>
         `;
+        
+        console.log(`✅ Rendered ${contacts.length} contacts`);
+    }
+    
+    /**
+     * Debounce utility function to limit function calls
+     * @param {Function} func - Function to debounce
+     * @param {number} wait - Wait time in milliseconds
+     * @returns {Function} Debounced function
+     */
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func.apply(this, args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
     }
 
     /**
-     * GOLD STANDARD: Update overall form validation status
+     * Load company data from API
      */
-    updateFormStatus() {
-        const form = this.domElements.editFormContainer;
-        if (!form) return;
-
-        const inputs = form.querySelectorAll('.enterprise-input');
-        let allValid = true;
-        let hasErrors = false;
-
-        inputs.forEach(input => {
-            const hasError = input.classList.contains('border-red-300');
-            if (hasError) {
-                allValid = false;
-                hasErrors = true;
-            }
-        });
-
-        const validationStatus = document.getElementById('validation-status');
-        if (validationStatus) {
-            if (allValid && !hasErrors) {
-                validationStatus.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800';
-                validationStatus.innerHTML = '<i class="fas fa-check-circle mr-1"></i>All fields valid';
-                validationStatus.classList.remove('hidden');
-            } else if (hasErrors) {
-                validationStatus.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800';
-                validationStatus.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>Please fix errors';
-                validationStatus.classList.remove('hidden');
-            } else {
-                validationStatus.classList.add('hidden');
-            }
-        }
-    }
-
-    /**
-     * GOLD STANDARD: Perform auto-save operation
-     */
-    async performAutoSave() {
-        if (!this.hasUnsavedChanges) return;
-
+    async loadCompanyData() {
         try {
-            console.log('💾 Performing auto-save...');
-            await this.saveAllChanges(true); // true = silent save
-            console.log('✅ Auto-save completed');
-        } catch (error) {
-            console.error('❌ Auto-save failed:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Format address data for display
-     */
-    formatAddress(data) {
-        // Check for new simplified field first, then legacy field
-        if (data.companyAddress) {
-            return data.companyAddress;
-        }
-        
-        if (data.businessAddress) {
-            return data.businessAddress;
-        }
-        
-        if (data.address && typeof data.address === 'object') {
-            const addr = data.address;
-            return [addr.street, addr.city, addr.state, addr.zipCode || addr.zip, addr.country]
-                .filter(Boolean).join(', ') || 'No address provided';
-        }
-        
-        return 'No address provided';
-    }
-
-    /**
-     * Escape HTML for safe insertion
-     */
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    /**
-     * Populate Configuration tab with data
-     */
-    populateConfigTab() {
-        try {
-            console.log('⚙️ Populating Config tab...');
-            
-            if (!this.currentData) {
-                console.log('⚠️ No company data available for Config tab');
-                return;
-            }
-
-            // Create modern configuration interface
-            this.createConfigurationInterface();
-        } catch (error) {
-            console.error('❌ Error populating Config tab:', error);
-            this.showNotification('Error loading configuration data', 'error');
-        }
-    }
-
-    /**
-     * Create modern configuration interface
-     */
-    createConfigurationInterface() {
-        const configContent = document.getElementById('config-content');
-        if (!configContent) {
-            console.warn('Config content container not found');
-            return;
-        }
-
-        // Look for Twilio configuration fields
-        const twilioSidInput = document.getElementById('twilioAccountSid');
-        const twilioTokenInput = document.getElementById('twilioAuthToken');
-        const twilioApiKeyInput = document.getElementById('twilioApiKey');
-        const twilioApiSecretInput = document.getElementById('twilioApiSecret');
-        
-        console.log('🔧 Loading Twilio config:', {
-            twilioConfig: this.currentData.twilioConfig,
-            flatSid: this.currentData.twilioAccountSid,
-            flatToken: this.currentData.twilioAuthToken,
-            authTokenValue: this.currentData.twilioConfig?.authToken
-        });
-        
-        // Check nested structure first, then flat structure for backward compatibility
-        const twilioConfig = this.currentData.twilioConfig || {};
-        
-        console.log('🔧 DEBUG: About to process Auth Token:', {
-            twilioTokenInput: !!twilioTokenInput,
-            authToken: twilioConfig.authToken,
-            flatAuthToken: this.currentData.twilioAuthToken,
-            hasEither: !!(twilioConfig.authToken || this.currentData.twilioAuthToken)
-        });
-        
-        if (twilioSidInput && (twilioConfig.accountSid || this.currentData.twilioAccountSid)) {
-            twilioSidInput.value = twilioConfig.accountSid || this.currentData.twilioAccountSid;
-            console.log('🔧 Loaded Twilio SID:', twilioSidInput.value);
-        }
-        
-        if (twilioTokenInput && (twilioConfig.authToken || this.currentData.twilioAuthToken)) {
-            const savedToken = twilioConfig.authToken || this.currentData.twilioAuthToken;
-            // Show last 4 characters with masking for better UX
-            if (savedToken && savedToken.length > 4) {
-                twilioTokenInput.value = '••••••••••••' + savedToken.slice(-4);
-                twilioTokenInput.dataset.hasToken = 'true';
-                console.log('🔧 Loaded Twilio Auth Token (showing last 4):', '••••••••••••' + savedToken.slice(-4));
-                console.log('🔧 Full token for debug:', savedToken);
-            } else {
-                twilioTokenInput.value = '••••••••••••••••';
-                twilioTokenInput.dataset.hasToken = 'true';
-                console.log('🔧 Loaded Twilio Auth Token (fully masked - short token)');
-            }
-        } else {
-            if (twilioTokenInput) {
-                twilioTokenInput.value = '';
-                twilioTokenInput.placeholder = 'Enter Auth Token';
-                twilioTokenInput.dataset.hasToken = 'false';
-                console.log('🔧 No Twilio Auth Token found - field empty');
-            }
-        }
-        
-        if (twilioApiKeyInput && (twilioConfig.apiKey || this.currentData.twilioApiKey)) {
-            const savedApiKey = twilioConfig.apiKey || this.currentData.twilioApiKey;
-            // Show last 4 characters with masking for better UX (API Keys can be sensitive too)
-            if (savedApiKey && savedApiKey.length > 4) {
-                twilioApiKeyInput.value = '••••••••••••' + savedApiKey.slice(-4);
-                twilioApiKeyInput.dataset.hasApiKey = 'true';
-                console.log('🔧 Loaded Twilio API Key (showing last 4):', '••••••••••••' + savedApiKey.slice(-4));
-            } else {
-                twilioApiKeyInput.value = '••••••••••••••••';
-                twilioApiKeyInput.dataset.hasApiKey = 'true';
-                console.log('🔧 Loaded Twilio API Key (fully masked - short key)');
-            }
-        } else {
-            if (twilioApiKeyInput) {
-                twilioApiKeyInput.value = '';
-                twilioApiKeyInput.placeholder = 'Enter API Key';
-                twilioApiKeyInput.dataset.hasApiKey = 'false';
-                console.log('🔧 No Twilio API Key found - field empty');
-            }
-        }
-        
-        if (twilioApiSecretInput && (twilioConfig.apiSecret || this.currentData.twilioApiSecret)) {
-            const savedSecret = twilioConfig.apiSecret || this.currentData.twilioApiSecret;
-            // Show last 4 characters with masking for better UX
-            if (savedSecret && savedSecret.length > 4) {
-                twilioApiSecretInput.value = '••••••••••••' + savedSecret.slice(-4);
-                twilioApiSecretInput.dataset.hasSecret = 'true';
-                console.log('🔧 Loaded Twilio API Secret (showing last 4):', '••••••••••••' + savedSecret.slice(-4));
-            } else {
-                twilioApiSecretInput.value = '••••••••••••••••';
-                twilioApiSecretInput.dataset.hasSecret = 'true';
-                console.log('🔧 Loaded Twilio API Secret (fully masked - short secret)');
-            }
-        } else {
-            if (twilioApiSecretInput) {
-                twilioApiSecretInput.value = '';
-                twilioApiSecretInput.placeholder = 'Enter API Secret';
-                twilioApiSecretInput.dataset.hasSecret = 'false';
-                console.log('🔧 No Twilio API Secret found - field empty');
-            }
-        }
-
-        // Setup phone numbers management
-        this.setupPhoneNumbersManagement();
-        
-        // Setup configuration form listeners
-        this.setupConfigFormListeners();
-        
-        console.log('✅ Configuration interface ready');
-    }
-
-    /**
-     * Setup phone numbers management
-     */
-    setupPhoneNumbersManagement() {
-        try {
-            console.log('📞 Setting up phone numbers management...');
-            
-            const addPhoneBtn = document.getElementById('addPhoneNumberBtn');
-            if (addPhoneBtn) {
-                // Remove existing listener to avoid duplicates
-                addPhoneBtn.replaceWith(addPhoneBtn.cloneNode(true));
-                const newAddPhoneBtn = document.getElementById('addPhoneNumberBtn');
-                
-                newAddPhoneBtn.addEventListener('click', () => {
-                    this.addPhoneNumber();
-                });
-                console.log('📞 Add phone button listener attached');
-            } else {
-                console.warn('📞 Add phone button not found');
-            }
-
-            // Load existing phone numbers or create default one
-            this.renderPhoneNumbers();
-            
-            // Setup event listeners for existing phone number items
-            this.setupPhoneNumberEventListeners();
-            
-            console.log('✅ Phone numbers management setup complete');
-        } catch (error) {
-            console.error('❌ Error setting up phone numbers management:', error);
-            // Continue execution but log the error
-        }
-    }
-
-    /**
-     * Setup event listeners for phone number items
-     */
-    setupPhoneNumberEventListeners() {
-        const phoneNumberItems = document.querySelectorAll('.phone-number-item');
-        console.log(`📞 Setting up event listeners for ${phoneNumberItems.length} phone number items`);
-        
-        phoneNumberItems.forEach((item, index) => {
-            this.setupSinglePhoneNumberListeners(item);
-            
-            // Also add change listeners for form inputs to track unsaved changes
-            const inputs = item.querySelectorAll('input, select');
-            inputs.forEach(input => {
-                input.addEventListener('change', () => {
-                    this.setUnsavedChanges(true);
-                });
-                input.addEventListener('input', () => {
-                    this.setUnsavedChanges(true);
-                });
-            });
-        });
-    }
-
-    /**
-     * Render existing phone numbers
-     */
-    renderPhoneNumbers() {
-        const phoneNumbersList = document.getElementById('phoneNumbersList');
-        if (!phoneNumbersList) {
-            console.warn('📞 Phone numbers list element not found');
-            return;
-        }
-
-        // Get phone numbers from current data with safety checks
-        let phoneNumbers = [];
-        if (this.currentData) {
-            phoneNumbers = this.currentData?.twilioConfig?.phoneNumbers || 
-                          this.currentData?.phoneNumbers || [];
-        }
-        
-        console.log('📞 Rendering phone numbers:', phoneNumbers);
-
-        // If no phone numbers exist, add a default empty one
-        if (phoneNumbers.length === 0) {
-            console.log('📞 No phone numbers found, adding default empty one');
-            this.addPhoneNumber();
-            return;
-        }
-
-        // Clear existing items
-        phoneNumbersList.innerHTML = '';
-
-        // Render each phone number
-        phoneNumbers.forEach((phone, index) => {
-            console.log(`📞 Adding phone number ${index + 1}:`, phone);
-            this.addPhoneNumberWithData(phone, index === 0);
-        });
-    }
-
-    /**
-     * Add phone number field with existing data
-     */
-    addPhoneNumberWithData(phoneData, isPrimary = false) {
-        const phoneNumbersList = document.getElementById('phoneNumbersList');
-        const template = document.getElementById('phoneNumberTemplate');
-        
-        if (!phoneNumbersList || !template) return;
-
-        const newItem = template.content.cloneNode(true);
-        
-        // Populate with existing data
-        const phoneInput = newItem.querySelector('input[name="phoneNumber"]');
-        const friendlyInput = newItem.querySelector('input[name="friendlyName"]');
-        const statusSelect = newItem.querySelector('select[name="status"]');
-        const setPrimaryBtn = newItem.querySelector('button[title="Set as Primary"]'); 
-        
-        if (phoneInput) phoneInput.value = phoneData.phoneNumber || phoneData.number || '';
-        if (friendlyInput) friendlyInput.value = phoneData.friendlyName || '';
-        if (statusSelect) statusSelect.value = phoneData.status || 'active';
-        
-        if (setPrimaryBtn && (isPrimary || phoneData.isPrimary)) {
-            setPrimaryBtn.textContent = 'Primary';
-            setPrimaryBtn.classList.remove('bg-blue-100', 'text-blue-800');
-            setPrimaryBtn.classList.add('bg-green-100', 'text-green-800');
-        }
-        
-        phoneNumbersList.appendChild(newItem);
-        
-        // Setup event listeners for this item
-        const addedItem = phoneNumbersList.lastElementChild;
-        this.setupSinglePhoneNumberListeners(addedItem);
-    }
-
-    /**
-     * Setup event listeners for a single phone number item
-     */
-    setupSinglePhoneNumberListeners(item) {
-        if (!item) return;
-        
-        const deleteBtn = item.querySelector('button[title="Remove"]');
-        const setPrimaryBtn = item.querySelector('button[title="Set as Primary"]');
-        
-        // Handle delete button
-        if (deleteBtn) {
-            // Remove existing event listeners by cloning the element
-            const newDeleteBtn = deleteBtn.cloneNode(true);
-            deleteBtn.parentNode.replaceChild(newDeleteBtn, deleteBtn);
-            
-            newDeleteBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('📞 Delete button clicked');
-                this.removePhoneNumber(item);
-            });
-        }
-        
-        // Handle set primary button
-        if (setPrimaryBtn) {
-            // Remove existing event listeners by cloning the element
-            const newSetPrimaryBtn = setPrimaryBtn.cloneNode(true);
-            setPrimaryBtn.parentNode.replaceChild(newSetPrimaryBtn, setPrimaryBtn);
-            
-            newSetPrimaryBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('📞 Set primary button clicked');
-                this.setPrimaryNumber(item);
-            });
-        }
-        
-        // Add change listeners to inputs for unsaved changes tracking
-        const inputs = item.querySelectorAll('input, select');
-        inputs.forEach(input => {
-            input.addEventListener('change', () => {
-                this.setUnsavedChanges(true);
-            });
-            input.addEventListener('input', () => {
-                this.setUnsavedChanges(true);
-            });
-        });
-    }
-
-    /**
-     * Add new phone number field
-     */
-    addPhoneNumber() {
-        const phoneNumbersList = document.getElementById('phoneNumbersList');
-        const template = document.getElementById('phoneNumberTemplate');
-        
-        if (!phoneNumbersList || !template) return;
-
-        const newItem = template.content.cloneNode(true);
-        phoneNumbersList.appendChild(newItem);
-        
-        // Setup event listeners for the newly added item
-        const addedItem = phoneNumbersList.lastElementChild;
-        this.setupSinglePhoneNumberListeners(addedItem);
-        
-        this.setUnsavedChanges(true);
-        console.log('📞 New phone number field added');
-    }
-
-    /**
-     * Remove phone number field
-     */
-    removePhoneNumber(phoneItem) {
-        if (!phoneItem) return;
-        
-        // Don't allow removing the last phone number
-        const phoneNumbersList = document.getElementById('phoneNumbersList');
-        const allItems = phoneNumbersList.querySelectorAll('.phone-number-item');
-        
-        if (allItems.length <= 1) {
-            this.showNotification('Cannot remove the last phone number', 'error');
-            return;
-        }
-        
-        phoneItem.remove();
-        this.setUnsavedChanges(true);
-        console.log('📞 Phone number field removed');
-    }
-
-    /**
-     * Set phone number as primary
-     */
-    setPrimaryNumber(phoneItem) {
-        if (!phoneItem) return;
-        
-        // Remove primary status from all items
-        const phoneNumbersList = document.getElementById('phoneNumbersList');
-        const allItems = phoneNumbersList.querySelectorAll('.phone-number-item');
-        
-        allItems.forEach(item => {
-            const primaryBtn = item.querySelector('button[title="Set as Primary"]');
-            if (primaryBtn) {
-                primaryBtn.textContent = 'Set Primary';
-                primaryBtn.classList.remove('bg-green-100', 'text-green-800');
-                primaryBtn.classList.add('bg-blue-100', 'text-blue-800');
-            }
-        });
-        
-        // Set this item as primary
-        const primaryBtn = phoneItem.querySelector('button[title="Set as Primary"]');
-        if (primaryBtn) {
-            primaryBtn.textContent = 'Primary';
-            primaryBtn.classList.remove('bg-blue-100', 'text-blue-800');
-            primaryBtn.classList.add('bg-green-100', 'text-green-800');
-        }
-        
-        this.setUnsavedChanges(true);
-        console.log('📞 Primary phone number updated');
-    }
-
-    /**
-     * Setup configuration form event listeners
-     */
-    setupConfigFormListeners() {
-        const configForm = document.getElementById('config-settings-form');
-        if (!configForm) {
-            console.warn('❌ Config form not found');
-            return;
-        }
-
-        // Setup webhook toggle functionality
-        this.setupWebhookToggle();
-
-        // Setup form submission
-        configForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            await this.saveConfigurationChanges();
-        });
-
-        // Track changes for unsaved indicator
-        const inputs = configForm.querySelectorAll('input, select, textarea');
-        inputs.forEach(input => {
-            input.addEventListener('input', () => {
-                this.setUnsavedChanges(true);
-            });
-        });
-    }
-
-    /**
-     * Setup webhook toggle functionality
-     */
-    setupWebhookToggle() {
-        const toggleWebhookBtn = document.getElementById('toggleWebhookInfo');
-        const webhookPanel = document.getElementById('webhookInfoPanel');
-        
-        console.log('🔧 Setting up webhook toggle...', { 
-            toggleWebhookBtn: !!toggleWebhookBtn, 
-            webhookPanel: !!webhookPanel,
-            companyId: this.companyId 
-        });
-        
-        if (!toggleWebhookBtn || !webhookPanel) {
-            console.warn('❌ Webhook toggle elements not found:', { 
-                toggleWebhookBtn: !!toggleWebhookBtn, 
-                webhookPanel: !!webhookPanel 
-            });
-            return;
-        }
-
-        if (!this.companyId) {
-            console.warn('❌ Company ID not available for webhook setup');
-            return;
-        }
-
-        // Check if already set up (avoid duplicate event listeners)
-        if (toggleWebhookBtn.dataset.webhookSetup === 'true') {
-            console.log('✅ Webhook toggle already set up');
-            return;
-        }
-
-        // Mark as set up
-        toggleWebhookBtn.dataset.webhookSetup = 'true';
-        
-        // Add the event listener
-        toggleWebhookBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            console.log('🔘 Webhook toggle clicked for company:', this.companyId);
-            
-            const currentPanel = document.getElementById('webhookInfoPanel');
-            if (!currentPanel) {
-                console.error('❌ Webhook panel disappeared');
-                return;
-            }
-            
-            const isHidden = currentPanel.classList.contains('hidden');
-            console.log('📊 Panel hidden state:', isHidden);
-            
-            if (isHidden) {
-                // Generate dynamic webhook content with companyId
-                console.log('🔧 Generating webhook panel for company:', this.companyId);
-                this.generateWebhookPanel();
-                currentPanel.classList.remove('hidden');
-                toggleWebhookBtn.innerHTML = '<i class="fas fa-eye-slash mr-1"></i>Hide Webhook URLs';
-            } else {
-                currentPanel.classList.add('hidden');
-                toggleWebhookBtn.innerHTML = '<i class="fas fa-info-circle mr-1"></i>Show Webhook URLs';
-            }
-        });
-        
-        console.log('✅ Webhook toggle setup complete');
-    }
-
-    /**
-     * Save configuration changes
-     */
-    async saveConfigurationChanges() {
-        try {
-            console.log('💾 Saving configuration changes...');
-            
-            // Show loading state
+            console.log('📥 Loading company data for ID:', this.companyId);
+            console.log('🌐 API Base URL:', this.apiBaseUrl);
             this.showLoading(true);
-            
-            // Collect only configuration data
-            const configData = {};
-            this.collectConfigData(configData);
-            
-            // Add other tabs' data if they exist
-            this.collectNotesData(configData);
-            this.collectCalendarData(configData);
-            this.collectAISettingsData(configData);
-            this.collectVoiceData(configData);
-            this.collectPersonalityData(configData);
-            this.collectAgentLogicData(configData);
-            
-            console.log('📤 Sending configuration data:', configData);
-            
-            // Send PATCH request
-            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(configData)
-            });
 
+            const apiUrl = `${this.apiBaseUrl}/api/company/${this.companyId}`;
+            console.log('📞 Fetching from:', apiUrl);
+            
+            const response = await fetch(apiUrl);
+            
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Failed to save configuration');
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            const updatedCompany = await response.json();
-            this.currentData = updatedCompany;
-            this.setUnsavedChanges(false);
-            
-            console.log('✅ Configuration saved successfully');
-            this.showNotification('Configuration saved successfully!', 'success');
-            
+            this.currentData = await response.json();
+            console.log('✅ Company data loaded:', this.currentData);
+
+            // Populate all tabs with data
+            this.populateOverviewTab();
+            this.populateConfigTab();
+            this.populateNotesTab();
+            this.populateCalendarTab();
+            this.populateAISettingsTab();
+            this.populateVoiceTab();
+            this.populatePersonalityTab();
+            this.populateAgentLogicTab();
+
         } catch (error) {
-            console.error('❌ Error saving configuration:', error);
-            this.showNotification('Failed to save configuration', 'error');
+            console.error('❌ Failed to load company data:', error);
+            console.error('Error details:', {
+                message: error.message,
+                companyId: this.companyId,
+                apiBaseUrl: this.apiBaseUrl,
+                fullUrl: `${this.apiBaseUrl}/api/company/${this.companyId}`
+            });
+            
+            this.showNotification(`Failed to load company data: ${error.message}`, 'error');
         } finally {
             this.showLoading(false);
         }
     }
 
     /**
-     * PRODUCTION: Populate Notes tab with enterprise-grade note management system
-     * Features: Pin/unpin, edit in-place, timestamps, search, categories, auto-save
+     * GOLD STANDARD: Populate Overview tab with enterprise-grade UX
+     * Features: Live validation, auto-save, accessibility, error recovery
      */
-    populateNotesTab() {        
-        // Initialize notes management system with advanced features
-        this.initializeEnterpriseNotesSystem();
-    }
-
-    /**
-     * PRODUCTION: Initialize enterprise notes management system
-     */
-    initializeEnterpriseNotesSystem() {        
-        // Initialize notes array with enterprise structure
-        this.notes = this.currentData?.notes || [];
-        
-        // Ensure notes have proper structure
-        this.notes = this.notes.map(note => this.normalizeNoteStructure(note));
-        
-        // Setup enterprise notes interface
-        this.setupEnterpriseNotesInterface();
-        
-        // Render notes with advanced features
-        this.renderEnterpriseNotes();
-        
-        // Setup search and filtering
-        this.setupNotesSearch();
-        
-        console.log('✅ Enterprise notes system initialized with', this.notes.length, 'notes');
-    }
-
-    /**
-     * PRODUCTION: Normalize note structure for enterprise features
-     */
-    normalizeNoteStructure(note) {
-        return {
-            id: note.id || Date.now() + Math.random(),
-            content: note.content || note.text || '',
-            title: note.title || this.extractTitleFromContent(note.content || note.text || ''),
-            isPinned: note.isPinned || false,
-            category: note.category || 'general',
-            priority: note.priority || 'normal',
-            tags: note.tags || [],
-            createdAt: note.createdAt || note.timestamp || new Date().toISOString(),
-            updatedAt: note.updatedAt || note.timestamp || new Date().toISOString(),
-            author: note.author || 'Developer',
-            isEditing: false
-        };
-    }
-
-    /**
-     * GOLD STANDARD: Extract title from note content
-     */
-    extractTitleFromContent(content) {
-        if (!content) return 'Untitled Note';
-        
-        // Get first line as title, max 50 chars
-        const firstLine = content.split('\n')[0].trim();
-        return firstLine.length > 50 ? firstLine.substring(0, 47) + '...' : firstLine || 'Untitled Note';
-    }
-
-    /**
-     * GOLD STANDARD: Setup enterprise notes interface with advanced controls
-     */
-    setupEnterpriseNotesInterface() {
-        // Transform the basic notes HTML into enterprise-grade interface
-        const notesContent = document.getElementById('notes-content');
-        if (!notesContent) {
-            console.error('❌ Notes content container not found');
+    populateOverviewTab() {
+        if (!this.currentData) {
+            this.showNotification('Company data not loaded', 'error');
             return;
         }
 
-        // Replace with enterprise notes interface
-        notesContent.innerHTML = this.generateEnterpriseNotesHTML();
-        
-        // Setup event listeners for advanced features
-        this.setupNotesEventListeners();
-        
-        console.log('✅ Enterprise notes interface created');
+        console.log('📄 Populating Overview tab with enterprise features...');
+
+        try {
+            // Update header elements with current data
+            this.updateHeaderElements();
+
+            // Create modern always-editable form with validation
+            this.createEnterpriseEditableForm();
+
+            // Initialize contacts management with enterprise features
+            this.initializeContactsManagement();
+            
+            // Setup comprehensive validation and auto-save
+            this.setupEnterpriseFormValidation();
+
+            console.log('✅ Overview tab initialized with enterprise features');
+        } catch (error) {
+            console.error('❌ Error initializing Overview tab:', error);
+            this.showNotification('Failed to initialize Overview tab', 'error');
+        }
     }
 
     /**
-     * GOLD STANDARD: Generate enterprise notes HTML interface
+     * GOLD STANDARD: Create enterprise-grade always-editable form
+     * Features: Validation, accessibility, progressive enhancement
      */
-    generateEnterpriseNotesHTML() {
+    createEnterpriseEditableForm() {
+        if (!this.domElements.editFormContainer) {
+            console.error('❌ Edit form container not found');
+            return;
+        }
+
+        const formHTML = this.generateEnterpriseFormHTML();
+        this.domElements.editFormContainer.innerHTML = formHTML;
+        this.domElements.editFormContainer.classList.remove('hidden');
+
+        // Hide legacy edit button (form is always visible)
+        if (this.domElements.editButton) {
+            this.domElements.editButton.style.display = 'none';
+        }
+
+        // Initialize enterprise form features
+        this.initializeFormAccessibility();
+        this.setupFormAutoSave();
+        
+        console.log('🔧 Enterprise editable form created');
+    }
+
+    /**
+     * GOLD STANDARD: Generate enterprise form HTML with validation
+     */
+    generateEnterpriseFormHTML() {
+        const data = this.currentData;
+        const requiredFields = ['companyName'];
+        
         return `
-            <section class="profile-section bg-transparent shadow-none p-0">
-                <!-- Header with Stats and Controls -->
-                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
-                    <div>
-                        <h2 class="text-2xl font-bold text-gray-900 flex items-center">
-                            <div class="bg-gradient-to-r from-purple-100 to-indigo-100 p-3 rounded-xl mr-4">
-                                <i class="fas fa-sticky-note text-purple-600 text-xl"></i>
-                            </div>
-                            Developer Notes
-                        </h2>
-                        <p class="text-gray-600 mt-2">Manage your development notes, ideas, and documentation</p>
-                    </div>
-                    <div class="flex items-center space-x-4 mt-4 lg:mt-0">
-                        <div class="text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-full">
-                            <span id="notes-count">0</span> total notes
+            <div class="bg-white rounded-xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-200">
+                <!-- Header Section -->
+                <div class="flex justify-between items-center mb-8">
+                    <div class="flex items-center">
+                        <div class="bg-indigo-100 p-3 rounded-lg mr-4">
+                            <i class="fas fa-building text-indigo-600 text-xl"></i>
                         </div>
-                        <div class="text-sm text-gray-500 bg-purple-100 px-4 py-2 rounded-full">
-                            <span id="pinned-count">0</span> pinned
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Search, Filter, and Add Controls -->
-                <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
-                    <div class="flex flex-col lg:flex-row lg:items-center lg:space-x-6 space-y-4 lg:space-y-0">
-                        <!-- Search Bar -->
-                        <div class="flex-1">
-                            <div class="relative">
-                                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                                <input 
-                                    type="text" 
-                                    id="notes-search" 
-                                    class="form-input pl-10 pr-4" 
-                                    placeholder="Search notes by title, content, or tags..."
-                                >
-                            </div>
-                        </div>
-                        
-                        <!-- Category Filter -->
                         <div>
-                            <select id="notes-category-filter" class="form-select">
-                                <option value="">All Categories</option>
-                                <option value="general">General</option>
-                                <option value="bug">Bug Reports</option>
-                                <option value="feature">Feature Ideas</option>
-                                <option value="todo">To Do</option>
-                                <option value="meeting">Meeting Notes</option>
-                                <option value="documentation">Documentation</option>
-                            </select>
-                        </div>
-                        
-                        <!-- Sort Options -->
-                        <div>
-                            <select id="notes-sort" class="form-select">
-                                <option value="updated-desc">Recently Updated</option>
-                                <option value="created-desc">Recently Created</option>
-                                <option value="title-asc">Title A-Z</option>
-                                <option value="priority-desc">Priority High-Low</option>
-                            </select>
+                            <h3 class="text-xl font-semibold text-gray-900">Company Information</h3>
+                            <p class="text-sm text-gray-600 mt-1">Manage your business details and contact information</p>
                         </div>
                     </div>
-                </div>
-
-                <!-- Quick Add Note -->
-                <div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border-2 border-dashed border-purple-200 p-6 mb-6">
-                    <div class="mb-4">
-                        <label for="quick-note-title" class="form-label">Note Title</label>
-                        <input 
-                            type="text" 
-                            id="quick-note-title" 
-                            class="form-input" 
-                            placeholder="Quick note title..."
-                        >
-                    </div>
-                    <div class="mb-4">
-                        <label for="quick-note-content" class="form-label">Note Content</label>
-                        <textarea 
-                            id="quick-note-content" 
-                            class="form-textarea" 
-                            rows="4" 
-                            placeholder="Write your note here... (Markdown supported)"
-                        ></textarea>
-                    </div>
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-                        <div class="flex items-center space-x-4">
-                            <select id="quick-note-category" class="form-select">
-                                <option value="general">General</option>
-                                <option value="bug">Bug Report</option>
-                                <option value="feature">Feature Idea</option>
-                                <option value="todo">To Do</option>
-                                <option value="meeting">Meeting Notes</option>
-                                <option value="documentation">Documentation</option>
-                            </select>
-                            <select id="quick-note-priority" class="form-select">
-                                <option value="normal">Normal</option>
-                                <option value="high">High Priority</option>
-                                <option value="low">Low Priority</option>
-                            </select>
-                        </div>
-                        <div class="flex items-center space-x-3">
-                            <label class="flex items-center">
-                                <input type="checkbox" id="quick-note-pin" class="form-checkbox mr-2">
-                                <span class="text-sm text-gray-700">Pin to top</span>
-                            </label>
-                            <button id="add-enterprise-note" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                                <i class="fas fa-plus mr-2 text-sm"></i>
-                                Add Note
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Notes Display Area -->
-                <div id="enterprise-notes-container">
-                    <!-- Notes will be rendered here -->
-                </div>
-
-                <!-- Empty State (will be shown when no notes) -->
-                <div id="notes-empty-state" class="hidden text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                    <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-purple-100 mb-4">
-                        <i class="fas fa-sticky-note text-purple-600 text-2xl"></i>
-                    </div>
-                    <h3 class="text-lg font-medium text-gray-900 mb-2">No notes yet</h3>
-                    <p class="text-sm text-gray-600 mb-6 max-w-sm mx-auto">
-                        Start organizing your development thoughts, ideas, and documentation with your first note.
-                    </p>
-                </div>
-            </section>
-        `;
-    }
-
-    /**
-     * GOLD STANDARD: Setup comprehensive event listeners for notes functionality
-     */
-    setupNotesEventListeners() {
-        // Add note button
-        const addButton = document.getElementById('add-enterprise-note');
-        if (addButton) {
-            addButton.addEventListener('click', () => this.addEnterpriseNote());
-        }
-
-        // Search functionality
-        const searchInput = document.getElementById('notes-search');
-        if (searchInput) {
-            searchInput.addEventListener('input', this.debounce(() => this.filterNotes(), 300));
-        }
-
-        // Category filter
-        const categoryFilter = document.getElementById('notes-category-filter');
-        if (categoryFilter) {
-            categoryFilter.addEventListener('change', () => this.filterNotes());
-        }
-
-        // Sort options
-        const sortSelect = document.getElementById('notes-sort');
-        if (sortSelect) {
-            sortSelect.addEventListener('change', () => this.renderEnterpriseNotes());
-        }
-
-        // Quick title auto-generation
-        const contentTextarea = document.getElementById('quick-note-content');
-        const titleInput = document.getElementById('quick-note-title');
-        
-        if (contentTextarea && titleInput) {
-            contentTextarea.addEventListener('input', () => {
-                if (!titleInput.value.trim()) {
-                    const generatedTitle = this.extractTitleFromContent(contentTextarea.value);
-                    if (generatedTitle !== 'Untitled Note') {
-                        titleInput.value = generatedTitle;
-                    }
-                }
-            });
-        }
-
-        // Event listeners setup complete
-    }
-
-    /**
-     * PRODUCTION: Add enterprise note with full feature set
-     */
-    addEnterpriseNote() {        
-        const titleInput = document.getElementById('quick-note-title');
-        const contentTextarea = document.getElementById('quick-note-content');
-        const categorySelect = document.getElementById('quick-note-category');
-        const prioritySelect = document.getElementById('quick-note-priority');
-        const pinCheckbox = document.getElementById('quick-note-pin');
-
-        // Validation
-        if (!contentTextarea?.value.trim()) {
-            this.showNotification('Please enter note content', 'error');
-            contentTextarea?.focus();
-            return;
-        }
-
-        const title = titleInput?.value.trim() || this.extractTitleFromContent(contentTextarea.value);
-        
-        const newNote = {
-            id: Date.now() + Math.random(),
-            title: title,
-            content: contentTextarea.value.trim(),
-            category: categorySelect?.value || 'general',
-            priority: prioritySelect?.value || 'normal',
-            isPinned: pinCheckbox?.checked || false,
-            tags: this.extractTagsFromContent(contentTextarea.value),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            author: 'Developer',
-            isEditing: false
-        };
-
-        // Add to notes array (pinned notes go to top)
-        if (newNote.isPinned) {
-            this.notes.unshift(newNote);
-        } else {
-            // Add after pinned notes
-            const firstUnpinnedIndex = this.notes.findIndex(note => !note.isPinned);
-            if (firstUnpinnedIndex === -1) {
-                this.notes.push(newNote);
-            } else {
-                this.notes.splice(firstUnpinnedIndex, 0, newNote);
-            }
-        }
-
-        // Clear form
-        titleInput.value = '';
-        contentTextarea.value = '';
-        categorySelect.value = 'general';
-        prioritySelect.value = 'normal';
-        pinCheckbox.checked = false;
-
-        // Update display
-        this.renderEnterpriseNotes();
-        this.setUnsavedChanges(true);
-        this.showNotification('Note added successfully!', 'success');
-    }
-
-    /**
-     * PRODUCTION: Extract tags from note content (#hashtags)
-     */
-    extractTagsFromContent(content) {
-        const tagRegex = /#(\w+)/g;
-        const tags = [];
-        let match;
-        
-        while ((match = tagRegex.exec(content)) !== null) {
-            tags.push(match[1].toLowerCase());
-        }
-        
-        return [...new Set(tags)]; // Remove duplicates
-    }
-
-    /**
-     * PRODUCTION: Render enterprise notes with advanced features
-     */
-    renderEnterpriseNotes() {
-        const container = document.getElementById('enterprise-notes-container');
-        const emptyState = document.getElementById('notes-empty-state');
-        
-        if (!container) {
-            console.error('❌ Enterprise notes container not found');
-            return;
-        }
-
-        // Update counts
-        this.updateNotesCounts();
-
-        // Sort notes
-        const sortedNotes = this.sortNotes([...this.notes]);
-        
-        if (sortedNotes.length === 0) {
-            container.innerHTML = '';
-            emptyState?.classList.remove('hidden');
-            return;
-        }
-
-        emptyState?.classList.add('hidden');
-        
-        // Separate pinned and regular notes
-        const pinnedNotes = sortedNotes.filter(note => note.isPinned);
-        const regularNotes = sortedNotes.filter(note => !note.isPinned);
-
-        let html = '';
-
-        // Render pinned notes section
-        if (pinnedNotes.length > 0) {
-            html += `
-                <div class="mb-6">
-                    <div class="flex items-center mb-3">
-                        <i class="fas fa-thumbtack text-yellow-600 mr-2"></i>
-                        <h3 class="text-base font-semibold text-gray-900">Pinned Notes</h3>
-                        <span class="ml-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">${pinnedNotes.length}</span>
-                    </div>
-                    <div class="space-y-2">
-                        ${pinnedNotes.map(note => this.generateNoteHTML(note)).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        // Render regular notes section
-        if (regularNotes.length > 0) {
-            html += `
-                <div>
-                    <div class="flex items-center mb-3">
-                        <i class="fas fa-sticky-note text-gray-600 mr-2"></i>
-                        <h3 class="text-base font-semibold text-gray-900">Notes</h3>
-                        <span class="ml-2 bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full">${regularNotes.length}</span>
-                    </div>
-                    <div class="space-y-2">
-                        ${regularNotes.map(note => this.generateNoteHTML(note)).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        container.innerHTML = html;
-        
-        // Setup individual note event listeners
-        this.setupNoteCardEventListeners();
-    }
-
-    /**
-     * PRODUCTION: Generate HTML for individual note with all features
-     */
-    generateNoteHTML(note) {
-        const categoryColors = {
-            general: 'bg-gray-100 text-gray-800',
-            bug: 'bg-red-100 text-red-800',
-            feature: 'bg-blue-100 text-blue-800',
-            todo: 'bg-green-100 text-green-800',
-            meeting: 'bg-purple-100 text-purple-800',
-            documentation: 'bg-indigo-100 text-indigo-800'
-        };
-
-        const priorityColors = {
-            low: 'text-gray-500',
-            normal: 'text-blue-500',
-            high: 'text-red-500'
-        };
-
-        const createdDate = new Date(note.createdAt).toLocaleDateString();
-        const updatedDate = new Date(note.updatedAt).toLocaleDateString();
-        const isRecent = (Date.now() - new Date(note.updatedAt).getTime()) < 24 * 60 * 60 * 1000;
-
-        return `
-            <div class="note-card bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 ${note.isPinned ? 'ring-2 ring-yellow-200' : ''}" data-note-id="${note.id}">
-                <!-- Compact Note Layout -->
-                <div class="p-2">
-                    <!-- Title and Actions Row -->
-                    <div class="flex items-start justify-between mb-1">
-                        ${note.isEditing ? `
-                            <input 
-                                type="text" 
-                                class="note-title-edit form-input text-sm font-semibold flex-1 mr-2" 
-                                value="${this.escapeHtml(note.title)}"
-                            >
-                        ` : `
-                            <div class="flex-1">
-                                <h4 class="text-sm font-semibold text-gray-900 break-words">
-                                    ${this.escapeHtml(note.title)}
-                                    ${isRecent ? '<span class="ml-1.5 bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded-full">New</span>' : ''}
-                                </h4>
-                            </div>
-                        `}
-                        
-                        <!-- Action Buttons -->
-                        <div class="flex items-center space-x-0.5 ml-2">
-                            <button class="pin-note-btn p-1 rounded hover:bg-gray-100 transition-colors ${note.isPinned ? 'text-yellow-600' : 'text-gray-400'}" 
-                                    data-note-id="${note.id}" 
-                                    title="${note.isPinned ? 'Unpin note' : 'Pin note'}">
-                                <i class="fas fa-thumbtack text-xs"></i>
-                            </button>
-                            <button class="edit-note-btn p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors" 
-                                    data-note-id="${note.id}" 
-                                    title="Edit note">
-                                <i class="fas fa-edit text-xs"></i>
-                            </button>
-                            <button class="delete-note-btn p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-red-600 transition-colors" 
-                                    data-note-id="${note.id}" 
-                                    title="Delete note">
-                                <i class="fas fa-trash text-xs"></i>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Metadata Row -->
-                    <div class="flex items-center flex-wrap gap-2 text-xs text-gray-500 mb-2">
-                        <span class="${categoryColors[note.category] || categoryColors.general} px-1.5 py-0.5 rounded-full text-xs font-medium">
-                            ${note.category}
-                        </span>
-                        <span class="flex items-center ${priorityColors[note.priority]}">
-                            <i class="fas fa-flag mr-1"></i>
-                            ${note.priority}
-                        </span>
-                        <span class="flex items-center">
-                            <i class="fas fa-clock mr-1"></i>
-                            ${createdDate === updatedDate ? createdDate : `Updated ${updatedDate}`}
-                        </span>
-                        <span class="flex items-center text-gray-400">
-                            By ${note.author}
-                        </span>
-                    </div>
-
-                    <!-- Note Content -->
-                    ${note.isEditing ? `
-                        <textarea 
-                            class="note-content-edit form-textarea w-full text-sm resize-none mb-1.5" 
-                            rows="2"
-                        >${this.escapeHtml(note.content)}</textarea>
-                        <div class="flex justify-end space-x-2">
-                            <button class="cancel-edit-btn bg-gray-300 hover:bg-gray-400 text-gray-700 px-2 py-1 rounded text-xs" data-note-id="${note.id}">
-                                Cancel
-                            </button>
-                            <button class="save-edit-btn bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs" data-note-id="${note.id}">
-                                Save
-                            </button>
-                        </div>
-                    ` : `
-                        <div class="text-sm text-gray-700 whitespace-pre-wrap break-words leading-tight mb-2">
-                            ${this.formatNoteContent(note.content)}
-                        </div>
-                        
-                        <!-- Tags and Time -->
-                        <div class="flex items-center justify-between">
-                            <div class="flex flex-wrap gap-1">
-                                ${note.tags && note.tags.length > 0 ? note.tags.map(tag => `
-                                    <span class="bg-indigo-100 text-indigo-800 text-xs px-1.5 py-0.5 rounded">
-                                        #${tag}
-                                    </span>
-                                `).join('') : ''}
-                            </div>
-                            <span class="text-xs text-gray-400" title="Created: ${new Date(note.createdAt).toLocaleString()}">
-                                ${this.getRelativeTime(note.updatedAt)}
+                    <div class="flex items-center space-x-2">
+                        <div id="validation-status" class="hidden">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium">
+                                <i class="fas fa-check-circle mr-1"></i>
+                                All fields valid
                             </span>
                         </div>
-                    `}
+                        <span class="text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-full">
+                            <i class="fas fa-edit text-gray-400 mr-1"></i>
+                            Live editing enabled
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Form Fields Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Left Column - Essential Info -->
+                    <div class="space-y-6">
+                        <div class="form-group">
+                            <label for="edit-company-name" class="form-label required">
+                                Company Name
+                                <span class="text-red-500 ml-1" title="Required field">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                id="edit-company-name" 
+                                name="companyName"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.companyName || data.name || '')}"
+                                placeholder="Enter your company name"
+                                required
+                                aria-describedby="company-name-help"
+                                data-validate="required|min:2|max:100"
+                            >
+                            <div id="company-name-help" class="form-help">
+                                This name will appear on all communications and documents
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-phone" class="form-label">
+                                Business Phone
+                            </label>
+                            <input 
+                                type="tel" 
+                                id="edit-business-phone" 
+                                name="businessPhone"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.companyPhone || data.businessPhone || '')}"
+                                placeholder="+1 (555) 123-4567"
+                                aria-describedby="business-phone-help"
+                                data-validate="phone"
+                            >
+                            <div id="business-phone-help" class="form-help">
+                                Primary contact number for customers and partners
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-email" class="form-label">
+                                Business Email
+                            </label>
+                            <input 
+                                type="email" 
+                                id="edit-business-email" 
+                                name="businessEmail"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.businessEmail || '')}"
+                                placeholder="contact@yourcompany.com"
+                                aria-describedby="business-email-help"
+                                data-validate="email"
+                            >
+                            <div id="business-email-help" class="form-help">
+                                Main email address for business communications
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-website" class="form-label">
+                                Website
+                            </label>
+                            <input 
+                                type="text" 
+                                id="edit-business-website" 
+                                name="businessWebsite"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.businessWebsite || '')}"
+                                placeholder="www.yourcompany.com"
+                                aria-describedby="business-website-help"
+                            >
+                            <div id="business-website-help" class="form-help">
+                                Your company's website URL
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column - Additional Details -->
+                    <div class="space-y-6">
+                        <div class="form-group">
+                            <label for="edit-business-address" class="form-label">
+                                Business Address
+                            </label>
+                            <textarea 
+                                id="edit-business-address" 
+                                name="businessAddress"
+                                class="form-textarea enterprise-input" 
+                                rows="3"
+                                placeholder="123 Main Street&#10;Suite 100&#10;City, State 12345"
+                                aria-describedby="business-address-help"
+                                data-validate="address"
+                            >${this.escapeHtml(data.companyAddress || data.businessAddress || '')}</textarea>
+                            <div id="business-address-help" class="form-help">
+                                Physical location of your business
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-service-area" class="form-label">
+                                Service Area
+                            </label>
+                            <input 
+                                type="text" 
+                                id="edit-service-area" 
+                                name="serviceArea"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.serviceArea || '')}"
+                                placeholder="Greater Metro Area, 50-mile radius"
+                                aria-describedby="service-area-help"
+                            >
+                            <div id="service-area-help" class="form-help">
+                                Geographic area where you provide services
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-hours" class="form-label">
+                                Business Hours
+                            </label>
+                            <input 
+                                type="text" 
+                                id="edit-business-hours" 
+                                name="businessHours"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.businessHours || '')}"
+                                placeholder="Monday-Friday: 9:00 AM - 5:00 PM"
+                                aria-describedby="business-hours-help"
+                            >
+                            <div id="business-hours-help" class="form-help">
+                                When your business is open for customers
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Description Section -->
+                <div class="mt-8">
+                    <div class="form-group">
+                        <label for="edit-description" class="form-label">
+                            Business Description
+                        </label>
+                        <textarea 
+                            id="edit-description" 
+                            name="description"
+                            class="form-textarea enterprise-input" 
+                            rows="4"
+                            placeholder="Describe your business, services, and what makes you unique..."
+                            aria-describedby="description-help"
+                            data-validate="max:1000"
+                        >${this.escapeHtml(data.description || '')}</textarea>
+                        <div id="description-help" class="form-help">
+                            Brief overview of your business and services (up to 1000 characters)
+                        </div>
+                        <div class="field-validation hidden"></div>
+                        <div class="text-right mt-1">
+                            <span id="description-counter" class="text-xs text-gray-500">
+                                ${(data.description || '').length}/1000 characters
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Status Indicator -->
+                <div class="mt-8 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="bg-blue-100 p-2 rounded-lg mr-3">
+                                <i class="fas fa-magic text-blue-600"></i>
+                            </div>
+                            <div>
+                                <span class="text-sm text-blue-900 font-semibold">Enterprise Live Editing</span>
+                                <p class="text-xs text-blue-700 mt-1">Changes are validated in real-time and auto-saved</p>
+                            </div>
+                        </div>
+                        <div id="form-status" class="flex items-center text-sm">
+                            <div class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                            <span class="text-green-700 font-medium">Ready</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
     }
 
     /**
-     * GOLD STANDARD: Format note content with basic markdown support
+     * GOLD STANDARD: Setup enterprise form validation and auto-save
      */
-    formatNoteContent(content) {
-        return content
-            // Bold text
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            // Italic text
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            // Code inline
-            .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded">$1</code>')
-            // Links
-            .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 hover:underline">$1</a>')
-            // Hashtags
-            .replace(/#(\w+)/g, '<span class="text-indigo-600 font-medium">#$1</span>');
-    }
+    setupEnterpriseFormValidation() {
+        const form = this.domElements.editFormContainer;
+        if (!form) return;
 
-    /**
-     * GOLD STANDARD: Get relative time string
-     */
-    getRelativeTime(timestamp) {
-        const now = new Date();
-        const time = new Date(timestamp);
-        const diffMs = now - time;
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 1) return 'Just now';
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
+        // Get all enterprise inputs
+        const inputs = form.querySelectorAll('.enterprise-input');
         
-        return time.toLocaleDateString();
-    }
-
-    /**
-     * GOLD STANDARD: Setup event listeners for individual note cards
-     */
-    setupNoteCardEventListeners() {
-        const container = document.getElementById('enterprise-notes-container');
-        if (!container) return;
-
-        // Use event delegation for better performance
-        container.addEventListener('click', (e) => {
-            const noteId = e.target.closest('[data-note-id]')?.dataset.noteId;
-            if (!noteId) return;
-
-            if (e.target.closest('.pin-note-btn')) {
-                this.togglePinNote(noteId);
-            } else if (e.target.closest('.edit-note-btn')) {
-                this.startEditNote(noteId);
-            } else if (e.target.closest('.delete-note-btn')) {
-                this.deleteEnterpriseNote(noteId);
-            } else if (e.target.closest('.save-edit-btn')) {
-                this.saveEditNote(noteId);
-            } else if (e.target.closest('.cancel-edit-btn')) {
-                this.cancelEditNote(noteId);
-            }
-        });
-    }
-
-    /**
-     * PRODUCTION: Toggle pin status of note
-     */
-    togglePinNote(noteId) {
-        const note = this.notes.find(n => n.id == noteId);
-        if (!note) return;
-
-        note.isPinned = !note.isPinned;
-        note.updatedAt = new Date().toISOString();
-        
-        // Move pinned notes to top, unpinned notes to their proper position
-        this.notes = this.notes.sort((a, b) => {
-            if (a.isPinned && !b.isPinned) return -1;
-            if (!a.isPinned && b.isPinned) return 1;
-            return new Date(b.updatedAt) - new Date(a.updatedAt);
+        inputs.forEach(input => {
+            // Real-time validation on input
+            input.addEventListener('input', (e) => this.handleEnterpriseInput(e));
+            input.addEventListener('blur', (e) => this.validateField(e.target));
+            input.addEventListener('focus', (e) => this.clearFieldErrors(e.target));
         });
 
-        this.renderEnterpriseNotes();
+        // Special handling for description character counter
+        const descriptionField = document.getElementById('edit-description');
+        if (descriptionField) {
+            descriptionField.addEventListener('input', () => this.updateCharacterCounter());
+        }
+
+        console.log('🔧 Enterprise validation setup complete');
+    }
+
+    /**
+     * GOLD STANDARD: Handle enterprise input with validation and auto-save
+     */
+    handleEnterpriseInput(event) {
+        const field = event.target;
+        
+        // Mark as changed for auto-save
         this.setUnsavedChanges(true);
         
-        const action = note.isPinned ? 'pinned' : 'unpinned';
-        this.showNotification(`Note ${action} successfully!`, 'success');
+        // Real-time validation (debounced)
+        clearTimeout(this.validationTimeout);
+        this.validationTimeout = setTimeout(() => {
+            this.validateField(field);
+            this.updateFormStatus();
+        }, 300);
+
+        // Update form status
+        this.setFormStatus('typing', 'Making changes...');
         
-        console.log(`� Note ${action}:`, note.title);
+        console.log(`📝 Enterprise field changed: ${field.name} = ${field.value.substring(0, 50)}...`);
     }
 
     /**
-     * GOLD STANDARD: Start editing a note
+     * GOLD STANDARD: Validate individual field with enterprise rules
      */
-    startEditNote(noteId) {
-        const note = this.notes.find(n => n.id == noteId);
-        if (!note) return;
+    validateField(field) {
+        const rules = field.getAttribute('data-validate');
+        if (!rules) return true;
 
-        // Set all other notes to not editing
-        this.notes.forEach(n => n.isEditing = false);
-        
-        // Set this note to editing mode
-        note.isEditing = true;
-        
-        this.renderEnterpriseNotes();
-        
-        // Focus on the content textarea
-        setTimeout(() => {
-            const textarea = document.querySelector(`[data-note-id="${noteId}"] .note-content-edit`);
-            if (textarea) {
-                textarea.focus();
-                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        const validationContainer = field.parentNode.querySelector('.field-validation');
+        if (!validationContainer) return true;
+
+        const value = field.value.trim();
+        const ruleArray = rules.split('|');
+        const errors = [];
+
+        // Apply validation rules
+        for (const rule of ruleArray) {
+            const [ruleName, ruleValue] = rule.split(':');
+            
+            switch (ruleName) {
+                case 'required':
+                    if (!value) errors.push('This field is required');
+                    break;
+                case 'min':
+                    if (value.length < parseInt(ruleValue)) {
+                        errors.push(`Minimum ${ruleValue} characters required`);
+                    }
+                    break;
+                case 'max':
+                    if (value.length > parseInt(ruleValue)) {
+                        errors.push(`Maximum ${ruleValue} characters allowed`);
+                    }
+                    break;
+                case 'email':
+                    if (value && !this.isValidEmail(value)) {
+                        errors.push('Please enter a valid email address');
+                    }
+                    break;
+                case 'phone':
+                    if (value && !this.isValidPhone(value)) {
+                        errors.push('Please enter a valid phone number');
+                    }
+                    break;
+                case 'url':
+                    if (value && !this.isValidUrl(value)) {
+                        errors.push('Please enter a valid website URL');
+                    }
+                    break;
             }
-        }, 100);
+        }
+
+        // Display validation results
+        if (errors.length > 0) {
+            this.showFieldErrors(field, errors);
+            return false;
+        } else {
+            this.showFieldSuccess(field);
+            return true;
+        }
     }
 
     /**
-     * PRODUCTION: Save edited note
+     * GOLD STANDARD: Initialize form accessibility features
      */
-    saveEditNote(noteId) {
-        const note = this.notes.find(n => n.id == noteId);
-        if (!note) return;
+    initializeFormAccessibility() {
+        const form = this.domElements.editFormContainer;
+        if (!form) return;
 
-        const noteCard = document.querySelector(`[data-note-id="${noteId}"]`);
-        const titleInput = noteCard?.querySelector('.note-title-edit');
-        const contentTextarea = noteCard?.querySelector('.note-content-edit');
+        // Add ARIA labels and descriptions
+        const inputs = form.querySelectorAll('input, textarea');
+        inputs.forEach(input => {
+            // Ensure proper labeling
+            const label = form.querySelector(`label[for="${input.id}"]`);
+            if (label && !input.getAttribute('aria-labelledby')) {
+                input.setAttribute('aria-labelledby', label.id || `${input.id}-label`);
+            }
 
-        if (!contentTextarea?.value.trim()) {
-            this.showNotification('Note content cannot be empty', 'error');
+            // Add required indicators for screen readers
+            if (input.hasAttribute('required')) {
+                input.setAttribute('aria-required', 'true');
+            }
+        });
+
+        console.log('♿ Accessibility features initialized');
+    }
+
+    /**
+     * GOLD STANDARD: Setup form auto-save with enterprise features
+     */
+    setupFormAutoSave() {
+        // Auto-save after 2 seconds of inactivity
+        this.autoSaveTimeout = null;
+        
+        const form = this.domElements.editFormContainer;
+        if (!form) return;
+
+        const inputs = form.querySelectorAll('.enterprise-input');
+        inputs.forEach(input => {
+            input.addEventListener('input', () => {
+                clearTimeout(this.autoSaveTimeout);
+                this.setFormStatus('pending', 'Auto-saving...');
+                
+                this.autoSaveTimeout = setTimeout(async () => {
+                    try {
+                        await this.performAutoSave();
+                        this.setFormStatus('saved', 'All changes saved');
+                    } catch (error) {
+                        this.setFormStatus('error', 'Auto-save failed');
+                        console.error('Auto-save failed:', error);
+                    }
+                }, 2000);
+            });
+        });
+
+        console.log('💾 Auto-save enabled');
+    }
+
+    /**
+     * GOLD STANDARD: Initialize contacts management with enterprise features
+     */
+    initializeContactsManagement() {
+        try {
+            this.renderEnterpriseContactsSection();
+            this.setupEnterpriseContactsHandlers();
+            console.log('� Enterprise contacts management initialized');
+        } catch (error) {
+            console.error('❌ Error initializing contacts:', error);
+            this.showNotification('Failed to initialize contacts section', 'error');
+        }
+    }
+
+    /**
+     * Render enterprise contacts section
+     */
+    renderEnterpriseContactsSection() {
+        console.log('👥 Rendering enterprise contacts section...');
+        
+        const contactsContainer = document.getElementById('contacts-container');
+        if (!contactsContainer) {
+            console.warn('⚠️ Contacts container not found');
+            return;
+        }
+        
+        const contacts = this.currentData?.contacts || [];
+        
+        if (contacts.length === 0) {
+            contactsContainer.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <div class="text-4xl mb-4">👥</div>
+                    <p>No contacts added yet</p>
+                    <button class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                            onclick="addNewContact()">
+                        Add First Contact
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        // Render contacts list
+        const contactsHTML = contacts.map((contact, index) => `
+            <div class="bg-white border rounded-lg p-4 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <h4 class="font-semibold text-gray-900">${contact.name || 'Unnamed Contact'}</h4>
+                        <p class="text-sm text-gray-600">${contact.role || 'No role specified'}</p>
+                        <div class="mt-2 space-y-1">
+                            ${contact.email ? `<p class="text-sm text-gray-700">📧 ${contact.email}</p>` : ''}
+                            ${contact.phone ? `<p class="text-sm text-gray-700">📞 ${contact.phone}</p>` : ''}
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="editContact(${index})" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
+                        <button onclick="deleteContact(${index})" 
+                                class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        contactsContainer.innerHTML = `
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium">Contacts (${contacts.length})</h3>
+                    <button onclick="addNewContact()" 
+                            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+                        Add Contact
+                    </button>
+                </div>
+                <div class="space-y-3">
+                    ${contactsHTML}
+                </div>
+            </div>
+        `;
+        
+        console.log(`✅ Rendered ${contacts.length} contacts`);
+    }
+    
+    /**
+     * Debounce utility function to limit function calls
+     * @param {Function} func - Function to debounce
+     * @param {number} wait - Wait time in milliseconds
+     * @returns {Function} Debounced function
+     */
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func.apply(this, args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    /**
+     * Load company data from API
+     */
+    async loadCompanyData() {
+        try {
+            console.log('📥 Loading company data for ID:', this.companyId);
+            console.log('🌐 API Base URL:', this.apiBaseUrl);
+            this.showLoading(true);
+
+            const apiUrl = `${this.apiBaseUrl}/api/company/${this.companyId}`;
+            console.log('📞 Fetching from:', apiUrl);
+            
+            const response = await fetch(apiUrl);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            this.currentData = await response.json();
+            console.log('✅ Company data loaded:', this.currentData);
+
+            // Populate all tabs with data
+            this.populateOverviewTab();
+            this.populateConfigTab();
+            this.populateNotesTab();
+            this.populateCalendarTab();
+            this.populateAISettingsTab();
+            this.populateVoiceTab();
+            this.populatePersonalityTab();
+            this.populateAgentLogicTab();
+
+        } catch (error) {
+            console.error('❌ Failed to load company data:', error);
+            console.error('Error details:', {
+                message: error.message,
+                companyId: this.companyId,
+                apiBaseUrl: this.apiBaseUrl,
+                fullUrl: `${this.apiBaseUrl}/api/company/${this.companyId}`
+            });
+            
+            this.showNotification(`Failed to load company data: ${error.message}`, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Populate Overview tab with enterprise-grade UX
+     * Features: Live validation, auto-save, accessibility, error recovery
+     */
+    populateOverviewTab() {
+        if (!this.currentData) {
+            this.showNotification('Company data not loaded', 'error');
             return;
         }
 
-        // Update note data
-        const newTitle = titleInput?.value.trim() || this.extractTitleFromContent(contentTextarea.value);
-        const newContent = contentTextarea.value.trim();
-        
-        note.title = newTitle;
-        note.content = newContent;
-        note.tags = this.extractTagsFromContent(newContent);
-        note.updatedAt = new Date().toISOString();
-        note.isEditing = false;
-
-        this.renderEnterpriseNotes();
-        this.setUnsavedChanges(true);
-        this.showNotification('Note updated successfully!', 'success');
-        
-        console.log('💾 Note saved:', note.title);
-    }
-
-    /**
-     * GOLD STANDARD: Cancel editing a note
-     */
-    cancelEditNote(noteId) {
-        const note = this.notes.find(n => n.id == noteId);
-        if (!note) return;
-
-        note.isEditing = false;
-        this.renderEnterpriseNotes();
-        
-        console.log('❌ Cancelled editing note:', note.title);
-    }
-
-    /**
-     * GOLD STANDARD: Delete note with confirmation
-     */
-    deleteEnterpriseNote(noteId) {
-        const note = this.notes.find(n => n.id == noteId);
-        if (!note) return;
-
-        const confirmMessage = `Are you sure you want to delete "${note.title}"?\n\nThis action cannot be undone.`;
-        
-        if (!confirm(confirmMessage)) return;
-
-        this.notes = this.notes.filter(n => n.id != noteId);
-        this.renderEnterpriseNotes();
-        this.setUnsavedChanges(true);
-        this.showNotification('Note deleted successfully!', 'success');
-    }
-
-    /**
-     * GOLD STANDARD: Update notes counts in header
-     */
-    updateNotesCounts() {
-        const totalCount = document.getElementById('notes-count');
-        const pinnedCount = document.getElementById('pinned-count');
-        
-        if (totalCount) totalCount.textContent = this.notes.length;
-        if (pinnedCount) pinnedCount.textContent = this.notes.filter(n => n.isPinned).length;
-    }
-
-    /**
-     * GOLD STANDARD: Sort notes based on selected criteria
-     */
-    sortNotes(notes) {
-        const sortSelect = document.getElementById('notes-sort');
-        const sortBy = sortSelect?.value || 'updated-desc';
-
-        return notes.sort((a, b) => {
-            // Always keep pinned notes at top within their group
-            if (a.isPinned && !b.isPinned) return -1;
-            if (!a.isPinned && b.isPinned) return 1;
-            return new Date(b.updatedAt) - new Date(a.updatedAt);
-        });
-    }
-
-    /**
-     * GOLD STANDARD: Collect ClientsVia agent personality settings (migrated from HTML)
-     */
-    async saveClientsviaAgentPersonalitySettings() {
-        const companyId = this.companyId;
-        if (!companyId) return;
-
-        const personalitySettings = {
-            voiceTone: document.getElementById('clientsvia-voiceToneSelect')?.value,
-            speechPace: document.getElementById('clientsvia-speechPaceSelect')?.value,
-            bargeIn: document.getElementById('clientsvia-bargeInToggle')?.checked,
-            acknowledgeEmotion: document.getElementById('clientsvia-emotionToggle')?.checked,
-            useEmojis: document.getElementById('clientsvia-emojiToggle')?.checked
-        };
+        console.log('📄 Populating Overview tab with enterprise features...');
 
         try {
-            const response = await fetch(`${this.apiBaseUrl}/api/company/${companyId}/personality`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ personalitySettings })
-            });
+            // Update header elements with current data
+            this.updateHeaderElements();
 
-            if (response.ok) {
-                const saved = document.getElementById('clientsvia-personality-settings-saved');
-                if (saved) {
-                    saved.classList.remove('hidden');
-                    setTimeout(() => saved.classList.add('hidden'), 3000);
-                }
-                console.log('✅ ClientsVia personality settings saved successfully');
-                this.showNotification('ClientsVia personality settings saved successfully', 'success');
-            } else if (response.status === 404) {
-                console.warn('⚠️ ClientsVia personality settings endpoint not implemented yet');
-                this.showNotification('ClientsVia personality settings endpoint not implemented yet', 'warning');
-            } else {
-                throw new Error(`HTTP ${response.status}: Failed to save personality settings`);
-            }
+            // Create modern always-editable form with validation
+            this.createEnterpriseEditableForm();
+
+            // Initialize contacts management with enterprise features
+            this.initializeContactsManagement();
+            
+            // Setup comprehensive validation and auto-save
+            this.setupEnterpriseFormValidation();
+
+            console.log('✅ Overview tab initialized with enterprise features');
         } catch (error) {
+            console.error('❌ Error initializing Overview tab:', error);
+            this.showNotification('Failed to initialize Overview tab', 'error');
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Create enterprise-grade always-editable form
+     * Features: Validation, accessibility, progressive enhancement
+     */
+    createEnterpriseEditableForm() {
+        if (!this.domElements.editFormContainer) {
+            console.error('❌ Edit form container not found');
+            return;
+        }
+
+        const formHTML = this.generateEnterpriseFormHTML();
+        this.domElements.editFormContainer.innerHTML = formHTML;
+        this.domElements.editFormContainer.classList.remove('hidden');
+
+        // Hide legacy edit button (form is always visible)
+        if (this.domElements.editButton) {
+            this.domElements.editButton.style.display = 'none';
+        }
+
+        // Initialize enterprise form features
+        this.initializeFormAccessibility();
+        this.setupFormAutoSave();
+        
+        console.log('🔧 Enterprise editable form created');
+    }
+
+    /**
+     * GOLD STANDARD: Generate enterprise form HTML with validation
+     */
+    generateEnterpriseFormHTML() {
+        const data = this.currentData;
+        const requiredFields = ['companyName'];
+        
+        return `
+            <div class="bg-white rounded-xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-200">
+                <!-- Header Section -->
+                <div class="flex justify-between items-center mb-8">
+                    <div class="flex items-center">
+                        <div class="bg-indigo-100 p-3 rounded-lg mr-4">
+                            <i class="fas fa-building text-indigo-600 text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-900">Company Information</h3>
+                            <p class="text-sm text-gray-600 mt-1">Manage your business details and contact information</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div id="validation-status" class="hidden">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium">
+                                <i class="fas fa-check-circle mr-1"></i>
+                                All fields valid
+                            </span>
+                        </div>
+                        <span class="text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-full">
+                            <i class="fas fa-edit text-gray-400 mr-1"></i>
+                            Live editing enabled
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Form Fields Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Left Column - Essential Info -->
+                    <div class="space-y-6">
+                        <div class="form-group">
+                            <label for="edit-company-name" class="form-label required">
+                                Company Name
+                                <span class="text-red-500 ml-1" title="Required field">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                id="edit-company-name" 
+                                name="companyName"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.companyName || data.name || '')}"
+                                placeholder="Enter your company name"
+                                required
+                                aria-describedby="company-name-help"
+                                data-validate="required|min:2|max:100"
+                            >
+                            <div id="company-name-help" class="form-help">
+                                This name will appear on all communications and documents
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-phone" class="form-label">
+                                Business Phone
+                            </label>
+                            <input 
+                                type="tel" 
+                                id="edit-business-phone" 
+                                name="businessPhone"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.companyPhone || data.businessPhone || '')}"
+                                placeholder="+1 (555) 123-4567"
+                                aria-describedby="business-phone-help"
+                                data-validate="phone"
+                            >
+                            <div id="business-phone-help" class="form-help">
+                                Primary contact number for customers and partners
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-email" class="form-label">
+                                Business Email
+                            </label>
+                            <input 
+                                type="email" 
+                                id="edit-business-email" 
+                                name="businessEmail"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.businessEmail || '')}"
+                                placeholder="contact@yourcompany.com"
+                                aria-describedby="business-email-help"
+                                data-validate="email"
+                            >
+                            <div id="business-email-help" class="form-help">
+                                Main email address for business communications
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-website" class="form-label">
+                                Website
+                            </label>
+                            <input 
+                                type="text" 
+                                id="edit-business-website" 
+                                name="businessWebsite"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.businessWebsite || '')}"
+                                placeholder="www.yourcompany.com"
+                                aria-describedby="business-website-help"
+                            >
+                            <div id="business-website-help" class="form-help">
+                                Your company's website URL
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column - Additional Details -->
+                    <div class="space-y-6">
+                        <div class="form-group">
+                            <label for="edit-business-address" class="form-label">
+                                Business Address
+                            </label>
+                            <textarea 
+                                id="edit-business-address" 
+                                name="businessAddress"
+                                class="form-textarea enterprise-input" 
+                                rows="3"
+                                placeholder="123 Main Street&#10;Suite 100&#10;City, State 12345"
+                                aria-describedby="business-address-help"
+                                data-validate="address"
+                            >${this.escapeHtml(data.companyAddress || data.businessAddress || '')}</textarea>
+                            <div id="business-address-help" class="form-help">
+                                Physical location of your business
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-service-area" class="form-label">
+                                Service Area
+                            </label>
+                            <input 
+                                type="text" 
+                                id="edit-service-area" 
+                                name="serviceArea"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.serviceArea || '')}"
+                                placeholder="Greater Metro Area, 50-mile radius"
+                                aria-describedby="service-area-help"
+                            >
+                            <div id="service-area-help" class="form-help">
+                                Geographic area where you provide services
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-hours" class="form-label">
+                                Business Hours
+                            </label>
+                            <input 
+                                type="text" 
+                                id="edit-business-hours" 
+                                name="businessHours"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.businessHours || '')}"
+                                placeholder="Monday-Friday: 9:00 AM - 5:00 PM"
+                                aria-describedby="business-hours-help"
+                            >
+                            <div id="business-hours-help" class="form-help">
+                                When your business is open for customers
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Description Section -->
+                <div class="mt-8">
+                    <div class="form-group">
+                        <label for="edit-description" class="form-label">
+                            Business Description
+                        </label>
+                        <textarea 
+                            id="edit-description" 
+                            name="description"
+                            class="form-textarea enterprise-input" 
+                            rows="4"
+                            placeholder="Describe your business, services, and what makes you unique..."
+                            aria-describedby="description-help"
+                            data-validate="max:1000"
+                        >${this.escapeHtml(data.description || '')}</textarea>
+                        <div id="description-help" class="form-help">
+                            Brief overview of your business and services (up to 1000 characters)
+                        </div>
+                        <div class="field-validation hidden"></div>
+                        <div class="text-right mt-1">
+                            <span id="description-counter" class="text-xs text-gray-500">
+                                ${(data.description || '').length}/1000 characters
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Status Indicator -->
+                <div class="mt-8 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="bg-blue-100 p-2 rounded-lg mr-3">
+                                <i class="fas fa-magic text-blue-600"></i>
+                            </div>
+                            <div>
+                                <span class="text-sm text-blue-900 font-semibold">Enterprise Live Editing</span>
+                                <p class="text-xs text-blue-700 mt-1">Changes are validated in real-time and auto-saved</p>
+                            </div>
+                        </div>
+                        <div id="form-status" class="flex items-center text-sm">
+                            <div class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                            <span class="text-green-700 font-medium">Ready</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * GOLD STANDARD: Setup enterprise form validation and auto-save
+     */
+    setupEnterpriseFormValidation() {
+        const form = this.domElements.editFormContainer;
+        if (!form) return;
+
+        // Get all enterprise inputs
+        const inputs = form.querySelectorAll('.enterprise-input');
+        
+        inputs.forEach(input => {
+            // Real-time validation on input
+            input.addEventListener('input', (e) => this.handleEnterpriseInput(e));
+            input.addEventListener('blur', (e) => this.validateField(e.target));
+            input.addEventListener('focus', (e) => this.clearFieldErrors(e.target));
+        });
+
+        // Special handling for description character counter
+        const descriptionField = document.getElementById('edit-description');
+        if (descriptionField) {
+            descriptionField.addEventListener('input', () => this.updateCharacterCounter());
+        }
+
+        console.log('🔧 Enterprise validation setup complete');
+    }
+
+    /**
+     * GOLD STANDARD: Handle enterprise input with validation and auto-save
+     */
+    handleEnterpriseInput(event) {
+        const field = event.target;
+        
+        // Mark as changed for auto-save
+        this.setUnsavedChanges(true);
+        
+        // Real-time validation (debounced)
+        clearTimeout(this.validationTimeout);
+        this.validationTimeout = setTimeout(() => {
+            this.validateField(field);
+            this.updateFormStatus();
+        }, 300);
+
+        // Update form status
+        this.setFormStatus('typing', 'Making changes...');
+        
+        console.log(`📝 Enterprise field changed: ${field.name} = ${field.value.substring(0, 50)}...`);
+    }
+
+    /**
+     * GOLD STANDARD: Validate individual field with enterprise rules
+     */
+    validateField(field) {
+        const rules = field.getAttribute('data-validate');
+        if (!rules) return true;
+
+        const validationContainer = field.parentNode.querySelector('.field-validation');
+        if (!validationContainer) return true;
+
+        const value = field.value.trim();
+        const ruleArray = rules.split('|');
+        const errors = [];
+
+        // Apply validation rules
+        for (const rule of ruleArray) {
+            const [ruleName, ruleValue] = rule.split(':');
+            
+            switch (ruleName) {
+                case 'required':
+                    if (!value) errors.push('This field is required');
+                    break;
+                case 'min':
+                    if (value.length < parseInt(ruleValue)) {
+                        errors.push(`Minimum ${ruleValue} characters required`);
+                    }
+                    break;
+                case 'max':
+                    if (value.length > parseInt(ruleValue)) {
+                        errors.push(`Maximum ${ruleValue} characters allowed`);
+                    }
+                    break;
+                case 'email':
+                    if (value && !this.isValidEmail(value)) {
+                        errors.push('Please enter a valid email address');
+                    }
+                    break;
+                case 'phone':
+                    if (value && !this.isValidPhone(value)) {
+                        errors.push('Please enter a valid phone number');
+                    }
+                    break;
+                case 'url':
+                    if (value && !this.isValidUrl(value)) {
+                        errors.push('Please enter a valid website URL');
+                    }
+                    break;
+            }
+        }
+
+        // Display validation results
+        if (errors.length > 0) {
+            this.showFieldErrors(field, errors);
+            return false;
+        } else {
+            this.showFieldSuccess(field);
+            return true;
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Initialize form accessibility features
+     */
+    initializeFormAccessibility() {
+        const form = this.domElements.editFormContainer;
+        if (!form) return;
+
+        // Add ARIA labels and descriptions
+        const inputs = form.querySelectorAll('input, textarea');
+        inputs.forEach(input => {
+            // Ensure proper labeling
+            const label = form.querySelector(`label[for="${input.id}"]`);
+            if (label && !input.getAttribute('aria-labelledby')) {
+                input.setAttribute('aria-labelledby', label.id || `${input.id}-label`);
+            }
+
+            // Add required indicators for screen readers
+            if (input.hasAttribute('required')) {
+                input.setAttribute('aria-required', 'true');
+            }
+        });
+
+        console.log('♿ Accessibility features initialized');
+    }
+
+    /**
+     * GOLD STANDARD: Setup form auto-save with enterprise features
+     */
+    setupFormAutoSave() {
+        // Auto-save after 2 seconds of inactivity
+        this.autoSaveTimeout = null;
+        
+        const form = this.domElements.editFormContainer;
+        if (!form) return;
+
+        const inputs = form.querySelectorAll('.enterprise-input');
+        inputs.forEach(input => {
+            input.addEventListener('input', () => {
+                clearTimeout(this.autoSaveTimeout);
+                this.setFormStatus('pending', 'Auto-saving...');
+                
+                this.autoSaveTimeout = setTimeout(async () => {
+                    try {
+                        await this.performAutoSave();
+                        this.setFormStatus('saved', 'All changes saved');
+                    } catch (error) {
+                        this.setFormStatus('error', 'Auto-save failed');
+                        console.error('Auto-save failed:', error);
+                    }
+                }, 2000);
+            });
+        });
+
+        console.log('💾 Auto-save enabled');
+    }
+
+    /**
+     * GOLD STANDARD: Initialize contacts management with enterprise features
+     */
+    initializeContactsManagement() {
+        try {
+            this.renderEnterpriseContactsSection();
+            this.setupEnterpriseContactsHandlers();
+            console.log('� Enterprise contacts management initialized');
+        } catch (error) {
+            console.error('❌ Error initializing contacts:', error);
+            this.showNotification('Failed to initialize contacts section', 'error');
+        }
+    }
+
+    /**
+     * Render enterprise contacts section
+     */
+    renderEnterpriseContactsSection() {
+        console.log('👥 Rendering enterprise contacts section...');
+        
+        const contactsContainer = document.getElementById('contacts-container');
+        if (!contactsContainer) {
+            console.warn('⚠️ Contacts container not found');
+            return;
+        }
+        
+        const contacts = this.currentData?.contacts || [];
+        
+        if (contacts.length === 0) {
+            contactsContainer.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <div class="text-4xl mb-4">👥</div>
+                    <p>No contacts added yet</p>
+                    <button class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                            onclick="addNewContact()">
+                        Add First Contact
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        // Render contacts list
+        const contactsHTML = contacts.map((contact, index) => `
+            <div class="bg-white border rounded-lg p-4 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <h4 class="font-semibold text-gray-900">${contact.name || 'Unnamed Contact'}</h4>
+                        <p class="text-sm text-gray-600">${contact.role || 'No role specified'}</p>
+                        <div class="mt-2 space-y-1">
+                            ${contact.email ? `<p class="text-sm text-gray-700">📧 ${contact.email}</p>` : ''}
+                            ${contact.phone ? `<p class="text-sm text-gray-700">📞 ${contact.phone}</p>` : ''}
+                        </div>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="editContact(${index})" 
+                                class="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
+                        <button onclick="deleteContact(${index})" 
+                                class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        contactsContainer.innerHTML = `
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium">Contacts (${contacts.length})</h3>
+                    <button onclick="addNewContact()" 
+                            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+                        Add Contact
+                    </button>
+                </div>
+                <div class="space-y-3">
+                    ${contactsHTML}
+                </div>
+            </div>
+        `;
+        
+        console.log(`✅ Rendered ${contacts.length} contacts`);
+    }
+    
+    /**
+     * Debounce utility function to limit function calls
+     * @param {Function} func - Function to debounce
+     * @param {number} wait - Wait time in milliseconds
+     * @returns {Function} Debounced function
+     */
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func.apply(this, args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    /**
+     * Load company data from API
+     */
+    async loadCompanyData() {
+        try {
+            console.log('📥 Loading company data for ID:', this.companyId);
+            console.log('🌐 API Base URL:', this.apiBaseUrl);
+            this.showLoading(true);
+
+            const apiUrl = `${this.apiBaseUrl}/api/company/${this.companyId}`;
+            console.log('📞 Fetching from:', apiUrl);
+            
+            const response = await fetch(apiUrl);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            this.currentData = await response.json();
+            console.log('✅ Company data loaded:', this.currentData);
+
+            // Populate all tabs with data
+            this.populateOverviewTab();
+            this.populateConfigTab();
+            this.populateNotesTab();
+            this.populateCalendarTab();
+            this.populateAISettingsTab();
+            this.populateVoiceTab();
+            this.populatePersonalityTab();
+            this.populateAgentLogicTab();
+
+        } catch (error) {
+            console.error('❌ Failed to load company data:', error);
+            console.error('Error details:', {
+                message: error.message,
+                companyId: this.companyId,
+                apiBaseUrl: this.apiBaseUrl,
+                fullUrl: `${this.apiBaseUrl}/api/company/${this.companyId}`
+            });
+            
+            this.showNotification(`Failed to load company data: ${error.message}`, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Populate Overview tab with enterprise-grade UX
+     * Features: Live validation, auto-save, accessibility, error recovery
+     */
+    populateOverviewTab() {
+        if (!this.currentData) {
+            this.showNotification('Company data not loaded', 'error');
+            return;
+        }
+
+        console.log('📄 Populating Overview tab with enterprise features...');
+
+        try {
+            // Update header elements with current data
+            this.updateHeaderElements();
+
+            // Create modern always-editable form with validation
+            this.createEnterpriseEditableForm();
+
+            // Initialize contacts management with enterprise features
+            this.initializeContactsManagement();
+            
+            // Setup comprehensive validation and auto-save
+            this.setupEnterpriseFormValidation();
+
+            console.log('✅ Overview tab initialized with enterprise features');
+        } catch (error) {
+            console.error('❌ Error initializing Overview tab:', error);
+            this.showNotification('Failed to initialize Overview tab', 'error');
+        }
+    }
+
+    /**
+     * GOLD STANDARD: Create enterprise-grade always-editable form
+     * Features: Validation, accessibility, progressive enhancement
+     */
+    createEnterpriseEditableForm() {
+        if (!this.domElements.editFormContainer) {
+            console.error('❌ Edit form container not found');
+            return;
+        }
+
+        const formHTML = this.generateEnterpriseFormHTML();
+        this.domElements.editFormContainer.innerHTML = formHTML;
+        this.domElements.editFormContainer.classList.remove('hidden');
+
+        // Hide legacy edit button (form is always visible)
+        if (this.domElements.editButton) {
+            this.domElements.editButton.style.display = 'none';
+        }
+
+        // Initialize enterprise form features
+        this.initializeFormAccessibility();
+        this.setupFormAutoSave();
+        
+        console.log('🔧 Enterprise editable form created');
+    }
+
+    /**
+     * GOLD STANDARD: Generate enterprise form HTML with validation
+     */
+    generateEnterpriseFormHTML() {
+        const data = this.currentData;
+        const requiredFields = ['companyName'];
+        
+        return `
+            <div class="bg-white rounded-xl border border-gray-200 p-8 shadow-sm hover:shadow-md transition-shadow duration-200">
+                <!-- Header Section -->
+                <div class="flex justify-between items-center mb-8">
+                    <div class="flex items-center">
+                        <div class="bg-indigo-100 p-3 rounded-lg mr-4">
+                            <i class="fas fa-building text-indigo-600 text-xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-900">Company Information</h3>
+                            <p class="text-sm text-gray-600 mt-1">Manage your business details and contact information</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div id="validation-status" class="hidden">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium">
+                                <i class="fas fa-check-circle mr-1"></i>
+                                All fields valid
+                            </span>
+                        </div>
+                        <span class="text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-full">
+                            <i class="fas fa-edit text-gray-400 mr-1"></i>
+                            Live editing enabled
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Form Fields Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Left Column - Essential Info -->
+                    <div class="space-y-6">
+                        <div class="form-group">
+                            <label for="edit-company-name" class="form-label required">
+                                Company Name
+                                <span class="text-red-500 ml-1" title="Required field">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                id="edit-company-name" 
+                                name="companyName"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.companyName || data.name || '')}"
+                                placeholder="Enter your company name"
+                                required
+                                aria-describedby="company-name-help"
+                                data-validate="required|min:2|max:100"
+                            >
+                            <div id="company-name-help" class="form-help">
+                                This name will appear on all communications and documents
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-phone" class="form-label">
+                                Business Phone
+                            </label>
+                            <input 
+                                type="tel" 
+                                id="edit-business-phone" 
+                                name="businessPhone"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.companyPhone || data.businessPhone || '')}"
+                                placeholder="+1 (555) 123-4567"
+                                aria-describedby="business-phone-help"
+                                data-validate="phone"
+                            >
+                            <div id="business-phone-help" class="form-help">
+                                Primary contact number for customers and partners
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit-business-email" class="form-label">
+                                Business Email
+                            </label>
+                            <input 
+                                type="email" 
+                                id="edit-business-email" 
+                                name="businessEmail"
+                                class="form-input enterprise-input" 
+                                value="${this.escapeHtml(data.businessEmail || '')}"
+                                placeholder="contact@yourcompany.com"
+                                aria-describedby="business-email-help"
+                                data-validate="email"
+                            >
+                            <div id="business-email-help" class="form-help">
+                                Main email address for business communications
+                            </div>
+                            <div class="field-validation hidden"></div>
+                        </div>
+
+                        <div class="form-group">
             console.error('❌ Failed to save ClientsVia personality settings:', error);
             this.showNotification(`Failed to save ClientsVia personality settings: ${error.message}`, 'error');
         }
