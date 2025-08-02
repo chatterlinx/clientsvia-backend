@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.15 - CACHE REFRESH - setupNotesSearch method added');
+console.log('🚀 Loading company-profile-modern.js v2.16 - Added missing escapeHtml method');
 
 /**
  * Modern Company Profile Management System
@@ -2599,6 +2599,18 @@ class CompanyProfileManager {
         }, 5000);
         
         console.log(`📢 Notification (${type}): ${message}`);
+    }
+
+    /**
+     * Escape HTML characters to prevent XSS attacks
+     * @param {string} str - String to escape
+     * @returns {string} Escaped string
+     */
+    escapeHtml(str) {
+        if (typeof str !== 'string') return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
     }
 
     /**
