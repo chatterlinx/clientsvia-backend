@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.13 - Fixed tab switching functionality');
+console.log('🚀 Loading company-profile-modern.js v2.14 - Added missing setupNotesSearch method');
 
 /**
  * Modern Company Profile Management System
@@ -695,7 +695,7 @@ class CompanyProfileManager {
         if (!form) return;
 
         const inputs = form.querySelectorAll('.enterprise-input');
-        inputs.forEach((input) => {
+        inputs.forEach(input => {
             input.addEventListener('input', () => {
                 clearTimeout(this.autoSaveTimeout);
                 this.setFormStatus('pending', 'Auto-saving...');
@@ -2053,6 +2053,126 @@ class CompanyProfileManager {
     }
 
     /**
+     * PRODUCTION: Setup notes search and filtering functionality
+     */
+    setupNotesSearch() {
+        console.log('🔍 Setting up notes search functionality...');
+        
+        // Search functionality
+        const searchInput = document.getElementById('notes-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', this.debounce(() => this.filterNotes(), 300));
+            console.log('✅ Notes search input listener attached');
+       
+        }
+
+        // Category filter
+        const categoryFilter = document.getElementById('notes-category-filter');
+        if (categoryFilter) {
+            categoryFilter.addEventListener('change', () => this.filterNotes());
+            console.log('✅ Notes category filter listener attached');
+        }
+
+        // Sort options
+        const sortSelect = document.getElementById('notes-sort');
+        if (sortSelect) {
+            sortSelect.addEventListener('change', () => this.renderEnterpriseNotes());
+            console.log('✅ Notes sort listener attached');
+        }
+
+        console.log('✅ Notes search functionality setup complete');
+    }
+
+    /**
+     * PRODUCTION: Filter notes based on search and category
+     */
+    filterNotes() {
+        const searchTerm = document.getElementById('notes-search')?.value.toLowerCase() || '';
+        const selectedCategory = document.getElementById('notes-category-filter')?.value || 'all';
+        
+        let filteredNotes = this.notes;
+        
+        // Filter by search term
+        if (searchTerm) {
+            filteredNotes = filteredNotes.filter(note => 
+                note.title.toLowerCase().includes(searchTerm) ||
+                note.content.toLowerCase().includes(searchTerm) ||
+                note.tags.some(tag => tag.toLowerCase().includes(searchTerm))
+            );
+        }
+        
+        // Filter by category
+        if (selectedCategory !== 'all') {
+            filteredNotes = filteredNotes.filter(note => note.category === selectedCategory);
+        }
+        
+        // Render filtered notes
+        this.renderFilteredNotes(filteredNotes);
+        
+        console.log(`🔍 Filtered ${filteredNotes.length}/${this.notes.length} notes`);
+    }
+
+    /**
+     * PRODUCTION: Render filtered notes subset
+     */
+    renderFilteredNotes(filteredNotes) {
+        const container = document.getElementById('enterprise-notes-display');
+        if (!container) return;
+
+        const pinnedNotes = filteredNotes.filter(note => note.isPinned);
+        const regularNotes = filteredNotes.filter(note => !note.isPinned);
+
+        let html = '';
+
+        // Show no results message if no notes match
+        if (filteredNotes.length === 0) {
+            html = `
+                <div class="text-center py-8 text-gray-500">
+                    <i class="fas fa-search text-3xl mb-3"></i>
+                    <p>No notes found matching your search criteria.</p>
+                </div>
+            `;
+        } else {
+            // Render pinned notes first
+            if (pinnedNotes.length > 0) {
+                html += `
+                    <div class="mb-6">
+                        <div class="flex items-center mb-3">
+                            <i class="fas fa-thumbtack text-yellow-600 mr-2"></i>
+                            <h3 class="text-base font-semibold text-gray-900">Pinned Notes</h3>
+                            <span class="ml-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">${pinnedNotes.length}</span>
+                        </div>
+                        <div class="space-y-2">
+                            ${pinnedNotes.map(note => this.generateNoteHTML(note)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Render regular notes
+            if (regularNotes.length > 0) {
+                html += `
+                    <div>
+                        <div class="flex items-center mb-3">
+                            <i class="fas fa-sticky-note text-gray-600 mr-2"></i>
+                            <h3 class="text-base font-semibold text-gray-900">Notes</h3>
+                            <span class="ml-2 bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full">${regularNotes.length}</span>
+                        </div>
+                        <div class="space-y-2">
+                            ${regularNotes.map(note => this.generateNoteHTML(note)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        container.innerHTML = html;
+        
+        // Re-setup event listeners for the filtered notes
+        this.setupNoteCardEventListeners();
+    }
+
+    /**
      * GOLD STANDARD: Collect ClientsVia agent personality settings (migrated from HTML)
      */
     async saveClientsviaAgentPersonalitySettings() {
@@ -2308,6 +2428,7 @@ class CompanyProfileManager {
         
         // Setup tab switching logic if not already handled by HTML
         const tabButtons = document.querySelectorAll('[data-tab]');
+        const tabPanes = document.querySelectorAll('.tab-pane');
         
         tabButtons.forEach(button => {
             button.addEventListener('click', (e) => {
@@ -2316,9 +2437,6 @@ class CompanyProfileManager {
                 this.switchTab(targetTab);
             });
         });
-        
-        // Set initial tab to overview
-        this.switchTab('overview');
         
         console.log('✅ Tabs system initialized');
     }
@@ -2331,31 +2449,20 @@ class CompanyProfileManager {
         // Update current tab
         this.currentTab = tabName;
         
-        // Update active states for tab buttons
+        // Update active states
         document.querySelectorAll('[data-tab]').forEach(btn => {
             btn.classList.remove('active');
         });
-        
-        // Hide all tab content items
-        document.querySelectorAll('.tab-content-item').forEach(pane => {
-            pane.classList.add('hidden');
+        document.querySelectorAll('.tab-pane').forEach(pane => {
+            pane.classList.remove('active');
         });
         
-        // Activate target tab button
+        // Activate target tab
         const targetButton = document.querySelector(`[data-tab="${tabName}"]`);
-        if (targetButton) targetButton.classList.add('active');
+        const targetPane = document.getElementById(tabName);
         
-        // Show target tab content
-        const targetPane = document.getElementById(`${tabName}-content`);
-        if (targetPane) {
-            targetPane.classList.remove('hidden');
-        } else {
-            // Fallback: try with exact tabName as ID
-            const fallbackPane = document.getElementById(tabName);
-            if (fallbackPane) {
-                fallbackPane.classList.remove('hidden');
-            }
-        }
+        if (targetButton) targetButton.classList.add('active');
+        if (targetPane) targetPane.classList.add('active');
         
         console.log(`📑 Switched to tab: ${tabName}`);
     }
@@ -2492,18 +2599,6 @@ class CompanyProfileManager {
         }, 5000);
         
         console.log(`📢 Notification (${type}): ${message}`);
-    }
-
-    /**
-     * Escape HTML to prevent XSS attacks
-     * @param {string} str - String to escape
-     * @returns {string} Escaped HTML string
-     */
-    escapeHtml(str) {
-        if (typeof str !== 'string') return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
     }
 
     /**
