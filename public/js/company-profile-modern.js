@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.9 - Restored Working State');
+console.log('🚀 Loading company-profile-modern.js v2.10 - Added debounce utility method');
 
 /**
  * Modern Company Profile Management System
@@ -730,203 +730,78 @@ class CompanyProfileManager {
     }
 
     /**
-     * GOLD STANDARD: Validation utility methods
+     * Render enterprise contacts section
      */
-    isValidEmail(email) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
-    }
-
-    isValidPhone(phone) {
-        // Remove all non-digits for validation
-        const cleaned = phone.replace(/\D/g, '');
-        return cleaned.length >= 10 && cleaned.length <= 15;
-    }
-
-    isValidUrl(url) {
-        try {
-            new URL(url);
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    /**
-     * GOLD STANDARD: Update character counter for description field
-     */
-    updateCharacterCounter() {
-        const descriptionField = document.getElementById('edit-description');
-        const counter = document.getElementById('description-counter');
+    renderEnterpriseContactsSection() {
+        console.log('👥 Rendering enterprise contacts section...');
         
-        if (descriptionField && counter) {
-            const length = descriptionField.value.length;
-            const maxLength = 1000;
-            
-            counter.textContent = `${length}/${maxLength} characters`;
-            
-            // Color coding based on usage
-            if (length > maxLength * 0.9) {
-                counter.className = 'text-xs text-red-600 font-medium';
-            } else if (length > maxLength * 0.75) {
-                counter.className = 'text-xs text-yellow-600';
-            } else {
-                counter.className = 'text-xs text-gray-500';
-            }
-        }
-    }
-
-    /**
-     * GOLD STANDARD: Show field validation errors
-     */
-    showFieldErrors(field, errors) {
-        const validationContainer = field.parentNode.querySelector('.field-validation');
-        if (!validationContainer) return;
-
-        validationContainer.innerHTML = errors.map(error => 
-            `<div class="text-red-600 text-xs mt-1 flex items-center">
-                <i class="fas fa-exclamation-circle mr-1"></i>
-                ${error}
-            </div>`
-        ).join('');
-        
-        validationContainer.classList.remove('hidden');
-        field.classList.add('border-red-300');
-        field.classList.remove('border-green-300');
-    }
-
-    /**
-     * GOLD STANDARD: Show field validation success
-     */
-    showFieldSuccess(field) {
-        const validationContainer = field.parentNode.querySelector('.field-validation');
-        if (validationContainer) {
-            validationContainer.classList.add('hidden');
+        const contactsContainer = document.getElementById('contacts-container');
+        if (!contactsContainer) {
+            console.warn('⚠️ Contacts container not found');
+            return;
         }
         
-        field.classList.remove('border-red-300');
-        field.classList.add('border-green-300');
-    }
-
-    /**
-     * GOLD STANDARD: Clear field errors on focus
-     */
-    clearFieldErrors(field) {
-        const validationContainer = field.parentNode.querySelector('.field-validation');
-        if (validationContainer) {
-            validationContainer.classList.add('hidden');
-        }
-        
-        field.classList.remove('border-red-300', 'border-green-300');
-    }
-
-    /**
-     * GOLD STANDARD: Set form status indicator
-     */
-    setFormStatus(status, message) {
-        const statusElement = document.getElementById('form-status');
-        if (!statusElement) return;
-
-        const statusConfigs = {
-            ready: { color: 'text-green-700', bgColor: 'bg-green-500', icon: 'fas fa-check-circle' },
-            typing: { color: 'text-blue-700', bgColor: 'bg-blue-500', icon: 'fas fa-edit' },
-            pending: { color: 'text-yellow-700', bgColor: 'bg-yellow-500', icon: 'fas fa-clock' },
-            saved: { color: 'text-green-700', bgColor: 'bg-green-500', icon: 'fas fa-check-circle' },
-            error: { color: 'text-red-700', bgColor: 'bg-red-500', icon: 'fas fa-exclamation-circle' }
-        };
-
-        const config = statusConfigs[status] || statusConfigs.ready;
-        
-        statusElement.innerHTML = `
-            <div class="w-2 h-2 ${config.bgColor} rounded-full mr-2 ${status === 'pending' ? 'animate-pulse' : ''}"></div>
-            <span class="${config.color} font-medium">${message}</span>
+        // Create contacts display section
+        const contactsHTML = `
+            <div class="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Company Contacts</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Primary Contact -->
+                    <div class="space-y-4">
+                        <h4 class="font-medium text-gray-700">Primary Contact</h4>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Contact Name</label>
+                            <p id="company-contact-name-view" class="mt-1 text-sm text-gray-900">${this.currentData?.contactName || 'No contact provided'}</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Contact Email</label>
+                            <p id="company-contact-email-view" class="mt-1 text-sm text-gray-900">${this.currentData?.contactEmail || 'No contact email provided'}</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Contact Phone</label>
+                            <p id="company-contact-phone-view" class="mt-1 text-sm text-gray-900">${this.currentData?.contactPhone || 'No contact phone provided'}</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Owner Information -->
+                    <div class="space-y-4">
+                        <h4 class="font-medium text-gray-700">Owner Information</h4>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Owner Name</label>
+                            <p id="company-owner-view" class="mt-1 text-sm text-gray-900">${this.currentData?.ownerName || 'No owner provided'}</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Owner Email</label>
+                            <p id="company-owner-email-view" class="mt-1 text-sm text-gray-900">${this.currentData?.ownerEmail || 'No owner email provided'}</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Owner Phone</label>
+                            <p id="company-owner-phone-view" class="mt-1 text-sm text-gray-900">${this.currentData?.ownerPhone || 'No owner phone provided'}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         `;
-    }
-
-    /**
-     * GOLD STANDARD: Update overall form validation status
-     */
-    updateFormStatus() {
-        const form = this.domElements.editFormContainer;
-        if (!form) return;
-
-        const inputs = form.querySelectorAll('.enterprise-input');
-        let allValid = true;
-        let hasErrors = false;
-
-        inputs.forEach(input => {
-            const hasError = input.classList.contains('border-red-300');
-            if (hasError) {
-                allValid = false;
-                hasErrors = true;
-            }
-        });
-
-        const validationStatus = document.getElementById('validation-status');
-        if (validationStatus) {
-            if (allValid && !hasErrors) {
-                validationStatus.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800';
-                validationStatus.innerHTML = '<i class="fas fa-check-circle mr-1"></i>All fields valid';
-                validationStatus.classList.remove('hidden');
-            } else if (hasErrors) {
-                validationStatus.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800';
-                validationStatus.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>Please fix errors';
-                validationStatus.classList.remove('hidden');
-            } else {
-                validationStatus.classList.add('hidden');
-            }
-        }
-    }
-
-    /**
-     * GOLD STANDARD: Perform auto-save operation
-     */
-    async performAutoSave() {
-        if (!this.hasUnsavedChanges) return;
-
-        try {
-            console.log('💾 Performing auto-save...');
-            await this.saveAllChanges(true); // true = silent save
-            console.log('✅ Auto-save completed');
-        } catch (error) {
-            console.error('❌ Auto-save failed:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Format address data for display
-     */
-    formatAddress(data) {
-        // Check for new simplified field first, then legacy field
-        if (data.companyAddress) {
-            return data.companyAddress;
-        }
         
-        if (data.businessAddress) {
-            return data.businessAddress;
-        }
-        
-        if (data.address && typeof data.address === 'object') {
-            const addr = data.address;
-            return [addr.street, addr.city, addr.state, addr.zipCode || addr.zip, addr.country]
-                .filter(Boolean).join(', ') || 'No address provided';
-        }
-        
-        return 'No address provided';
+        contactsContainer.innerHTML = contactsHTML;
+        console.log('✅ Enterprise contacts section rendered');
     }
-
+    
     /**
-     * Escape HTML for safe insertion
+     * Setup enterprise contacts event handlers
      */
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+    setupEnterpriseContactsHandlers() {
+        console.log('👥 Setting up enterprise contacts handlers...');
+        
+        // Add any contact-related event listeners here
+        // For now, this is mainly a display section, but we can add edit functionality later
+        
+        console.log('✅ Enterprise contacts handlers setup complete');
     }
 
     /**
-     * Populate Configuration tab with data
+     * GOLD STANDARD: Populate Configuration tab with data
      */
     populateConfigTab() {
         try {
@@ -2606,7 +2481,23 @@ class CompanyProfileManager {
         console.log(`📢 Notification (${type}): ${message}`);
     }
 
-// ...existing code...
+    /**
+     * Debounce utility method for delayed function execution
+     * @param {Function} func - Function to debounce
+     * @param {number} wait - Delay in milliseconds
+     * @returns {Function} Debounced function
+     */
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func.apply(this, args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
 }
 
 /**
