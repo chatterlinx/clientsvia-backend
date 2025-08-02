@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.2 - Character Counter Fix');
+console.log('🚀 Loading company-profile-modern.js v2.3 - Missing Utility Methods Fix');
 
 /**
  * Modern Company Profile Management System
@@ -2165,22 +2165,7 @@ class CompanyProfileManager {
             // Always keep pinned notes at top within their group
             if (a.isPinned && !b.isPinned) return -1;
             if (!a.isPinned && b.isPinned) return 1;
-
-            switch (sortBy) {
-                case 'created-desc':
-                    return new Date(b.createdAt) - new Date(a.createdAt);
-        
-                case 'title-asc':
-                    return a.title.localeCompare(b.title);
-                
-                case 'priority-desc':
-                    const priorityOrder = { high: 3, normal: 2, low: 1 };
-                    return (priorityOrder[b.priority] || 2) - (priorityOrder[a.priority] || 2);
-                
-                case 'updated-desc':
-                default:
-                    return new Date(b.updatedAt) - new Date(a.updatedAt);
-            }
+            return new Date(b.updatedAt) - new Date(a.updatedAt);
         });
     }
 
@@ -2426,6 +2411,115 @@ class CompanyProfileManager {
                 }
             });
         });
+    }
+
+    /**
+     * UTILITY METHODS
+     */
+    
+    /**
+     * Show or hide loading indicator
+     * @param {boolean} show - Whether to show loading state
+     */
+    showLoading(show) {
+        const loadingIndicator = document.getElementById('loading-indicator');
+        if (loadingIndicator) {
+            loadingIndicator.style.display = show ? 'block' : 'none';
+        }
+        
+        // Also handle any loading buttons
+        const loadingButtons = document.querySelectorAll('.loading');
+        loadingButtons.forEach(btn => {
+            if (show) {
+                btn.disabled = true;
+                btn.classList.add('opacity-50');
+            } else {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+            }
+        });
+    }
+    
+    /**
+     * Show notification to user
+     * @param {string} message - Message to display
+     * @param {string} type - Type of notification (success, error, warning, info)
+     */
+    showNotification(message, type = 'info') {
+        // Create notification element if it doesn't exist
+        let notificationContainer = document.getElementById('notification-container');
+        if (!notificationContainer) {
+            notificationContainer = document.createElement('div');
+            notificationContainer.id = 'notification-container';
+            notificationContainer.className = 'fixed top-4 right-4 z-50 space-y-2';
+            document.body.appendChild(notificationContainer);
+        }
+        
+        const notification = document.createElement('div');
+        notification.className = `p-4 rounded-lg shadow-lg border-l-4 max-w-sm transition-all duration-300 ${this.getNotificationClasses(type)}`;
+        
+        const icon = this.getNotificationIcon(type);
+        notification.innerHTML = `
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    ${icon}
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm font-medium">${message}</p>
+                </div>
+                <div class="ml-auto pl-3">
+                    <div class="-mx-1.5 -my-1.5">
+                        <button class="inline-flex rounded-md p-1.5 text-gray-400 hover:text-gray-500 focus:outline-none" onclick="this.parentElement.parentElement.parentElement.parentElement.remove()">
+                            <span class="sr-only">Dismiss</span>
+                            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        notificationContainer.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 5000);
+        
+        console.log(`📢 Notification (${type}): ${message}`);
+    }
+    
+    /**
+     * Get CSS classes for notification type
+     * @param {string} type - Notification type
+     * @returns {string} CSS classes
+     */
+    getNotificationClasses(type) {
+        const classes = {
+            success: 'bg-green-50 border-green-400 text-green-700',
+            error: 'bg-red-50 border-red-400 text-red-700',
+            warning: 'bg-yellow-50 border-yellow-400 text-yellow-700',
+            info: 'bg-blue-50 border-blue-400 text-blue-700'
+        };
+        return classes[type] || classes.info;
+    }
+    
+    /**
+     * Get icon for notification type
+     * @param {string} type - Notification type
+     * @returns {string} Icon HTML
+     */
+    getNotificationIcon(type) {
+        const icons = {
+            success: '<svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>',
+            error: '<svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>',
+            warning: '<svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>',
+            info: '<svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>'
+        };
+        return icons[type] || icons.info;
     }
 }
 
