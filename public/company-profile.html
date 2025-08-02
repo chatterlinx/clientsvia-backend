@@ -6698,7 +6698,7 @@
         });
     </script>
     
-    <script src="/js/company-profile-modern.js?v=2.8"></script>
+    <script src="/js/company-profile-modern.js?v=2.9"></script>
     
     <!-- Main Page Initialization Script -->
     <script>
@@ -6795,6 +6795,22 @@
                 // Set global company ID - CRITICAL: This allows JS to pick it up
                 window.companyId = companyId;
                 
+                // Define waitForManager function first
+                const waitForManager = () => {
+                    if (window.companyProfileManager && window.companyProfileManager.initialized) {
+                        console.log('✅ Company Profile Manager already initialized');
+                        
+                        // 🚀 CRITICAL FIX: Set up change listeners for AI Agent Logic form fields - DISABLED (using dedicated save button instead)
+                        console.log('⚠️ AI Agent Logic change listeners disabled - using dedicated save button');
+                        
+                        // Initialize ClientsVia Intelligence after company data loads
+                        initClientsViaIntelligence();
+                    } else {
+                        // Wait a bit longer for the manager to initialize
+                        setTimeout(waitForManager, 100);
+                    }
+                };
+                
                 // Try the proven fetchCompanyData pattern first
                 if (typeof fetchCompanyData === 'function') {
                     console.log('📡 Calling proven fetchCompanyData pattern...');
@@ -6812,22 +6828,6 @@
                     console.log('📡 FetchCompanyData not available, using manager pattern...');
                     waitForManager();
                 }
-                
-                // Wait for CompanyProfileManager as fallback
-                const waitForManager = () => {
-                    if (window.companyProfileManager && window.companyProfileManager.initialized) {
-                        console.log('✅ Company Profile Manager already initialized');
-                        
-                        // 🚀 CRITICAL FIX: Set up change listeners for AI Agent Logic form fields - DISABLED (using dedicated save button instead)
-                        console.log('⚠️ AI Agent Logic change listeners disabled - using dedicated save button');
-                        
-                        // Initialize ClientsVia Intelligence after company data loads
-                        initClientsViaIntelligence();
-                    } else {
-                        // Wait a bit longer for the manager to initialize
-                        setTimeout(waitForManager, 100);
-                    }
-                };
                 
                 // Start waiting for the manager
                 waitForManager();
