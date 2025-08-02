@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.6 - Proven Company ID Bridge Pattern');
+console.log('🚀 Loading company-profile-modern.js v2.7 - Restored Missing Utility Methods');
 
 /**
  * Modern Company Profile Management System
@@ -2506,57 +2506,107 @@ class CompanyProfileManager {
     }
     
     /**
-     * Debounce utility function
-     * @param {Function} func - Function to debounce
-     * @param {number} wait - Wait time in milliseconds
-     * @returns {Function} Debounced function
+     * Show or hide loading indicator
+     * @param {boolean} show - Whether to show loading state
      */
-    debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func.apply(this, args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-    
-    /**
-     * Filter notes based on search criteria
-     */
-    filterNotes() {
-        const searchInput = document.getElementById('note-search-input');
-        const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+    showLoading(show) {
+        // Create loading indicator if it doesn't exist
+        let loadingIndicator = document.getElementById('global-loading-indicator');
+        if (!loadingIndicator) {
+            loadingIndicator = document.createElement('div');
+            loadingIndicator.id = 'global-loading-indicator';
+            loadingIndicator.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            loadingIndicator.innerHTML = `
+                <div class="bg-white rounded-lg p-6 shadow-xl">
+                    <div class="flex items-center space-x-3">
+                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                        <span class="text-gray-700">Loading...</span>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(loadingIndicator);
+        }
         
-        const noteItems = document.querySelectorAll('.note-item');
-        let visibleCount = 0;
+        loadingIndicator.style.display = show ? 'flex' : 'none';
         
-        noteItems.forEach(item => {
-            const title = item.querySelector('.note-title')?.textContent.toLowerCase() || '';
-            const content = item.querySelector('.note-content')?.textContent.toLowerCase() || '';
-            
-            const matches = title.includes(searchTerm) || content.includes(searchTerm);
-            
-            if (matches || searchTerm === '') {
-                item.style.display = 'block';
-                visibleCount++;
+        // Also handle any loading buttons
+        const loadingButtons = document.querySelectorAll('.loading');
+        loadingButtons.forEach(btn => {
+            if (show) {
+                btn.disabled = true;
+                btn.classList.add('opacity-50');
+                const originalText = btn.innerHTML;
+                btn.dataset.originalText = originalText;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading...';
             } else {
-                item.style.display = 'none';
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+                if (btn.dataset.originalText) {
+                    btn.innerHTML = btn.dataset.originalText;
+                }
             }
         });
         
-        // Update search results count
-        const resultsCount = document.getElementById('search-results-count');
-        if (resultsCount) {
-            resultsCount.textContent = `${visibleCount} notes found`;
+        console.log(`🔄 Loading indicator ${show ? 'shown' : 'hidden'}`);
+    }
+    
+    /**
+     * Show notification to user
+     * @param {string} message - Message to display
+     * @param {string} type - Type of notification (success, error, warning, info)
+     */
+    showNotification(message, type = 'info') {
+        // Create notification container if it doesn't exist
+        let notificationContainer = document.getElementById('notification-container');
+        if (!notificationContainer) {
+            notificationContainer = document.createElement('div');
+            notificationContainer.id = 'notification-container';
+            notificationContainer.className = 'fixed top-4 right-4 z-50 space-y-2';
+            document.body.appendChild(notificationContainer);
         }
         
-        console.log(`🔍 Filtered notes: ${visibleCount} visible`);
+        const notification = document.createElement('div');
+        const baseClasses = 'p-4 rounded-lg shadow-lg transition-all duration-300 max-w-sm';
+        const typeClasses = {
+            success: 'bg-green-100 border border-green-400 text-green-700',
+            error: 'bg-red-100 border border-red-400 text-red-700', 
+            warning: 'bg-yellow-100 border border-yellow-400 text-yellow-700',
+            info: 'bg-blue-100 border border-blue-400 text-blue-700'
+        };
+        
+        notification.className = `${baseClasses} ${typeClasses[type] || typeClasses.info}`;
+        
+        const icons = {
+            success: '✅',
+            error: '❌', 
+            warning: '⚠️',
+            info: 'ℹ️'
+        };
+        
+        notification.innerHTML = `
+            <div class="flex items-start justify-between">
+                <div class="flex items-start">
+                    <span class="mr-2 text-lg">${icons[type] || icons.info}</span>
+                    <span class="text-sm font-medium">${message}</span>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" 
+                        class="ml-3 text-lg hover:opacity-75 focus:outline-none">×</button>
+            </div>
+        `;
+        
+        notificationContainer.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 5000);
+        
+        console.log(`📢 Notification (${type}): ${message}`);
     }
 
-    // ...existing code...
+// ...existing code...
 }
 
 /**
