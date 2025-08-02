@@ -3823,6 +3823,32 @@ class CompanyProfileManager {
             const savedData = await response.json();
             console.log('✅ Changes saved successfully:', savedData);
 
+            // 🚀 ADDITIONAL: Save AI Agent settings to separate API if they exist
+            if (updateData.agentSettings || updateData.tradeCategories) {
+                console.log('🤖 Saving AI Agent settings to separate API...');
+                try {
+                    const agentResponse = await fetch(`${this.apiBaseUrl}/api/agent/companies/${this.companyId}/agent-settings`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            tradeCategories: updateData.tradeCategories || [],
+                            agentSettings: updateData.agentSettings || {}
+                        })
+                    });
+
+                    if (agentResponse.ok) {
+                        const agentData = await agentResponse.json();
+                        console.log('✅ AI Agent settings saved successfully:', agentData);
+                    } else {
+                        console.warn('⚠️ AI Agent settings save failed, but main save succeeded');
+                    }
+                } catch (agentError) {
+                    console.warn('⚠️ AI Agent settings save error:', agentError);
+                }
+            }
+
             // Update current data with the saved response
             this.currentData = { ...this.currentData, ...savedData };
             this.setUnsavedChanges(false);
@@ -4537,12 +4563,59 @@ class CompanyProfileManager {
      * Collect Agent Logic tab data
      */
     collectAgentLogicData(data) {
+        // Existing data collection
         if (this.bookingFlowFields && this.bookingFlowFields.length > 0) {
             data.bookingFlow = this.bookingFlowFields;
         }
         
         if (this.agentLogicNotes && this.agentLogicNotes.length > 0) {
             data.agentLogicNotes = this.agentLogicNotes;
+        }
+
+        // 🚀 NEW: Collect AI Agent Logic settings
+        console.log('📋 Collecting AI Agent Logic settings...');
+        
+        try {
+            // Collect trade categories from checkboxes
+            const checkboxes = document.querySelectorAll('#trade-categories-checkboxes input[type="checkbox"]:checked');
+            const tradeCategories = Array.from(checkboxes).map(checkbox => checkbox.value);
+            
+            if (tradeCategories.length > 0) {
+                data.tradeCategories = tradeCategories;
+                console.log('✅ Collected trade categories:', tradeCategories);
+            }
+
+            // Helper function to safely get element values
+            const safeGetValue = (id, defaultValue = '') => {
+                const element = document.getElementById(id);
+                return element ? element.value : defaultValue;
+            };
+
+            const safeGetChecked = (id, defaultValue = false) => {
+                const element = document.getElementById(id);
+                return element ? element.checked : defaultValue;
+            };
+
+            // Collect agent settings
+            const agentSettings = {
+                useLLM: safeGetValue('agent-useLLM') === 'true',
+                llmModel: safeGetValue('agent-llmModel', 'gemini-pro'),
+                memoryMode: safeGetValue('agent-memoryMode', 'short'),
+                fallbackThreshold: parseFloat(safeGetValue('agent-fallbackThreshold', '0.5')),
+                escalationMode: safeGetValue('agent-escalationMode', 'ask'),
+                rePromptAfterTurns: parseInt(safeGetValue('agent-rePromptAfterTurns', '3')),
+                maxPromptsPerCall: parseInt(safeGetValue('agent-maxPromptsPerCall', '2')),
+                firstPromptSoft: safeGetChecked('agent-firstPromptSoft', true),
+                semanticSearchEnabled: safeGetChecked('agent-semanticSearchEnabled', true),
+                confidenceScoring: safeGetChecked('agent-confidenceScoring', true),
+                autoLearningQueue: safeGetChecked('agent-autoLearningQueue', true)
+            };
+
+            data.agentSettings = agentSettings;
+            console.log('✅ Collected agent settings:', agentSettings);
+
+        } catch (error) {
+            console.error('❌ Error collecting AI Agent Logic settings:', error);
         }
     }
 
