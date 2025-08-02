@@ -2392,8 +2392,15 @@
                                             <button type="button" onclick="testApiAccess()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-1 px-3 rounded-md shadow-sm transition duration-150 ease-in-out mr-2 text-xs">
                                                 <i class="fas fa-bug mr-1"></i>Debug API
                                             </button>
-                                            <button type="button" onclick="saveAISettingsOnly(event)" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-md shadow-sm transition duration-150 ease-in-out">
-                                                <i class="fas fa-save mr-2"></i>Save AI Settings
+                                            <!-- 🚀 NEW DEDICATED AI AGENT LOGIC SAVE BUTTON -->
+                                            <button 
+                                                type="button" 
+                                                id="ai-agent-logic-save-btn"
+                                                onclick="saveAIAgentLogicSettings()" 
+                                                class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-3 px-8 rounded-lg shadow-lg transform transition-all duration-200 hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-green-300"
+                                            >
+                                                <i class="fas fa-save mr-2 text-lg"></i>
+                                                <span class="text-lg">Save AI Agent Logic</span>
                                             </button>
                                         </div>
                                     </div>
@@ -4151,17 +4158,8 @@
                 });
             }
             
-            // 🚀 CRITICAL FIX: Trigger main form change detection
-            if (typeof window.handleFormChange === 'function') {
-                console.log('🔄 Triggering main form change detection from AI Agent Logic');
-                window.handleFormChange();
-            } else if (window.companyProfileManager && typeof window.companyProfileManager.handleFormChange === 'function') {
-                console.log('🔄 Triggering main form change detection via manager');
-                window.companyProfileManager.handleFormChange({ target: { matches: () => true } });
-            } else if (window.companyProfileManager && typeof window.companyProfileManager.setUnsavedChanges === 'function') {
-                console.log('🔄 Fallback: directly setting unsaved changes');
-                window.companyProfileManager.setUnsavedChanges(true);
-            }
+            // 🚀 No longer triggering floating button - using dedicated save button instead
+            console.log('✅ Trade categories updated - use dedicated Save AI Agent Logic button');
         }
 
         // Update the selected categories display
@@ -5841,6 +5839,108 @@
             // Call our AI-specific save function
             await saveClientsViaConfigurationSafe();
         }
+
+        // 🚀 NEW DEDICATED AI AGENT LOGIC SAVE FUNCTION
+        async function saveAIAgentLogicSettings() {
+            console.log('🤖 NEW AI Agent Logic Save Function - Starting save process...');
+            
+            const saveBtn = document.getElementById('ai-agent-logic-save-btn');
+            const savedIndicator = document.getElementById('agent-settings-saved');
+            
+            try {
+                // Show saving state
+                if (saveBtn) {
+                    saveBtn.disabled = true;
+                    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2 text-lg"></i><span class="text-lg">Saving...</span>';
+                }
+                
+                const companyId = getCurrentCompanyId();
+                if (!companyId) {
+                    throw new Error('Company ID not found');
+                }
+                
+                console.log('🤖 Collecting AI Agent Logic data for company:', companyId);
+                
+                // Collect trade categories from checkboxes
+                const checkboxes = document.querySelectorAll('#trade-categories-checkboxes input[type="checkbox"]:checked');
+                const tradeCategories = Array.from(checkboxes).map(checkbox => checkbox.value);
+                
+                // Helper functions for safe data collection
+                const safeGetValue = (id, defaultValue = '') => {
+                    const element = document.getElementById(id);
+                    return element ? element.value : defaultValue;
+                };
+                
+                const safeGetChecked = (id, defaultValue = false) => {
+                    const element = document.getElementById(id);
+                    return element ? element.checked : defaultValue;
+                };
+                
+                // Collect agent settings
+                const agentSettings = {
+                    useLLM: safeGetValue('agent-useLLM') === 'true',
+                    llmModel: safeGetValue('agent-llmModel', 'gemini-pro'),
+                    memoryMode: safeGetValue('agent-memoryMode', 'short'),
+                    fallbackThreshold: parseFloat(safeGetValue('agent-fallbackThreshold', '0.5')),
+                    escalationMode: safeGetValue('agent-escalationMode', 'ask'),
+                    rePromptAfterTurns: parseInt(safeGetValue('agent-rePromptAfterTurns', '3')),
+                    maxPromptsPerCall: parseInt(safeGetValue('agent-maxPromptsPerCall', '2')),
+                    firstPromptSoft: safeGetChecked('agent-firstPromptSoft', true),
+                    semanticSearchEnabled: safeGetChecked('agent-semanticSearchEnabled', true),
+                    confidenceScoring: safeGetChecked('agent-confidenceScoring', true),
+                    autoLearningQueue: safeGetChecked('agent-autoLearningQueue', true)
+                };
+                
+                console.log('🤖 Collected trade categories:', tradeCategories);
+                console.log('🤖 Collected agent settings:', agentSettings);
+                
+                // Prepare save data
+                const saveData = {
+                    tradeCategories: tradeCategories,
+                    agentSettings: agentSettings
+                };
+                
+                console.log('🤖 Sending save request to:', `/api/agent/companies/${companyId}/agent-settings`);
+                
+                // Save to backend
+                const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(saveData)
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const result = await response.json();
+                console.log('✅ AI Agent Logic settings saved successfully:', result);
+                
+                // Show success state
+                if (savedIndicator) {
+                    savedIndicator.classList.remove('hidden');
+                    setTimeout(() => {
+                        savedIndicator.classList.add('hidden');
+                    }, 3000);
+                }
+                
+                // Show success notification
+                showNotification('AI Agent Logic settings saved successfully!', 'success');
+                
+            } catch (error) {
+                console.error('❌ Failed to save AI Agent Logic settings:', error);
+                showNotification('Failed to save AI Agent Logic settings: ' + error.message, 'error');
+            } finally {
+                // Restore button state
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-save mr-2 text-lg"></i><span class="text-lg">Save AI Agent Logic</span>';
+                }
+            }
+        }
         
         // Save ClientsVia configuration
         // Enhanced save function that prevents form validation interference
@@ -6460,8 +6560,10 @@
                         .then(() => {
                             console.log('✅ Company Profile Manager initialized successfully');
                             
-                            // 🚀 CRITICAL FIX: Set up change listeners for AI Agent Logic form fields
-                            setupAIAgentLogicChangeListeners();
+                            // 🚀 CRITICAL FIX: Set up change listeners for AI Agent Logic form fields - DISABLED (using dedicated save button instead)
+                            console.log('⚠️ AI Agent Logic change listeners disabled - using dedicated save button');
+                            
+                            // setupAIAgentLogicChangeListeners();
                             
                             // Initialize ClientsVia Intelligence after company data loads
                             initClientsViaIntelligence();

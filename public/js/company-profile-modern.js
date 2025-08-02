@@ -183,61 +183,36 @@ class CompanyProfileManager {
     }
 
     /**
-     * Set unsaved changes state
+     * Set unsaved changes state - SIMPLIFIED (no floating button)
      */
     setUnsavedChanges(hasChanges) {
         this.hasUnsavedChanges = hasChanges;
-        
-        if (hasChanges) {
-            this.showSaveButton();
-        } else {
-            this.hideSaveButton();
-        }
+        console.log('📝 Unsaved changes state set to:', hasChanges);
     }
 
     /**
-     * Create floating save button
+     * Create floating save button - DISABLED (using dedicated tab-specific save buttons instead)
      */
     createSaveButton() {
-        if (this.saveButton) return;
-
-        this.saveButton = document.createElement('button');
-        this.saveButton.id = 'floating-save-btn';
-        this.saveButton.className = 'fixed bottom-6 right-6 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-4 px-8 rounded-xl shadow-2xl z-50 transition-all duration-300 transform translate-y-20 opacity-0 border-2 border-green-400';
-        this.saveButton.innerHTML = '<i class="fas fa-save mr-3 text-lg"></i><span class="text-lg">Save Changes</span>';
-        this.saveButton.style.display = 'none';
-        
-        this.saveButton.addEventListener('click', async () => {
-            await this.saveAllChanges();
-        });
-        
-        document.body.appendChild(this.saveButton);
-        console.log('✅ Floating save button created');
+        console.log('⚠️ Floating save button creation disabled - using dedicated tab-specific save buttons');
+        // Floating save button removed to prevent UI state conflicts
+        return;
     }
 
     /**
-     * Show save button with animation
+     * Show save button with animation - DISABLED
      */
     showSaveButton() {
-        if (!this.saveButton) return;
-        
-        console.log('💾 Showing save button');
-        this.saveButton.style.display = 'block';
-        setTimeout(() => {
-            this.saveButton.classList.remove('translate-y-20', 'opacity-0');
-        }, 10);
+        console.log('⚠️ Floating save button disabled - use dedicated tab-specific save buttons');
+        return;
     }
 
     /**
-     * Hide save button with animation
+     * Hide save button with animation - DISABLED
      */
     hideSaveButton() {
-        if (!this.saveButton) return;
-        
-        this.saveButton.classList.add('translate-y-20', 'opacity-0');
-        setTimeout(() => {
-            this.saveButton.style.display = 'none';
-        }, 300);
+        console.log('⚠️ Floating save button disabled - use dedicated tab-specific save buttons');
+        return;
     }
 
     /**
