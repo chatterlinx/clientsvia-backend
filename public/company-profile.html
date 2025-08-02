@@ -6698,7 +6698,7 @@
         });
     </script>
     
-    <script src="/js/company-profile-modern.js?v=2.3"></script>
+    <script src="/js/company-profile-modern.js?v=2.5"></script>
     
     <!-- Main Page Initialization Script -->
     <script>
@@ -6795,31 +6795,24 @@
                 // Set global company ID
                 window.companyId = companyId;
                 
-                // Initialize CompanyProfileManager and start loading data
-                try {
-                    console.log('📡 Creating CompanyProfileManager instance...');
-                    window.companyProfileManager = new CompanyProfileManager();
-                    
-                    // Initialize the manager (this will call loadCompanyData internally)
-                    window.companyProfileManager.init()
-                        .then(() => {
-                            console.log('✅ Company Profile Manager initialized successfully');
-                            
-                            // 🚀 CRITICAL FIX: Set up change listeners for AI Agent Logic form fields - DISABLED (using dedicated save button instead)
-                            console.log('⚠️ AI Agent Logic change listeners disabled - using dedicated save button');
-                            
-                            // setupAIAgentLogicChangeListeners();
-                            
-                            // Initialize ClientsVia Intelligence after company data loads
-                            initClientsViaIntelligence();
-                        })
-                        .catch(error => {
-                            console.error('❌ Error initializing Company Profile Manager:', error);
-                        });
+                // Wait for CompanyProfileManager to be initialized by the modern.js file
+                const waitForManager = () => {
+                    if (window.companyProfileManager && window.companyProfileManager.initialized) {
+                        console.log('✅ Company Profile Manager already initialized');
                         
-                } catch (error) {
-                    console.error('❌ Error creating CompanyProfileManager:', error);
-                }
+                        // 🚀 CRITICAL FIX: Set up change listeners for AI Agent Logic form fields - DISABLED (using dedicated save button instead)
+                        console.log('⚠️ AI Agent Logic change listeners disabled - using dedicated save button');
+                        
+                        // Initialize ClientsVia Intelligence after company data loads
+                        initClientsViaIntelligence();
+                    } else {
+                        // Wait a bit longer for the manager to initialize
+                        setTimeout(waitForManager, 100);
+                    }
+                };
+                
+                // Start waiting for the manager
+                waitForManager();
             } else {
                 console.error('❌ No company ID found in URL');
                 document.getElementById('company-name-header').textContent = 'Error: No company ID provided';
