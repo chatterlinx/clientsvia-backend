@@ -4150,6 +4150,18 @@
                     option.selected = selectedCategories.includes(option.value);
                 });
             }
+            
+            // 🚀 CRITICAL FIX: Trigger main form change detection
+            if (typeof window.handleFormChange === 'function') {
+                console.log('🔄 Triggering main form change detection from AI Agent Logic');
+                window.handleFormChange();
+            } else if (window.companyProfileManager && typeof window.companyProfileManager.handleFormChange === 'function') {
+                console.log('🔄 Triggering main form change detection via manager');
+                window.companyProfileManager.handleFormChange({ target: { matches: () => true } });
+            } else if (window.companyProfileManager && typeof window.companyProfileManager.setUnsavedChanges === 'function') {
+                console.log('🔄 Fallback: directly setting unsaved changes');
+                window.companyProfileManager.setUnsavedChanges(true);
+            }
         }
 
         // Update the selected categories display
@@ -6357,6 +6369,73 @@
             });
         }, true);
 
+        // 🚀 CRITICAL FIX: Setup change listeners for AI Agent Logic form fields
+        function setupAIAgentLogicChangeListeners() {
+            console.log('🔧 Setting up AI Agent Logic change listeners...');
+            
+            // List of all AI Agent Logic form field IDs
+            const aiAgentFieldIds = [
+                'agent-useLLM',
+                'agent-primaryLLM', 
+                'agent-fallbackLLM',
+                'agent-memoryMode',
+                'agent-llmModel',
+                'agent-fallbackThreshold',
+                'agent-escalationMode',
+                'agent-rePromptAfterTurns',
+                'agent-maxPromptsPerCall',
+                'agent-firstPromptSoft',
+                'agent-semanticSearchEnabled',
+                'agent-confidenceScoring',
+                'agent-autoLearningQueue'
+            ];
+            
+            // Add change listeners to all form fields
+            aiAgentFieldIds.forEach(fieldId => {
+                const element = document.getElementById(fieldId);
+                if (element) {
+                    element.addEventListener('change', function(event) {
+                        console.log('🔄 AI Agent Logic field changed:', fieldId, event.target.value || event.target.checked);
+                        
+                        // Trigger main form change detection
+                        if (window.companyProfileManager && typeof window.companyProfileManager.handleFormChange === 'function') {
+                            window.companyProfileManager.handleFormChange(event);
+                        } else if (window.companyProfileManager && typeof window.companyProfileManager.setUnsavedChanges === 'function') {
+                            // Fallback: directly set unsaved changes
+                            window.companyProfileManager.setUnsavedChanges(true);
+                        }
+                    });
+                    console.log(`✅ Change listener added to ${fieldId}`);
+                } else {
+                    console.warn(`⚠️ Could not find AI Agent Logic field: ${fieldId}`);
+                }
+            });
+            
+            // Add change listeners to LLM model checkboxes
+            const llmCheckboxIds = ['llm-gemini-pro', 'llm-openai-gpt4', 'llm-claude-3'];
+            llmCheckboxIds.forEach(checkboxId => {
+                const checkbox = document.getElementById(checkboxId);
+                if (checkbox) {
+                    checkbox.addEventListener('change', function(event) {
+                        console.log('🔄 LLM checkbox changed:', checkboxId, event.target.checked);
+                        
+                        // Trigger main form change detection
+                        if (window.companyProfileManager && typeof window.companyProfileManager.handleFormChange === 'function') {
+                            window.companyProfileManager.handleFormChange(event);
+                        } else if (window.companyProfileManager && typeof window.companyProfileManager.setUnsavedChanges === 'function') {
+                            // Fallback: directly set unsaved changes
+                            window.companyProfileManager.setUnsavedChanges(true);
+                        }
+                    });
+                    console.log(`✅ Change listener added to LLM checkbox ${checkboxId}`);
+                } else {
+                    console.warn(`⚠️ Could not find LLM checkbox: ${checkboxId}`);
+                }
+            });
+            
+            console.log('✅ AI Agent Logic change listeners setup complete');
+        }
+
         // Main initialization when page loads
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
@@ -6380,6 +6459,9 @@
                     window.companyProfileManager.init()
                         .then(() => {
                             console.log('✅ Company Profile Manager initialized successfully');
+                            
+                            // 🚀 CRITICAL FIX: Set up change listeners for AI Agent Logic form fields
+                            setupAIAgentLogicChangeListeners();
                             
                             // Initialize ClientsVia Intelligence after company data loads
                             initClientsViaIntelligence();
