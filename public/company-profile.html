@@ -58,15 +58,7 @@
         .tab-button-inactive:hover { background-color: #D1D5DB; }
         .tab-content-item { @apply p-0 pt-6; } 
         .tab-content-item.hidden { display: none; }
-        .notes-textarea { @apply w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out; min-height: 150px; }
         .wider-textbox { max-width: 800px; width: 100%; }
-        .note-card { @apply bg-white p-4 rounded-lg shadow border border-gray-200 mb-4; }
-        .note-card.pinned { @apply bg-yellow-50 border-yellow-300; }
-        .note-content { @apply text-gray-800 whitespace-pre-wrap; }
-        .note-timestamps { @apply text-xs text-gray-500 mt-2; }
-        .note-actions { @apply mt-3 flex items-center space-x-3; }
-        .note-action-button { @apply text-xs text-indigo-600 hover:text-indigo-800 font-medium; }
-        .note-action-button .fa-thumbtack.pinned-icon { color: #F59E0B; }
         .status-badge { @apply px-2.5 py-0.5 rounded-full text-xs font-medium; }
         .status-active { @apply bg-green-100 text-green-800; }
         .status-inactive { @apply bg-red-100 text-red-800; }
@@ -2179,43 +2171,6 @@
                                 </div>
                             </div>
                             
-                            <!-- Notepad Section -->
-                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-                                <div class="border-b border-gray-200 bg-gray-50 px-4 py-3 rounded-t-lg">
-                                    <h3 class="text-lg font-medium text-gray-800">
-                                        <i class="fas fa-sticky-note mr-2 text-yellow-600"></i>Logic Notes
-                                    </h3>
-                                    <p class="text-sm text-gray-600 mt-1">Keep track of AI logic decisions, rules, and implementation notes</p>
-                                </div>
-                                
-                                <div class="p-4">
-                                    <!-- Add New Note Form -->
-                                    <div class="mb-4 pb-4 border-b border-gray-200">
-                                        <label for="new-logic-note" class="form-label">Add New Note</label>
-                                        <textarea 
-                                            id="new-logic-note" 
-                                            class="form-textarea wider-textbox" 
-                                            rows="3" 
-                                            placeholder="Enter your AI logic note here..."
-                                        ></textarea>
-                                        <div class="mt-2 flex justify-end">
-                                            <button 
-                                                type="button" 
-                                                onclick="addLogicNote()" 
-                                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md shadow-sm transition duration-150 ease-in-out"
-                                            >
-                                                <i class="fas fa-plus mr-2"></i>Add Note
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <!-- Notes List -->
-                                    <div id="logic-notes-list" class="space-y-3">
-                                        <p class="text-gray-500 italic text-center py-4">No notes yet. Add your first note above.</p>
-                                    </div>
-                                </div>
-                            </div>
-
                             <!-- ========================================= -->
                             <!-- BOOKING WORKFLOWS CONFIGURATION          -->
                             <!-- Blueprint: BookingHandler.js integration -->
