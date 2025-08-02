@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.5 - Duplicate Initialization Fix');
+console.log('🚀 Loading company-profile-modern.js v2.6 - Proven Company ID Bridge Pattern');
 
 /**
  * Modern Company Profile Management System
@@ -64,8 +64,16 @@ class CompanyProfileManager {
      * Extract company ID from URL parameters
      */
     extractCompanyId() {
-        const urlParams = new URLSearchParams(window.location.search);
-        this.companyId = urlParams.get('id');
+        // First check if company ID was already set by HTML initialization
+        if (window.companyId) {
+            this.companyId = window.companyId;
+            console.log('🔍 Using company ID from global window:', this.companyId);
+        } else {
+            // Fallback: extract from URL directly
+            const urlParams = new URLSearchParams(window.location.search);
+            this.companyId = urlParams.get('id');
+            console.log('🔍 Extracted company ID from URL:', this.companyId);
+        }
         
         // For testing - provide default ID if none provided
         if (!this.companyId) {
@@ -77,7 +85,7 @@ class CompanyProfileManager {
         window.currentCompanyId = this.companyId;
         window.companyId = this.companyId;
         
-        console.log('🔍 Company ID extracted:', this.companyId);
+        console.log('🔍 Final company ID set:', this.companyId);
     }
 
     /**
@@ -2551,35 +2559,25 @@ class CompanyProfileManager {
     // ...existing code...
 }
 
-// =============================================
-// GLOBAL UTILITY FUNCTIONS
-// =============================================
-
 /**
- * Update slider value display for ElevenLabs voice parameters
- * This function is called by the HTML oninput events on the sliders
+ * GLOBAL FUNCTION EXPOSURE FOR HTML SCRIPT COMPATIBILITY
+ * Following the proven pattern from the working implementation
  */
-function updateSliderValue(parameterName, value) {
-    console.log(`🎛️ Updating slider ${parameterName} to ${value}`);
-    
-    // Update the display value
-    const valueElement = document.getElementById(`${parameterName}-value`);
-    if (valueElement) {
-        valueElement.textContent = parseFloat(value).toFixed(1);
-        console.log(`✅ Updated ${parameterName}-value display to ${value}`);
-    } else {
-        console.warn(`⚠️ Could not find element ${parameterName}-value`);
-    }
-    
-    // Trigger change detection if company profile manager is available
-    if (window.companyProfileManager) {
-        window.companyProfileManager.setUnsavedChanges(true);
-        console.log(`📝 Marked ElevenLabs ${parameterName} change as unsaved`);
-    }
-}
 
-// Make updateSliderValue globally accessible
-window.updateSliderValue = updateSliderValue;
+// Expose fetchCompanyData function globally for HTML script calls
+window.fetchCompanyData = async function() {
+    console.log('🌐 Global fetchCompanyData called');
+    if (window.companyProfileManager) {
+        try {
+            await window.companyProfileManager.loadCompanyData();
+            console.log('✅ Global fetchCompanyData completed');
+        } catch (error) {
+            console.error('❌ Global fetchCompanyData failed:', error);
+        }
+    } else {
+        console.error('❌ CompanyProfileManager not available for fetchCompanyData');
+    }
+};
 
 // =============================================
 // INITIALIZATION

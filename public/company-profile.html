@@ -6698,7 +6698,7 @@
         });
     </script>
     
-    <script src="/js/company-profile-modern.js?v=2.5"></script>
+    <script src="/js/company-profile-modern.js?v=2.6"></script>
     
     <!-- Main Page Initialization Script -->
     <script>
@@ -6785,17 +6785,35 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
             
-            // Get company ID from URL
+            // Get company ID from URL - CRITICAL: This must happen first
             const urlParams = new URLSearchParams(window.location.search);
             const companyId = urlParams.get('id');
             
             if (companyId) {
                 console.log('✅ Company ID found in URL:', companyId);
                 
-                // Set global company ID
+                // Set global company ID - CRITICAL: This allows JS to pick it up
                 window.companyId = companyId;
                 
-                // Wait for CompanyProfileManager to be initialized by the modern.js file
+                // Try the proven fetchCompanyData pattern first
+                if (typeof fetchCompanyData === 'function') {
+                    console.log('📡 Calling proven fetchCompanyData pattern...');
+                    fetchCompanyData()
+                        .then(() => {
+                            console.log('✅ FetchCompanyData completed successfully');
+                            initClientsViaIntelligence();
+                        })
+                        .catch(error => {
+                            console.error('❌ FetchCompanyData failed:', error);
+                            // Fallback to manager pattern
+                            waitForManager();
+                        });
+                } else {
+                    console.log('📡 FetchCompanyData not available, using manager pattern...');
+                    waitForManager();
+                }
+                
+                // Wait for CompanyProfileManager as fallback
                 const waitForManager = () => {
                     if (window.companyProfileManager && window.companyProfileManager.initialized) {
                         console.log('✅ Company Profile Manager already initialized');
