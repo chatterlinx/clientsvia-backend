@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.16 - Added missing escapeHtml method');
+console.log('🚀 Loading company-profile-modern.js v2.17 - FORCE CACHE BUST - escapeHtml method added');
 
 /**
  * Modern Company Profile Management System
