@@ -187,12 +187,50 @@ class ResponseTraceLogger {
    * @param {Object} result - Behavior result
    */
   static addBehaviorStep(trace, behaviorType, applied, config, result) {
-    trace.behaviors.push({
+    // Debug logging to track when behaviors gets corrupted
+    if (trace.behaviors && typeof trace.behaviors === 'string') {
+      console.error('🚨 CRITICAL: behaviors field is a string in addBehaviorStep!');
+      console.error('🚨 String value:', trace.behaviors.substring(0, 200) + '...');
+      console.error('🚨 Stack trace:', new Error().stack);
+    }
+    
+    // Ensure trace.behaviors exists and is an array
+    if (!trace.behaviors) {
+      trace.behaviors = [];
+    }
+    
+    // If somehow behaviors became a string, fix it
+    if (typeof trace.behaviors === 'string') {
+      try {
+        trace.behaviors = JSON.parse(trace.behaviors);
+        console.warn('⚠️ Fixed stringified behaviors array in addBehaviorStep');
+      } catch (error) {
+        console.error('❌ Failed to parse behaviors string in addBehaviorStep:', error);
+        trace.behaviors = [];
+      }
+    }
+    
+    if (!Array.isArray(trace.behaviors)) {
+      console.warn('⚠️ trace.behaviors is not an array, resetting to empty array');
+      trace.behaviors = [];
+    }
+
+    // Create a clean behavior object
+    const behaviorStep = {
       type: behaviorType,
-      applied,
-      config,
-      result
-    });
+      applied: Boolean(applied),
+      config: config || null,
+      result: result || null
+    };
+
+    trace.behaviors.push(behaviorStep);
+    
+    // Verify it's still an array after pushing
+    if (!Array.isArray(trace.behaviors)) {
+      console.error('🚨 CRITICAL: behaviors became non-array after push!');
+      console.error('🚨 Current type:', typeof trace.behaviors);
+      console.error('🚨 Current value:', trace.behaviors);
+    }
   }
 
   /**
@@ -261,30 +299,80 @@ class ResponseTraceLogger {
   }
 
   /**
+   * Validate and sanitize trace object structure
+   * @param {Object} trace - Trace object to validate
+   * @returns {Object} Sanitized trace object
+   */
+  static validateTrace(trace) {
+    if (!trace || typeof trace !== 'object') {
+      throw new Error('Invalid trace object');
+    }
+
+    // Ensure required fields exist
+    const sanitizedTrace = {
+      companyID: trace.companyID,
+      callId: trace.callId,
+      sessionId: trace.sessionId,
+      startTime: trace.startTime || Date.now(),
+      input: trace.input || {},
+      knowledgeTrace: Array.isArray(trace.knowledgeTrace) ? trace.knowledgeTrace : [],
+      response: trace.response || {},
+      behaviors: [],
+      bookingTrace: trace.bookingTrace || null,
+      metrics: trace.metrics || { cacheHit: false },
+      context: trace.context || {},
+      debug: trace.debug || {}
+    };
+
+    // Handle behaviors field specially
+    if (trace.behaviors) {
+      if (typeof trace.behaviors === 'string') {
+        try {
+          sanitizedTrace.behaviors = JSON.parse(trace.behaviors);
+        } catch (error) {
+          console.error('❌ Failed to parse behaviors string:', error);
+          sanitizedTrace.behaviors = [];
+        }
+      } else if (Array.isArray(trace.behaviors)) {
+        sanitizedTrace.behaviors = trace.behaviors;
+      } else {
+        console.warn('⚠️ behaviors field is not array or string, setting to empty array');
+        sanitizedTrace.behaviors = [];
+      }
+    }
+
+    return sanitizedTrace;
+  }
+
+  /**
    * Finalize and save trace to database
    * @param {Object} trace - Complete trace object
    * @returns {Object} Saved trace document
    */
   static async saveTrace(trace) {
     try {
+      // Validate and sanitize the trace object
+      const sanitizedTrace = this.validateTrace(trace);
+      
       const traceDoc = new ResponseTrace({
-        companyID: trace.companyID,
-        callId: trace.callId,
-        sessionId: trace.sessionId,
-        input: trace.input,
-        knowledgeTrace: trace.knowledgeTrace,
-        response: trace.response,
-        behaviors: trace.behaviors,
-        bookingTrace: trace.bookingTrace,
-        metrics: trace.metrics,
-        context: trace.context,
-        debug: trace.debug
+        companyID: sanitizedTrace.companyID,
+        callId: sanitizedTrace.callId,
+        sessionId: sanitizedTrace.sessionId,
+        input: sanitizedTrace.input,
+        knowledgeTrace: sanitizedTrace.knowledgeTrace,
+        response: sanitizedTrace.response,
+        behaviors: sanitizedTrace.behaviors,
+        bookingTrace: sanitizedTrace.bookingTrace,
+        metrics: sanitizedTrace.metrics,
+        context: sanitizedTrace.context,
+        debug: sanitizedTrace.debug
       });
 
       const savedTrace = await traceDoc.save();
       return savedTrace;
     } catch (error) {
       console.error('Error saving response trace:', error);
+      console.error('Original trace data:', JSON.stringify(trace, null, 2));
       throw error;
     }
   }
