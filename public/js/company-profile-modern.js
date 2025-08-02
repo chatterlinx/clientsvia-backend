@@ -29,7 +29,6 @@ class CompanyProfileManager {
         this.handleFormChange = this.handleFormChange.bind(this);
         this.handleBeforeUnload = this.handleBeforeUnload.bind(this);
         this.handleTabSwitch = this.handleTabSwitch.bind(this);
-        this.saveAllChanges = this.saveAllChanges.bind(this);
     }
 
     /**
