@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.11 - Added missing populate methods');
+console.log('🚀 Loading company-profile-modern.js v2.12 - Added escapeHtml utility method');
 
 /**
  * Modern Company Profile Management System
@@ -695,7 +695,7 @@ class CompanyProfileManager {
         if (!form) return;
 
         const inputs = form.querySelectorAll('.enterprise-input');
-        inputs.forEach(input => {
+        inputs.forEach((input) => {
             input.addEventListener('input', () => {
                 clearTimeout(this.autoSaveTimeout);
                 this.setFormStatus('pending', 'Auto-saving...');
@@ -2479,6 +2479,18 @@ class CompanyProfileManager {
         }, 5000);
         
         console.log(`📢 Notification (${type}): ${message}`);
+    }
+
+    /**
+     * Escape HTML to prevent XSS attacks
+     * @param {string} str - String to escape
+     * @returns {string} Escaped HTML string
+     */
+    escapeHtml(str) {
+        if (typeof str !== 'string') return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
     }
 
     /**
