@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.14 - Added missing setupNotesSearch method');
+console.log('🚀 Loading company-profile-modern.js v2.15 - CACHE REFRESH - setupNotesSearch method added');
 
 /**
  * Modern Company Profile Management System
