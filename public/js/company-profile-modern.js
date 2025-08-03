@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.14 - Organized with section labeling');
+console.log('🚀 Loading company-profile-modern.js v2.14 - Fixed missing setupNotesSearch function');
 
 /* ============================================================================
    MODERN COMPANY PROFILE MANAGEMENT SYSTEM
