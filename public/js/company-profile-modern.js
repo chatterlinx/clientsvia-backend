@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.18 - Fixed CompanyProfileManager availability and contacts container warning');
+console.log('🚀 Loading company-profile-modern.js v2.19 - Fixed fetchCompanyData race condition with async waiting');
 
 /* ============================================================================
    MODERN COMPANY PROFILE MANAGEMENT SYSTEM
@@ -2866,15 +2866,27 @@ class CompanyProfileManager {
 // Expose fetchCompanyData function globally for HTML script calls
 window.fetchCompanyData = async function() {
     console.log('🌐 Global fetchCompanyData called');
-    if (window.companyProfileManager) {
-        try {
-            await window.companyProfileManager.loadCompanyData();
-            console.log('✅ Global fetchCompanyData completed');
-        } catch (error) {
-            console.error('❌ Global fetchCompanyData failed:', error);
-        }
-    } else {
-        console.error('❌ CompanyProfileManager not available for fetchCompanyData');
+    
+    // Wait for CompanyProfileManager to be available
+    const waitForManager = () => {
+        return new Promise((resolve) => {
+            const checkManager = () => {
+                if (window.companyProfileManager) {
+                    resolve();
+                } else {
+                    setTimeout(checkManager, 50); // Check every 50ms
+                }
+            };
+            checkManager();
+        });
+    };
+    
+    try {
+        await waitForManager();
+        await window.companyProfileManager.loadCompanyData();
+        console.log('✅ Global fetchCompanyData completed');
+    } catch (error) {
+        console.error('❌ Global fetchCompanyData failed:', error);
     }
 };
 
