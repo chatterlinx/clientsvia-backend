@@ -33,7 +33,7 @@
             border-radius: 12px;
             position: relative;
             cursor: pointer;
-            transition: background 0.3s;
+            transition: background 0.3s, transform 0.15s;
         }
         .toggle-switch:checked {
             background: #3b82f6;
@@ -48,6 +48,7 @@
             top: 2px;
             left: 2px;
             transition: transform 0.3s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .toggle-switch:checked::before {
             transform: translateX(20px);
@@ -248,6 +249,13 @@
                         <span id="contextRetentionValue" class="text-sm font-medium text-gray-600 min-w-16">30 min</span>
                     </div>
                     <p class="text-xs text-gray-500 mt-1">How long to remember caller context</p>
+                </div>
+
+                <!-- Save Intelligence Settings Button -->
+                <div class="mt-6 flex justify-end">
+                    <button onclick="saveIntelligenceSettings()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-md transition-colors">
+                        <i class="fas fa-save mr-2"></i>Save Intelligence Settings
+                    </button>
                 </div>
             </div>
 
@@ -514,6 +522,13 @@
             checkAuthentication();
             loadCompanies();
             setupEventListeners();
+            
+            // Add test company for debugging
+            setTimeout(() => {
+                if (!currentCompanyId) {
+                    addTestCompany();
+                }
+            }, 2000);
         });
 
         function checkAuthentication() {
@@ -522,6 +537,79 @@
                 window.location.href = '/login.html';
                 return;
             }
+        }
+
+        function addTestCompany() {
+            console.log('Adding test company for debugging');
+            const select = document.getElementById('companySelect');
+            
+            // Add test company option
+            const option = document.createElement('option');
+            option.value = 'test-company';
+            option.textContent = 'Test Company (Debug)';
+            select.appendChild(option);
+            
+            // Select it automatically and load test settings
+            select.value = 'test-company';
+            loadTestCompanySettings();
+        }
+
+        function loadTestCompanySettings() {
+            currentCompanyId = 'test-company';
+            
+            // Create test company settings
+            const testCompany = {
+                companyName: 'Test Company',
+                agentIntelligenceSettings: {
+                    useLLM: true,
+                    primaryLLM: 'gemini-pro',
+                    fallbackLLM: 'gemini-pro',
+                    memoryMode: 'conversation',
+                    fallbackThreshold: 0.5,
+                    escalationMode: 'ask',
+                    rePromptAfterTurns: 3,
+                    maxPromptsPerCall: 2,
+                    semanticSearchEnabled: true,
+                    confidenceScoring: true,
+                    autoLearningQueue: true,
+                    autoLearningEnabled: true,
+                    learningApprovalMode: 'manual',
+                    learningConfidenceThreshold: 0.85,
+                    maxPendingQnAs: 100,
+                    intelligentRouting: true
+                },
+                aiSettings: {
+                    contextualMemory: {
+                        enabled: true,
+                        memoryRetentionHours: 24
+                    },
+                    dynamicReasoning: {
+                        enabled: true
+                    },
+                    smartEscalation: {
+                        enabled: true
+                    },
+                    continuousLearning: {
+                        realTimeOptimization: true,
+                        predictiveIntentAnalysis: false,
+                        abTestStrategies: false
+                    },
+                    performanceBenchmarks: {
+                        targetConfidenceRate: 0.87,
+                        targetResponseTime: 1.8,
+                        targetEscalationRate: 0.12
+                    },
+                    customEscalationMessage: '',
+                    sentimentAnalysis: false
+                }
+            };
+            
+            currentSettings = testCompany;
+            displayCompanyInfo(testCompany);
+            populateSettings(testCompany);
+            document.getElementById('companyInfo').classList.remove('hidden');
+            
+            console.log('Test company settings loaded');
         }
 
         async function loadCompanies() {
@@ -575,6 +663,56 @@
                     display.textContent = value;
                 });
             });
+
+            // Add event listeners for intelligence toggles
+            const intelligenceToggles = [
+                'contextualMemory', 'dynamicReasoning', 'smartEscalation', 
+                'autoLearningQueue', 'realTimeOptimization'
+            ];
+            
+            intelligenceToggles.forEach(toggleId => {
+                const toggle = document.getElementById(toggleId);
+                if (toggle) {
+                    toggle.addEventListener('change', function() {
+                        console.log(`Toggle ${toggleId} changed to:`, this.checked);
+                        // Provide visual feedback that settings have changed
+                        showChangeIndicator();
+                        
+                        // Add a subtle animation to show the change
+                        this.style.transform = 'scale(1.1)';
+                        setTimeout(() => {
+                            this.style.transform = 'scale(1)';
+                        }, 150);
+                    });
+                }
+            });
+        }
+
+        function testIntelligenceToggles() {
+            console.log('Testing intelligence toggles:');
+            const toggles = [
+                'contextualMemory', 'dynamicReasoning', 'smartEscalation', 
+                'autoLearningQueue', 'realTimeOptimization'
+            ];
+            
+            toggles.forEach(toggleId => {
+                const toggle = document.getElementById(toggleId);
+                if (toggle) {
+                    console.log(`${toggleId}: ${toggle.checked ? 'ON' : 'OFF'}`);
+                } else {
+                    console.error(`Toggle element not found: ${toggleId}`);
+                }
+            });
+        }
+
+        function showChangeIndicator() {
+            // Add a visual indicator that settings have changed
+            const saveButton = document.querySelector('button[onclick="saveAllSettings()"]');
+            if (saveButton && !saveButton.classList.contains('bg-orange-600')) {
+                saveButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                saveButton.classList.add('bg-orange-600', 'hover:bg-orange-700');
+                saveButton.innerHTML = '<i class="fas fa-save mr-2"></i>Save Changes';
+            }
         }
 
         async function loadCompanySettings(companyId) {
@@ -632,6 +770,10 @@
             const intelligence = company.agentIntelligenceSettings || {};
             const aiSettings = company.aiSettings || {};
 
+            console.log('Populating settings for company:', company.companyName);
+            console.log('Intelligence settings:', intelligence);
+            console.log('AI settings:', aiSettings);
+
             // LLM Settings
             document.getElementById('primaryLLM').value = intelligence.primaryLLM || 'gemini-pro';
             document.getElementById('fallbackLLM').value = intelligence.fallbackLLM || 'gemini-pro';
@@ -639,13 +781,28 @@
             document.getElementById('semanticSearchEnabled').checked = intelligence.semanticSearchEnabled || false;
             document.getElementById('confidenceScoring').checked = intelligence.confidenceScoring !== false;
 
-            // Memory & Intelligence
+            // Memory & Intelligence - Apply defaults if not set
             document.getElementById('memoryMode').value = intelligence.memoryMode || 'conversation';
-            document.getElementById('contextualMemory').checked = aiSettings.contextualMemory?.enabled !== false;
-            document.getElementById('dynamicReasoning').checked = aiSettings.dynamicReasoning?.enabled !== false;
-            document.getElementById('smartEscalation').checked = aiSettings.smartEscalation?.enabled !== false;
-            document.getElementById('autoLearningQueue').checked = intelligence.autoLearningQueue || false;
-            document.getElementById('realTimeOptimization').checked = aiSettings.continuousLearning?.realTimeOptimization !== false;
+            
+            // Intelligence toggles with proper default handling
+            const contextualMemoryEnabled = aiSettings.contextualMemory?.enabled !== false;
+            const dynamicReasoningEnabled = aiSettings.dynamicReasoning?.enabled !== false;
+            const smartEscalationEnabled = aiSettings.smartEscalation?.enabled !== false;
+            const autoLearningQueueEnabled = intelligence.autoLearningQueue !== false;
+            const realTimeOptimizationEnabled = aiSettings.continuousLearning?.realTimeOptimization !== false;
+
+            console.log('Toggle states:');
+            console.log('- Contextual Memory:', contextualMemoryEnabled);
+            console.log('- Dynamic Reasoning:', dynamicReasoningEnabled);
+            console.log('- Smart Escalation:', smartEscalationEnabled);
+            console.log('- Auto Learning Queue:', autoLearningQueueEnabled);
+            console.log('- Real-time Optimization:', realTimeOptimizationEnabled);
+
+            document.getElementById('contextualMemory').checked = contextualMemoryEnabled;
+            document.getElementById('dynamicReasoning').checked = dynamicReasoningEnabled;
+            document.getElementById('smartEscalation').checked = smartEscalationEnabled;
+            document.getElementById('autoLearningQueue').checked = autoLearningQueueEnabled;
+            document.getElementById('realTimeOptimization').checked = realTimeOptimizationEnabled;
 
             // Confidence & Escalation
             const fallbackThreshold = intelligence.fallbackThreshold || 0.5;
@@ -691,12 +848,72 @@
             const contextMinutes = Math.round((contextRetention / 24) * 1440); // Convert hours to minutes for display
             document.getElementById('contextRetention').value = Math.min(120, Math.max(5, contextMinutes));
             document.getElementById('contextRetentionValue').textContent = Math.min(120, Math.max(5, contextMinutes)) + ' min';
+            
+            console.log('Settings populated successfully');
         }
 
         function hideCompanyInfo() {
             document.getElementById('companyInfo').classList.add('hidden');
             currentCompanyId = null;
             currentSettings = {};
+        }
+
+        async function saveIntelligenceSettings() {
+            if (!currentCompanyId) {
+                alert('Please select a company first');
+                return;
+            }
+
+            try {
+                // Collect only the intelligence and memory related settings
+                const intelligenceSettings = {
+                    agentIntelligenceSettings: {
+                        memoryMode: document.getElementById('memoryMode').value,
+                        autoLearningQueue: document.getElementById('autoLearningQueue').checked,
+                        intelligentRouting: document.getElementById('intelligentRouting').checked
+                    },
+                    aiSettings: {
+                        contextualMemory: {
+                            enabled: document.getElementById('contextualMemory').checked,
+                            memoryRetentionHours: Math.round((parseInt(document.getElementById('contextRetention').value) / 60) * 24)
+                        },
+                        dynamicReasoning: {
+                            enabled: document.getElementById('dynamicReasoning').checked
+                        },
+                        smartEscalation: {
+                            enabled: document.getElementById('smartEscalation').checked
+                        },
+                        continuousLearning: {
+                            realTimeOptimization: document.getElementById('realTimeOptimization').checked
+                        }
+                    }
+                };
+
+                console.log('Saving intelligence settings:', intelligenceSettings);
+                
+                const token = localStorage.getItem('adminToken');
+                
+                const response = await fetch(`/api/company/companies/${currentCompanyId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(intelligenceSettings)
+                });
+
+                if (response.ok) {
+                    showSuccessMessage('Intelligence settings saved successfully!');
+                    
+                    // Update current settings to reflect the changes
+                    currentSettings = { ...currentSettings, ...intelligenceSettings };
+                } else {
+                    throw new Error('Failed to save intelligence settings');
+                }
+            } catch (error) {
+                console.error('Error saving intelligence settings:', error);
+                showErrorMessage('Failed to save intelligence settings. Please try again.');
+            }
         }
 
         async function saveAllSettings() {
@@ -707,6 +924,8 @@
 
             try {
                 const settings = collectAllSettings();
+                console.log('Saving settings:', settings);
+                
                 const token = localStorage.getItem('adminToken');
                 
                 const response = await fetch(`/api/company/companies/${currentCompanyId}`, {
@@ -720,6 +939,13 @@
 
                 if (response.ok) {
                     showSuccessMessage('Settings saved successfully!');
+                    // Reset save button to normal state
+                    const saveButton = document.querySelector('button[onclick="saveAllSettings()"]');
+                    if (saveButton) {
+                        saveButton.classList.remove('bg-orange-600', 'hover:bg-orange-700');
+                        saveButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                        saveButton.innerHTML = '<i class="fas fa-save mr-2"></i>Save All Settings';
+                    }
                 } else {
                     throw new Error('Failed to save settings');
                 }

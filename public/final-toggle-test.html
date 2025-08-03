@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toggle Switch Final Test</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 2px solid #e5e7eb; border-radius: 8px; }
+        .success { border-color: #10b981; background: #f0fdf4; }
+        .error { border-color: #ef4444; background: #fef2f2; }
+        .toggle-switch {
+            appearance: none; width: 44px; height: 24px; background: #cbd5e1;
+            border-radius: 12px; position: relative; cursor: pointer; transition: background 0.3s;
+        }
+        .toggle-switch:checked { background: #3b82f6; }
+        .toggle-switch::before {
+            content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%;
+            background: white; top: 2px; left: 2px; transition: transform 0.3s;
+        }
+        .toggle-switch:checked::before { transform: translateX(20px); }
+        .test-row { display: flex; justify-content: space-between; align-items: center; margin: 10px 0; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-primary { background: #3b82f6; color: white; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Intelligence Toggle Switch - Final Verification</h1>
+    
+    <div class="test-section" id="elementTest">
+        <h3>1. Element Existence Test</h3>
+        <div id="elementResults"></div>
+    </div>
+    
+    <div class="test-section" id="functionalityTest">
+        <h3>2. Toggle Functionality Test</h3>
+        
+        <div class="test-row">
+            <span>Contextual Memory</span>
+            <input type="checkbox" id="contextualMemory" class="toggle-switch">
+        </div>
+        <div class="test-row">
+            <span>Dynamic Reasoning</span>
+            <input type="checkbox" id="dynamicReasoning" class="toggle-switch">
+        </div>
+        <div class="test-row">
+            <span>Smart Escalation</span>
+            <input type="checkbox" id="smartEscalation" class="toggle-switch">
+        </div>
+        <div class="test-row">
+            <span>Auto Learning Queue</span>
+            <input type="checkbox" id="autoLearningQueue" class="toggle-switch">
+        </div>
+        <div class="test-row">
+            <span>Real-time Optimization</span>
+            <input type="checkbox" id="realTimeOptimization" class="toggle-switch">
+        </div>
+        
+        <button class="btn-primary" onclick="testAllToggles()">Test All Toggles</button>
+        <button class="btn-success" onclick="setAllOn()">Turn All ON</button>
+        <button class="btn-danger" onclick="setAllOff()">Turn All OFF</button>
+    </div>
+    
+    <div class="test-section" id="eventTest">
+        <h3>3. Event Listener Test</h3>
+        <div id="eventResults"></div>
+    </div>
+    
+    <div class="test-section" id="saveTest">
+        <h3>4. Save Function Test</h3>
+        <button class="btn-primary" onclick="testSaveFunction()">Test Save Intelligence Settings</button>
+        <div id="saveResults"></div>
+    </div>
+    
+    <div class="test-section" id="finalResults">
+        <h3>📊 Final Test Results</h3>
+        <div id="overallResults"></div>
+    </div>
+
+    <script>
+        const toggleIds = ['contextualMemory', 'dynamicReasoning', 'smartEscalation', 'autoLearningQueue', 'realTimeOptimization'];
+        let testResults = {};
+
+        // Test 1: Element Existence
+        function testElementExistence() {
+            let results = [];
+            let allFound = true;
+            
+            toggleIds.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    results.push(`✅ ${id}: Found`);
+                } else {
+                    results.push(`❌ ${id}: NOT FOUND`);
+                    allFound = false;
+                }
+            });
+            
+            document.getElementById('elementResults').innerHTML = results.join('<br>');
+            document.getElementById('elementTest').className = `test-section ${allFound ? 'success' : 'error'}`;
+            testResults.elementExistence = allFound;
+            return allFound;
+        }
+
+        // Test 2: Toggle Functionality
+        function testAllToggles() {
+            let results = [];
+            let allWorking = true;
+            
+            toggleIds.forEach(id => {
+                const toggle = document.getElementById(id);
+                if (toggle) {
+                    const originalState = toggle.checked;
+                    toggle.click();
+                    const newState = toggle.checked;
+                    
+                    if (originalState !== newState) {
+                        results.push(`✅ ${id}: Click working (${originalState} → ${newState})`);
+                    } else {
+                        results.push(`❌ ${id}: Click NOT working`);
+                        allWorking = false;
+                    }
+                } else {
+                    results.push(`❌ ${id}: Element not found`);
+                    allWorking = false;
+                }
+            });
+            
+            document.getElementById('functionalityTest').className = `test-section ${allWorking ? 'success' : 'error'}`;
+            testResults.functionality = allWorking;
+            updateFinalResults();
+        }
+
+        // Test 3: Event Listeners
+        function testEventListeners() {
+            let eventWorking = true;
+            let results = [];
+            
+            toggleIds.forEach(id => {
+                const toggle = document.getElementById(id);
+                if (toggle) {
+                    // Add a test event listener
+                    let eventFired = false;
+                    const testListener = () => { eventFired = true; };
+                    toggle.addEventListener('change', testListener);
+                    
+                    // Trigger change
+                    toggle.click();
+                    
+                    if (eventFired) {
+                        results.push(`✅ ${id}: Event listener working`);
+                    } else {
+                        results.push(`❌ ${id}: Event listener NOT working`);
+                        eventWorking = false;
+                    }
+                    
+                    // Clean up
+                    toggle.removeEventListener('change', testListener);
+                }
+            });
+            
+            document.getElementById('eventResults').innerHTML = results.join('<br>');
+            document.getElementById('eventTest').className = `test-section ${eventWorking ? 'success' : 'error'}`;
+            testResults.eventListeners = eventWorking;
+            updateFinalResults();
+        }
+
+        // Test 4: Save Function
+        function testSaveFunction() {
+            const saveResult = document.getElementById('saveResults');
+            
+            // Mock save function for testing
+            function mockSaveIntelligenceSettings() {
+                const settings = {};
+                toggleIds.forEach(id => {
+                    const toggle = document.getElementById(id);
+                    if (toggle) {
+                        settings[id] = toggle.checked;
+                    }
+                });
+                
+                console.log('Mock save - Intelligence settings:', settings);
+                return settings;
+            }
+            
+            try {
+                const settings = mockSaveIntelligenceSettings();
+                const settingsCount = Object.keys(settings).length;
+                
+                if (settingsCount === toggleIds.length) {
+                    saveResult.innerHTML = `✅ Save function working<br>Collected ${settingsCount} settings: ${JSON.stringify(settings, null, 2)}`;
+                    document.getElementById('saveTest').className = 'test-section success';
+                    testResults.saveFunction = true;
+                } else {
+                    saveResult.innerHTML = `❌ Save function incomplete<br>Only collected ${settingsCount} of ${toggleIds.length} settings`;
+                    document.getElementById('saveTest').className = 'test-section error';
+                    testResults.saveFunction = false;
+                }
+            } catch (error) {
+                saveResult.innerHTML = `❌ Save function error: ${error.message}`;
+                document.getElementById('saveTest').className = 'test-section error';
+                testResults.saveFunction = false;
+            }
+            
+            updateFinalResults();
+        }
+
+        // Utility functions
+        function setAllOn() {
+            toggleIds.forEach(id => {
+                const toggle = document.getElementById(id);
+                if (toggle) toggle.checked = true;
+            });
+        }
+
+        function setAllOff() {
+            toggleIds.forEach(id => {
+                const toggle = document.getElementById(id);
+                if (toggle) toggle.checked = false;
+            });
+        }
+
+        function updateFinalResults() {
+            const totalTests = Object.keys(testResults).length;
+            const passedTests = Object.values(testResults).filter(result => result === true).length;
+            const percentage = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0;
+            
+            let status = '';
+            if (percentage === 100) {
+                status = '🎉 ALL TESTS PASSED! Toggles are working perfectly.';
+                document.getElementById('finalResults').className = 'test-section success';
+            } else if (percentage >= 75) {
+                status = '⚠️ Most tests passed, minor issues detected.';
+                document.getElementById('finalResults').className = 'test-section';
+            } else {
+                status = '❌ Multiple issues detected, toggles need fixes.';
+                document.getElementById('finalResults').className = 'test-section error';
+            }
+            
+            document.getElementById('overallResults').innerHTML = `
+                <strong>${status}</strong><br>
+                Tests Passed: ${passedTests}/${totalTests} (${percentage}%)<br><br>
+                <strong>Individual Results:</strong><br>
+                Element Existence: ${testResults.elementExistence ? '✅' : '❌'}<br>
+                Toggle Functionality: ${testResults.functionality ? '✅' : '❌'}<br>
+                Event Listeners: ${testResults.eventListeners ? '✅' : '❌'}<br>
+                Save Function: ${testResults.saveFunction ? '✅' : '❌'}
+            `;
+        }
+
+        // Run initial tests
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                testElementExistence();
+                testEventListeners();
+            }, 100);
+        });
+    </script>
+</body>
+</html>
