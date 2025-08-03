@@ -1055,103 +1055,6 @@
                             <!--   • Response Tracing: Lines ~2500-2654 (ResponseTrace viewer)                -->
                             <!-- ============================================================================== -->
                             
-                            <!-- 🧠 INTELLIGENCE & MEMORY - ENTERPRISE AI FEATURES -->
-                            <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200 p-4 mb-6">
-                                <div class="flex items-center mb-4">
-                                    <i class="fas fa-brain text-blue-600 text-xl mr-3"></i>
-                                    <h3 class="text-lg font-semibold text-gray-800">Intelligence & Memory</h3>
-                                    <span class="ml-3 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">Production Ready</span>
-                                </div>
-                                
-                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    <!-- Left Column: Memory Configuration -->
-                                    <div class="space-y-4">
-                                        <div>
-                                            <label for="ai-memory-mode" class="block text-sm font-medium text-gray-700 mb-2">Memory Mode</label>
-                                            <select id="ai-memory-mode" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                                                <option value="short">Short Term (Single Response)</option>
-                                                <option value="conversational" selected>Conversational (Session Memory)</option>
-                                                <option value="persistent">Persistent (Cross-Session)</option>
-                                            </select>
-                                            <p class="text-xs text-gray-500 mt-1">How much context the agent remembers</p>
-                                        </div>
-                                        
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-3">Context Retention</label>
-                                            <div class="flex items-center space-x-3">
-                                                <input type="range" id="context-retention-slider" class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
-                                                       min="5" max="60" value="30" step="5">
-                                                <span id="context-retention-value" class="text-sm font-mono bg-white px-2 py-1 rounded border">30 min</span>
-                                            </div>
-                                            <p class="text-xs text-gray-500 mt-1">How long to remember caller context</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Right Column: AI Intelligence Features -->
-                                    <div class="space-y-4">
-                                        <h4 class="text-sm font-medium text-gray-700 mb-3">AI Intelligence Features</h4>
-                                        
-                                        <div class="space-y-3">
-                                            <label class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-                                                <span class="text-sm font-medium text-gray-900">Contextual Memory</span>
-                                                <div class="relative">
-                                                    <input type="checkbox" id="contextual-memory" class="sr-only" checked>
-                                                    <div class="toggle-switch w-11 h-6 bg-blue-600 rounded-full shadow-inner transition-colors duration-200 ease-in-out">
-                                                        <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out translate-x-6 top-1 left-1"></div>
-                                                    </div>
-                                                </div>
-                                            </label>
-                                            
-                                            <label class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-                                                <span class="text-sm font-medium text-gray-900">Dynamic Reasoning</span>
-                                                <div class="relative">
-                                                    <input type="checkbox" id="dynamic-reasoning" class="sr-only" checked>
-                                                    <div class="toggle-switch w-11 h-6 bg-blue-600 rounded-full shadow-inner transition-colors duration-200 ease-in-out">
-                                                        <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out translate-x-6 top-1 left-1"></div>
-                                                    </div>
-                                                </div>
-                                            </label>
-                                            
-                                            <label class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-                                                <span class="text-sm font-medium text-gray-900">Smart Escalation</span>
-                                                <div class="relative">
-                                                    <input type="checkbox" id="smart-escalation" class="sr-only" checked>
-                                                    <div class="toggle-switch w-11 h-6 bg-blue-600 rounded-full shadow-inner transition-colors duration-200 ease-in-out">
-                                                        <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out translate-x-6 top-1 left-1"></div>
-                                                    </div>
-                                                </div>
-                                            </label>
-                                            
-                                            <label class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-                                                <span class="text-sm font-medium text-gray-900">Auto Learning Queue</span>
-                                                <div class="relative">
-                                                    <input type="checkbox" id="auto-learning-queue" class="sr-only" checked>
-                                                    <div class="toggle-switch w-11 h-6 bg-blue-600 rounded-full shadow-inner transition-colors duration-200 ease-in-out">
-                                                        <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out translate-x-6 top-1 left-1"></div>
-                                                    </div>
-                                                </div>
-                                            </label>
-                                            
-                                            <label class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-                                                <span class="text-sm font-medium text-gray-900">Real-time Optimization</span>
-                                                <div class="relative">
-                                                    <input type="checkbox" id="real-time-optimization" class="sr-only" checked>
-                                                    <div class="toggle-switch w-11 h-6 bg-blue-600 rounded-full shadow-inner transition-colors duration-200 ease-in-out">
-                                                        <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out translate-x-6 top-1 left-1"></div>
-                                                    </div>
-                                                </div>
-                                            </label>
-                                        </div>
-                                        
-                                        <!-- Save Button -->
-                                        <button type="button" onclick="saveIntelligenceSettings()" 
-                                                class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out">
-                                            <i class="fas fa-save mr-2"></i>Save Intelligence Settings
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            
                             <!-- 🧠 AGENT CLIENTSVIA INTELLIGENCE - UNIFIED CONTAINER -->
                             <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
                                 
@@ -7538,79 +7441,11 @@
             }
         }
         
-        // Save Intelligence Settings
-        async function saveIntelligenceSettings() {
-            const saveButton = document.getElementById('save-intelligence-settings');
-            if (!saveButton) return;
-            
-            const originalText = saveButton.innerHTML;
-            saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
-            saveButton.disabled = true;
-            
-            try {
-                const companyId = window.currentCompanyId || window.companyId;
-                if (!companyId) {
-                    throw new Error('No company ID found');
-                }
-                
-                // Collect intelligence settings
-                const intelligenceSettings = {
-                    memoryMode: document.getElementById('ai-memory-mode')?.value || 'conversational',
-                    contextRetention: parseInt(document.getElementById('ai-context-retention')?.value) || 30,
-                    features: {
-                        contextualMemory: document.getElementById('ai-contextual-memory')?.checked || false,
-                        dynamicReasoning: document.getElementById('ai-dynamic-reasoning')?.checked || false,
-                        smartEscalation: document.getElementById('ai-smart-escalation')?.checked || false,
-                        autoLearning: document.getElementById('ai-auto-learning')?.checked || false,
-                        realtimeOptimization: document.getElementById('ai-realtime-optimization')?.checked || false
-                    }
-                };
-                
-                // Save to API
-                const response = await fetch(`/api/company/${companyId}/intelligence-settings`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(intelligenceSettings)
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to save: ${response.statusText}`);
-                }
-                
-                // Success notification
-                showNotification('🧠 Intelligence settings saved successfully!', 'success');
-                
-                // Clear unsaved changes flag
-                if (window.companyProfileManager) {
-                    window.companyProfileManager.setUnsavedChanges(false);
-                }
-                
-                console.log('✅ Intelligence settings saved:', intelligenceSettings);
-                
-            } catch (error) {
-                console.error('❌ Error saving intelligence settings:', error);
-                showNotification('Failed to save intelligence settings: ' + error.message, 'error');
-            } finally {
-                saveButton.innerHTML = originalText;
-                saveButton.disabled = false;
-            }
-        }
-        
         // Initialize Intelligence & Memory section
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
-                initializeIntelligenceToggles();
-                initializeContextRetentionSlider();
-                
-                // Bind save button
-                const saveButton = document.getElementById('save-intelligence-settings');
-                if (saveButton) {
-                    saveButton.addEventListener('click', saveIntelligenceSettings);
-                }
-                
-                console.log('🚀 Intelligence & Memory section initialized');
+                // ClientsVia Intelligence initialization handled by main ClientsVia system
+                console.log('🚀 Intelligence & Memory section ready');
             }, 1500);
         });
     </script>

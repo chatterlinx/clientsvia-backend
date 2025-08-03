@@ -1,16 +1,38 @@
-console.log('🚀 Loading company-profile-modern.js v2.13 - Fixed tab switching functionality');
+console.log('🚀 Loading company-profile-modern.js v2.14 - Organized with section labeling');
 
-/**
- * Modern Company Profile Management System
- * Clean, maintainable, and feature-complete implementation
- * 
- * Architecture:
- * - Class-based modular design
- * - Centralized state management
- * - Robust error handling
- * - Modern ES6+ features
- * - Clean separation of concerns
- */
+/* ============================================================================
+   MODERN COMPANY PROFILE MANAGEMENT SYSTEM
+   ============================================================================
+   
+   📋 FILE ORGANIZATION:
+   ├── 🏗️  CLASS DEFINITION & CORE ARCHITECTURE
+   ├── 🚀  INITIALIZATION & SETUP METHODS  
+   ├── 🔍  COMPANY ID & URL MANAGEMENT
+   ├── 🎯  DOM MANAGEMENT & VALIDATION
+   ├── 📡  EVENT HANDLING SYSTEM
+   ├── 🗂️  TAB MANAGEMENT SYSTEM
+   ├── 💾  DATA LOADING & PROCESSING
+   ├── 📋  OVERVIEW TAB - COMPANY DETAILS
+   ├── 👥  CONTACTS TAB - CONTACT MANAGEMENT
+   ├── ⚙️  CONFIGURATION TAB - SETTINGS
+   ├── 📞  PHONE NUMBERS MANAGEMENT
+   ├── 🔧  UTILITY FUNCTIONS & HELPERS
+   ├── 🌐  GLOBAL FUNCTION EXPOSURE
+   └── 🚀  INITIALIZATION & EXPORTS
+   
+   Architecture:
+   - Class-based modular design
+   - Centralized state management  
+   - Robust error handling
+   - Modern ES6+ features
+   - Clean separation of concerns
+   - Multi-tenant company isolation
+   
+   ============================================================================ */
+
+/* ============================================================================
+   🏗️ CLASS DEFINITION & CORE ARCHITECTURE
+   ============================================================================ */
 
 class CompanyProfileManager {
     constructor() {
@@ -25,6 +47,10 @@ class CompanyProfileManager {
         this.saveButton = null;
         this.initialized = false;
     }
+
+    /* ========================================================================
+       🚀 INITIALIZATION & SETUP METHODS
+       ======================================================================== */
 
     /**
      * Initialize the company profile system
@@ -60,6 +86,10 @@ class CompanyProfileManager {
         }
     }
 
+    /* ========================================================================
+       🔍 COMPANY ID & URL MANAGEMENT
+       ======================================================================== */
+
     /**
      * Extract company ID from URL parameters
      */
@@ -87,6 +117,10 @@ class CompanyProfileManager {
         
         console.log('🔍 Final company ID set:', this.companyId);
     }
+
+    /* ========================================================================
+       🎯 DOM MANAGEMENT & VALIDATION
+       ======================================================================== */
 
     /**
      * Initialize DOM element references
@@ -128,6 +162,10 @@ class CompanyProfileManager {
             console.log('ℹ️ Optional DOM elements not found (this is normal):', missingOptional);
         }
     }
+
+    /* ========================================================================
+       📡 EVENT HANDLING SYSTEM
+       ======================================================================== */
 
     /**
      * Setup all event listeners
@@ -217,6 +255,10 @@ class CompanyProfileManager {
         return;
     }
 
+    /* ========================================================================
+       💾 DATA LOADING & PROCESSING
+       ======================================================================== */
+
     /**
      * Load company data from API
      */
@@ -262,6 +304,10 @@ class CompanyProfileManager {
             this.showLoading(false);
         }
     }
+
+    /* ========================================================================
+       📋 OVERVIEW TAB - COMPANY DETAILS
+       ======================================================================== */
 
     /**
      * GOLD STANDARD: Populate Overview tab with enterprise-grade UX
@@ -715,6 +761,10 @@ class CompanyProfileManager {
         console.log('💾 Auto-save enabled');
     }
 
+    /* ========================================================================
+       👥 CONTACTS TAB - CONTACT MANAGEMENT
+       ======================================================================== */
+
     /**
      * GOLD STANDARD: Initialize contacts management with enterprise features
      */
@@ -799,6 +849,10 @@ class CompanyProfileManager {
         
         console.log('✅ Enterprise contacts handlers setup complete');
     }
+
+    /* ========================================================================
+       ⚙️ CONFIGURATION TAB - SETTINGS
+       ======================================================================== */
 
     /**
      * GOLD STANDARD: Populate Configuration tab with data
@@ -930,6 +984,10 @@ class CompanyProfileManager {
         
         console.log('✅ Configuration interface ready');
     }
+
+    /* ========================================================================
+       📞 PHONE NUMBERS MANAGEMENT
+       ======================================================================== */
 
     /**
      * Setup phone numbers management
@@ -2300,6 +2358,10 @@ class CompanyProfileManager {
      * MISSING CRITICAL METHODS - Added to fix initialization errors
      */
     
+    /* ========================================================================
+       🗂️ TAB MANAGEMENT SYSTEM
+       ======================================================================== */
+
     /**
      * Initialize tab system
      */
@@ -2494,6 +2556,10 @@ class CompanyProfileManager {
         console.log(`📢 Notification (${type}): ${message}`);
     }
 
+    /* ========================================================================
+       🔧 UTILITY FUNCTIONS & HELPERS
+       ======================================================================== */
+
     /**
      * Escape HTML to prevent XSS attacks
      * @param {string} str - String to escape
@@ -2525,10 +2591,9 @@ class CompanyProfileManager {
     }
 }
 
-/**
- * GLOBAL FUNCTION EXPOSURE FOR HTML SCRIPT COMPATIBILITY
- * Following the proven pattern from the working implementation
- */
+/* ============================================================================
+   🌐 GLOBAL FUNCTION EXPOSURE FOR HTML SCRIPT COMPATIBILITY
+   ============================================================================ */
 
 // Expose fetchCompanyData function globally for HTML script calls
 window.fetchCompanyData = async function() {
@@ -2545,9 +2610,9 @@ window.fetchCompanyData = async function() {
     }
 };
 
-// =============================================
-// INITIALIZATION
-// =============================================
+/* ============================================================================
+   🚀 INITIALIZATION & EXPORTS
+   ============================================================================ */
 
 // Global instance
 let companyProfileManager = null;
