@@ -7986,7 +7986,7 @@
             }
 
             try {
-                const response = await fetch(`/api/ai-agent-logic/ab-testing/${companyId}/create`, {
+                const response = await fetch(`/api/ai-agent-logic/test/ab-testing/${companyId}/create`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -8025,7 +8025,7 @@
 
         async function loadABTests() {
             try {
-                const response = await fetch(`/api/ai-agent-logic/ab-testing/${companyId}/tests`);
+                const response = await fetch(`/api/ai-agent-logic/test/ab-testing/${companyId}/tests`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
@@ -8133,7 +8133,7 @@
                     ]
                 };
 
-                const response = await fetch(`/api/ai-agent-logic/personalization/${companyId}/rules`, {
+                const response = await fetch(`/api/ai-agent-logic/test/personalization/${companyId}/rules`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -8169,7 +8169,7 @@
                     actions: ['vip_treatment', 'dedicated_support']
                 };
 
-                const response = await fetch(`/api/ai-agent-logic/personalization/${companyId}/segments`, {
+                const response = await fetch(`/api/ai-agent-logic/test/personalization/${companyId}/segments`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
