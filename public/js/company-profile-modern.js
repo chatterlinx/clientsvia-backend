@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.17 - ACTUALLY fixed all missing populate functions');
+console.log('🚀 Loading company-profile-modern.js v2.18 - Fixed CompanyProfileManager availability and contacts container warning');
 
 /* ============================================================================
    MODERN COMPANY PROFILE MANAGEMENT SYSTEM
@@ -787,7 +787,7 @@ class CompanyProfileManager {
         
         const contactsContainer = document.getElementById('contacts-container');
         if (!contactsContainer) {
-            console.warn('⚠️ Contacts container not found');
+            console.log('ℹ️ Contacts container not found - skipping contacts rendering (this is normal for some tabs)');
             return;
         }
         
@@ -2889,6 +2889,10 @@ let companyProfileManager = null;
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         companyProfileManager = new CompanyProfileManager();
+        
+        // Set global reference BEFORE initializing
+        window.companyProfileManager = companyProfileManager;
+        
         await companyProfileManager.init();
         
         // Add global debug functions for testing
@@ -2918,4 +2922,3 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Export for global access
 window.CompanyProfileManager = CompanyProfileManager;
-window.companyProfileManager = companyProfileManager;
