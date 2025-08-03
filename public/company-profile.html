@@ -8333,17 +8333,52 @@
                 tab.classList.add('border-transparent', 'text-gray-500');
             });
             
-            // Show selected content
-            const targetContent = document.getElementById(`clientsvia-${tabName}-content`);
-            if (targetContent) {
-                targetContent.classList.remove('hidden');
+            // Map tab names to content IDs (handle hyphenated content IDs)
+            let contentId;
+            switch(tabName) {
+                case 'analytics':
+                    contentId = 'clientsvia-analytics-content';
+                    break;
+                case 'abtesting':
+                    contentId = 'clientsvia-ab-testing-content';
+                    break;
+                case 'flowdesigner':
+                    contentId = 'clientsvia-flow-designer-content';
+                    break;
+                case 'personalization':
+                    contentId = 'clientsvia-personalization-content';
+                    break;
+                default:
+                    contentId = `clientsvia-${tabName}-content`;
             }
             
-            // Activate selected tab
-            const targetTab = document.getElementById(`clientsvia-tab-${tabName}`);
+            // Show selected content
+            const targetContent = document.getElementById(contentId);
+            if (targetContent) {
+                targetContent.classList.remove('hidden');
+            } else {
+                console.warn(`⚠️ Content container not found: ${contentId}`);
+            }
+            
+            // Activate selected tab - map back to hyphenated IDs for tabs
+            let tabId;
+            switch(tabName) {
+                case 'abtesting':
+                    tabId = 'clientsvia-tab-ab-testing';
+                    break;
+                case 'flowdesigner':
+                    tabId = 'clientsvia-tab-flow-designer';
+                    break;
+                default:
+                    tabId = `clientsvia-tab-${tabName}`;
+            }
+            
+            const targetTab = document.getElementById(tabId);
             if (targetTab) {
                 targetTab.classList.add('border-blue-500', 'text-blue-600');
                 targetTab.classList.remove('border-transparent', 'text-gray-500');
+            } else {
+                console.warn(`⚠️ Tab button not found: ${tabId}`);
             }
             
             // Initialize specific feature if needed
@@ -8368,15 +8403,18 @@
             // Enterprise tab buttons
             const enterpriseTabButtons = [
                 'clientsvia-tab-analytics',
-                'clientsvia-tab-abtesting', 
-                'clientsvia-tab-flowdesigner',
+                'clientsvia-tab-ab-testing', 
+                'clientsvia-tab-flow-designer',
                 'clientsvia-tab-personalization'
             ];
             
             enterpriseTabButtons.forEach(buttonId => {
                 const button = document.getElementById(buttonId);
                 if (button) {
-                    const tabName = buttonId.replace('clientsvia-tab-', '');
+                    let tabName = buttonId.replace('clientsvia-tab-', '');
+                    // Map hyphenated names to the expected format
+                    if (tabName === 'ab-testing') tabName = 'abtesting';
+                    if (tabName === 'flow-designer') tabName = 'flowdesigner';
                     button.addEventListener('click', () => switchEnterpriseTab(tabName));
                 }
             });
@@ -8384,6 +8422,8 @@
             // Initialize enterprise features after delay
             setTimeout(() => {
                 initializeEnterpriseFeatures();
+                // Show analytics tab by default
+                switchEnterpriseTab('analytics');
                 console.log('🚀 Enterprise AI features initialized');
             }, 1500);
         });
