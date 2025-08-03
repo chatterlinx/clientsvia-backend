@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.19 - Fixed fetchCompanyData race condition with async waiting');
+console.log('🚀 Loading company-profile-modern.js v2.20 - Fixed company ID display in header subheader');
 
 /* ============================================================================
    MODERN COMPANY PROFILE MANAGEMENT SYSTEM
@@ -2610,9 +2610,9 @@ class CompanyProfileManager {
             }
             
             // Update any other header elements
-            const companyIdElement = document.getElementById('company-id-display');
+            const companyIdElement = document.getElementById('company-id-subheader');
             if (companyIdElement) {
-                companyIdElement.textContent = this.companyId;
+                companyIdElement.textContent = `ID: ${this.companyId}`;
             }
             
             console.log('✅ Header elements updated');
