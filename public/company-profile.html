@@ -6282,18 +6282,30 @@
                     const stats = await response.json();
                     
                     // Update dashboard stats
-                    document.getElementById('total-contacts').textContent = stats.totalContacts || 0;
-                    document.getElementById('total-calls').textContent = stats.totalCalls || 0;
-                    document.getElementById('active-customers').textContent = stats.contactsByStatus?.customer?.count || 0;
-                    document.getElementById('new-leads').textContent = stats.contactsByStatus?.new_lead?.count || 0;
-                    document.getElementById('total-revenue').textContent = `$${(stats.totalRevenue || 0).toLocaleString()}`;
+                    const totalContactsEl = document.getElementById('total-contacts');
+                    const totalCallsEl = document.getElementById('total-calls');
+                    const activeCustomersEl = document.getElementById('active-customers');
+                    const newLeadsEl = document.getElementById('new-leads');
+                    const totalRevenueEl = document.getElementById('total-revenue');
+                    
+                    if (totalContactsEl) totalContactsEl.textContent = stats.totalContacts || 0;
+                    if (totalCallsEl) totalCallsEl.textContent = stats.totalCalls || 0;
+                    if (activeCustomersEl) activeCustomersEl.textContent = stats.contactsByStatus?.customer?.count || 0;
+                    if (newLeadsEl) newLeadsEl.textContent = stats.contactsByStatus?.new_lead?.count || 0;
+                    if (totalRevenueEl) totalRevenueEl.textContent = `$${(stats.totalRevenue || 0).toLocaleString()}`;
                     
                     // Update pipeline stats
-                    document.getElementById('pipeline-new').textContent = stats.pipeline.new_lead || 0;
-                    document.getElementById('pipeline-contacted').textContent = stats.pipeline.contacted || 0;
-                    document.getElementById('pipeline-quoted').textContent = stats.pipeline.quoted || 0;
-                    document.getElementById('pipeline-customer').textContent = stats.pipeline.customer || 0;
-                    document.getElementById('pipeline-inactive').textContent = stats.pipeline.inactive || 0;
+                    const pipelineNewEl = document.getElementById('pipeline-new');
+                    const pipelineContactedEl = document.getElementById('pipeline-contacted');
+                    const pipelineQuotedEl = document.getElementById('pipeline-quoted');
+                    const pipelineCustomerEl = document.getElementById('pipeline-customer');
+                    const pipelineInactiveEl = document.getElementById('pipeline-inactive');
+                    
+                    if (pipelineNewEl) pipelineNewEl.textContent = stats.pipeline.new_lead || 0;
+                    if (pipelineContactedEl) pipelineContactedEl.textContent = stats.pipeline.contacted || 0;
+                    if (pipelineQuotedEl) pipelineQuotedEl.textContent = stats.pipeline.quoted || 0;
+                    if (pipelineCustomerEl) pipelineCustomerEl.textContent = stats.pipeline.customer || 0;
+                    if (pipelineInactiveEl) pipelineInactiveEl.textContent = stats.pipeline.inactive || 0;
                     
                     console.log('✅ CRM dashboard loaded:', stats);
                 } else {
@@ -7875,14 +7887,8 @@
         // 📊 REAL-TIME ANALYTICS DASHBOARD FUNCTIONS
         async function fetchRealTimeMetrics() {
             try {
-                // Try production endpoint first, fallback to test endpoint
-                let response;
-                try {
-                    response = await fetch(`/api/ai-agent-logic/analytics/${companyId}/realtime`);
-                } catch (authError) {
-                    // Fallback to test endpoint if auth fails
-                    response = await fetch(`/api/ai-agent-logic/test/analytics/${companyId}/realtime`);
-                }
+                // Use test endpoint for production (no auth required)
+                let response = await fetch(`/api/ai-agent-logic/test/analytics/${companyId}/realtime`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
@@ -7916,11 +7922,16 @@
         }
 
         function updateAnalyticsDashboard(data) {
-            // Update metric cards
-            document.getElementById('success-rate-value').textContent = `${data.successRate}%`;
-            document.getElementById('response-time-value').textContent = `${data.avgResponseTime}s`;
-            document.getElementById('confidence-value').textContent = `${data.confidence}%`;
-            document.getElementById('active-sessions-value').textContent = data.activeSessions;
+            // Update metric cards with null checks
+            const successRateEl = document.getElementById('success-rate-value');
+            const responseTimeEl = document.getElementById('response-time-value');
+            const confidenceEl = document.getElementById('confidence-value');
+            const activeSessionsEl = document.getElementById('active-sessions-value');
+            
+            if (successRateEl) successRateEl.textContent = `${data.successRate}%`;
+            if (responseTimeEl) responseTimeEl.textContent = `${data.avgResponseTime}s`;
+            if (confidenceEl) confidenceEl.textContent = `${data.confidence}%`;
+            if (activeSessionsEl) activeSessionsEl.textContent = data.activeSessions;
 
             // Update timestamp
             const timestamp = new Date().toLocaleTimeString();
@@ -7932,7 +7943,7 @@
 
         async function exportAnalyticsReport() {
             try {
-                const response = await fetch(`/api/ai-agent-logic/analytics/${companyId}/export`, {
+                const response = await fetch(`/api/ai-agent-logic/test/analytics/${companyId}/export`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -8512,8 +8523,10 @@
                 waitForManager();
             } else {
                 console.error('❌ No company ID found in URL');
-                document.getElementById('company-name-header').textContent = 'Error: No company ID provided';
-                document.getElementById('company-id-subheader').textContent = 'Please access this page with a valid company ID.';
+                const companyNameHeader = document.getElementById('company-name-header');
+                const companyIdSubheader = document.getElementById('company-id-subheader');
+                if (companyNameHeader) companyNameHeader.textContent = 'Error: No company ID provided';
+                if (companyIdSubheader) companyIdSubheader.textContent = 'Please access this page with a valid company ID.';
             }
         });
 
