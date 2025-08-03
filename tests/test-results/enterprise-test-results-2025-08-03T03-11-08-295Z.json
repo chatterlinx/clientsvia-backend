@@ -1,0 +1,183 @@
+{
+  "timestamp": "2025-08-03T03:11:08.295Z",
+  "totalTests": 20,
+  "passed": 20,
+  "failed": 0,
+  "successRate": 100,
+  "executionTime": 53,
+  "productionReady": true,
+  "details": {
+    "analytics": {
+      "passed": 4,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Real-time Analytics Data",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        },
+        {
+          "name": "Analytics Data Structure Validation",
+          "status": "PASSED",
+          "response": "All required fields present"
+        },
+        {
+          "name": "Data Range Validation",
+          "status": "PASSED",
+          "response": "All 4 validations passed"
+        },
+        {
+          "name": "Analytics Export Endpoint",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 2,
+          "attempt": 1
+        }
+      ]
+    },
+    "abTesting": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "A/B Test Creation",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        },
+        {
+          "name": "A/B Tests Retrieval",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        }
+      ]
+    },
+    "personalization": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Personalization Rules Update",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        },
+        {
+          "name": "Customer Segment Creation",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        }
+      ]
+    },
+    "flowDesigner": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Conversation Flow Save",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        },
+        {
+          "name": "Conversation Flows Retrieval",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        }
+      ]
+    },
+    "system": {
+      "passed": 7,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Server Health Check",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 14,
+          "attempt": 1
+        },
+        {
+          "name": "Database Connectivity",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 4,
+          "attempt": 1
+        },
+        {
+          "name": "Performance Test 1",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        },
+        {
+          "name": "Performance Test 2",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        },
+        {
+          "name": "Performance Test 3",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        },
+        {
+          "name": "Performance Test 4",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        },
+        {
+          "name": "Performance Test 5",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 0,
+          "attempt": 1
+        }
+      ]
+    },
+    "integration": {
+      "passed": 3,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Frontend Page Access",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 6,
+          "attempt": 1
+        },
+        {
+          "name": "Route Registration: /api/ai-agent-logic/test/health",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        },
+        {
+          "name": "Route Registration: /api/ai-agent-logic/test/analytics/507f1f77bcf86cd799439011/realtime",
+          "status": "PASSED",
+          "response": 200,
+          "responseTime": 1,
+          "attempt": 1
+        }
+      ]
+    }
+  }
+}

@@ -528,6 +528,38 @@ class EnterpriseTestSuite {
     }
 }
 
+// Jest test wrapper
+describe('Enterprise AI Agent Logic Integration Tests', () => {
+    let testSuite;
+    
+    beforeAll(() => {
+        testSuite = new EnterpriseTestSuite();
+    });
+    
+    test('should pass all enterprise integration tests', async () => {
+        const results = await testSuite.runCompleteSuite();
+        
+        // Save results to file for CI/CD
+        const fs = require('fs');
+        const path = require('path');
+        const resultsDir = path.join(__dirname, '..', 'test-results');
+        
+        if (!fs.existsSync(resultsDir)) {
+            fs.mkdirSync(resultsDir, { recursive: true });
+        }
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const resultsFile = path.join(resultsDir, `enterprise-test-results-${timestamp}.json`);
+        fs.writeFileSync(resultsFile, JSON.stringify(results, null, 2));
+        
+        console.log(`\n📁 Test results saved to: ${resultsFile}`.cyan);
+        
+        // Assert that all tests passed
+        expect(results.productionReady).toBe(true);
+        expect(results.failed).toBe(0);
+    }, 60000); // 60 second timeout for full integration test
+});
+
 // Export for use as module
 module.exports = EnterpriseTestSuite;
 
