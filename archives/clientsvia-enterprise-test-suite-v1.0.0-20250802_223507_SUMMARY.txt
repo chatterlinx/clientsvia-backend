@@ -1,0 +1,39 @@
+ClientsVia Enterprise Test Suite Archive Summary
+==============================================
+
+Archive: clientsvia-enterprise-test-suite-v1.0.0-20250802_223507
+Created: Sat Aug  2 22:35:07 EDT 2025
+Version: 1.0.0
+
+Contents:
+- Files:       19
+- Size (tar.gz):  36K
+- Size (zip):  48K
+
+Installation:
+1. Extract archive to your project
+2. cd tests/ && npm install
+3. npm run health
+4. npm run test:all
+
+Features:
+✅ Analytics Dashboard Testing
+✅ A/B Testing Framework
+✅ Personalization Engine Tests
+✅ Flow Designer Validation
+✅ Integration Testing Suite
+✅ Performance Benchmarks
+✅ Production Validation
+✅ CI/CD Integration
+✅ Comprehensive Documentation
+✅ Maintenance Tools
+
+Quick Start:
+tar -xzf clientsvia-enterprise-test-suite-v1.0.0-20250802_223507.tar.gz
+cd clientsvia-enterprise-test-suite-v1.0.0-20250802_223507/
+npm install
+npm run test:all
+
+For detailed instructions, see INSTALLATION_GUIDE.md
+
+🎯 Ready for enterprise deployment!

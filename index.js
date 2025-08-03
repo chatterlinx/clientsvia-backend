@@ -100,6 +100,9 @@ async function loadAllRoutes() {
         routes.backupRoutes = await loadRouteWithTimeout('./routes/backup', 'backupRoutes');
         routes.crmManagementRoutes = await loadRouteWithTimeout('./routes/crmManagement', 'crmManagementRoutes');
         
+        // Load AI Agent Logic routes for enterprise features
+        routes.aiAgentLogicRoutes = await loadRouteWithTimeout('./routes/aiAgentLogic', 'aiAgentLogicRoutes');
+        
         console.log('[INIT] ✅ All routes loaded successfully');
         return routes;
     } catch (error) {
@@ -233,6 +236,10 @@ function registerRoutes(routes) {
     
     // CRM Management System for Enterprise Contact Management
     app.use('/api/crm', routes.crmManagementRoutes);
+    
+    // AI Agent Logic routes for enterprise features (Analytics, A/B Testing, etc.)
+    app.use('/api/ai-agent-logic', routes.aiAgentLogicRoutes);
+    app.use('/api', routes.aiAgentLogicRoutes); // Also mount for direct API access
     
     console.log('[INIT] ✅ All API routes registered successfully');
 }

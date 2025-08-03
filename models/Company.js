@@ -542,58 +542,236 @@ const companySchema = new mongoose.Schema({
             }
         },
         
-        // Agent Personality Configuration
-        agentPersonality: {
-            voiceTone: { 
-                type: String, 
-                enum: ['friendly', 'professional', 'casual', 'enthusiastic', 'empathetic'], 
-                default: 'friendly' 
+        // 🚀 ENTERPRISE FEATURES: Real-time Analytics
+        analytics: {
+            enabled: { type: Boolean, default: true },
+            realTimeUpdates: { type: Boolean, default: true },
+            retentionDays: { type: Number, default: 90 },
+            
+            // Metrics tracking
+            metrics: {
+                callVolume: { type: Number, default: 0 },
+                successRate: { type: Number, default: 0 },
+                avgResponseTime: { type: Number, default: 0 },
+                satisfactionScore: { type: Number, default: 0 }
             },
-            speechPace: { 
-                type: String, 
-                enum: ['slow', 'moderate', 'fast'], 
-                default: 'moderate' 
+            
+            // Export settings
+            autoExports: {
+                enabled: { type: Boolean, default: false },
+                frequency: { type: String, enum: ['daily', 'weekly', 'monthly'], default: 'weekly' },
+                format: { type: String, enum: ['csv', 'json', 'pdf'], default: 'csv' },
+                recipients: [{ type: String }]
             }
         },
         
-        // Behavior Controls Configuration
-        behaviorControls: {
-            allowBargeIn: { type: Boolean, default: false },
-            acknowledgeEmotion: { type: Boolean, default: false },
-            useEmails: { type: Boolean, default: false }
-        },
+        // 🎨 ENTERPRISE FEATURES: Conversation Flow Designer
+        conversationFlows: [{
+            id: { type: String, required: true },
+            name: { type: String, required: true },
+            description: { type: String, default: '' },
+            active: { type: Boolean, default: true },
+            
+            // Flow nodes and connections
+            nodes: [{
+                id: { type: String, required: true },
+                type: { type: String, enum: ['greeting', 'question', 'response', 'escalation', 'action'], required: true },
+                position: {
+                    x: { type: Number, default: 0 },
+                    y: { type: Number, default: 0 }
+                },
+                config: { type: mongoose.Schema.Types.Mixed, default: {} }
+            }],
+            
+            connections: [{
+                from: { type: String, required: true },
+                to: { type: String, required: true },
+                condition: { type: String, default: '' }
+            }],
+            
+            // Flow settings
+            triggers: {
+                type: { type: String, enum: ['any', 'business-hours', 'after-hours', 'keywords'], default: 'any' },
+                conditions: [{ type: String }]
+            },
+            priority: { type: String, enum: ['high', 'medium', 'low'], default: 'medium' },
+            
+            // Metadata
+            createdAt: { type: Date, default: Date.now },
+            lastUpdated: { type: Date, default: Date.now }
+        }],
         
-        // Call Transfer & Escalation Configuration
-        callTransferConfig: {
-            dialOutNumber: { 
-                type: String, 
-                trim: true,
-                default: '',
-                validate: {
-                    validator: function(v) {
-                        // Allow empty string or valid phone number format
-                        return !v || /^\+?[\d\s\-\(\)]{10,20}$/.test(v);
-                    },
-                    message: 'Dial-out number must be a valid phone number format'
+        // 🧪 ENTERPRISE FEATURES: A/B Testing Framework
+        abTests: [{
+            id: { type: String, required: true },
+            name: { type: String, required: true },
+            type: { type: String, enum: ['greeting', 'response-tone', 'escalation-timing', 'knowledge-source', 'custom'], required: true },
+            status: { type: String, enum: ['draft', 'running', 'paused', 'completed', 'analyzing'], default: 'draft' },
+            
+            // Test variants
+            variants: {
+                type: mongoose.Schema.Types.Mixed,
+                default: {
+                    A: { name: 'Control', traffic: 50, config: {} },
+                    B: { name: 'Variant', traffic: 50, config: {} }
                 }
             },
-            dialOutEnabled: { type: Boolean, default: false },
-            transferMessage: { 
-                type: String, 
-                trim: true, 
-                default: 'Let me connect you with someone who can better assist you.' 
+            
+            // Test configuration
+            config: {
+                successMetric: { type: String, enum: ['satisfaction', 'response-time', 'resolution-rate', 'escalation-rate', 'conversion-rate'], required: true },
+                duration: { type: Number, default: 7 }, // days
+                minSampleSize: { type: Number, default: 100 },
+                confidenceLevel: { type: Number, default: 95, min: 80, max: 99 },
+                significanceThreshold: { type: Number, default: 0.05 }
+            },
+            
+            // Test results
+            metrics: {
+                totalCalls: { type: Number, default: 0 },
+                progress: { type: Number, default: 0 }, // percentage
+                confidenceLevel: { type: Number, default: 0 },
+                leadingVariant: { type: String, default: '' },
+                improvement: { type: Number, default: 0 },
+                statisticalSignificance: { type: Boolean, default: false }
+            },
+            
+            // Metadata
+            createdAt: { type: Date, default: Date.now },
+            startedAt: { type: Date },
+            completedAt: { type: Date },
+            results: { type: mongoose.Schema.Types.Mixed, default: {} }
+        }],
+        
+        // 👤 ENTERPRISE FEATURES: Advanced Personalization Engine
+        personalization: {
+            enabled: { type: Boolean, default: true },
+            
+            // Performance metrics
+            metrics: {
+                activeSegments: { type: Number, default: 0 },
+                personalizedCalls: { type: Number, default: 0 }, // percentage
+                satisfactionBoost: { type: Number, default: 0 }, // percentage
+                learningAccuracy: { type: Number, default: 0 } // percentage
+            },
+            
+            // Customer segments
+            segments: [{
+                id: { type: String, required: true },
+                name: { type: String, required: true },
+                description: { type: String, default: '' },
+                active: { type: Boolean, default: true },
+                priority: { type: Boolean, default: false },
+                
+                // Segment criteria
+                criteria: [{
+                    field: { type: String, required: true }, // e.g., 'call_count', 'last_call_date', 'satisfaction_score'
+                    operator: { type: String, enum: ['equals', 'greater_than', 'less_than', 'contains', 'not_contains'], required: true },
+                    value: { type: mongoose.Schema.Types.Mixed, required: true }
+                }],
+                
+                // Segment metrics
+                metrics: {
+                    members: { type: Number, default: 0 },
+                    avgCallTime: { type: Number, default: 0 },
+                    avgResponseTime: { type: Number, default: 0 },
+                    satisfaction: { type: Number, default: 0 },
+                    resolutionRate: { type: Number, default: 0 }
+                },
+                
+                // Personalization rules for this segment
+                rules: [{ type: String }],
+                
+                // Metadata
+                createdAt: { type: Date, default: Date.now },
+                lastUpdated: { type: Date, default: Date.now }
+            }],
+            
+            // Dynamic personalization rules
+            dynamicRules: [{
+                id: { type: String, required: true },
+                name: { type: String, required: true },
+                description: { type: String, default: '' },
+                active: { type: Boolean, default: true },
+                
+                // Rule conditions
+                trigger: { type: String, required: true },
+                conditions: [{
+                    field: { type: String, required: true },
+                    operator: { type: String, required: true },
+                    value: { type: mongoose.Schema.Types.Mixed, required: true }
+                }],
+                
+                // Rule actions
+                actions: [{ type: String, required: true }],
+                
+                // Rule performance
+                performance: {
+                    applicationsCount: { type: Number, default: 0 },
+                    successRate: { type: Number, default: 0 },
+                    improvementPercent: { type: Number, default: 0 }
+                },
+                
+                // Metadata
+                createdAt: { type: Date, default: Date.now },
+                lastApplied: { type: Date }
+            }],
+            
+            // Predictive insights
+            insights: [{
+                pattern: { type: String, required: true },
+                confidence: { type: Number, required: true, min: 0, max: 100 },
+                detectedDays: { type: Number, default: 0 },
+                type: { type: String, enum: ['emerging', 'established', 'declining'], default: 'emerging' },
+                recommendedAction: { type: String, default: '' },
+                detectedAt: { type: Date, default: Date.now }
+            }],
+            
+            // AI recommendations
+            recommendations: [{
+                id: { type: String, required: true },
+                title: { type: String, required: true },
+                description: { type: String, default: '' },
+                type: { type: String, enum: ['segment-creation', 'rule-modification', 'timing-optimization', 'tone-adjustment'], required: true },
+                priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+                
+                // Expected impact
+                impact: {
+                    metric: { type: String, required: true },
+                    expectedImprovement: { type: Number, default: 0 },
+                    confidence: { type: Number, default: 0, min: 0, max: 100 }
+                },
+                
+                // Implementation status
+                status: { type: String, enum: ['pending', 'implemented', 'dismissed'], default: 'pending' },
+                implementedAt: { type: Date },
+                
+                // Metadata
+                createdAt: { type: Date, default: Date.now }
+            }],
+            
+            // Privacy and compliance settings
+            privacy: {
+                dataRetentionDays: { type: Number, default: 90 },
+                anonymizationLevel: { type: String, enum: ['none', 'partial', 'full'], default: 'partial' },
+                gdprCompliance: { type: Boolean, default: true },
+                automaticDeletion: { type: Boolean, default: true },
+                
+                // Data collection permissions
+                permissions: {
+                    behavioralPatterns: { type: Boolean, default: true },
+                    callHistory: { type: Boolean, default: true },
+                    sentimentAnalysis: { type: Boolean, default: true },
+                    crmIntegration: { type: Boolean, default: false }
+                }
             }
         },
         
-        // Knowledge Source Controls
-        knowledgeSourceControls: {
-            type: mongoose.Schema.Types.Mixed,
-            default: {}
-        },
-        
-        lastUpdated: { type: Date, default: Date.now }
+        // Legacy fields (keeping for backward compatibility)
+        highlevelApiKey: { type: String, trim: true, default: null },
+        highlevelCalendarId: { type: String, trim: true, default: null },
+        googleOAuth: { type: googleOAuthSchema, default: () => ({}) }
     },
-    
     notes: { type: [noteSchema], default: [] },
     
     // Booking Scripts Configuration
