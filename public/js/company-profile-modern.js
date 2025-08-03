@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.15 - Fixed missing setupNotesSearch function');
+console.log('🚀 Loading company-profile-modern.js v2.16 - Fixed all missing populate functions');
 
 /* ============================================================================
    MODERN COMPANY PROFILE MANAGEMENT SYSTEM
@@ -2723,7 +2723,7 @@ class CompanyProfileManager {
     }
 
     /* ========================================================================
-       🔧 UTILITY FUNCTIONS & HELPERS
+       🔧 UTILITY FUNCTIONS
        ======================================================================== */
 
     /**
