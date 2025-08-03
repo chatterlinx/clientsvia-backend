@@ -8322,14 +8322,17 @@
         function switchEnterpriseTab(tabName) {
             console.log(`🔀 Switching to enterprise tab: ${tabName}`);
             
-            // Hide all enterprise content
+            // Hide all enterprise content (including both regular and enterprise tabs)
             const allEnterpriseContent = document.querySelectorAll('.clientsvia-tab-content');
-            allEnterpriseContent.forEach(content => content.classList.add('hidden'));
+            allEnterpriseContent.forEach(content => {
+                content.classList.add('hidden');
+                content.style.display = 'none';
+            });
             
             // Remove active state from all tabs
             const allEnterpriseTabs = document.querySelectorAll('.clientsvia-tab-btn');
             allEnterpriseTabs.forEach(tab => {
-                tab.classList.remove('border-blue-500', 'text-blue-600');
+                tab.classList.remove('border-blue-500', 'text-blue-600', 'active');
                 tab.classList.add('border-transparent', 'text-gray-500');
             });
             
@@ -8356,6 +8359,12 @@
             const targetContent = document.getElementById(contentId);
             if (targetContent) {
                 targetContent.classList.remove('hidden');
+                targetContent.classList.add('active');
+                // Force display
+                targetContent.style.display = 'block';
+                targetContent.style.visibility = 'visible';
+                targetContent.style.opacity = '1';
+                console.log(`✅ Showing content for: ${contentId}`, targetContent);
             } else {
                 console.warn(`⚠️ Content container not found: ${contentId}`);
             }
