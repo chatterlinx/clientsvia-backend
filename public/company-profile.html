@@ -1842,7 +1842,7 @@
                                         <!-- Data: kb_company + kb_trade collections  -->
                                         <!-- ========================================= -->
                                         <!-- TAB 2: Knowledge Source Controls -->
-                                        <div id="clientsvia-knowledge-content" class="clientsvia-tab-content hidden" data-config-section="knowledge-sources">
+                                        <div id="clientsvia-knowledge-content" class="clientsvia-tab-content" data-config-section="knowledge-sources">
                                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                                 <!-- Left Column: Source Priority & Configuration -->
                                                 <div class="space-y-5">
@@ -2045,7 +2045,7 @@
                                         <!-- Data: behavior_rules collection          -->
                                         <!-- ========================================= -->
                                         <!-- TAB 3: Agent Personality -->
-                                        <div id="clientsvia-personality-content" class="clientsvia-tab-content hidden" data-config-section="agent-personality">
+                                        <div id="clientsvia-personality-content" class="clientsvia-tab-content" data-config-section="agent-personality">
                                             <div class="mb-6">
                                                 <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                                                     <i class="fas fa-theater-masks mr-2 text-pink-600"></i>Agent Personality Configuration
@@ -3679,7 +3679,7 @@
                 <!-- Enterprise-Grade Performance Monitoring  -->
                 <!-- ========================================= -->
                 <!-- TAB 4: Real-time Analytics Dashboard -->
-                <div id="clientsvia-analytics-content" class="clientsvia-tab-content hidden">
+                <div id="clientsvia-analytics-content" class="clientsvia-tab-content">
                     <div class="mb-6">
                         <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                             <i class="fas fa-chart-line mr-2 text-blue-600"></i>Real-time Analytics Dashboard
@@ -3841,7 +3841,7 @@
                 <!-- Visual Node-Based Conversation Editor    -->
                 <!-- ========================================= -->
                 <!-- TAB 5: Conversation Flow Designer -->
-                <div id="clientsvia-flow-designer-content" class="clientsvia-tab-content hidden">
+                <div id="clientsvia-flow-designer-content" class="clientsvia-tab-content">
                     <div class="mb-6">
                         <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                             <i class="fas fa-project-diagram mr-2 text-indigo-600"></i>Conversation Flow Designer
@@ -3994,7 +3994,7 @@
                 <!-- Split Testing & Conversion Optimization  -->
                 <!-- ========================================= -->
                 <!-- TAB 6: A/B Testing Framework -->
-                <div id="clientsvia-ab-testing-content" class="clientsvia-tab-content hidden">
+                <div id="clientsvia-ab-testing-content" class="clientsvia-tab-content">
                     <div class="mb-6">
                         <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                             <i class="fas fa-flask mr-2 text-amber-600"></i>A/B Testing Framework
@@ -4185,7 +4185,7 @@
                 <!-- Behavioral Segmentation & Dynamic Rules  -->
                 <!-- ========================================= -->
                 <!-- TAB 7: Advanced Personalization Engine -->
-                <div id="clientsvia-personalization-content" class="clientsvia-tab-content hidden">
+                <div id="clientsvia-personalization-content" class="clientsvia-tab-content">
                     <div class="mb-6">
                         <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                             <i class="fas fa-user-cog mr-2 text-indigo-600"></i>Advanced Personalization Engine
@@ -7131,17 +7131,57 @@
                     const targetTab = button.id.replace('clientsvia-tab-', '');
                     
                     // Remove active class from all tabs and contents
-                    tabButtons.forEach(btn => btn.classList.remove('active'));
-                    tabContents.forEach(content => content.classList.remove('active', 'block'));
-                    tabContents.forEach(content => content.classList.add('hidden'));
+                    tabButtons.forEach(btn => btn.classList.remove('active', 'border-blue-500', 'border-indigo-500', 'text-blue-600', 'text-indigo-600', 'bg-indigo-50'));
+                    tabButtons.forEach(btn => btn.classList.add('border-transparent', 'text-gray-500'));
+                    tabContents.forEach(content => {
+                        content.classList.remove('active');
+                        // Clear any inline styles
+                        content.style.display = '';
+                        content.style.visibility = '';
+                        content.style.opacity = '';
+                    });
                     
                     // Add active class to clicked tab and corresponding content
                     button.classList.add('active');
+                    button.classList.remove('border-transparent', 'text-gray-500');
+                    
+                    // Use indigo for priority tab, blue for enterprise tabs
+                    if (targetTab === 'priority') {
+                        button.classList.add('border-indigo-500', 'text-indigo-600', 'bg-indigo-50');
+                    } else {
+                        button.classList.add('border-blue-500', 'text-blue-600');
+                    }
+                    
                     const targetContent = document.getElementById(`clientsvia-${targetTab}-content`);
                     if (targetContent) {
-                        targetContent.classList.remove('hidden');
-                        targetContent.classList.add('active', 'block');
+                        targetContent.classList.add('active');
                     }
+                    
+                    // Initialize specific enterprise features when their tabs are activated
+                    switch(targetTab) {
+                        case 'analytics':
+                            if (typeof fetchRealTimeMetrics === 'function') {
+                                fetchRealTimeMetrics();
+                            }
+                            break;
+                        case 'ab-testing':
+                            if (typeof loadABTests === 'function') {
+                                loadABTests();
+                            }
+                            break;
+                        case 'flow-designer':
+                            if (typeof initializeFlowDesigner === 'function') {
+                                initializeFlowDesigner();
+                            }
+                            break;
+                        case 'personalization':
+                            if (typeof refreshPersonalizationEngine === 'function') {
+                                refreshPersonalizationEngine();
+                            }
+                            break;
+                    }
+                    
+                    console.log(`🔀 Switched to tab: ${targetTab}`);
                 });
             });
         }
@@ -8318,121 +8358,11 @@
             }
         }
 
-        // Enhanced tab switching for enterprise features
-        function switchEnterpriseTab(tabName) {
-            console.log(`🔀 Switching to enterprise tab: ${tabName}`);
-            
-            // Hide all enterprise content (including both regular and enterprise tabs)
-            const allEnterpriseContent = document.querySelectorAll('.clientsvia-tab-content');
-            allEnterpriseContent.forEach(content => {
-                content.classList.add('hidden');
-                content.style.display = 'none';
-            });
-            
-            // Remove active state from all tabs
-            const allEnterpriseTabs = document.querySelectorAll('.clientsvia-tab-btn');
-            allEnterpriseTabs.forEach(tab => {
-                tab.classList.remove('border-blue-500', 'text-blue-600', 'active');
-                tab.classList.add('border-transparent', 'text-gray-500');
-            });
-            
-            // Map tab names to content IDs (handle hyphenated content IDs)
-            let contentId;
-            switch(tabName) {
-                case 'analytics':
-                    contentId = 'clientsvia-analytics-content';
-                    break;
-                case 'abtesting':
-                    contentId = 'clientsvia-ab-testing-content';
-                    break;
-                case 'flowdesigner':
-                    contentId = 'clientsvia-flow-designer-content';
-                    break;
-                case 'personalization':
-                    contentId = 'clientsvia-personalization-content';
-                    break;
-                default:
-                    contentId = `clientsvia-${tabName}-content`;
-            }
-            
-            // Show selected content
-            const targetContent = document.getElementById(contentId);
-            if (targetContent) {
-                targetContent.classList.remove('hidden');
-                targetContent.classList.add('active');
-                // Force display
-                targetContent.style.display = 'block';
-                targetContent.style.visibility = 'visible';
-                targetContent.style.opacity = '1';
-                console.log(`✅ Showing content for: ${contentId}`, targetContent);
-            } else {
-                console.warn(`⚠️ Content container not found: ${contentId}`);
-            }
-            
-            // Activate selected tab - map back to hyphenated IDs for tabs
-            let tabId;
-            switch(tabName) {
-                case 'abtesting':
-                    tabId = 'clientsvia-tab-ab-testing';
-                    break;
-                case 'flowdesigner':
-                    tabId = 'clientsvia-tab-flow-designer';
-                    break;
-                default:
-                    tabId = `clientsvia-tab-${tabName}`;
-            }
-            
-            const targetTab = document.getElementById(tabId);
-            if (targetTab) {
-                targetTab.classList.add('border-blue-500', 'text-blue-600');
-                targetTab.classList.remove('border-transparent', 'text-gray-500');
-            } else {
-                console.warn(`⚠️ Tab button not found: ${tabId}`);
-            }
-            
-            // Initialize specific feature if needed
-            switch(tabName) {
-                case 'analytics':
-                    fetchRealTimeMetrics();
-                    break;
-                case 'abtesting':
-                    loadABTests();
-                    break;
-                case 'flowdesigner':
-                    initializeFlowDesigner();
-                    break;
-                case 'personalization':
-                    refreshPersonalizationEngine();
-                    break;
-            }
-        }
-
-        // Add event listeners for enterprise tabs
+        // Initialize enterprise features after loading
         document.addEventListener('DOMContentLoaded', function() {
-            // Enterprise tab buttons
-            const enterpriseTabButtons = [
-                'clientsvia-tab-analytics',
-                'clientsvia-tab-ab-testing', 
-                'clientsvia-tab-flow-designer',
-                'clientsvia-tab-personalization'
-            ];
-            
-            enterpriseTabButtons.forEach(buttonId => {
-                const button = document.getElementById(buttonId);
-                if (button) {
-                    let tabName = buttonId.replace('clientsvia-tab-', '');
-                    // Map hyphenated names to the expected format
-                    if (tabName === 'ab-testing') tabName = 'abtesting';
-                    if (tabName === 'flow-designer') tabName = 'flowdesigner';
-                    button.addEventListener('click', () => switchEnterpriseTab(tabName));
-                }
-            });
-            
             // Initialize enterprise features after delay
             setTimeout(() => {
                 initializeEnterpriseFeatures();
-                // Show analytics tab by default
-                switchEnterpriseTab('analytics');
                 console.log('🚀 Enterprise AI features initialized');
             }, 1500);
         });
