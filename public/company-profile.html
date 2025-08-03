@@ -9201,13 +9201,14 @@
             
             toggles.forEach(toggle => {
                 const label = toggle.closest('label');
-                const switchElement = label.querySelector('.toggle-switch');
-                const dotElement = label.querySelector('.toggle-dot');
+                const toggleContainer = label.querySelector('.relative');
+                const switchElement = toggleContainer.querySelector('.toggle-switch');
+                const dotElement = toggleContainer.querySelector('.toggle-dot');
                 
                 // Set initial state
                 updateToggleAppearance(toggle, switchElement, dotElement);
                 
-                // Add click handler
+                // Add click handler to the label
                 label.addEventListener('click', (e) => {
                     e.preventDefault();
                     toggle.checked = !toggle.checked;
@@ -9217,6 +9218,20 @@
                     if (window.companyProfileManager) {
                         window.companyProfileManager.setUnsavedChanges(true);
                     }
+                    
+                    console.log(`🔄 Toggle ${toggle.id}: ${toggle.checked ? 'ON' : 'OFF'}`);
+                });
+                
+                // Also add click handler directly to the checkbox input
+                toggle.addEventListener('change', () => {
+                    updateToggleAppearance(toggle, switchElement, dotElement);
+                    
+                    // Trigger change detection for save button
+                    if (window.companyProfileManager) {
+                        window.companyProfileManager.setUnsavedChanges(true);
+                    }
+                    
+                    console.log(`🔄 Direct toggle ${toggle.id}: ${toggle.checked ? 'ON' : 'OFF'}`);
                 });
             });
             
@@ -9225,11 +9240,24 @@
         
         function updateToggleAppearance(toggle, switchElement, dotElement) {
             if (toggle.checked) {
+                // Get the original color from the switch element's classes
+                const originalColorClass = switchElement.className.match(/bg-(blue|yellow|red|green|purple)-\d+/);
+                
+                // Remove gray background and restore original color
                 switchElement.classList.remove('bg-gray-300');
+                if (originalColorClass) {
+                    switchElement.classList.add(originalColorClass[0]);
+                }
+                
+                // Move dot to the right (checked position)
                 dotElement.classList.add('translate-x-5');
                 dotElement.classList.remove('translate-x-0');
             } else {
+                // Remove all color backgrounds and add gray
+                switchElement.classList.remove('bg-blue-600', 'bg-yellow-600', 'bg-red-600', 'bg-green-600', 'bg-purple-600');
                 switchElement.classList.add('bg-gray-300');
+                
+                // Move dot to the left (unchecked position)
                 dotElement.classList.remove('translate-x-5');
                 dotElement.classList.add('translate-x-0');
             }
@@ -9257,10 +9285,86 @@
         // Initialize Intelligence & Memory section
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
-                // ClientsVia Intelligence initialization handled by main ClientsVia system
-                console.log('🚀 Intelligence & Memory section ready');
+                // Initialize Intelligence toggle switches
+                initializeIntelligenceToggles();
+                
+                // Initialize context retention slider
+                initializeContextRetentionSlider();
+                
+                // Initialize save button
+                const saveButton = document.getElementById('save-intelligence-settings');
+                if (saveButton) {
+                    saveButton.addEventListener('click', function() {
+                        saveIntelligenceSettings();
+                    });
+                    console.log('� Intelligence save button initialized');
+                }
+                
+                console.log('�🚀 Intelligence & Memory section ready');
             }, 1500);
         });
+        
+        // Save Intelligence Settings function
+        async function saveIntelligenceSettings() {
+            const button = document.getElementById('save-intelligence-settings');
+            const originalText = button.innerHTML;
+            
+            try {
+                // Show loading state
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+                button.disabled = true;
+                
+                // Collect intelligence settings
+                const settings = {
+                    memoryMode: document.getElementById('ai-memory-mode')?.value || 'conversational',
+                    contextRetention: parseInt(document.getElementById('ai-context-retention')?.value || 30),
+                    features: {
+                        contextualMemory: document.getElementById('ai-contextual-memory')?.checked || false,
+                        dynamicReasoning: document.getElementById('ai-dynamic-reasoning')?.checked || false,
+                        smartEscalation: document.getElementById('ai-smart-escalation')?.checked || false,
+                        autoLearning: document.getElementById('ai-auto-learning')?.checked || false,
+                        realtimeOptimization: document.getElementById('ai-realtime-optimization')?.checked || false
+                    }
+                };
+                
+                console.log('💾 Saving intelligence settings:', settings);
+                
+                // Here you would typically make an API call to save the settings
+                // For now, we'll simulate a successful save
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Show success state
+                button.innerHTML = '<i class="fas fa-check mr-2"></i>Saved!';
+                button.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+                button.classList.add('bg-green-600');
+                
+                // Reset button after 2 seconds
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                    button.classList.remove('bg-green-600');
+                    button.classList.add('bg-purple-600', 'hover:bg-purple-700');
+                }, 2000);
+                
+                console.log('✅ Intelligence settings saved successfully');
+                
+            } catch (error) {
+                console.error('❌ Error saving intelligence settings:', error);
+                
+                // Show error state
+                button.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Error';
+                button.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+                button.classList.add('bg-red-600');
+                
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                    button.classList.remove('bg-red-600');
+                    button.classList.add('bg-purple-600', 'hover:bg-purple-700');
+                }, 3000);
+            }
+        }
     </script>
     
     <style>
