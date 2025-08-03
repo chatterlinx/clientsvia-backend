@@ -118,8 +118,6 @@ router.get('/call-history', async (req, res) => {
     }
 });
 
-module.exports = router;
-
 /**
  * GET /api/crm/dashboard-stats?companyId=...
  * Get CRM dashboard statistics

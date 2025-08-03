@@ -2075,3 +2075,5 @@ router.get('/test/flow-designer/:companyId/flows', async (req, res) => {
  * OLD ROUTES BELOW - THESE HAVE AUTHENTICATION REQUIREMENTS
  * Only used if someone tries to access the authenticated endpoints
  */
+
+module.exports = router;
