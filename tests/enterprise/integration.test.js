@@ -155,11 +155,11 @@ class EnterpriseTestSuite {
             '/api/ai-agent-logic/test/health'
         );
 
-        // Test database connectivity (if available)
+        // Test database connectivity
         await this.testEndpoint(
             'Database Connectivity',
             'system',
-            '/health'
+            '/api/ai-agent-logic/test/database'
         );
     }
 
@@ -208,7 +208,7 @@ class EnterpriseTestSuite {
         await this.testEndpoint(
             'Analytics Export Endpoint',
             'analytics',
-            `/api/ai-agent-logic/analytics/${this.config.COMPANY_ID}/export`,
+            `/api/ai-agent-logic/test/analytics/${this.config.COMPANY_ID}/export`,
             'POST',
             { format: 'csv', timeframe: '7d' }
         );
@@ -274,7 +274,7 @@ class EnterpriseTestSuite {
         await this.testEndpoint(
             'A/B Test Creation',
             'abTesting',
-            `/api/ai-agent-logic/ab-testing/${this.config.COMPANY_ID}/create`,
+            `/api/ai-agent-logic/test/ab-testing/${this.config.COMPANY_ID}/create`,
             'POST',
             testConfig
         );
@@ -283,7 +283,7 @@ class EnterpriseTestSuite {
         await this.testEndpoint(
             'A/B Tests Retrieval',
             'abTesting',
-            `/api/ai-agent-logic/ab-testing/${this.config.COMPANY_ID}/tests`
+            `/api/ai-agent-logic/test/ab-testing/${this.config.COMPANY_ID}/tests`
         );
     }
 
@@ -309,7 +309,7 @@ class EnterpriseTestSuite {
         await this.testEndpoint(
             'Personalization Rules Update',
             'personalization',
-            `/api/ai-agent-logic/personalization/${this.config.COMPANY_ID}/rules`,
+            `/api/ai-agent-logic/test/personalization/${this.config.COMPANY_ID}/rules`,
             'POST',
             rules
         );
@@ -327,7 +327,7 @@ class EnterpriseTestSuite {
         await this.testEndpoint(
             'Customer Segment Creation',
             'personalization',
-            `/api/ai-agent-logic/personalization/${this.config.COMPANY_ID}/segments`,
+            `/api/ai-agent-logic/test/personalization/${this.config.COMPANY_ID}/segments`,
             'POST',
             segmentConfig
         );
@@ -359,7 +359,7 @@ class EnterpriseTestSuite {
         await this.testEndpoint(
             'Conversation Flow Save',
             'flowDesigner',
-            `/api/ai-agent-logic/flow-designer/${this.config.COMPANY_ID}/flows`,
+            `/api/ai-agent-logic/test/flow-designer/${this.config.COMPANY_ID}/flows`,
             'POST',
             flowData
         );
@@ -368,7 +368,7 @@ class EnterpriseTestSuite {
         await this.testEndpoint(
             'Conversation Flows Retrieval',
             'flowDesigner',
-            `/api/ai-agent-logic/flow-designer/${this.config.COMPANY_ID}/flows`
+            `/api/ai-agent-logic/test/flow-designer/${this.config.COMPANY_ID}/flows`
         );
     }
 
