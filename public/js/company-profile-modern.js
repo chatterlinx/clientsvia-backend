@@ -2111,6 +2111,172 @@ class CompanyProfileManager {
     }
 
     /**
+     * GOLD STANDARD: Setup notes search and filtering functionality
+     */
+    setupNotesSearch() {
+        console.log('🔍 Setting up notes search functionality...');
+        
+        // Initialize search input if it exists
+        const searchInput = document.getElementById('notes-search');
+        if (searchInput) {
+            // Clear any existing value
+            searchInput.value = '';
+            
+            // Set placeholder
+            searchInput.placeholder = 'Search notes by title or content...';
+            
+            console.log('✅ Notes search input initialized');
+        }
+
+        // Initialize category filter if it exists
+        const categoryFilter = document.getElementById('notes-category-filter');
+        if (categoryFilter) {
+            // Set default to 'all'
+            categoryFilter.value = 'all';
+            console.log('✅ Notes category filter initialized');
+        }
+
+        // Initialize sort selector if it exists
+        const sortSelect = document.getElementById('notes-sort');
+        if (sortSelect) {
+            // Set default sort
+            sortSelect.value = 'updated-desc';
+            console.log('✅ Notes sort selector initialized');
+        }
+
+        console.log('✅ Notes search setup complete');
+    }
+
+    /**
+     * GOLD STANDARD: Filter notes based on search criteria
+     */
+    filterNotes() {
+        const searchInput = document.getElementById('notes-search');
+        const categoryFilter = document.getElementById('notes-category-filter');
+        
+        const searchTerm = searchInput?.value.toLowerCase().trim() || '';
+        const selectedCategory = categoryFilter?.value || 'all';
+
+        // Filter notes based on criteria
+        let filteredNotes = this.notes;
+
+        // Apply search filter
+        if (searchTerm) {
+            filteredNotes = filteredNotes.filter(note => {
+                const title = (note.title || '').toLowerCase();
+                const content = (note.content || note.text || '').toLowerCase();
+                return title.includes(searchTerm) || content.includes(searchTerm);
+            });
+        }
+
+        // Apply category filter
+        if (selectedCategory && selectedCategory !== 'all') {
+            filteredNotes = filteredNotes.filter(note => 
+                note.category === selectedCategory
+            );
+        }
+
+        // Sort the filtered notes
+        const sortedNotes = this.sortNotes(filteredNotes);
+
+        // Re-render with filtered notes
+        this.renderFilteredNotes(sortedNotes);
+
+        console.log(`🔍 Filtered notes: ${filteredNotes.length} of ${this.notes.length} notes shown`);
+    }
+
+    /**
+     * GOLD STANDARD: Render filtered notes (separate from main render to avoid recursion)
+     */
+    renderFilteredNotes(filteredNotes) {
+        const notesContainer = document.getElementById('notes-list');
+        if (!notesContainer) {
+            console.warn('Notes container not found for filtering');
+            return;
+        }
+
+        if (filteredNotes.length === 0) {
+            notesContainer.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <i class="fas fa-search text-4xl mb-4 text-gray-300"></i>
+                    <p class="text-lg font-medium">No notes found</p>
+                    <p class="text-sm">Try adjusting your search criteria</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Render the filtered notes
+        const notesHTML = filteredNotes.map(note => this.generateNoteHTML(note)).join('');
+        notesContainer.innerHTML = notesHTML;
+
+        // Re-attach event listeners for the rendered notes
+        this.attachNoteEventListeners();
+    }
+
+    /**
+     * GOLD STANDARD: Attach event listeners to note elements
+     */
+    attachNoteEventListeners() {
+        // Pin/unpin functionality
+        document.querySelectorAll('.pin-note').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const noteId = e.target.closest('.note-item').dataset.noteId;
+                this.togglePinNote(noteId);
+            });
+        });
+
+        // Delete functionality
+        document.querySelectorAll('.delete-note').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const noteId = e.target.closest('.note-item').dataset.noteId;
+                this.deleteEnterpriseNote(noteId);
+            });
+        });
+
+        // Edit functionality
+        document.querySelectorAll('.edit-note').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const noteId = e.target.closest('.note-item').dataset.noteId;
+                this.startEditNote(noteId);
+            });
+        });
+    }
+
+    /**
+     * GOLD STANDARD: Generate HTML for a single note
+     */
+    generateNoteHTML(note) {
+        const dateStr = new Date(note.updatedAt).toLocaleDateString();
+        const timeStr = new Date(note.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        
+        return `
+            <div class="note-item bg-white rounded-lg border border-gray-200 p-4 mb-4 hover:shadow-md transition-shadow ${note.isPinned ? 'ring-2 ring-yellow-200 bg-yellow-50' : ''}" data-note-id="${note.id}">
+                <div class="flex justify-between items-start mb-2">
+                    <h4 class="font-semibold text-gray-900 ${note.isPinned ? 'text-yellow-800' : ''}">${this.escapeHtml(note.title)}</h4>
+                    <div class="flex items-center space-x-2">
+                        ${note.isPinned ? '<i class="fas fa-thumbtack text-yellow-600" title="Pinned"></i>' : ''}
+                        <button class="pin-note text-gray-400 hover:text-yellow-600" title="${note.isPinned ? 'Unpin' : 'Pin'} note">
+                            <i class="fas fa-thumbtack"></i>
+                        </button>
+                        <button class="edit-note text-gray-400 hover:text-blue-600" title="Edit note">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="delete-note text-gray-400 hover:text-red-600" title="Delete note">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <p class="text-gray-700 text-sm mb-2">${this.escapeHtml(note.content || note.text || '')}</p>
+                <div class="flex justify-between items-center text-xs text-gray-500">
+                    <span class="bg-gray-100 px-2 py-1 rounded">${note.category || 'general'}</span>
+                    <span>${dateStr} at ${timeStr}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
      * GOLD STANDARD: Collect ClientsVia agent personality settings (migrated from HTML)
      */
     async saveClientsviaAgentPersonalitySettings() {
