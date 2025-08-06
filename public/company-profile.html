@@ -9279,13 +9279,22 @@
                 valueDisplay.textContent = `${slider.value} min`;
                 
                 slider.addEventListener('input', function() {
-                    valueDisplay.textContent = `${this.value} min`;
-                    console.log('🕐 Context retention changed to:', this.value, 'minutes');
+                    const newValue = this.value;
+                    valueDisplay.textContent = `${newValue} min`;
+                    console.log('🕐 Context retention slider moved to:', newValue, 'minutes');
+                    console.log('🕐 Display updated to:', valueDisplay.textContent);
                     
                     // Trigger change detection
                     if (window.companyProfileManager) {
                         window.companyProfileManager.setUnsavedChanges(true);
                     }
+                });
+                
+                // Also add 'change' event for when slider is released
+                slider.addEventListener('change', function() {
+                    const newValue = this.value;
+                    valueDisplay.textContent = `${newValue} min`;
+                    console.log('🕐 Context retention slider released at:', newValue, 'minutes');
                 });
                 
                 console.log('✅ Context retention slider initialized with value:', slider.value);
@@ -9371,7 +9380,9 @@
                 console.log('🎯 Load API URL:', `/api/company/companies/${companyId}/agent-settings`);
                 console.log('⏰ Intelligence load timestamp:', new Date().toISOString());
                 
-                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
+                // Add cache-busting parameter to ensure fresh data
+                const cacheBuster = new Date().getTime();
+                const response = await fetch(`/api/company/companies/${companyId}/agent-settings?_cb=${cacheBuster}`, {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -9407,12 +9418,11 @@
                                          
                         console.log('🎯 FIXED: Setting Intelligence & Memory mode to:', memoryMode);
                         console.log('🎯 FIXED: Source value from agentIntelligenceSettings.memoryMode:', settings.memoryMode);
+                        
+                        // Set value WITHOUT triggering change event (to avoid false unsaved changes)
                         memoryModeSelect.value = memoryMode;
                         
-                        // Force the dropdown to update visually
-                        memoryModeSelect.dispatchEvent(new Event('change'));
-                        
-                        console.log('✅ FIXED: Memory mode set and change event fired');
+                        console.log('✅ FIXED: Memory mode set (no change event during load)');
                     } else {
                         console.log('⚠️ Memory mode element (ai-memory-mode) not found');
                     }
@@ -9550,6 +9560,12 @@
                 button.innerHTML = '<i class="fas fa-check mr-2"></i>Saved!';
                 button.classList.remove('bg-purple-600', 'hover:bg-purple-700');
                 button.classList.add('bg-green-600');
+                
+                // Clear unsaved changes state after successful save
+                if (window.companyProfileManager) {
+                    window.companyProfileManager.setUnsavedChanges(false);
+                    console.log('✅ Unsaved changes cleared after Intelligence settings save');
+                }
                 
                 // Reset button after configured timeout
                 setTimeout(() => {
