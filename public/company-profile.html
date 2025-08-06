@@ -1630,29 +1630,31 @@
                                 </div>
                                 
                                 <div class="p-6">
-                                    <!-- Tab Navigation -->
-                                    <div class="flex border-b border-gray-200 mb-6">
-                                        <button id="clientsvia-tab-priority" class="clientsvia-tab-btn active px-6 py-3 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50">
-                                            <i class="fas fa-layer-group mr-2"></i>Answer Priority Flow
-                                        </button>
-                                        <button id="clientsvia-tab-knowledge" class="clientsvia-tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                                            <i class="fas fa-book-open mr-2"></i>Knowledge Source Controls
-                                        </button>
-                                        <button id="clientsvia-tab-personality" class="clientsvia-tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                                            <i class="fas fa-theater-masks mr-2"></i>Agent Personality
-                                        </button>
-                                        <button id="clientsvia-tab-analytics" class="clientsvia-tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                                            <i class="fas fa-chart-line mr-2"></i>Analytics Dashboard
-                                        </button>
-                                        <button id="clientsvia-tab-flow-designer" class="clientsvia-tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                                            <i class="fas fa-project-diagram mr-2"></i>Flow Designer
-                                        </button>
-                                        <button id="clientsvia-tab-ab-testing" class="clientsvia-tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                                            <i class="fas fa-flask mr-2"></i>A/B Testing
-                                        </button>
-                                        <button id="clientsvia-tab-personalization" class="clientsvia-tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                                            <i class="fas fa-user-cog mr-2"></i>Personalization
-                                        </button>
+                                    <!-- Tab Navigation - Fixed Responsive Design -->
+                                    <div class="border-b border-gray-200 mb-6 overflow-x-auto overflow-y-hidden" style="scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9;">
+                                        <div class="flex space-x-0 min-w-max">
+                                            <button id="clientsvia-tab-priority" class="clientsvia-tab-btn active flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50 whitespace-nowrap transition-all duration-200">
+                                                <i class="fas fa-layer-group mr-2"></i>Answer Priority Flow
+                                            </button>
+                                            <button id="clientsvia-tab-knowledge" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
+                                                <i class="fas fa-book-open mr-2"></i>Knowledge Sources
+                                            </button>
+                                            <button id="clientsvia-tab-personality" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
+                                                <i class="fas fa-theater-masks mr-2"></i>Agent Personality
+                                            </button>
+                                            <button id="clientsvia-tab-analytics" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
+                                                <i class="fas fa-chart-line mr-2"></i>Analytics Dashboard
+                                            </button>
+                                            <button id="clientsvia-tab-flow-designer" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
+                                                <i class="fas fa-project-diagram mr-2"></i>Flow Designer
+                                            </button>
+                                            <button id="clientsvia-tab-ab-testing" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
+                                                <i class="fas fa-flask mr-2"></i>A/B Testing
+                                            </button>
+                                            <button id="clientsvia-tab-personalization" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
+                                                <i class="fas fa-user-cog mr-2"></i>Personalization
+                                            </button>
+                                        </div>
                                     </div>
                                     
                                     <!-- Tab Content Container -->
@@ -3344,28 +3346,19 @@
                             </div>
                         </div>
 
-                        </section>
-                        <!-- ============================================================================== -->
-                        <!-- END: AI AGENT LOGIC SECTION                                                   -->
-                        <!-- Total Configuration Areas Implemented:                                        -->
-                        <!--   ✅ Answer Priority Flow (KnowledgeRouter config)                           -->
-                        <!--   ✅ Knowledge Source Controls (Company KB + Trade QA)                       -->
-                        <!--   ✅ Agent Personality & Behavior (BehaviorEngine controls)                  -->
-                        <!--   ✅ Template Intelligence (Template system)                                 -->
-                        <!--   ✅ Self-Learning Knowledge Base (Learning system)                          -->
-                        <!--   ✅ Booking Workflows (BookingHandler config)                               -->
-                        <!--   ✅ Response Tracing & Debugging (ResponseTrace viewer)                     -->
-                        <!--   ✅ Analytics Dashboard (Real-time metrics)                                 -->
-                        <!--   ✅ Flow Designer (Visual conversation builder)                             -->
-                        <!--   ✅ A/B Testing (Split testing framework)                                   -->
-                        <!--   ✅ Personalization (Behavioral segmentation)                               -->
-                        <!-- Multi-Tenant Enterprise AI Receptionist Platform - Production Ready          -->
-                        <!-- ============================================================================== -->
                         </div>
+                        <!-- END: clientsvia-tab-content -->
                     </div>
-                    <!-- ===== TAB SECTION END: AI AGENT LOGIC ===== -->
-
-                    <!-- ===== TAB SECTION START: CRM & CONTACTS ===== -->
+                
+                </div>
+            </div>
+            
+            <!-- ========================================= -->
+            <!-- BOOKING WORKFLOWS CONFIGURATION          -->
+            <!-- Blueprint: BookingHandler.js integration -->
+            <!-- Purpose: Interactive appointment booking  -->
+            <!-- Data: booking_flows collection           -->
+            <!-- ========================================= -->
                     <!-- CRM & Contacts Tab Content -->
                     <div id="crm-content" class="tab-content-item hidden">
                         <section class="profile-section bg-transparent shadow-none p-0">
