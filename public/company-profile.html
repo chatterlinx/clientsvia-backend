@@ -9307,6 +9307,91 @@
             }, 1500);
         });
         
+        // Load current Intelligence Settings
+        async function loadIntelligenceSettings() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const companyId = urlParams.get('id') || window.currentCompanyId;
+                
+                if (!companyId) {
+                    console.warn('No company ID found, skipping intelligence settings load');
+                    return;
+                }
+                
+                const response = await fetch(`/api/companies/${companyId}/agent-settings`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load settings');
+                }
+                
+                const result = await response.json();
+                
+                if (result.success && result.company.agentIntelligenceSettings) {
+                    const settings = result.company.agentIntelligenceSettings;
+                    
+                    // Load memory mode
+                    const memoryModeSelect = document.getElementById('ai-memory-mode');
+                    if (memoryModeSelect && settings.memoryMode) {
+                        memoryModeSelect.value = settings.memoryMode;
+                    }
+                    
+                    // Load context retention
+                    const contextRetentionSlider = document.getElementById('ai-context-retention');
+                    const contextRetentionValue = document.getElementById('ai-context-value');
+                    if (contextRetentionSlider && settings.contextRetentionMinutes) {
+                        contextRetentionSlider.value = settings.contextRetentionMinutes;
+                        if (contextRetentionValue) {
+                            contextRetentionValue.textContent = `${settings.contextRetentionMinutes} min`;
+                        }
+                    }
+                    
+                    // Load feature toggles
+                    const featureMap = {
+                        'ai-contextual-memory': 'contextualMemory',
+                        'ai-dynamic-reasoning': 'dynamicReasoning',
+                        'ai-smart-escalation': 'smartEscalation',
+                        'ai-auto-learning': 'autoLearningQueue',
+                        'ai-realtime-optimization': 'realTimeOptimization'
+                    };
+                    
+                    Object.entries(featureMap).forEach(([elementId, settingKey]) => {
+                        const checkbox = document.getElementById(elementId);
+                        if (checkbox && settings[settingKey] !== undefined) {
+                            checkbox.checked = settings[settingKey];
+                            updateToggleVisualState(checkbox);
+                        }
+                    });
+                    
+                    console.log('✅ Intelligence settings loaded successfully:', settings);
+                }
+                
+            } catch (error) {
+                console.error('❌ Error loading intelligence settings:', error);
+            }
+        }
+        
+        // Update toggle visual state (move the toggle dot)
+        function updateToggleVisualState(checkbox) {
+            const toggleDot = checkbox.parentElement.querySelector('.toggle-dot');
+            const toggleSwitch = checkbox.parentElement.querySelector('.toggle-switch');
+            
+            if (toggleDot && toggleSwitch) {
+                if (checkbox.checked) {
+                    toggleDot.classList.add('translate-x-5');
+                    toggleDot.classList.remove('translate-x-0');
+                } else {
+                    toggleDot.classList.add('translate-x-0');
+                    toggleDot.classList.remove('translate-x-5');
+                    toggleSwitch.style.backgroundColor = '#d1d5db';
+                }
+            }
+        }
+
         // Save Intelligence Settings function
         async function saveIntelligenceSettings() {
             const button = document.getElementById('save-intelligence-settings');
@@ -9535,80 +9620,6 @@
                 }
             });
         }
-        
-        // Save Intelligence Settings Function
-        async function saveIntelligenceSettings() {
-            const saveButton = document.querySelector('[onclick="saveIntelligenceSettings()"]');
-            if (!saveButton) return;
-            
-            const originalText = saveButton.innerHTML;
-            saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
-            saveButton.disabled = true;
-            
-            try {
-                const companyId = window.currentCompanyId || window.companyId;
-                if (!companyId) {
-                    throw new Error('No company ID found');
-                }
-                
-                // Collect intelligence settings
-                const intelligenceSettings = {
-                    memoryMode: document.getElementById('ai-memory-mode')?.value || 'conversational',
-                    contextRetention: parseInt(document.getElementById('context-retention-slider')?.value) || 30,
-                    features: {
-                        contextualMemory: document.getElementById('contextual-memory')?.checked || false,
-                        dynamicReasoning: document.getElementById('dynamic-reasoning')?.checked || false,
-                        smartEscalation: document.getElementById('smart-escalation')?.checked || false,
-                        autoLearningQueue: document.getElementById('auto-learning-queue')?.checked || false,
-                        realtimeOptimization: document.getElementById('real-time-optimization')?.checked || false
-                    }
-                };
-                
-                console.log('🧠 Saving Intelligence Settings:', intelligenceSettings);
-                
-                // Save to backend
-                const response = await fetch(`/api/company/${companyId}/intelligence-settings`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(intelligenceSettings)
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const result = await response.json();
-                console.log('✅ Intelligence settings saved successfully:', result);
-                
-                // Show success notification
-                showNotification('Intelligence settings saved successfully!', 'success');
-                
-                // Reset button
-                saveButton.innerHTML = '<i class="fas fa-check mr-2"></i>Saved!';
-                setTimeout(() => {
-                    saveButton.innerHTML = originalText;
-                    saveButton.disabled = false;
-                }, 2000);
-                
-            } catch (error) {
-                console.error('❌ Error saving intelligence settings:', error);
-                showNotification('Failed to save intelligence settings: ' + error.message, 'error');
-                
-                // Reset button
-                saveButton.innerHTML = originalText;
-                saveButton.disabled = false;
-            }
-        }
-        
-        // Initialize when DOM is loaded
-        document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(() => {
-                initializeIntelligenceFeatures();
-                console.log('🧠 Intelligence & Memory features initialized');
-            }, 1000);
-        });
     </script>
 
     <!-- Modern implementation handles all initialization -->
