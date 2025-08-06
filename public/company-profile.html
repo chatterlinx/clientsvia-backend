@@ -1548,9 +1548,9 @@
                                                     </div>
                                                 </div>
                                                 <div class="relative">
-                                                    <input type="checkbox" id="ai-contextual-memory" class="sr-only" checked>
-                                                    <div class="toggle-switch w-11 h-6 bg-blue-600 rounded-full shadow-inner transition-colors duration-200"></div>
-                                                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-5"></div>
+                                                    <input type="checkbox" id="ai-contextual-memory" class="sr-only">
+                                                    <div class="toggle-switch w-11 h-6 bg-gray-300 rounded-full shadow-inner transition-colors duration-200 bg-blue-600" data-color="blue"></div>
+                                                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-0"></div>
                                                 </div>
                                             </label>
                                             
@@ -1564,9 +1564,9 @@
                                                     </div>
                                                 </div>
                                                 <div class="relative">
-                                                    <input type="checkbox" id="ai-dynamic-reasoning" class="sr-only" checked>
-                                                    <div class="toggle-switch w-11 h-6 bg-yellow-600 rounded-full shadow-inner transition-colors duration-200"></div>
-                                                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-5"></div>
+                                                    <input type="checkbox" id="ai-dynamic-reasoning" class="sr-only">
+                                                    <div class="toggle-switch w-11 h-6 bg-gray-300 rounded-full shadow-inner transition-colors duration-200 bg-yellow-600" data-color="yellow"></div>
+                                                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-0"></div>
                                                 </div>
                                             </label>
                                             
@@ -1580,9 +1580,9 @@
                                                     </div>
                                                 </div>
                                                 <div class="relative">
-                                                    <input type="checkbox" id="ai-smart-escalation" class="sr-only" checked>
-                                                    <div class="toggle-switch w-11 h-6 bg-red-600 rounded-full shadow-inner transition-colors duration-200"></div>
-                                                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-5"></div>
+                                                    <input type="checkbox" id="ai-smart-escalation" class="sr-only">
+                                                    <div class="toggle-switch w-11 h-6 bg-gray-300 rounded-full shadow-inner transition-colors duration-200 bg-red-600" data-color="red"></div>
+                                                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-0"></div>
                                                 </div>
                                             </label>
                                             
@@ -1596,9 +1596,9 @@
                                                     </div>
                                                 </div>
                                                 <div class="relative">
-                                                    <input type="checkbox" id="ai-auto-learning" class="sr-only" checked>
-                                                    <div class="toggle-switch w-11 h-6 bg-green-600 rounded-full shadow-inner transition-colors duration-200"></div>
-                                                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-5"></div>
+                                                    <input type="checkbox" id="ai-auto-learning" class="sr-only">
+                                                    <div class="toggle-switch w-11 h-6 bg-gray-300 rounded-full shadow-inner transition-colors duration-200 bg-green-600" data-color="green"></div>
+                                                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-0"></div>
                                                 </div>
                                             </label>
                                             
@@ -1612,9 +1612,9 @@
                                                     </div>
                                                 </div>
                                                 <div class="relative">
-                                                    <input type="checkbox" id="ai-realtime-optimization" class="sr-only" checked>
-                                                    <div class="toggle-switch w-11 h-6 bg-purple-600 rounded-full shadow-inner transition-colors duration-200"></div>
-                                                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-5"></div>
+                                                    <input type="checkbox" id="ai-realtime-optimization" class="sr-only">
+                                                    <div class="toggle-switch w-11 h-6 bg-gray-300 rounded-full shadow-inner transition-colors duration-200 bg-purple-600" data-color="purple"></div>
+                                                    <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-0"></div>
                                                 </div>
                                             </label>
                                         </div>
@@ -9282,6 +9282,58 @@
             }
         }
         
+        // Initialize Intelligence toggle switches
+        function initializeIntelligenceToggles() {
+            const toggleIds = [
+                'ai-contextual-memory',
+                'ai-dynamic-reasoning', 
+                'ai-smart-escalation',
+                'ai-auto-learning',
+                'ai-realtime-optimization'
+            ];
+            
+            toggleIds.forEach(id => {
+                const checkbox = document.getElementById(id);
+                if (checkbox) {
+                    // Set initial visual state
+                    updateToggleVisualState(checkbox);
+                    
+                    // Add click event listener to the label (parent container)
+                    const label = checkbox.closest('label');
+                    if (label) {
+                        label.addEventListener('click', function(e) {
+                            // Prevent double triggering since we're handling the toggle manually
+                            e.preventDefault();
+                            
+                            // Toggle the checkbox state
+                            checkbox.checked = !checkbox.checked;
+                            
+                            // Update visual state
+                            updateToggleVisualState(checkbox);
+                            
+                            console.log(`🔄 Toggle ${id}: ${checkbox.checked ? 'ON' : 'OFF'}`);
+                        });
+                    }
+                }
+            });
+            
+            console.log('✅ Intelligence toggles initialized');
+        }
+        
+        // Initialize context retention slider
+        function initializeContextRetentionSlider() {
+            const slider = document.getElementById('ai-context-retention');
+            const valueDisplay = document.getElementById('ai-context-value');
+            
+            if (slider && valueDisplay) {
+                slider.addEventListener('input', function() {
+                    valueDisplay.textContent = `${this.value} min`;
+                });
+                
+                console.log('✅ Context retention slider initialized');
+            }
+        }
+
         // Initialize Intelligence & Memory section
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
@@ -9375,18 +9427,32 @@
             }
         }
         
-        // Update toggle visual state (move the toggle dot)
+        // Update toggle visual state (move the toggle dot and change colors)
         function updateToggleVisualState(checkbox) {
             const toggleDot = checkbox.parentElement.querySelector('.toggle-dot');
             const toggleSwitch = checkbox.parentElement.querySelector('.toggle-switch');
             
             if (toggleDot && toggleSwitch) {
+                const colorType = toggleSwitch.getAttribute('data-color') || 'blue';
+                
                 if (checkbox.checked) {
+                    // Move dot to the right (ON position)
                     toggleDot.classList.add('translate-x-5');
                     toggleDot.classList.remove('translate-x-0');
+                    // Set the background color based on the toggle's color type
+                    const colors = {
+                        'blue': '#2563eb',
+                        'yellow': '#d97706',
+                        'red': '#dc2626',
+                        'green': '#16a34a',
+                        'purple': '#9333ea'
+                    };
+                    toggleSwitch.style.backgroundColor = colors[colorType] || colors['blue'];
                 } else {
+                    // Move dot to the left (OFF position)
                     toggleDot.classList.add('translate-x-0');
                     toggleDot.classList.remove('translate-x-5');
+                    // Set gray background for OFF state
                     toggleSwitch.style.backgroundColor = '#d1d5db';
                 }
             }
