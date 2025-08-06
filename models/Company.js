@@ -455,7 +455,7 @@ const companySchema = new mongoose.Schema({
             llmFallback: { type: Number, default: 0.6, min: 0, max: 1 }
         },
         // Memory and context settings
-        memoryMode: { type: String, enum: ['short', 'conversational', 'session'], default: 'conversational' },
+        memoryMode: { type: String, enum: ['short', 'conversational', 'persistent'], default: 'conversational' },
         contextRetentionMinutes: { type: Number, default: 30, min: 5, max: 120 },
         // Fallback behavior
         rejectLowConfidence: { type: Boolean, default: true },
