@@ -1,14 +1,19 @@
 // routes/company/agentSettings.js - Enterprise AI Agent Configuration API
-// Updated for deployment test
+// Updated for Answer Priority Flow support
 const express = require('express');
 const router = express.Router();
 const Company = require('../../models/Company');
 const TradeCategory = require('../../models/TradeCategory');
 
-// 🚀 Save AI Agent Intelligence Settings
+// 🚀 Save AI Agent Intelligence Settings (Updated for Answer Priority Flow)
 router.post('/companies/:id/agent-settings', async (req, res) => {
   try {
-    const { tradeCategories = [], agentIntelligenceSettings = {} } = req.body;
+    const { 
+      tradeCategories = [], 
+      agentIntelligenceSettings = {},
+      answerPriorityFlow = [],  // NEW: Answer Priority Flow data
+      aiAgentLogic = {}  // NEW: Complete AI Agent Logic config
+    } = req.body;
     const companyId = req.params.id;
 
     // Validate trade categories exist
@@ -22,6 +27,31 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
       if (filteredCategories.length !== tradeCategories.length) {
         console.warn(`Some trade categories were invalid for company ${companyId}`);
       }
+    }
+
+    // Validate and process Answer Priority Flow data
+    let validatedPriorityFlow = [];
+    if (answerPriorityFlow && Array.isArray(answerPriorityFlow)) {
+      validatedPriorityFlow = answerPriorityFlow.map((item, index) => ({
+        id: item.id || `priority-${index}`,
+        name: item.name || 'Unknown Source',
+        description: item.description || '',
+        active: Boolean(item.active !== undefined ? item.active : true),
+        primary: Boolean(item.primary !== undefined ? item.primary : index === 0),
+        priority: item.priority || index + 1,
+        icon: item.icon || 'cog',
+        category: item.category || 'other',
+        confidenceThreshold: Math.min(Math.max(item.confidenceThreshold || 0.7, 0), 1),
+        intelligenceLevel: ['high', 'medium', 'low', 'smart'].includes(item.intelligenceLevel) 
+          ? item.intelligenceLevel : 'medium',
+        performance: {
+          successRate: item.performance?.successRate || 0,
+          avgConfidence: item.performance?.avgConfidence || 0,
+          usageCount: item.performance?.usageCount || 0
+        }
+      }));
+      
+      console.log(`✅ Validated Answer Priority Flow for company ${companyId}:`, validatedPriorityFlow.length, 'items');
     }
 
     // Validate agent settings
@@ -56,6 +86,8 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
       { 
         tradeCategories, 
         agentIntelligenceSettings: validatedSettings,
+        answerPriorityFlow: validatedPriorityFlow, // NEW: Save validated Answer Priority Flow
+        aiAgentLogic, // NEW: Save AI Agent Logic config
         updatedAt: new Date()
       },
       { new: true, runValidators: true }
@@ -78,7 +110,8 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
         _id: company._id,
         companyName: company.companyName,
         tradeCategories: company.tradeCategories,
-        agentIntelligenceSettings: company.agentIntelligenceSettings
+        agentIntelligenceSettings: company.agentIntelligenceSettings,
+        answerPriorityFlow: company.answerPriorityFlow // NEW: Include Answer Priority Flow in response
       }
     });
 
@@ -95,7 +128,7 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
 router.get('/companies/:id/agent-settings', async (req, res) => {
   try {
     const company = await Company.findById(req.params.id)
-      .select('companyName tradeCategories agentIntelligenceSettings agentSettings');
+      .select('companyName tradeCategories agentIntelligenceSettings agentSettings answerPriorityFlow aiAgentLogic');
 
     if (!company) {
       return res.status(404).json({ error: 'Company not found' });
@@ -113,7 +146,9 @@ router.get('/companies/:id/agent-settings', async (req, res) => {
         _id: company._id,
         companyName: company.companyName,
         tradeCategories: company.tradeCategories || [],
-        agentIntelligenceSettings: settings
+        agentIntelligenceSettings: settings,
+        answerPriorityFlow: company.answerPriorityFlow || [],
+        aiAgentLogic: company.aiAgentLogic || {}
       }
     });
 

@@ -20,6 +20,11 @@ router.get('/companies/:companyId/agent-settings', async (req, res) => {
       return res.status(404).json({ error: 'Company not found' });
     }
 
+    // Debug: Log what fields are available on the company object
+    console.log(`🔍 [Agent Settings] Available company fields:`, Object.keys(company.toObject()));
+    console.log(`🔍 [Agent Settings] answerPriorityFlow:`, company.answerPriorityFlow?.length || 'undefined');
+    console.log(`🔍 [Agent Settings] aiAgentLogic:`, company.aiAgentLogic ? 'exists' : 'undefined');
+
     const response = {
       companyId: company._id.toString(), // Use MongoDB _id as companyId
       companyName: company.companyName,
@@ -38,6 +43,9 @@ router.get('/companies/:companyId/agent-settings', async (req, res) => {
         confidenceScoring: true,
         autoLearningQueue: true
       },
+      // NEW: Answer Priority Flow data
+      answerPriorityFlow: company.answerPriorityFlow || [],
+      aiAgentLogic: company.aiAgentLogic || {},
       bookingFlow: company.bookingFlow || [],
       personnel: company.personnel || [],
       calendars: company.calendars || [],
@@ -68,6 +76,9 @@ router.post('/companies/:companyId/agent-settings', async (req, res) => {
     const {
       tradeCategories = [],
       agentSettings = {},
+      agentIntelligenceSettings = {},
+      answerPriorityFlow = [],  // NEW: Answer Priority Flow data
+      aiAgentLogic = {},        // NEW: Complete AI Agent Logic config
       bookingFlow = [],
       personnel = [],
       calendars = [],
@@ -76,7 +87,32 @@ router.post('/companies/:companyId/agent-settings', async (req, res) => {
 
     console.log(`🏢 [Agent Settings] Saving settings for companyId: ${companyId}`);
     console.log(`📋 Selected trade categories: ${tradeCategories.join(', ')}`);
+    console.log(`🎯 Answer Priority Flow items: ${answerPriorityFlow.length}`);
 
+    // Validate Answer Priority Flow data
+    let validatedPriorityFlow = [];
+    if (answerPriorityFlow && Array.isArray(answerPriorityFlow)) {
+      validatedPriorityFlow = answerPriorityFlow.map((item, index) => ({
+        id: item.id || `priority-${index}`,
+        name: item.name || 'Unknown Source',
+        description: item.description || '',
+        active: Boolean(item.active !== undefined ? item.active : true),
+        primary: Boolean(item.primary !== undefined ? item.primary : index === 0),
+        priority: item.priority || index + 1,
+        icon: item.icon || 'cog',
+        category: item.category || 'other',
+        confidenceThreshold: Math.min(Math.max(item.confidenceThreshold || 0.7, 0), 1),
+        intelligenceLevel: ['high', 'medium', 'low', 'smart'].includes(item.intelligenceLevel) 
+          ? item.intelligenceLevel : 'medium',
+        performance: {
+          successRate: item.performance?.successRate || 0,
+          avgConfidence: item.performance?.avgConfidence || 0,
+          usageCount: item.performance?.usageCount || 0
+        }
+      }));
+      
+      console.log(`✅ Validated Answer Priority Flow: ${validatedPriorityFlow.length} items`);
+    }
     // Validate agent settings with enterprise-grade validation
     const validatedSettings = {
       useLLM: agentSettings.useLLM !== undefined ? Boolean(agentSettings.useLLM) : true,
@@ -93,17 +129,27 @@ router.post('/companies/:companyId/agent-settings', async (req, res) => {
     };
 
     // Multi-tenant update: Update specific company by MongoDB _id
+    const updateData = {
+      tradeCategories,
+      agentSettings: validatedSettings,
+      bookingFlow,
+      personnel,
+      calendars,
+      messageTemplates,
+      updatedAt: new Date()
+    };
+
+    // Add Answer Priority Flow to aiAgentLogic if provided
+    if (validatedPriorityFlow.length > 0) {
+      updateData.answerPriorityFlow = validatedPriorityFlow;
+      updateData['aiAgentLogic.answerPriorityFlow'] = validatedPriorityFlow;
+      updateData['aiAgentLogic.lastUpdated'] = new Date();
+      console.log(`🎯 Adding Answer Priority Flow to aiAgentLogic: ${validatedPriorityFlow.length} items`);
+    }
+
     const company = await Company.findByIdAndUpdate(
       companyId,
-      {
-        tradeCategories,
-        agentSettings: validatedSettings,
-        bookingFlow,
-        personnel,
-        calendars,
-        messageTemplates,
-        updatedAt: new Date()
-      },
+      updateData,
       { new: true, runValidators: true }
     );
 
