@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flow Designer Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <h1 class="text-2xl font-bold mb-4">Flow Designer Tab Test</h1>
+        
+        <!-- Tab Navigation -->
+        <div class="flex space-x-2 mb-4">
+            <button id="tab-flow-designer" class="px-4 py-2 bg-blue-600 text-white rounded-md" onclick="showTab('flow-designer')">
+                <i class="fas fa-project-diagram mr-2"></i>Flow Designer
+            </button>
+            <button id="tab-analytics" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md" onclick="showTab('analytics')">
+                <i class="fas fa-chart-line mr-2"></i>Analytics
+            </button>
+        </div>
+        
+        <!-- Tab Content -->
+        <div id="flow-designer-content" class="tab-content bg-white p-6 rounded-lg shadow">
+            <h2 class="text-xl font-semibold mb-4">🎨 Flow Designer</h2>
+            <div class="bg-green-100 border-2 border-green-500 p-4 rounded-lg">
+                <h3 class="text-lg font-bold text-green-800">✅ Flow Designer Active</h3>
+                <p class="text-green-700">The Flow Designer tab is working correctly!</p>
+            </div>
+        </div>
+        
+        <div id="analytics-content" class="tab-content bg-white p-6 rounded-lg shadow hidden">
+            <h2 class="text-xl font-semibold mb-4">📊 Analytics Dashboard</h2>
+            <div class="bg-blue-100 border-2 border-blue-500 p-4 rounded-lg">
+                <h3 class="text-lg font-bold text-blue-800">✅ Analytics Active</h3>
+                <p class="text-blue-700">The Analytics tab is working correctly!</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            
+            // Reset all tab buttons
+            document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+                btn.className = 'px-4 py-2 bg-gray-300 text-gray-700 rounded-md';
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName + '-content').classList.remove('hidden');
+            
+            // Highlight selected tab button
+            document.getElementById('tab-' + tabName).className = 'px-4 py-2 bg-blue-600 text-white rounded-md';
+            
+            console.log('Switched to tab:', tabName);
+        }
+        
+        // Initialize
+        console.log('Flow Designer test page loaded');
+    </script>
+</body>
+</html>
