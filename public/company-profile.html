@@ -9375,18 +9375,25 @@
                     return;
                 }
                 
-                const response = await fetch(`/api/companies/${companyId}/agent-settings`, {
+                console.log('📡 Loading intelligence settings for company:', companyId);
+                console.log('🎯 Load API URL:', `/api/company/companies/${companyId}/agent-settings`);
+                
+                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
                     }
                 });
                 
+                console.log('📡 Load Response Status:', response.status);
+                console.log('📡 Load Response OK:', response.ok);
+                
                 if (!response.ok) {
                     throw new Error('Failed to load settings');
                 }
                 
                 const result = await response.json();
+                console.log('📄 Load Response Data:', result);
                 
                 if (result.success && result.company.agentIntelligenceSettings) {
                     const settings = result.company.agentIntelligenceSettings;
@@ -9497,7 +9504,7 @@
                 console.log('💾 Saving intelligence settings:', settings);
                 
                 // Make API call to save the settings
-                const response = await fetch(`/api/companies/${companyId}/ai-intelligence-settings`, {
+                const response = await fetch(`/api/company/companies/${companyId}/ai-intelligence-settings`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -9505,10 +9512,14 @@
                     body: JSON.stringify(settings)
                 });
                 
+                console.log('📡 API Response Status:', response.status);
+                console.log('📡 API Response OK:', response.ok);
+                
                 const result = await response.json();
+                console.log('📄 API Response Data:', result);
                 
                 if (!response.ok) {
-                    throw new Error(result.error || 'Failed to save settings');
+                    throw new Error(result.error || `HTTP ${response.status}: Failed to save settings`);
                 }
                 
                 // Show success state
