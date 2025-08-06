@@ -2559,9 +2559,10 @@ class CompanyProfileManager {
         // Update current tab
         this.currentTab = tabName;
         
-        // Update active states for tab buttons
+        // Update active states for tab buttons - use correct CSS classes
         document.querySelectorAll('[data-tab]').forEach(btn => {
-            btn.classList.remove('active');
+            btn.classList.remove('active', 'tab-button-active');
+            btn.classList.add('tab-button-inactive');
         });
         
         // Hide all tab content items
@@ -2569,9 +2570,12 @@ class CompanyProfileManager {
             pane.classList.add('hidden');
         });
         
-        // Activate target tab button
+        // Activate target tab button - use correct CSS classes
         const targetButton = document.querySelector(`[data-tab="${tabName}"]`);
-        if (targetButton) targetButton.classList.add('active');
+        if (targetButton) {
+            targetButton.classList.add('active', 'tab-button-active');
+            targetButton.classList.remove('tab-button-inactive');
+        }
         
         // Show target tab content
         const targetPane = document.getElementById(`${tabName}-content`);

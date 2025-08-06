@@ -7894,7 +7894,12 @@
             const aiAgentTab = document.getElementById('tab-ai-agent-logic');
             if (aiAgentTab) {
                 aiAgentTab.addEventListener('click', function() {
-                    // Add small delay to ensure tab content is visible
+                    // First, properly switch the tab using the CompanyProfileManager
+                    if (window.companyProfileManager && typeof window.companyProfileManager.switchTab === 'function') {
+                        window.companyProfileManager.switchTab('ai-agent-logic');
+                    }
+                    
+                    // Then load the data with a small delay to ensure tab content is visible
                     setTimeout(() => {
                         loadAgentTradeCategories(); // Load checkboxes system
                         loadAgentSettings();
