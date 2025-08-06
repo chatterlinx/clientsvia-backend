@@ -5596,6 +5596,7 @@
 
             try {
                 console.log('🔄 Loading agent settings for company:', companyId);
+                console.log('⏰ Agent Settings load timestamp:', new Date().toISOString());
                 const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`);
                 const data = await response.json();
                 
@@ -9377,6 +9378,7 @@
                 
                 console.log('📡 Loading intelligence settings for company:', companyId);
                 console.log('🎯 Load API URL:', `/api/company/companies/${companyId}/agent-settings`);
+                console.log('⏰ Intelligence load timestamp:', new Date().toISOString());
                 
                 const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
                     method: 'GET',
@@ -9408,14 +9410,18 @@
                     // Load memory mode
                     const memoryModeSelect = document.getElementById('ai-memory-mode');
                     if (memoryModeSelect) {
-                        // Try multiple possible locations for memoryMode
-                        const memoryMode = settings.memoryMode || 
-                                         result.company?.agentSettings?.memoryMode ||
-                                         result.company?.memoryMode ||
-                                         'conversational'; // default
+                        // ONLY use agentIntelligenceSettings.memoryMode, don't fallback to agentSettings
+                        // This prevents conflicts with the Agent Logic section
+                        const memoryMode = settings.memoryMode || 'conversational'; // default only
                                          
-                        console.log('✅ Setting memory mode to:', memoryMode);
+                        console.log('🎯 FIXED: Setting Intelligence & Memory mode to:', memoryMode);
+                        console.log('🎯 FIXED: Source value from agentIntelligenceSettings.memoryMode:', settings.memoryMode);
                         memoryModeSelect.value = memoryMode;
+                        
+                        // Force the dropdown to update visually
+                        memoryModeSelect.dispatchEvent(new Event('change'));
+                        
+                        console.log('✅ FIXED: Memory mode set and change event fired');
                     } else {
                         console.log('⚠️ Memory mode element (ai-memory-mode) not found');
                     }
