@@ -53,7 +53,7 @@ fi
 # Test 5: Check if Analytics Dashboard tab elements are present
 echo ""
 echo "🔍 Test 5: Checking if Analytics Dashboard tab elements are present..."
-if grep -q 'data-clientsvia-tab="analytics"' /tmp/company-profile-test.html; then
+if grep -q 'id="clientsvia-tab-analytics"' /tmp/company-profile-test.html; then
     echo "✅ Analytics Dashboard tab element found"
 else
     echo "❌ Analytics Dashboard tab element not found"
@@ -63,7 +63,7 @@ fi
 # Test 6: Check if Analytics Dashboard content is present
 echo ""
 echo "🔍 Test 6: Checking if Analytics Dashboard content is present..."
-if grep -q 'data-content="analytics"' /tmp/company-profile-test.html; then
+if grep -q 'id="clientsvia-analytics-content"' /tmp/company-profile-test.html; then
     echo "✅ Analytics Dashboard content element found"
 else
     echo "❌ Analytics Dashboard content element not found"
