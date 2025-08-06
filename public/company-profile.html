@@ -8494,6 +8494,111 @@
             }
         }
 
+        /**
+         * 🔄 CLIENTSVIA AI AGENT LOGIC TAB SWITCHING FUNCTIONALITY
+         * Handles navigation between AI Agent Logic sub-tabs
+         */
+        function switchClientsviaTab(targetTabId) {
+            try {
+                console.log('🔀 Switching to tab:', targetTabId);
+                
+                // Get all tab buttons and content areas
+                const tabButtons = document.querySelectorAll('.clientsvia-tab-btn');
+                const tabContents = document.querySelectorAll('.clientsvia-tab-content');
+                
+                // Remove active class from all buttons and contents
+                tabButtons.forEach(btn => {
+                    btn.classList.remove('active', 'border-indigo-500', 'text-indigo-600', 'bg-indigo-50');
+                    btn.classList.add('border-transparent', 'text-gray-500');
+                });
+                
+                tabContents.forEach(content => {
+                    content.classList.remove('active');
+                    content.style.display = 'none';
+                });
+                
+                // Find and activate the target button
+                const targetButton = document.getElementById(`clientsvia-tab-${targetTabId}`);
+                if (targetButton) {
+                    targetButton.classList.add('active', 'border-indigo-500', 'text-indigo-600', 'bg-indigo-50');
+                    targetButton.classList.remove('border-transparent', 'text-gray-500');
+                }
+                
+                // Find and show the target content
+                const targetContent = document.getElementById(`clientsvia-${targetTabId}-content`);
+                if (targetContent) {
+                    targetContent.classList.add('active');
+                    targetContent.style.display = 'block';
+                    
+                    // Load specific content when switching to tabs
+                    switch (targetTabId) {
+                        case 'analytics':
+                            console.log('📊 Loading Analytics Dashboard...');
+                            fetchAnalyticsMetrics();
+                            break;
+                        case 'flow-designer':
+                            console.log('🎨 Loading Flow Designer...');
+                            initializeFlowDesigner();
+                            break;
+                        case 'ab-testing':
+                            console.log('🧪 Loading A/B Testing...');
+                            loadABTests();
+                            break;
+                        case 'personalization':
+                            console.log('🎯 Loading Personalization...');
+                            refreshPersonalizationEngine();
+                            break;
+                    }
+                }
+                
+                console.log('✅ Successfully switched to tab:', targetTabId);
+                
+            } catch (error) {
+                console.error('❌ Error switching ClientsVia tab:', error);
+                showNotification(`Failed to switch to ${targetTabId} tab`, 'error');
+            }
+        }
+
+        /**
+         * Initialize ClientsVia tab event listeners
+         */
+        function initializeClientsviaTabListeners() {
+            try {
+                console.log('🎯 Initializing ClientsVia tab listeners...');
+                
+                // Add click listeners to all tab buttons
+                const tabButtons = [
+                    { id: 'clientsvia-tab-priority', target: 'priority' },
+                    { id: 'clientsvia-tab-knowledge', target: 'knowledge' },
+                    { id: 'clientsvia-tab-personality', target: 'personality' },
+                    { id: 'clientsvia-tab-analytics', target: 'analytics' },
+                    { id: 'clientsvia-tab-flow-designer', target: 'flow-designer' },
+                    { id: 'clientsvia-tab-ab-testing', target: 'ab-testing' },
+                    { id: 'clientsvia-tab-personalization', target: 'personalization' }
+                ];
+                
+                let listenersAdded = 0;
+                tabButtons.forEach(({ id, target }) => {
+                    const button = document.getElementById(id);
+                    if (button) {
+                        button.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            switchClientsviaTab(target);
+                        });
+                        listenersAdded++;
+                    }
+                });
+                
+                console.log(`✅ Added ${listenersAdded} ClientsVia tab listeners`);
+                
+                // Set default active tab (priority)
+                switchClientsviaTab('priority');
+                
+            } catch (error) {
+                console.error('❌ Failed to initialize ClientsVia tab listeners:', error);
+            }
+        }
+
     </script>
     
     <!-- Main Page Initialization Script -->
@@ -8601,6 +8706,9 @@
                         
                         // Initialize ClientsVia Intelligence after company data loads
                         initClientsViaIntelligence();
+                        
+                        // 🎯 Initialize ClientsVia AI Agent Logic tab navigation
+                        initializeClientsviaTabListeners();
                     } else {
                         // Wait a bit longer for the manager to initialize
                         setTimeout(waitForManager, 100);
@@ -8614,6 +8722,9 @@
                         .then(() => {
                             console.log('✅ FetchCompanyData completed successfully');
                             initClientsViaIntelligence();
+                            
+                            // 🎯 Initialize ClientsVia AI Agent Logic tab navigation
+                            initializeClientsviaTabListeners();
                         })
                         .catch(error => {
                             console.error('❌ FetchCompanyData failed:', error);
