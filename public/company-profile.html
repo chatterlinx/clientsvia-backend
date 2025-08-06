@@ -8534,6 +8534,7 @@
                     switch (targetTabId) {
                         case 'analytics':
                             console.log('📊 Loading Analytics Dashboard...');
+                            // Fixed: Use fetchRealTimeMetrics instead of fetchAnalyticsMetrics
                             fetchRealTimeMetrics();
                             break;
                         case 'flow-designer':
