@@ -3270,16 +3270,140 @@
                                     <i class="fas fa-chart-line mr-2 text-blue-600"></i>Real-time Analytics Dashboard
                                     <span class="ml-2 text-sm text-gray-600">(Live Performance Metrics)</span>
                                 </h4>
-                                <div class="text-center py-8">
-                                    <i class="fas fa-chart-line text-4xl text-blue-400 mb-4"></i>
-                                    <h5 class="text-lg font-medium text-gray-700 mb-2">Analytics Dashboard</h5>
-                                    <p class="text-gray-500">Real-time performance metrics and analytics</p>
-                                    <button onclick="fetchRealTimeMetrics()" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md">
-                                        <i class="fas fa-sync mr-2"></i>Load Analytics
-                                    </button>
+                                
+                                <!-- Real-time Metrics Grid -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                    <!-- Current Call Volume -->
+                                    <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-600">Active Calls</p>
+                                                <p class="text-2xl font-bold text-green-600" id="current-calls">0</p>
+                                            </div>
+                                            <div class="p-2 bg-green-100 rounded-full">
+                                                <i class="fas fa-phone text-green-600"></i>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 text-xs text-gray-500">
+                                            <span class="text-green-600">+2.5%</span> from yesterday
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Response Time -->
+                                    <div class="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-4">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-600">Avg Response Time</p>
+                                                <p class="text-2xl font-bold text-blue-600" id="avg-response-time">1.2s</p>
+                                            </div>
+                                            <div class="p-2 bg-blue-100 rounded-full">
+                                                <i class="fas fa-clock text-blue-600"></i>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 text-xs text-gray-500">
+                                            <span class="text-blue-600">-0.3s</span> improvement
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Total Calls Today -->
+                                    <div class="bg-gradient-to-r from-purple-50 to-violet-50 border border-purple-200 rounded-lg p-4">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-600">Total Calls</p>
+                                                <p class="text-2xl font-bold text-purple-600" id="total-calls">0</p>
+                                            </div>
+                                            <div class="p-2 bg-purple-100 rounded-full">
+                                                <i class="fas fa-chart-bar text-purple-600"></i>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 text-xs text-gray-500">
+                                            <span class="text-purple-600">+12%</span> vs last week
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Success Rate -->
+                                    <div class="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-lg p-4">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-600">Success Rate</p>
+                                                <p class="text-2xl font-bold text-orange-600" id="success-rate">0%</p>
+                                            </div>
+                                            <div class="p-2 bg-orange-100 rounded-full">
+                                                <i class="fas fa-check-circle text-orange-600"></i>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 text-xs text-gray-500">
+                                            <span class="text-orange-600">+1.2%</span> this month
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Analytics Controls -->
+                                <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <h5 class="text-md font-semibold text-gray-700">Analytics Controls</h5>
+                                        <div class="flex items-center space-x-2">
+                                            <button onclick="refreshAnalyticsMetrics()" class="text-blue-600 hover:text-blue-800 text-sm px-3 py-1 border border-blue-200 rounded">
+                                                <i class="fas fa-sync-alt mr-1"></i>Refresh
+                                            </button>
+                                            <button onclick="exportAnalytics()" class="text-green-600 hover:text-green-800 text-sm px-3 py-1 border border-green-200 rounded">
+                                                <i class="fas fa-download mr-1"></i>Export
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Time Range</label>
+                                            <select class="form-select text-sm w-full">
+                                                <option>Last 24 hours</option>
+                                                <option>Last 7 days</option>
+                                                <option>Last 30 days</option>
+                                                <option>Custom range</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Metric Type</label>
+                                            <select class="form-select text-sm w-full">
+                                                <option>All metrics</option>
+                                                <option>Call volume only</option>
+                                                <option>Response times only</option>
+                                                <option>Success rates only</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Update Frequency</label>
+                                            <select class="form-select text-sm w-full">
+                                                <option>Real-time (5s)</option>
+                                                <option>Every minute</option>
+                                                <option>Every 5 minutes</option>
+                                                <option>Manual only</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Performance Trends -->
+                                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                    <h5 class="text-md font-semibold text-gray-700 mb-3">Performance Trends</h5>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div class="border border-gray-100 rounded p-3">
+                                            <h6 class="text-sm font-medium text-gray-600 mb-2">Call Volume Trend</h6>
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-lg font-bold text-blue-600">📈 Increasing</span>
+                                                <span class="text-sm text-gray-500">+15% this week</span>
+                                            </div>
+                                        </div>
+                                        <div class="border border-gray-100 rounded p-3">
+                                            <h6 class="text-sm font-medium text-gray-600 mb-2">Response Quality</h6>
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-lg font-bold text-green-600">✅ Excellent</span>
+                                                <span class="text-sm text-gray-500">97.5% satisfaction</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        >
 
                         <!-- ========================================= -->
                         <!-- TAB 5: Flow Designer                     -->
@@ -3290,17 +3414,143 @@
                                     <i class="fas fa-project-diagram mr-2 text-indigo-600"></i>Conversation Flow Designer
                                     <span class="ml-2 text-sm text-gray-600">(Visual Conversation Logic)</span>
                                 </h4>
-                                <div class="text-center py-8">
-                                    <i class="fas fa-project-diagram text-4xl text-indigo-400 mb-4"></i>
-                                    <h5 class="text-lg font-medium text-gray-700 mb-2">Flow Designer</h5>
-                                    <p class="text-gray-500">Visual conversation flow builder</p>
-                                    <div class="mt-4 space-x-2">
-                                        <button onclick="addFlowNode('greeting')" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">
-                                            <i class="fas fa-plus mr-1"></i>Add Node
-                                        </button>
-                                        <button onclick="initializeFlowDesigner()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md">
-                                            <i class="fas fa-play mr-2"></i>Initialize Designer
-                                        </button>
+                                
+                                <!-- Flow Designer Toolbar -->
+                                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-4">
+                                            <h5 class="text-sm font-semibold text-gray-700">Flow Designer Tools</h5>
+                                            <div class="flex items-center space-x-2">
+                                                <button onclick="addFlowNode('greeting')" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs">
+                                                    <i class="fas fa-plus mr-1"></i>Greeting
+                                                </button>
+                                                <button onclick="addFlowNode('question')" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs">
+                                                    <i class="fas fa-question mr-1"></i>Question
+                                                </button>
+                                                <button onclick="addFlowNode('response')" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded text-xs">
+                                                    <i class="fas fa-reply mr-1"></i>Response
+                                                </button>
+                                                <button onclick="addFlowNode('escalation')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs">
+                                                    <i class="fas fa-exclamation mr-1"></i>Escalation
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center space-x-2">
+                                            <button onclick="saveFlowDesign()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm">
+                                                <i class="fas fa-save mr-2"></i>Save Flow
+                                            </button>
+                                            <button onclick="previewFlow()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm">
+                                                <i class="fas fa-play mr-2"></i>Preview
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Visual Flow Canvas -->
+                                <div class="bg-white border-2 border-dashed border-gray-300 rounded-lg p-8 mb-6" style="min-height: 400px;">
+                                    <div id="flow-canvas" class="w-full h-full relative">
+                                        <!-- Default Flow Nodes -->
+                                        <div class="flow-node greeting-node absolute top-8 left-8 bg-green-100 border-2 border-green-500 rounded-lg p-4 w-48" style="left: 50px; top: 50px;">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <div class="flex items-center">
+                                                    <i class="fas fa-hand-wave text-green-600 mr-2"></i>
+                                                    <span class="text-sm font-semibold text-gray-800">Greeting Node</span>
+                                                </div>
+                                                <button onclick="editFlowNode(this)" class="text-gray-400 hover:text-gray-600">
+                                                    <i class="fas fa-edit text-xs"></i>
+                                                </button>
+                                            </div>
+                                            <p class="text-xs text-gray-600 mb-2">Welcome message and initial response</p>
+                                            <div class="text-xs text-gray-500">
+                                                <div class="mb-1">
+                                                    <span class="font-medium">Triggers:</span> Call start, "Hello"
+                                                </div>
+                                                <div>
+                                                    <span class="font-medium">Next:</span> Intent detection
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flow-node question-node absolute bg-blue-100 border-2 border-blue-500 rounded-lg p-4 w-48" style="left: 350px; top: 50px;">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <div class="flex items-center">
+                                                    <i class="fas fa-question-circle text-blue-600 mr-2"></i>
+                                                    <span class="text-sm font-semibold text-gray-800">Intent Detection</span>
+                                                </div>
+                                                <button onclick="editFlowNode(this)" class="text-gray-400 hover:text-gray-600">
+                                                    <i class="fas fa-edit text-xs"></i>
+                                                </button>
+                                            </div>
+                                            <p class="text-xs text-gray-600 mb-2">Analyze customer intent and route</p>
+                                            <div class="text-xs text-gray-500">
+                                                <div class="mb-1">
+                                                    <span class="font-medium">Conditions:</span> Any question
+                                                </div>
+                                                <div>
+                                                    <span class="font-medium">Actions:</span> Knowledge search
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flow-node response-node absolute bg-purple-100 border-2 border-purple-500 rounded-lg p-4 w-48" style="left: 650px; top: 50px;">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <div class="flex items-center">
+                                                    <i class="fas fa-reply text-purple-600 mr-2"></i>
+                                                    <span class="text-sm font-semibold text-gray-800">Smart Response</span>
+                                                </div>
+                                                <button onclick="editFlowNode(this)" class="text-gray-400 hover:text-gray-600">
+                                                    <i class="fas fa-edit text-xs"></i>
+                                                </button>
+                                            </div>
+                                            <p class="text-xs text-gray-600 mb-2">Generate intelligent response</p>
+                                            <div class="text-xs text-gray-500">
+                                                <div class="mb-1">
+                                                    <span class="font-medium">Source:</span> Knowledge base
+                                                </div>
+                                                <div>
+                                                    <span class="font-medium">Confidence:</span> 85%+
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Connection Lines -->
+                                        <svg class="absolute top-0 left-0 w-full h-full pointer-events-none" style="z-index: 1;">
+                                            <line x1="198" y1="75" x2="350" y2="75" stroke="#6B7280" stroke-width="2" marker-end="url(#arrowhead)"/>
+                                            <line x1="548" y1="75" x2="650" y2="75" stroke="#6B7280" stroke-width="2" marker-end="url(#arrowhead)"/>
+                                            <defs>
+                                                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                                    <polygon points="0 0, 10 3.5, 0 7" fill="#6B7280"/>
+                                                </marker>
+                                            </defs>
+                                        </svg>
+                                    </div>
+                                </div>
+                                
+                                <!-- Flow Properties Panel -->
+                                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                    <h5 class="text-sm font-semibold text-gray-700 mb-3">Flow Properties</h5>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 mb-1">Flow Name</label>
+                                            <input type="text" id="flow-name" value="Default Customer Service Flow" class="w-full text-sm border border-gray-300 rounded px-2 py-1">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 mb-1">Trigger Conditions</label>
+                                            <select id="flow-trigger" class="w-full text-sm border border-gray-300 rounded px-2 py-1">
+                                                <option value="any">Any incoming call</option>
+                                                <option value="business-hours">Business hours only</option>
+                                                <option value="after-hours">After hours</option>
+                                                <option value="specific-keywords">Specific keywords</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-gray-600 mb-1">Priority Level</label>
+                                            <select id="flow-priority" class="w-full text-sm border border-gray-300 rounded px-2 py-1">
+                                                <option value="high">High Priority</option>
+                                                <option value="medium" selected>Medium Priority</option>
+                                                <option value="low">Low Priority</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -8473,7 +8723,14 @@
                 
                 // Update UI elements if they exist
                 const activeCallsEl = document.getElementById('current-calls');
+                const avgResponseTimeEl = document.getElementById('avg-response-time');
+                const totalCallsEl = document.getElementById('total-calls');
+                const successRateEl = document.getElementById('success-rate');
+                
                 if (activeCallsEl) activeCallsEl.textContent = metrics.activeCalls;
+                if (avgResponseTimeEl) avgResponseTimeEl.textContent = metrics.avgResponseTime + 's';
+                if (totalCallsEl) totalCallsEl.textContent = metrics.totalCalls;
+                if (successRateEl) successRateEl.textContent = metrics.successRate + '%';
                 
                 console.log('✅ Analytics metrics updated:', metrics);
                 
