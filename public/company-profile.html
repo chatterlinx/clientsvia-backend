@@ -9489,6 +9489,13 @@
 
         // Save Intelligence Settings function
         async function saveIntelligenceSettings() {
+            // Configuration constants
+            const SAVE_CONFIG = {
+                SUCCESS_DISPLAY_TIME: 2000,
+                ERROR_DISPLAY_TIME: 3000,
+                DEFAULT_CONTEXT_RETENTION: 30
+            };
+            
             const button = document.getElementById('save-intelligence-settings');
             const originalText = button.innerHTML;
             
@@ -9508,7 +9515,7 @@
                 // Collect intelligence settings
                 const settings = {
                     memoryMode: document.getElementById('ai-memory-mode')?.value || 'conversational',
-                    contextRetention: parseInt(document.getElementById('ai-context-retention')?.value || 30),
+                    contextRetention: parseInt(document.getElementById('ai-context-retention')?.value || SAVE_CONFIG.DEFAULT_CONTEXT_RETENTION),
                     features: {
                         contextualMemory: document.getElementById('ai-contextual-memory')?.checked || false,
                         dynamicReasoning: document.getElementById('ai-dynamic-reasoning')?.checked || false,
@@ -9544,31 +9551,40 @@
                 button.classList.remove('bg-purple-600', 'hover:bg-purple-700');
                 button.classList.add('bg-green-600');
                 
-                // Reset button after 2 seconds
+                // Reset button after configured timeout
                 setTimeout(() => {
                     button.innerHTML = originalText;
                     button.disabled = false;
                     button.classList.remove('bg-green-600');
                     button.classList.add('bg-purple-600', 'hover:bg-purple-700');
-                }, 2000);
+                }, SAVE_CONFIG.SUCCESS_DISPLAY_TIME);
                 
                 console.log('✅ Intelligence settings saved successfully:', result);
                 
             } catch (error) {
                 console.error('❌ Error saving intelligence settings:', error);
                 
-                // Show error state
-                button.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Error';
+                // Show error state with retry option
+                button.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Failed - Click to Retry';
                 button.classList.remove('bg-purple-600', 'hover:bg-purple-700');
-                button.classList.add('bg-red-600');
+                button.classList.add('bg-red-600', 'hover:bg-red-700');
                 
-                // Reset button after 3 seconds
+                // Enable button for retry but keep error styling
+                button.disabled = false;
+                
+                // Show user-friendly error notification
+                if (typeof showNotification === 'function') {
+                    showNotification('Failed to save Intelligence settings. Please try again.', 'error');
+                }
+                
+                // Auto-reset button styling after timeout (but keep retry functionality)
                 setTimeout(() => {
-                    button.innerHTML = originalText;
-                    button.disabled = false;
-                    button.classList.remove('bg-red-600');
-                    button.classList.add('bg-purple-600', 'hover:bg-purple-700');
-                }, 3000);
+                    if (button.innerHTML.includes('Failed - Click to Retry')) {
+                        button.innerHTML = originalText;
+                        button.classList.remove('bg-red-600', 'hover:bg-red-700');
+                        button.classList.add('bg-purple-600', 'hover:bg-purple-700');
+                    }
+                }, SAVE_CONFIG.ERROR_DISPLAY_TIME);
             }
         }
     </script>
