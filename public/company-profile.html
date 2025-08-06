@@ -9275,8 +9275,12 @@
             const valueDisplay = document.getElementById('ai-context-value');
             
             if (slider && valueDisplay) {
+                // Set initial value display
+                valueDisplay.textContent = `${slider.value} min`;
+                
                 slider.addEventListener('input', function() {
                     valueDisplay.textContent = `${this.value} min`;
+                    console.log('🕐 Context retention changed to:', this.value, 'minutes');
                     
                     // Trigger change detection
                     if (window.companyProfileManager) {
@@ -9284,7 +9288,9 @@
                     }
                 });
                 
-                console.log('🕐 Context retention slider initialized');
+                console.log('✅ Context retention slider initialized with value:', slider.value);
+            } else {
+                console.warn('⚠️ Context retention slider elements not found:', { slider: !!slider, valueDisplay: !!valueDisplay });
             }
         }
         
@@ -9323,23 +9329,8 @@
                 }
             });
             
-            console.log('✅ Intelligence toggles initialized');
-        }
+            console.log('✅ Intelligence toggles initialized');        }
         
-        // Initialize context retention slider
-        function initializeContextRetentionSlider() {
-            const slider = document.getElementById('ai-context-retention');
-            const valueDisplay = document.getElementById('ai-context-value');
-            
-            if (slider && valueDisplay) {
-                slider.addEventListener('input', function() {
-                    valueDisplay.textContent = `${this.value} min`;
-                });
-                
-                console.log('✅ Context retention slider initialized');
-            }
-        }
-
         // Initialize Intelligence & Memory section
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
@@ -9429,11 +9420,15 @@
                     // Load context retention
                     const contextRetentionSlider = document.getElementById('ai-context-retention');
                     const contextRetentionValue = document.getElementById('ai-context-value');
-                    if (contextRetentionSlider && settings.contextRetentionMinutes) {
-                        contextRetentionSlider.value = settings.contextRetentionMinutes;
+                    if (contextRetentionSlider) {
+                        const retentionMinutes = settings.contextRetentionMinutes || 30;
+                        contextRetentionSlider.value = retentionMinutes;
                         if (contextRetentionValue) {
-                            contextRetentionValue.textContent = `${settings.contextRetentionMinutes} min`;
+                            contextRetentionValue.textContent = `${retentionMinutes} min`;
                         }
+                        console.log('🕐 Context retention loaded:', retentionMinutes, 'minutes');
+                    } else {
+                        console.warn('⚠️ Context retention slider not found');
                     }
                     
                     // Load feature toggles
