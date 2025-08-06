@@ -9394,14 +9394,30 @@
                 
                 const result = await response.json();
                 console.log('📄 Load Response Data:', result);
+                console.log('🔍 agentIntelligenceSettings:', result.company?.agentIntelligenceSettings);
+                console.log('🔍 Available memoryMode values:', {
+                    'agentIntelligenceSettings.memoryMode': result.company?.agentIntelligenceSettings?.memoryMode,
+                    'agentSettings.memoryMode': result.company?.agentSettings?.memoryMode,
+                    'company.memoryMode': result.company?.memoryMode
+                });
                 
                 if (result.success && result.company.agentIntelligenceSettings) {
                     const settings = result.company.agentIntelligenceSettings;
+                    console.log('🎯 Loading from agentIntelligenceSettings:', settings);
                     
                     // Load memory mode
                     const memoryModeSelect = document.getElementById('ai-memory-mode');
-                    if (memoryModeSelect && settings.memoryMode) {
-                        memoryModeSelect.value = settings.memoryMode;
+                    if (memoryModeSelect) {
+                        // Try multiple possible locations for memoryMode
+                        const memoryMode = settings.memoryMode || 
+                                         result.company?.agentSettings?.memoryMode ||
+                                         result.company?.memoryMode ||
+                                         'conversational'; // default
+                                         
+                        console.log('✅ Setting memory mode to:', memoryMode);
+                        memoryModeSelect.value = memoryMode;
+                    } else {
+                        console.log('⚠️ Memory mode element (ai-memory-mode) not found');
                     }
                     
                     // Load context retention
