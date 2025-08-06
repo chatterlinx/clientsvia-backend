@@ -9291,6 +9291,9 @@
                 // Initialize context retention slider
                 initializeContextRetentionSlider();
                 
+                // Load existing intelligence settings
+                loadIntelligenceSettings();
+                
                 // Initialize save button
                 const saveButton = document.getElementById('save-intelligence-settings');
                 if (saveButton) {
@@ -9314,6 +9317,14 @@
                 button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
                 button.disabled = true;
                 
+                // Get company ID from URL or global variable
+                const urlParams = new URLSearchParams(window.location.search);
+                const companyId = urlParams.get('id') || window.currentCompanyId;
+                
+                if (!companyId) {
+                    throw new Error('Company ID not found');
+                }
+                
                 // Collect intelligence settings
                 const settings = {
                     memoryMode: document.getElementById('ai-memory-mode')?.value || 'conversational',
@@ -9329,9 +9340,20 @@
                 
                 console.log('💾 Saving intelligence settings:', settings);
                 
-                // Here you would typically make an API call to save the settings
-                // For now, we'll simulate a successful save
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // Make API call to save the settings
+                const response = await fetch(`/api/companies/${companyId}/ai-intelligence-settings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(settings)
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to save settings');
+                }
                 
                 // Show success state
                 button.innerHTML = '<i class="fas fa-check mr-2"></i>Saved!';
@@ -9346,7 +9368,7 @@
                     button.classList.add('bg-purple-600', 'hover:bg-purple-700');
                 }, 2000);
                 
-                console.log('✅ Intelligence settings saved successfully');
+                console.log('✅ Intelligence settings saved successfully:', result);
                 
             } catch (error) {
                 console.error('❌ Error saving intelligence settings:', error);

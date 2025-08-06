@@ -1218,4 +1218,8 @@ router.use('/', personalityRoutes);
 const knowledgeRoutes = require('./company/knowledge');
 router.use('/', knowledgeRoutes);
 
+// Include agent settings routes
+const agentSettingsRoutes = require('./company/agentSettings');
+router.use('/', agentSettingsRoutes);
+
 module.exports = router;

@@ -340,8 +340,8 @@ const companySchema = new mongoose.Schema({
         
         memoryMode: { 
             type: String, 
-            enum: ['short', 'conversation'], 
-            default: 'short' 
+            enum: ['short', 'conversational', 'persistent'], 
+            default: 'conversational' 
         },
         fallbackThreshold: { 
             type: Number, 
@@ -375,7 +375,13 @@ const companySchema = new mongoose.Schema({
         contextRetention: { type: Boolean, default: true },
         intelligentRouting: { type: Boolean, default: true },
         sentimentAnalysis: { type: Boolean, default: false },
-        realTimeOptimization: { type: Boolean, default: true }
+        realTimeOptimization: { type: Boolean, default: true },
+        
+        // 🧠 AI Intelligence Features from Frontend
+        contextualMemory: { type: Boolean, default: true },
+        dynamicReasoning: { type: Boolean, default: true },
+        smartEscalation: { type: Boolean, default: true },
+        contextRetentionMinutes: { type: Number, min: 5, max: 120, default: 30 }
     },
     bookingFlow: [{
         name: { type: String, required: true },

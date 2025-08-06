@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Intelligence Settings Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">AI Intelligence Settings Test</h1>
+        
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Company ID</label>
+            <input type="text" id="company-id" value="689337fc2967f72b1a2096b0" 
+                class="w-full px-3 py-2 border border-gray-300 rounded-md">
+        </div>
+        
+        <div class="grid md:grid-cols-2 gap-6 mb-6">
+            <!-- Left Column: Basic Settings -->
+            <div class="space-y-3">
+                <h5 class="text-sm font-semibold text-gray-700 mb-3">Basic Settings</h5>
+                
+                <div>
+                    <label class="form-label text-gray-700 font-medium">Memory Mode</label>
+                    <select id="ai-memory-mode" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        <option value="short">Short Term (Single Response)</option>
+                        <option value="conversational" selected>Conversational (Session Memory)</option>
+                        <option value="persistent">Persistent (Long-term Context)</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="form-label text-gray-700 font-medium">Context Retention</label>
+                    <div class="flex items-center space-x-3">
+                        <input type="range" id="ai-context-retention" 
+                            class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
+                            min="5" max="120" step="5" value="30">
+                        <span id="ai-context-value" class="text-sm font-mono bg-gray-100 px-3 py-1 rounded min-w-[70px] text-center">30 min</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Column: AI Intelligence Features -->
+            <div class="space-y-3">
+                <h5 class="text-sm font-semibold text-gray-700 mb-3">AI Intelligence Features</h5>
+                
+                <!-- Contextual Memory -->
+                <label class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer">
+                    <div class="flex items-center">
+                        <i class="fas fa-memory mr-3 text-blue-600"></i>
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">Contextual Memory</span>
+                            <p class="text-xs text-gray-500">Remember caller preferences & history</p>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <input type="checkbox" id="ai-contextual-memory" class="sr-only" checked>
+                        <div class="toggle-switch w-11 h-6 bg-blue-600 rounded-full shadow-inner transition-colors duration-200"></div>
+                        <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-5"></div>
+                    </div>
+                </label>
+                
+                <!-- Dynamic Reasoning -->
+                <label class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer">
+                    <div class="flex items-center">
+                        <i class="fas fa-lightbulb mr-3 text-yellow-600"></i>
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">Dynamic Reasoning</span>
+                            <p class="text-xs text-gray-500">Adapt responses based on conversation flow</p>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <input type="checkbox" id="ai-dynamic-reasoning" class="sr-only" checked>
+                        <div class="toggle-switch w-11 h-6 bg-yellow-600 rounded-full shadow-inner transition-colors duration-200"></div>
+                        <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-5"></div>
+                    </div>
+                </label>
+                
+                <!-- Smart Escalation -->
+                <label class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer">
+                    <div class="flex items-center">
+                        <i class="fas fa-level-up-alt mr-3 text-red-600"></i>
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">Smart Escalation</span>
+                            <p class="text-xs text-gray-500">Auto-detect when human intervention needed</p>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <input type="checkbox" id="ai-smart-escalation" class="sr-only" checked>
+                        <div class="toggle-switch w-11 h-6 bg-red-600 rounded-full shadow-inner transition-colors duration-200"></div>
+                        <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-5"></div>
+                    </div>
+                </label>
+                
+                <!-- Auto Learning Queue -->
+                <label class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer">
+                    <div class="flex items-center">
+                        <i class="fas fa-graduation-cap mr-3 text-green-600"></i>
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">Auto Learning Queue</span>
+                            <p class="text-xs text-gray-500">Learn from interactions automatically</p>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <input type="checkbox" id="ai-auto-learning" class="sr-only" checked>
+                        <div class="toggle-switch w-11 h-6 bg-green-600 rounded-full shadow-inner transition-colors duration-200"></div>
+                        <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-5"></div>
+                    </div>
+                </label>
+                
+                <!-- Real-time Optimization -->
+                <label class="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer">
+                    <div class="flex items-center">
+                        <i class="fas fa-tachometer-alt mr-3 text-purple-600"></i>
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">Real-time Optimization</span>
+                            <p class="text-xs text-gray-500">Continuously improve response quality</p>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <input type="checkbox" id="ai-realtime-optimization" class="sr-only">
+                        <div class="toggle-switch w-11 h-6 bg-gray-300 rounded-full shadow-inner transition-colors duration-200"></div>
+                        <div class="toggle-dot absolute w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 top-1 left-1 transform translate-x-0"></div>
+                    </div>
+                </label>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="flex justify-between items-center">
+            <button type="button" id="load-settings-btn" 
+                class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center">
+                <i class="fas fa-download mr-2"></i>Load Settings
+            </button>
+            
+            <button type="button" id="save-intelligence-settings" 
+                class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-6 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center">
+                <i class="fas fa-save mr-2"></i>Save Intelligence Settings
+            </button>
+        </div>
+        
+        <!-- Status Display -->
+        <div id="status-display" class="mt-4 p-3 rounded-lg bg-gray-50 border hidden">
+            <pre id="status-content" class="text-xs text-gray-600"></pre>
+        </div>
+    </div>
+
+    <style>
+        /* Toggle Switch Styles */
+        .toggle-switch {
+            transition: background-color 0.2s ease;
+        }
+        
+        .toggle-dot {
+            transition: transform 0.2s ease;
+        }
+        
+        /* Unchecked state colors */
+        input[type="checkbox"]:not(:checked) + .toggle-switch {
+            background-color: #d1d5db !important; /* gray-300 */
+        }
+        
+        /* Toggle functionality */
+        label.cursor-pointer {
+            cursor: pointer;
+        }
+    </style>
+
+    <script>
+        // Initialize context retention slider
+        function initializeContextRetentionSlider() {
+            const slider = document.getElementById('ai-context-retention');
+            const valueDisplay = document.getElementById('ai-context-value');
+            
+            if (slider && valueDisplay) {
+                slider.addEventListener('input', function() {
+                    valueDisplay.textContent = `${this.value} min`;
+                });
+                console.log('✅ Context retention slider initialized');
+            }
+        }
+        
+        // Initialize toggle switches
+        function initializeToggleSwitches() {
+            const toggles = document.querySelectorAll('input[type="checkbox"][id^="ai-"]');
+            
+            toggles.forEach(toggle => {
+                toggle.addEventListener('change', function() {
+                    updateToggleVisualState(this);
+                });
+            });
+            
+            console.log('✅ Toggle switches initialized');
+        }
+        
+        // Update toggle visual state
+        function updateToggleVisualState(checkbox) {
+            const toggleDot = checkbox.parentElement.querySelector('.toggle-dot');
+            const toggleSwitch = checkbox.parentElement.querySelector('.toggle-switch');
+            
+            if (toggleDot && toggleSwitch) {
+                if (checkbox.checked) {
+                    toggleDot.classList.add('translate-x-5');
+                    toggleDot.classList.remove('translate-x-0');
+                } else {
+                    toggleDot.classList.add('translate-x-0');
+                    toggleDot.classList.remove('translate-x-5');
+                    toggleSwitch.style.backgroundColor = '#d1d5db';
+                }
+            }
+        }
+        
+        // Load current Intelligence Settings
+        async function loadIntelligenceSettings() {
+            try {
+                const companyId = document.getElementById('company-id').value;
+                
+                if (!companyId) {
+                    throw new Error('Company ID is required');
+                }
+                
+                showStatus('Loading settings...', 'info');
+                
+                const response = await fetch(`/api/companies/${companyId}/agent-settings`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load settings');
+                }
+                
+                const result = await response.json();
+                
+                if (result.success && result.company.agentIntelligenceSettings) {
+                    const settings = result.company.agentIntelligenceSettings;
+                    
+                    // Load memory mode
+                    const memoryModeSelect = document.getElementById('ai-memory-mode');
+                    if (memoryModeSelect && settings.memoryMode) {
+                        memoryModeSelect.value = settings.memoryMode;
+                    }
+                    
+                    // Load context retention
+                    const contextRetentionSlider = document.getElementById('ai-context-retention');
+                    const contextRetentionValue = document.getElementById('ai-context-value');
+                    if (contextRetentionSlider && settings.contextRetentionMinutes) {
+                        contextRetentionSlider.value = settings.contextRetentionMinutes;
+                        if (contextRetentionValue) {
+                            contextRetentionValue.textContent = `${settings.contextRetentionMinutes} min`;
+                        }
+                    }
+                    
+                    // Load feature toggles
+                    const featureMap = {
+                        'ai-contextual-memory': 'contextualMemory',
+                        'ai-dynamic-reasoning': 'dynamicReasoning',
+                        'ai-smart-escalation': 'smartEscalation',
+                        'ai-auto-learning': 'autoLearningQueue',
+                        'ai-realtime-optimization': 'realTimeOptimization'
+                    };
+                    
+                    Object.entries(featureMap).forEach(([elementId, settingKey]) => {
+                        const checkbox = document.getElementById(elementId);
+                        if (checkbox && settings[settingKey] !== undefined) {
+                            checkbox.checked = settings[settingKey];
+                            updateToggleVisualState(checkbox);
+                        }
+                    });
+                    
+                    showStatus('Settings loaded successfully!', 'success');
+                    console.log('✅ Intelligence settings loaded:', settings);
+                } else {
+                    throw new Error('Invalid response format');
+                }
+                
+            } catch (error) {
+                console.error('❌ Error loading intelligence settings:', error);
+                showStatus(`Error loading settings: ${error.message}`, 'error');
+            }
+        }
+        
+        // Save Intelligence Settings
+        async function saveIntelligenceSettings() {
+            const button = document.getElementById('save-intelligence-settings');
+            const originalText = button.innerHTML;
+            
+            try {
+                // Show loading state
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+                button.disabled = true;
+                
+                const companyId = document.getElementById('company-id').value;
+                
+                if (!companyId) {
+                    throw new Error('Company ID is required');
+                }
+                
+                // Collect intelligence settings
+                const settings = {
+                    memoryMode: document.getElementById('ai-memory-mode')?.value || 'conversational',
+                    contextRetention: parseInt(document.getElementById('ai-context-retention')?.value || 30),
+                    features: {
+                        contextualMemory: document.getElementById('ai-contextual-memory')?.checked || false,
+                        dynamicReasoning: document.getElementById('ai-dynamic-reasoning')?.checked || false,
+                        smartEscalation: document.getElementById('ai-smart-escalation')?.checked || false,
+                        autoLearning: document.getElementById('ai-auto-learning')?.checked || false,
+                        realtimeOptimization: document.getElementById('ai-realtime-optimization')?.checked || false
+                    }
+                };
+                
+                showStatus('Saving settings...', 'info');
+                console.log('💾 Saving intelligence settings:', settings);
+                
+                // Make API call to save the settings
+                const response = await fetch(`/api/companies/${companyId}/ai-intelligence-settings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(settings)
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to save settings');
+                }
+                
+                // Show success state
+                button.innerHTML = '<i class="fas fa-check mr-2"></i>Saved!';
+                button.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+                button.classList.add('bg-green-600');
+                
+                showStatus('Settings saved successfully!', 'success');
+                
+                // Reset button after 2 seconds
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                    button.classList.remove('bg-green-600');
+                    button.classList.add('bg-purple-600', 'hover:bg-purple-700');
+                }, 2000);
+                
+                console.log('✅ Intelligence settings saved successfully:', result);
+                
+            } catch (error) {
+                console.error('❌ Error saving intelligence settings:', error);
+                
+                // Show error state
+                button.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Error';
+                button.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+                button.classList.add('bg-red-600');
+                
+                showStatus(`Error saving settings: ${error.message}`, 'error');
+                
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                    button.classList.remove('bg-red-600');
+                    button.classList.add('bg-purple-600', 'hover:bg-purple-700');
+                }, 3000);
+            }
+        }
+        
+        // Show status message
+        function showStatus(message, type = 'info') {
+            const statusDisplay = document.getElementById('status-display');
+            const statusContent = document.getElementById('status-content');
+            
+            if (statusDisplay && statusContent) {
+                statusContent.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                
+                // Update styles based on type
+                statusDisplay.className = 'mt-4 p-3 rounded-lg border';
+                
+                switch (type) {
+                    case 'success':
+                        statusDisplay.classList.add('bg-green-50', 'border-green-200', 'text-green-800');
+                        break;
+                    case 'error':
+                        statusDisplay.classList.add('bg-red-50', 'border-red-200', 'text-red-800');
+                        break;
+                    default:
+                        statusDisplay.classList.add('bg-blue-50', 'border-blue-200', 'text-blue-800');
+                }
+                
+                statusDisplay.classList.remove('hidden');
+            }
+        }
+        
+        // Initialize everything when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeContextRetentionSlider();
+            initializeToggleSwitches();
+            
+            // Initialize buttons
+            const loadButton = document.getElementById('load-settings-btn');
+            const saveButton = document.getElementById('save-intelligence-settings');
+            
+            if (loadButton) {
+                loadButton.addEventListener('click', loadIntelligenceSettings);
+            }
+            
+            if (saveButton) {
+                saveButton.addEventListener('click', saveIntelligenceSettings);
+            }
+            
+            // Load settings on page load
+            loadIntelligenceSettings();
+            
+            console.log('🚀 AI Intelligence Settings Test Page Ready');
+        });
+    </script>
+</body>
+</html>

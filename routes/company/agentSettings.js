@@ -34,7 +34,20 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
       escalationMode: ['ask', 'auto'].includes(agentIntelligenceSettings.escalationMode) 
         ? agentIntelligenceSettings.escalationMode : 'ask',
       rePromptAfterTurns: Math.min(Math.max(agentIntelligenceSettings.rePromptAfterTurns || 3, 1), 10),
-      maxPromptsPerCall: Math.min(Math.max(agentIntelligenceSettings.maxPromptsPerCall || 2, 1), 10)
+      maxPromptsPerCall: Math.min(Math.max(agentIntelligenceSettings.maxPromptsPerCall || 2, 1), 10),
+      
+      // 🧠 AI Intelligence Features
+      contextualMemory: agentIntelligenceSettings.features?.contextualMemory !== undefined ? 
+        agentIntelligenceSettings.features.contextualMemory : true,
+      dynamicReasoning: agentIntelligenceSettings.features?.dynamicReasoning !== undefined ? 
+        agentIntelligenceSettings.features.dynamicReasoning : true,
+      smartEscalation: agentIntelligenceSettings.features?.smartEscalation !== undefined ? 
+        agentIntelligenceSettings.features.smartEscalation : true,
+      autoLearningQueue: agentIntelligenceSettings.features?.autoLearning !== undefined ? 
+        agentIntelligenceSettings.features.autoLearning : true,
+      realTimeOptimization: agentIntelligenceSettings.features?.realtimeOptimization !== undefined ? 
+        agentIntelligenceSettings.features.realtimeOptimization : true,
+      contextRetentionMinutes: Math.min(Math.max(agentIntelligenceSettings.contextRetention || 30, 5), 120)
     };
 
     // Update company with validated data
@@ -159,6 +172,84 @@ router.post('/companies/:id/test-agent', async (req, res) => {
   } catch (err) {
     console.error('❌ Error testing agent:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// 🧠 Save AI Intelligence Features Settings (specific endpoint)
+router.post('/companies/:id/ai-intelligence-settings', async (req, res) => {
+  try {
+    const companyId = req.params.id;
+    const { memoryMode, contextRetention, features } = req.body;
+
+    console.log('📧 Saving AI Intelligence Settings for company:', companyId, { memoryMode, contextRetention, features });
+
+    // Validate the settings
+    const validatedSettings = {};
+    
+    if (memoryMode && ['short', 'conversational', 'persistent'].includes(memoryMode)) {
+      validatedSettings.memoryMode = memoryMode;
+    }
+    
+    if (contextRetention !== undefined) {
+      validatedSettings.contextRetentionMinutes = Math.min(Math.max(parseInt(contextRetention), 5), 120);
+    }
+    
+    if (features && typeof features === 'object') {
+      if (features.contextualMemory !== undefined) {
+        validatedSettings.contextualMemory = Boolean(features.contextualMemory);
+      }
+      if (features.dynamicReasoning !== undefined) {
+        validatedSettings.dynamicReasoning = Boolean(features.dynamicReasoning);
+      }
+      if (features.smartEscalation !== undefined) {
+        validatedSettings.smartEscalation = Boolean(features.smartEscalation);
+      }
+      if (features.autoLearning !== undefined) {
+        validatedSettings.autoLearningQueue = Boolean(features.autoLearning);
+      }
+      if (features.realtimeOptimization !== undefined) {
+        validatedSettings.realTimeOptimization = Boolean(features.realtimeOptimization);
+      }
+    }
+
+    // Build the update object for nested agentIntelligenceSettings
+    const updateObject = {};
+    Object.keys(validatedSettings).forEach(key => {
+      updateObject[`agentIntelligenceSettings.${key}`] = validatedSettings[key];
+    });
+    
+    updateObject.updatedAt = new Date();
+
+    // Update company
+    const company = await Company.findByIdAndUpdate(
+      companyId,
+      updateObject,
+      { new: true, runValidators: true }
+    );
+
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    console.log('✅ AI Intelligence settings updated successfully:', validatedSettings);
+
+    res.json({ 
+      success: true, 
+      message: 'AI Intelligence settings saved successfully',
+      settings: validatedSettings,
+      company: {
+        _id: company._id,
+        companyName: company.companyName,
+        agentIntelligenceSettings: company.agentIntelligenceSettings
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ Error saving AI Intelligence settings:', err);
+    res.status(500).json({ 
+      error: 'Failed to save AI Intelligence settings',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
