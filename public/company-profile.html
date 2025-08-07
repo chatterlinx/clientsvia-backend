@@ -154,6 +154,21 @@
             contain: layout;
             width: 100%;
         }
+        
+        /* 🔧 CRITICAL: Remove separation between tab nav and content */
+        #clientsvia-tab-content {
+            margin-top: 0 !important;
+            padding-top: 1.5rem !important;
+            border-top: none !important;
+        }
+        
+        /* Ensure seamless tab-to-content connection */
+        .clientsvia-tab-btn.active {
+            border-bottom: 2px solid #6366f1 !important;
+            margin-bottom: -2px !important;
+            z-index: 10 !important;
+            position: relative !important;
+        }
         @media (min-width: 768px) { .wider-textbox { max-width: 800px; } }
         @media (max-width: 767px) { .wider-textbox { max-width: 100%; } }
         
@@ -1756,7 +1771,7 @@
                                 
                                 <div class="p-6 intelligence-section-container">
                                     <!-- Tab Navigation - Fixed Responsive Design -->
-                                    <div class="border-b border-gray-200 mb-6 overflow-x-auto overflow-y-hidden" style="scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9;">
+                                    <div class="border-b border-gray-200 overflow-x-auto overflow-y-hidden" style="scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9;">
                                         <div class="flex space-x-0 min-w-max">
                                             <button id="clientsvia-tab-priority" class="clientsvia-tab-btn active flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50 whitespace-nowrap transition-all duration-200">
                                                 <i class="fas fa-layer-group mr-2"></i>Answer Priority Flow
@@ -1783,7 +1798,7 @@
                                     </div>
                                     
                                     <!-- Tab Content Container -->
-                                    <div id="clientsvia-tab-content">
+                                    <div id="clientsvia-tab-content" class="mt-0">
                                         
                                         <!-- ========================================= -->
                                         <!-- ANSWER PRIORITY FLOW CONFIGURATION       -->
