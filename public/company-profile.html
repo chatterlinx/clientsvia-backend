@@ -75,6 +75,29 @@
         #toast-notification.show { opacity: 1; }
         #toast-notification.success { background-color: #4CAF50; }
         #toast-notification.error { background-color: #f44336; }
+        
+        /* 🔧 HOTFIX: Prevent priority items from floating outside containers */
+        .clientsvia-priority-item {
+            position: relative !important;
+            transform: none !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+            z-index: auto !important;
+        }
+        
+        /* Ensure priority flow container contains all elements */
+        #clientsvia-priority-flow-container {
+            position: relative;
+            overflow: visible;
+            contain: layout;
+        }
+        
+        /* Prevent any drag ghosts from becoming stuck */
+        .clientsvia-priority-item[style*="position"] {
+            position: relative !important;
+        }
         @media (min-width: 768px) { .wider-textbox { max-width: 800px; } }
         @media (max-width: 767px) { .wider-textbox { max-width: 100%; } }
         
@@ -1522,6 +1545,14 @@
                                             • Knowledge Sources: Lines ~1250-1450<br>
                                             • Agent Personality: Lines ~1450-1550<br>
                                             • Booking Workflows: Lines ~1920-2100
+                                        </div>
+                                        <div class="col-span-2 mt-4 pt-3 border-t border-gray-300">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-xs text-gray-500">🔧 Troubleshooting:</span>
+                                                <button onclick="fixEmergencyLLMFloating()" class="px-3 py-1 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200 transition-colors">
+                                                    <i class="fas fa-tools mr-1"></i>Fix Floating Elements
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -8501,10 +8532,75 @@
 
         // Initialize enterprise features after loading
         document.addEventListener('DOMContentLoaded', function() {
+            // 🔧 HOTFIX: Fix Emergency LLM floating issue
+            window.fixEmergencyLLMFloating = function() {
+                try {
+                    console.log('🔧 Fixing Emergency LLM floating issue...');
+                    
+                    // Find all Emergency LLM elements
+                    const emergencyElements = document.querySelectorAll('[data-priority-type="emergency-llm"]');
+                    const properContainer = document.getElementById('clientsvia-priority-flow-container');
+                    
+                    emergencyElements.forEach((element, index) => {
+                        // Reset all positioning styles
+                        element.style.position = '';
+                        element.style.top = '';
+                        element.style.left = '';
+                        element.style.right = '';
+                        element.style.bottom = '';
+                        element.style.transform = '';
+                        element.style.zIndex = '';
+                        element.style.opacity = '1';
+                        
+                        // If element is not in proper container, remove it (likely a duplicate/floating clone)
+                        if (properContainer && !properContainer.contains(element)) {
+                            console.log('🧹 Removing floating Emergency LLM element:', element);
+                            element.remove();
+                        }
+                        
+                        // If there are multiple elements, keep only the first one
+                        if (index > 0) {
+                            console.log('🧹 Removing duplicate Emergency LLM element:', element);
+                            element.remove();
+                        }
+                    });
+                    
+                    // Reset any stuck drag states
+                    if (window.clientsViaDraggedElement) {
+                        window.clientsViaDraggedElement = null;
+                    }
+                    
+                    // Clear any elements that might be floating with position styles
+                    const floatingElements = document.querySelectorAll('[style*="position: fixed"], [style*="position: absolute"]');
+                    floatingElements.forEach(element => {
+                        if (element.innerHTML && element.innerHTML.includes('Emergency LLM Fallback')) {
+                            console.log('🧹 Removing styled floating Emergency LLM element:', element);
+                            element.remove();
+                        }
+                    });
+                    
+                    console.log('✅ Emergency LLM floating issue fixed');
+                    showNotification('Emergency LLM floating elements cleared', 'success');
+                } catch (error) {
+                    console.error('❌ Error fixing Emergency LLM floating:', error);
+                    showNotification('Error fixing floating elements: ' + error.message, 'error');
+                }
+            };
+            
+            // Run fix immediately
+            fixEmergencyLLMFloating();
+            
+            // Run fix again after a short delay to catch any late-loading elements
+            setTimeout(fixEmergencyLLMFloating, 500);
+            setTimeout(fixEmergencyLLMFloating, 1000);
+            
             // Initialize enterprise features after delay
             setTimeout(() => {
                 initializeEnterpriseFeatures();
                 console.log('🚀 Enterprise AI features initialized');
+                
+                // Final cleanup after initialization
+                fixEmergencyLLMFloating();
             }, 1500);
         });
 
