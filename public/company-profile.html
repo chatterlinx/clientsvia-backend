@@ -122,6 +122,38 @@
             overflow: hidden;
             width: 100%;
         }
+        
+        /* 🔧 TAB CONTAINER STRUCTURE FIX */
+        #clientsvia-tab-content {
+            position: relative;
+            overflow: visible;
+            contain: layout;
+            width: 100%;
+            min-height: 400px;
+        }
+        
+        /* Ensure all tab contents are properly contained */
+        .clientsvia-tab-content {
+            position: relative !important;
+            float: none !important;
+            clear: both;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        
+        /* Fix any floating elements within tabs */
+        .clientsvia-tab-content * {
+            position: relative;
+            z-index: auto;
+        }
+        
+        /* Intelligence section container fix */
+        .intelligence-section-container {
+            position: relative;
+            overflow: visible;
+            contain: layout;
+            width: 100%;
+        }
         @media (min-width: 768px) { .wider-textbox { max-width: 800px; } }
         @media (max-width: 767px) { .wider-textbox { max-width: 100%; } }
         
@@ -1722,7 +1754,7 @@
                                     </div>
                                 </div>
                                 
-                                <div class="p-6">
+                                <div class="p-6 intelligence-section-container">
                                     <!-- Tab Navigation - Fixed Responsive Design -->
                                     <div class="border-b border-gray-200 mb-6 overflow-x-auto overflow-y-hidden" style="scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9;">
                                         <div class="flex space-x-0 min-w-max">
@@ -2564,7 +2596,6 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
                             
                             <!-- ========================================= -->
                             <!-- 📊 REAL-TIME ANALYTICS DASHBOARD        -->
@@ -4779,6 +4810,9 @@
                         </div>
                     </div>
                 </div>
+                    
+                    </div> <!-- End clientsvia-tab-content container -->
+                </div> <!-- End Intelligence section -->
 
             </div>
         </body>
