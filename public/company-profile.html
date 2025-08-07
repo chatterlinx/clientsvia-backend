@@ -508,6 +508,58 @@
                             <span class="mx-2">•</span>
                             <span id="page-loaded-time">Loading...</span>
                         </div>
+                        
+                        <!-- Flow Configuration Panel -->
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-6 mt-6">
+                            <h5 class="text-lg font-semibold text-gray-800 mb-4">
+                                <i class="fas fa-cog mr-2 text-gray-600"></i>Flow Configuration
+                            </h5>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Flow Name</label>
+                                    <input type="text" value="Customer Service Flow" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Flow Status</label>
+                                    <select class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                        <option value="active">Active</option>
+                                        <option value="draft">Draft</option>
+                                        <option value="testing">Testing</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Default Response Tone</label>
+                                    <select class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                        <option value="professional">Professional & Helpful</option>
+                                        <option value="friendly">Friendly & Casual</option>
+                                        <option value="formal">Formal & Business</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Escalation Threshold</label>
+                                    <select class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                        <option value="low">Low (Easy escalation)</option>
+                                        <option value="medium" selected>Medium (Balanced)</option>
+                                        <option value="high">High (AI tries harder)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+                                <div class="text-sm text-gray-600">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Last modified: <span class="font-medium">Today at 2:30 PM</span>
+                                </div>
+                                <div class="space-x-3">
+                                    <button class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm transition-colors">
+                                        <i class="fas fa-eye mr-2"></i>Preview
+                                    </button>
+                                    <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm transition-colors">
+                                        <i class="fas fa-save mr-2"></i>Save Changes
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <nav class="hidden md:flex items-center" style="gap: 20px;">
                         <a href="/index.html" class="nav-link-global" id="nav-home">Home</a>
@@ -2675,13 +2727,114 @@
                                     <!-- Flow Canvas -->
                                     <div class="bg-white border-2 border-dashed border-gray-300 rounded-lg p-8 mb-6" style="min-height: 400px;">
                                         <div id="flow-canvas" class="w-full h-full relative">
-                                            <!-- Flow nodes will be dynamically added here -->
-                                            <div class="text-center text-gray-500 mt-20">
-                                                <i class="fas fa-project-diagram text-4xl mb-4 text-gray-300"></i>
-                                                <p class="text-lg font-medium mb-2">Conversation Flow Canvas</p>
-                                                <p class="text-sm">Drag and drop nodes to design your conversation flow</p>
-                                                <button onclick="addFlowNode()" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors">
-                                                    <i class="fas fa-plus mr-2"></i>Add Your First Node
+                                            <!-- Example Flow Nodes -->
+                                            <div class="flow-node absolute bg-green-100 border-2 border-green-500 rounded-lg p-4 w-48" style="left: 50px; top: 30px;">
+                                                <div class="flex items-center justify-between mb-2">
+                                                    <div class="flex items-center">
+                                                        <i class="fas fa-phone text-green-600 mr-2"></i>
+                                                        <span class="text-sm font-semibold text-gray-800">Call Start</span>
+                                                    </div>
+                                                    <button onclick="editFlowNode(this)" class="text-gray-400 hover:text-gray-600">
+                                                        <i class="fas fa-edit text-xs"></i>
+                                                    </button>
+                                                </div>
+                                                <p class="text-xs text-gray-600 mb-2">Initial greeting and setup</p>
+                                                <div class="text-xs text-gray-500">
+                                                    <div class="mb-1"><span class="font-medium">Trigger:</span> Incoming call</div>
+                                                    <div><span class="font-medium">Next:</span> Intent Detection</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="flow-node absolute bg-blue-100 border-2 border-blue-500 rounded-lg p-4 w-48" style="left: 350px; top: 30px;">
+                                                <div class="flex items-center justify-between mb-2">
+                                                    <div class="flex items-center">
+                                                        <i class="fas fa-brain text-blue-600 mr-2"></i>
+                                                        <span class="text-sm font-semibold text-gray-800">Intent Detection</span>
+                                                    </div>
+                                                    <button onclick="editFlowNode(this)" class="text-gray-400 hover:text-gray-600">
+                                                        <i class="fas fa-edit text-xs"></i>
+                                                    </button>
+                                                </div>
+                                                <p class="text-xs text-gray-600 mb-2">Analyze customer request</p>
+                                                <div class="text-xs text-gray-500">
+                                                    <div class="mb-1"><span class="font-medium">AI:</span> Natural language processing</div>
+                                                    <div><span class="font-medium">Routes:</span> Knowledge search</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="flow-node absolute bg-purple-100 border-2 border-purple-500 rounded-lg p-4 w-48" style="left: 650px; top: 30px;">
+                                                <div class="flex items-center justify-between mb-2">
+                                                    <div class="flex items-center">
+                                                        <i class="fas fa-comments text-purple-600 mr-2"></i>
+                                                        <span class="text-sm font-semibold text-gray-800">Response</span>
+                                                    </div>
+                                                    <button onclick="editFlowNode(this)" class="text-gray-400 hover:text-gray-600">
+                                                        <i class="fas fa-edit text-xs"></i>
+                                                    </button>
+                                                </div>
+                                                <p class="text-xs text-gray-600 mb-2">Intelligent response generation</p>
+                                                <div class="text-xs text-gray-500">
+                                                    <div class="mb-1"><span class="font-medium">Source:</span> Knowledge base</div>
+                                                    <div><span class="font-medium">Tone:</span> Professional, helpful</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="flow-node absolute bg-orange-100 border-2 border-orange-500 rounded-lg p-4 w-48" style="left: 200px; top: 180px;">
+                                                <div class="flex items-center justify-between mb-2">
+                                                    <div class="flex items-center">
+                                                        <i class="fas fa-exclamation-triangle text-orange-600 mr-2"></i>
+                                                        <span class="text-sm font-semibold text-gray-800">Escalation</span>
+                                                    </div>
+                                                    <button onclick="editFlowNode(this)" class="text-gray-400 hover:text-gray-600">
+                                                        <i class="fas fa-edit text-xs"></i>
+                                                    </button>
+                                                </div>
+                                                <p class="text-xs text-gray-600 mb-2">Transfer to human agent</p>
+                                                <div class="text-xs text-gray-500">
+                                                    <div class="mb-1"><span class="font-medium">Triggers:</span> Complex requests</div>
+                                                    <div><span class="font-medium">Action:</span> Queue for agent</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="flow-node absolute bg-emerald-100 border-2 border-emerald-500 rounded-lg p-4 w-48" style="left: 500px; top: 180px;">
+                                                <div class="flex items-center justify-between mb-2">
+                                                    <div class="flex items-center">
+                                                        <i class="fas fa-calendar text-emerald-600 mr-2"></i>
+                                                        <span class="text-sm font-semibold text-gray-800">Booking</span>
+                                                    </div>
+                                                    <button onclick="editFlowNode(this)" class="text-gray-400 hover:text-gray-600">
+                                                        <i class="fas fa-edit text-xs"></i>
+                                                    </button>
+                                                </div>
+                                                <p class="text-xs text-gray-600 mb-2">Schedule appointment</p>
+                                                <div class="text-xs text-gray-500">
+                                                    <div class="mb-1"><span class="font-medium">Calendar:</span> Check availability</div>
+                                                    <div><span class="font-medium">Confirm:</span> Send details</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Connection Lines -->
+                                            <svg class="absolute top-0 left-0 w-full h-full pointer-events-none" style="z-index: 1;">
+                                                <!-- Call Start → Intent Detection -->
+                                                <line x1="298" y1="65" x2="350" y2="65" stroke="#6B7280" stroke-width="2" marker-end="url(#arrowhead)"/>
+                                                <!-- Intent Detection → Response -->
+                                                <line x1="598" y1="65" x2="650" y2="65" stroke="#6B7280" stroke-width="2" marker-end="url(#arrowhead)"/>
+                                                <!-- Intent Detection → Escalation -->
+                                                <line x1="425" y1="118" x2="320" y2="180" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrowhead)"/>
+                                                <!-- Intent Detection → Booking -->
+                                                <line x1="450" y1="118" x2="570" y2="180" stroke="#10b981" stroke-width="2" marker-end="url(#arrowhead)"/>
+                                                
+                                                <defs>
+                                                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                                        <polygon points="0 0, 10 3.5, 0 7" fill="#6B7280"/>
+                                                    </marker>
+                                                </defs>
+                                            </svg>
+                                            
+                                            <!-- Add Node Button Overlay -->
+                                            <div class="absolute bottom-4 right-4">
+                                                <button onclick="addFlowNode()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-full shadow-lg transition-colors">
+                                                    <i class="fas fa-plus mr-2"></i>Add Node
                                                 </button>
                                             </div>
                                         </div>
@@ -2690,15 +2843,15 @@
                                     <!-- Flow Statistics -->
                                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                                         <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                                            <div class="text-2xl font-bold text-blue-600" id="total-nodes">0</div>
+                                            <div class="text-2xl font-bold text-blue-600" id="total-nodes">5</div>
                                             <div class="text-sm text-gray-600">Total Nodes</div>
                                         </div>
                                         <div class="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                                            <div class="text-2xl font-bold text-green-600" id="connected-paths">0</div>
+                                            <div class="text-2xl font-bold text-green-600" id="connected-paths">4</div>
                                             <div class="text-sm text-gray-600">Connected Paths</div>
                                         </div>
                                         <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-                                            <div class="text-2xl font-bold text-yellow-600" id="flow-complexity">Low</div>
+                                            <div class="text-2xl font-bold text-yellow-600" id="flow-complexity">Medium</div>
                                             <div class="text-sm text-gray-600">Complexity</div>
                                         </div>
                                         <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
