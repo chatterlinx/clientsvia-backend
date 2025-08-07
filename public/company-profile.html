@@ -2928,24 +2928,183 @@
                                         </div>
                                     </div>
                                     
-                                    <!-- A/B Test Control Panel -->
-                                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-6">
-                                        <div class="flex items-center justify-between mb-4">
-                                            <h5 class="font-semibold text-gray-800">Test Management</h5>
-                                            <button onclick="createNewABTest()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors">
-                                                <i class="fas fa-plus mr-2"></i>New Test
+                                    <!-- A/B Test Dashboard Stats -->
+                                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                                        <!-- Completed Tests -->
+                                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <p class="text-sm font-medium text-gray-600">Completed</p>
+                                                    <p class="text-2xl font-bold text-blue-600" id="completed-tests">12</p>
+                                                </div>
+                                                <i class="fas fa-check-circle text-blue-600 text-2xl"></i>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mt-2">Tests with conclusive results</p>
+                                        </div>
+                                        
+                                        <!-- Avg Improvement -->
+                                        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <p class="text-sm font-medium text-gray-600">Avg Improvement</p>
+                                                    <p class="text-2xl font-bold text-purple-600" id="avg-improvement">+18.5%</p>
+                                                </div>
+                                                <i class="fas fa-chart-line text-purple-600 text-2xl"></i>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mt-2">Performance boost from tests</p>
+                                        </div>
+                                        
+                                        <!-- Test Control Panel -->
+                                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                            <div class="flex items-center justify-between mb-3">
+                                                <h5 class="font-semibold text-gray-800">Test Management</h5>
+                                            </div>
+                                            <div class="space-y-2">
+                                                <button onclick="pauseAllTests()" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md transition-colors text-sm">
+                                                    <i class="fas fa-pause mr-2"></i>Pause Tests
+                                                </button>
+                                                <button onclick="exportABResults()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md transition-colors text-sm">
+                                                    <i class="fas fa-download mr-2"></i>Export Results
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Test Creation -->
+                                    <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+                                        <h5 class="text-lg font-semibold text-gray-800 mb-4">Create New A/B Test</h5>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">Test Name</label>
+                                                <input type="text" id="test-name" placeholder="e.g., Greeting Message Optimization" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                                                
+                                                <label class="block text-sm font-medium text-gray-700 mb-2 mt-4">Test Type</label>
+                                                <select id="test-type" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                                                    <option value="greeting">Greeting Messages</option>
+                                                    <option value="response-tone">Response Tone</option>
+                                                    <option value="escalation-timing">Escalation Timing</option>
+                                                    <option value="knowledge-source">Knowledge Source Priority</option>
+                                                    <option value="custom">Custom Test</option>
+                                                </select>
+                                                
+                                                <label class="block text-sm font-medium text-gray-700 mb-2 mt-4">Traffic Split</label>
+                                                <div class="flex items-center space-x-4">
+                                                    <div class="flex-1">
+                                                        <label class="block text-xs text-gray-600 mb-1">Variant A</label>
+                                                        <input type="range" id="variant-a-split" min="0" max="100" value="50" class="w-full">
+                                                        <span class="text-xs text-gray-500" id="variant-a-percent">50%</span>
+                                                    </div>
+                                                    <div class="flex-1">
+                                                        <label class="block text-xs text-gray-600 mb-1">Variant B</label>
+                                                        <input type="range" id="variant-b-split" min="0" max="100" value="50" class="w-full">
+                                                        <span class="text-xs text-gray-500" id="variant-b-percent">50%</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">Success Metric</label>
+                                                <select id="success-metric" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                                                    <option value="satisfaction">Customer Satisfaction</option>
+                                                    <option value="response-time">Response Time</option>
+                                                    <option value="resolution-rate">Resolution Rate</option>
+                                                    <option value="escalation-rate">Escalation Rate</option>
+                                                    <option value="conversion-rate">Conversion Rate</option>
+                                                </select>
+                                                
+                                                <label class="block text-sm font-medium text-gray-700 mb-2 mt-4">Test Duration</label>
+                                                <select id="test-duration" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                                                    <option value="3">3 days</option>
+                                                    <option value="7" selected>1 week</option>
+                                                    <option value="14">2 weeks</option>
+                                                    <option value="30">1 month</option>
+                                                    <option value="custom">Custom duration</option>
+                                                </select>
+                                                
+                                                <label class="block text-sm font-medium text-gray-700 mb-2 mt-4">Statistical Confidence</label>
+                                                <div class="flex items-center space-x-3">
+                                                    <input type="range" id="confidence-level" min="90" max="99" value="95" class="flex-1">
+                                                    <span class="text-sm font-medium text-gray-900" id="confidence-percent">95%</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex justify-end mt-6">
+                                            <button onclick="createABTest()" class="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2 rounded-md transition-colors">
+                                                <i class="fas fa-flask mr-2"></i>Create Test
                                             </button>
                                         </div>
-                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <button onclick="pauseAllTests()" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md transition-colors">
-                                                <i class="fas fa-pause mr-2"></i>Pause Tests
-                                            </button>
-                                            <button onclick="exportABResults()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
-                                                <i class="fas fa-download mr-2"></i>Export Results
-                                            </button>
-                                            <button onclick="analyzeABData()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition-colors">
-                                                <i class="fas fa-chart-line mr-2"></i>Deep Analysis
-                                            </button>
+                                    </div>
+                                    
+                                    <!-- Active Tests List -->
+                                    <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                        <h5 class="text-lg font-semibold text-gray-800 mb-4">Active Tests</h5>
+                                        <div class="space-y-4">
+                                            <!-- Test 1 -->
+                                            <div class="border border-gray-200 rounded-lg p-4">
+                                                <div class="flex items-center justify-between mb-3">
+                                                    <h6 class="font-semibold text-gray-800">Greeting Message Warmth</h6>
+                                                    <div class="flex items-center space-x-2">
+                                                        <span class="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                                                            Running
+                                                        </span>
+                                                        <button onclick="viewTestDetails('test-1')" class="text-blue-600 hover:text-blue-800 text-sm">
+                                                            View Details
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                                                    <div>
+                                                        <span class="text-gray-600">Metric:</span>
+                                                        <span class="font-medium text-gray-900">Satisfaction</span>
+                                                    </div>
+                                                    <div>
+                                                        <span class="text-gray-600">Progress:</span>
+                                                        <span class="font-medium text-gray-900">67% (234 calls)</span>
+                                                    </div>
+                                                    <div>
+                                                        <span class="text-gray-600">Leading Variant:</span>
+                                                        <span class="font-medium text-green-600">B (+12.3%)</span>
+                                                    </div>
+                                                    <div>
+                                                        <span class="text-gray-600">Confidence:</span>
+                                                        <span class="font-medium text-gray-900">87%</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Test 2 -->
+                                            <div class="border border-gray-200 rounded-lg p-4">
+                                                <div class="flex items-center justify-between mb-3">
+                                                    <h6 class="font-semibold text-gray-800">Response Time vs. Accuracy</h6>
+                                                    <div class="flex items-center space-x-2">
+                                                        <span class="px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">
+                                                            Analyzing
+                                                        </span>
+                                                        <button onclick="viewTestDetails('test-2')" class="text-blue-600 hover:text-blue-800 text-sm">
+                                                            View Details
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                                                    <div>
+                                                        <span class="text-gray-600">Metric:</span>
+                                                        <span class="font-medium text-gray-900">Resolution Rate</span>
+                                                    </div>
+                                                    <div>
+                                                        <span class="text-gray-600">Progress:</span>
+                                                        <span class="font-medium text-gray-900">34% (89 calls)</span>
+                                                    </div>
+                                                    <div>
+                                                        <span class="text-gray-600">Leading Variant:</span>
+                                                        <span class="font-medium text-blue-600">A (+4.7%)</span>
+                                                    </div>
+                                                    <div>
+                                                        <span class="text-gray-600">Confidence:</span>
+                                                        <span class="font-medium text-gray-900">61%</span>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -4169,175 +4328,6 @@
                 </div>
                 <!-- ===== TAB SECTION END: CRM & CONTACTS ===== -->
 
-                <!-- DUPLICATE REMOVED: Flow Designer moved to correct location inside main container -->
-
-                <!-- DUPLICATE REMOVED: A/B Testing moved to correct location inside main container -->
-                            
-                            <!-- Completed Tests -->
-                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-sm font-medium text-gray-600">Completed</p>
-                                        <p class="text-2xl font-bold text-blue-600" id="completed-tests">12</p>
-                                    </div>
-                                    <i class="fas fa-check-circle text-blue-600 text-2xl"></i>
-                                </div>
-                                <p class="text-xs text-gray-500 mt-2">Tests with conclusive results</p>
-                            </div>
-                            
-                            <!-- Avg Improvement -->
-                            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-sm font-medium text-gray-600">Avg Improvement</p>
-                                        <p class="text-2xl font-bold text-purple-600" id="avg-improvement">+18.5%</p>
-                                    </div>
-                                    <i class="fas fa-chart-line text-purple-600 text-2xl"></i>
-                                </div>
-                                <p class="text-xs text-gray-500 mt-2">Performance boost from tests</p>
-                            </div>
-                        </div>
-                        
-                        <!-- Test Creation -->
-                        <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
-                            <h5 class="text-lg font-semibold text-gray-800 mb-4">Create New A/B Test</h5>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Test Name</label>
-                                    <input type="text" id="test-name" placeholder="e.g., Greeting Message Optimization" class="w-full border border-gray-300 rounded-md px-3 py-2">
-                                    
-                                    <label class="block text-sm font-medium text-gray-700 mb-2 mt-4">Test Type</label>
-                                    <select id="test-type" class="w-full border border-gray-300 rounded-md px-3 py-2">
-                                        <option value="greeting">Greeting Messages</option>
-                                        <option value="response-tone">Response Tone</option>
-                                        <option value="escalation-timing">Escalation Timing</option>
-                                        <option value="knowledge-source">Knowledge Source Priority</option>
-                                        <option value="custom">Custom Test</option>
-                                    </select>
-                                    
-                                    <label class="block text-sm font-medium text-gray-700 mb-2 mt-4">Traffic Split</label>
-                                    <div class="flex items-center space-x-4">
-                                        <div class="flex-1">
-                                            <label class="block text-xs text-gray-600 mb-1">Variant A</label>
-                                            <input type="range" id="variant-a-split" min="0" max="100" value="50" class="w-full">
-                                            <span class="text-xs text-gray-500" id="variant-a-percent">50%</span>
-                                        </div>
-                                        <div class="flex-1">
-                                            <label class="block text-xs text-gray-600 mb-1">Variant B</label>
-                                            <input type="range" id="variant-b-split" min="0" max="100" value="50" class="w-full">
-                                            <span class="text-xs text-gray-500" id="variant-b-percent">50%</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Success Metric</label>
-                                    <select id="success-metric" class="w-full border border-gray-300 rounded-md px-3 py-2">
-                                        <option value="satisfaction">Customer Satisfaction</option>
-                                        <option value="response-time">Response Time</option>
-                                        <option value="resolution-rate">Resolution Rate</option>
-                                        <option value="escalation-rate">Escalation Rate</option>
-                                        <option value="conversion-rate">Conversion Rate</option>
-                                    </select>
-                                    
-                                    <label class="block text-sm font-medium text-gray-700 mb-2 mt-4">Test Duration</label>
-                                    <select id="test-duration" class="w-full border border-gray-300 rounded-md px-3 py-2">
-                                        <option value="3">3 days</option>
-                                        <option value="7" selected>1 week</option>
-                                        <option value="14">2 weeks</option>
-                                        <option value="30">1 month</option>
-                                        <option value="custom">Custom duration</option>
-                                    </select>
-                                    
-                                    <label class="block text-sm font-medium text-gray-700 mb-2 mt-4">Statistical Confidence</label>
-                                    <div class="flex items-center space-x-3">
-                                        <input type="range" id="confidence-level" min="90" max="99" value="95" class="flex-1">
-                                        <span class="text-sm font-medium text-gray-900" id="confidence-percent">95%</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="flex justify-end mt-6">
-                                <button onclick="createABTest()" class="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2 rounded-md transition-colors">
-                                    <i class="fas fa-flask mr-2"></i>Create Test
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- Active Tests List -->
-                        <div class="bg-white border border-gray-200 rounded-lg p-6">
-                            <h5 class="text-lg font-semibold text-gray-800 mb-4">Active Tests</h5>
-                            <div class="space-y-4">
-                                <!-- Test 1 -->
-                                <div class="border border-gray-200 rounded-lg p-4">
-                                    <div class="flex items-center justify-between mb-3">
-                                        <h6 class="font-semibold text-gray-800">Greeting Message Warmth</h6>
-                                        <div class="flex items-center space-x-2">
-                                            <span class="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-                                                Running
-                                            </span>
-                                            <button onclick="viewTestDetails('test-1')" class="text-blue-600 hover:text-blue-800 text-sm">
-                                                View Details
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                                        <div>
-                                            <span class="text-gray-600">Metric:</span>
-                                            <span class="font-medium text-gray-900">Satisfaction</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-600">Progress:</span>
-                                            <span class="font-medium text-gray-900">67% (234 calls)</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-600">Leading Variant:</span>
-                                            <span class="font-medium text-green-600">B (+12.3%)</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-600">Confidence:</span>
-                                            <span class="font-medium text-gray-900">87%</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Test 2 -->
-                                <div class="border border-gray-200 rounded-lg p-4">
-                                    <div class="flex items-center justify-between mb-3">
-                                        <h6 class="font-semibold text-gray-800">Response Time vs. Accuracy</h6>
-                                        <div class="flex items-center space-x-2">
-                                            <span class="px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">
-                                                Analyzing
-                                            </span>
-                                            <button onclick="viewTestDetails('test-2')" class="text-blue-600 hover:text-blue-800 text-sm">
-                                                View Details
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                                        <div>
-                                            <span class="text-gray-600">Metric:</span>
-                                            <span class="font-medium text-gray-900">Resolution Rate</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-600">Progress:</span>
-                                            <span class="font-medium text-gray-900">34% (89 calls)</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-600">Leading Variant:</span>
-                                            <span class="font-medium text-blue-600">A (+4.7%)</span>
-                                        </div>
-                                        <div>
-                                            <span class="text-gray-600">Confidence:</span>
-                                            <span class="font-medium text-gray-900">61%</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
                 <!-- ========================================= -->
                 <!-- 👤 ADVANCED PERSONALIZATION ENGINE      -->
                 <!-- Behavioral Segmentation & Dynamic Rules  -->
