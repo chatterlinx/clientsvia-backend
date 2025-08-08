@@ -1724,7 +1724,7 @@
                                             <button id="clientsvia-tab-personality" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
                                                 <i class="fas fa-theater-masks mr-2"></i>Agent Personality
                                             </button>
-                                            <button id="clientsvia-tab-analytics" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent bg-blue-200 text-blue-800 hover:bg-blue-300 hover:text-blue-900 whitespace-nowrap transition-all duration-200">
+                                            <button id="clientsvia-tab-analytics" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
                                                 <i class="fas fa-chart-line mr-2"></i>Analytics Dashboard
                                             </button>
                                             <button id="clientsvia-tab-flow-designer" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent bg-blue-200 text-blue-800 hover:bg-blue-300 hover:text-blue-900 whitespace-nowrap transition-all duration-200">
@@ -2557,9 +2557,6 @@
                             <!-- ========================================= -->
                             <!-- TAB 4: Real-time Analytics Dashboard -->
                             <div id="clientsvia-analytics-content" class="clientsvia-tab-content">
-                                <div style="position: absolute; top: 100px; left: 50%; transform: translateX(-50%); background: red; color: white; padding: 20px; z-index: 99999; font-size: 24px; border: 5px solid yellow;">
-                                    🎯 ANALYTICS CONTENT IS HERE! 🎯
-                                </div>
                                 <div class="mb-6">
                                     <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                                         <i class="fas fa-chart-line mr-2 text-blue-600"></i>Real-time Analytics Dashboard  
@@ -8193,61 +8190,6 @@
          */
 
         // 📊 REAL-TIME ANALYTICS DASHBOARD FUNCTIONS
-        async function fetchRealTimeMetrics() {
-            try {
-                // Use test endpoint for production (no auth required)
-                let response = await fetch(`/api/ai-agent-logic/test/analytics/${companyId}/realtime`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                if (data.success && data.data) {
-                    updateAnalyticsDashboard(data.data);
-                } else {
-                    // Fallback to simulated data
-                    const simulatedData = {
-                        successRate: Math.round(92 + Math.random() * 6),
-                        avgResponseTime: (1.1 + Math.random() * 0.4).toFixed(1),
-                        confidence: Math.round(85 + Math.random() * 10),
-                        activeSessions: Math.floor(Math.random() * 50 + 10)
-                    };
-                    updateAnalyticsDashboard(simulatedData);
-                }
-            } catch (error) {
-                console.warn('⚠️ Real-time analytics API unavailable, using simulated data:', error);
-                // Fallback to simulated data
-                const simulatedData = {
-                    successRate: Math.round(92 + Math.random() * 6),
-                    avgResponseTime: (1.1 + Math.random() * 0.4).toFixed(1),
-                    confidence: Math.round(85 + Math.random() * 10),
-                    activeSessions: Math.floor(Math.random() * 50 + 10)
-                };
-                updateAnalyticsDashboard(simulatedData);
-            }
-        }
-
-        function updateAnalyticsDashboard(data) {
-            // Update metric cards with null checks
-            const successRateEl = document.getElementById('success-rate-value');
-            const responseTimeEl = document.getElementById('response-time-value');
-            const confidenceEl = document.getElementById('confidence-value');
-            const activeSessionsEl = document.getElementById('active-sessions-value');
-            
-            if (successRateEl) successRateEl.textContent = `${data.successRate}%`;
-            if (responseTimeEl) responseTimeEl.textContent = `${data.avgResponseTime}s`;
-            if (confidenceEl) confidenceEl.textContent = `${data.confidence}%`;
-            if (activeSessionsEl) activeSessionsEl.textContent = data.activeSessions;
-
-            // Update timestamp
-            const timestamp = new Date().toLocaleTimeString();
-            const timestampElement = document.querySelector('.analytics-timestamp');
-            if (timestampElement) {
-                timestampElement.textContent = `Last updated: ${timestamp}`;
-            }
-        }
 
         async function exportAnalyticsReport() {
             try {
@@ -8943,34 +8885,8 @@
                     switch (targetTabId) {
                         case 'analytics':
                             console.log('📊 Loading Analytics Dashboard...');
-                            // Fixed: Use fetchRealTimeMetrics instead of fetchAnalyticsMetrics
                             fetchRealTimeMetrics();
-                            
-                            // INJECT REAL ANALYTICS DASHBOARD
-                            let existingDashboard = document.getElementById('force-analytics-dashboard');
-                            if (existingDashboard) existingDashboard.remove();
-                            
-                            const analyticsDashboard = document.createElement('div');
-                            analyticsDashboard.id = 'force-analytics-dashboard';
-                            analyticsDashboard.style.cssText = `
-                                position: fixed !important;
-                                top: 120px !important;
-                                left: 50% !important;
-                                transform: translateX(-50%) !important;
-                                background: white !important;
-                                color: #333 !important;
-                                padding: 30px !important;
-                                border: 2px solid #e2e8f0 !important;
-                                border-radius: 12px !important;
-                                box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
-                                z-index: 999999 !important;
-                                width: 90% !important;
-                                max-width: 1200px !important;
-                                max-height: 80vh !important;
-                                overflow-y: auto !important;
-                            `;
-                            
-                            analyticsDashboard.innerHTML = `
+                            break;
                                 <div style="margin-bottom: 20px;">
                                     <h2 style="font-size: 24px; font-weight: bold; color: #1f2937; margin-bottom: 8px; display: flex; align-items: center;">
                                         <i class="fas fa-chart-line" style="margin-right: 12px; color: #3b82f6;"></i>
