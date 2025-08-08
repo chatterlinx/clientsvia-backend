@@ -602,58 +602,6 @@
                             <span class="mx-2">•</span>
                             <span id="page-loaded-time">Loading...</span>
                         </div>
-                        
-                        <!-- Flow Configuration Panel -->
-                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-6 mt-6">
-                            <h5 class="text-lg font-semibold text-gray-800 mb-4">
-                                <i class="fas fa-cog mr-2 text-gray-600"></i>Flow Configuration
-                            </h5>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Flow Name</label>
-                                    <input type="text" value="Customer Service Flow" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Flow Status</label>
-                                    <select class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
-                                        <option value="active">Active</option>
-                                        <option value="draft">Draft</option>
-                                        <option value="testing">Testing</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Default Response Tone</label>
-                                    <select class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
-                                        <option value="professional">Professional & Helpful</option>
-                                        <option value="friendly">Friendly & Casual</option>
-                                        <option value="formal">Formal & Business</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Escalation Threshold</label>
-                                    <select class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
-                                        <option value="low">Low (Easy escalation)</option>
-                                        <option value="medium" selected>Medium (Balanced)</option>
-                                        <option value="high">High (AI tries harder)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div class="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
-                                <div class="text-sm text-gray-600">
-                                    <i class="fas fa-info-circle mr-1"></i>
-                                    Last modified: <span class="font-medium">Today at 2:30 PM</span>
-                                </div>
-                                <div class="space-x-3">
-                                    <button class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm transition-colors">
-                                        <i class="fas fa-eye mr-2"></i>Preview
-                                    </button>
-                                    <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm transition-colors">
-                                        <i class="fas fa-save mr-2"></i>Save Changes
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                     <nav class="hidden md:flex items-center" style="gap: 20px;">
                         <a href="/index.html" class="nav-link-global" id="nav-home">Home</a>
@@ -2803,6 +2751,58 @@
                                                 </button>
                                                 <button class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md transition-colors" onclick="exportFlow()">
                                                     <i class="fas fa-download mr-2"></i>Export
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Flow Configuration Panel -->
+                                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-6">
+                                        <h5 class="text-lg font-semibold text-gray-800 mb-4">
+                                            <i class="fas fa-cog mr-2 text-gray-600"></i>Flow Configuration
+                                        </h5>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">Flow Name</label>
+                                                <input type="text" value="Customer Service Flow" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">Flow Status</label>
+                                                <select class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                                    <option value="active">Active</option>
+                                                    <option value="draft">Draft</option>
+                                                    <option value="testing">Testing</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">Default Response Tone</label>
+                                                <select class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                                    <option value="professional">Professional & Helpful</option>
+                                                    <option value="friendly">Friendly & Casual</option>
+                                                    <option value="formal">Formal & Business</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">Escalation Threshold</label>
+                                                <select class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                                    <option value="low">Low (Easy escalation)</option>
+                                                    <option value="medium" selected>Medium (Balanced)</option>
+                                                    <option value="high">High (AI tries harder)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+                                            <div class="text-sm text-gray-600">
+                                                <i class="fas fa-info-circle mr-1"></i>
+                                                Last modified: <span class="font-medium">Today at 2:30 PM</span>
+                                            </div>
+                                            <div class="space-x-3">
+                                                <button class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm transition-colors">
+                                                    <i class="fas fa-eye mr-2"></i>Preview
+                                                </button>
+                                                <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm transition-colors">
+                                                    <i class="fas fa-save mr-2"></i>Save Changes
                                                 </button>
                                             </div>
                                         </div>
