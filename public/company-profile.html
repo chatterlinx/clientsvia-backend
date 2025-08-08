@@ -8949,9 +8949,15 @@
                 
                 // Find and show the target content
                 const targetContent = document.getElementById(`clientsvia-${targetTabId}-content`);
+                console.log(`🔍 DEBUG: Looking for element with ID: clientsvia-${targetTabId}-content`);
+                console.log(`🔍 DEBUG: Found element:`, targetContent);
                 if (targetContent) {
+                    console.log(`🔍 DEBUG: Current display style:`, targetContent.style.display);
+                    console.log(`🔍 DEBUG: Current computed style:`, window.getComputedStyle(targetContent).display);
                     targetContent.classList.add('active');
                     targetContent.style.display = 'block';
+                    console.log(`🔍 DEBUG: After setting display block:`, targetContent.style.display);
+                    console.log(`🔍 DEBUG: After computed style:`, window.getComputedStyle(targetContent).display);
                     
                     // Load specific content when switching to tabs
                     switch (targetTabId) {
