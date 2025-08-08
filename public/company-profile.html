@@ -8945,6 +8945,31 @@
                             console.log('📊 Loading Analytics Dashboard...');
                             // Fixed: Use fetchRealTimeMetrics instead of fetchAnalyticsMetrics
                             fetchRealTimeMetrics();
+                            
+                            // FORCE INJECT ANALYTICS CONTENT INTO BODY
+                            let existingBanner = document.getElementById('force-analytics-banner');
+                            if (existingBanner) existingBanner.remove();
+                            
+                            const analyticsBanner = document.createElement('div');
+                            analyticsBanner.id = 'force-analytics-banner';
+                            analyticsBanner.style.cssText = `
+                                position: fixed !important;
+                                top: 200px !important;
+                                left: 50% !important;
+                                transform: translateX(-50%) !important;
+                                background: linear-gradient(45deg, #ff0000, #00ff00) !important;
+                                color: white !important;
+                                padding: 40px !important;
+                                font-size: 32px !important;
+                                font-weight: bold !important;
+                                border: 8px solid #ffff00 !important;
+                                z-index: 999999 !important;
+                                text-align: center !important;
+                                border-radius: 10px !important;
+                                box-shadow: 0 0 50px rgba(0,0,0,0.8) !important;
+                            `;
+                            analyticsBanner.innerHTML = '🎯 ANALYTICS CONTENT FORCE INJECTED! 🎯<br>This proves the tab switching works!';
+                            document.body.appendChild(analyticsBanner);
                             break;
                         case 'flow-designer':
                             console.log('🎨 Loading Flow Designer...');
