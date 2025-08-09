@@ -2556,16 +2556,15 @@
                                         <!-- Enterprise-Grade Performance Monitoring  -->
                                         <!-- ========================================= -->
                                         <!-- TAB 4: Real-time Analytics Dashboard -->
-                                        <div id="clientsvia-analytics-content" class="clientsvia-tab-content" style="min-height: 400px;">
+                                        <div id="clientsvia-analytics-content" class="clientsvia-tab-content" style="min-height: 400px; background-color: red !important; z-index: 9999 !important; position: relative !important;">
+                                            
+                                            <!-- EMERGENCY VISIBILITY TEST -->
+                                            <div style="background-color: yellow !important; color: black !important; padding: 20px !important; margin: 10px !important; border: 5px solid red !important; font-size: 24px !important; font-weight: bold !important; text-align: center !important; z-index: 10000 !important; position: relative !important;">
+                                                🚨 ANALYTICS CONTENT IS HERE! 🚨<br>
+                                                If you can see this, the content exists!
+                                            </div>
+                                            
                                             <div class="mb-6">
-                                                <!-- DEBUG TEST BUTTON -->
-                                                <div class="bg-yellow-100 border border-yellow-400 rounded-lg p-4 mb-4">
-                                                    <h5 class="text-yellow-800 font-medium mb-2">🧪 Debug Test</h5>
-                                                    <button onclick="switchClientsviaTab('analytics')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm">
-                                                        Test Analytics Tab Switch
-                                                    </button>
-                                                    <p class="text-yellow-700 text-xs mt-2">Click this button to test if Analytics tab switching works</p>
-                                                </div>
                                                 <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                                                     <i class="fas fa-chart-line mr-2 text-blue-600"></i>Real-time Analytics Dashboard  
                                                     <span class="ml-2 text-sm text-gray-600">(Live Performance Metrics)</span>
@@ -8719,6 +8718,18 @@
         function switchClientsviaTab(targetTabId) {
             try {
                 console.log('🔀 Switching to tab:', targetTabId);
+                
+                // EMERGENCY: Force show analytics content regardless of tab
+                const analyticsContent = document.getElementById('clientsvia-analytics-content');
+                if (analyticsContent) {
+                    analyticsContent.style.display = 'block';
+                    analyticsContent.style.visibility = 'visible';
+                    analyticsContent.style.opacity = '1';
+                    analyticsContent.style.zIndex = '9999';
+                    analyticsContent.style.position = 'relative';
+                    analyticsContent.style.backgroundColor = 'red';
+                    console.log('🚨 EMERGENCY: Forced analytics content to be visible');
+                }
                 
                 // Get all tab buttons and content areas
                 const tabButtons = document.querySelectorAll('.clientsvia-tab-btn');
