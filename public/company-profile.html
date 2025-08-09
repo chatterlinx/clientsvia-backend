@@ -8725,6 +8725,12 @@
                 tabContents.forEach(content => {
                     content.classList.remove('active');
                     content.style.display = 'none';
+                    // Force hide Analytics content specifically since it has absolute positioning
+                    if (content.id === 'clientsvia-analytics-content') {
+                        content.style.visibility = 'hidden';
+                        content.style.opacity = '0';
+                        content.style.zIndex = '-1';
+                    }
                 });
                 
                 // Find and activate the target button
@@ -8741,6 +8747,27 @@
                     targetContent.style.display = 'block';
                     targetContent.style.visibility = 'visible';
                     targetContent.style.opacity = '1';
+                    
+                    // Special handling for Analytics content (has absolute positioning)
+                    if (targetTabId === 'analytics') {
+                        targetContent.style.zIndex = '9999';
+                        targetContent.style.position = 'relative'; // Change back to relative when active
+                    } else {
+                        // For non-analytics tabs, ensure normal positioning
+                        targetContent.style.position = 'relative';
+                        targetContent.style.zIndex = 'auto';
+                    }
+                    
+                    // EMERGENCY: Force Flow Designer to show
+                    if (targetTabId === 'flow-designer') {
+                        targetContent.style.position = 'absolute';
+                        targetContent.style.top = '100px';
+                        targetContent.style.left = '0';
+                        targetContent.style.width = '100%';
+                        targetContent.style.zIndex = '9999';
+                        targetContent.style.backgroundColor = 'blue';
+                        console.log('🎨 EMERGENCY: Forced Flow Designer content to be visible');
+                    }
                     
                     // Special handling for Analytics tab
                     if (targetTabId === 'analytics') {
