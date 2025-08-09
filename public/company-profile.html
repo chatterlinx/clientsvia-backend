@@ -2556,15 +2556,7 @@
                                         <!-- Enterprise-Grade Performance Monitoring  -->
                                         <!-- ========================================= -->
                                         <!-- TAB 4: Real-time Analytics Dashboard -->
-                                        <div id="clientsvia-analytics-content" class="clientsvia-tab-content" style="min-height: 400px !important; background-color: red !important; z-index: 9999 !important; position: absolute !important; top: 100px !important; left: 0 !important; width: 100% !important; display: block !important; visibility: visible !important; opacity: 1 !important;">
-                                            
-                                            <!-- EMERGENCY VISIBILITY TEST -->
-                                            <div style="background-color: yellow !important; color: black !important; padding: 20px !important; margin: 10px !important; border: 5px solid red !important; font-size: 24px !important; font-weight: bold !important; text-align: center !important; z-index: 10000 !important; position: relative !important;">
-                                                🚨 ANALYTICS CONTENT IS HERE! 🚨<br>
-                                                If you can see this, the content exists!<br>
-                                                TAB SWITCHING IS WORKING!
-                                            </div>
-                                            
+                                        <div id="clientsvia-analytics-content" class="clientsvia-tab-content" style="min-height: 400px;">
                                             <div class="mb-6">
                                                 <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                                                     <i class="fas fa-chart-line mr-2 text-blue-600"></i>Real-time Analytics Dashboard  
@@ -8719,18 +8711,6 @@
         function switchClientsviaTab(targetTabId) {
             try {
                 console.log('🔀 Switching to tab:', targetTabId);
-                
-                // EMERGENCY: Force show analytics content regardless of tab
-                const analyticsContent = document.getElementById('clientsvia-analytics-content');
-                if (analyticsContent) {
-                    analyticsContent.style.display = 'block';
-                    analyticsContent.style.visibility = 'visible';
-                    analyticsContent.style.opacity = '1';
-                    analyticsContent.style.zIndex = '9999';
-                    analyticsContent.style.position = 'relative';
-                    analyticsContent.style.backgroundColor = 'red';
-                    console.log('🚨 EMERGENCY: Forced analytics content to be visible');
-                }
                 
                 // Get all tab buttons and content areas
                 const tabButtons = document.querySelectorAll('.clientsvia-tab-btn');
