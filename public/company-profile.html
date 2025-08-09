@@ -2556,8 +2556,16 @@
                                         <!-- Enterprise-Grade Performance Monitoring  -->
                                         <!-- ========================================= -->
                                         <!-- TAB 4: Real-time Analytics Dashboard -->
-                                        <div id="clientsvia-analytics-content" class="clientsvia-tab-content">
+                                        <div id="clientsvia-analytics-content" class="clientsvia-tab-content" style="min-height: 400px;">
                                             <div class="mb-6">
+                                                <!-- DEBUG TEST BUTTON -->
+                                                <div class="bg-yellow-100 border border-yellow-400 rounded-lg p-4 mb-4">
+                                                    <h5 class="text-yellow-800 font-medium mb-2">🧪 Debug Test</h5>
+                                                    <button onclick="switchClientsviaTab('analytics')" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm">
+                                                        Test Analytics Tab Switch
+                                                    </button>
+                                                    <p class="text-yellow-700 text-xs mt-2">Click this button to test if Analytics tab switching works</p>
+                                                </div>
                                                 <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                                                     <i class="fas fa-chart-line mr-2 text-blue-600"></i>Real-time Analytics Dashboard  
                                                     <span class="ml-2 text-sm text-gray-600">(Live Performance Metrics)</span>
@@ -8739,6 +8747,15 @@
                 if (targetContent) {
                     targetContent.classList.add('active');
                     targetContent.style.display = 'block';
+                    targetContent.style.visibility = 'visible';
+                    targetContent.style.opacity = '1';
+                    
+                    // Special handling for Analytics tab
+                    if (targetTabId === 'analytics') {
+                        console.log('📊 Analytics content element found:', targetContent);
+                        console.log('📊 Analytics content display:', getComputedStyle(targetContent).display);
+                        console.log('📊 Analytics content visibility:', getComputedStyle(targetContent).visibility);
+                    }
                     
                     // Load specific content when switching to tabs
                     switch (targetTabId) {
