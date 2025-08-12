@@ -833,7 +833,269 @@ const companySchema = new mongoose.Schema({
         semanticSearchEnabled: { type: Boolean, default: true },
         confidenceScoring: { type: Boolean, default: true },
         autoLearningQueue: { type: Boolean, default: true }
-    }
+    },        // 🚀 ENTERPRISE AI INTELLIGENCE CONTROL CENTER - PRODUCTION READY
+        // Per-company configuration with composite confidence, provider routing, cost controls
+        enterpriseAIIntelligence: {
+            // ========================================
+            // COMPOSITE CONFIDENCE SCORING - PER SOURCE
+            // ========================================
+            confidencePolicy: {
+                companyKB: { 
+                    min: { type: Number, default: 0.80, min: 0, max: 1 },
+                    weight: { type: Number, default: 0.50, min: 0, max: 1 }
+                },
+                tradeKB: { 
+                    min: { type: Number, default: 0.75, min: 0, max: 1 },
+                    weight: { type: Number, default: 0.30, min: 0, max: 1 }
+                },
+                vector: { 
+                    min: { type: Number, default: 0.70, min: 0, max: 1 },
+                    weight: { type: Number, default: 0.20, min: 0, max: 1 }
+                },
+                recencyHalfLifeDays: { type: Number, default: 90, min: 1, max: 365 },
+                llmFallback: {
+                    enabled: { type: Boolean, default: true },
+                    allowlistIntents: { 
+                        type: [String], 
+                        default: ['general_question', 'small_talk', 'greeting', 'closing'] 
+                    },
+                    timeoutMs: { type: Number, default: 1800, min: 1000, max: 10000 },
+                    restrictedTopics: { 
+                        type: [String], 
+                        default: ['pricing', 'quote', 'estimate', 'legal', 'warranty_claims'] 
+                    }
+                }
+            },
+            
+            // ========================================
+            // LLM PROVIDER ROUTER WITH CIRCUIT BREAKERS
+            // ========================================
+            providers: {
+                stt: { 
+                    type: [String], 
+                    default: ['deepgram', 'google'],
+                    validate: {
+                        validator: function(v) {
+                            const validProviders = ['deepgram', 'google', 'azure', 'aws'];
+                            return v.every(provider => validProviders.includes(provider));
+                        }
+                    }
+                },
+                tts: { 
+                    type: [String], 
+                    default: ['elevenlabs', 'google'],
+                    validate: {
+                        validator: function(v) {
+                            const validProviders = ['elevenlabs', 'google', 'azure', 'aws'];
+                            return v.every(provider => validProviders.includes(provider));
+                        }
+                    }
+                },
+                llm: { 
+                    type: [String], 
+                    default: ['gemini', 'openai', 'claude'],
+                    validate: {
+                        validator: function(v) {
+                            const validProviders = ['gemini', 'openai', 'claude', 'ollama'];
+                            return v.every(provider => validProviders.includes(provider));
+                        }
+                    }
+                }
+            },
+            
+            // Circuit breaker configuration
+            circuitBreakers: {
+                failFast: { type: Boolean, default: true },
+                errorRateThreshold: { type: Number, default: 0.08, min: 0.01, max: 0.5 },
+                latencyP95Ms: { type: Number, default: 2200, min: 500, max: 10000 },
+                recoveryTimeMs: { type: Number, default: 30000, min: 10000, max: 300000 },
+                healthCheckIntervalMs: { type: Number, default: 60000, min: 30000, max: 300000 }
+            },
+            
+            // ========================================
+            // ENTERPRISE COST CONTROLS & BUDGETS
+            // ========================================
+            budgets: {
+                dailyUsd: { type: Number, default: 50, min: 1, max: 1000 },
+                monthlyUsd: { type: Number, default: 1500, min: 30, max: 50000 },
+                onBreach: { 
+                    type: String, 
+                    enum: ['downgrade_llm_and_alert', 'disable_llm_keep_kb', 'escalate_immediately'], 
+                    default: 'downgrade_llm_and_alert' 
+                },
+                alertThresholds: {
+                    daily: { type: Number, default: 0.8, min: 0.1, max: 1.0 },
+                    monthly: { type: Number, default: 0.9, min: 0.1, max: 1.0 }
+                },
+                costPerCall: {
+                    target: { type: Number, default: 0.25, min: 0.01, max: 10.0 },
+                    max: { type: Number, default: 2.0, min: 0.1, max: 50.0 }
+                }
+            },
+            
+            // ========================================
+            // ENTERPRISE MEMORY MANAGEMENT
+            // ========================================
+            memoryManagement: {
+                // Session memory (conversation within call)
+                sessionTTLMinutes: { type: Number, default: 45, min: 5, max: 120 },
+                
+                // Caller profile memory (cross-session)
+                callerProfile: {
+                    enabled: { type: Boolean, default: false },
+                    ttlDays: { type: Number, default: 365, min: 1, max: 2555 }, // 7 years max
+                    keyBy: { 
+                        type: String, 
+                        enum: ['phone_only', 'phone_company', 'phone_name_company'], 
+                        default: 'phone_company' 
+                    },
+                    explicitConsent: { type: Boolean, default: true },
+                    purgeOnDemand: { type: Boolean, default: true }
+                },
+                
+                // Data retention and compliance
+                dataRetention: {
+                    conversationLogs: { type: Number, default: 90, min: 1, max: 2555 },
+                    audioRecordings: { type: Number, default: 30, min: 1, max: 365 },
+                    personalData: { type: Number, default: 365, min: 30, max: 2555 },
+                    autoDelete: { type: Boolean, default: true }
+                }
+            },
+            
+            // ========================================
+            // PROMPT FIREWALL & SECURITY
+            // ========================================
+            security: {
+                promptFirewall: {
+                    enabled: { type: Boolean, default: true },
+                    jailbreakFilters: { 
+                        type: [String], 
+                        default: [
+                            'ignore instructions', 'system prompt', 'jailbreak', 
+                            'act as', 'pretend you are', 'developer mode',
+                            'admin override', 'bypass security', 'sudo mode'
+                        ] 
+                    },
+                    piiScrubbing: { type: Boolean, default: true },
+                    contentFiltering: { type: Boolean, default: true }
+                },
+                
+                // Hard timeouts per stage
+                timeouts: {
+                    sttMs: { type: Number, default: 8000, min: 2000, max: 30000 },
+                    nluMs: { type: Number, default: 2000, min: 500, max: 10000 },
+                    kbMs: { type: Number, default: 3000, min: 1000, max: 15000 },
+                    llmMs: { type: Number, default: 8000, min: 2000, max: 30000 },
+                    ttsMs: { type: Number, default: 5000, min: 1000, max: 20000 },
+                    totalCallMs: { type: Number, default: 45000, min: 10000, max: 300000 }
+                },
+                
+                // Data residency and compliance
+                dataResidency: { 
+                    type: String, 
+                    enum: ['us-east', 'us-west', 'eu-west', 'ca-central', 'asia-pacific'], 
+                    default: 'us-east' 
+                },
+                encryptionAtRest: { type: Boolean, default: true },
+                encryptionInTransit: { type: Boolean, default: true }
+            },
+            
+            // ========================================
+            // TRADE CATEGORIES WITH WEIGHTS & EXPIRY
+            // ========================================
+            tradeCategories: [{
+                category: { type: String, required: true },
+                weight: { type: Number, default: 0.8, min: 0, max: 1 },
+                negativeKeywords: { type: [String], default: [] },
+                synonyms: { type: [String], default: [] },
+                validThrough: { type: Date },
+                lastReviewed: { type: Date, default: Date.now },
+                reviewEveryDays: { type: Number, default: 90, min: 30, max: 365 },
+                sourceOfTruth: { type: String, default: 'manual' },
+                owner: { type: String, required: true }
+            }],
+            
+            // ========================================
+            // ENTERPRISE FEATURES & GOVERNANCE
+            // ========================================
+            governance: {
+                // Config as code
+                configAsCode: {
+                    enabled: { type: Boolean, default: true },
+                    gitIntegration: { type: Boolean, default: false },
+                    approvalWorkflow: { type: Boolean, default: true },
+                    rollbackEnabled: { type: Boolean, default: true }
+                },
+                
+                // Environment management
+                environments: {
+                    current: { 
+                        type: String, 
+                        enum: ['dev', 'staging', 'production'], 
+                        default: 'production' 
+                    },
+                    promotionRules: {
+                        requireApproval: { type: Boolean, default: true },
+                        requireTesting: { type: Boolean, default: true },
+                        autoRollback: { type: Boolean, default: true }
+                    }
+                },
+                
+                // Audit and compliance
+                audit: {
+                    enabled: { type: Boolean, default: true },
+                    detailedLogging: { type: Boolean, default: true },
+                    responseTracing: { type: Boolean, default: true },
+                    costTracking: { type: Boolean, default: true },
+                    retentionDays: { type: Number, default: 365, min: 90, max: 2555 }
+                },
+                
+                // Access control
+                rbac: {
+                    enabled: { type: Boolean, default: true },
+                    ssoRequired: { type: Boolean, default: false },
+                    roles: [{
+                        name: { type: String, required: true },
+                        permissions: { type: [String], required: true },
+                        users: { type: [String], default: [] }
+                    }]
+                }
+            },
+            
+            // ========================================
+            // PERFORMANCE & SCALING
+            // ========================================
+            performance: {
+                caching: {
+                    enabled: { type: Boolean, default: true },
+                    ttlMinutes: { type: Number, default: 30, min: 1, max: 1440 },
+                    maxSize: { type: Number, default: 10000, min: 100, max: 100000 }
+                },
+                
+                rateLimiting: {
+                    callsPerMinute: { type: Number, default: 60, min: 1, max: 1000 },
+                    burstLimit: { type: Number, default: 10, min: 1, max: 100 },
+                    concurrentCalls: { type: Number, default: 5, min: 1, max: 50 }
+                },
+                
+                hotReload: {
+                    enabled: { type: Boolean, default: true },
+                    kbReloadCron: { type: String, default: '0 */6 * * *' }, // Every 6 hours
+                    embeddingVersioning: { type: Boolean, default: true }
+                }
+            },
+            
+            // Metadata and versioning
+            version: { type: String, default: '1.0.0' },
+            lastUpdated: { type: Date, default: Date.now },
+            updatedBy: { type: String, default: 'system' },
+            environment: { 
+                type: String, 
+                enum: ['dev', 'staging', 'production'], 
+                default: 'production' 
+            },
+            enabled: { type: Boolean, default: true }
+        },
 });
 
 // --- Middleware ---

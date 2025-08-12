@@ -103,6 +103,9 @@ async function loadAllRoutes() {
         // Load AI Agent Logic routes for enterprise features
         routes.aiAgentLogicRoutes = await loadRouteWithTimeout('./routes/aiAgentLogic', 'aiAgentLogicRoutes');
         
+        // Load Enterprise AI Intelligence routes
+        routes.enterpriseAIIntelligenceRoutes = await loadRouteWithTimeout('./routes/enterpriseAIIntelligence', 'enterpriseAIIntelligenceRoutes');
+        
         console.log('[INIT] ✅ All routes loaded successfully');
         return routes;
     } catch (error) {
@@ -213,6 +216,7 @@ function registerRoutes(routes) {
     app.use('/api/notes', routes.notesRoutes); // GOLD STANDARD: Enterprise Notes Management
     app.use('/api/booking-handler', routes.bookingHandlerRoutes); // Booking Handler API for testing and integration
     app.use('/api/ai-intelligence', routes.aiIntelligenceRoutes); // AI Intelligence Engine routes
+    app.use('/api/enterprise-ai', routes.enterpriseAIIntelligenceRoutes); // ENTERPRISE: AI Intelligence Control Center
 
     // Mount agent processor routes
     app.use('/api/agent', routes.agentProcessorRoutes); // NEW: Central agent processing API

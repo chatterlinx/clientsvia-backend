@@ -5,8 +5,9 @@ const express = require('express');
 const router = express.Router();
 const { getDB } = require('../db');
 const { ObjectId } = require('mongodb');
+const logger = require('../utils/logger');
 
-console.log('--- Enterprise Booking routes loading ---');
+// Enterprise Booking routes loaded
 
 /**
  * @route   POST /api/booking/enterprise-schema
@@ -30,7 +31,7 @@ router.post('/enterprise-schema', async (req, res) => {
             version
         } = req.body;
 
-        console.log(`[Enterprise Booking] Saving schema for company: ${companyID}, trade: ${tradeCategory}, service: ${serviceType}`);
+        logger.info('Enterprise booking schema saved', { companyID, tradeCategory, serviceType, schemaId: enterpriseSchema.schemaId });
 
         // Validation
         if (!companyID || !tradeCategory || !serviceType) {
@@ -128,11 +129,11 @@ router.post('/enterprise-schema', async (req, res) => {
                 { $set: enterpriseSchema }
             );
             
-            console.log(`[Enterprise Booking] Updated schema for ${companyID}/${enterpriseSchema.schemaId}`);
+            logger.info('Enterprise booking schema updated', { companyID, schemaId: enterpriseSchema.schemaId });
         } else {
             // Create new schema
             result = await db.collection('enterpriseBookingSchemas').insertOne(enterpriseSchema);
-            console.log(`[Enterprise Booking] Created new schema for ${companyID}/${enterpriseSchema.schemaId}`);
+            logger.info('Enterprise booking schema created', { companyID, schemaId: enterpriseSchema.schemaId });
         }
 
         // Also update the company's booking scripts for backward compatibility
@@ -148,7 +149,7 @@ router.post('/enterprise-schema', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[Enterprise Booking] Error saving schema:', error);
+        logger.error('Enterprise booking schema save error', { error: error.message, companyID });
         res.status(500).json({
             success: false,
             message: 'Failed to save enterprise booking schema',
@@ -166,7 +167,7 @@ router.get('/enterprise-schema/:companyID', async (req, res) => {
     try {
         const { companyID } = req.params;
         
-        console.log(`[Enterprise Booking] Getting schemas for company: ${companyID}`);
+        logger.info('Enterprise booking schemas requested', { companyID });
 
         const db = getDB();
         if (!db) {
@@ -189,7 +190,7 @@ router.get('/enterprise-schema/:companyID', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[Enterprise Booking] Error getting schemas:', error);
+        logger.error('Enterprise booking schemas retrieval error', { error: error.message, companyID });
         res.status(500).json({
             success: false,
             message: 'Failed to retrieve enterprise booking schemas',
@@ -207,7 +208,7 @@ router.get('/enterprise-schema/:companyID/:schemaId', async (req, res) => {
     try {
         const { companyID, schemaId } = req.params;
         
-        console.log(`[Enterprise Booking] Getting schema: ${companyID}/${schemaId}`);
+        logger.info('Enterprise booking schema requested', { companyID, schemaId });
 
         const db = getDB();
         if (!db) {
@@ -233,7 +234,7 @@ router.get('/enterprise-schema/:companyID/:schemaId', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[Enterprise Booking] Error getting schema:', error);
+        logger.error('Enterprise booking schema retrieval error', { error: error.message, companyID, schemaId });
         res.status(500).json({
             success: false,
             message: 'Failed to retrieve enterprise booking schema',
@@ -251,7 +252,7 @@ router.post('/enterprise-validate', async (req, res) => {
     try {
         const { companyID, schemaId, bookingData, sessionId } = req.body;
 
-        console.log(`[Enterprise Booking] Validating booking data for ${companyID}/${schemaId}`);
+        logger.info('Enterprise booking validation requested', { companyID, schemaId });
 
         const db = getDB();
         if (!db) {
@@ -290,7 +291,7 @@ router.post('/enterprise-validate', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[Enterprise Booking] Error validating booking:', error);
+        logger.error('Enterprise booking validation error', { error: error.message, companyID, schemaId });
         res.status(500).json({
             success: false,
             message: 'Failed to validate booking data',
@@ -342,10 +343,10 @@ async function updateCompanyBookingScripts(db, companyID, tradeCategory, service
             { $push: { bookingScripts: bookingScript } }
         );
 
-        console.log(`[Enterprise Booking] Updated legacy booking script for ${companyID}`);
+        logger.info('Enterprise booking legacy script updated', { companyID });
 
     } catch (error) {
-        console.error('[Enterprise Booking] Error updating legacy scripts:', error);
+        logger.error('Enterprise booking legacy script update error', { error: error.message, companyID });
         // Don't throw - this is backward compatibility, not critical
     }
 }
@@ -429,7 +430,7 @@ async function logValidationAttempt(db, companyID, schemaId, sessionId, validati
 
         await db.collection('enterpriseBookingAuditLog').insertOne(logEntry);
     } catch (error) {
-        console.error('[Enterprise Booking] Error logging validation:', error);
+        logger.error('Enterprise booking validation logging error', { error: error.message });
         // Don't throw - logging failure shouldn't break validation
     }
 }

@@ -31,16 +31,16 @@ const bookingRoutes = require('./routes/booking');
 const transferRoutes = require('./routes/transfer');
 const notesRoutes = require('./routes/notes'); // GOLD STANDARD: Enterprise Notes API
 
-console.log('✅ Notes routes loaded, about to load Agent Settings routes...');
+// ENTERPRISE: New routes for enterprise functionality
+const knowledgeLifecycleRoutes = require('./routes/knowledgeLifecycle');
+const enterpriseAnalyticsRoutes = require('./routes/enterpriseAnalytics');
 
 // ENTERPRISE: AI Agent Settings API with error handling
 let agentSettingsRoutes;
 try {
   agentSettingsRoutes = require('./routes/agentSettings');
-  console.log('✅ Agent Settings routes loaded successfully in app.js');
 } catch (error) {
-  console.error('❌ Failed to load Agent Settings routes:', error.message);
-  console.error('Stack:', error.stack);
+  console.error('Failed to load Agent Settings routes:', error.message);
   process.exit(1);
 }
 
@@ -143,17 +143,22 @@ app.use('/api/agent', agentSettingsRoutes); // ENTERPRISE: AI Agent Settings Man
 app.use('/api/event-hooks', eventHooksRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/qna-learning', qnaLearningRoutes);
-console.log('✅ Monitoring routes registered at /api/monitoring');
-console.log('🔒 Cloud-only LLM configuration - Local LLM routes removed');
-console.log('✅ LLM routes registered at /api/llm');
-console.log('✅ Booking routes registered at /api/booking');
-console.log('✅ Transfer routes registered at /api/transfer');
-console.log('✅ Notes routes registered at /api/notes'); // GOLD STANDARD: Enterprise Notes
-console.log('✅ Agent Settings routes registered at /api/agent'); // ENTERPRISE: AI Agent Settings
-console.log('✅ Agent Settings routes registered at /api/agent'); // ENTERPRISE: AI Agent Settings
-console.log('✅ Event Hooks routes registered at /api/event-hooks');
-console.log('✅ Notification routes registered at /api/notifications');
-console.log('✅ Q&A Learning routes registered at /api/qna-learning');
+
+// Enterprise AI Intelligence routes with error handling
+let enterpriseAIIntelligenceRoutes;
+try {
+  enterpriseAIIntelligenceRoutes = require('./routes/enterpriseAIIntelligence');
+  app.use('/api/enterprise-ai', enterpriseAIIntelligenceRoutes);
+} catch (error) {
+  console.error('Failed to load Enterprise AI Intelligence routes:', error.message);
+  process.exit(1);
+}
+
+// Enterprise Knowledge Lifecycle Management
+app.use('/api/knowledge-lifecycle', knowledgeLifecycleRoutes);
+
+// Enterprise Analytics and Reporting
+app.use('/api/enterprise-analytics', enterpriseAnalyticsRoutes);
 
 // Contact Lookup for Real-time Caller Identification
 const contactLookupRoutes = require('./routes/contactLookup');
