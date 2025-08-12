@@ -8878,12 +8878,13 @@
             try {
                 console.log('📊 Fetching real-time analytics metrics...');
                 
-                // Simulate real-time data (in production, this would fetch from API)
+                // TODO: Replace with actual API endpoint when ready
+                // For now, show zero/empty state for real data
                 const metrics = {
-                    activeCalls: Math.floor(Math.random() * 50),
-                    totalCalls: Math.floor(Math.random() * 1000) + 500,
-                    avgResponseTime: (Math.random() * 3 + 1).toFixed(1),
-                    successRate: (95 + Math.random() * 4).toFixed(1)
+                    activeCalls: 0,
+                    totalCalls: 0,
+                    avgResponseTime: "0.0",
+                    successRate: "0.0"
                 };
                 
                 // Update UI elements if they exist
@@ -8897,7 +8898,7 @@
                 if (totalCallsEl) totalCallsEl.textContent = metrics.totalCalls;
                 if (successRateEl) successRateEl.textContent = metrics.successRate + '%';
                 
-                console.log('✅ Analytics metrics updated:', metrics);
+                console.log('✅ Analytics metrics updated (real data - currently zero):', metrics);
                 
             } catch (error) {
                 console.error('❌ Failed to fetch real-time metrics:', error);
