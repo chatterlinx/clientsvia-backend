@@ -5021,7 +5021,7 @@
                 }, 300);
             }, 5000);
             
-            // Notification display
+            console.log(`📢 Notification (${type}): ${message}`);
         }
 
         // 🎙️ ELEVENLABS VOICE FUNCTIONS
@@ -5140,9 +5140,14 @@
 
             // Add voice options
             availableVoices.forEach((voice, index) => {
-                // Voice structure validation for first few voices
+                // Debug voice structure for first few voices
                 if (index < 3) {
-                    // Production: validation logic without debug output
+                    console.log(`🔍 Voice ${index} structure:`, {
+                        voice_id: voice.voice_id,
+                        id: voice.id,
+                        name: voice.name,
+                        keys: Object.keys(voice)
+                    });
                 }
                 
                 // Skip voices with invalid voice_id
@@ -5189,27 +5194,33 @@
                 }
             }
             
-            // Checking for saved voice during population
+            console.log('🔍 Checking for saved voice during population:', {
+                savedVoiceId: savedVoiceId,
+                currentSelectorValue: selector.value,
+                availableVoicesCount: availableVoices.length,
+                dataAttribute: selector.getAttribute('data-saved-voice-id'),
+                companyDataExists: !!(window.companyProfileManager && window.companyProfileManager.currentData)
+            });
             
             // If we have a saved voice ID, try to select it
             if (savedVoiceId && savedVoiceId !== 'undefined' && availableVoices.length > 0) {
                 const savedVoice = availableVoices.find(v => v.voice_id === savedVoiceId);
                 if (savedVoice) {
                     selector.value = savedVoiceId;
-                    // Restored saved voice
+                    console.log(`🎯 Restored saved voice: ${savedVoice.name} (${savedVoiceId})`);
                     
                     // Trigger the change event to show voice preview
                     setTimeout(() => {
-
+                        console.log(`🔍 Pre-handleVoiceChange selector value (saved): "${selector.value}"`);
                         handleVoiceChange();
                     }, 150);
                 } else {
-                    // Saved voice ID not found, auto-selecting first voice
+                    console.log(`⚠️ Saved voice ID ${savedVoiceId} not found in available voices, will auto-select first voice`);
                     // Fall back to auto-selecting first voice
                     if (availableVoices.length > 0) {
                         const firstVoice = availableVoices[0];
                         selector.value = firstVoice.voice_id;
-                        // Auto-selected first voice (fallback)
+                        console.log(`🎯 Auto-selected first voice (fallback): ${firstVoice.name} (${firstVoice.voice_id})`);
                         setTimeout(() => {
                             handleVoiceChange();
                         }, 150);
@@ -5223,11 +5234,11 @@
                 selector.value = firstVoice.voice_id;
                 
                 if (selector.value === firstVoice.voice_id) {
-                    // Auto-selected first voice (no saved voice)
+                    console.log(`🎯 Auto-selected first voice (no saved voice): ${firstVoice.name} (${firstVoice.voice_id})`);
                     
                     // Trigger the change event to show voice preview (with a slight delay to ensure DOM is ready)
                     setTimeout(() => {
-
+                        console.log(`🔍 Pre-handleVoiceChange selector value: "${selector.value}"`);
                         handleVoiceChange();
                     }, 150);
                 } else {
@@ -5235,7 +5246,7 @@
                 }
             }
 
-            // Populated voice selector with available voices
+            console.log(`📝 Populated voice selector with ${availableVoices.length} voices`);
         }
 
         // Filter voices based on gender and category
@@ -5259,7 +5270,7 @@
                 option.style.display = (genderMatch && categoryMatch) ? 'block' : 'none';
             });
 
-
+            console.log(`🔍 Filtered voices by gender: ${genderFilter}, category: ${categoryFilter}`);
         }
 
         // Handle voice selection change
@@ -5271,11 +5282,11 @@
                 return;
             }
             
-
+            console.log(`🔍 handleVoiceChange called, selector value: "${selector.value}"`);
             
             // Safeguard: if selector value is 'undefined', try to fix it
             if (selector.value === 'undefined') {
-                // Detected undefined voice selector value, attempting to fix
+                console.log('🚨 Detected undefined voice selector value, attempting to fix...');
                 
                 // Try to set it to the first valid option
                 if (availableVoices && availableVoices.length > 0) {
@@ -5335,7 +5346,7 @@
                 // Trigger form change detection (with a delay to prevent race conditions)
                 setTimeout(() => {
                     if (typeof window.handleFormChange === 'function') {
-
+                        console.log('🔄 Triggering form change detection from handleVoiceChange');
                         window.handleFormChange();
                     }
                 }, 200);
@@ -5343,7 +5354,7 @@
                 // Hide the preview section if no voice selected
                 previewSection.classList.add('hidden');
                 voiceInfo.innerHTML = '';
-                // No voice selected or voice not found
+                console.log('ℹ️ No voice selected or voice not found');
             }
         }
 
@@ -5378,7 +5389,7 @@
                 apiSourceDescription.textContent = 'Using your own ElevenLabs API account';
                 toggleLabel.textContent = 'Use ClientsVia API';
                 
-
+                console.log('🔄 Switched to own API mode');
             } else {
                 // Switch to global API mode
                 apiKeyInput.disabled = true;
@@ -5390,7 +5401,7 @@
                 apiSourceDescription.textContent = 'Using ClientsVia global API (default for all companies)';
                 toggleLabel.textContent = 'Use Own API';
                 
-
+                console.log('🔄 Switched to ClientsVia global API mode');
             }
             
             // Trigger form change detection
@@ -5428,7 +5439,7 @@
                 button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
                 button.disabled = true;
 
-                // Generating test audio
+                console.log('🎵 Generating test audio...', { voiceId, textLength: testText.length });
                 
                 const response = await fetch('/api/elevenlabs/synthesize', {
                     method: 'POST',
@@ -5775,7 +5786,7 @@
                             // Track property changes
                             const checkValue = () => {
                                 if (selector.value !== lastValue) {
-
+                                    console.log(`🔍 Voice selector value changed: "${lastValue}" -> "${selector.value}"`);
                                     console.trace('Voice selector change stack trace:');
                                     lastValue = selector.value;
                                 }
@@ -5786,7 +5797,7 @@
                             
                             // Track events
                             selector.addEventListener('change', () => {
-
+                                console.log(`🔍 Voice selector change event: value = "${selector.value}"`);
                             });
                         }
                     }, 2000);
@@ -5796,7 +5807,7 @@
             }, 1000);
             
             // Debug: Log all available elements for troubleshooting
-
+            console.log('🔍 ElevenLabs UI Elements Check:');
             console.log('  - Test API Connection button:', !!document.getElementById('test-api-connection'));
             console.log('  - Refresh Voices button:', !!document.getElementById('refresh-voices')); 
             console.log('  - Voice selector:', !!document.getElementById('voice-selector'));
@@ -5866,7 +5877,7 @@
             if (!selector) return;
             
             const selectedCategories = Array.from(selector.selectedOptions).map(option => option.value);
-
+            console.log('🔄 Trade categories selection changed:', selectedCategories);
             
             // Update any related UI or trigger save
             // This function maintains compatibility with the original system
@@ -5879,7 +5890,7 @@
                 .filter(cb => cb.checked)
                 .map(cb => cb.value);
             
-
+            console.log('🔄 Trade categories checkbox selection changed:', selectedCategories);
             
             // Update the selected categories display
             updateSelectedCategoriesDisplay(selectedCategories);
@@ -5925,7 +5936,7 @@
             if (!companyId) return;
 
             try {
-
+                console.log('🔄 Loading agent settings for company:', companyId);
                 console.log('⏰ Agent Settings load timestamp:', new Date().toISOString());
                 const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`);
                 const data = await response.json();
@@ -6058,7 +6069,7 @@
                     autoLearningQueue: safeGetChecked('agent-autoLearningQueue', true)
                 };
 
-
+                console.log('🔄 About to save agent settings:', { companyId, tradeCategories, agentSettings });
 
                 const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
                     method: 'POST',
@@ -6076,7 +6087,7 @@
 
                     
                     // Reload settings to verify they were saved
-
+                    console.log('🔄 Reloading settings to verify save...');
                     setTimeout(() => loadAgentSettings(), 1000);
                 } else {
                     throw new Error(responseData.error || 'Failed to save settings');
@@ -7507,7 +7518,7 @@
         
         // Filter tests by status
         function filterTests(status) {
-
+            console.log(`🔍 Filtering tests by: ${status}`);
             // TODO: Implement actual test filtering
             showNotification('Filter Applied', `Showing tests with status: ${status.toUpperCase()}`, 'info');
         }
@@ -7521,7 +7532,7 @@
         
         // Refresh test data from live API
         function refreshTestData() {
-
+            console.log('🔄 Refreshing real-time test data...');
             
             // Fetch live data from API
             fetch(`/api/agent/companies/${companyId}/ab-tests/stats`, {
@@ -7601,14 +7612,14 @@
         
         // Filter personalization rules
         function filterPersonalizationRules(status) {
-
+            console.log(`🔍 Filtering personalization rules by: ${status}`);
             // TODO: Implement actual rule filtering
             showNotification('Filter Applied', `Showing personalization rules with status: ${status.toUpperCase()}`, 'info');
         }
         
         // Refresh personalization data from live API
         function refreshPersonalizationData() {
-
+            console.log('🔄 Refreshing personalization metrics...');
             
             // Fetch live personalization data
             fetch(`/api/agent/companies/${companyId}/personalization/stats`, {
@@ -7694,7 +7705,7 @@
                     e.stopPropagation();
                     
                     const targetTab = button.id.replace('clientsvia-tab-', '');
-
+                    console.log(`🔄 Switching to tab: ${targetTab}`);
                     
                     // Remove active class from all tabs and contents
                     tabButtons.forEach(btn => {
@@ -8171,6 +8182,151 @@
             }
         }
         
+        // ========================================= 
+        // AI AGENT TESTING FUNCTIONS
+        // ========================================= 
+        
+        // Test AI Agent with actual runtime call
+        async function runAgentTest() {
+            const companyId = getCurrentCompanyId();
+            const testMessage = document.getElementById('testMessage')?.value?.trim();
+            
+            if (!testMessage) {
+                showNotification('Please enter a test message', 'warning');
+                return;
+            }
+            
+            if (!companyId) {
+                showNotification('Company ID not found', 'error');
+                return;
+            }
+            
+            // Update UI to show testing state
+            const testBtn = document.getElementById('testAgentBtn');
+            const responseDiv = document.getElementById('agentResponse');
+            const traceDiv = document.getElementById('responseTrace');
+            
+            testBtn.disabled = true;
+            testBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Testing...';
+            
+            responseDiv.innerHTML = '<p class="text-gray-500 italic text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>Processing your message...</p>';
+            traceDiv.innerHTML = '<p class="text-gray-500 italic text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>Generating trace...</p>';
+            
+            try {
+                // Call the actual agent runtime endpoint (blueprint compliant)
+                const response = await fetch(`/api/agent/${companyId}/test`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: testMessage,
+                        context: {
+                            timestamp: new Date().toISOString(),
+                            testMode: true
+                        }
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    displayTestResults(result);
+                } else if (response.status === 404) {
+                    // Fallback for development - show mock results
+                    const mockResult = {
+                        response: {
+                            text: "This is a mock response. The agent runtime endpoint is not yet implemented.",
+                            source: "mock",
+                            confidence: 0.95
+                        },
+                        trace: [
+                            { source: "companyKB", matches: 0, score: 0.0, selected: false },
+                            { source: "tradeQA", matches: 1, score: 0.85, selected: true },
+                            { source: "templates", matches: 0, score: 0.0, selected: false }
+                        ],
+                        finalSource: "tradeQA",
+                        timestamp: new Date().toISOString()
+                    };
+                    displayTestResults(mockResult);
+                    showNotification('Agent endpoint not available - showing mock response', 'warning');
+                } else {
+                    throw new Error(`HTTP ${response.status}: Agent test failed`);
+                }
+                
+            } catch (error) {
+                console.error('❌ Agent test error:', error);
+                responseDiv.innerHTML = `<p class="text-red-600"><i class="fas fa-exclamation-triangle mr-2"></i>Error: ${error.message}</p>`;
+                traceDiv.innerHTML = `<p class="text-red-600"><i class="fas fa-exclamation-triangle mr-2"></i>Could not generate trace</p>`;
+                showNotification('Agent test failed', 'error');
+            } finally {
+                // Reset button state
+                testBtn.disabled = false;
+                testBtn.innerHTML = '<i class="fas fa-play mr-2"></i>Test Agent';
+            }
+        }
+        
+        // Display test results in UI
+        function displayTestResults(result) {
+            const responseDiv = document.getElementById('agentResponse');
+            const traceDiv = document.getElementById('responseTrace');
+            
+            // Display agent response
+            responseDiv.innerHTML = `
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-gray-700">Response Source:</span>
+                        <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">${result.finalSource || result.response?.source || 'Unknown'}</span>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-lg p-3">
+                        <p class="text-gray-800">${result.response?.text || 'No response generated'}</p>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-600">Confidence: <strong>${((result.response?.confidence || 0) * 100).toFixed(1)}%</strong></span>
+                        <span class="text-gray-600">Time: ${new Date(result.timestamp).toLocaleTimeString()}</span>
+                    </div>
+                </div>
+            `;
+            
+            // Display response trace
+            if (result.trace && result.trace.length > 0) {
+                const traceHtml = result.trace.map((step, index) => `
+                    <div class="flex items-center justify-between p-3 ${step.selected ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'} border rounded-lg">
+                        <div class="flex items-center">
+                            <span class="w-6 h-6 flex items-center justify-center ${step.selected ? 'bg-green-600 text-white' : 'bg-gray-400 text-white'} rounded-full text-xs font-bold mr-3">${index + 1}</span>
+                            <div>
+                                <span class="font-medium text-gray-800">${step.source}</span>
+                                <p class="text-xs text-gray-600">Matches: ${step.matches || 0}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm font-mono ${step.selected ? 'text-green-700' : 'text-gray-600'}">${(step.score * 100).toFixed(1)}%</div>
+                            ${step.selected ? '<i class="fas fa-check-circle text-green-600"></i>' : '<i class="fas fa-circle text-gray-400"></i>'}
+                        </div>
+                    </div>
+                `).join('');
+                
+                traceDiv.innerHTML = `
+                    <div class="space-y-2">
+                        <h5 class="font-medium text-gray-800 mb-3">Decision Trace</h5>
+                        ${traceHtml}
+                    </div>
+                `;
+            } else {
+                traceDiv.innerHTML = '<p class="text-gray-500 italic text-center py-4">No trace data available</p>';
+            }
+        }
+        
+        // Clear test results
+        function clearTestResults() {
+            document.getElementById('testMessage').value = '';
+            document.getElementById('agentResponse').innerHTML = '<p class="text-gray-500 italic text-center py-4">No test run yet. Enter a message and click "Test Agent" to see the response.</p>';
+            document.getElementById('responseTrace').innerHTML = '<p class="text-gray-500 italic text-center py-4">Trace will appear here after running a test.</p>';
+        }
+        
+        // ========================================= 
+        // END AI AGENT TESTING FUNCTIONS
+        // ========================================= 
+        
         // Initialize ClientsVia Intelligence
         function initClientsViaIntelligence() {
             initClientsViaTabs();
@@ -8179,8 +8335,58 @@
             
             // Load existing configuration
             loadClientsViaConfiguration();
+            
+            console.log('🧠 ClientsVia Intelligence fully initialized');
         }
 
+        // Debug function to test endpoint accessibility
+        async function testApiAccess() {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) {
+                console.log('❌ No company ID found');
+                return;
+            }
+            
+            try {
+                console.log('🔍 Testing authentication and API access...');
+                console.log('🍪 Cookies:', document.cookie);
+                console.log('🏢 Company ID:', companyId);
+                
+                console.log('🔍 Testing GET endpoint access...');
+                const getResponse = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
+                    method: 'GET'
+                });
+                console.log('GET Response status:', getResponse.status);
+                console.log('GET Response headers:', [...getResponse.headers.entries()]);
+                
+                if (getResponse.ok) {
+                    const data = await getResponse.json();
+
+                } else {
+                    const errorText = await getResponse.text();
+                    console.log('❌ GET failed:', getResponse.status, errorText);
+                    
+                    // Try alternative working endpoint
+                    console.log('🔍 Testing working endpoint as backup...');
+                    const getResponse2 = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    console.log('GET Response 2 status:', getResponse2.status);
+                    if (!getResponse2.ok) {
+                        const errorText2 = await getResponse2.text();
+                        console.log('❌ GET 2 failed:', getResponse2.status, errorText2);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Test API access error:', error);
+            }
+        }
+        
+        // Call test function when page loads
+        testApiAccess();
         
         // Load ClientsVia configuration from backend
         async function loadClientsViaConfiguration() {
@@ -9144,7 +9350,7 @@
                 const element = document.getElementById(fieldId);
                 if (element) {
                     element.addEventListener('change', function(event) {
-
+                        console.log('🔄 AI Agent Logic field changed:', fieldId, event.target.value || event.target.checked);
                         
                         // Trigger main form change detection
                         if (window.companyProfileManager && typeof window.companyProfileManager.handleFormChange === 'function') {
@@ -9166,7 +9372,7 @@
                 const checkbox = document.getElementById(checkboxId);
                 if (checkbox) {
                     checkbox.addEventListener('change', function(event) {
-
+                        console.log('🔄 LLM checkbox changed:', checkboxId, event.target.checked);
                         
                         // Trigger main form change detection
                         if (window.companyProfileManager && typeof window.companyProfileManager.handleFormChange === 'function') {
@@ -9715,7 +9921,7 @@
                     });
                     
                     const result = await response.json();
-
+                    console.log('🔍 Full server response:', result);
                     
                     if (result.success) {
                         let audioUrl;
@@ -9960,7 +10166,7 @@
                         window.companyProfileManager.setUnsavedChanges(true);
                     }
                     
-
+                    console.log(`🔄 Toggle ${toggle.id}: ${toggle.checked ? 'ON' : 'OFF'}`);
                 });
                 
                 // Also add click handler directly to the checkbox input
@@ -9972,7 +10178,7 @@
                         window.companyProfileManager.setUnsavedChanges(true);
                     }
                     
-
+                    console.log(`🔄 Direct toggle ${toggle.id}: ${toggle.checked ? 'ON' : 'OFF'}`);
                 });
             });
             
@@ -10067,7 +10273,7 @@
                             // Update visual state
                             updateToggleVisualState(checkbox);
                             
-
+                            console.log(`🔄 Toggle ${id}: ${checkbox.checked ? 'ON' : 'OFF'}`);
                         });
                     }
                 }
@@ -10133,7 +10339,7 @@
                 
                 const result = await response.json();
                 console.log('📄 Load Response Data:', result);
-
+                console.log('🔍 agentIntelligenceSettings:', result.company?.agentIntelligenceSettings);
                 console.log('🔍 Available memoryMode values:', {
                     'agentIntelligenceSettings.memoryMode': result.company?.agentIntelligenceSettings?.memoryMode,
                     'agentSettings.memoryMode': result.company?.agentSettings?.memoryMode,
