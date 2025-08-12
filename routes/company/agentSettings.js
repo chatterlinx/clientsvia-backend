@@ -161,8 +161,8 @@ router.get('/companies/:id/agent-settings', async (req, res) => {
 // 📊 Get Available Trade Categories
 router.get('/trade-categories', async (req, res) => {
   try {
-    const categories = await TradeCategory.find({ isActive: true })
-      .select('name description serviceTypes')
+    const categories = await TradeCategory.find({})
+      .select('name description serviceTypes commonQAs')
       .sort({ name: 1 });
 
     res.json(categories);
