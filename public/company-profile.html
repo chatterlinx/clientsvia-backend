@@ -2161,16 +2161,157 @@
                                         <!-- ========================================= -->
                                         <div id="clientsvia-analytics-new-content" class="clientsvia-tab-content">
                                             <div class="mb-6">
-                                                <!-- Simple test banner -->
-                                                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                                                    <div class="flex">
-                                                        <div class="py-1">
-                                                            <strong class="font-bold">🎯 ANALYTICS TEST BANNER</strong>
+                                                <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
+                                                    <i class="fas fa-chart-line mr-2 text-blue-600"></i>Real-time Analytics Dashboard  
+                                                    <span class="ml-2 text-sm text-gray-600">(Live Performance Metrics)</span>
+                                                </h4>
+                                                
+                                                <!-- Real-time Metrics Grid -->
+                                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                                    <!-- Current Call Volume -->
+                                                    <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
+                                                        <div class="flex items-center justify-between">
+                                                            <div>
+                                                                <p class="text-sm font-medium text-gray-600">Active Calls</p>
+                                                                <p class="text-2xl font-bold text-green-600" id="current-calls">0</p>
+                                                            </div>
+                                                            <div class="p-2 bg-green-100 rounded-full">
+                                                                <i class="fas fa-phone text-green-600"></i>
+                                                            </div>
+                                                        </div>
+                                                        <div class="mt-2 text-xs text-gray-500">
+                                                            <span class="text-green-600">+2.5%</span> from yesterday
                                                         </div>
                                                     </div>
-                                                    <p class="text-sm mt-2">
-                                                        If you can see this banner, the new Analytics Dashboard tab position is working correctly!
-                                                    </p>
+                                                    
+                                                    <!-- Response Time -->
+                                                    <div class="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-4">
+                                                        <div class="flex items-center justify-between">
+                                                            <div>
+                                                                <p class="text-sm font-medium text-gray-600">Avg Response Time</p>
+                                                                <p class="text-2xl font-bold text-blue-600" id="avg-response-time">1.2s</p>
+                                                            </div>
+                                                            <div class="p-2 bg-blue-100 rounded-full">
+                                                                <i class="fas fa-clock text-blue-600"></i>
+                                                            </div>
+                                                        </div>
+                                                        <div class="mt-2 text-xs text-gray-500">
+                                                            <span class="text-green-600">-0.3s</span> improvement
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Success Rate -->
+                                                    <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
+                                                        <div class="flex items-center justify-between">
+                                                            <div>
+                                                                <p class="text-sm font-medium text-gray-600">Success Rate</p>
+                                                                <p class="text-2xl font-bold text-purple-600" id="success-rate">94.2%</p>
+                                                            </div>
+                                                            <div class="p-2 bg-purple-100 rounded-full">
+                                                                <i class="fas fa-check-circle text-purple-600"></i>
+                                                            </div>
+                                                        </div>
+                                                        <div class="mt-2 text-xs text-gray-500">
+                                                            <span class="text-green-600">+1.8%</span> this week
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Customer Satisfaction -->
+                                                    <div class="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-lg p-4">
+                                                        <div class="flex items-center justify-between">
+                                                            <div>
+                                                                <p class="text-sm font-medium text-gray-600">Satisfaction</p>
+                                                                <p class="text-2xl font-bold text-amber-600" id="satisfaction-score">4.8</p>
+                                                            </div>
+                                                            <div class="p-2 bg-amber-100 rounded-full">
+                                                                <i class="fas fa-star text-amber-600"></i>
+                                                            </div>
+                                                        </div>
+                                                        <div class="mt-2 text-xs text-gray-500">
+                                                            Based on 847 ratings
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Charts Section -->
+                                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                                                    <!-- Performance Trend Chart -->
+                                                    <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                                        <h5 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                                            <i class="fas fa-trending-up mr-2 text-green-600"></i>Performance Trends
+                                                        </h5>
+                                                        <div class="h-64 bg-gray-50 rounded-lg flex items-center justify-center">
+                                                            <div class="text-center">
+                                                                <div id="performance-chart" class="w-full h-full">
+                                                                    <!-- Chart will be inserted here -->
+                                                                    <div class="flex items-center justify-center h-full">
+                                                                        <div class="text-gray-400">
+                                                                            <i class="fas fa-chart-line text-3xl mb-2"></i>
+                                                                            <p class="text-sm">Live chart data loading...</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Knowledge Source Usage -->
+                                                    <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                                        <h5 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                                                            <i class="fas fa-database mr-2 text-blue-600"></i>Knowledge Source Usage
+                                                        </h5>
+                                                        <div class="space-y-3">
+                                                            <div class="flex items-center justify-between">
+                                                                <span class="text-sm text-gray-600">Company KB</span>
+                                                                <div class="flex items-center">
+                                                                    <div class="w-24 bg-gray-200 rounded-full h-2 mr-3">
+                                                                        <div class="bg-green-600 h-2 rounded-full" style="width: 68%"></div>
+                                                                    </div>
+                                                                    <span class="text-sm font-medium text-gray-900">68%</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="flex items-center justify-between">
+                                                                <span class="text-sm text-gray-600">Trade Categories</span>
+                                                                <div class="flex items-center">
+                                                                    <div class="w-24 bg-gray-200 rounded-full h-2 mr-3">
+                                                                        <div class="bg-blue-600 h-2 rounded-full" style="width: 22%"></div>
+                                                                    </div>
+                                                                    <span class="text-sm font-medium text-gray-900">22%</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="flex items-center justify-between">
+                                                                <span class="text-sm text-gray-600">Template Intelligence</span>
+                                                                <div class="flex items-center">
+                                                                    <div class="w-24 bg-gray-200 rounded-full h-2 mr-3">
+                                                                        <div class="bg-purple-600 h-2 rounded-full" style="width: 7%"></div>
+                                                                    </div>
+                                                                    <span class="text-sm font-medium text-gray-900">7%</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="flex items-center justify-between">
+                                                                <span class="text-sm text-gray-600">LLM Fallback</span>
+                                                                <div class="flex items-center">
+                                                                    <div class="w-24 bg-gray-200 rounded-full h-2 mr-3">
+                                                                        <div class="bg-red-600 h-2 rounded-full" style="width: 3%"></div>
+                                                                    </div>
+                                                                    <span class="text-sm font-medium text-gray-900">3%</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Action Buttons -->
+                                                <div class="flex flex-wrap gap-3">
+                                                    <button onclick="exportAnalyticsReport()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
+                                                        <i class="fas fa-download mr-2"></i>Export Report
+                                                    </button>
+                                                    <button onclick="refreshDashboard()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md transition-colors">
+                                                        <i class="fas fa-sync mr-2"></i>Refresh Data
+                                                    </button>
+                                                    <button onclick="scheduleReport()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors">
+                                                        <i class="fas fa-calendar mr-2"></i>Schedule Reports
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
@@ -7509,7 +7650,10 @@
                     // Initialize specific enterprise features when their tabs are activated
                     switch(targetTab) {
                         case 'analytics-new':
-                            console.log('📊 NEW Analytics tab activated - test position');
+                            console.log('📊 NEW Analytics tab activated - fetching metrics');
+                            if (typeof fetchRealTimeMetrics === 'function') {
+                                fetchRealTimeMetrics();
+                            }
                             break;
                         case 'analytics':
                             console.log('📊 Analytics tab activated - fetching metrics');
@@ -8972,7 +9116,8 @@
                     // Load specific content when switching to tabs
                     switch (targetTabId) {
                         case 'analytics-new':
-                            console.log('📊 Loading NEW Analytics Dashboard (test position)...');
+                            console.log('📊 Loading NEW Analytics Dashboard (safe position)...');
+                            fetchRealTimeMetrics();
                             break;
                         case 'analytics':
                             console.log('📊 Loading Analytics Dashboard...');
