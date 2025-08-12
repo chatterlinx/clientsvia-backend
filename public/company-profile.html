@@ -625,7 +625,7 @@
                         <a href="/index.html" class="nav-link-global" id="nav-home">Home</a>
                         <a href="/directory.html" class="nav-link-global" id="nav-directory">Directory</a>
                         <a href="/add-company.html" class="nav-link-global" id="nav-add-company">Add Company</a>
-                        <a href="/trade-category-management.html" class="nav-link-global" id="nav-trade-categories">Trade Categories</a>
+                        <a href="/enterprise-trade-categories.html" class="nav-link-global" id="nav-trade-categories">Trade Categories</a>
                         <a href="/company-profile.html" class="nav-link-global active" id="nav-company-profile">Company Profile</a>
                     </nav>
                     <div class="md:hidden flex items-center">
@@ -642,7 +642,7 @@
                     <a href="/index.html" class="block nav-link text-base">Home</a>
                     <a href="/directory.html" class="block nav-link text-base">Directory</a>
                     <a href="/add-company.html" class="block nav-link text-base">Add Company</a>
-                    <a href="/trade-category-management.html" class="block nav-link text-base">Trade Categories</a>
+                    <a href="/enterprise-trade-categories.html" class="block nav-link text-base">Trade Categories</a>
                     <a href="/company-profile.html" class="block nav-link text-base">Company Profile</a>
                 </div>
             </div>
@@ -6032,9 +6032,15 @@
         // Load trade categories for agent configuration
         async function loadAgentTradeCategories() {
             try {
-                // Use the GLOBAL trade categories endpoint
-                const response = await fetch('/api/trade-categories/');
-                const categories = await response.json();
+                // Use the ENTERPRISE trade categories endpoint
+                const response = await fetch(`/api/enterprise-trade-categories?companyId=${currentCompanyId || 'global'}&includeGlobal=true`);
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.message || 'Failed to load trade categories');
+                }
+                
+                const categories = result.data;
                 
                 // Populate the original dropdown (for compatibility)
                 const selector = document.getElementById('agent-trade-categories');
@@ -6048,7 +6054,7 @@
                     // Add to dropdown
                     const option = document.createElement('option');
                     option.value = category.name;
-                    const qaCount = category.commonQAs ? category.commonQAs.length : 0;
+                    const qaCount = category.qnas ? category.qnas.length : 0;
                     option.textContent = `${category.name} (${qaCount} Q&As)`;
                     selector.appendChild(option);
                     

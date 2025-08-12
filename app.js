@@ -35,6 +35,16 @@ const notesRoutes = require('./routes/notes'); // GOLD STANDARD: Enterprise Note
 const knowledgeLifecycleRoutes = require('./routes/knowledgeLifecycle');
 const enterpriseAnalyticsRoutes = require('./routes/enterpriseAnalytics');
 
+// ENTERPRISE: Trade Categories with error handling
+let enterpriseTradeCategories;
+try {
+  enterpriseTradeCategories = require('./routes/enterpriseTradeCategories');
+  console.log('✅ Enterprise Trade Categories routes loaded successfully');
+} catch (error) {
+  console.error('❌ Failed to load Enterprise Trade Categories routes:', error.message);
+  process.exit(1);
+}
+
 // ENTERPRISE: AI Agent Settings API with error handling
 let agentSettingsRoutes;
 try {
@@ -159,6 +169,10 @@ app.use('/api/knowledge-lifecycle', knowledgeLifecycleRoutes);
 
 // Enterprise Analytics and Reporting
 app.use('/api/enterprise-analytics', enterpriseAnalyticsRoutes);
+
+// Enterprise Trade Categories Management
+app.use('/api/enterprise-trade-categories', enterpriseTradeCategories);
+console.log('✅ Enterprise Trade Categories routes registered at /api/enterprise-trade-categories');
 
 // Contact Lookup for Real-time Caller Identification
 const contactLookupRoutes = require('./routes/contactLookup');

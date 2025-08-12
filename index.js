@@ -106,6 +106,9 @@ async function loadAllRoutes() {
         // Load Enterprise AI Intelligence routes
         routes.enterpriseAIIntelligenceRoutes = await loadRouteWithTimeout('./routes/enterpriseAIIntelligence', 'enterpriseAIIntelligenceRoutes');
         
+        // Load Enterprise Trade Categories routes
+        routes.enterpriseTradeCategories = await loadRouteWithTimeout('./routes/enterpriseTradeCategories', 'enterpriseTradeCategories');
+        
         console.log('[INIT] ✅ All routes loaded successfully');
         return routes;
     } catch (error) {
@@ -217,6 +220,7 @@ function registerRoutes(routes) {
     app.use('/api/booking-handler', routes.bookingHandlerRoutes); // Booking Handler API for testing and integration
     app.use('/api/ai-intelligence', routes.aiIntelligenceRoutes); // AI Intelligence Engine routes
     app.use('/api/enterprise-ai', routes.enterpriseAIIntelligenceRoutes); // ENTERPRISE: AI Intelligence Control Center
+    app.use('/api/enterprise-trade-categories', routes.enterpriseTradeCategories); // ENTERPRISE: Trade Categories Management
 
     // Mount agent processor routes
     app.use('/api/agent', routes.agentProcessorRoutes); // NEW: Central agent processing API
