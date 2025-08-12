@@ -173,19 +173,49 @@
         @media (max-width: 767px) { .wider-textbox { max-width: 100%; } }
         
         /* 🧠 Agent ClientsVia Intelligence Styles */
+        /* 🔧 BULLETPROOF TAB SWITCHING STYLES */
         .clientsvia-tab-btn {
+            position: relative;
+            z-index: 1;
             transition: all 0.2s ease-in-out;
+            cursor: pointer;
         }
+        
+        .clientsvia-tab-btn:hover {
+            background-color: #f8fafc;
+        }
+        
         .clientsvia-tab-btn.active {
-            border-color: #6366f1 !important;
+            z-index: 2;
+            border-bottom-color: #6366f1 !important;
             color: #6366f1 !important;
-            background-color: #eef2ff;
+            background-color: #eef2ff !important;
+            font-weight: 600;
         }
-        .clientsvia-tab-content {
-            display: none;
+        
+        /* Force hide inactive tabs with multiple approaches */
+        .clientsvia-tab-content:not(.active) {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
         }
+        
+        /* Force show active tabs */
         .clientsvia-tab-content.active {
-            display: block;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+        
+        /* Container stability */
+        #clientsvia-tab-content {
+            min-height: 500px;
+            position: relative;
+            overflow: visible;
         }
         .clientsvia-priority-item {
             transition: all 0.3s ease;
@@ -2556,18 +2586,6 @@
                                         <!-- Enterprise-Grade Performance Monitoring  -->
                                         <!-- ========================================= -->                        <!-- TAB 4: Real-time Analytics Dashboard -->
                         <div id="clientsvia-analytics-content" class="clientsvia-tab-content">
-                            <!-- Visibility Test Banner -->
-                            <div class="bg-red-500 text-white p-4 text-center font-bold mb-4">
-                                🔴 ANALYTICS CONTENT IS VISIBLE - TEST BANNER
-                            </div>
-                            
-                            <!-- BIG TEST TEXT -->
-                            <div class="bg-yellow-300 border-4 border-black p-8 text-center mb-6">
-                                <h1 class="text-4xl font-black text-black mb-4">🧪 ANALYTICS TAB TEST</h1>
-                                <p class="text-2xl font-bold text-black">If you can see this, the analytics tab is working!</p>
-                                <p class="text-xl text-black mt-2">Tab switching is functional ✅</p>
-                            </div>
-                            
                             <div class="mb-6">
                                                 <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                                                     <i class="fas fa-chart-line mr-2 text-blue-600"></i>Real-time Analytics Dashboard  
@@ -7393,24 +7411,52 @@
             }
         }
 
-        // Tab switching functionality
+        // Tab switching functionality - BULLETPROOF VERSION
         function initClientsViaTabs() {
             const tabButtons = document.querySelectorAll('.clientsvia-tab-btn');
             const tabContents = document.querySelectorAll('.clientsvia-tab-content');
             
-            tabButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    const targetTab = button.id.replace('clientsvia-tab-', '');
-                    
-                    // Remove active class from all tabs and contents
-                    tabButtons.forEach(btn => btn.classList.remove('active', 'border-blue-500', 'border-indigo-500', 'text-blue-600', 'text-indigo-600', 'bg-indigo-50'));
-                    tabButtons.forEach(btn => btn.classList.add('border-transparent', 'text-gray-500'));
+            // Force initial state - make sure priority tab is active by default
+            setTimeout(() => {
+                const priorityTab = document.getElementById('clientsvia-tab-priority');
+                const priorityContent = document.getElementById('clientsvia-priority-content');
+                if (priorityTab && priorityContent) {
+                    // Clear all active states first
+                    tabButtons.forEach(btn => {
+                        btn.classList.remove('active', 'border-blue-500', 'border-indigo-500', 'text-blue-600', 'text-indigo-600', 'bg-indigo-50');
+                        btn.classList.add('border-transparent', 'text-gray-500');
+                    });
                     tabContents.forEach(content => {
                         content.classList.remove('active');
-                        // Clear any inline styles
-                        content.style.display = '';
-                        content.style.visibility = '';
-                        content.style.opacity = '';
+                    });
+                    
+                    // Activate priority tab
+                    priorityTab.classList.add('active', 'border-indigo-500', 'text-indigo-600', 'bg-indigo-50');
+                    priorityTab.classList.remove('border-transparent', 'text-gray-500');
+                    priorityContent.classList.add('active');
+                }
+            }, 100);
+            
+            tabButtons.forEach(button => {
+                button.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const targetTab = button.id.replace('clientsvia-tab-', '');
+                    console.log(`🔄 Switching to tab: ${targetTab}`);
+                    
+                    // Remove active class from all tabs and contents
+                    tabButtons.forEach(btn => {
+                        btn.classList.remove('active', 'border-blue-500', 'border-indigo-500', 'text-blue-600', 'text-indigo-600', 'bg-indigo-50');
+                        btn.classList.add('border-transparent', 'text-gray-500');
+                    });
+                    
+                    tabContents.forEach(content => {
+                        content.classList.remove('active');
+                        // Force hide with multiple methods
+                        content.style.display = 'none';
+                        content.style.visibility = 'hidden';
+                        content.style.opacity = '0';
                     });
                     
                     // Add active class to clicked tab and corresponding content
@@ -7427,11 +7473,20 @@
                     const targetContent = document.getElementById(`clientsvia-${targetTab}-content`);
                     if (targetContent) {
                         targetContent.classList.add('active');
+                        // Force show with multiple methods
+                        targetContent.style.display = 'block';
+                        targetContent.style.visibility = 'visible';
+                        targetContent.style.opacity = '1';
+                        
+                        console.log(`✅ Activated content for: ${targetTab}`);
+                    } else {
+                        console.error(`❌ Content not found for tab: ${targetTab}`);
                     }
                     
                     // Initialize specific enterprise features when their tabs are activated
                     switch(targetTab) {
                         case 'analytics':
+                            console.log('📊 Analytics tab activated - fetching metrics');
                             if (typeof fetchRealTimeMetrics === 'function') {
                                 fetchRealTimeMetrics();
                             }
