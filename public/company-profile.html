@@ -9198,21 +9198,30 @@
         }
 
         /**
-         * Load and display A/B test configurations
+         * Load and display A/B test configurations from API
          */
         function loadABTests() {
             try {
                 console.log('🧪 Loading A/B testing configurations...');
                 
-                // Simulate A/B test data (in production, this would fetch from API)
-                const tests = [
-                    { id: 1, name: 'Greeting Variations', status: 'active', participants: 250 },
-                    { id: 2, name: 'Voice Tone Test', status: 'completed', participants: 180 },
-                    { id: 3, name: 'Response Speed Test', status: 'draft', participants: 0 }
-                ];
-                
-                console.log('✅ A/B tests loaded:', tests.length, 'tests');
-                showNotification('A/B tests loaded successfully', 'success');
+                // Fetch live A/B tests from API
+                fetch(`/api/agent/companies/${companyId}/ab-tests`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(tests => {
+                    console.log('✅ A/B tests loaded:', tests.length, 'tests');
+                    // Update UI with real test data here
+                    updateABTestsDisplay(tests);
+                })
+                .catch(error => {
+                    console.error('❌ Failed to load A/B tests:', error);
+                    // Keep UI in zero state
+                });
                 
             } catch (error) {
                 console.error('❌ Failed to load A/B tests:', error);
