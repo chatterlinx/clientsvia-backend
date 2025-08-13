@@ -1703,13 +1703,18 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        
-                                        <!-- Save Button -->
-                                        <div class="mt-6 pt-4 border-t border-gray-200 flex justify-end">
-                                            <button type="button" onclick="saveAgentSettings()" class="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
-                                                <i class="fas fa-save mr-2"></i>Save Agent Settings
-                                            </button>
-                                        </div>
+                                                         <!-- Save Button -->
+                        <div class="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center">
+                            <span id="agent-settings-saved" class="text-green-600 text-sm hidden flex items-center">
+                                <svg class="mr-1 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                Settings Saved!
+                            </span>
+                            <button type="button" onclick="saveAgentSettings()" class="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
+                                <i class="fas fa-save mr-2"></i>Save Agent Settings
+                            </button>
+                        </div>
                                     </div>
                                 </div>
 
@@ -6266,25 +6271,21 @@
 
         // Update the selected categories display
         function updateSelectedCategoriesDisplay(selectedCategories) {
-            const countElement = document.getElementById('selected-categories-count');
-            const listElement = document.getElementById('selected-categories-list');
+            const display = document.getElementById('selected-categories-display');
+            if (!display) return;
             
-            if (countElement) {
-                countElement.textContent = `${selectedCategories.length} selected`;
+            if (!selectedCategories || selectedCategories.length === 0) {
+                display.innerHTML = '<span class="text-gray-500 text-sm">No categories selected</span>';
+                return;
             }
             
-            if (listElement) {
-                if (selectedCategories.length === 0) {
-                    listElement.innerHTML = '<div class="text-gray-400 text-sm italic">No categories selected</div>';
-                } else {
-                    const categoriesHTML = selectedCategories.map(category => 
-                        `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2 mb-2">
-                            ${category}
-                        </span>`
-                    ).join('');
-                    listElement.innerHTML = categoriesHTML;
-                }
-            }
+            const categoriesHtml = selectedCategories.map(category => 
+                `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2 mb-1">
+                    ${category}
+                </span>`
+            ).join('');
+            
+            display.innerHTML = categoriesHtml;
         }
 
         // Load current agent settings
@@ -6441,8 +6442,10 @@
 
                 if (response.ok) {
                     const savedIndicator = document.getElementById('agent-settings-saved');
-                    savedIndicator.classList.remove('hidden');
-                    setTimeout(() => savedIndicator.classList.add('hidden'), 3000);
+                    if (savedIndicator) {
+                        savedIndicator.classList.remove('hidden');
+                        setTimeout(() => savedIndicator.classList.add('hidden'), 3000);
+                    }
 
                     
                     // Reload settings to verify they were saved
