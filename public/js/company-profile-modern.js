@@ -171,9 +171,9 @@ class CompanyProfileManager {
      * Setup all event listeners
      */
     setupEventListeners() {
-        // Form change tracking
-        document.addEventListener('input', (event) => this.handleFormChange(event));
+        // Form change tracking - only listen for 'change' and 'blur' events, not 'input' (keystrokes)
         document.addEventListener('change', (event) => this.handleFormChange(event));
+        document.addEventListener('blur', (event) => this.handleFormChange(event), true); // useCapture for blur
         
         // Before unload warning
         window.addEventListener('beforeunload', (event) => this.handleBeforeUnload(event));
@@ -197,7 +197,10 @@ class CompanyProfileManager {
      */
     handleFormChange(event) {
         if (event.target.matches('input, textarea, select')) {
-            console.log('📝 Change detected:', event.target.name || event.target.id, event.target.value);
+            // Only log on blur/change events, not input events (keystroke-by-keystroke)
+            if (event.type === 'change' || event.type === 'blur') {
+                console.log('📝 Field updated:', event.target.name || event.target.id);
+            }
             this.setUnsavedChanges(true);
         }
     }
@@ -227,7 +230,14 @@ class CompanyProfileManager {
      */
     setUnsavedChanges(hasChanges) {
         this.hasUnsavedChanges = hasChanges;
-        console.log('📝 Unsaved changes state set to:', hasChanges);
+        // Only log state changes, not every keystroke
+        if (hasChanges && !this.previousUnsavedState) {
+            console.log('📝 Unsaved changes detected');
+            this.previousUnsavedState = true;
+        } else if (!hasChanges && this.previousUnsavedState) {
+            console.log('📝 Changes saved');
+            this.previousUnsavedState = false;
+        }
     }
 
     /**

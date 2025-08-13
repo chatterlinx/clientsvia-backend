@@ -65,26 +65,15 @@ router.post('/companies/:companyId/company-kb', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Question and answer are required' });
         }
 
-        // Check if company exists using raw MongoDB query to avoid validation
-        // const db = Company.db;
-        // const objectId = new mongoose.Types.ObjectId(companyId);
-        // const companyExists = await db.collection('companies').findOne({ _id: objectId });
-        // if (!companyExists) {
-        //     return res.status(404).json({ success: false, message: 'Company not found' });
-        // }
-
-        // For now, just test the response structure
-        if (!companyId) {
-            return res.status(404).json({ success: false, message: 'Company ID required' });
+        // Check if company exists and add the Q&A entry
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
         }
 
         // Auto-generate keywords if not provided or enhance existing ones
-        // const keywordGeneration = generateKeywords(question, answer, keywords);
-        // const autoIntent = intent || suggestIntent(question, answer);
-        
-        // Temporary: Use simple defaults to test
-        const keywordGeneration = { keywords: ['test'], confidence: 0.8 };
-        const autoIntent = 'general';
+        const keywordGeneration = generateKeywords(question, answer, keywords);
+        const autoIntent = intent || suggestIntent(question, answer);
 
         // Generate unique ID for the Q&A entry
         const newQnA = {
@@ -108,16 +97,33 @@ router.post('/companies/:companyId/company-kb', async (req, res) => {
             keywordConfidence: keywordGeneration.confidence
         };
 
-        // Use raw MongoDB collection update to completely avoid validation
-        // const db = Company.db;
-        // const updateResult = await db.collection('companies').updateOne(
-        //     { _id: objectId },
-        //     {
-        //         $push: { companyKB: newQnA },
-        //         $set: { 
-        //             'companyKBSettings.lastUpdated': new Date(),
-        //             'companyKBSettings.version': '1.0.1'
-        //         }
+        // Initialize companyKB array if it doesn't exist
+        if (!company.companyKB) {
+            company.companyKB = [];
+        }
+
+        // Add the new Q&A entry
+        company.companyKB.push(newQnA);
+
+        // Update company KB settings
+        if (!company.companyKBSettings) {
+            company.companyKBSettings = {
+                enabled: true,
+                requireApproval: true,
+                maxQuestions: 100,
+                confidenceThreshold: 0.8,
+                fuzzyMatchEnabled: true,
+                fuzzyMatchThreshold: 0.85,
+                autoSuggestFromTradeKB: true
+            };
+        }
+        
+        company.companyKBSettings.lastUpdated = new Date();
+        company.companyKBSettings.version = '1.0.1';
+        company.companyKBSettings.entryCount = company.companyKB.length;
+
+        // Save the company
+        await company.save();
         //     }
         // );
 
