@@ -1,6 +1,6 @@
 const Company = require('../models/Company');
-const TradeCategory = require('../models/TradeCategory');
 const { extractKeywords } = require('../utils/keywordExtractor');
+const { getDB } = require('../db');
 
 async function checkCustomKB(transcript, companyID, traceLogger, options = {}) {
   const { selectedTradeCategories = [] } = options;
@@ -30,14 +30,18 @@ async function checkCustomKB(transcript, companyID, traceLogger, options = {}) {
   } else {
     console.log(`[checkCustomKB] Searching Q&As in selected trade categories: [${companyTradeCategories.join(', ')}]`);
     
-    // Search through all selected trade categories
+    // Search through all selected trade categories using enterprise system
+    const db = getDB();
     for (const tradeCategoryName of companyTradeCategories) {
-      const trade = await TradeCategory.findOne({ name: { $regex: new RegExp(`^${tradeCategoryName}$`, 'i') } });
+      const trade = await db.collection('enterpriseTradeCategories').findOne({ 
+        name: { $regex: new RegExp(`^${tradeCategoryName}$`, 'i') },
+        isActive: { $ne: false }
+      });
       
-      if (trade && trade.commonQAs && trade.commonQAs.length > 0) {
-        console.log(`[checkCustomKB] Found ${trade.commonQAs.length} Q&As in category: ${tradeCategoryName}`);
+      if (trade && trade.qnas && trade.qnas.length > 0) {
+        console.log(`[checkCustomKB] Found ${trade.qnas.length} Q&As in enterprise category: ${tradeCategoryName}`);
         
-        const categoryMatches = trade.commonQAs.map(qa => {
+        const categoryMatches = trade.qnas.filter(qa => qa.isActive !== false).map(qa => {
           const qaKeywords = extractKeywords(qa.question);
           const matches = keywords.filter(k => qaKeywords.includes(k));
           const confidence = (matches.length / keywords.length) * 100;
@@ -52,7 +56,7 @@ async function checkCustomKB(transcript, companyID, traceLogger, options = {}) {
         
         tradeMatches.push(...categoryMatches);
       } else {
-        console.log(`[checkCustomKB] No Q&As found in category: ${tradeCategoryName}`);
+        console.log(`[checkCustomKB] No Q&As found in enterprise category: ${tradeCategoryName}`);
       }
     }
     
