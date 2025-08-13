@@ -299,6 +299,164 @@ router.post('/companies/:companyId/company-kb-settings', async (req, res) => {
     }
 });
 
+// PUT endpoint for company KB settings (alternative route for frontend compatibility)
+router.put('/companies/:companyId/settings', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { autoPublish, reviewFrequency, confidenceThreshold } = req.body;
+
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+
+        // Initialize companyKBSettings with proper schema defaults if it doesn't exist
+        if (!company.companyKBSettings) {
+            company.companyKBSettings = {
+                enabled: true,
+                autoPublish: false,
+                requireApproval: true,
+                maxQuestions: 100,
+                confidenceThreshold: 0.80,
+                fuzzyMatchEnabled: true,
+                fuzzyMatchThreshold: 0.85,
+                priorityWeights: {
+                    high: 1.0,
+                    normal: 0.8,
+                    low: 0.6
+                },
+                autoSuggestFromTradeKB: true,
+                versionHistory: {
+                    enabled: true,
+                    maxVersions: 10,
+                    autoCleanup: true
+                },
+                analytics: {
+                    trackUsage: true,
+                    trackPerformance: true,
+                    generateReports: true
+                },
+                lastPublished: null,
+                publishedBy: null,
+                publishVersion: 0
+            };
+        }
+
+        // Ensure nested objects exist with defaults
+        if (!company.companyKBSettings.priorityWeights) {
+            company.companyKBSettings.priorityWeights = {
+                high: 1.0,
+                normal: 0.8,
+                low: 0.6
+            };
+        }
+
+        if (!company.companyKBSettings.versionHistory) {
+            company.companyKBSettings.versionHistory = {
+                enabled: true,
+                maxVersions: 10,
+                autoCleanup: true
+            };
+        }
+
+        if (!company.companyKBSettings.analytics) {
+            company.companyKBSettings.analytics = {
+                trackUsage: true,
+                trackPerformance: true,
+                generateReports: true
+            };
+        }
+
+        // Update only the settings provided in the request
+        if (autoPublish !== undefined) {
+            company.companyKBSettings.autoPublish = autoPublish;
+        }
+        if (reviewFrequency !== undefined) {
+            company.companyKBSettings.reviewFrequency = reviewFrequency;
+        }
+        if (confidenceThreshold !== undefined) {
+            company.companyKBSettings.confidenceThreshold = confidenceThreshold;
+        }
+
+        // Use findByIdAndUpdate to only update companyKBSettings field to avoid other validation issues
+        const updatedCompany = await Company.findByIdAndUpdate(
+            companyId,
+            { $set: { companyKBSettings: company.companyKBSettings } },
+            { new: true, runValidators: false } // Skip validators to avoid other field issues
+        );
+
+        res.json({
+            success: true,
+            data: updatedCompany.companyKBSettings,
+            message: 'Company KB settings updated successfully'
+        });
+
+    } catch (error) {
+        console.error('Error updating company KB settings:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+});
+
+// GET endpoint for company KB settings (alternative route for frontend compatibility)
+router.get('/companies/:companyId/settings', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+
+        // Ensure we have a complete settings object with proper defaults
+        const defaultSettings = {
+            enabled: true,
+            autoPublish: false,
+            requireApproval: true,
+            maxQuestions: 100,
+            confidenceThreshold: 0.80,
+            fuzzyMatchEnabled: true,
+            fuzzyMatchThreshold: 0.85,
+            priorityWeights: {
+                high: 1.0,
+                normal: 0.8,
+                low: 0.6
+            },
+            autoSuggestFromTradeKB: true,
+            versionHistory: {
+                enabled: true,
+                maxVersions: 10,
+                autoCleanup: true
+            },
+            analytics: {
+                trackUsage: true,
+                trackPerformance: true,
+                generateReports: true
+            },
+            lastPublished: null,
+            publishedBy: null,
+            publishVersion: 0,
+            entryCount: company.companyKB?.length || 0
+        };
+
+        // Merge existing settings with defaults
+        const settings = company.companyKBSettings ? 
+            { ...defaultSettings, ...company.companyKBSettings.toObject() } : 
+            defaultSettings;
+
+        // Ensure entry count is current
+        settings.entryCount = company.companyKB?.length || 0;
+
+        res.json({
+            success: true,
+            data: settings
+        });
+
+    } catch (error) {
+        console.error('Error fetching company KB settings:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+});
+
 // Publish company KB (make it live)
 router.post('/companies/:companyId/company-kb/publish', async (req, res) => {
     try {
