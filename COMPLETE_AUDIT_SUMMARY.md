@@ -61,7 +61,7 @@
 3. `directory.html` - Company listing
 4. `add-company.html` - Create companies
 5. `company-profile.html` - **Main workspace** (664KB)
-6. `enterprise-trade-categories.html` - Enterprise Trade Categories (Global)
+6. `trade-category-management.html` - Trade categories
 7. `company-access.html` - Access control
 8. `dashboard.html` - AI monitoring
 9. `system-status.html` - System health
@@ -69,7 +69,7 @@
 ### **Essential JavaScript Files (4):**
 1. `company-profile-modern.js` - Main application logic
 2. `add-company.js` - Company creation
-3. `enterprise-trade-categories.js` - Enterprise Trade management
+3. `trade-category-management.js` - Trade management
 
 ### **Clean CSS Structure (2):**
 1. `input.css` - Source file
@@ -108,7 +108,7 @@
    - Add New → `add-company.html`
    - Manage Individual → `company-profile.html`
 4. **System Administration:**
-   - Enterprise Trade Categories → `enterprise-trade-categories.html`
+   - Trade Categories → `trade-category-management.html`
    - Monitoring → `dashboard.html`
    - System Health → `system-status.html`
 

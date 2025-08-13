@@ -5178,6 +5178,11 @@
                 return window.currentCompanyId;
             }
             
+            // Also check for window.companyId (set by page initialization)
+            if (window.companyId) {
+                return window.companyId;
+            }
+            
             // Fallback: extract from URL parameters (standard multi-tenant access)
             const urlParams = new URLSearchParams(window.location.search);
             const companyId = urlParams.get('id');
@@ -6033,7 +6038,8 @@
         async function loadAgentTradeCategories() {
             try {
                 // Use the ENTERPRISE trade categories endpoint
-                const response = await fetch(`/api/enterprise-trade-categories?companyId=${currentCompanyId || 'global'}&includeGlobal=true`);
+                const companyId = getCurrentCompanyId();
+                const response = await fetch(`/api/enterprise-trade-categories?companyId=${companyId || 'global'}&includeGlobal=true`);
                 const result = await response.json();
                 
                 if (!result.success) {
@@ -6099,26 +6105,19 @@
 
         // Handle checkbox change for trade categories
         function handleTradeCheckboxChange() {
-            const checkboxes = document.querySelectorAll('#trade-categories-checkboxes input[type="checkbox"]');
-            const selectedCategories = Array.from(checkboxes)
-                .filter(cb => cb.checked)
-                .map(cb => cb.value);
+            const checkboxes = document.querySelectorAll('#trade-categories-checkboxes input[type="checkbox"]:checked');
+            const selectedCategories = Array.from(checkboxes).map(checkbox => checkbox.value);
             
-
-            
-            // Update the selected categories display
-            updateSelectedCategoriesDisplay(selectedCategories);
-            
-            // Sync with dropdown for compatibility
-            const dropdown = document.getElementById('agent-trade-categories');
-            if (dropdown) {
-                Array.from(dropdown.options).forEach(option => {
+            // Update the dropdown to match checkboxes
+            const selector = document.getElementById('agent-trade-categories');
+            if (selector) {
+                Array.from(selector.options).forEach(option => {
                     option.selected = selectedCategories.includes(option.value);
                 });
             }
             
-            // 🚀 No longer triggering floating button - using dedicated save button instead
-
+            // Update display
+            updateSelectedCategoriesDisplay(selectedCategories);
         }
 
         // Update the selected categories display
