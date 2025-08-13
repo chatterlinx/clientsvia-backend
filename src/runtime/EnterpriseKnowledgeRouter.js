@@ -5,8 +5,8 @@
  */
 
 const aiLoader = require('../config/aiLoader');
-const LLMClient = require('../config/llmClient');
-const enterpriseCache = require('../services/enterpriseCacheService');
+const { LLMClient } = require('../config/llmClient');
+const enterpriseCache = require('../../services/enterpriseCacheService');
 const { getDB } = require('../../db');
 
 class EnterpriseKnowledgeRouter {
