@@ -6674,7 +6674,7 @@
                 }
             } catch (error) {
                 console.error('❌ Failed to load company Q&As:', error);
-                showToast('Failed to load company Q&As', 'error');
+                showNotification('Failed to load company Q&As', 'error');
             }
         }
 
@@ -6828,14 +6828,14 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    showToast('Company Q&A added successfully', 'success');
+                    showNotification('Company Q&A added successfully', 'success');
                     loadCompanyKB(); // Refresh the list
                 } else {
                     throw new Error(result.message || 'Failed to add Q&A');
                 }
             } catch (error) {
                 console.error('❌ Failed to add Q&A:', error);
-                showToast('Failed to add Q&A', 'error');
+                showNotification('Failed to add Q&A', 'error');
             }
         }
 
@@ -6843,7 +6843,7 @@
         function editCompanyQnA(qaId) {
             // Implementation for editing Q&A
             console.log('Edit Q&A:', qaId);
-            showToast('Edit functionality coming soon', 'info');
+            showNotification('Edit functionality coming soon', 'info');
         }
 
         // Delete company Q&A
@@ -6861,14 +6861,14 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    showToast('Q&A deleted successfully', 'success');
+                    showNotification('Q&A deleted successfully', 'success');
                     loadCompanyKB(); // Refresh the list
                 } else {
                     throw new Error(result.message || 'Failed to delete Q&A');
                 }
             } catch (error) {
                 console.error('❌ Failed to delete Q&A:', error);
-                showToast('Failed to delete Q&A', 'error');
+                showNotification('Failed to delete Q&A', 'error');
             }
         }
 
@@ -6889,20 +6889,20 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    showToast('Company KB published successfully', 'success');
+                    showNotification('Company KB published successfully', 'success');
                     loadCompanyKB(); // Refresh to show publish status
                 } else {
                     throw new Error(result.message || 'Failed to publish');
                 }
             } catch (error) {
                 console.error('❌ Failed to publish KB:', error);
-                showToast('Failed to publish KB', 'error');
+                showNotification('Failed to publish KB', 'error');
             }
         }
 
         // View version history
         function viewVersionHistory() {
-            showToast('Version history functionality coming soon', 'info');
+            showNotification('Version history functionality coming soon', 'info');
         }
 
         // Export company KB
@@ -6934,13 +6934,13 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    showToast('Company KB settings saved', 'success');
+                    showNotification('Company KB settings saved', 'success');
                 } else {
                     throw new Error(result.message || 'Failed to save settings');
                 }
             } catch (error) {
                 console.error('❌ Failed to save KB settings:', error);
-                showToast('Failed to save KB settings', 'error');
+                showNotification('Failed to save KB settings', 'error');
             }
         }
 

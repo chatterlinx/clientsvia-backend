@@ -108,6 +108,9 @@ async function loadAllRoutes() {
         // Load Enterprise Trade Categories routes
         routes.enterpriseTradeCategories = await loadRouteWithTimeout('./routes/enterpriseTradeCategories', 'enterpriseTradeCategories');
         
+        // Load Company Knowledge Base routes
+        routes.companyKBRoutes = await loadRouteWithTimeout('./routes/companyKB', 'companyKBRoutes');
+        
         console.log('[INIT] ✅ All routes loaded successfully');
         return routes;
     } catch (error) {
@@ -219,6 +222,9 @@ function registerRoutes(routes) {
     app.use('/api/ai-intelligence', routes.aiIntelligenceRoutes); // AI Intelligence Engine routes
     app.use('/api/enterprise-ai', routes.enterpriseAIIntelligenceRoutes); // ENTERPRISE: AI Intelligence Control Center
     app.use('/api/enterprise-trade-categories', routes.enterpriseTradeCategories); // ENTERPRISE: Trade Categories Management
+
+    // Company Knowledge Base Management
+    app.use('/api/company-kb', routes.companyKBRoutes); // ENTERPRISE: Company-specific Knowledge Base
 
     // Mount agent processor routes
     app.use('/api/agent', routes.agentProcessorRoutes); // NEW: Central agent processing API
