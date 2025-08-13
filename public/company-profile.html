@@ -6152,7 +6152,7 @@
             try {
 
                 console.log('⏰ Agent Settings load timestamp:', new Date().toISOString());
-                const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`);
+                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`);
                 const data = await response.json();
                 
                 console.log('📥 Received agent settings data:', data);
@@ -6285,7 +6285,7 @@
 
 
 
-                const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
+                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ tradeCategories, agentSettings })
@@ -8258,10 +8258,10 @@
                     agentSettings: agentSettings
                 };
                 
-                console.log('🤖 Sending save request to:', `/api/agent/companies/${companyId}/agent-settings`);
+                console.log('🤖 Sending save request to:', `/api/company/companies/${companyId}/agent-settings`);
                 
                 // Save to backend
-                const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
+                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -8441,7 +8441,7 @@
                 };
                 
                 // Save to backend - Production API endpoint
-                const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
+                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -8505,7 +8505,7 @@
             }
             
             try {
-                const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`);
+                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`);
                 
                 if (response.ok) {
                     const config = await response.json();
