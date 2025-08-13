@@ -217,31 +217,30 @@ router.get('/companies/:companyId/agent-analytics', async (req, res) => {
     const { companyId } = req.params;
     const { days = 7 } = req.query;
 
-    // Mock analytics data - replace with real analytics service
+    // TODO: Implement real analytics by querying actual call logs/conversation data
+    // For now, return zero values for a fresh system
     const analytics = {
       companyId,
       period: `${days} days`,
       metrics: {
-        totalInteractions: Math.floor(Math.random() * 1000) + 100,
-        averageConfidence: Math.random() * 0.3 + 0.7, // 0.7-1.0
-        escalationRate: Math.random() * 0.1 + 0.05, // 5-15%
-        responseTime: Math.random() * 1 + 1.5, // 1.5-2.5 seconds
-        bookingConversionRate: Math.random() * 0.2 + 0.6, // 60-80%
-        customerSatisfactionScore: Math.random() * 1 + 4, // 4-5 stars
+        totalInteractions: 0,
+        averageConfidence: 0,
+        escalationRate: 0,
+        responseTime: 0,
+        bookingConversionRate: 0,
+        customerSatisfactionScore: 0,
       },
       topQuestions: [
-        { question: "What are your hours?", frequency: 45, confidence: 0.95 },
-        { question: "How much does it cost?", frequency: 32, confidence: 0.87 },
-        { question: "Can I book an appointment?", frequency: 28, confidence: 0.92 },
-        { question: "Where are you located?", frequency: 22, confidence: 0.98 },
-        { question: "What services do you offer?", frequency: 18, confidence: 0.89 }
+        // Empty until real interactions occur
       ],
       performanceTrend: Array.from({ length: parseInt(days) }, (_, i) => ({
         date: new Date(Date.now() - (parseInt(days) - i - 1) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        interactions: Math.floor(Math.random() * 50) + 20,
-        avgConfidence: Math.random() * 0.2 + 0.8,
-        escalations: Math.floor(Math.random() * 5) + 1
-      }))
+        interactions: 0,
+        avgConfidence: 0,
+        escalations: 0
+      })),
+      message: "No interactions recorded yet. Analytics will populate as your AI agent handles calls and conversations.",
+      isProduction: true
     };
 
     res.json(analytics);
