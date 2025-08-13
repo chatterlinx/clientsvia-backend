@@ -1570,6 +1570,150 @@
                                 </div>
 
                                 <!-- ========================================= -->
+                                <!-- AGENT SETTINGS & CONFIGURATION FORM     -->
+                                <!-- Missing form elements for agent config   -->
+                                <!-- ========================================= -->
+                                <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                    <div class="border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 rounded-t-lg">
+                                        <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                            <i class="fas fa-cog mr-2 text-blue-600"></i>Agent Settings & Trade Categories
+                                            <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">Configuration</span>
+                                        </h3>
+                                        <p class="text-sm text-gray-600 mt-1">Configure AI agent behavior and select relevant trade categories</p>
+                                    </div>
+                                    
+                                    <div class="p-6">
+                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            <!-- Left Column: Trade Categories -->
+                                            <div class="space-y-4">
+                                                <h4 class="text-md font-semibold text-gray-700 border-b pb-2">
+                                                    <i class="fas fa-briefcase mr-2 text-blue-600"></i>Trade Categories
+                                                </h4>
+                                                
+                                                <!-- Trade Categories Dropdown (for compatibility) -->
+                                                <div>
+                                                    <label class="form-label">Select Trade Categories</label>
+                                                    <select id="agent-trade-categories" multiple class="form-select" style="height: 120px;">
+                                                        <option value="">Loading trade categories...</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <!-- Trade Categories Checkboxes -->
+                                                <div>
+                                                    <label class="form-label">Available Trade Categories</label>
+                                                    <div id="trade-categories-checkboxes" class="max-h-40 overflow-y-auto border border-gray-300 rounded-md p-3 bg-gray-50">
+                                                        <div class="text-center text-gray-500 text-sm py-2">
+                                                            <i class="fas fa-spinner fa-spin mr-2"></i>Loading categories...
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Selected Categories Display -->
+                                                <div>
+                                                    <label class="form-label">Selected Categories</label>
+                                                    <div id="selected-categories-display" class="p-3 border border-gray-300 rounded-md bg-white min-h-[60px]">
+                                                        <span class="text-gray-500 text-sm">No categories selected</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Right Column: Agent Settings -->
+                                            <div class="space-y-4">
+                                                <h4 class="text-md font-semibold text-gray-700 border-b pb-2">
+                                                    <i class="fas fa-robot mr-2 text-indigo-600"></i>Agent Configuration
+                                                </h4>
+                                                
+                                                <!-- Use LLM -->
+                                                <div>
+                                                    <label class="form-label">Use AI Language Model</label>
+                                                    <select id="agent-useLLM" class="form-select">
+                                                        <option value="true">Enabled - Use AI for responses</option>
+                                                        <option value="false">Disabled - Knowledge base only</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <!-- LLM Model -->
+                                                <div>
+                                                    <label class="form-label">Language Model</label>
+                                                    <select id="agent-llmModel" class="form-select">
+                                                        <option value="gemini-pro">Google Gemini Pro</option>
+                                                        <option value="gpt-4">OpenAI GPT-4</option>
+                                                        <option value="claude-3">Anthropic Claude 3</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <!-- Memory Mode -->
+                                                <div>
+                                                    <label class="form-label">Memory Mode</label>
+                                                    <select id="agent-memoryMode" class="form-select">
+                                                        <option value="short">Short Term</option>
+                                                        <option value="conversational">Conversational</option>
+                                                        <option value="persistent">Persistent</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <!-- Escalation Mode -->
+                                                <div>
+                                                    <label class="form-label">Escalation Mode</label>
+                                                    <select id="agent-escalationMode" class="form-select">
+                                                        <option value="ask">Ask before escalating</option>
+                                                        <option value="auto">Auto escalate when needed</option>
+                                                        <option value="never">Never escalate</option>
+                                                    </select>
+                                                </div>
+                                                
+                                                <!-- Fallback Threshold -->
+                                                <div>
+                                                    <label class="form-label">Fallback Threshold</label>
+                                                    <div class="flex items-center space-x-3">
+                                                        <input type="range" id="agent-fallbackThreshold" class="flex-1" min="0" max="1" step="0.1" value="0.5">
+                                                        <span id="fallback-threshold-value" class="text-sm font-medium text-gray-700 w-12">0.5</span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Re-prompt Settings -->
+                                                <div class="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label class="form-label">Re-prompt After Turns</label>
+                                                        <input type="number" id="agent-rePromptAfterTurns" class="form-input" min="1" max="10" value="3">
+                                                    </div>
+                                                    <div>
+                                                        <label class="form-label">Max Prompts Per Call</label>
+                                                        <input type="number" id="agent-maxPromptsPerCall" class="form-input" min="1" max="5" value="2">
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Advanced Features -->
+                                                <div class="space-y-2">
+                                                    <label class="form-label">Advanced Features</label>
+                                                    <div class="space-y-2">
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="agent-semanticSearchEnabled" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm">Semantic Search</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="agent-confidenceScoring" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm">Confidence Scoring</span>
+                                                        </label>
+                                                        <label class="flex items-center">
+                                                            <input type="checkbox" id="agent-autoLearningQueue" class="form-checkbox" checked>
+                                                            <span class="ml-2 text-sm">Auto Learning Queue</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Save Button -->
+                                        <div class="mt-6 pt-4 border-t border-gray-200 flex justify-end">
+                                            <button type="button" onclick="saveAgentSettings()" class="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
+                                                <i class="fas fa-save mr-2"></i>Save Agent Settings
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- ========================================= -->
                                 <!-- 🧠 INTELLIGENCE & MEMORY - ENTERPRISE AI -->
                                 <!-- Production-Ready Agent Intelligence Core   -->
                                 <!-- Optimized for performance & scalability   -->
