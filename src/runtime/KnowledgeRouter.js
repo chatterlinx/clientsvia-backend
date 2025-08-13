@@ -2,16 +2,56 @@
  * 🎯 BLUEPRINT COMPLIANCE: Knowledge Router
  * Implements priority flow + thresholds for AI agent decisions
  * Core component of the production-ready AI Agent Logic system
+ * 
+ * ENTERPRISE UPGRADE: Now uses EnterpriseKnowledgeRouter for optimal performance
  */
 
-const aiLoader = require('../config/aiLoader');
-const LLMClient = require('../config/llmClient');
-const { getDB } = require('../../db');
+const EnterpriseKnowledgeRouter = require('./EnterpriseKnowledgeRouter');
 
 class KnowledgeRouter {
     constructor() {
-        this.llmClient = new LLMClient();
+        this.enterpriseRouter = EnterpriseKnowledgeRouter;
+        console.log('🚀 Knowledge Router initialized with Enterprise backend');
     }
+
+    /**
+     * Route a user query through the knowledge priority flow
+     * Uses enterprise-grade caching and optimized algorithms
+     */
+    async route(params) {
+        return await this.enterpriseRouter.route(params);
+    }
+
+    /**
+     * Legacy methods for backward compatibility
+     */
+    async searchCompanyKB(companyID, text, cfg) {
+        return await this.enterpriseRouter.searchCompanyKB(companyID, text, cfg);
+    }
+
+    async searchTradeQA(tradeCategories, text) {
+        return await this.enterpriseRouter.searchTradeQA(tradeCategories, text);
+    }
+
+    /**
+     * Get performance analytics
+     */
+    getAnalytics() {
+        return this.enterpriseRouter.getAnalytics();
+    }
+
+    /**
+     * Health check for monitoring
+     */
+    async healthCheck() {
+        const enterpriseCache = require('../services/enterpriseCacheService');
+        return {
+            status: 'ok',
+            cache: await enterpriseCache.healthCheck(),
+            analytics: this.getAnalytics()
+        };
+    }
+}
 
     /**
      * Route a user query through the knowledge priority flow
@@ -153,68 +193,136 @@ class KnowledgeRouter {
     async searchCompanyKB(companyID, text, cfg) {
         console.log(`🏢 Searching company KB for: "${text}"`);
         
-        const knowledgeBase = cfg.knowledgeBase || [];
-        const searchText = text.toLowerCase();
-        
-        let bestMatch = null;
-        let bestScore = 0;
-        let matches = 0;
-        let keywords = [];
+        try {
+            const Company = require('../../models/Company');
+            const company = await Company.findById(companyID).select('companyKB companyKBSettings');
+            
+            if (!company || !company.companyKB || company.companyKB.length === 0) {
+                console.log('❌ No company KB entries found');
+                return {
+                    text: null,
+                    source: 'companyKB',
+                    score: 0,
+                    matches: 0,
+                    keywords: []
+                };
+            }
 
-        for (const entry of knowledgeBase) {
-            let score = 0;
-            const entryKeywords = [];
-            
-            // Check question match
-            if (entry.question && entry.question.toLowerCase().includes(searchText)) {
-                score += 0.8;
-                entryKeywords.push('question');
-            }
-            
-            // Check answer match
-            if (entry.answer && entry.answer.toLowerCase().includes(searchText)) {
-                score += 0.6;
-                entryKeywords.push('answer');
-            }
-            
-            // Check keywords match
-            if (entry.keywords) {
-                for (const keyword of entry.keywords) {
-                    if (searchText.includes(keyword.toLowerCase())) {
-                        score += 0.4;
-                        entryKeywords.push(keyword);
+            const searchText = text.toLowerCase();
+            let bestMatch = null;
+            let bestScore = 0;
+            let matches = 0;
+            let keywords = [];
+
+            // Get settings for threshold overrides
+            const kbSettings = company.companyKBSettings || {};
+            const fuzzyMatchEnabled = kbSettings.fuzzyMatchEnabled !== false;
+            const fuzzyThreshold = kbSettings.fuzzyMatchThreshold || 0.85;
+
+            for (const entry of company.companyKB) {
+                // Skip inactive entries
+                if (entry.isActive === false) continue;
+                
+                let score = 0;
+                const entryKeywords = [];
+                
+                // Check question match (exact and partial)
+                if (entry.question) {
+                    const questionLower = entry.question.toLowerCase();
+                    if (questionLower === searchText) {
+                        score += 0.95; // Exact match gets highest score
+                        entryKeywords.push('exact_question');
+                    } else if (questionLower.includes(searchText) || searchText.includes(questionLower)) {
+                        score += 0.8;
+                        entryKeywords.push('question');
+                    }
+                }
+                
+                // Check for keyword matching
+                const questionWords = entry.question ? entry.question.toLowerCase().split(/\s+/) : [];
+                const searchWords = searchText.split(/\s+/);
+                
+                let wordMatches = 0;
+                for (const searchWord of searchWords) {
+                    if (searchWord.length > 2) { // Only match meaningful words
+                        for (const questionWord of questionWords) {
+                            if (questionWord.includes(searchWord) || searchWord.includes(questionWord)) {
+                                wordMatches++;
+                                entryKeywords.push(searchWord);
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (wordMatches > 0) {
+                    score += (wordMatches / Math.max(searchWords.length, questionWords.length)) * 0.7;
+                }
+                
+                // Apply priority boost
+                const priorityBoost = entry.priority === 'high' ? 0.1 : entry.priority === 'low' ? -0.05 : 0;
+                score += priorityBoost;
+                
+                // Apply confidence boost from entry settings
+                if (entry.confidenceBoost) {
+                    score = Math.min(score * entry.confidenceBoost, 1.0);
+                }
+
+                if (score > 0) {
+                    matches++;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMatch = entry;
+                        keywords = entryKeywords;
                     }
                 }
             }
-            
-            if (score > 0) {
-                matches++;
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestMatch = entry;
-                    keywords = entryKeywords;
-                }
-            }
-        }
 
-        if (bestMatch) {
+            if (bestMatch) {
+                // Track usage
+                try {
+                    await Company.findOneAndUpdate(
+                        { _id: companyID, 'companyKB.id': bestMatch.id },
+                        { 
+                            $inc: { 'companyKB.$.usageCount': 1 },
+                            $set: { 'companyKB.$.lastUsed': new Date() }
+                        }
+                    );
+                } catch (updateError) {
+                    console.warn('Failed to update usage count:', updateError);
+                }
+
+                return {
+                    text: bestMatch.answer,
+                    source: 'companyKB',
+                    score: Math.min(bestScore, 1.0),
+                    matches,
+                    keywords,
+                    entryId: bestMatch.id,
+                    category: bestMatch.category,
+                    priority: bestMatch.priority
+                };
+            }
+
             return {
-                text: bestMatch.answer,
+                text: null,
                 source: 'companyKB',
-                score: Math.min(bestScore, 1.0),
-                matches,
-                keywords,
-                entryId: bestMatch.id
+                score: 0,
+                matches: 0,
+                keywords: []
+            };
+            
+        } catch (error) {
+            console.error('❌ Company KB search error:', error);
+            return {
+                text: null,
+                source: 'companyKB',
+                score: 0,
+                matches: 0,
+                keywords: [],
+                error: error.message
             };
         }
-
-        return {
-            text: null,
-            source: 'companyKB',
-            score: 0,
-            matches: 0,
-            keywords: []
-        };
     }
 
     /**

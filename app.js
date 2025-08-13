@@ -172,6 +172,11 @@ app.use('/api/enterprise-analytics', enterpriseAnalyticsRoutes);
 app.use('/api/enterprise-trade-categories', enterpriseTradeCategories);
 console.log('✅ Enterprise Trade Categories routes registered at /api/enterprise-trade-categories');
 
+// 🚀 ENTERPRISE PERFORMANCE MONITORING
+const performanceMonitoringRoutes = require('./routes/performanceMonitoring');
+app.use('/api/performance', performanceMonitoringRoutes);
+console.log('✅ Enterprise Performance Monitoring routes registered at /api/performance');
+
 // Contact Lookup for Real-time Caller Identification
 const contactLookupRoutes = require('./routes/contactLookup');
 app.use('/api/contact-lookup', contactLookupRoutes);

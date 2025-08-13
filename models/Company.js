@@ -1096,6 +1096,59 @@ const companySchema = new mongoose.Schema({
             },
             enabled: { type: Boolean, default: true }
         },
+    
+    // 📚 COMPANY KNOWLEDGE BASE (Q&A) - Top Priority in Answer Flow
+    companyKB: {
+        type: [{
+            _id: { type: ObjectId, default: () => new mongoose.Types.ObjectId() },
+            id: { type: String, required: true }, // Frontend compatibility ID
+            question: { type: String, required: true, trim: true },
+            answer: { type: String, required: true, trim: true },
+            category: { type: String, default: 'general', trim: true },
+            tags: { type: [String], default: [] },
+            priority: { type: String, enum: ['low', 'normal', 'high'], default: 'normal' },
+            isActive: { type: Boolean, default: true },
+            confidenceBoost: { type: Number, default: 0.95, min: 0, max: 1 }, // High confidence for company-specific Q&A
+            createdAt: { type: Date, default: Date.now },
+            updatedAt: { type: Date, default: Date.now },
+            createdBy: { type: String, default: 'admin' },
+            lastReviewed: { type: Date, default: Date.now },
+            reviewCount: { type: Number, default: 0 },
+            usageCount: { type: Number, default: 0 }, // Track how often this Q&A is matched
+            version: { type: Number, default: 1 }
+        }],
+        default: []
+    },
+    
+    // 🎛️ COMPANY KB SETTINGS & CONTROLS
+    companyKBSettings: {
+        enabled: { type: Boolean, default: true },
+        autoPublish: { type: Boolean, default: false }, // Require manual publish by default
+        requireApproval: { type: Boolean, default: true },
+        maxQuestions: { type: Number, default: 100, min: 1, max: 1000 },
+        confidenceThreshold: { type: Number, default: 0.80, min: 0, max: 1 },
+        fuzzyMatchEnabled: { type: Boolean, default: true },
+        fuzzyMatchThreshold: { type: Number, default: 0.85, min: 0, max: 1 },
+        priorityWeights: {
+            high: { type: Number, default: 1.0, min: 0, max: 2 },
+            normal: { type: Number, default: 0.8, min: 0, max: 2 },
+            low: { type: Number, default: 0.6, min: 0, max: 2 }
+        },
+        autoSuggestFromTradeKB: { type: Boolean, default: true }, // Suggest Q&As from trade categories
+        versionHistory: {
+            enabled: { type: Boolean, default: true },
+            maxVersions: { type: Number, default: 10, min: 1, max: 50 },
+            autoCleanup: { type: Boolean, default: true }
+        },
+        analytics: {
+            trackUsage: { type: Boolean, default: true },
+            trackPerformance: { type: Boolean, default: true },
+            generateReports: { type: Boolean, default: true }
+        },
+        lastPublished: { type: Date, default: null },
+        publishedBy: { type: String, default: null },
+        publishVersion: { type: Number, default: 0 }
+    }
 });
 
 // --- Middleware ---
