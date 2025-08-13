@@ -112,10 +112,15 @@ router.post('/companies/:companyId/company-kb', async (req, res) => {
             };
         } else {
             company.companyKBSettings.lastUpdated = new Date();
-            // Increment version
-            const versionParts = company.companyKBSettings.version.split('.');
-            versionParts[2] = (parseInt(versionParts[2]) + 1).toString();
-            company.companyKBSettings.version = versionParts.join('.');
+            // Increment version - safely handle version string
+            const currentVersion = company.companyKBSettings.version || '1.0.0';
+            if (typeof currentVersion === 'string' && currentVersion.includes('.')) {
+                const versionParts = currentVersion.split('.');
+                versionParts[2] = (parseInt(versionParts[2]) + 1).toString();
+                company.companyKBSettings.version = versionParts.join('.');
+            } else {
+                company.companyKBSettings.version = '1.0.1';
+            }
         }
 
         await company.save();
