@@ -71,6 +71,16 @@ router.post('/companies/:companyId/company-kb', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
 
+        // Fix any invalid LLM models before saving (production cleanup)
+        if (company.agentIntelligenceSettings) {
+            if (company.agentIntelligenceSettings.llmModel && company.agentIntelligenceSettings.llmModel.includes('ollama')) {
+                company.agentIntelligenceSettings.llmModel = 'gemini-pro';
+            }
+            if (company.agentIntelligenceSettings.fallbackModel && company.agentIntelligenceSettings.fallbackModel.includes('ollama')) {
+                company.agentIntelligenceSettings.fallbackModel = 'gemini-pro';
+            }
+        }
+
         // Auto-generate keywords if not provided or enhance existing ones
         const keywordGeneration = generateKeywords(question, answer, keywords);
         const autoIntent = intent || suggestIntent(question, answer);

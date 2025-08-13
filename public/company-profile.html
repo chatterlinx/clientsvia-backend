@@ -6828,6 +6828,17 @@
                 if (result.success) {
                     showNotification('Company Q&A added successfully', 'success');
                     loadCompanyKB(); // Refresh the list
+                    
+                    // Clear the form
+                    document.getElementById('qa-question').value = '';
+                    document.getElementById('qa-answer').value = '';
+                    document.getElementById('qa-category').value = 'general';
+                    document.getElementById('qa-priority').value = 'normal';
+                    
+                    // Reset unsaved changes state
+                    if (window.companyProfileManager) {
+                        window.companyProfileManager.setUnsavedChanges(false);
+                    }
                 } else {
                     throw new Error(result.message || 'Failed to add Q&A');
                 }

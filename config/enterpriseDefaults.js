@@ -299,7 +299,7 @@ const enterpriseBookingFlowDefaults = {
         providerRouter: {
             stt: ["deepgram", "google"],
             tts: ["elevenlabs", "google"],
-            llm: ["gemini", "ollama", "openai"],
+            llm: ["gemini", "openai"],
             fallbackChain: true,
             healthCheckIntervalMs: 30000
         },
@@ -379,7 +379,7 @@ const enterpriseBookingFlowDefaults = {
         providers: {
             stt: ["deepgram", "google"],
             tts: ["elevenlabs", "google"], 
-            llm: ["gemini", "ollama", "openai"]
+            llm: ["gemini", "openai"]
         },
         circuitBreakers: {
             failFast: true,
@@ -388,7 +388,7 @@ const enterpriseBookingFlowDefaults = {
         },
         routing: {
             primary: "gemini",
-            fallback: "ollama",
+            fallback: "openai",
             emergency: "openai",
             loadBalancing: false,
             preferLocal: false
