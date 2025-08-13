@@ -1587,12 +1587,6 @@
                                                 <button type="button" onclick="exportCompanyKB()" class="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition duration-150">
                                                     <i class="fas fa-download mr-1"></i>Export
                                                 </button>
-                                                <button type="button" onclick="viewVersionHistory()" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition duration-150">
-                                                    <i class="fas fa-history mr-1"></i>Version History
-                                                </button>
-                                                <button type="button" onclick="publishCompanyKB()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition duration-150">
-                                                    <i class="fas fa-cloud-upload-alt mr-1"></i>Publish
-                                                </button>
                                                 <button type="button" onclick="addCompanyQnA()" class="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition duration-150">
                                                     <i class="fas fa-plus mr-1"></i>Add Q&A
                                                 </button>
@@ -1661,16 +1655,6 @@
                                                         <span id="company-kb-threshold-value" class="text-sm font-medium text-gray-700 w-12">0.80</span>
                                                     </div>
                                                     <p class="text-xs text-gray-500 mt-1">Minimum confidence to use company-specific answers</p>
-                                                </div>
-                                                
-                                                <!-- Auto-publish Settings -->
-                                                <div>
-                                                    <label class="form-label">Auto-publish Changes</label>
-                                                    <select id="company-kb-autopublish" class="form-select">
-                                                        <option value="manual">Manual - Require publish button</option>
-                                                        <option value="immediate">Immediate - Auto-publish on save</option>
-                                                        <option value="scheduled">Scheduled - Publish daily at 2 AM</option>
-                                                    </select>
                                                 </div>
                                                 
                                                 <!-- Review Settings -->
@@ -6872,39 +6856,6 @@
             }
         }
 
-        // Publish company KB changes
-        async function publishCompanyKB() {
-            const companyId = getCurrentCompanyId();
-            if (!companyId) return;
-
-            if (!confirm('Publish all Company Q&A changes? This will make them live for AI agent responses.')) return;
-
-            try {
-                const response = await fetch(`/api/company-kb/companies/${companyId}/publish`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
-                });
-
-                const result = await response.json();
-                
-                if (result.success) {
-                    showNotification('Company KB published successfully', 'success');
-                    loadCompanyKB(); // Refresh to show publish status
-                } else {
-                    throw new Error(result.message || 'Failed to publish');
-                }
-            } catch (error) {
-                console.error('❌ Failed to publish KB:', error);
-                showNotification('Failed to publish KB', 'error');
-            }
-        }
-
-        // View version history
-        function viewVersionHistory() {
-            showNotification('Version history functionality coming soon', 'info');
-        }
-
         // Export company KB
         function exportCompanyKB() {
             const companyId = getCurrentCompanyId();
@@ -6920,7 +6871,6 @@
 
             const settings = {
                 confidenceThreshold: parseFloat(document.getElementById('company-kb-threshold').value),
-                autoPublish: document.getElementById('company-kb-autopublish').value === 'immediate',
                 reviewFrequency: parseInt(document.getElementById('company-kb-review').value)
             };
 

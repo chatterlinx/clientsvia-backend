@@ -113,7 +113,6 @@ router.post('/companies/:companyId/company-kb', async (req, res) => {
             company.companyKBSettings = {
                 version: '1.0.0',
                 lastUpdated: new Date(),
-                autoPublish: 'manual',
                 reviewFrequency: 180,
                 confidenceThreshold: 0.80
             };
@@ -247,7 +246,6 @@ router.get('/companies/:companyId/company-kb-settings', async (req, res) => {
         const settings = company.companyKBSettings || {
             version: '1.0.0',
             lastUpdated: new Date(),
-            autoPublish: 'manual',
             reviewFrequency: 180,
             confidenceThreshold: 0.80,
             entryCount: 0
@@ -270,7 +268,7 @@ router.get('/companies/:companyId/company-kb-settings', async (req, res) => {
 router.post('/companies/:companyId/company-kb-settings', async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { autoPublish, reviewFrequency, confidenceThreshold } = req.body;
+        const { reviewFrequency, confidenceThreshold } = req.body;
 
         const company = await Company.findById(companyId);
         if (!company) {
@@ -279,7 +277,6 @@ router.post('/companies/:companyId/company-kb-settings', async (req, res) => {
 
         company.companyKBSettings = {
             ...company.companyKBSettings,
-            autoPublish: autoPublish || 'manual',
             reviewFrequency: reviewFrequency || 180,
             confidenceThreshold: confidenceThreshold || 0.80,
             lastUpdated: new Date()
@@ -303,7 +300,7 @@ router.post('/companies/:companyId/company-kb-settings', async (req, res) => {
 router.put('/companies/:companyId/settings', async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { autoPublish, reviewFrequency, confidenceThreshold } = req.body;
+        const { reviewFrequency, confidenceThreshold } = req.body;
 
         const company = await Company.findById(companyId);
         if (!company) {
@@ -314,7 +311,6 @@ router.put('/companies/:companyId/settings', async (req, res) => {
         if (!company.companyKBSettings) {
             company.companyKBSettings = {
                 enabled: true,
-                autoPublish: false,
                 requireApproval: true,
                 maxQuestions: 100,
                 confidenceThreshold: 0.80,
@@ -326,19 +322,11 @@ router.put('/companies/:companyId/settings', async (req, res) => {
                     low: 0.6
                 },
                 autoSuggestFromTradeKB: true,
-                versionHistory: {
-                    enabled: true,
-                    maxVersions: 10,
-                    autoCleanup: true
-                },
                 analytics: {
                     trackUsage: true,
                     trackPerformance: true,
                     generateReports: true
-                },
-                lastPublished: null,
-                publishedBy: null,
-                publishVersion: 0
+                }
             };
         }
 
@@ -351,14 +339,6 @@ router.put('/companies/:companyId/settings', async (req, res) => {
             };
         }
 
-        if (!company.companyKBSettings.versionHistory) {
-            company.companyKBSettings.versionHistory = {
-                enabled: true,
-                maxVersions: 10,
-                autoCleanup: true
-            };
-        }
-
         if (!company.companyKBSettings.analytics) {
             company.companyKBSettings.analytics = {
                 trackUsage: true,
@@ -368,9 +348,6 @@ router.put('/companies/:companyId/settings', async (req, res) => {
         }
 
         // Update only the settings provided in the request
-        if (autoPublish !== undefined) {
-            company.companyKBSettings.autoPublish = autoPublish;
-        }
         if (reviewFrequency !== undefined) {
             company.companyKBSettings.reviewFrequency = reviewFrequency;
         }
@@ -410,7 +387,6 @@ router.get('/companies/:companyId/settings', async (req, res) => {
         // Ensure we have a complete settings object with proper defaults
         const defaultSettings = {
             enabled: true,
-            autoPublish: false,
             requireApproval: true,
             maxQuestions: 100,
             confidenceThreshold: 0.80,
@@ -422,19 +398,11 @@ router.get('/companies/:companyId/settings', async (req, res) => {
                 low: 0.6
             },
             autoSuggestFromTradeKB: true,
-            versionHistory: {
-                enabled: true,
-                maxVersions: 10,
-                autoCleanup: true
-            },
             analytics: {
                 trackUsage: true,
                 trackPerformance: true,
                 generateReports: true
             },
-            lastPublished: null,
-            publishedBy: null,
-            publishVersion: 0,
             entryCount: company.companyKB?.length || 0
         };
 
@@ -453,41 +421,6 @@ router.get('/companies/:companyId/settings', async (req, res) => {
 
     } catch (error) {
         console.error('Error fetching company KB settings:', error);
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
-    }
-});
-
-// Publish company KB (make it live)
-router.post('/companies/:companyId/company-kb/publish', async (req, res) => {
-    try {
-        const { companyId } = req.params;
-
-        const company = await Company.findById(companyId);
-        if (!company) {
-            return res.status(404).json({ success: false, message: 'Company not found' });
-        }
-
-        // Update publish timestamp
-        if (!company.companyKBSettings) {
-            company.companyKBSettings = {};
-        }
-
-        company.companyKBSettings.lastPublished = new Date();
-        company.companyKBSettings.publishedEntryCount = company.companyKB?.length || 0;
-
-        await company.save();
-
-        res.json({
-            success: true,
-            message: `Published ${company.companyKB?.length || 0} company Q&A entries`,
-            data: {
-                publishedAt: company.companyKBSettings.lastPublished,
-                entryCount: company.companyKBSettings.publishedEntryCount
-            }
-        });
-
-    } catch (error) {
-        console.error('Error publishing company KB:', error);
         res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 });

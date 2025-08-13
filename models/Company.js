@@ -1123,7 +1123,6 @@ const companySchema = new mongoose.Schema({
     // 🎛️ COMPANY KB SETTINGS & CONTROLS
     companyKBSettings: {
         enabled: { type: Boolean, default: true },
-        autoPublish: { type: Boolean, default: false }, // Require manual publish by default
         requireApproval: { type: Boolean, default: true },
         maxQuestions: { type: Number, default: 100, min: 1, max: 1000 },
         confidenceThreshold: { type: Number, default: 0.80, min: 0, max: 1 },
@@ -1135,19 +1134,11 @@ const companySchema = new mongoose.Schema({
             low: { type: Number, default: 0.6, min: 0, max: 2 }
         },
         autoSuggestFromTradeKB: { type: Boolean, default: true }, // Suggest Q&As from trade categories
-        versionHistory: {
-            enabled: { type: Boolean, default: true },
-            maxVersions: { type: Number, default: 10, min: 1, max: 50 },
-            autoCleanup: { type: Boolean, default: true }
-        },
         analytics: {
             trackUsage: { type: Boolean, default: true },
             trackPerformance: { type: Boolean, default: true },
             generateReports: { type: Boolean, default: true }
-        },
-        lastPublished: { type: Date, default: null },
-        publishedBy: { type: String, default: null },
-        publishVersion: { type: Number, default: 0 }
+        }
     }
 });
 
