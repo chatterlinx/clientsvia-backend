@@ -41,15 +41,15 @@ class AIIntelligenceEngine {
             
             if (!companyData) return null;
 
-            // Get trade categories and Q&As
-            const tradeCategories = await db.collection('tradeCategories').find({}).toArray();
+            // Get enterprise trade categories and Q&As
+            const tradeCategories = await db.collection('enterpriseTradeCategories').find({}).toArray();
             let bestMatch = null;
             let bestConfidence = 0;
 
-            // Semantic search through all Q&As
+            // Semantic search through all Q&As in enterprise system
             for (const category of tradeCategories) {
-                if (category.commonQAs) {
-                    for (const qa of category.commonQAs) {
+                if (category.qnas && category.qnas.length > 0) {
+                    for (const qa of category.qnas) {
                         const confidence = this.calculateSemanticSimilarity(query, qa.question);
                         if (confidence > bestConfidence && confidence >= confidenceThreshold) {
                             bestMatch = {

@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const Company = require('../../models/Company');
-const TradeCategory = require('../../models/TradeCategory');
+const { getDB } = require('../../db');
 
 // 🚀 Save AI Agent Intelligence Settings (Updated for Answer Priority Flow)
 router.post('/companies/:id/agent-settings', async (req, res) => {
@@ -16,10 +16,14 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     } = req.body;
     const companyId = req.params.id;
 
-    // Validate trade categories exist
+    // Validate trade categories exist in enterprise system
     if (tradeCategories.length > 0) {
-      const validCategories = await TradeCategory.find({ name: { $in: tradeCategories } });
-      const validCategoryNames = validCategories.map(cat => cat.name);
+      const db = getDB();
+      const enterpriseCategories = await db.collection('enterpriseTradeCategories')
+        .find({ name: { $in: tradeCategories } })
+        .toArray();
+      
+      const validCategoryNames = enterpriseCategories.map(cat => cat.name);
       
       // Filter out invalid categories
       const filteredCategories = tradeCategories.filter(cat => validCategoryNames.includes(cat));
@@ -158,12 +162,15 @@ router.get('/companies/:id/agent-settings', async (req, res) => {
   }
 });
 
-// 📊 Get Available Trade Categories
+// 📊 Get Available Trade Categories (Enterprise System)
 router.get('/trade-categories', async (req, res) => {
   try {
-    const categories = await TradeCategory.find({})
-      .select('name description serviceTypes commonQAs')
-      .sort({ name: 1 });
+    const db = getDB();
+    const categories = await db.collection('enterpriseTradeCategories')
+      .find({})
+      .project({ name: 1, description: 1, isActive: 1 })
+      .sort({ name: 1 })
+      .toArray();
 
     res.json(categories);
 

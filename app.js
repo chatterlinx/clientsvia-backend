@@ -16,7 +16,6 @@ const employeeRoutes = require("./routes/employee");
 const uploadRoutes = require("./routes/upload");
 const authRoutes = require('./routes/auth');
 const companyRoutes = require('./routes/company');
-const tradeCategoryRoutes = require('./routes/tradeCategories');
 const settingsRoutes = require('./routes/settings');
 
 const aiAgentWorkflowRoutes = require('./routes/aiAgentWorkflows');
@@ -135,7 +134,6 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/company', companyRoutes);
-app.use('/api/trade-categories', tradeCategoryRoutes); // GLOBAL trade categories
 app.use('/api/company', settingsRoutes);
 
 app.use('/api/ai-agent-workflows', aiAgentWorkflowRoutes);

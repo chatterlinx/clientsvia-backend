@@ -314,7 +314,7 @@ GET    /api/suggestions     // ❌ DISABLED - Exposed AI learning across compani
 #### **✅ SAFE PUBLIC ENDPOINTS:**
 ```javascript
 // These endpoints handle non-sensitive, global data
-GET    /api/trade-categories     // ✅ Global trade category templates
+GET    /api/enterprise-trade-categories     // ✅ Global enterprise trade category templates
 GET    /api/booking-scripts/templates  // ✅ Public booking templates
 GET    /health                   // ✅ System health monitoring
 POST   /api/ai/models           // ✅ Available AI models list

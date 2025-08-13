@@ -6,6 +6,7 @@
 const winston = require('winston');
 const fs = require('fs').promises;
 const path = require('path');
+const { getDB } = require('../db');
 
 // Valid actions - ACTUAL FUNCTIONS FROM CODEBASE ANALYSIS
 const VALID_ACTIONS = [
@@ -591,20 +592,65 @@ class IntentRoutingService {
             
             checkTradeCategories: async (text, companyId) => {
                 try {
-                    // This would connect to the actual trade categories API
-                    // GET /api/trade-categories/qas endpoint
-                    this.logger.info('Checking trade categories Q&As', { text, companyId });
+                    // Connect to the actual enterprise trade categories system
+                    this.logger.info('Checking enterprise trade categories Q&As', { text, companyId });
                     
-                    // Mock response based on real trade categories structure
-                    const mockTradeQAs = ['hvac', 'plumbing', 'electrical', 'maintenance'];
-                    const hasMatch = mockTradeQAs.some(trade => text.toLowerCase().includes(trade));
+                    const db = getDB();
+                    const searchText = text.toLowerCase();
+                    
+                    // Get all enterprise trade categories with Q&As
+                    const categories = await db.collection('enterpriseTradeCategories')
+                        .find({ 
+                            isActive: { $ne: false },
+                            qnas: { $exists: true, $ne: [] }
+                        })
+                        .toArray();
+                    
+                    let bestMatch = null;
+                    let bestScore = 0;
+                    
+                    for (const category of categories) {
+                        for (const qa of category.qnas) {
+                            if (qa.isActive === false) continue;
+                            
+                            let score = 0;
+                            
+                            // Check keywords
+                            if (qa.keywords && qa.keywords.length > 0) {
+                                for (const keyword of qa.keywords) {
+                                    if (searchText.includes(keyword.toLowerCase())) {
+                                        score += 0.3;
+                                    }
+                                }
+                            }
+                            
+                            // Check question match
+                            if (qa.question.toLowerCase().includes(searchText)) {
+                                score += 0.5;
+                            }
+                            
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestMatch = {
+                                    question: qa.question,
+                                    answer: qa.answer,
+                                    category: category.name
+                                };
+                            }
+                        }
+                    }
                     
                     return { 
-                        found: hasMatch, 
-                        response: hasMatch ? "I found information in our trade categories about that. Let me help you." : null 
+                        found: bestMatch !== null, 
+                        response: bestMatch ? bestMatch.answer : null,
+                        metadata: bestMatch ? {
+                            question: bestMatch.question,
+                            category: bestMatch.category,
+                            confidence: bestScore
+                        } : null
                     };
                 } catch (error) {
-                    this.logger.error('Trade categories check failed', { error: error.message });
+                    this.logger.error('Enterprise trade categories check failed', { error: error.message });
                     return { found: false };
                 }
             },

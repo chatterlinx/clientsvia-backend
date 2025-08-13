@@ -314,110 +314,139 @@ async function checkTradeCategoryDatabaseWithTrace(transcript, categoryID, compa
     const db = getDB();
     console.log(`[checkTradeCategoryDB] Searching for categoryID: ${categoryID}, companyID: ${companyID}`);
     
-    // Check if there's a dedicated trade category Q&A collection
-    const tradeCategoryQAs = db.collection('tradecategoryqas');
+    // Use the new enterprise trade categories system
+    const searchText = transcript.toLowerCase();
     
-    // Enhanced search - try multiple category formats and keyword matching
-    const searchQueries = [
-      { categoryID: categoryID },
-      { categoryID: 'hvac-residential' }, // Common fallback for HVAC companies
-      { categoryID: 'HVAC' },
-      { category: categoryID },
-      { trade: 'HVAC' }
-    ];
+    // Try to match with enterprise trade categories
+    const category = await db.collection('enterpriseTradeCategories').findOne({
+      $or: [
+        { name: categoryID },
+        { name: { $regex: categoryID, $options: 'i' } }
+      ],
+      isActive: { $ne: false }
+    });
     
-    let matches = [];
-    
-    // Try each search query until we find matches
-    for (const searchQuery of searchQueries) {
-      const queryMatches = await tradeCategoryQAs.find({
-        ...searchQuery,
-        $or: [
-          { question: { $regex: new RegExp(transcript, 'i') } },
-          { keywords: { $in: transcript.toLowerCase().split(' ') } },
-          { answer: { $regex: new RegExp(transcript, 'i') } }
-        ]
-      }).toArray();
+    if (!category || !category.qnas) {
+      console.log(`[checkTradeCategoryDB] No enterprise category found for: ${categoryID}`);
       
-      if (queryMatches.length > 0) {
-        matches = queryMatches;
-        console.log(`[checkTradeCategoryDB] Found ${matches.length} matches with query:`, searchQuery);
-        break;
+      if (traceLogger) {
+        traceLogger.logSourceCheck('Enterprise Trade Categories', { 
+          categoryID, 
+          searchAttempt: 'enterprise-categories'
+        }, {
+          matched: false,
+          matchedKeywords: [],
+          totalMatches: 0,
+          totalAvailable: 0,
+          confidence: 0,
+          reason: `No enterprise category found for: ${categoryID}`
+        });
       }
+      
+      return { matched: false };
     }
     
-    // FALLBACK: If no dedicated collection, check company's tradeCategoryQAs field
-    if (matches.length === 0) {
-      console.log(`[checkTradeCategoryDB] No dedicated collection matches, checking company tradeCategoryQAs`);
-      const companiesCollection = db.collection('companiesCollection');
-      const company = await companiesCollection.findOne({ _id: new ObjectId(companyID) });
+    let bestMatch = null;
+    let bestScore = 0;
+    const matchedKeywords = [];
+    
+    // Search through Q&As in the enterprise category
+    for (const qa of category.qnas) {
+      if (qa.isActive === false) continue;
       
-      if (company?.tradeCategoryQAs) {
-        console.log(`[checkTradeCategoryDB] Found company tradeCategoryQAs array with ${company.tradeCategoryQAs.length} entries`);
-        
-        // Search within company's trade category Q&As
-        for (const qa of company.tradeCategoryQAs) {
-          if (qa.question?.toLowerCase().includes(transcript.toLowerCase()) ||
-              qa.answer?.toLowerCase().includes(transcript.toLowerCase()) ||
-              keywords.some(keyword => qa.question?.toLowerCase().includes(keyword.toLowerCase()))) {
-            matches.push(qa);
+      let score = 0;
+      
+      // Check if transcript matches question
+      if (qa.question.toLowerCase().includes(searchText)) {
+        score += 0.5;
+      }
+      
+      // Check if transcript matches answer
+      if (qa.answer.toLowerCase().includes(searchText)) {
+        score += 0.3;
+      }
+      
+      // Check keyword matches
+      if (qa.keywords && qa.keywords.length > 0) {
+        for (const keyword of qa.keywords) {
+          if (searchText.includes(keyword.toLowerCase())) {
+            score += 0.2;
+            if (!matchedKeywords.includes(keyword)) {
+              matchedKeywords.push(keyword);
+            }
           }
         }
       }
+      
+      // Check against provided keywords
+      if (keywords && keywords.length > 0) {
+        for (const keyword of keywords) {
+          if (qa.question.toLowerCase().includes(keyword.toLowerCase()) ||
+              qa.answer.toLowerCase().includes(keyword.toLowerCase())) {
+            score += 0.2;
+            if (!matchedKeywords.includes(keyword)) {
+              matchedKeywords.push(keyword);
+            }
+          }
+        }
+      }
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = qa;
+      }
     }
     
-    // Calculate matched keywords more accurately
-    const matchedKeywords = [];
-    if (matches.length > 0) {
-      const firstMatch = matches[0];
-      keywords.forEach(keyword => {
-        if (firstMatch.question?.toLowerCase().includes(keyword.toLowerCase()) ||
-            firstMatch.answer?.toLowerCase().includes(keyword.toLowerCase())) {
-          matchedKeywords.push(keyword);
-        }
+    // Calculate confidence based on matches
+    const keywordScore = keywords.length > 0 ? matchedKeywords.length / keywords.length : bestScore;
+    const confidence = Math.min(keywordScore >= 1.0 ? 100 : (keywordScore >= 0.5 ? 85 : Math.round(bestScore * 100)), 100);
+    
+    if (traceLogger) {
+      traceLogger.logSourceCheck('Enterprise Trade Categories', { 
+        categoryID, 
+        category: category.name,
+        totalQnAs: category.qnas.length
+      }, {
+        matched: bestMatch !== null,
+        matchedKeywords: matchedKeywords,
+        totalMatches: matchedKeywords.length,
+        totalAvailable: keywords.length,
+        confidence: confidence / 100,
+        reason: bestMatch ? `Found match in ${category.name} - ${confidence}% confidence` : 'No matching Q&As found'
       });
     }
     
-    // FORCE 100% confidence for 2/2 keyword matches or high similarity
-    const keywordScore = matchedKeywords.length / keywords.length;
-    const confidence = keywordScore >= 1.0 ? 100 : (keywordScore >= 0.5 ? 85 : 0);
-    
-    traceLogger.logSourceCheck('Trade Category Database', { 
-      categoryID, 
-      totalEntries: matches.length,
-      searchAttempts: searchQueries.length,
-      finalQuery: matches.length > 0 ? 'Found matches' : 'No matches'
-    }, {
-      matched: matches.length > 0,
-      matchedKeywords: matchedKeywords,
-      totalMatches: matchedKeywords.length,
-      totalAvailable: keywords.length,
-      confidence: confidence / 100, // Convert to decimal for consistency with other checks
-      reason: matches.length > 0 ? `${matchedKeywords.length}/${keywords.length} matches - ${confidence}% (${matchedKeywords.join(', ')})` : 'No database matches'
-    });
-    
-    if (matches.length > 0) {
-      console.log(`[checkTradeCategoryDB] SUCCESS: Found ${matches.length} trade category matches`);
-      console.log(`[checkTradeCategoryDB] First match answer:`, matches[0].answer);
-      return { 
-        matched: true, 
-        answer: matches[0].answer, 
-        confidence: confidence / 100, // Convert to decimal for compatibility
-        matchedKeywords 
+    if (bestMatch && bestScore > 0.3) { // Minimum threshold for match
+      console.log(`[checkTradeCategoryDB] Found enterprise match with score ${bestScore}:`, bestMatch.question.substring(0, 50));
+      
+      return {
+        matched: true,
+        answer: bestMatch.answer,
+        question: bestMatch.question,
+        confidence: confidence / 100,
+        matchedKeywords: matchedKeywords,
+        source: 'enterprise-trade-categories',
+        category: category.name
       };
     }
     
+    console.log(`[checkTradeCategoryDB] No adequate matches found in enterprise category: ${category.name}`);
     return { matched: false };
+    
   } catch (error) {
-    console.error(`[checkTradeCategoryDB] Error checking trade category database:`, error);
-    traceLogger.logSourceCheck('Trade Category Database', {}, {
-      matched: false,
-      matchedKeywords: [],
-      totalMatches: 0,
-      totalAvailable: 0,
-      confidence: 0,
-      reason: `Database error: ${error.message}`
-    });
+    console.error(`[checkTradeCategoryDB] Error checking enterprise trade category database:`, error);
+    
+    if (traceLogger) {
+      traceLogger.logSourceCheck('Enterprise Trade Categories', {}, {
+        matched: false,
+        matchedKeywords: [],
+        totalMatches: 0,
+        totalAvailable: 0,
+        confidence: 0,
+        reason: `Database error: ${error.message}`
+      });
+    }
+    
     return { matched: false };
   }
 }

@@ -4,9 +4,9 @@
 
 const Company = require('../models/Company');
 const CompanyQnA = require('../models/CompanyQnA');
-const TradeQnA = require('../models/TradeQnA');
 const PendingQnA = require('../models/PendingQnA');
 const { ObjectId } = require('mongodb');
+const { getDB } = require('../db');
 const { vectorSearch } = require('../clients/pinecone'); // if Pinecone is used
 const { translateText } = require('../services/translation'); // optional
 const { logQASearch } = require('../services/logger'); // optional logging
@@ -347,16 +347,43 @@ class EnhancedQAEngine {
   }
 
   async searchTradeQAs(tradeCategory, query, options = {}) {
-    const regex = new RegExp(query, 'i');
-    const matches = await TradeQnA.find({
-      tradeCategory,
-      $or: [
-        { question: regex },
-        { keywords: { $in: [query.toLowerCase()] } }
-      ]
-    }).lean();
-
-    return matches || [];
+    try {
+      const db = getDB();
+      const regex = new RegExp(query, 'i');
+      
+      // Search in enterprise trade categories Q&As
+      const category = await db.collection('enterpriseTradeCategories').findOne({
+        name: tradeCategory
+      });
+      
+      if (!category || !category.qnas) {
+        return [];
+      }
+      
+      // Search through Q&As for matches
+      const matches = category.qnas.filter(qa => {
+        return (
+          regex.test(qa.question) ||
+          regex.test(qa.answer) ||
+          (qa.keywords && qa.keywords.some(keyword => regex.test(keyword)))
+        );
+      });
+      
+      // Transform to expected format
+      return matches.map(qa => ({
+        _id: qa._id || new ObjectId(),
+        question: qa.question,
+        answer: qa.answer,
+        keywords: qa.keywords || [],
+        tradeCategory: tradeCategory,
+        confidence: qa.confidence || 1,
+        isActive: qa.isActive !== false
+      }));
+      
+    } catch (error) {
+      console.error('Error searching trade Q&As:', error);
+      return [];
+    }
   }
 
   async semanticSearch(query, context = {}, options = {}) {

@@ -62,7 +62,6 @@ async function loadAllRoutes() {
     
     try {
         routes.companyRoutes = await loadRouteWithTimeout('./routes/company', 'companyRoutes');
-        routes.tradeCategoryRoutes = await loadRouteWithTimeout('./routes/tradeCategories', 'tradeCategoryRoutes');
         routes.alertRoutes = await loadRouteWithTimeout('./routes/alerts', 'alertRoutes');
         routes.integrationsRoutes = await loadRouteWithTimeout('./routes/integrations', 'integrationsRoutes');
         routes.ttsRoutes = await loadRouteWithTimeout('./routes/tts', 'ttsRoutes');
@@ -182,7 +181,6 @@ function registerRoutes(routes) {
     
     // --- API Routes ---
     app.use('/api', routes.companyRoutes);
-    app.use('/api/trade-categories', routes.tradeCategoryRoutes);
     app.use('/api/alerts', routes.alertRoutes);
     app.use('/api/integrations', routes.integrationsRoutes);
     app.use('/api/tts', routes.ttsRoutes);

@@ -85,11 +85,15 @@ services:
 - `GET /api/companies/:id/booking-flow` - Get booking flow configuration
 - `POST /api/companies/:id/booking-flow` - Save booking flow configuration
 
-### Trade Categories
-- `GET /api/trade-categories` - List all available categories
-- `POST /api/trade-categories` - Create new categories
-- `GET /api/companies/:companyId/trade-categories` - Get company's assigned categories
-- `POST /api/companies/:companyId/trade-categories` - Update company's category assignments
+### Enterprise Trade Categories
+- `GET /api/enterprise-trade-categories` - List all global trade categories
+- `POST /api/enterprise-trade-categories` - Create new global categories
+- `PUT /api/enterprise-trade-categories/:id` - Update existing category
+- `DELETE /api/enterprise-trade-categories/:id` - Delete category
+- `GET /api/enterprise-trade-categories/qas` - Get all Q&As for all categories
+- `POST /api/enterprise-trade-categories/:id/qnas` - Add Q&A to category
+- `PUT /api/enterprise-trade-categories/:categoryId/qnas/:qnaId` - Update Q&A
+- `DELETE /api/enterprise-trade-categories/:categoryId/qnas/:qnaId` - Delete Q&A
 
 ### Admin Interface
 - `GET /` - Main dashboard

@@ -13,7 +13,7 @@
 - `directory.html` - Company listing and search functionality
 - `add-company.html` - Create new companies
 - `company-profile.html` - **MAIN FILE** - Manage individual companies (664KB)
-- `trade-category-management.html` - Manage trade categories
+- `enterprise-trade-categories.html` - Manage global enterprise trade categories
 
 **System Monitoring:**
 - `dashboard.html` - AI malfunction monitoring and alerts
@@ -60,7 +60,7 @@
    - **Add New** → `add-company.html`  
    - **Manage Individual** → `company-profile.html` (main workspace)
 4. **System Admin:**
-   - **Trade Categories** → `trade-category-management.html`
+   - **Enterprise Trade Categories** → `enterprise-trade-categories.html`
    - **Monitoring** → `dashboard.html`
    - **System Health** → `system-status.html`
 

@@ -6,6 +6,7 @@
 
 const aiLoader = require('../config/aiLoader');
 const LLMClient = require('../config/llmClient');
+const { getDB } = require('../../db');
 
 class KnowledgeRouter {
     constructor() {
@@ -217,82 +218,105 @@ class KnowledgeRouter {
     }
 
     /**
-     * Search trade-specific Q&A
+     * Search trade-specific Q&A using Enterprise Trade Categories
      * @param {Array} tradeCategories - Enabled trade categories
      * @param {string} text - Search text
      * @returns {Object} Search result
      */
     async searchTradeQA(tradeCategories, text) {
-        console.log(`🔧 Searching trade QA for categories: ${tradeCategories.join(', ')}`);
+        console.log(`🔧 Searching enterprise trade QA for categories: ${tradeCategories.join(', ')}`);
         
-        // Mock trade Q&A for production readiness
-        const tradeDatabase = {
-            "HVAC Residential": [
-                { question: "thermostat blank screen", answer: "Try replacing the batteries in your thermostat. If that doesn't work, check the circuit breaker.", keywords: ["thermostat", "blank", "screen", "batteries"] },
-                { question: "air conditioner not cooling", answer: "Check if the air filter needs replacement and ensure all vents are open.", keywords: ["air", "conditioner", "cooling", "filter"] }
-            ],
-            "Plumbing Residential": [
-                { question: "toilet won't flush", answer: "Check if the water level in the tank is adequate and the chain is connected to the flapper.", keywords: ["toilet", "flush", "water", "tank"] },
-                { question: "leaky faucet", answer: "The most common cause is a worn washer or O-ring that needs replacement.", keywords: ["faucet", "leak", "drip", "washer"] }
-            ]
-        };
+        try {
+            const db = getDB();
+            const searchText = text.toLowerCase();
+            let bestMatch = null;
+            let bestScore = 0;
+            let totalMatches = 0;
+            let keywords = [];
 
-        const searchText = text.toLowerCase();
-        let bestMatch = null;
-        let bestScore = 0;
-        let totalMatches = 0;
-        let keywords = [];
-
-        for (const category of tradeCategories) {
-            const entries = tradeDatabase[category] || [];
-            
-            for (const entry of entries) {
-                let score = 0;
-                const entryKeywords = [];
+            // Search through enterprise trade categories
+            for (const categoryName of tradeCategories) {
+                const category = await db.collection('enterpriseTradeCategories').findOne({
+                    name: categoryName,
+                    isActive: { $ne: false }
+                });
                 
-                // Check if search text contains entry keywords
-                for (const keyword of entry.keywords) {
-                    if (searchText.includes(keyword.toLowerCase())) {
-                        score += 0.3;
-                        entryKeywords.push(keyword);
+                if (!category || !category.qnas) continue;
+                
+                for (const qa of category.qnas) {
+                    if (qa.isActive === false) continue;
+                    
+                    let score = 0;
+                    const entryKeywords = [];
+                    
+                    // Check if search text contains QA keywords
+                    if (qa.keywords && qa.keywords.length > 0) {
+                        for (const keyword of qa.keywords) {
+                            if (searchText.includes(keyword.toLowerCase())) {
+                                score += 0.3;
+                                entryKeywords.push(keyword);
+                            }
+                        }
                     }
-                }
-                
-                // Check question match
-                if (entry.question.toLowerCase().includes(searchText)) {
-                    score += 0.5;
-                    entryKeywords.push('question-match');
-                }
+                    
+                    // Check question match
+                    if (qa.question.toLowerCase().includes(searchText)) {
+                        score += 0.5;
+                        entryKeywords.push('question-match');
+                    }
+                    
+                    // Check answer match (lower weight)
+                    if (qa.answer.toLowerCase().includes(searchText)) {
+                        score += 0.2;
+                        entryKeywords.push('answer-match');
+                    }
 
-                if (score > 0) {
-                    totalMatches++;
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestMatch = entry;
-                        keywords = entryKeywords;
+                    if (score > 0) {
+                        totalMatches++;
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestMatch = {
+                                question: qa.question,
+                                answer: qa.answer,
+                                keywords: qa.keywords || [],
+                                category: categoryName,
+                                confidence: qa.confidence || 1
+                            };
+                            keywords = entryKeywords;
+                        }
                     }
                 }
             }
-        }
 
-        if (bestMatch) {
+            if (bestMatch) {
+                return {
+                    text: bestMatch.answer,
+                    source: 'tradeQA',
+                    score: Math.min(bestScore, 1.0),
+                    matches: totalMatches,
+                    keywords,
+                    category: bestMatch.category
+                };
+            }
+
             return {
-                text: bestMatch.answer,
+                text: null,
                 source: 'tradeQA',
-                score: Math.min(bestScore, 1.0),
-                matches: totalMatches,
-                keywords,
-                category: tradeCategories.find(cat => tradeDatabase[cat]?.includes(bestMatch))
+                score: 0,
+                matches: 0,
+                keywords: []
+            };
+            
+        } catch (error) {
+            console.error('Error searching enterprise trade QA:', error);
+            return {
+                text: null,
+                source: 'tradeQA',
+                score: 0,
+                matches: 0,
+                keywords: []
             };
         }
-
-        return {
-            text: null,
-            source: 'tradeQA',
-            score: 0,
-            matches: 0,
-            keywords: []
-        };
     }
 
     /**
