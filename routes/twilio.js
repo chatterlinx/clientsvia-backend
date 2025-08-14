@@ -717,12 +717,37 @@ router.post('/handle-speech', async (req, res) => {
   }
 });
 
-// Partial speech results for faster response (experimental)
+// Partial speech results for faster response (fixed logging)
 router.post('/partial-speech', async (req, res) => {
-  console.log(`[PARTIAL SPEECH] Received at: ${new Date().toISOString()}`);
-  console.log(`[PARTIAL SPEECH] Partial result: "${req.body.SpeechResult}" (Stability: ${req.body.Stability})`);
+  // Check multiple possible field names for partial speech
+  const partialText = req.body.UnstableSpeechResult || 
+                     req.body.SpeechResult || 
+                     req.body.Transcription || 
+                     req.body.partial || 
+                     null;
   
-  // Just acknowledge - we'll process the final result
+  const stability = req.body.Stability || req.body.stability || 'unknown';
+  
+  // Only log if we have actual text and it's changed (debounce)
+  if (partialText && partialText.trim() && partialText !== 'undefined') {
+    // Simple debounce - only log if text is different from last
+    const callSid = req.body.CallSid || 'unknown';
+    const logKey = `partial-log:${callSid}`;
+    
+    // Don't flood logs - max 1 per second and only when text changes
+    const now = Date.now();
+    const lastLog = global.partialLogs?.[logKey];
+    
+    if (!lastLog || (now - lastLog.time > 1000 && lastLog.text !== partialText)) {
+      console.log(`[AI AGENT PARTIAL] CallSid: ${callSid}, Text: "${partialText}" (Stability: ${stability})`);
+      
+      // Store last log to prevent duplicates
+      global.partialLogs = global.partialLogs || {};
+      global.partialLogs[logKey] = { time: now, text: partialText };
+    }
+  }
+  
+  // Acknowledge to Twilio
   res.status(200).send('OK');
 });
 
@@ -961,9 +986,30 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
 router.post('/ai-agent-partial/:companyID', async (req, res) => {
   try {
     const { companyID } = req.params;
-    const { PartialSpeechResult, CallSid } = req.body;
+    const { CallSid } = req.body;
     
-    console.log(`[AI AGENT PARTIAL] Company: ${companyID}, CallSid: ${CallSid}, Partial: "${PartialSpeechResult}"`);
+    // Check multiple possible field names for partial speech
+    const partialText = req.body.PartialSpeechResult || 
+                       req.body.UnstableSpeechResult || 
+                       req.body.SpeechResult || 
+                       req.body.Transcription || 
+                       req.body.partial || 
+                       null;
+    
+    // Only log meaningful partial results
+    if (partialText && partialText.trim() && partialText !== 'undefined') {
+      // Debounce logging for AI Agent Logic
+      const logKey = `ai-partial:${companyID}:${CallSid}`;
+      const now = Date.now();
+      const lastLog = global.aiPartialLogs?.[logKey];
+      
+      if (!lastLog || (now - lastLog.time > 1000 && lastLog.text !== partialText)) {
+        console.log(`[AI AGENT PARTIAL] Company: ${companyID}, Text: "${partialText.substring(0, 50)}${partialText.length > 50 ? '...' : ''}"`);
+        
+        global.aiPartialLogs = global.aiPartialLogs || {};
+        global.aiPartialLogs[logKey] = { time: now, text: partialText };
+      }
+    }
     
     // For now, just acknowledge - could be used for real-time intent detection
     res.json({ success: true });

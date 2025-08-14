@@ -216,8 +216,8 @@ class AIAgentRuntime {
         await ResponseTraceLogger.saveTrace(trace);
       }
       
-      // Fallback to existing system
-      return await this.fallbackToLegacySystem(companyID, userText, company);
+      // Use company fallback instead of legacy system
+      return await this.useCompanyFallback(companyID || 'unknown', trace, 'runtime_error', company);
     }
   }
 
@@ -297,29 +297,63 @@ class AIAgentRuntime {
   }
 
   /**
-   * Handle knowledge/QA intent
+   * Handle knowledge/QA intent with null-safe guards and config validation
    */
   static async handleKnowledgeIntent(companyID, callId, userText, callState, trace, config, company) {
     try {
+      console.log('[AI AGENT] Starting knowledge intent handling');
+      
+      // Validate compiled config before proceeding
+      const configValidation = this.validateKnowledgeConfig(config);
+      if (!configValidation.valid) {
+        console.error('[AI AGENT] Config validation failed:', configValidation.errors);
+        ResponseTraceLogger.addBehaviorStep(trace, 'config_validation', false, 
+          { errors: configValidation.errors }, 'router_config_missing');
+        
+        // Use company fallback instead of legacy
+        return await this.useCompanyFallback(companyID, trace, 'router_config_missing', company);
+      }
+      
+      console.log('[AI AGENT] Config validation passed, starting knowledge routing');
       const knowledgeStart = Date.now();
       
-      // Use new knowledge router
+      // Use new knowledge router with validated config
       const knowledgeResult = await routeKnowledge({
         companyID,
         text: userText,
-        context: callState
+        context: callState,
+        config: config // Pass validated config
       });
       
       const knowledgeTime = Date.now() - knowledgeStart;
+      console.log(`[AI AGENT] Knowledge routing completed in ${knowledgeTime}ms`);
       
-      // Add knowledge steps to trace
-      knowledgeResult.trace.forEach(step => {
-        ResponseTraceLogger.addKnowledgeStep(
-          trace, step.source, step, step.threshold || 0, step.selected, knowledgeTime
-        );
-      });
+      // Null-safe trace logging
+      if (knowledgeResult.trace && Array.isArray(knowledgeResult.trace)) {
+        knowledgeResult.trace.forEach(step => {
+          ResponseTraceLogger.addKnowledgeStep(
+            trace, step.source, step.query || userText, step.matches || 0, 
+            step.score || 0, step.selected || false
+          );
+        });
+      } else {
+        console.warn('[AI AGENT] Knowledge result trace is not an array, skipping trace logging');
+        ResponseTraceLogger.addBehaviorStep(trace, 'knowledge_trace_missing', false, 
+          { result: knowledgeResult }, 'trace_format_error');
+      }
       
-      ResponseTraceLogger.setResponse(trace, knowledgeResult.result, knowledgeResult.trace.find(t => t.selected)?.source || 'unknown');
+      // Check if we got a valid result
+      if (!knowledgeResult.result || !knowledgeResult.result.text) {
+        console.log('[AI AGENT] No knowledge result found, using company fallback');
+        ResponseTraceLogger.addBehaviorStep(trace, 'knowledge_miss', false, 
+          { query: userText }, 'kb_miss');
+        
+        return await this.useCompanyFallback(companyID, trace, 'kb_miss', company);
+      }
+      
+      console.log('[AI AGENT] Knowledge result found, setting response');
+      ResponseTraceLogger.setResponse(trace, knowledgeResult.result, 
+        knowledgeResult.trace?.find(t => t.selected)?.source || 'unknown');
       
       const finalResponse = await this.applyBehaviorAndFinalize(
         config, callState, knowledgeResult.result, trace
@@ -328,14 +362,111 @@ class AIAgentRuntime {
       return finalResponse;
       
     } catch (error) {
-      console.error('Error in knowledge routing, falling back to legacy system:', error);
+      console.error('[AI AGENT] Error in knowledge routing:', error.message);
+      console.error('[AI AGENT] Stack:', error.stack);
       
-      // Fallback to existing agent system
-      const legacyResponse = await this.fallbackToLegacySystem(companyID, userText, company);
+      // Log the error as a behavior step
+      ResponseTraceLogger.addBehaviorStep(trace, 'knowledge_error', false, 
+        { error: error.message, stack: error.stack }, 'kb_error');
       
-      ResponseTraceLogger.setResponse(trace, legacyResponse, 'legacy_fallback');
+      // Use company fallback instead of legacy system
+      return await this.useCompanyFallback(companyID, trace, 'kb_error', company);
+    }
+  }
+  
+  /**
+   * Validate knowledge configuration
+   */
+  static validateKnowledgeConfig(config) {
+    const errors = [];
+    
+    // Check routing priority
+    if (!config.routing || !Array.isArray(config.routing.priority)) {
+      errors.push('routing.priority must be an array');
+    }
+    
+    // Check knowledge sources
+    if (!config.knowledge || !config.knowledge.sources) {
+      errors.push('knowledge.sources is required');
+    } else {
+      const sources = config.knowledge.sources;
+      if (sources.company && !Array.isArray(sources.company)) {
+        errors.push('knowledge.sources.company must be an array');
+      }
+      if (sources.trade && !Array.isArray(sources.trade)) {
+        errors.push('knowledge.sources.trade must be an array');
+      }
+      if (sources.vector && !Array.isArray(sources.vector)) {
+        errors.push('knowledge.sources.vector must be an array');
+      }
+    }
+    
+    // Check thresholds
+    if (!config.knowledge || !config.knowledge.thresholds) {
+      errors.push('knowledge.thresholds is required');
+    }
+    
+    // Check enterprise composite threshold
+    if (!config.enterprise || typeof config.enterprise.composite?.threshold !== 'number') {
+      errors.push('enterprise.composite.threshold must be a number');
+    }
+    
+    return {
+      valid: errors.length === 0,
+      errors: errors
+    };
+  }
+  
+  /**
+   * Use company-specific fallback instead of legacy system
+   */
+  static async useCompanyFallback(companyID, trace, reason, company) {
+    try {
+      console.log(`[AI AGENT] Using company fallback for reason: ${reason}`);
       
-      return await this.applyBehaviorAndFinalize(config, callState, legacyResponse, trace);
+      // Get company-specific fallback message
+      let fallbackText = "I apologize, but I'm having trouble accessing that information right now. Please try again later.";
+      
+      if (company) {
+        // Try to get company-specific fallback from AI Agent Logic config
+        const fallbackConfig = company.aiAgentLogic?.responseCategories?.fallback;
+        if (fallbackConfig?.template) {
+          fallbackText = fallbackConfig.template.replace('{companyName}', 
+            company.businessName || company.companyName || 'our company');
+        } else if (company.aiSettings?.fallbackMessage) {
+          fallbackText = company.aiSettings.fallbackMessage;
+        }
+      }
+      
+      // Log fallback selection
+      ResponseTraceLogger.addBehaviorStep(trace, 'fallback_select', true, 
+        { reason: reason, companyID: companyID }, fallbackText);
+      
+      ResponseTraceLogger.setResponse(trace, { text: fallbackText }, `company_fallback_${reason}`);
+      
+      return {
+        text: fallbackText,
+        confidence: 0.9, // High confidence in fallback
+        source: `company_fallback_${reason}`,
+        shouldHangup: false,
+        shouldTransfer: false,
+        controlFlags: { reason: reason }
+      };
+      
+    } catch (error) {
+      console.error('[AI AGENT] Error in company fallback:', error);
+      
+      // Ultimate fallback
+      const ultimateFallback = "I apologize for the technical difficulty. Please try calling back later.";
+      ResponseTraceLogger.setResponse(trace, { text: ultimateFallback }, 'ultimate_fallback');
+      
+      return {
+        text: ultimateFallback,
+        confidence: 1.0,
+        source: 'ultimate_fallback',
+        shouldHangup: true,
+        shouldTransfer: false
+      };
     }
   }
 
@@ -541,78 +672,6 @@ class AIAgentRuntime {
           shouldHangup: true,
           callState: callState,
           error: error.message
-        };
-      }
-    }
-  }
-
-  /**
-   * Fallback to legacy system when new system fails
-   */
-  static async fallbackToLegacySystem(companyID, userText, company) {
-    try {
-      console.log('Falling back to legacy agent system');
-      
-      // Try cached answer first
-      const cachedAnswer = await findCachedAnswer(companyID, userText);
-      if (cachedAnswer) {
-        return {
-          text: cachedAnswer,
-          confidence: 0.8,
-          source: 'cached_legacy'
-        };
-      }
-      
-      // Use existing agent service
-      if (company) {
-        const legacyResponse = await answerQuestion(userText, company);
-        return {
-          text: legacyResponse.answer || legacyResponse,
-          confidence: legacyResponse.confidence || 0.7,
-          source: 'legacy_agent'
-        };
-      }
-      
-      // Check if transfer is enabled for fallback scenarios
-      const transferEnabled = await isTransferEnabled(companyID);
-      
-      if (transferEnabled) {
-        return {
-          text: "I'm sorry, I'm having trouble accessing my knowledge base right now. Let me transfer you to someone who can help.",
-          confidence: 0.5,
-          shouldTransfer: true,
-          source: 'fallback_message'
-        };
-      } else {
-        return {
-          text: "I'm sorry, I'm having trouble accessing my knowledge base right now. Please try calling back later or visit our website for assistance.",
-          confidence: 0.5,
-          shouldTransfer: false,
-          shouldHangup: true,
-          source: 'fallback_message_no_transfer'
-        };
-      }
-      
-    } catch (error) {
-      console.error('Error in legacy fallback:', error);
-      
-      // Check if transfer is enabled for error scenarios
-      const transferEnabled = await isTransferEnabled(companyID);
-      
-      if (transferEnabled) {
-        return {
-          text: "I apologize, but I'm experiencing technical difficulties. Please hold while I transfer you to a team member.",
-          confidence: 0.3,
-          shouldTransfer: true,
-          source: 'error_fallback'
-        };
-      } else {
-        return {
-          text: "I apologize, but I'm experiencing technical difficulties. Please try calling back later or visit our website for assistance.",
-          confidence: 0.3,
-          shouldTransfer: false,
-          shouldHangup: true,
-          source: 'error_fallback_no_transfer'
         };
       }
     }
