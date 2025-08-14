@@ -1027,7 +1027,7 @@ async function addTTSResponse(twiml, company, text, fallbackText = null) {
   const response = await generateTTSResponse(company, text, fallbackText);
   
   if (response.type === 'play') {
-    const host = process.env.NODE_ENV === 'production' ? 'clientsvia-backend-production.up.railway.app' : 'localhost:3001';
+    const host = process.env.NODE_ENV === 'production' ? 'clientsvia-backend.onrender.com' : 'localhost:3001';
     const fullUrl = `https://${host}${response.url}`;
     twiml.play(fullUrl);
     console.log(`[TTS] Playing ElevenLabs audio: ${fullUrl}`);
@@ -1044,7 +1044,7 @@ async function addFallbackResponse(twiml, company, customMessage = null) {
   // Try to get cached fallback URL first
   const cachedUrl = await getFallbackMessageUrl(company, fallbackText);
   if (cachedUrl) {
-    const host = process.env.NODE_ENV === 'production' ? 'clientsvia-backend-production.up.railway.app' : 'localhost:3001';
+    const host = process.env.NODE_ENV === 'production' ? 'clientsvia-backend.onrender.com' : 'localhost:3001';
     const fullUrl = `https://${host}${cachedUrl}`;
     twiml.play(fullUrl);
     console.log(`[FALLBACK TTS] Playing cached fallback: ${fullUrl}`);

@@ -357,7 +357,8 @@ async function getFallbackMessageUrl(company, fallbackText = "I apologize, but I
 
   const companyId = company._id.toString();
   const configVersion = company.aiAgentLogic?.version || 1;
-  const cacheKey = `tenants:${companyId}:tts:fallback:v${configVersion}`;
+  // Add cache-busting version to force regeneration with correct domain (render.com)
+  const cacheKey = `tenants:${companyId}:tts:fallback:v${configVersion}:render-v2`;
 
   try {
     // Check cache first
