@@ -782,7 +782,7 @@ class CompanyProfileManager {
         try {
             this.renderEnterpriseContactsSection();
             this.setupEnterpriseContactsHandlers();
-            console.log('� Enterprise contacts management initialized');
+            console.log('👥 Enterprise contacts management initialized');
         } catch (error) {
             console.error('❌ Error initializing contacts:', error);
             this.showNotification('Failed to initialize contacts section', 'error');
@@ -2003,7 +2003,7 @@ class CompanyProfileManager {
         const action = note.isPinned ? 'pinned' : 'unpinned';
         this.showNotification(`Note ${action} successfully!`, 'success');
         
-        console.log(`� Note ${action}:`, note.title);
+        console.log(`📝 Note ${action}:`, note.title);
     }
 
     /**
