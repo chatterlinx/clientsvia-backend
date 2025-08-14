@@ -6,7 +6,7 @@
 
 const crypto = require('crypto');
 const logger = require('../../utils/logger');
-const { VOICE_GUARD_V1 } = require('../config/flags');
+const { VOICE_GUARD_V1 } = require('../../config/flags');
 
 /**
  * Create a short hash of text for tracking without storing sensitive content

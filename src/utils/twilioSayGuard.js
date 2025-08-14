@@ -5,8 +5,8 @@
  */
 
 const { VoiceResponse } = require('twilio').twiml;
-const logger = require('./logger');
-const { KILL_TWIML_SAY } = require('../config/flags');
+const logger = require('../../utils/logger');
+const { KILL_TWIML_SAY } = require('../../config/flags');
 
 let armed = false;
 
