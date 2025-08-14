@@ -2831,6 +2831,57 @@ class CompanyProfileManager {
         }
     }
     
+    /**
+     * Show or hide loading indicator
+     * @param {boolean} show - Whether to show loading state
+     */
+    showLoading(show) {
+        // Try to use existing loading indicator if available
+        let loadingIndicator = document.getElementById('global-loading-indicator');
+        
+        if (!loadingIndicator && show) {
+            // Create a simple loading indicator
+            loadingIndicator = document.createElement('div');
+            loadingIndicator.id = 'global-loading-indicator';
+            loadingIndicator.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                           background: rgba(0,0,0,0.3); z-index: 9999; display: flex; 
+                           align-items: center; justify-content: center;">
+                    <div style="background: white; padding: 20px; border-radius: 8px; 
+                               box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <i class="fas fa-spinner fa-spin mr-2"></i>Loading...
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(loadingIndicator);
+        }
+        
+        if (loadingIndicator) {
+            loadingIndicator.style.display = show ? 'block' : 'none';
+            if (!show && loadingIndicator.id === 'global-loading-indicator') {
+                // Remove our temporary loading indicator
+                setTimeout(() => {
+                    if (loadingIndicator.parentNode) {
+                        loadingIndicator.parentNode.removeChild(loadingIndicator);
+                    }
+                }, 100);
+            }
+        }
+        
+        // Fallback: just log to console
+        console.log(`🔄 Loading: ${show ? 'ON' : 'OFF'}`);
+    }
+
+    /**
+     * Show notification message
+     * @param {string} message - The message to show
+     * @param {string} type - The type of notification (success, error, info)
+     */
+    showNotification(message, type = 'info') {
+        // Delegate to showToast
+        this.showToast(message, type);
+    }
+    
     // ============================================================================
 }
 
