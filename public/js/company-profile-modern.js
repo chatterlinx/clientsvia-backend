@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.20 - Fixed company ID display in header subheader');
+console.log('🚀 Loading company-profile-modern.js v2.21 - Phase 4 fallback actions + encoding fixes');
 
 /* ============================================================================
    MODERN COMPANY PROFILE MANAGEMENT SYSTEM
