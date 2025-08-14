@@ -431,7 +431,7 @@ function getCompanyTTSConfig(company) {
 /**
  * Generate TTS response for Twilio with company voice consistency
  */
-async function generateTTSResponse(company, text, fallbackText = null) {
+async function generateTTSResponse(company, text, fallbackText = null, { callSid = null, kind = 'response' } = {}) {
   const config = getCompanyTTSConfig(company);
   
   if (config.provider === 'elevenlabs' && config.voiceId) {
@@ -456,12 +456,51 @@ async function generateTTSResponse(company, text, fallbackText = null) {
       const filepath = path.join(audioDir, filename);
       fs.writeFileSync(filepath, buffer);
 
+      const audioUrl = `/audio/${filename}`;
+      
+      // Phase 7: Trace ElevenLabs audio generation
+      if (callSid) {
+        try {
+          const { traceElevenLabsAudio } = require('../utils/audioEventTracer');
+          await traceElevenLabsAudio({
+            callSid,
+            companyId: company._id || company.id,
+            url: `${process.env.BASE_URL || 'https://clientsvia-backend.onrender.com'}${audioUrl}`,
+            text,
+            kind,
+            voiceId: config.voiceId,
+            modelId: company.aiSettings?.elevenLabs?.modelId || 'eleven_turbo_v2_5'
+          });
+        } catch (traceError) {
+          console.error('[AUDIO_TRACE] Failed to trace ElevenLabs audio:', traceError.message);
+          // Don't let tracing errors break the call flow
+        }
+      }
+
       return {
         type: 'play',
-        url: `/audio/${filename}`
+        url: audioUrl
       };
     } catch (error) {
       console.error('[TTS ERROR] ElevenLabs synthesis failed, falling back to Twilio:', error);
+      
+      // Phase 7: Trace fallback audio if we have callSid
+      if (callSid) {
+        try {
+          const { traceFallbackAudio } = require('../utils/audioEventTracer');
+          await traceFallbackAudio({
+            callSid,
+            companyId: company._id || company.id,
+            url: 'twilio-tts-fallback',
+            text: fallbackText || text,
+            kind: 'fallback',
+            fallbackReason: error.message
+          });
+        } catch (traceError) {
+          console.error('[AUDIO_TRACE] Failed to trace fallback audio:', traceError.message);
+        }
+      }
+      
       return {
         type: 'say',
         text: fallbackText || text,
@@ -470,7 +509,23 @@ async function generateTTSResponse(company, text, fallbackText = null) {
     }
   }
 
-  // Twilio TTS fallback
+  // Twilio TTS fallback - trace this too
+  if (callSid) {
+    try {
+      const { traceFallbackAudio } = require('../utils/audioEventTracer');
+      await traceFallbackAudio({
+        callSid,
+        companyId: company._id || company.id,
+        url: 'twilio-tts-default',
+        text,
+        kind: 'default_tts',
+        fallbackReason: 'No ElevenLabs configuration'
+      });
+    } catch (traceError) {
+      console.error('[AUDIO_TRACE] Failed to trace default TTS:', traceError.message);
+    }
+  }
+
   return {
     type: 'say',
     text: text,

@@ -36,12 +36,17 @@ module.exports = {
   PRESETS_V1: process.env.PRESETS_V1 === 'on',
   PRESET_DEFAULT: process.env.PRESET_DEFAULT || 'hvac_starter',
   
+  // ==== Phase 7: One Voice, One Source (Audio Verification & Guardrails) ====
+  VOICE_GUARD_V1: process.env.VOICE_GUARD_V1 === 'on',     // enable audio event tracing
+  KILL_TWIML_SAY: process.env.KILL_TWIML_SAY === 'on',     // block any TwiML <Say>
+  
   // Helper to check if any experimental features are enabled
   hasExperimentalFeatures() {
     return this.AI_LOGIC_V2 || this.FALLBACK_V2 || this.CONFIG_SOFT_DEFAULTS || 
            this.TTS_LOCK || this.NOTIFY_ENABLED || this.DIRECTORY_V2 || 
            this.FALLBACK_OVERRIDES_V1 || this.FALLBACK_ACTIONS_V1 ||
-           this.DIRECTORY_V1 || this.NOTIFY_V1 || this.PRESETS_V1;
+           this.DIRECTORY_V1 || this.NOTIFY_V1 || this.PRESETS_V1 ||
+           this.VOICE_GUARD_V1 || this.KILL_TWIML_SAY;
   },
   
   // Get flags summary for debugging
@@ -59,6 +64,8 @@ module.exports = {
       NOTIFY_V1: this.NOTIFY_V1,
       PRESETS_V1: this.PRESETS_V1,
       PRESET_DEFAULT: this.PRESET_DEFAULT,
+      VOICE_GUARD_V1: this.VOICE_GUARD_V1,
+      KILL_TWIML_SAY: this.KILL_TWIML_SAY,
       experimental: this.hasExperimentalFeatures()
     };
   }

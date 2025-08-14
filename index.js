@@ -98,6 +98,9 @@ async function loadAllRoutes() {
         routes.backupRoutes = await loadRouteWithTimeout('./routes/backup', 'backupRoutes');
         routes.crmManagementRoutes = await loadRouteWithTimeout('./routes/crmManagement', 'crmManagementRoutes');
         
+        // Phase 7: Debug routes for voice source verification
+        routes.debugRoutes = await loadRouteWithTimeout('./src/routes/debug', 'debugRoutes');
+        
         // Load AI Agent Logic routes for enterprise features
         routes.aiAgentLogicRoutes = await loadRouteWithTimeout('./routes/aiAgentLogic', 'aiAgentLogicRoutes');
         
@@ -125,6 +128,12 @@ const routesPromise = loadAllRoutes();
 console.log('[INIT] Initializing Express app...');
 const app = express();
 console.log('[INIT] ✅ Express app initialized');
+
+// --- Phase 7: Initialize Voice Guard (must be early, before any TwiML generation) ---
+console.log('[INIT] Setting up Phase 7 Voice Guard...');
+const { armTwilioSayGuard } = require('./src/utils/twilioSayGuard');
+armTwilioSayGuard();
+console.log('[INIT] ✅ Voice Guard armed');
 
 // --- Sentry Middleware (must be first) ---
 console.log('[INIT] Setting up Sentry middleware...');
@@ -226,6 +235,9 @@ function registerRoutes(routes) {
 
     // Mount agent processor routes
     app.use('/api/agent', routes.agentProcessorRoutes); // NEW: Central agent processing API
+
+    // Phase 7: Debug routes for voice source verification
+    app.use('/api/debug', routes.debugRoutes); // PHASE 7: Audio event tracing and voice source verification
 
     /*
     --- TWILIO SMOKE TEST ROUTE (COMMENTED OUT) ---
