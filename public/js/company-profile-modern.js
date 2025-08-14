@@ -2881,6 +2881,67 @@ class CompanyProfileManager {
         // Delegate to showToast
         this.showToast(message, type);
     }
+
+    /**
+     * Escape HTML to prevent XSS
+     * @param {string} text - Text to escape
+     * @returns {string} Escaped text
+     */
+    escapeHtml(text) {
+        if (typeof text !== 'string') return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    /**
+     * Debounce function execution
+     * @param {Function} func - Function to debounce
+     * @param {number} wait - Wait time in milliseconds
+     * @returns {Function} Debounced function
+     */
+    debounce(func, wait = 300) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func.apply(this, args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    /**
+     * Utility function to safely get nested object properties
+     * @param {Object} obj - The object to traverse
+     * @param {string} path - Dot notation path (e.g., 'user.profile.name')
+     * @param {*} defaultValue - Default value if path doesn't exist
+     * @returns {*} The value at the path or default value
+     */
+    getNestedValue(obj, path, defaultValue = null) {
+        return path.split('.').reduce((current, key) => {
+            return (current && current[key] !== undefined) ? current[key] : defaultValue;
+        }, obj);
+    }
+
+    /**
+     * Utility function to safely set nested object properties
+     * @param {Object} obj - The object to modify
+     * @param {string} path - Dot notation path (e.g., 'user.profile.name')
+     * @param {*} value - Value to set
+     */
+    setNestedValue(obj, path, value) {
+        const keys = path.split('.');
+        const lastKey = keys.pop();
+        const target = keys.reduce((current, key) => {
+            if (!current[key] || typeof current[key] !== 'object') {
+                current[key] = {};
+            }
+            return current[key];
+        }, obj);
+        target[lastKey] = value;
+    }
     
     // ============================================================================
 }
