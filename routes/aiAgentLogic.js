@@ -2079,7 +2079,119 @@ router.get('/test/flow-designer/:companyId/flows', async (req, res) => {
     }
 });
 
-// ⚠️ END OF TEST ENDPOINTS ⚠️
+// ========================================= 
+// 🚀 EMERGENCY CONFIG SEEDING ENDPOINT
+// ========================================= 
+
+/**
+ * POST /api/ai-agent-logic/seed-config/:companyId
+ * Emergency endpoint to seed minimal valid config for router_config_missing fix
+ */
+router.post('/seed-config/:companyId', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        console.log(`🌱 Emergency config seeding for company: ${companyId}`);
+        
+        // Find company
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        console.log(`✅ Found company: ${company.companyName || company.name || 'Unnamed'}`);
+
+        // Initialize AI Agent Logic config if it doesn't exist
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+
+        // Set the minimal required config that the validator expects
+        const seedConfig = {
+            routing: {
+                priority: ["template", "company_kb", "trade_kb", "vector", "llm"]
+            },
+            knowledge: {
+                sources: {
+                    company_kb: true,
+                    trade_kb: true, 
+                    vector: true
+                },
+                thresholds: {
+                    company_kb: 0.60,
+                    trade_kb: 0.62,
+                    vector: 0.64
+                }
+            },
+            enterprise: {
+                composite: {
+                    threshold: 0.62
+                }
+            },
+            fallback: {
+                message: `Thanks for calling ${company.companyName || company.name || 'our company'}. I'm having trouble right now - please text our booking link or call back in a few minutes for immediate assistance.`
+            },
+            // Add metadata
+            version: (company.aiAgentLogic.version || 0) + 1,
+            lastUpdated: new Date(),
+            seedStatus: 'emergency-seeded-for-router-fix'
+        };
+
+        // Merge with existing config
+        company.aiAgentLogic = { ...company.aiAgentLogic, ...seedConfig };
+
+        console.log('💾 Saving seeded config...');
+        await company.save();
+
+        // Bust TTS cache since config version changed
+        try {
+            await bustCompanyTTSCache(companyId);
+            console.log('🗑️ TTS cache busted for company:', companyId);
+        } catch (cacheError) {
+            console.error('⚠️ Failed to bust TTS cache:', cacheError);
+            // Don't fail the whole request for cache errors
+        }
+
+        console.log('✅ Emergency config seeded successfully!');
+        
+        // Verify the saved config
+        const verifyCompany = await Company.findById(companyId);
+        const config = verifyCompany.aiAgentLogic;
+        
+        const validation = {
+            routing_priority: Array.isArray(config.routing?.priority) ? '✅ Array' : '❌ Not array',
+            knowledge_sources: config.knowledge?.sources ? '✅ Present' : '❌ Missing',
+            knowledge_thresholds: config.knowledge?.thresholds ? '✅ Present' : '❌ Missing',
+            enterprise_threshold: typeof config.enterprise?.composite?.threshold === 'number' ? '✅ Number' : '❌ Not number'
+        };
+
+        console.log('🔍 Config validation:', validation);
+
+        res.json({
+            success: true,
+            message: 'Emergency config seeded successfully - router_config_missing should be resolved',
+            data: {
+                companyId,
+                companyName: company.companyName || company.name,
+                version: company.aiAgentLogic.version,
+                lastUpdated: company.aiAgentLogic.lastUpdated,
+                validation,
+                nextSteps: [
+                    'Make a test call to verify config.load {validation: ok}',
+                    'Check that router_config_missing no longer appears',
+                    'Verify AI agent can now answer calls instead of falling back'
+                ]
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Emergency config seeding error:', error);
+        res.status(500).json({ 
+            error: 'Failed to seed emergency config',
+            details: error.message 
+        });
+    }
+});
 
 /**
  * OLD ROUTES BELOW - THESE HAVE AUTHENTICATION REQUIREMENTS
