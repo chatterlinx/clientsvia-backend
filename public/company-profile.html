@@ -620,6 +620,64 @@
                             <span class="mx-2">•</span>
                             <span id="page-loaded-time">Loading...</span>
                         </div>
+                        
+                        <!-- ===== Directory & Notifications (MVP) ===== -->
+                        <div id="agent-directory-card" class="card mt-6 p-6 bg-white rounded-lg shadow-sm border border-gray-200">
+                            <div class="card-header border-b pb-4 mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800 flex items-center">
+                                    <i class="fas fa-address-book mr-2 text-indigo-600"></i>
+                                    Transfer Directory & Notifications (MVP)
+                                    <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">Phase 5</span>
+                                </h3>
+                                <p class="text-sm text-gray-600 mt-2">Press-1 routing to a live person + who gets texted.</p>
+                            </div>
+                            <div class="card-body">
+                                <h4 class="text-md font-medium text-gray-700 mb-3">Transfer Directory</h4>
+                                <div class="overflow-x-auto mb-4">
+                                    <table id="dir-table" class="min-w-full bg-white border border-gray-200 rounded-lg">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone (E.164)</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">After hours only</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="dir-rows" class="bg-white divide-y divide-gray-200"></tbody>
+                                    </table>
+                                </div>
+                                <button type="button" id="dir-add" class="mb-6 px-3 py-2 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 transition-colors">
+                                    <i class="fas fa-plus mr-1"></i>Add Person
+                                </button>
+
+                                <h4 class="text-md font-medium text-gray-700 mb-3">Notify Recipients (SMS)</h4>
+                                <div class="overflow-x-auto mb-4">
+                                    <table id="notify-table" class="min-w-full bg-white border border-gray-200 rounded-lg">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone (E.164)</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Events</th>
+                                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="notify-rows" class="bg-white divide-y divide-gray-200"></tbody>
+                                    </table>
+                                </div>
+                                <button type="button" id="notify-add" class="mb-6 px-3 py-2 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 transition-colors">
+                                    <i class="fas fa-plus mr-1"></i>Add Recipient
+                                </button>
+
+                                <div class="pt-4 border-t border-gray-200">
+                                    <button type="button" id="dir-save" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded hover:bg-indigo-700 transition-colors">
+                                        <i class="fas fa-save mr-1"></i>Save Directory & Notifications
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <nav class="hidden md:flex items-center" style="gap: 20px;">
                         <a href="/index.html" class="nav-link-global" id="nav-home">Home</a>
@@ -8880,7 +8938,114 @@
                 timeout = setTimeout(later, wait);
             };
         }
+        
+        // --- BEGIN Directory UI (MVP) ---
+        async function loadDirectory(companyId) {
+            try {
+                const res = await fetch(`/api/company/${companyId}/directory`, { credentials: 'include' });
+                if (!res.ok) return { agentDirectory: [], agentNotifyTargets: [] };
+                return res.json();
+            } catch (error) {
+                console.error('Failed to load directory:', error);
+                return { agentDirectory: [], agentNotifyTargets: [] };
+            }
+        }
 
+        function rowDir(d = {}) {
+            return `
+            <tr class="hover:bg-gray-50">
+                <td class="px-3 py-2"><input class="dir-name w-full px-2 py-1 border rounded text-sm" value="${d.name||''}"/></td>
+                <td class="px-3 py-2"><input class="dir-dept w-full px-2 py-1 border rounded text-sm" value="${d.department||''}"/></td>
+                <td class="px-3 py-2"><input class="dir-phone w-full px-2 py-1 border rounded text-sm" value="${d.phone||''}" placeholder="+12345550123"/></td>
+                <td class="px-3 py-2"><input class="dir-priority w-16 px-2 py-1 border rounded text-sm" type="number" min="1" max="10" value="${d.priority??1}"/></td>
+                <td class="px-3 py-2 text-center"><input class="dir-after" type="checkbox" ${d.afterHours?'checked':''}/></td>
+                <td class="px-3 py-2 text-center"><input class="dir-active" type="checkbox" ${d.active!==false?'checked':''}/></td>
+                <td class="px-3 py-2 text-center"><button class="dir-del text-red-600 hover:text-red-800 text-sm">Delete</button></td>
+            </tr>`;
+        }
+        
+        function rowNotify(n = {}) {
+            const has = (k) => Array.isArray(n.types) && n.types.includes(k);
+            return `
+            <tr class="hover:bg-gray-50">
+                <td class="px-3 py-2"><input class="ntf-name w-full px-2 py-1 border rounded text-sm" value="${n.name||''}"/></td>
+                <td class="px-3 py-2"><input class="ntf-phone w-full px-2 py-1 border rounded text-sm" value="${n.phone||''}" placeholder="+12345550123"/></td>
+                <td class="px-3 py-2">
+                    <div class="flex flex-wrap gap-2 text-sm">
+                        <label class="flex items-center"><input class="ntf-type mr-1" data-type="transfer" type="checkbox" ${has('transfer')?'checked':''}/> transfer</label>
+                        <label class="flex items-center"><input class="ntf-type mr-1" data-type="voicemail" type="checkbox" ${has('voicemail')?'checked':''}/> voicemail</label>
+                        <label class="flex items-center"><input class="ntf-type mr-1" data-type="callback" type="checkbox" ${has('callback')?'checked':''}/> callback</label>
+                    </div>
+                </td>
+                <td class="px-3 py-2 text-center"><button class="ntf-del text-red-600 hover:text-red-800 text-sm">Delete</button></td>
+            </tr>`;
+        }
+
+        async function initDirectoryUI(companyId) {
+            const card = document.getElementById('agent-directory-card');
+            if (!card) return;
+
+            const dirTBody = document.getElementById('dir-rows');
+            const ntfTBody = document.getElementById('notify-rows');
+            const addDir = document.getElementById('dir-add');
+            const addNtf = document.getElementById('notify-add');
+            const saveBtn = document.getElementById('dir-save');
+
+            const state = await loadDirectory(companyId);
+            dirTBody.innerHTML = (state.agentDirectory || []).map(rowDir).join('') || rowDir({});
+            ntfTBody.innerHTML = (state.agentNotifyTargets || []).map(rowNotify).join('');
+
+            addDir.onclick = () => { dirTBody.insertAdjacentHTML('beforeend', rowDir({})); bindRowEvents(); };
+            addNtf.onclick = () => { ntfTBody.insertAdjacentHTML('beforeend', rowNotify({ types:['transfer'] })); bindRowEvents(); };
+
+            function bindRowEvents() {
+                dirTBody.querySelectorAll('.dir-del').forEach(btn => btn.onclick = () => btn.closest('tr').remove());
+                ntfTBody.querySelectorAll('.ntf-del').forEach(btn => btn.onclick = () => btn.closest('tr').remove());
+            }
+            bindRowEvents();
+
+            saveBtn.onclick = async () => {
+                try {
+                    const dir = Array.from(dirTBody.querySelectorAll('tr')).map(tr => ({
+                        name: tr.querySelector('.dir-name').value.trim(),
+                        department: tr.querySelector('.dir-dept').value.trim(),
+                        phone: tr.querySelector('.dir-phone').value.trim(),
+                        priority: +tr.querySelector('.dir-priority').value || 1,
+                        afterHours: tr.querySelector('.dir-after').checked,
+                        active: tr.querySelector('.dir-active').checked,
+                    })).filter(x => x.name && x.phone);
+
+                    const notify = Array.from(ntfTBody.querySelectorAll('tr')).map(tr => {
+                        const types = Array.from(tr.querySelectorAll('.ntf-type'))
+                            .filter(i => i.checked)
+                            .map(i => i.dataset.type);
+                        return {
+                            name: tr.querySelector('.ntf-name').value.trim(),
+                            phone: tr.querySelector('.ntf-phone').value.trim(),
+                            types: types.length ? types : ['transfer'],
+                        };
+                    }).filter(x => x.phone);
+
+                    const res = await fetch(`/api/company/${companyId}/directory`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ agentDirectory: dir, agentNotifyTargets: notify }),
+                    });
+
+                    if (res.ok) {
+                        showToast?.('Directory & notifications saved successfully!', 'success');
+                    } else {
+                        throw new Error('Save failed');
+                    }
+                } catch (error) {
+                    console.error('Failed to save directory:', error);
+                    showToast?.('Failed to save directory', 'error');
+                }
+            };
+        }
+        // --- END Directory UI (MVP) ---
+        
         // ...existing code...
 
         /**
@@ -9846,6 +10011,9 @@
                         initKnowledgeSources(); // Module 2: Initialize knowledge source controls
                         loadKnowledgeSettings(); // Module 2: Load knowledge settings
                         loadAgentAnalytics();
+                        // Phase 5: Initialize Directory & Notifications UI
+                        const companyId = getCurrentCompanyId();
+                        if (companyId) initDirectoryUI(companyId);
                     }, 100);
                 });
             }

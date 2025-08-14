@@ -28,11 +28,16 @@ module.exports = {
   // Phase 4: Tenant-scoped fallback actions (SMS, transfer, voicemail, callback, booking)
   FALLBACK_ACTIONS_V1: process.env.FALLBACK_ACTIONS_V1 === 'on',
   
+  // ==== Directory & Notifications (MVP) ====
+  DIRECTORY_V1: process.env.DIRECTORY_V1?.toLowerCase?.() === 'on',
+  NOTIFY_V1: process.env.NOTIFY_V1?.toLowerCase?.() === 'on',
+  
   // Helper to check if any experimental features are enabled
   hasExperimentalFeatures() {
     return this.AI_LOGIC_V2 || this.FALLBACK_V2 || this.CONFIG_SOFT_DEFAULTS || 
            this.TTS_LOCK || this.NOTIFY_ENABLED || this.DIRECTORY_V2 || 
-           this.FALLBACK_OVERRIDES_V1 || this.FALLBACK_ACTIONS_V1;
+           this.FALLBACK_OVERRIDES_V1 || this.FALLBACK_ACTIONS_V1 ||
+           this.DIRECTORY_V1 || this.NOTIFY_V1;
   },
   
   // Get flags summary for debugging
@@ -46,6 +51,8 @@ module.exports = {
       DIRECTORY_V2: this.DIRECTORY_V2,
       FALLBACK_OVERRIDES_V1: this.FALLBACK_OVERRIDES_V1,
       FALLBACK_ACTIONS_V1: this.FALLBACK_ACTIONS_V1,
+      DIRECTORY_V1: this.DIRECTORY_V1,
+      NOTIFY_V1: this.NOTIFY_V1,
       experimental: this.hasExperimentalFeatures()
     };
   }

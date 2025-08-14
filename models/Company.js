@@ -1256,5 +1256,28 @@ companySchema.methods.getActivePhoneNumbers = function() {
     return this.twilioConfig?.phoneNumber ? [{ phoneNumber: this.twilioConfig.phoneNumber, friendlyName: 'Primary', isPrimary: true }] : [];
 };
 
+// --- BEGIN Directory & Notifications (MVP) ---
+const DirectoryTargetSchema = new mongoose.Schema({
+  name:        { type: String, required: true, trim: true },
+  department:  { type: String, default: '', trim: true },
+  phone:       { type: String, required: true, trim: true }, // E.164
+  priority:    { type: Number, default: 1, min: 1, max: 10 }, // lower = higher priority
+  afterHours:  { type: Boolean, default: false },             // only route after hours
+  active:      { type: Boolean, default: true },
+}, { _id: false });
+
+const NotifyTargetSchema = new mongoose.Schema({
+  name:   { type: String, trim: true },
+  phone:  { type: String, required: true, trim: true }, // SMS E.164
+  types:  { type: [String], default: ['transfer','voicemail','callback'] } // what to notify on
+}, { _id: false });
+
+// Attach to company
+companySchema.add({
+  agentDirectory:   { type: [DirectoryTargetSchema], default: [] },
+  agentNotifyTargets:{ type: [NotifyTargetSchema],   default: [] },
+});
+// --- END Directory & Notifications (MVP) ---
+
 const Company = mongoose.model('Company', companySchema, 'companiesCollection');
 module.exports = Company;

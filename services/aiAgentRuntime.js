@@ -23,6 +23,34 @@ const Company = require('../models/Company');
 const { answerQuestion } = require('./agent');
 const { findCachedAnswer } = require('../utils/aiAgent');
 
+// --- BEGIN Directory helper (MVP) ---
+const { DIRECTORY_V1, NOTIFY_V1 } = require('../config/flags');
+
+function isAfterHours(company, now = new Date()) {
+  // MVP: respect simple afterHours toggle if present elsewhere; otherwise assume false
+  try {
+    const tz = company?.businessSettings?.timezone || 'America/New_York';
+    const hour = new Date(now).getUTCHours(); // naive MVP; replace with tz lib later
+    // Example: business hours 8–18 local → treat 0–7 & 19–23 as after hours
+    return (hour < 13 || hour > 22); // rough placeholder: adjust to your real hours logic
+  } catch { return false; }
+}
+
+function pickDirectoryTarget(company, now = new Date()) {
+  if (!DIRECTORY_V1) return null;
+  const list = Array.isArray(company?.agentDirectory) ? company.agentDirectory : [];
+  if (!list.length) return null;
+
+  const after = isAfterHours(company, now);
+  const candidates = list
+    .filter(x => x.active !== false)
+    .filter(x => (after ? x.afterHours : true))
+    .sort((a,b) => (a.priority ?? 1) - (b.priority ?? 1));
+
+  return candidates[0] || null;
+}
+// --- END Directory helper (MVP) ---
+
 /**
  * Helper function to check if call transfer is enabled for a company
  * @param {string} companyID - Company identifier
@@ -859,5 +887,8 @@ module.exports = {
   getCallTrace: async (companyID, callId) => {
     return await AIAgentRuntime.getCallTrace(companyID, callId);
   },
-  AIAgentRuntime
+  AIAgentRuntime,
+  // Directory & Notifications MVP
+  pickDirectoryTarget,
+  isAfterHours
 };

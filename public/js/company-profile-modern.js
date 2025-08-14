@@ -2727,6 +2727,12 @@ class CompanyProfileManager {
             // AI Agent Logic settings are handled by embedded HTML forms and JavaScript
             // The tab contains complex intelligence and memory systems
             // No specific population needed as forms are already in HTML
+            
+            // Initialize Directory UI (Phase 5 MVP)
+            if (this.companyId) {
+                this.initDirectoryUI(this.companyId);
+            }
+            
             console.log('✅ Agent Logic tab populated');
         } catch (error) {
             console.error('❌ Error populating Agent Logic tab:', error);

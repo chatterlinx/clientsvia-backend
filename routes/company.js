@@ -1222,4 +1222,65 @@ router.use('/', knowledgeRoutes);
 const agentSettingsRoutes = require('./company/agentSettings');
 router.use('/', agentSettingsRoutes);
 
+// --- BEGIN /api/company/:id/directory (MVP) ---
+const { DIRECTORY_V1 } = require('../config/flags');
+const { authenticateSingleSession } = require('../middleware/auth');
+
+router.get('/:id/directory', authenticateSingleSession, async (req, res) => {
+  if (!DIRECTORY_V1) return res.status(404).json({ error: 'Feature disabled' });
+  try {
+    const company = await Company.findById(req.params.id).lean();
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+    res.json({
+      agentDirectory: company.agentDirectory || [],
+      agentNotifyTargets: company.agentNotifyTargets || [],
+    });
+  } catch (error) {
+    console.error('[Directory API] Get error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/:id/directory', authenticateSingleSession, async (req, res) => {
+  if (!DIRECTORY_V1) return res.status(404).json({ error: 'Feature disabled' });
+
+  try {
+    // light validation (MVP)
+    const dir = Array.isArray(req.body.agentDirectory) ? req.body.agentDirectory : [];
+    const notify = Array.isArray(req.body.agentNotifyTargets) ? req.body.agentNotifyTargets : [];
+
+    const sanitizePhone = s => (s || '').replace(/[^\d+]/g, '');
+    const validDir = dir.filter(x => x && x.name && x.phone).map(x => ({
+      name: x.name.trim(),
+      department: (x.department || '').trim(),
+      phone: sanitizePhone(x.phone),
+      priority: Number.isFinite(+x.priority) ? Math.max(1, Math.min(10, +x.priority)) : 1,
+      afterHours: !!x.afterHours,
+      active: x.active !== false,
+    }));
+
+    const validNotify = notify.filter(x => x && x.phone).map(x => ({
+      name: (x.name || '').trim(),
+      phone: sanitizePhone(x.phone),
+      types: Array.isArray(x.types) && x.types.length ? x.types : ['transfer','voicemail','callback'],
+    }));
+
+    const updated = await Company.findByIdAndUpdate(
+      req.params.id,
+      { $set: { agentDirectory: validDir, agentNotifyTargets: validNotify } },
+      { new: true }
+    ).lean();
+
+    res.json({
+      agentDirectory: updated.agentDirectory || [],
+      agentNotifyTargets: updated.agentNotifyTargets || [],
+      ok: true
+    });
+  } catch (error) {
+    console.error('[Directory API] Put error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+// --- END /api/company/:id/directory (MVP) ---
+
 module.exports = router;

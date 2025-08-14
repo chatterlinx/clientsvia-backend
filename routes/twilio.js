@@ -25,6 +25,11 @@ const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils
 const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
 const { getRandomPersonalityResponse, getPersonalityResponse, fetchCompanyResponses } = require('../utils/personalityResponses_enhanced');
 
+// Directory & Notifications MVP imports
+const { DIRECTORY_V1, NOTIFY_V1 } = require('../config/flags');
+const { pickDirectoryTarget } = require('../services/aiAgentRuntime');
+const { notifyTargets } = require('../services/notifyService');
+
 const router = express.Router();
 
 // Helper function to check if transfer is enabled
@@ -899,9 +904,55 @@ router.post('/voice/:companyID', async (req, res) => {
 router.post('/ai-agent-respond/:companyID', async (req, res) => {
   try {
     const { companyID } = req.params;
-    const { SpeechResult, CallSid, From } = req.body;
+    const { SpeechResult, CallSid, From, Digits } = req.body;
     
-    console.log(`[AI AGENT RESPOND] Company: ${companyID}, CallSid: ${CallSid}, Speech: "${SpeechResult}"`);
+    console.log(`[AI AGENT RESPOND] Company: ${companyID}, CallSid: ${CallSid}, Speech: "${SpeechResult}", Digits: "${Digits}"`);
+    
+    // Load company first for DTMF handling
+    const company = await Company.findById(companyID);
+    if (!company) {
+      const twiml = new twilio.twiml.VoiceResponse();
+      twiml.say({ voice: 'man' }, 'Company not found. Please try again later.');
+      twiml.hangup();
+      return res.type('text/xml').send(twiml.toString());
+    }
+    
+    // --- BEGIN DTMF short-circuit (MVP) ---
+    const digits = (Digits || '').trim();
+    if (DIRECTORY_V1 && digits === '1') {
+      const target = pickDirectoryTarget(company);
+      const twiml = new twilio.twiml.VoiceResponse();
+
+      if (!target) {
+        // no one to transfer to; politely fall back
+        const msg = "Sorry, I can't reach a person right now. Would you like to leave a voicemail or request a callback?";
+        await addTTSResponse(twiml, company, msg);
+        const g = twiml.gather({ 
+          input: 'speech dtmf', 
+          numDigits: 1, 
+          timeout: 5, 
+          action: `/api/twilio/ai-agent-respond/${companyID}` 
+        });
+        return res.type('text/xml').send(twiml.toString());
+      }
+
+      // Build a safe Dial (20s timeout)
+      const dial = twiml.dial({ timeout: 20 });
+      dial.number(target.phone);
+
+      // Optional SMS notify (we keep it minimal)
+      if (NOTIFY_V1 && Array.isArray(company.agentNotifyTargets)) {
+        notifyTargets(company.agentNotifyTargets, {
+          type: 'transfer',
+          to: target.phone,
+          from: From,
+          companyName: company?.name || company?.companyName || '',
+        }).catch(() => {});
+      }
+
+      return res.type('text/xml').send(twiml.toString());
+    }
+    // --- END DTMF short-circuit (MVP) ---
     
     // Import AI Agent Runtime
     const { processCallTurn } = require('../services/aiAgentRuntime');
@@ -929,18 +980,41 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
     
     const twiml = new twilio.twiml.VoiceResponse();
     
+    // --- BEGIN fallback menu (MVP) ---
+    if (result?.source?.startsWith('company_fallback')) {
+      // 1) Play the fallback message (consistent TTS path)
+      const fallbackText = result?.text || "I'm missing that info right now.";
+      
+      // 2) If directory enabled & has targets, offer 'press 1'
+      const hasTransfer = DIRECTORY_V1 && Array.isArray(company?.agentDirectory) && company.agentDirectory.some(x => x.active !== false);
+
+      const g = twiml.gather({
+        input: hasTransfer ? 'speech dtmf' : 'speech',
+        numDigits: hasTransfer ? 1 : undefined,
+        timeout: 5,
+        action: `/api/twilio/ai-agent-respond/${companyID}` // will come back here; DTMF is handled by block A
+      });
+
+      await addTTSResponse(g, company, fallbackText);
+
+      if (hasTransfer) {
+        const menuText = "If you'd like to speak to a person now, press 1. Or tell me what you'd like to do.";
+        await addTTSResponse(g, company, menuText);
+      }
+
+      return res.type('text/xml').send(twiml.toString());
+    }
+    // --- END fallback menu (MVP) ---
+    
     // Handle different response types
     if (result.shouldHangup) {
-      const company = await Company.findById(companyID);
       await addTTSResponse(twiml, company, result.text);
       twiml.hangup();
     } else if (result.shouldTransfer) {
-      const company = await Company.findById(companyID);
       await addTTSResponse(twiml, company, result.text);
       await handleTransfer(twiml, company, "I apologize, but I cannot transfer you at this time. Please try calling back later or visiting our website for assistance.");
     } else {
       // Continue conversation
-      const company = await Company.findById(companyID);
       await addTTSResponse(twiml, company, result.text);
       
       // Set up next gather for continued conversation
