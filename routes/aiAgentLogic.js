@@ -2106,53 +2106,38 @@ router.post('/seed-config/:companyId', async (req, res) => {
             company.aiAgentLogic = {};
         }
 
-        // Set the minimal required config that the validator expects
-        const seedConfig = {
-            routing: {
-                priority: ["template", "company_kb", "trade_kb", "vector", "llm"]
+        // Set specific required fields for router validation (don't merge, set directly)
+        company.aiAgentLogic.routing = {
+            priority: ["template", "company_kb", "trade_kb", "vector", "llm"]
+        };
+        
+        company.aiAgentLogic.knowledge = {
+            sources: {
+                company_kb: true,
+                trade_kb: true, 
+                vector: true
             },
-            knowledge: {
-                sources: {
-                    company_kb: true,
-                    trade_kb: true, 
-                    vector: true
-                },
-                thresholds: {
-                    company_kb: 0.60,
-                    trade_kb: 0.62,
-                    vector: 0.64
-                }
-            },
-            enterprise: {
-                composite: {
-                    threshold: 0.62
-                }
-            },
-            fallback: {
-                message: `Thanks for calling ${company.companyName || company.name || 'our company'}. I'm having trouble right now - please text our booking link or call back in a few minutes for immediate assistance.`
-            },
-            // Required schema fields with defaults
-            responseCategories: {
-                core: {},
-                advanced: {},
-                emotional: {}
-            },
-            analytics: {
-                enabled: true,
-                trackingEnabled: false
-            },
-            personalization: {
-                enabled: false,
-                rules: []
-            },
-            // Add metadata
-            version: (company.aiAgentLogic.version || 0) + 1,
-            lastUpdated: new Date(),
-            seedStatus: 'emergency-seeded-for-router-fix'
+            thresholds: {
+                company_kb: 0.60,
+                trade_kb: 0.62,
+                vector: 0.64
+            }
+        };
+        
+        company.aiAgentLogic.enterprise = {
+            composite: {
+                threshold: 0.62
+            }
+        };
+        
+        company.aiAgentLogic.fallback = {
+            message: `Thanks for calling ${company.companyName || company.name || 'our company'}. I'm having trouble right now - please text our booking link or call back in a few minutes for immediate assistance.`
         };
 
-        // Merge with existing config
-        company.aiAgentLogic = { ...company.aiAgentLogic, ...seedConfig };
+        // Update metadata
+        company.aiAgentLogic.version = (company.aiAgentLogic.version || 0) + 1;
+        company.aiAgentLogic.lastUpdated = new Date();
+        company.aiAgentLogic.seedStatus = 'emergency-seeded-for-router-fix';
 
         console.log('💾 Saving seeded config...');
         await company.save();
