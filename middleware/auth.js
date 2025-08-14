@@ -111,6 +111,13 @@ async function authenticateSingleSession(req, res, next) {
     const token = getTokenFromRequest(req);
     
     if (!token) {
+      // Development mode bypass - allow requests during development without auth
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔓 Development mode: Bypassing authentication');
+        req.user = { _id: 'dev-user', development: true };
+        return next();
+      }
+      
       return res.status(401).json({ 
         message: 'Access token required',
         code: 'NO_TOKEN'

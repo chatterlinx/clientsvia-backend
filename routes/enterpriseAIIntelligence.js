@@ -14,6 +14,7 @@ const router = express.Router();
 const Company = require('../models/Company');
 const { ObjectId } = require('mongodb');
 const { authenticateSingleSession } = require('../middleware/auth');
+const logger = require('../utils/logger');
 
 // ===============================================
 // 🚀 GET ENTERPRISE AI INTELLIGENCE SETTINGS

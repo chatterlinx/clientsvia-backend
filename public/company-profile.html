@@ -7312,11 +7312,12 @@
                 if (response.ok) {
                     // Show success message
                     const savedIndicator = document.getElementById('personality-settings-saved');
-                    savedIndicator.classList.remove('hidden');
-                    setTimeout(() => savedIndicator.classList.add('hidden'), 3000);
+                    if (savedIndicator && savedIndicator.classList) {
+                        savedIndicator.classList.remove('hidden');
+                        setTimeout(() => savedIndicator.classList.add('hidden'), 3000);
+                    }
                     
-
-                    alert('✅ Personality settings saved successfully!');
+                    showToast('Personality settings saved successfully!', 'success');
                 } else {
                     throw new Error('Failed to save settings');
                 }
@@ -7365,6 +7366,138 @@
             if (emojiElement) emojiElement.checked = false;
             
 
+        }
+        
+        // Utility function for showing toast notifications
+        function showToast(message, type = 'info') {
+            // Create toast element if it doesn't exist
+            let toast = document.getElementById('toast-notification');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'toast-notification';
+                toast.style.cssText = `
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    background-color: #333;
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 6px;
+                    z-index: 10000;
+                    opacity: 0;
+                    transition: opacity 0.3s ease-in-out;
+                    max-width: 400px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                `;
+                document.body.appendChild(toast);
+            }
+
+            // Set background color based on type
+            const colors = {
+                success: '#10b981',
+                error: '#ef4444',
+                warning: '#f59e0b',
+                info: '#3b82f6'
+            };
+            toast.style.backgroundColor = colors[type] || colors.info;
+
+            // Set message and show
+            toast.textContent = message;
+            toast.style.opacity = '1';
+
+            // Hide after 4 seconds
+            setTimeout(() => {
+                toast.style.opacity = '0';
+            }, 4000);
+        }
+        
+        // Missing save functions that were causing UI errors
+        async function saveResponseTemplates() {
+            console.log('💾 Saving response templates...');
+            try {
+                const companyId = getCurrentCompanyId();
+                if (!companyId) {
+                    console.error('No company ID found');
+                    return;
+                }
+
+                // Collect response template data from the UI
+                const templates = {};
+                const templateTextareas = document.querySelectorAll('textarea[data-response-category]');
+                
+                templateTextareas.forEach(textarea => {
+                    const category = textarea.getAttribute('data-response-category');
+                    if (category && textarea.value.trim()) {
+                        templates[category] = textarea.value.trim();
+                    }
+                });
+
+                if (Object.keys(templates).length === 0) {
+                    console.log('No response templates to save');
+                    return;
+                }
+
+                // Save to the personality responses endpoint
+                const response = await fetch(`/api/company/${companyId}/personality-responses`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ responseTemplates: templates })
+                });
+
+                if (response.ok) {
+                    console.log('✅ Response templates saved successfully');
+                    showToast('Response templates saved successfully', 'success');
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+            } catch (error) {
+                console.error('❌ Failed to save response templates:', error);
+                showToast('Failed to save response templates: ' + error.message, 'error');
+            }
+        }
+
+        async function saveLearningSettings() {
+            console.log('🧠 Saving learning settings...');
+            try {
+                const companyId = getCurrentCompanyId();
+                if (!companyId) {
+                    console.error('No company ID found');
+                    return;
+                }
+
+                // Collect learning settings from the UI
+                const learningSettings = {
+                    autoLearningEnabled: document.getElementById('auto-learning-enabled')?.checked ?? true,
+                    learningThreshold: parseFloat(document.getElementById('learning-threshold')?.value) || 0.8,
+                    reviewFrequency: document.getElementById('review-frequency')?.value || 'monthly',
+                    confidenceThreshold: parseFloat(document.getElementById('learning-confidence-threshold')?.value) || 0.7
+                };
+
+                // Save to the agent settings endpoint
+                const response = await fetch(`/api/company/${companyId}/agent-settings`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ learningSettings })
+                });
+
+                if (response.ok) {
+                    console.log('✅ Learning settings saved successfully');
+                    showToast('Learning settings saved successfully', 'success');
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+            } catch (error) {
+                console.error('❌ Failed to save learning settings:', error);
+                showToast('Failed to save learning settings: ' + error.message, 'error');
+            }
         }
         
         // 📚 KNOWLEDGE Q&A SOURCE CONTROLS FUNCTIONS - Module 2
@@ -11296,7 +11429,14 @@
             try {
                 console.log('[Enterprise AI] Loading settings for company:', companyId);
                 
-                const response = await fetch(`/api/enterprise-ai/companies/${companyId}/enterprise-ai-settings`);
+                const response = await fetch(`/api/enterprise-ai/companies/${companyId}/enterprise-ai-settings`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    credentials: 'include'
+                });
                 
                 if (response.ok) {
                     const data = await response.json();
@@ -11507,8 +11647,10 @@
                 const response = await fetch(`/api/enterprise-ai/companies/${companyId}/enterprise-ai-settings`, {
                     method: 'PUT',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
                     },
+                    credentials: 'include',
                     body: JSON.stringify({
                         enterpriseAISettings: enterpriseSettings
                     })
@@ -11645,7 +11787,12 @@
 
             try {
                 const response = await fetch(`/api/enterprise-ai/companies/${companyId}/reset-enterprise-ai`, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    credentials: 'include'
                 });
 
                 const data = await response.json();
