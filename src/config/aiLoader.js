@@ -47,7 +47,35 @@ class AIConfigLoader {
                 // Answer Priority Flow
                 answerPriority: this.getAnswerPriority(aiLogic),
                 
-                // Confidence Thresholds
+                // Routing Configuration (for validation)
+                routing: {
+                    priority: this.getAnswerPriority(aiLogic)
+                },
+                
+                // Knowledge Configuration (for validation)
+                knowledge: {
+                    sources: {
+                        company: aiLogic.knowledgeSources?.company || [],
+                        trade: aiLogic.knowledgeSources?.trade || [],
+                        vector: aiLogic.knowledgeSources?.vector || []
+                    },
+                    thresholds: {
+                        companyKB: 0.80,
+                        tradeQA: 0.75,
+                        vector: 0.70,
+                        llmFallback: 0.60,
+                        ...aiLogic.thresholds
+                    }
+                },
+                
+                // Enterprise Configuration (for validation)
+                enterprise: {
+                    composite: {
+                        threshold: aiLogic.enterprise?.composite?.threshold || 0.70
+                    }
+                },
+                
+                // Confidence Thresholds (legacy compatibility)
                 thresholds: {
                     companyKB: 0.80,
                     tradeQA: 0.75,
