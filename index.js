@@ -106,13 +106,8 @@ async function loadAllRoutes() {
             routes.debugRoutes = null;
         }
         
-        // Phase 8: Agent Config Publishing routes (with error tolerance)
-        try {
-            routes.agentConfigRoutes = await loadRouteWithTimeout('./src/routes/agentConfig', 'agentConfigRoutes');
-        } catch (error) {
-            console.error('[INIT] ⚠️ Agent config routes failed to load, continuing without them:', error.message);
-            routes.agentConfigRoutes = null;
-        }
+        // Phase 8: Agent Config Publishing routes
+        routes.agentConfigRoutes = await loadRouteWithTimeout('./src/routes/agentConfig', 'agentConfigRoutes');
         
         // Load AI Agent Logic routes for enterprise features
         routes.aiAgentLogicRoutes = await loadRouteWithTimeout('./routes/aiAgentLogic', 'aiAgentLogicRoutes');
