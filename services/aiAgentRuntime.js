@@ -15,7 +15,7 @@ const { route: routeIntent } = require('../src/runtime/IntentRouter');
 const { route: routeKnowledge } = require('../src/runtime/KnowledgeRouter');
 const { apply: applyBehavior, updateCallState } = require('../src/runtime/BehaviorEngine');
 const { start: startBooking, next: nextBooking } = require('../src/runtime/BookingHandler');
-const { ResponseTraceLogger } = require('../src/runtime/ResponseTrace');
+const { ResponseTraceLogger } = require('./ResponseTraceLogger');
 const aiLoader = require('../src/config/aiLoader');
 const Company = require('../models/Company');
 

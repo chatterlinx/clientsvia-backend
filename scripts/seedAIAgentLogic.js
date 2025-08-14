@@ -9,7 +9,7 @@ const mongoose = require('mongoose');
 const Company = require('../models/Company');
 const KnowledgeEntry = require('../models/KnowledgeEntry');
 const TradeQnA = require('../models/TradeQnA');
-const { ResponseTrace } = require('../src/runtime/ResponseTrace');
+const ResponseTrace = require('../models/ResponseTrace');
 
 // Default AI Agent Logic configuration
 const defaultAIAgentLogic = {

@@ -378,9 +378,18 @@ async function startServer() {
         console.log('[Server] Step 3/7: Starting database connection...');
         const dbStart = Date.now();
         await connectDB();
-        console.log(`[Server] ✅ Step 2 COMPLETE: Database connected in ${Date.now() - dbStart}ms`);
+        console.log(`[Server] ✅ Step 3 COMPLETE: Database connected in ${Date.now() - dbStart}ms`);
         
-        console.log('[Server] Step 3/6: Loading agent prompts...');
+        console.log('[Server] Step 4/8: Validating ResponseTrace schema...');
+        const validationStart = Date.now();
+        const { validateResponseTraceSchema } = require('./utils/bootValidation');
+        const schemaValid = await validateResponseTraceSchema();
+        if (!schemaValid && process.env.RUNTIME_STRICT_CONFIG === '1') {
+            throw new Error('Boot validation failed: ResponseTrace schema invalid');
+        }
+        console.log(`[Server] ✅ Step 4 COMPLETE: Schema validation passed in ${Date.now() - validationStart}ms`);
+        
+        console.log('[Server] Step 5/8: Loading agent prompts...');
         const promptStart = Date.now();
         
         // Add timeout to prevent hanging
@@ -389,24 +398,24 @@ async function startServer() {
         );
         
         await Promise.race([AgentPromptService.loadAll(), promptTimeout]);
-        console.log(`[Server] ✅ Step 3 COMPLETE: Agent prompts loaded in ${Date.now() - promptStart}ms`);
+        console.log(`[Server] ✅ Step 5 COMPLETE: Agent prompts loaded in ${Date.now() - promptStart}ms`);
         
-        console.log('[Server] Step 4/6: Initializing backup monitoring...');
+        console.log('[Server] Step 6/8: Initializing backup monitoring...');
         const backupStart = Date.now();
         const backupMonitoring = new BackupMonitoringService();
         backupMonitoring.start();
         logger.info('🔄 Backup monitoring service initialized');
-        console.log(`[Server] ✅ Step 4 COMPLETE: Backup monitoring initialized in ${Date.now() - backupStart}ms`);
+        console.log(`[Server] ✅ Step 6 COMPLETE: Backup monitoring initialized in ${Date.now() - backupStart}ms`);
         
-        console.log('[Server] Step 5/6: Preparing to bind to port...');
+        console.log('[Server] Step 7/8: Preparing to bind to port...');
         const PORT = process.env.PORT || 3000;
         console.log(`[Server] Target port: ${PORT}, bind address: 0.0.0.0`);
         
-        console.log('[Server] Step 6/6: Starting HTTP server...');
+        console.log('[Server] Step 8/8: Starting HTTP server...');
         const serverStart = Date.now();
         
         return app.listen(PORT, '0.0.0.0', () => {
-            console.log(`[Server] ✅ Step 6 COMPLETE: HTTP server bound in ${Date.now() - serverStart}ms`);
+            console.log(`[Server] ✅ Step 8 COMPLETE: HTTP server bound in ${Date.now() - serverStart}ms`);
             console.log(`🎉 SERVER FULLY OPERATIONAL!`);
             console.log(`🌐 Admin dashboard listening at http://0.0.0.0:${PORT}`);
             console.log(`📊 Node environment: ${process.env.NODE_ENV || 'development'}`);
