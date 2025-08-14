@@ -9,7 +9,7 @@ const router = express.Router();
 const { getCallAudioEvents, validateAudioSources } = require('../utils/audioEventTracer');
 const { isGuardArmed } = require('../utils/twilioSayGuard');
 const { VOICE_GUARD_V1, KILL_TWIML_SAY } = require('../config/flags');
-const logger = require('../utils/logger');
+const logger = require('../../utils/logger');
 
 /**
  * GET /api/debug/call/:callSid/audio-events
