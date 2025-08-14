@@ -1,4 +1,4 @@
-console.log('🚀 Loading company-profile-modern.js v2.21 - Phase 4 fallback actions + encoding fixes');
+console.log('🚀 Loading company-profile-modern.js v2.22 - Phase 6 presets + utility function fixes');
 
 /* ============================================================================
    MODERN COMPANY PROFILE MANAGEMENT SYSTEM
