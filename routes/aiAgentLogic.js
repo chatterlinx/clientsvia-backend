@@ -2131,6 +2131,20 @@ router.post('/seed-config/:companyId', async (req, res) => {
             fallback: {
                 message: `Thanks for calling ${company.companyName || company.name || 'our company'}. I'm having trouble right now - please text our booking link or call back in a few minutes for immediate assistance.`
             },
+            // Required schema fields with defaults
+            responseCategories: {
+                core: {},
+                advanced: {},
+                emotional: {}
+            },
+            analytics: {
+                enabled: true,
+                trackingEnabled: false
+            },
+            personalization: {
+                enabled: false,
+                rules: []
+            },
             // Add metadata
             version: (company.aiAgentLogic.version || 0) + 1,
             lastUpdated: new Date(),
