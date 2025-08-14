@@ -471,6 +471,54 @@ const companySchema = new mongoose.Schema({
             router_config_missing: { type: String, default: "", trim: true },
             after_hours: { type: String, default: "", trim: true },
             runtime_error: { type: String, default: "", trim: true }
+        },
+        // Phase 4: Tenant-scoped fallback actions (SMS, transfer, voicemail, callback, booking)
+        fallbackActions: {
+            offerSms: { type: Boolean, default: true },
+            smsTemplate: {
+                body: { type: String, default: "Thanks for calling. Here's our booking link: {{booking_link}}", trim: true },
+                includeBookingLink: { type: Boolean, default: true },
+                extraLinks: [{ 
+                    label: { type: String, trim: true }, 
+                    url: { type: String, trim: true } 
+                }]
+            },
+            offerTransfer: { type: Boolean, default: true },
+            transferStrategy: { 
+                type: String, 
+                enum: ["hours_only", "always", "never"], 
+                default: "hours_only" 
+            },
+            transferTargets: [{
+                id: { type: String, trim: true },
+                name: { type: String, trim: true },
+                department: { type: String, trim: true },
+                phone: { type: String, trim: true },
+                notifySms: [{ type: String, trim: true }],
+                notifyEmail: [{ type: String, trim: true }]
+            }],
+            retryTransferOnBusy: {
+                enabled: { type: Boolean, default: true },
+                attempts: { type: Number, default: 1, min: 0, max: 3 },
+                backoffSeconds: { type: Number, default: 15, min: 0, max: 60 }
+            },
+            offerVoicemail: { type: Boolean, default: true },
+            voicemailStrategy: { 
+                type: String, 
+                enum: ["always", "after_hours_only", "on_fail"], 
+                default: "after_hours_only" 
+            },
+            offerCallback: { type: Boolean, default: true },
+            offerBooking: { type: Boolean, default: true },
+            bookingLink: { 
+                type: String, 
+                default: "https://cal.clientsvia.ai/{{companyId}}", 
+                trim: true 
+            },
+            notifyOnActions: {
+                sms: [{ type: String, trim: true }],
+                email: [{ type: String, trim: true }]
+            }
         }
     },
     

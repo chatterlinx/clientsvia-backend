@@ -125,6 +125,39 @@ async function getCompanyFallbackText(companyId, reason) {
   }
 }
 
+/**
+ * Build dynamic action menu text based on tenant configuration
+ * @param {Object} cfg - Company configuration object
+ * @returns {string} - Action menu text or empty string if no actions enabled
+ */
+function buildActionMenuText(cfg) {
+  const flags = require('../config/flags');
+  if (!flags.FALLBACK_ACTIONS_V1) return "";
+  
+  const fa = cfg?.agentKnowledgeSettings?.fallbackActions || {};
+  const options = [];
+
+  if (fa.offerBooking && fa.bookingLink) {
+    options.push("get a text to book");
+  }
+  if (fa.offerTransfer && fa.transferStrategy !== "never") {
+    options.push("speak to a person");
+  }
+  if (fa.offerVoicemail) {
+    options.push("leave a voicemail");
+  }
+  if (fa.offerCallback) {
+    options.push("request a callback");
+  }
+
+  if (!options.length) return ""; // silent if admin disabled everything
+  
+  const nice = options.length > 1
+    ? options.slice(0, -1).join(", ") + ", or " + options.slice(-1)
+    : options[0];
+  return `If you'd like, you can ${nice}. What would you prefer?`;
+}
+
 class AIAgentRuntime {
   /**
    * Initialize a new call and generate greeting
@@ -492,19 +525,31 @@ class AIAgentRuntime {
       // Get reason-specific fallback message (Phase 3 enhancement)
       const fallbackText = await getCompanyFallbackText(companyID, reason);
       
+      // Phase 4: Add action menu if enabled
+      let actionMenu = "";
+      const flags = require('../config/flags');
+      if (flags.FALLBACK_ACTIONS_V1) {
+        // Use the company object if provided, otherwise fetch it
+        const cfg = company || await require('../models/Company').findById(companyID);
+        actionMenu = buildActionMenuText(cfg);
+      }
+      
+      // Combine fallback text with action menu
+      const finalText = [fallbackText, actionMenu].filter(Boolean).join(" ");
+      
       // Log fallback selection
       ResponseTraceLogger.addBehaviorStep(trace, 'fallback_select', true, 
-        { reason: reason, companyID: companyID }, fallbackText);
+        { reason: reason, companyID: companyID, hasActionMenu: !!actionMenu }, finalText);
       
-      ResponseTraceLogger.setResponse(trace, { text: fallbackText }, `company_fallback_${reason}`);
+      ResponseTraceLogger.setResponse(trace, { text: finalText }, `company_fallback_${reason}`);
       
       return {
-        text: fallbackText,
+        text: finalText,
         confidence: 0.9, // High confidence in fallback
         source: `company_fallback_${reason}`,
         shouldHangup: false,
         shouldTransfer: false,
-        controlFlags: { reason: reason }
+        controlFlags: { reason: reason, hasActionMenu: !!actionMenu }
       };
       
     } catch (error) {

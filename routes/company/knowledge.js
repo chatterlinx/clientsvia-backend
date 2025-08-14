@@ -73,6 +73,31 @@ router.get('/:id/knowledge', async (req, res) => {
                     router_config_missing: "",
                     after_hours: "",
                     runtime_error: ""
+                },
+                fallbackActions: knowledgeSettings.fallbackActions || {
+                    offerSms: true,
+                    smsTemplate: {
+                        body: "Thanks for calling. Here's our booking link: {{booking_link}}",
+                        includeBookingLink: true,
+                        extraLinks: []
+                    },
+                    offerTransfer: true,
+                    transferStrategy: "hours_only",
+                    transferTargets: [],
+                    retryTransferOnBusy: {
+                        enabled: true,
+                        attempts: 1,
+                        backoffSeconds: 15
+                    },
+                    offerVoicemail: true,
+                    voicemailStrategy: "after_hours_only",
+                    offerCallback: true,
+                    offerBooking: true,
+                    bookingLink: "https://cal.clientsvia.ai/{{companyId}}",
+                    notifyOnActions: {
+                        sms: [],
+                        email: []
+                    }
                 }
             }
         });
@@ -171,6 +196,68 @@ router.put('/:id/knowledge', async (req, res) => {
                     return res.status(400).json({
                         success: false,
                         error: `Fallback override message for ${reason} exceeds 500 character limit`
+                    });
+                }
+            }
+        }
+
+        // Validate fallback actions (Phase 4)
+        if (knowledgeUpdates.fallbackActions) {
+            const fa = knowledgeUpdates.fallbackActions;
+            
+            // Validate transfer strategy
+            if (fa.transferStrategy && !['hours_only', 'always', 'never'].includes(fa.transferStrategy)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Transfer strategy must be: hours_only, always, or never'
+                });
+            }
+            
+            // Validate voicemail strategy
+            if (fa.voicemailStrategy && !['always', 'after_hours_only', 'on_fail'].includes(fa.voicemailStrategy)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Voicemail strategy must be: always, after_hours_only, or on_fail'
+                });
+            }
+            
+            // Validate SMS template body length
+            if (fa.smsTemplate?.body && fa.smsTemplate.body.length > 500) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'SMS template body exceeds 500 character limit'
+                });
+            }
+            
+            // Validate booking link length
+            if (fa.bookingLink && fa.bookingLink.length > 300) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Booking link exceeds 300 character limit'
+                });
+            }
+            
+            // Validate transfer targets limit
+            if (fa.transferTargets && Array.isArray(fa.transferTargets) && fa.transferTargets.length > 8) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Cannot have more than 8 transfer targets'
+                });
+            }
+            
+            // Validate retry settings
+            if (fa.retryTransferOnBusy) {
+                const retry = fa.retryTransferOnBusy;
+                if (retry.attempts && (retry.attempts < 0 || retry.attempts > 3)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Retry attempts must be between 0 and 3'
+                    });
+                }
+                if (retry.backoffSeconds && (retry.backoffSeconds < 0 || retry.backoffSeconds > 60)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Retry backoff must be between 0 and 60 seconds'
                     });
                 }
             }
