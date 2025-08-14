@@ -1,0 +1,43 @@
+/**
+ * Production Feature Flags Configuration
+ * Multi-tenant platform flags for controlled rollouts
+ */
+
+module.exports = {
+  // AI Agent Logic v2 rollout
+  AI_LOGIC_V2: process.env.AI_LOGIC_V2 === 'on',
+  
+  // Enhanced fallback message system
+  FALLBACK_V2: process.env.FALLBACK_V2 === 'on',
+  
+  // Soft configuration defaults for new companies
+  CONFIG_SOFT_DEFAULTS: process.env.CONFIG_SOFT_DEFAULTS === 'on',
+  
+  // TTS voice consistency lock
+  TTS_LOCK: process.env.TTS_LOCK === 'on',
+  
+  // Real-time notifications system
+  NOTIFY_ENABLED: process.env.NOTIFY_ENABLED === 'on',
+  
+  // Directory service v2
+  DIRECTORY_V2: process.env.DIRECTORY_V2 === 'on',
+  
+  // Helper to check if any experimental features are enabled
+  hasExperimentalFeatures() {
+    return this.AI_LOGIC_V2 || this.FALLBACK_V2 || this.CONFIG_SOFT_DEFAULTS || 
+           this.TTS_LOCK || this.NOTIFY_ENABLED || this.DIRECTORY_V2;
+  },
+  
+  // Get flags summary for debugging
+  getSummary() {
+    return {
+      AI_LOGIC_V2: this.AI_LOGIC_V2,
+      FALLBACK_V2: this.FALLBACK_V2,
+      CONFIG_SOFT_DEFAULTS: this.CONFIG_SOFT_DEFAULTS,
+      TTS_LOCK: this.TTS_LOCK,
+      NOTIFY_ENABLED: this.NOTIFY_ENABLED,
+      DIRECTORY_V2: this.DIRECTORY_V2,
+      experimental: this.hasExperimentalFeatures()
+    };
+  }
+};
