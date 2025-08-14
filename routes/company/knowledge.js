@@ -55,12 +55,26 @@ router.get('/:id/knowledge', async (req, res) => {
             contextRetentionMinutes: 30,
             rejectLowConfidence: true,
             escalateOnNoMatch: true,
-            fallbackMessage: "I want to make sure I give you accurate information. Let me connect you with a specialist who can help."
+            fallbackMessage: "I want to make sure I give you accurate information. Let me connect you with a specialist who can help.",
+            fallbackOverrides: {
+                kb_miss: "",
+                router_config_missing: "",
+                after_hours: "",
+                runtime_error: ""
+            }
         };
 
         res.json({
             success: true,
-            data: knowledgeSettings
+            data: {
+                ...knowledgeSettings,
+                fallbackOverrides: knowledgeSettings.fallbackOverrides || {
+                    kb_miss: "",
+                    router_config_missing: "",
+                    after_hours: "",
+                    runtime_error: ""
+                }
+            }
         });
 
     } catch (error) {
@@ -136,6 +150,29 @@ router.put('/:id/knowledge', async (req, res) => {
                     success: false,
                     error: 'Context retention must be between 5 and 120 minutes'
                 });
+            }
+        }
+
+        // Validate fallback overrides (Phase 3)
+        if (knowledgeUpdates.fallbackOverrides) {
+            const validReasons = ['kb_miss', 'router_config_missing', 'after_hours', 'runtime_error'];
+            const overrides = knowledgeUpdates.fallbackOverrides;
+            
+            for (const reason in overrides) {
+                if (!validReasons.includes(reason)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Invalid fallback override reason: ${reason}. Valid reasons: ${validReasons.join(', ')}`
+                    });
+                }
+                
+                // Optional: validate message length (reasonable limit)
+                if (typeof overrides[reason] === 'string' && overrides[reason].length > 500) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Fallback override message for ${reason} exceeds 500 character limit`
+                    });
+                }
             }
         }
 

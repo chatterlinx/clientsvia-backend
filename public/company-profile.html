@@ -2376,6 +2376,45 @@
                                                         <textarea id="clientsvia-fallbackMessageInput" class="form-textarea" rows="3">I want to make sure I give you accurate information. Let me connect you with a specialist who can help.</textarea>
                                                         <p class="text-xs text-gray-500 mt-1">Message to use when escalating to human</p>
                                                     </div>
+
+                                                    <!-- Phase 3: Reason-Specific Fallback Overrides -->
+                                                    <div class="mt-6">
+                                                        <h4 class="text-sm font-medium text-gray-900 mb-3">
+                                                            <i class="fas fa-cogs text-blue-500 mr-2"></i>
+                                                            Reason-Specific Fallback Overrides
+                                                        </h4>
+                                                        <p class="text-xs text-gray-500 mb-4">Override the default fallback message for specific scenarios. Leave blank to use the default fallback message above.</p>
+                                                        
+                                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            <!-- Knowledge Base Miss -->
+                                                            <div>
+                                                                <label for="clientsvia-fallbackOverride-kb-miss" class="form-label text-xs">Knowledge Base Miss</label>
+                                                                <textarea id="clientsvia-fallbackOverride-kb-miss" class="form-textarea text-sm" rows="2" placeholder="Custom message when no knowledge found..."></textarea>
+                                                                <p class="text-xs text-gray-400 mt-1">When AI can't find relevant information</p>
+                                                            </div>
+                                                            
+                                                            <!-- Router Config Missing -->
+                                                            <div>
+                                                                <label for="clientsvia-fallbackOverride-router-config" class="form-label text-xs">Router Config Missing</label>
+                                                                <textarea id="clientsvia-fallbackOverride-router-config" class="form-textarea text-sm" rows="2" placeholder="Custom message for config issues..."></textarea>
+                                                                <p class="text-xs text-gray-400 mt-1">When routing configuration is incomplete</p>
+                                                            </div>
+                                                            
+                                                            <!-- After Hours -->
+                                                            <div>
+                                                                <label for="clientsvia-fallbackOverride-after-hours" class="form-label text-xs">After Hours</label>
+                                                                <textarea id="clientsvia-fallbackOverride-after-hours" class="form-textarea text-sm" rows="2" placeholder="Custom after-hours message..."></textarea>
+                                                                <p class="text-xs text-gray-400 mt-1">When calling outside business hours</p>
+                                                            </div>
+                                                            
+                                                            <!-- Runtime Error -->
+                                                            <div>
+                                                                <label for="clientsvia-fallbackOverride-runtime-error" class="form-label text-xs">Runtime Error</label>
+                                                                <textarea id="clientsvia-fallbackOverride-runtime-error" class="form-textarea text-sm" rows="2" placeholder="Custom error recovery message..."></textarea>
+                                                                <p class="text-xs text-gray-400 mt-1">When system encounters unexpected errors</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                             
@@ -7706,6 +7745,22 @@
                         }
                     }
                     
+                    // Phase 3: Load fallback overrides
+                    if (settings.fallbackOverrides) {
+                        const overrideElements = {
+                            kb_miss: document.getElementById('clientsvia-fallbackOverride-kb-miss'),
+                            router_config_missing: document.getElementById('clientsvia-fallbackOverride-router-config'),
+                            after_hours: document.getElementById('clientsvia-fallbackOverride-after-hours'),
+                            runtime_error: document.getElementById('clientsvia-fallbackOverride-runtime-error')
+                        };
+                        
+                        for (const [reason, element] of Object.entries(overrideElements)) {
+                            if (element && settings.fallbackOverrides[reason] !== undefined) {
+                                element.value = settings.fallbackOverrides[reason];
+                            }
+                        }
+                    }
+                    
 
                 }
             } catch (error) {
@@ -7741,7 +7796,14 @@
                 contextRetentionMinutes: parseInt(document.getElementById('clientsvia-contextRetentionSlider')?.value || '30'),
                 rejectLowConfidence: document.getElementById('clientsvia-rejectLowConfidenceToggle')?.checked || true,
                 escalateOnNoMatch: document.getElementById('clientsvia-escalateNoMatchToggle')?.checked || true,
-                fallbackMessage: document.getElementById('clientsvia-fallbackMessageInput')?.value?.trim() || ''
+                fallbackMessage: document.getElementById('clientsvia-fallbackMessageInput')?.value?.trim() || '',
+                // Phase 3: Include fallback overrides
+                fallbackOverrides: {
+                    kb_miss: document.getElementById('clientsvia-fallbackOverride-kb-miss')?.value?.trim() || '',
+                    router_config_missing: document.getElementById('clientsvia-fallbackOverride-router-config')?.value?.trim() || '',
+                    after_hours: document.getElementById('clientsvia-fallbackOverride-after-hours')?.value?.trim() || '',
+                    runtime_error: document.getElementById('clientsvia-fallbackOverride-runtime-error')?.value?.trim() || ''
+                }
             };
             
             try {

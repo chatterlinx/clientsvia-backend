@@ -464,6 +464,13 @@ const companySchema = new mongoose.Schema({
             type: String, 
             default: "I want to make sure I give you accurate information. Let me connect you with a specialist who can help.",
             trim: true 
+        },
+        // Phase 3: Reason-specific fallback overrides (optional)
+        fallbackOverrides: {
+            kb_miss: { type: String, default: "", trim: true },
+            router_config_missing: { type: String, default: "", trim: true },
+            after_hours: { type: String, default: "", trim: true },
+            runtime_error: { type: String, default: "", trim: true }
         }
     },
     

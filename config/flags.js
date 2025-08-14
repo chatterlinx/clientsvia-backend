@@ -22,10 +22,13 @@ module.exports = {
   // Directory service v2
   DIRECTORY_V2: process.env.DIRECTORY_V2 === 'on',
   
+  // Phase 3: Reason-specific fallback overrides
+  FALLBACK_OVERRIDES_V1: process.env.FALLBACK_OVERRIDES_V1 === 'on',
+  
   // Helper to check if any experimental features are enabled
   hasExperimentalFeatures() {
     return this.AI_LOGIC_V2 || this.FALLBACK_V2 || this.CONFIG_SOFT_DEFAULTS || 
-           this.TTS_LOCK || this.NOTIFY_ENABLED || this.DIRECTORY_V2;
+           this.TTS_LOCK || this.NOTIFY_ENABLED || this.DIRECTORY_V2 || this.FALLBACK_OVERRIDES_V1;
   },
   
   // Get flags summary for debugging
@@ -37,6 +40,7 @@ module.exports = {
       TTS_LOCK: this.TTS_LOCK,
       NOTIFY_ENABLED: this.NOTIFY_ENABLED,
       DIRECTORY_V2: this.DIRECTORY_V2,
+      FALLBACK_OVERRIDES_V1: this.FALLBACK_OVERRIDES_V1,
       experimental: this.hasExperimentalFeatures()
     };
   }

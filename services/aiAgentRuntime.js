@@ -84,6 +84,47 @@ async function getCompanyFallbackMessage(companyId) {
   }
 }
 
+/**
+ * Phase 3: Returns reason-specific fallback text with tenant overrides
+ * @param {string} companyId - Company identifier
+ * @param {string} reason - Fallback reason (kb_miss, router_config_missing, etc.)
+ * @returns {Promise<string>} - Reason-specific fallback or safe default
+ */
+async function getCompanyFallbackText(companyId, reason) {
+  const flags = require('../config/flags');
+  
+  try {
+    const company = await Company.findById(companyId);
+    
+    // Conservative HVAC-friendly default
+    const DEFAULT_FALLBACK = "I'm missing that info right now, but I can take a message and text you a link, transfer you to a person during business hours, or help with something else. What would you like to do?";
+    
+    // Map reasons to suggested defaults
+    const DEFAULTS_BY_REASON = {
+      kb_miss: "I don't have that answer on hand yet. I can take a message and text you a link, transfer you to a person during business hours, or help with something else.",
+      router_config_missing: "I can't access my knowledge settings right now. I can take a message and text you a link, transfer you to a person during business hours, or help with something else.",
+      after_hours: "Our team is closed right now. I can take a message and text you our booking link, or help you find the next available appointment.",
+      runtime_error: "I'm having trouble completing that request. I can take a message and text you a link, transfer you during business hours, or help with something else."
+    };
+
+    const base = company?.agentKnowledgeSettings?.fallbackMessage?.trim() || DEFAULT_FALLBACK;
+    
+    if (!flags.FALLBACK_OVERRIDES_V1) return base;
+
+    const overrides = company?.agentKnowledgeSettings?.fallbackOverrides || {};
+    const override = (overrides[reason] || "").trim();
+
+    if (override) return override;
+
+    // if no override, prefer reason default over base
+    const reasonDefault = DEFAULTS_BY_REASON[reason];
+    return reasonDefault || base;
+  } catch (e) {
+    console.warn("[AI AGENT] getCompanyFallbackText error:", e?.message);
+    return "I'm missing that info right now, but I can take a message and text you a link, transfer you to a person during business hours, or help with something else. What would you like to do?";
+  }
+}
+
 class AIAgentRuntime {
   /**
    * Initialize a new call and generate greeting
@@ -448,8 +489,8 @@ class AIAgentRuntime {
     try {
       console.log(`[AI AGENT] Using company fallback for reason: ${reason}`);
       
-      // Get tenant-specific fallback message (with safe default)
-      const fallbackText = await getCompanyFallbackMessage(companyID);
+      // Get reason-specific fallback message (Phase 3 enhancement)
+      const fallbackText = await getCompanyFallbackText(companyID, reason);
       
       // Log fallback selection
       ResponseTraceLogger.addBehaviorStep(trace, 'fallback_select', true, 
