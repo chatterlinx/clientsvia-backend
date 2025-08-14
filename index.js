@@ -98,8 +98,13 @@ async function loadAllRoutes() {
         routes.backupRoutes = await loadRouteWithTimeout('./routes/backup', 'backupRoutes');
         routes.crmManagementRoutes = await loadRouteWithTimeout('./routes/crmManagement', 'crmManagementRoutes');
         
-        // Phase 7: Debug routes for voice source verification
-        routes.debugRoutes = await loadRouteWithTimeout('./src/routes/debug', 'debugRoutes');
+        // Phase 7: Debug routes for voice source verification (with error tolerance)
+        try {
+            routes.debugRoutes = await loadRouteWithTimeout('./src/routes/debug', 'debugRoutes');
+        } catch (error) {
+            console.error('[INIT] ⚠️ Debug routes failed to load, continuing without them:', error.message);
+            routes.debugRoutes = null;
+        }
         
         // Load AI Agent Logic routes for enterprise features
         routes.aiAgentLogicRoutes = await loadRouteWithTimeout('./routes/aiAgentLogic', 'aiAgentLogicRoutes');
@@ -237,7 +242,12 @@ function registerRoutes(routes) {
     app.use('/api/agent', routes.agentProcessorRoutes); // NEW: Central agent processing API
 
     // Phase 7: Debug routes for voice source verification
-    app.use('/api/debug', routes.debugRoutes); // PHASE 7: Audio event tracing and voice source verification
+    if (routes.debugRoutes) {
+        app.use('/api/debug', routes.debugRoutes); // PHASE 7: Audio event tracing and voice source verification
+        console.log('[INIT] ✅ Debug routes registered at /api/debug');
+    } else {
+        console.log('[INIT] ⚠️ Debug routes not available - skipping registration');
+    }
 
     /*
     --- TWILIO SMOKE TEST ROUTE (COMMENTED OUT) ---
