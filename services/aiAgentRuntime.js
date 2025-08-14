@@ -60,6 +60,30 @@ function createNonTransferResponse(originalText, scenario = 'general') {
   };
 }
 
+/**
+ * Returns the tenant-specific fallback message, or the default if missing.
+ * @param {string} companyId - Company identifier
+ * @returns {Promise<string>} - Tenant fallback message or safe default
+ */
+async function getCompanyFallbackMessage(companyId) {
+  try {
+    const company = await Company.findById(companyId);
+    const msg = company?.agentKnowledgeSettings?.fallbackMessage;
+
+    // HVAC-friendly safe default for zero-touch onboarding
+    const safeDefault = "I'm missing that info right now, but I can take a message and text you a link, transfer you to a person during business hours, or help with something else. What would you like to do?";
+
+    if (typeof msg === "string" && msg.trim().length > 0) {
+      return msg.trim();
+    }
+    return safeDefault;
+  } catch (e) {
+    // Don't explode on config issues; log and fall back
+    console.warn("[AI AGENT] getCompanyFallbackMessage error:", e?.message);
+    return "I'm missing that info right now, but I can take a message and text you a link, transfer you to a person during business hours, or help with something else. What would you like to do?";
+  }
+}
+
 class AIAgentRuntime {
   /**
    * Initialize a new call and generate greeting
@@ -424,19 +448,8 @@ class AIAgentRuntime {
     try {
       console.log(`[AI AGENT] Using company fallback for reason: ${reason}`);
       
-      // Get company-specific fallback message
-      let fallbackText = "I apologize, but I'm having trouble accessing that information right now. Please try again later.";
-      
-      if (company) {
-        // Try to get company-specific fallback from AI Agent Logic config
-        const fallbackConfig = company.aiAgentLogic?.responseCategories?.fallback;
-        if (fallbackConfig?.template) {
-          fallbackText = fallbackConfig.template.replace('{companyName}', 
-            company.businessName || company.companyName || 'our company');
-        } else if (company.aiSettings?.fallbackMessage) {
-          fallbackText = company.aiSettings.fallbackMessage;
-        }
-      }
+      // Get tenant-specific fallback message (with safe default)
+      const fallbackText = await getCompanyFallbackMessage(companyID);
       
       // Log fallback selection
       ResponseTraceLogger.addBehaviorStep(trace, 'fallback_select', true, 
