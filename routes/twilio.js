@@ -943,7 +943,7 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       const company = await Company.findById(companyID);
       await addTTSResponse(twiml, company, result.text);
       
-      // Set up next gather
+      // Set up next gather for continued conversation
       const gather = twiml.gather({
         input: 'speech',
         speechTimeout: 5,
@@ -952,11 +952,8 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
         method: 'POST'
       });
       
-      gather.say('');
-      
-      // Fallback - only transfer if enabled
-      // company is already loaded above
-      await handleTransfer(twiml, company, "Thank you for calling. Please try again later.");
+      // The gather will wait for speech and call the action URL
+      // No fallback needed here - action URL handles timeouts
     }
     
     res.type('text/xml');
