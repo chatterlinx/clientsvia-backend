@@ -14,7 +14,12 @@ const { findCachedAnswer } = require('../utils/aiAgent');
 const KnowledgeEntry = require('../models/KnowledgeEntry');
 const fs = require('fs');
 const path = require('path');
-const { synthesizeSpeech } = require('../services/elevenLabsService');
+const { 
+  synthesizeSpeech, 
+  getFallbackMessageUrl, 
+  getCompanyTTSConfig, 
+  generateTTSResponse 
+} = require('../services/elevenLabsService');
 const { redisClient } = require('../clients');
 const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils/phone');
 const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
@@ -56,16 +61,16 @@ function getTransferMessage(company) {
 }
 
 // Helper function to handle transfer logic with enabled check
-function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I cannot assist further at this time. Please try calling back later.") {
+async function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I cannot assist further at this time. Please try calling back later.") {
   if (isTransferEnabled(company)) {
     const transferMessage = getTransferMessage(company);
     const transferNumber = getTransferNumber(company);
     console.log('[AI AGENT] Transfer enabled, transferring to:', transferNumber);
-    twiml.say(transferMessage);
+    await addTTSResponse(twiml, company, transferMessage);
     twiml.dial(transferNumber);
   } else {
     console.log('[AI AGENT] Transfer disabled, providing fallback message');
-    twiml.say(fallbackMessage);
+    await addFallbackResponse(twiml, company, fallbackMessage);
     twiml.hangup();
   }
 }
@@ -204,7 +209,7 @@ router.post('/voice', async (req, res) => {
     if (!company) {
       console.log(`[ERROR] [ERROR] No company found for phone number: ${calledNumber}`);
       const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
-      twiml.say(escapeTwiML(msg));
+      twiml.say({ voice: 'man' }, msg);
       twiml.hangup();
       res.type('text/xml');
       res.send(twiml.toString());
@@ -236,7 +241,7 @@ router.post('/voice', async (req, res) => {
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
         timeout: 5,
-        speechTimeout: 'auto',
+        speechTimeout: 5,
         enhanced: true,
         speechModel: 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/ai-agent-partial/${company._id}`
@@ -290,11 +295,11 @@ router.post('/voice', async (req, res) => {
         method: 'POST',
         bargeIn: false,
         timeout: 5,
-        speechTimeout: 'auto',
+        speechTimeout: 5,
         enhanced: true,
         speechModel: 'phone_call'
       });
-      gather.say(escapeTwiML(fallbackGreeting));
+      await addTTSResponse(gather, company, fallbackGreeting);
     }
 
     res.type('text/xml');
@@ -305,7 +310,8 @@ router.post('/voice', async (req, res) => {
   } catch (error) {
     console.error(`[ERROR] [CRITICAL] Voice endpoint error: ${error.message}`);
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say('I apologize, but I\'m experiencing technical difficulties. Please try calling again in a moment.');
+    // Use basic Twilio voice since company context may not be available
+    twiml.say({ voice: 'man' }, 'I apologize, but I\'m experiencing technical difficulties. Please try calling again in a moment.');
     twiml.hangup();
     res.type('text/xml');
     res.send(twiml.toString());
@@ -368,10 +374,10 @@ router.post('/handle-speech', async (req, res) => {
     if (!company) {
       console.log(`[COMPANY ERROR] [ERROR] No company found for phone: ${calledNumber} during speech processing`);
       const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
-      const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
+      twiml.say({ voice: 'man' }, msg);
       twiml.hangup();
       res.type('text/xml');
-      res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
+      res.send(twiml.toString());
       return;
     }
 
@@ -391,11 +397,11 @@ router.post('/handle-speech', async (req, res) => {
       if (repeats > (company.aiSettings?.maxRepeats ?? 3)) {
         const personality = company.aiSettings?.personality || 'friendly';
         const msg = company.aiSettings?.repeatEscalationMessage || await getPersonalityResponse(company._id.toString(), 'transferToRep', personality);
-        const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
+        await addFallbackResponse(twiml, company, msg);
         twiml.hangup();
         await redisClient.del(repeatKey);
         res.type('text/xml');
-        res.send(`<?xml version="1.0" encoding="UTF-8"?><Response>${fallbackText}</Response>`);
+        res.send(twiml.toString());
         return;
       }
       const gather = twiml.gather({
@@ -404,7 +410,7 @@ router.post('/handle-speech', async (req, res) => {
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
         timeout: 5, // Globally optimized for fast response
-        speechTimeout: 'auto',
+        speechTimeout: 5,
         enhanced: true,
         speechModel: 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -511,7 +517,7 @@ router.post('/handle-speech', async (req, res) => {
           method: 'POST',
           bargeIn: company.aiSettings?.bargeIn ?? false,
           timeout: 5,
-          speechTimeout: 'auto',
+          speechTimeout: 5,
           enhanced: true,
           speechModel: 'phone_call',
           partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -536,7 +542,7 @@ router.post('/handle-speech', async (req, res) => {
         method: 'POST',
         bargeIn: company.aiSettings?.bargeIn ?? false,
         timeout: 5, // Globally optimized for fast response
-        speechTimeout: 'auto',
+        speechTimeout: 5,
         enhanced: true,
         speechModel: 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -649,7 +655,7 @@ router.post('/handle-speech', async (req, res) => {
       method: 'POST',
       bargeIn: company.aiSettings?.bargeIn ?? false,
       timeout: 5, // Globally optimized for fast response
-      speechTimeout: 'auto',
+      speechTimeout: 5,
       enhanced: true,
       speechModel: 'phone_call',
       partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -759,8 +765,8 @@ router.post('/speech-timing-test', async (req, res) => {
   
   const twiml = new twilio.twiml.VoiceResponse();
   
-  // Immediate response with timing info
-  twiml.say(`Speech received at ${new Date().toLocaleTimeString()}. Processing took ${Date.now() - receiveTime} milliseconds.`);
+  // Immediate response with timing info - use consistent voice
+  twiml.say({ voice: 'man' }, `Speech received at ${new Date().toLocaleTimeString()}. Processing took ${Date.now() - receiveTime} milliseconds.`);
   
   const respondTime = Date.now();
   console.log(`[DIAGNOSTIC] Responding at: ${new Date().toISOString()}`);
@@ -821,7 +827,7 @@ router.post('/voice/:companyID', async (req, res) => {
     const company = await Company.findById(companyID);
     if (!company) {
       console.log(`[ERROR] Company not found: ${companyID}`);
-      twiml.say("I'm sorry, there was an error connecting your call. Please try again.");
+      twiml.say({ voice: 'man' }, "I'm sorry, there was an error connecting your call. Please try again.");
       twiml.hangup();
       res.type('text/xml');
       return res.send(twiml.toString());
@@ -833,21 +839,19 @@ router.post('/voice/:companyID', async (req, res) => {
     if (company.aiAgentLogic?.enabled) {
       console.log(`[AI AGENT LOGIC] Enabled for company ${companyID}`);
       
-      // Use new AI Agent Logic greeting
+      // Use new AI Agent Logic greeting with consistent TTS
       const greeting = company.aiAgentLogic.responseCategories?.greeting?.template || 
         `Hello! Thank you for calling ${company.businessName || company.companyName}. I'm your AI assistant. How can I help you today?`;
       
       // Apply placeholder replacement
       const finalGreeting = greeting.replace('{companyName}', company.businessName || company.companyName);
       
-      twiml.say({
-        voice: company.aiAgentLogic.agentPersonality?.voice?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
-      }, escapeTwiML(finalGreeting));
+      await addTTSResponse(twiml, company, finalGreeting);
       
       // Set up gather for AI Agent Logic flow
       const gather = twiml.gather({
         input: 'speech',
-        speechTimeout: 'auto',
+        speechTimeout: 5,
         speechModel: 'phone_call',
         action: `/api/twilio/ai-agent-respond/${companyID}`,
         method: 'POST',
@@ -858,7 +862,7 @@ router.post('/voice/:companyID', async (req, res) => {
       gather.say('');
       
       // Fallback if no input - only transfer if enabled
-      handleTransfer(twiml, company, "Thank you for calling. Please try again later or visit our website.");
+      await handleTransfer(twiml, company, "Thank you for calling. Please try again later or visit our website.");
       
     } else {
       // Fall back to existing voice flow
@@ -873,7 +877,7 @@ router.post('/voice/:companyID', async (req, res) => {
         req.body.To = companyPhone;
         return router.post('/voice')(req, res);
       } else {
-        twiml.say("I'm sorry, this service is not properly configured. Please try again later.");
+        await addFallbackResponse(twiml, company, "I'm sorry, this service is not properly configured. Please try again later.");
         twiml.hangup();
       }
     }
@@ -884,7 +888,7 @@ router.post('/voice/:companyID', async (req, res) => {
   } catch (error) {
     console.error(`[ERROR] AI Agent Voice error for company ${companyID}:`, error);
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say("I'm sorry, there was a technical error. Please try calling back.");
+    twiml.say({ voice: 'man' }, "I'm sorry, there was a technical error. Please try calling back.");
     twiml.hangup();
     res.type('text/xml');
     res.send(twiml.toString());
@@ -927,24 +931,22 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
     
     // Handle different response types
     if (result.shouldHangup) {
-      twiml.say(escapeTwiML(result.text));
+      const company = await Company.findById(companyID);
+      await addTTSResponse(twiml, company, result.text);
       twiml.hangup();
     } else if (result.shouldTransfer) {
-      twiml.say(escapeTwiML(result.text));
-      
-      // Get company transfer number and check if transfer is enabled
       const company = await Company.findById(companyID);
-      handleTransfer(twiml, company, "I apologize, but I cannot transfer you at this time. Please try calling back later or visiting our website for assistance.");
+      await addTTSResponse(twiml, company, result.text);
+      await handleTransfer(twiml, company, "I apologize, but I cannot transfer you at this time. Please try calling back later or visiting our website for assistance.");
     } else {
       // Continue conversation
-      twiml.say({
-        voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
-      }, escapeTwiML(result.text));
+      const company = await Company.findById(companyID);
+      await addTTSResponse(twiml, company, result.text);
       
       // Set up next gather
       const gather = twiml.gather({
         input: 'speech',
-        speechTimeout: 'auto',
+        speechTimeout: 5,
         speechModel: 'phone_call',
         action: `/api/twilio/ai-agent-respond/${companyID}`,
         method: 'POST'
@@ -953,8 +955,8 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       gather.say('');
       
       // Fallback - only transfer if enabled
-      const company = await Company.findById(companyID);
-      handleTransfer(twiml, company, "Thank you for calling. Please try again later.");
+      // company is already loaded above
+      await handleTransfer(twiml, company, "Thank you for calling. Please try again later.");
     }
     
     res.type('text/xml');
@@ -969,11 +971,11 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       const { companyID } = req.params; // Get companyID from request params
       const company = await Company.findById(companyID);
       
-      twiml.say("I'm sorry, I'm having trouble processing your request.");
-      handleTransfer(twiml, company, "Please try calling back later or visit our website for assistance.");
+      await addFallbackResponse(twiml, company, "I'm sorry, I'm having trouble processing your request.");
+      await handleTransfer(twiml, company, "Please try calling back later or visit our website for assistance.");
     } catch (companyError) {
       console.error('[ERROR] Could not load company for transfer:', companyError);
-      twiml.say("I'm sorry, I'm having trouble processing your request. Please try calling back later.");
+      twiml.say({ voice: 'man' }, "I'm sorry, I'm having trouble processing your request. Please try calling back later.");
       twiml.hangup();
     }
     
@@ -1019,5 +1021,39 @@ router.post('/ai-agent-partial/:companyID', async (req, res) => {
     res.json({ success: false });
   }
 });
+
+// Helper function to add TTS response to TwiML with company voice consistency
+async function addTTSResponse(twiml, company, text, fallbackText = null) {
+  const response = await generateTTSResponse(company, text, fallbackText);
+  
+  if (response.type === 'play') {
+    const host = process.env.NODE_ENV === 'production' ? 'clientsvia-backend-production.up.railway.app' : 'localhost:3001';
+    const fullUrl = `https://${host}${response.url}`;
+    twiml.play(fullUrl);
+    console.log(`[TTS] Playing ElevenLabs audio: ${fullUrl}`);
+  } else {
+    twiml.say({ voice: response.voice }, response.text);
+    console.log(`[TTS] Using Twilio voice (${response.voice}): ${response.text}`);
+  }
+}
+
+// Helper function to add fallback response with cached TTS
+async function addFallbackResponse(twiml, company, customMessage = null) {
+  const fallbackText = customMessage || "I apologize, but I cannot assist further at this time. Please try calling back later.";
+  
+  // Try to get cached fallback URL first
+  const cachedUrl = await getFallbackMessageUrl(company, fallbackText);
+  if (cachedUrl) {
+    const host = process.env.NODE_ENV === 'production' ? 'clientsvia-backend-production.up.railway.app' : 'localhost:3001';
+    const fullUrl = `https://${host}${cachedUrl}`;
+    twiml.play(fullUrl);
+    console.log(`[FALLBACK TTS] Playing cached fallback: ${fullUrl}`);
+  } else {
+    // Fallback to consistent Twilio voice
+    const config = getCompanyTTSConfig(company);
+    twiml.say({ voice: config.twilioVoice }, fallbackText);
+    console.log(`[FALLBACK TTS] Using Twilio voice (${config.twilioVoice}): ${fallbackText}`);
+  }
+}
 
 module.exports = router;

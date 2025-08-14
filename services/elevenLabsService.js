@@ -1,6 +1,7 @@
 const { ElevenLabsClient } = require('@elevenlabs/elevenlabs-js');
 const fs = require('fs');
 const path = require('path');
+const { redisClient } = require('../clients');
 
 const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 
@@ -344,6 +345,154 @@ async function getUserInfo({ apiKey, company } = {}) {
   }
 }
 
+/**
+ * Get fallback message URL for a company (cached)
+ * Cache key: tenants:{companyID}:tts:fallback:v{configVersion}
+ */
+async function getFallbackMessageUrl(company, fallbackText = "I apologize, but I cannot assist further at this time. Please try calling back later.") {
+  if (!company?._id) {
+    console.warn('[TTS] No company ID provided for fallback TTS');
+    return null;
+  }
+
+  const companyId = company._id.toString();
+  const configVersion = company.aiAgentLogic?.version || 1;
+  const cacheKey = `tenants:${companyId}:tts:fallback:v${configVersion}`;
+
+  try {
+    // Check cache first
+    const cachedUrl = await redisClient.get(cacheKey);
+    if (cachedUrl) {
+      console.log(`[TTS CACHE] Fallback URL found in cache for company ${companyId}`);
+      return cachedUrl;
+    }
+
+    // Generate and cache new fallback
+    const voiceId = company.aiSettings?.elevenLabs?.voiceId;
+    if (!voiceId) {
+      console.warn(`[TTS] No ElevenLabs voice configured for company ${companyId}, cannot generate fallback`);
+      return null;
+    }
+
+    console.log(`[TTS GENERATE] Creating fallback TTS for company ${companyId}`);
+    const buffer = await synthesizeSpeech({
+      text: fallbackText,
+      voiceId: voiceId,
+      stability: company.aiSettings?.elevenLabs?.stability,
+      similarity_boost: company.aiSettings?.elevenLabs?.similarityBoost,
+      style: company.aiSettings?.elevenLabs?.style,
+      model_id: company.aiSettings?.elevenLabs?.modelId,
+      company
+    });
+
+    // Save to audio directory
+    const audioDir = path.join(__dirname, '..', 'public', 'audio');
+    if (!fs.existsSync(audioDir)) {
+      fs.mkdirSync(audioDir, { recursive: true });
+    }
+
+    const filename = `fallback_${companyId}_v${configVersion}.mp3`;
+    const filepath = path.join(audioDir, filename);
+    fs.writeFileSync(filepath, buffer);
+
+    const fallbackUrl = `/audio/${filename}`;
+    
+    // Cache for 24 hours
+    await redisClient.setEx(cacheKey, 86400, fallbackUrl);
+    console.log(`[TTS CACHE] Fallback URL cached for company ${companyId}: ${fallbackUrl}`);
+
+    return fallbackUrl;
+  } catch (error) {
+    console.error(`[TTS ERROR] Failed to generate fallback for company ${companyId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Get company TTS configuration
+ */
+function getCompanyTTSConfig(company) {
+  if (!company) {
+    return { provider: 'twilio', twilioVoice: 'man' };
+  }
+
+  const ttsProvider = company.aiSettings?.tts?.provider || 'elevenlabs';
+  
+  return {
+    provider: ttsProvider,
+    voiceId: company.aiSettings?.elevenLabs?.voiceId,
+    twilioVoice: company.aiSettings?.tts?.twilioVoice || 'man',
+    greetingUrl: company.aiSettings?.tts?.greetingUrl,
+    fallbackUrl: company.aiSettings?.tts?.fallbackUrl
+  };
+}
+
+/**
+ * Generate TTS response for Twilio with company voice consistency
+ */
+async function generateTTSResponse(company, text, fallbackText = null) {
+  const config = getCompanyTTSConfig(company);
+  
+  if (config.provider === 'elevenlabs' && config.voiceId) {
+    try {
+      const buffer = await synthesizeSpeech({
+        text: text,
+        voiceId: config.voiceId,
+        stability: company.aiSettings?.elevenLabs?.stability,
+        similarity_boost: company.aiSettings?.elevenLabs?.similarityBoost,
+        style: company.aiSettings?.elevenLabs?.style,
+        model_id: company.aiSettings?.elevenLabs?.modelId,
+        company
+      });
+
+      // Save to temp audio file
+      const audioDir = path.join(__dirname, '..', 'public', 'audio');
+      if (!fs.existsSync(audioDir)) {
+        fs.mkdirSync(audioDir, { recursive: true });
+      }
+
+      const filename = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.mp3`;
+      const filepath = path.join(audioDir, filename);
+      fs.writeFileSync(filepath, buffer);
+
+      return {
+        type: 'play',
+        url: `/audio/${filename}`
+      };
+    } catch (error) {
+      console.error('[TTS ERROR] ElevenLabs synthesis failed, falling back to Twilio:', error);
+      return {
+        type: 'say',
+        text: fallbackText || text,
+        voice: config.twilioVoice
+      };
+    }
+  }
+
+  // Twilio TTS fallback
+  return {
+    type: 'say',
+    text: text,
+    voice: config.twilioVoice
+  };
+}
+
+/**
+ * Bust TTS cache for a company (call when config is published)
+ */
+async function bustCompanyTTSCache(companyId) {
+  try {
+    const pattern = `tenants:${companyId}:tts:*`;
+    const keys = await redisClient.keys(pattern);
+    if (keys.length > 0) {
+      await redisClient.del(keys);
+      console.log(`[TTS CACHE] Busted ${keys.length} cached TTS entries for company ${companyId}`);
+    }
+  } catch (error) {
+    console.error(`[TTS CACHE] Failed to bust cache for company ${companyId}:`, error);
+  }
+}
+
 // Mock voice data for testing when API key is invalid or not available
 function getMockVoices() {
   return [
@@ -413,5 +562,9 @@ module.exports = {
   analyzeVoice,
   generateStaticPrompt,
   getUserInfo,
-  getMockVoices
+  getMockVoices,
+  getFallbackMessageUrl,
+  getCompanyTTSConfig,
+  generateTTSResponse,
+  bustCompanyTTSCache
 };

@@ -14,6 +14,7 @@ const router = express.Router();
 const { authenticateSingleSession } = require('../middleware/auth'); // Use single session auth
 const ClientsViaIntelligenceEngine = require('../services/clientsViaIntelligenceEngine');
 const Company = require('../models/Company');
+const { bustCompanyTTSCache } = require('../services/elevenLabsService');
 
 // Initialize intelligence engine
 const intelligenceEngine = new ClientsViaIntelligenceEngine();
@@ -926,6 +927,15 @@ router.post('/save-config', authenticateSingleSession, async (req, res) => {
 
         // Save the company
         await company.save();
+
+        // Bust TTS cache since config version changed
+        try {
+            await bustCompanyTTSCache(companyId);
+            console.log('🗑️ TTS cache busted for company:', companyId);
+        } catch (cacheError) {
+            console.error('⚠️ Failed to bust TTS cache:', cacheError);
+            // Don't fail the whole request for cache errors
+        }
 
         console.log(`✅ AI Agent configuration saved successfully for company ${companyId}`);
         
