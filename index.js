@@ -85,7 +85,6 @@ async function loadAllRoutes() {
         routes.aiAgentAnalyticsRoutes = await loadRouteWithTimeout('./routes/aiAgentAnalytics', 'aiAgentAnalyticsRoutes');
         routes.knowledgeAutoPopulationRoutes = await loadRouteWithTimeout('./routes/knowledgeAutoPopulation', 'knowledgeAutoPopulationRoutes');
         routes.enhancedAIAgentRoutes = await loadRouteWithTimeout('./routes/enhancedAIAgent', 'enhancedAIAgentRoutes');
-        routes.aiAgentHandlerRoutes = await loadRouteWithTimeout('./routes/aiAgentHandler', 'aiAgentHandlerRoutes');
         routes.agentPerformanceRoutes = await loadRouteWithTimeout('./routes/agentPerformance', 'agentPerformanceRoutes');
         routes.intentRoutingRoutes = await loadRouteWithTimeout('./routes/intentRouting', 'intentRoutingRoutes');
         routes.bookingScriptsRoutes = await loadRouteWithTimeout('./routes/bookingScripts', 'bookingScriptsRoutes');
@@ -212,7 +211,6 @@ function registerRoutes(routes) {
     app.use('/api/ai-agent-analytics', routes.aiAgentAnalyticsRoutes);
     app.use('/api/knowledge-auto-population', routes.knowledgeAutoPopulationRoutes);
     app.use('/api/enhanced-ai-agent', routes.enhancedAIAgentRoutes);
-    app.use('/api/ai-agent', routes.aiAgentHandlerRoutes);
     app.use('/api/agent', routes.agentPerformanceRoutes);
     app.use('/api/agent', routes.intentRoutingRoutes); // Intent Routing & Flow Control routes
     app.use('/api/booking-scripts', routes.bookingScriptsRoutes); // Booking Scripts Configuration
