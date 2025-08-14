@@ -40,13 +40,16 @@ module.exports = {
   VOICE_GUARD_V1: process.env.VOICE_GUARD_V1 === 'on',     // enable audio event tracing
   KILL_TWIML_SAY: process.env.KILL_TWIML_SAY === 'on',     // block any TwiML <Say>
   
+  // ==== Phase 8: Publish & Snapshot (Compiled Config Pipeline) ====
+  PUBLISH_V1: process.env.PUBLISH_V1 === 'on',             // enable config snapshots
+  
   // Helper to check if any experimental features are enabled
   hasExperimentalFeatures() {
     return this.AI_LOGIC_V2 || this.FALLBACK_V2 || this.CONFIG_SOFT_DEFAULTS || 
            this.TTS_LOCK || this.NOTIFY_ENABLED || this.DIRECTORY_V2 || 
            this.FALLBACK_OVERRIDES_V1 || this.FALLBACK_ACTIONS_V1 ||
            this.DIRECTORY_V1 || this.NOTIFY_V1 || this.PRESETS_V1 ||
-           this.VOICE_GUARD_V1 || this.KILL_TWIML_SAY;
+           this.VOICE_GUARD_V1 || this.KILL_TWIML_SAY || this.PUBLISH_V1;
   },
   
   // Get flags summary for debugging
@@ -66,6 +69,7 @@ module.exports = {
       PRESET_DEFAULT: this.PRESET_DEFAULT,
       VOICE_GUARD_V1: this.VOICE_GUARD_V1,
       KILL_TWIML_SAY: this.KILL_TWIML_SAY,
+      PUBLISH_V1: this.PUBLISH_V1,
       experimental: this.hasExperimentalFeatures()
     };
   }

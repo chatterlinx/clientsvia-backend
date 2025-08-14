@@ -4844,6 +4844,42 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 📸 PHASE 8: PUBLISH & SNAPSHOT CONFIG SECTION -->
+                <div class="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-6 mt-6" id="agent-config-publish-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-800 flex items-center">
+                                <i class="fas fa-camera mr-2 text-blue-600"></i>Agent Config — Publish Snapshot
+                                <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">Phase 8</span>
+                            </h4>
+                            <p class="text-sm text-gray-600 mt-1">Compile & publish a deterministic snapshot the runtime will use</p>
+                            <div class="mt-2 text-xs text-gray-500">
+                                <span id="publish-status">Status: Loading...</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <button 
+                                type="button" 
+                                id="btn-publish-agent-config"
+                                class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition duration-150 ease-in-out transform hover:scale-105"
+                            >
+                                <i class="fas fa-upload mr-2"></i>Publish Config
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-4 p-3 bg-white rounded-lg border border-blue-100">
+                        <div class="text-xs text-gray-600">
+                            <strong>Benefits:</strong>
+                            <ul class="mt-1 ml-4 list-disc space-y-1">
+                                <li>Eliminates router_config_missing errors</li>
+                                <li>Guarantees deterministic AI Agent Logic execution</li>
+                                <li>Immutable snapshots prevent half-saved UI states</li>
+                                <li>One-click recovery from configuration issues</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- ========================================= -->

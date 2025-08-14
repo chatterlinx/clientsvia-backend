@@ -193,6 +193,10 @@ class CompanyProfileManager {
 
         // Preset functionality (Phase 6)
         this.setupPresetEventListeners();
+        
+        // Publish config functionality (Phase 8)
+        this.setupPublishConfigEventListeners();
+        this.refreshPublishHealth();
     }
 
     /**
@@ -2941,6 +2945,127 @@ class CompanyProfileManager {
             return current[key];
         }, obj);
         target[lastKey] = value;
+    }
+    
+    // ============================================================================
+    // PHASE 8: PUBLISH & SNAPSHOT CONFIG METHODS
+    // ============================================================================
+    
+    /**
+     * Setup publish config event listeners
+     */
+    setupPublishConfigEventListeners() {
+        const btn = document.getElementById('btn-publish-agent-config');
+        if (btn) {
+            btn.addEventListener('click', () => this.publishAgentConfig());
+        }
+    }
+
+    /**
+     * Refresh publish health status display
+     */
+    async refreshPublishHealth() {
+        try {
+            const response = await fetch(`/api/company/${this.companyId}/agent-config/health`, { 
+                credentials: 'include' 
+            });
+            const data = await response.json();
+            const el = document.getElementById('publish-status');
+            if (!el) return;
+
+            if (!data.ok) {
+                el.textContent = `Status: error - ${data.error || 'unknown'}`;
+                el.className = 'text-red-600';
+                return;
+            }
+            
+            if (!data.enabled) {
+                el.textContent = 'Status: disabled (PUBLISH_V1 off)';
+                el.className = 'text-gray-500';
+                return;
+            }
+            
+            if (data.status === 'OK') {
+                el.textContent = `Status: OK — v${data.version} @ ${new Date(data.lastPublished).toLocaleString()}`;
+                el.className = 'text-green-600';
+            } else if (data.status === 'MISSING') {
+                el.textContent = 'Status: No snapshot published yet';
+                el.className = 'text-yellow-600';
+            } else {
+                el.textContent = `Status: INVALID — ${(data.errors || []).join('; ')}`;
+                el.className = 'text-red-600';
+            }
+            
+        } catch (error) {
+            const el = document.getElementById('publish-status');
+            if (el) {
+                el.textContent = `Status: error - ${error.message}`;
+                el.className = 'text-red-600';
+            }
+        }
+    }
+
+    /**
+     * Publish agent configuration snapshot
+     */
+    async publishAgentConfig() {
+        const btn = document.getElementById('btn-publish-agent-config');
+        const statusEl = document.getElementById('publish-status');
+        
+        try {
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Publishing...';
+            }
+            
+            if (statusEl) {
+                statusEl.textContent = 'Publishing…';
+                statusEl.className = 'text-blue-600';
+            }
+
+            const response = await fetch(`/api/company/${this.companyId}/agent-config/publish`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const data = await response.json();
+
+            if (!data.ok) {
+                const errorMsg = data.error || 'unknown error';
+                const details = data.details ? ' — ' + data.details.join(', ') : '';
+                if (statusEl) {
+                    statusEl.textContent = `Publish failed: ${errorMsg}${details}`;
+                    statusEl.className = 'text-red-600';
+                }
+                this.showToast(`Failed to publish config: ${errorMsg}`, 'error');
+                return;
+            }
+
+            // Success
+            if (statusEl) {
+                statusEl.textContent = `Published v${data.version} @ ${new Date().toLocaleString()}`;
+                statusEl.className = 'text-green-600';
+            }
+            
+            this.showToast(`Agent configuration published successfully! (v${data.version})`, 'success');
+            
+            // Refresh health status after a moment
+            setTimeout(() => this.refreshPublishHealth(), 1000);
+            
+        } catch (error) {
+            if (statusEl) {
+                statusEl.textContent = `Publish error: ${error.message}`;
+                statusEl.className = 'text-red-600';
+            }
+            this.showToast(`Publish error: ${error.message}`, 'error');
+            
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-upload mr-2"></i>Publish Config';
+            }
+        }
     }
     
     // ============================================================================

@@ -106,6 +106,14 @@ async function loadAllRoutes() {
             routes.debugRoutes = null;
         }
         
+        // Phase 8: Agent Config Publishing routes (with error tolerance)
+        try {
+            routes.agentConfigRoutes = await loadRouteWithTimeout('./src/routes/agentConfig', 'agentConfigRoutes');
+        } catch (error) {
+            console.error('[INIT] ⚠️ Agent config routes failed to load, continuing without them:', error.message);
+            routes.agentConfigRoutes = null;
+        }
+        
         // Load AI Agent Logic routes for enterprise features
         routes.aiAgentLogicRoutes = await loadRouteWithTimeout('./routes/aiAgentLogic', 'aiAgentLogicRoutes');
         
@@ -247,6 +255,14 @@ function registerRoutes(routes) {
         console.log('[INIT] ✅ Debug routes registered at /api/debug');
     } else {
         console.log('[INIT] ⚠️ Debug routes not available - skipping registration');
+    }
+
+    // Phase 8: Agent Config Publishing routes
+    if (routes.agentConfigRoutes) {
+        app.use('/api', routes.agentConfigRoutes); // PHASE 8: Config snapshot publishing and retrieval
+        console.log('[INIT] ✅ Agent config routes registered at /api/company/:id/agent-config/*');
+    } else {
+        console.log('[INIT] ⚠️ Agent config routes not available - skipping registration');
     }
 
     /*

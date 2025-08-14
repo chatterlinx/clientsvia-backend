@@ -5,8 +5,10 @@
  */
 
 const Company = require('../../models/Company');
+const AgentConfigSnapshot = require('../models/AgentConfigSnapshot');
+const { buildCompiledConfig } = require('../services/aiConfigAssembler');
 const { getDefaultPreset, applyPresetToCompanyDoc } = require('../../services/presets');
-const { PRESETS_V1 } = require('../../config/flags');
+const { PRESETS_V1, PUBLISH_V1 } = require('../../config/flags');
 
 class AIConfigLoader {
     constructor() {
@@ -34,6 +36,30 @@ class AIConfigLoader {
         console.log(`🔍 Loading AI configuration for company: ${companyID}`);
         
         try {
+            // Phase 8: Prefer published snapshot when PUBLISH_V1 is enabled
+            if (PUBLISH_V1) {
+                const snapshot = await AgentConfigSnapshot.getLatest(companyID);
+                if (snapshot?.data) {
+                    console.log(`📸 Using published config snapshot v${snapshot.version} for company: ${companyID}`);
+                    const snapshotConfig = {
+                        ...snapshot.data,
+                        companyID,
+                        loadedFrom: 'snapshot',
+                        snapshotVersion: snapshot.version,
+                        snapshotCreatedAt: snapshot.createdAt
+                    };
+                    
+                    // Cache the snapshot
+                    this.cache.set(cacheKey, {
+                        data: snapshotConfig,
+                        timestamp: Date.now()
+                    });
+                    
+                    return snapshotConfig;
+                }
+                console.log(`📸 No published snapshot found for company: ${companyID}, falling back to dynamic compilation`);
+            }
+
             let company = await Company.findById(companyID);
             if (!company) {
                 throw new Error(`Company not found: ${companyID}`);
@@ -52,47 +78,25 @@ class AIConfigLoader {
 
             const aiLogic = company.aiAgentLogic || {};
             
-            // Build comprehensive configuration per Blueprint
+            // Phase 8: Use the new assembler for consistent config structure
+            const compiledConfig = buildCompiledConfig(company.toObject ? company.toObject() : company);
+            
+            // Build comprehensive configuration per Blueprint (merging new assembler with legacy fields)
             const config = {
                 companyID,
                 companyName: company.companyName || company.name,
                 
-                // Answer Priority Flow
-                answerPriority: this.getAnswerPriority(aiLogic),
+                // Phase 8: Use compiled config as base
+                ...compiledConfig,
                 
-                // Routing Configuration (for validation)
-                routing: {
-                    priority: this.getAnswerPriority(aiLogic)
-                },
+                // Legacy fields for backward compatibility
+                answerPriority: compiledConfig.routing.priority,
                 
-                // Knowledge Configuration (for validation)
-                knowledge: {
-                    sources: {
-                        company: aiLogic.knowledgeSources?.company || [],
-                        trade: aiLogic.knowledgeSources?.trade || [],
-                        vector: aiLogic.knowledgeSources?.vector || []
-                    },
-                    thresholds: {
-                        companyKB: 0.80,
-                        tradeQA: 0.75,
-                        vector: 0.70,
-                        llmFallback: 0.60,
-                        ...aiLogic.thresholds
-                    }
-                },
-                
-                // Enterprise Configuration (for validation)
-                enterprise: {
-                    composite: {
-                        threshold: aiLogic.enterprise?.composite?.threshold || 0.70
-                    }
-                },
-                
-                // Confidence Thresholds (legacy compatibility)
+                // Confidence Thresholds (legacy compatibility - merge with compiled)
                 thresholds: {
-                    companyKB: 0.80,
-                    tradeQA: 0.75,
-                    vector: 0.70,
+                    companyKB: compiledConfig.knowledge.thresholds.companyQnA,
+                    tradeQA: compiledConfig.knowledge.thresholds.tradeQnA,
+                    vector: compiledConfig.knowledge.thresholds.vectorSearch,
                     llmFallback: 0.60,
                     ...aiLogic.thresholds
                 },
@@ -163,9 +167,18 @@ class AIConfigLoader {
                     ]
                 },
                 
-                // Metadata
+                // Metadata (merge with compiled config meta)
                 version: aiLogic.version || 1,
-                lastUpdated: aiLogic.lastUpdated || new Date()
+                lastUpdated: aiLogic.lastUpdated || new Date(),
+                loadedFrom: 'dynamic_compilation',
+                
+                // Phase 8 metadata (override compiled meta to show this was dynamically compiled)
+                meta: {
+                    ...compiledConfig.meta,
+                    loadedFrom: 'dynamic_compilation',
+                    fallbackMode: !PUBLISH_V1 ? 'flag_disabled' : 'no_snapshot',
+                    legacyCompatible: true,
+                }
             };
 
             // Apply presets if available
