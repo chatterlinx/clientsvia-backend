@@ -32,12 +32,16 @@ module.exports = {
   DIRECTORY_V1: process.env.DIRECTORY_V1?.toLowerCase?.() === 'on',
   NOTIFY_V1: process.env.NOTIFY_V1?.toLowerCase?.() === 'on',
   
+  // ==== Phase 6: Default Presets & Auto-Onboarding ====
+  PRESETS_V1: process.env.PRESETS_V1 === 'on',
+  PRESET_DEFAULT: process.env.PRESET_DEFAULT || 'hvac_starter',
+  
   // Helper to check if any experimental features are enabled
   hasExperimentalFeatures() {
     return this.AI_LOGIC_V2 || this.FALLBACK_V2 || this.CONFIG_SOFT_DEFAULTS || 
            this.TTS_LOCK || this.NOTIFY_ENABLED || this.DIRECTORY_V2 || 
            this.FALLBACK_OVERRIDES_V1 || this.FALLBACK_ACTIONS_V1 ||
-           this.DIRECTORY_V1 || this.NOTIFY_V1;
+           this.DIRECTORY_V1 || this.NOTIFY_V1 || this.PRESETS_V1;
   },
   
   // Get flags summary for debugging
@@ -53,6 +57,8 @@ module.exports = {
       FALLBACK_ACTIONS_V1: this.FALLBACK_ACTIONS_V1,
       DIRECTORY_V1: this.DIRECTORY_V1,
       NOTIFY_V1: this.NOTIFY_V1,
+      PRESETS_V1: this.PRESETS_V1,
+      PRESET_DEFAULT: this.PRESET_DEFAULT,
       experimental: this.hasExperimentalFeatures()
     };
   }

@@ -5,6 +5,8 @@
  */
 
 const Company = require('../../models/Company');
+const { getDefaultPreset, applyPresetToCompanyDoc } = require('../../services/presets');
+const { PRESETS_V1 } = require('../../config/flags');
 
 class AIConfigLoader {
     constructor() {
@@ -32,9 +34,20 @@ class AIConfigLoader {
         console.log(`🔍 Loading AI configuration for company: ${companyID}`);
         
         try {
-            const company = await Company.findById(companyID);
+            let company = await Company.findById(companyID);
             if (!company) {
                 throw new Error(`Company not found: ${companyID}`);
+            }
+
+            // Apply preset defaults if company has minimal configuration and presets are enabled
+            if (PRESETS_V1 && this.needsPresetDefaults(company)) {
+                const defaultPreset = getDefaultPreset();
+                if (defaultPreset) {
+                    console.log(`🎯 Applying default preset to company ${companyID} (minimal config detected)`);
+                    // Use the preset ID from flags.PRESET_DEFAULT 
+                    const { PRESET_DEFAULT } = require('../../config/flags');
+                    company = applyPresetToCompanyDoc(company.toObject(), PRESET_DEFAULT);
+                }
             }
 
             const aiLogic = company.aiAgentLogic || {};
@@ -155,6 +168,12 @@ class AIConfigLoader {
                 lastUpdated: aiLogic.lastUpdated || new Date()
             };
 
+            // Apply presets if available
+            if (company.presetID && PRESETS_V1.includes(company.presetID)) {
+                const preset = await getDefaultPreset(company.presetID);
+                applyPresetToCompanyDoc(company, preset);
+            }
+
             // Cache the configuration
             this.cache.set(cacheKey, {
                 data: config,
@@ -204,6 +223,26 @@ class AIConfigLoader {
     clearCache() {
         this.cache.clear();
         console.log('🗑️ All AI configuration cache cleared');
+    }
+
+    /**
+     * Check if company needs preset defaults (has minimal configuration)
+     * @param {Object} company - Company document
+     * @returns {boolean} True if preset defaults should be applied
+     */
+    needsPresetDefaults(company) {
+        // If preset was already applied, don't apply again
+        if (company.appliedPreset) {
+            return false;
+        }
+        
+        // Check if company has minimal configuration
+        const hasBasicInstructions = company.agentInstructions && company.agentInstructions.length > 50;
+        const hasCompanyInfo = company.companyInfo && Object.keys(company.companyInfo).length > 0;
+        const hasFallbackSettings = company.fallbackSettings && Object.keys(company.fallbackSettings).length > 0;
+        
+        // If missing key configuration, apply preset defaults
+        return !hasBasicInstructions || !hasCompanyInfo || !hasFallbackSettings;
     }
 }
 

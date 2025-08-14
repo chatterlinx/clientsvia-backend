@@ -190,6 +190,9 @@ class CompanyProfileManager {
                 console.log('Edit button clicked - form is already editable');
             });
         }
+
+        // Preset functionality (Phase 6)
+        this.setupPresetEventListeners();
     }
 
     /**
@@ -2057,6 +2060,8 @@ class CompanyProfileManager {
         note.updatedAt = new Date().toISOString();
         note.isEditing = false;
 
+
+
         this.renderEnterpriseNotes();
         this.setUnsavedChanges(true);
         this.showNotification('Note updated successfully!', 'success');
@@ -2727,156 +2732,106 @@ class CompanyProfileManager {
             // AI Agent Logic settings are handled by embedded HTML forms and JavaScript
             // The tab contains complex intelligence and memory systems
             // No specific population needed as forms are already in HTML
-            
-            // Initialize Directory UI (Phase 5 MVP)
-            if (this.companyId) {
-                this.initDirectoryUI(this.companyId);
-            }
-            
             console.log('✅ Agent Logic tab populated');
         } catch (error) {
             console.error('❌ Error populating Agent Logic tab:', error);
         }
     }
-    
+
     // ============================================================================
-    // 🔧 UTILITY FUNCTIONS
+    // 🎯 PRESET FUNCTIONALITY (Phase 6)
     // ============================================================================
 
     /**
-     * Show or hide loading indicator
-     * @param {boolean} show - Whether to show loading state
+     * Setup preset event listeners
      */
-    showLoading(show) {
-        // Create loading indicator if it doesn't exist
-        let loadingIndicator = document.getElementById('global-loading-indicator');
-        if (!loadingIndicator) {
-            loadingIndicator = document.createElement('div');
-            loadingIndicator.id = 'global-loading-indicator';
-            loadingIndicator.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-            loadingIndicator.innerHTML = `
-                <div class="bg-white rounded-lg p-6 shadow-xl">
-                    <div class="flex items-center space-x-3">
-                        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                        <span class="text-gray-700">Loading...</span>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(loadingIndicator);
+    setupPresetEventListeners() {
+        const applyPresetBtn = document.getElementById('applyPresetBtn');
+        if (applyPresetBtn) {
+            applyPresetBtn.addEventListener('click', () => this.handleApplyPreset());
+        }
+    }
+
+    /**
+     * Handle apply preset button click
+     */
+    async handleApplyPreset() {
+        try {
+            const presetSelect = document.getElementById('presetSelect');
+            const applyBtn = document.getElementById('applyPresetBtn');
+            
+            if (!presetSelect || !this.companyId) {
+                throw new Error('Missing preset selection or company ID');
+            }
+
+            const presetId = presetSelect.value;
+            const originalBtnText = applyBtn.innerHTML;
+            
+            // Show loading state
+            applyBtn.disabled = true;
+            applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Applying...';
+
+            console.log(`🎯 Applying preset '${presetId}' to company ${this.companyId}`);
+
+            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}/apply-preset`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({ presetId })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to apply preset');
+            }
+
+            console.log('✅ Preset applied successfully:', data);
+            
+            // Show success message
+            this.showToast(`Successfully applied ${data.appliedPreset?.name || presetId} preset!`, 'success');
+            
+            // Reload the company data to reflect changes
+            await this.loadCompanyData();
+            
+        } catch (error) {
+            console.error('❌ Failed to apply preset:', error);
+            this.showToast(`Failed to apply preset: ${error.message}`, 'error');
+        } finally {
+            // Reset button state
+            const applyBtn = document.getElementById('applyPresetBtn');
+            if (applyBtn) {
+                applyBtn.disabled = false;
+                applyBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>Apply Preset';
+            }
+        }
+    }
+
+    /**
+     * Show toast notification
+     */
+    showToast(message, type = 'info') {
+        // Try to use existing toast function if available
+        if (typeof window.showToast === 'function') {
+            window.showToast(message, type);
+            return;
         }
         
-        loadingIndicator.style.display = show ? 'flex' : 'none';
+        // Fallback: Create simple toast
+        console.log(`${type.toUpperCase()}: ${message}`);
         
-        // Also handle any loading buttons
-        const loadingButtons = document.querySelectorAll('.loading');
-        loadingButtons.forEach(btn => {
-            if (show) {
-                btn.disabled = true;
-                btn.classList.add('opacity-50');
-                const originalText = btn.innerHTML;
-                btn.dataset.originalText = originalText;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading...';
-            } else {
-                btn.disabled = false;
-                btn.classList.remove('opacity-50');
-                if (btn.dataset.originalText) {
-                    btn.innerHTML = btn.dataset.originalText;
-                }
-            }
-        });
-        
-        console.log(`🔄 Loading indicator ${show ? 'shown' : 'hidden'}`);
+        // Simple alert fallback
+        if (type === 'error') {
+            alert(`Error: ${message}`);
+        } else if (type === 'success') {
+            // For success, just log to console to avoid annoying alerts
+            console.log(`✅ SUCCESS: ${message}`);
+        }
     }
     
-    /**
-     * Show notification to user
-     * @param {string} message - Message to display
-     * @param {string} type - Type of notification (success, error, warning, info)
-     */
-    showNotification(message, type = 'info') {
-        // Create notification container if it doesn't exist
-        let notificationContainer = document.getElementById('notification-container');
-        if (!notificationContainer) {
-            notificationContainer = document.createElement('div');
-            notificationContainer.id = 'notification-container';
-            notificationContainer.className = 'fixed top-4 right-4 z-50 space-y-2';
-            document.body.appendChild(notificationContainer);
-        }
-        
-        const notification = document.createElement('div');
-        const baseClasses = 'p-4 rounded-lg shadow-lg transition-all duration-300 max-w-sm';
-        const typeClasses = {
-            success: 'bg-green-100 border border-green-400 text-green-700',
-            error: 'bg-red-100 border border-red-400 text-red-700', 
-            warning: 'bg-yellow-100 border border-yellow-400 text-yellow-700',
-            info: 'bg-blue-100 border border-blue-400 text-blue-700'
-        };
-        
-        notification.className = `${baseClasses} ${typeClasses[type] || typeClasses.info}`;
-        
-        const icons = {
-            success: '✅',
-            error: '❌', 
-            warning: '⚠️',
-            info: 'ℹ️'
-        };
-        
-        notification.innerHTML = `
-            <div class="flex items-start justify-between">
-                <div class="flex items-start">
-                    <span class="mr-2 text-lg">${icons[type] || icons.info}</span>
-                    <span class="text-sm font-medium">${message}</span>
-                </div>
-                <button onclick="this.parentElement.parentElement.remove()" 
-                        class="ml-3 text-lg hover:opacity-75 focus:outline-none">×</button>
-            </div>
-        `;
-        
-        notificationContainer.appendChild(notification);
-        
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.remove();
-            }
-        }, 5000);
-        
-        console.log(`📢 Notification (${type}): ${message}`);
-    }
-
-    /* ========================================================================
-       🔧 UTILITY FUNCTIONS
-       ======================================================================== */
-
-    /**
-     * Escape HTML to prevent XSS attacks
-     * @param {string} str - String to escape
-     * @returns {string} Escaped HTML string
-     */
-    escapeHtml(str) {
-        if (typeof str !== 'string') return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
-
-    /**
-     * Debounce utility method for delayed function execution
-     * @param {Function} func - Function to debounce
-     * @param {number} wait - Delay in milliseconds
-     * @returns {Function} Debounced function
-     */
-    debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func.apply(this, args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
+    // ============================================================================
 }
 
 /* ============================================================================

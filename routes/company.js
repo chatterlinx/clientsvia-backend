@@ -10,6 +10,7 @@ const { redisClient } = require('../clients');
 const { apiLimiter } = require('../middleware/rateLimit'); // Rate limiting
 const { authenticateJWT, requireRole } = require('../middleware/auth'); // Authentication
 const { defaultResponses, clearCompanyResponsesCache, initializeStandardPersonalityResponses, ensurePersonalityResponsesExist } = require('../utils/personalityResponses_enhanced');
+const flags = require('../config/flags'); // Phase 6: Feature flags for presets
 
 // Google OAuth2 Client Setup
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -129,6 +130,21 @@ router.post('/companies', async (req, res) => {
 
         // Use Mongoose model to create the company with all default values
         const newCompany = new Company(newCompanyData);
+        
+        // Apply preset defaults if feature is enabled (Phase 6)
+        if (flags.PRESETS_V1) {
+            const { applyPresetToCompanyDoc } = require('../services/presets');
+            const presetId = req.query.preset || flags.PRESET_DEFAULT;
+            try {
+                const presetData = applyPresetToCompanyDoc(newCompany.toObject(), presetId);
+                Object.assign(newCompany, presetData);
+                console.log(`[Company Creation] Applied preset '${presetId}' to new company: ${companyName}`);
+            } catch (presetError) {
+                console.warn(`[Company Creation] Failed to apply preset '${presetId}':`, presetError.message);
+                // Continue without preset - not a blocking error
+            }
+        }
+        
         const savedCompany = await newCompany.save();
         
         console.log('[API POST /api/companies] Company added successfully:', savedCompany.companyName, 'ID:', savedCompany._id);
@@ -1282,5 +1298,69 @@ router.put('/:id/directory', authenticateSingleSession, async (req, res) => {
   }
 });
 // --- END /api/company/:id/directory (MVP) ---
+
+// --- BEGIN /api/company/:id/apply-preset (Phase 6) ---
+const { PRESETS_V1 } = require('../config/flags');
+const { getPresetList, applyPresetToCompanyDoc, validatePreset } = require('../services/presets');
+
+// Get available presets
+router.get('/presets', authenticateSingleSession, async (req, res) => {
+  if (!PRESETS_V1) return res.status(404).json({ error: 'Feature disabled' });
+  
+  try {
+    const presets = getPresetList();
+    res.json({ presets });
+  } catch (error) {
+    console.error('[Presets API] List error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Apply preset to company
+router.post('/:id/apply-preset', authenticateSingleSession, async (req, res) => {
+  if (!PRESETS_V1) return res.status(404).json({ error: 'Feature disabled' });
+  
+  try {
+    const { presetId } = req.body;
+    if (!presetId) {
+      return res.status(400).json({ error: 'presetId is required' });
+    }
+    
+    // Validate preset exists
+    const validation = validatePreset(presetId);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+    
+    // Get current company
+    const company = await Company.findById(req.params.id);
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    // Apply preset (non-destructive merge)
+    const updatedDoc = applyPresetToCompanyDoc(company.toObject(), presetId);
+    
+    // Update company with preset configuration
+    const updated = await Company.findByIdAndUpdate(
+      req.params.id,
+      { $set: updatedDoc },
+      { new: true, runValidators: true }
+    );
+    
+    console.log(`[Presets] Applied preset '${presetId}' to company ${req.params.id}`);
+    
+    res.json({
+      success: true,
+      appliedPreset: updatedDoc.appliedPreset,
+      message: `Successfully applied ${updatedDoc.appliedPreset.name} preset`
+    });
+    
+  } catch (error) {
+    console.error('[Presets API] Apply error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+// --- END /api/company/:id/apply-preset (Phase 6) ---
 
 module.exports = router;
