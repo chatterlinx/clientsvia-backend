@@ -4577,6 +4577,45 @@
                     </div>
                 
                 </div>
+
+                <!-- 🚀 MAIN AI AGENT LOGIC SAVE/PUBLISH SECTION -->
+                <div class="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-6 mt-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-800 flex items-center">
+                                <i class="fas fa-rocket mr-2 text-indigo-600"></i>Publish AI Agent Configuration
+                                <span class="ml-2 px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded-full">Required</span>
+                            </h4>
+                            <p class="text-sm text-gray-600 mt-1">Save and activate your complete AI Agent Logic configuration</p>
+                            <div class="mt-2 text-xs text-gray-500">
+                                <span class="ai-config-status status-inactive">Status: Configuration Required</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <span id="ai-agent-config-saved" class="text-green-600 text-sm hidden">
+                                <i class="fas fa-check-circle mr-1"></i>Configuration Published!
+                            </span>
+                            <button 
+                                type="button" 
+                                onclick="saveAIAgentLogicConfiguration()" 
+                                class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition duration-150 ease-in-out transform hover:scale-105"
+                            >
+                                <i class="fas fa-rocket mr-2"></i>Publish Configuration
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-4 p-3 bg-white rounded-lg border border-indigo-100">
+                        <div class="text-xs text-gray-600">
+                            <strong>This will configure:</strong>
+                            <ul class="mt-1 ml-4 list-disc space-y-1">
+                                <li>Answer Priority Flow (routing.priority)</li>
+                                <li>Knowledge Source Thresholds (knowledge.thresholds)</li>
+                                <li>Composite Confidence Settings (enterprise.composite.threshold)</li>
+                                <li>Agent Personality & Behavior Controls</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- ========================================= -->
@@ -8534,6 +8573,131 @@
         }
 
         // ...existing code...
+
+        /**
+         * 🚀 SAVE COMPLETE AI AGENT LOGIC CONFIGURATION
+         * Ensures all required router config fields are properly set
+         */
+        async function saveAIAgentLogicConfiguration() {
+            console.log('🤖 Saving complete AI Agent Logic configuration...');
+            try {
+                const companyId = getCurrentCompanyId();
+                if (!companyId) {
+                    console.error('❌ No company ID found');
+                    showToast('No company ID found', 'error');
+                    return;
+                }
+
+                // 1. Build routing priority from the priority flow UI
+                const priorityItems = document.querySelectorAll('.clientsvia-priority-item');
+                const routing = {
+                    priority: []
+                };
+
+                priorityItems.forEach((item, index) => {
+                    const checkbox = item.querySelector('.clientsvia-priority-toggle');
+                    if (checkbox && checkbox.checked) {
+                        const priorityType = item.getAttribute('data-priority-type');
+                        // Map UI types to router types
+                        const typeMapping = {
+                            'company-knowledge': 'template',
+                            'trade-categories': 'company_kb',
+                            'template-intelligence': 'trade_kb',
+                            'vector-search': 'vector',
+                            'llm-fallback': 'llm'
+                        };
+                        routing.priority.push(typeMapping[priorityType] || priorityType);
+                    }
+                });
+
+                // Ensure we have a default priority order if none specified
+                if (routing.priority.length === 0) {
+                    routing.priority = ["template", "company_kb", "trade_kb", "vector", "llm"];
+                }
+
+                // 2. Build knowledge sources configuration
+                const knowledge = {
+                    sources: {
+                        company: [], // Will be populated from company Q&A
+                        trade: [],   // Will be populated from trade categories
+                        vector: []   // Will be populated from vector search
+                    },
+                    thresholds: {
+                        company: parseFloat(document.getElementById('clientsvia-threshold-companyQnA')?.value) || 0.80,
+                        trade: parseFloat(document.getElementById('clientsvia-threshold-tradeQnA')?.value) || 0.75,
+                        vector: parseFloat(document.getElementById('clientsvia-threshold-vectorSearch')?.value) || 0.70,
+                        llm: parseFloat(document.getElementById('clientsvia-threshold-llmFallback')?.value) || 0.60
+                    }
+                };
+
+                // 3. Build enterprise configuration
+                const enterprise = {
+                    composite: {
+                        threshold: parseFloat(document.getElementById('composite-threshold')?.value) || 70
+                    }
+                };
+
+                // 4. Collect agent personality settings
+                const agentPersonality = {
+                    voiceTone: document.getElementById('clientsvia-voiceTone')?.value || 'professional',
+                    speechPace: document.getElementById('clientsvia-speechPace')?.value || 'normal',
+                    personality: document.getElementById('clientsvia-personalityStyle')?.value || 'helpful',
+                    responseLength: document.getElementById('clientsvia-responseLength')?.value || 'concise'
+                };
+
+                // 5. Collect behavior controls
+                const behaviorControls = {
+                    allowBargeIn: document.getElementById('clientsvia-allowBargeIn')?.checked ?? false,
+                    acknowledgeEmotion: document.getElementById('clientsvia-acknowledgeEmotion')?.checked ?? true,
+                    useEmails: document.getElementById('clientsvia-useEmails')?.checked ?? false,
+                    escalateOnConfusion: document.getElementById('clientsvia-escalateOnConfusion')?.checked ?? true
+                };
+
+                // 6. Build the complete configuration object
+                const aiAgentLogicConfig = {
+                    routing,
+                    knowledge,
+                    enterprise,
+                    agentPersonality,
+                    behaviorControls,
+                    enabled: true,
+                    lastUpdated: new Date().toISOString(),
+                    version: Date.now() // Use timestamp as version for cache busting
+                };
+
+                console.log('🚀 Saving AI Agent Logic configuration:', aiAgentLogicConfig);
+
+                // 7. Save to the AI Agent Logic endpoint
+                const response = await fetch(`/api/aiAgentLogic/save-config`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(aiAgentLogicConfig)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('✅ AI Agent Logic configuration saved successfully:', result);
+                    showToast('AI Agent Logic configuration saved & published successfully!', 'success');
+                    
+                    // Update the UI to show configuration is active
+                    const statusElements = document.querySelectorAll('.ai-config-status');
+                    statusElements.forEach(el => {
+                        el.textContent = 'Active';
+                        el.className = el.className.replace('status-inactive', 'status-active');
+                    });
+                } else {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+            } catch (error) {
+                console.error('❌ Failed to save AI Agent Logic configuration:', error);
+                showToast('Failed to save AI Agent Logic configuration: ' + error.message, 'error');
+            }
+        }
 
         // Preview ClientsVia personality voice
         async function previewClientsviaPersonality() {
