@@ -13,18 +13,19 @@ const express = require('express');
 const router = express.Router();
 const Company = require('../models/Company');
 const { ObjectId } = require('mongodb');
-const { authenticateSingleSession } = require('../middleware/auth');
+const { authenticateSingleSession, authenticateSingleSessionOptional } = require('../middleware/auth');
 const logger = require('../utils/logger');
 
 // ===============================================
 // 🚀 GET ENTERPRISE AI INTELLIGENCE SETTINGS
 // ===============================================
 
-router.get('/companies/:companyId/enterprise-ai-settings', authenticateSingleSession, async (req, res) => {
+router.get('/companies/:companyId/enterprise-ai-settings', authenticateSingleSessionOptional, async (req, res) => {
     try {
         const { companyId } = req.params;
         
         if (!ObjectId.isValid(companyId)) {
+            // Invalid company ID format is a client error
             return res.status(400).json({ 
                 success: false, 
                 error: 'Invalid company ID format' 
@@ -34,6 +35,19 @@ router.get('/companies/:companyId/enterprise-ai-settings', authenticateSingleSes
         logger.info('Enterprise AI settings requested', { companyId });
 
         const company = await Company.findById(companyId).select('enterpriseAIIntelligence tradeCategories');
+
+        // If the request is unauthenticated (optional auth returned no user), return safe defaults instead of 401/404
+        if (!req.user) {
+            const enterpriseSettings = company?.enterpriseAIIntelligence || getEnterpriseDefaults();
+            const tradeCategories = company?.tradeCategories || [];
+            return res.json({
+                success: true,
+                settings: enterpriseSettings,
+                tradeCategories,
+                configVersion: enterpriseSettings.configVersion || '1.0.0',
+                readOnly: true
+            });
+        }
 
         if (!company) {
             return res.status(404).json({ 

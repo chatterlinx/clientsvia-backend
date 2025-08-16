@@ -170,11 +170,65 @@ async function authenticateSingleSession(req, res, next) {
   }
 }
 
+// OPTIONAL: Allow endpoint to be used in read-only/default mode when authentication is not provided or invalid
+async function authenticateSingleSessionOptional(req, res, next) {
+  try {
+    const token = getTokenFromRequest(req);
+
+    if (!token) {
+      // Development mode: preserve existing dev bypass behavior
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔓 Development mode: Optional auth bypass');
+        req.user = { _id: 'dev-user', development: true };
+        return next();
+      }
+      // In production, allow the request to continue unauthenticated
+      req.user = null;
+      return next();
+    }
+
+    // Attempt emergency bypass
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      if (decoded.emergency && decoded.sessionId === 'EMERGENCY_BYPASS') {
+        console.log('🚨 Emergency bypass access granted (optional)');
+        req.user = { _id: decoded.userId, emergency: true };
+        return next();
+      }
+    } catch (e) {
+      // ignore and continue
+    }
+
+    // Validate session
+    const validation = sessionManager.validateSession(token);
+    if (!validation.valid) {
+      // Treat invalid session as unauthenticated and continue
+      req.user = null;
+      return next();
+    }
+
+    const user = await User.findById(validation.decoded.userId).populate('companyId');
+    if (!user || user.status !== 'active') {
+      req.user = null;
+      return next();
+    }
+
+    req.user = user;
+    req.sessionInfo = validation.session;
+    return next();
+  } catch (error) {
+    console.error('Optional single session auth error:', error);
+    req.user = null;
+    return next();
+  }
+}
+
 module.exports = {
   getTokenFromRequest,
   verifyToken,
   authenticateJWT,
   authenticateSingleSession, // NEW: Single session auth
+  authenticateSingleSessionOptional,
   authenticateSession,
   requireRole,
   requireCompanyAccess
