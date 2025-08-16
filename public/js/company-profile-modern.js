@@ -2046,10 +2046,11 @@ class CompanyProfileManager {
         if (!note) return;
 
         const noteCard = document.querySelector(`[data-note-id="${noteId}"]`);
-        if (!noteCard) return;
+        if (!note) return;
 
-        const titleInput = noteCard.querySelector('.note-title-edit');
-        const contentTextarea = noteCard.querySelector('.note-content-edit');
+        const noteCard = document.querySelector(`[data-note-id="${noteId}"]`);
+        const titleInput = noteCard?.querySelector('.note-title-edit');
+        const contentTextarea = noteCard?.querySelector('.note-content-edit');
 
         if (!contentTextarea?.value.trim()) {
             this.showNotification('Note content cannot be empty', 'error');
