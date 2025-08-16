@@ -1,0 +1,112 @@
+{
+  "version": "1.0",
+  "name": "Platform Defaults",
+  "description": "Environment-backed platform defaults for all companies",
+  "lastUpdated": "2025-08-16T00:00:00.000Z",
+  
+  "answerPriority": ["companyKB", "tradeQA", "vector", "llmFallback"],
+  
+  "knowledge": {
+    "thresholds": {
+      "companyKB": 0.75,
+      "tradeQA": 0.70,
+      "vector": 0.65,
+      "llmFallback": 0.50
+    },
+    "companyKB": {
+      "enabled": true,
+      "entries": []
+    },
+    "tradeCategories": []
+  },
+  
+  "agentSettings": {
+    "useLLM": true,
+    "llmModel": "gemini-pro",
+    "memoryMode": "short",
+    "fallbackThreshold": 0.5,
+    "escalationMode": "ask",
+    "rePromptAfterTurns": 3,
+    "maxPromptsPerCall": 2,
+    "semanticSearchEnabled": true,
+    "confidenceScoring": true,
+    "autoLearningQueue": false
+  },
+  
+  "personality": {
+    "voiceTone": "professional",
+    "responseStyle": "helpful",
+    "escalationBehavior": "polite",
+    "acknowledgmentStyle": "formal",
+    "greetingStyle": "professional"
+  },
+  
+  "intelligence": {
+    "contextualMemory": false,
+    "dynamicReasoning": false,
+    "smartEscalation": false,
+    "autoLearning": false,
+    "realtimeOptimization": false,
+    "memoryRetentionMinutes": 15
+  },
+  
+  "voice": {
+    "provider": "google",
+    "voiceId": "en-US-Standard-A",
+    "speed": 1.0,
+    "pitch": 0,
+    "stability": 0.5,
+    "clarity": 0.75
+  },
+  
+  "transfer": {
+    "transferEmail": "support@clientsvia.com",
+    "transferPhone": "+1-555-SUPPORT",
+    "escalationMode": "ask",
+    "transferReasons": [
+      "Complex customer inquiry",
+      "Technical support needed",
+      "Pricing information request",
+      "General assistance"
+    ]
+  },
+  
+  "booking": {
+    "operatingHours": [
+      {"day": "Monday", "enabled": true, "start": "09:00", "end": "17:00"},
+      {"day": "Tuesday", "enabled": true, "start": "09:00", "end": "17:00"},
+      {"day": "Wednesday", "enabled": true, "start": "09:00", "end": "17:00"},
+      {"day": "Thursday", "enabled": true, "start": "09:00", "end": "17:00"},
+      {"day": "Friday", "enabled": true, "start": "09:00", "end": "17:00"},
+      {"day": "Saturday", "enabled": false, "start": "09:00", "end": "15:00"},
+      {"day": "Sunday", "enabled": false, "start": "09:00", "end": "15:00"}
+    ],
+    "timezone": "America/New_York",
+    "use247Routing": false,
+    "afterHoursAction": "message",
+    "appointmentTypes": [
+      {"name": "General Appointment", "duration": 60, "description": "Standard service appointment"}
+    ]
+  },
+  
+  "notifications": {
+    "emailNotifications": false,
+    "smsNotifications": false,
+    "appointmentReminders": false,
+    "serviceCompletionNotification": false
+  },
+  
+  "fallbacks": {
+    "unknownQuestionResponse": "I'd be happy to help you with that. Let me connect you with someone who can provide more specific information.",
+    "technicalIssueResponse": "For technical assistance, I'll transfer you to our support team who can help you right away.",
+    "pricingBeyondStandardResponse": "For pricing information, let me connect you with our team who can provide accurate details."
+  },
+  
+  "environment": {
+    "defaultVoiceId": "en-US-Standard-A",
+    "defaultTimezone": "America/New_York",
+    "fallbackTransferNumber": "+1-555-SUPPORT",
+    "fallbackTransferEmail": "support@clientsvia.com",
+    "supportHours": "Monday-Friday 9AM-5PM EST"
+  }
+}
