@@ -1439,3 +1439,6 @@ router.post('/company/:id/reset/:moduleKey', authenticateSingleSession, async (r
         res.status(500).json({ success: false, message: 'Failed to reset module', error: error.message });
     }
 });
+
+// Export the configured router so it can be mounted by the main app
+module.exports = router;
