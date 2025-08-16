@@ -137,6 +137,15 @@ router.get('/', async (req, res) => {
     try {
         const { companyId = 'global', includeGlobal = 'true' } = req.query;
         
+        // DEBUG: Log the request details
+        console.log('🔍 [DEBUG] Trade Categories GET request:', {
+            companyId,
+            includeGlobal,
+            fullQuery: req.query,
+            url: req.originalUrl,
+            method: req.method
+        });
+        
         const db = getDB();
         const collection = db.collection(COLLECTION_NAME);
         
@@ -165,6 +174,7 @@ router.get('/', async (req, res) => {
         });
         
     } catch (error) {
+        console.error('❌ [DEBUG] Trade Categories GET error:', error);
         logger.error('Error retrieving trade categories', { error: error.message });
         res.status(500).json({
             success: false,
