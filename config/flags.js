@@ -32,6 +32,9 @@ module.exports = {
   DIRECTORY_V1: process.env.DIRECTORY_V1?.toLowerCase?.() === 'on',
   NOTIFY_V1: process.env.NOTIFY_V1?.toLowerCase?.() === 'on',
   
+  // ==== Phase 2: Live Effective Config Resolver ====
+  LIVE_RESOLVER_V1: process.env.LIVE_RESOLVER_V1?.toLowerCase?.() === 'on' || process.env.LIVE_RESOLVER_V1 === 'true' || true, // Default ON for Phase 2
+  
   // ==== Phase 6: Default Presets & Auto-Onboarding ====
   PRESETS_V1: process.env.PRESETS_V1 === 'on',
   PRESET_DEFAULT: process.env.PRESET_DEFAULT || 'hvac_starter',
@@ -49,7 +52,8 @@ module.exports = {
            this.TTS_LOCK || this.NOTIFY_ENABLED || this.DIRECTORY_V2 || 
            this.FALLBACK_OVERRIDES_V1 || this.FALLBACK_ACTIONS_V1 ||
            this.DIRECTORY_V1 || this.NOTIFY_V1 || this.PRESETS_V1 ||
-           this.VOICE_GUARD_V1 || this.KILL_TWIML_SAY || this.PUBLISH_V1;
+           this.VOICE_GUARD_V1 || this.KILL_TWIML_SAY || this.PUBLISH_V1 ||
+           this.LIVE_RESOLVER_V1;
   },
   
   // Get flags summary for debugging
@@ -70,6 +74,7 @@ module.exports = {
       VOICE_GUARD_V1: this.VOICE_GUARD_V1,
       KILL_TWIML_SAY: this.KILL_TWIML_SAY,
       PUBLISH_V1: this.PUBLISH_V1,
+      LIVE_RESOLVER_V1: this.LIVE_RESOLVER_V1,
       experimental: this.hasExperimentalFeatures()
     };
   }
