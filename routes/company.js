@@ -246,11 +246,13 @@ router.get('/company/:id', checkCompanyCache, handleGetCompany);
 router.get('/:id', (req, res, next) => {
     const { id } = req.params;
     if (ObjectId.isValid(id)) {
-        checkCompanyCache(req, res, next);
+        // Valid ObjectId - continue to company handler
+        next();
     } else {
-        next(); // Let other routes handle non-ObjectId paths
+        // Invalid ObjectId - skip to next route
+        next('route');
     }
-}, handleGetCompany);
+}, checkCompanyCache, handleGetCompany);
 
 // Delete a company completely from the database
 router.delete('/company/:id', async (req, res) => {
