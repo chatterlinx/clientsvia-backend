@@ -99,6 +99,25 @@
             position: relative !important;
         }
         
+        /* Phase 1 minimal styles */
+        .cv-card { box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+        .cv-btn-primary,
+        .cv-btn-secondary {
+            border-radius: 10px; padding: .6rem .9rem; font-weight: 600; border: 1px solid transparent;
+        }
+        .cv-btn-primary { background: #0f766e; color: #fff; }
+        .cv-btn-secondary { background: #f4f4f5; color: #111827; }
+        .cv-btn-primary[disabled] { opacity: .5; cursor: not-allowed; }
+        .cv-select, .cv-input, .cv-textarea {
+            border: 1px solid #e5e7eb; border-radius: 10px; padding: .55rem .7rem;
+        }
+        /* Per-module dirty state */
+        [data-module].is-dirty { outline: 2px solid #f59e0b; outline-offset: 2px; }
+        [data-module] .module-save { display: none; }
+        [data-module].is-dirty .module-save { display: inline-flex; }
+        /* Hide legacy "Agent Introductions" safely without deleting yet */
+        #agent-introductions-card, [data-module="introductions"] { display: none !important; }
+        
         /* 🔧 Flow Designer Canvas - Keep properly contained */
         #flow-canvas {
             position: relative;
@@ -1528,6 +1547,32 @@
                             <!-- 🧠 AGENT CLIENTSVIA INTELLIGENCE - UNIFIED CONTAINER -->
                             <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
                                 
+                                <!-- === AI Agent Logic — TOP CONTROLS (Phase 1) === -->
+                                <section id="ai-top-controls" class="cv-card sticky top-0 z-30 bg-white/95 backdrop-blur border rounded-xl p-4 mb-4">
+                                  <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <div class="flex items-center gap-3 flex-wrap">
+                                      <label for="presetSelect" class="font-medium">Preset</label>
+                                      <select id="presetSelect" class="cv-select min-w-[320px]" disabled>
+                                        <option value="hvac_starter" selected>HVAC Starter — Optimum Defaults v1</option>
+                                        <option value="plumbing" disabled>Plumbing (coming soon)</option>
+                                        <option value="electrical" disabled>Electrical (coming soon)</option>
+                                      </select>
+
+                                      <span id="dirtyBadge"
+                                            class="hidden text-amber-700 bg-amber-100 border border-amber-300 px-2 py-1 rounded-md text-sm">
+                                        Unsaved changes
+                                      </span>
+                                    </div>
+
+                                    <div class="flex items-center gap-2">
+                                      <button id="runSelfTestBtn" type="button" class="cv-btn-secondary">
+                                        Run Self-Test
+                                      </button>
+                                    </div>
+                                  </div>
+                                </section>
+                                <!-- === /TOP CONTROLS === -->
+                                
                                 <!-- ========================================= -->
                                 <!-- AI AGENT QUICK REFERENCE GUIDE           -->
                                 <!-- Purpose: Help AI assistants navigate     -->
@@ -1574,7 +1619,7 @@
                                 <!-- COMPANY KNOWLEDGE BASE MODULE            -->
                                 <!-- Priority #1: Company-specific Q&A        -->
                                 <!-- ========================================= -->
-                                <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6" data-module="knowledge">
                                     <div class="border-b border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-3 rounded-t-lg">
                                         <div class="flex items-center justify-between">
                                             <div>
@@ -1681,9 +1726,14 @@
                                                 
                                                 <!-- Save Button -->
                                                 <div class="pt-4">
-                                                    <button type="button" onclick="saveCompanyKBSettings()" class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700">
-                                                        <i class="fas fa-save mr-2"></i>Save KB Settings
-                                                    </button>
+                                                    <div class="flex gap-2">
+                                                        <button type="button" onclick="saveCompanyKBSettings()" class="cv-btn-primary module-save flex-1 inline-flex items-center justify-center" data-action="save" disabled>
+                                                            <i class="fas fa-save mr-2"></i>Save KB Settings
+                                                        </button>
+                                                        <button type="button" class="cv-btn-secondary" data-action="reset">
+                                                            Reset to Default
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1694,7 +1744,7 @@
                                 <!-- AGENT SETTINGS & CONFIGURATION FORM     -->
                                 <!-- Missing form elements for agent config   -->
                                 <!-- ========================================= -->
-                                <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6" data-module="agent-settings">
                                     <div class="border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 rounded-t-lg">
                                         <h3 class="text-lg font-medium text-gray-800 flex items-center">
                                             <i class="fas fa-cog mr-2 text-blue-600"></i>Agent Settings & Trade Categories
@@ -1832,9 +1882,14 @@
                                 </svg>
                                 Settings Saved!
                             </span>
-                            <button type="button" onclick="saveAgentSettings()" class="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
-                                <i class="fas fa-save mr-2"></i>Save Agent Settings
-                            </button>
+                            <div class="flex gap-2">
+                                <button type="button" onclick="saveAgentSettings()" class="cv-btn-primary module-save" data-action="save" disabled>
+                                    <i class="fas fa-save mr-2"></i>Save Agent Settings
+                                </button>
+                                <button type="button" class="cv-btn-secondary" data-action="reset">
+                                    Reset to Default
+                                </button>
+                            </div>
                         </div>
                                     </div>
                                 </div>
@@ -1844,7 +1899,7 @@
                                 <!-- Production-Ready Agent Intelligence Core   -->
                                 <!-- Optimized for performance & scalability   -->
                                 <!-- ========================================= -->
-                                <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4 mb-6">
+                                <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4 mb-6" data-module="intelligence">
                                     <div class="flex items-center justify-between mb-4">
                                         <div class="flex items-center">
                                             <i class="fas fa-brain mr-2 text-purple-600"></i>
@@ -1971,10 +2026,15 @@
                                     
                                     <!-- Save Button for Intelligence Settings -->
                                     <div class="flex justify-end mt-6 pt-4 border-t border-purple-200">
-                                        <button type="button" id="save-intelligence-settings" 
-                                            class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-6 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center">
-                                            <i class="fas fa-save mr-2"></i>Save Intelligence Settings
-                                        </button>
+                                        <div class="flex gap-2">
+                                            <button type="button" id="save-intelligence-settings" 
+                                                class="cv-btn-primary module-save" data-action="save" disabled>
+                                                <i class="fas fa-save mr-2"></i>Save Intelligence Settings
+                                            </button>
+                                            <button type="button" class="cv-btn-secondary" data-action="reset">
+                                                Reset to Default
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 
@@ -2016,7 +2076,7 @@
                                         <!-- Data: answerPriority array + thresholds   -->
                                         <!-- ========================================= -->
                                         <!-- TAB 1: Answer Priority Flow -->
-                                        <div id="clientsvia-priority-content" class="clientsvia-tab-content active" data-config-section="answer-priority-flow">
+                                        <div id="clientsvia-priority-content" class="clientsvia-tab-content active" data-config-section="answer-priority-flow" data-module="priority">
                                             <div class="mb-6">
                                                 <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                                                     <i class="fas fa-flow-chart mr-2 text-indigo-600"></i>Answer Priority Flow
@@ -2193,7 +2253,7 @@
                                         <!-- Data: kb_company + kb_trade collections  -->
                                         <!-- ========================================= -->
                                         <!-- TAB 2: Knowledge Source Controls -->
-                                        <div id="clientsvia-knowledge-content" class="clientsvia-tab-content" data-config-section="knowledge-sources">
+                                        <div id="clientsvia-knowledge-content" class="clientsvia-tab-content" data-config-section="knowledge-sources" data-module="knowledge-sources">
                                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                                 <!-- Left Column: Source Priority & Configuration -->
                                                 <div class="space-y-5">

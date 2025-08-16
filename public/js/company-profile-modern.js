@@ -3071,78 +3071,126 @@ class CompanyProfileManager {
     // ============================================================================
 }
 
-/* ============================================================================
-   🌐 GLOBAL FUNCTION EXPOSURE FOR HTML SCRIPT COMPATIBILITY
-   ============================================================================ */
-
-// Expose fetchCompanyData function globally for HTML script calls
-window.fetchCompanyData = async function() {
-    console.log('🌐 Global fetchCompanyData called');
-    
-    // Wait for CompanyProfileManager to be available
-    const waitForManager = () => {
-        return new Promise((resolve) => {
-            const checkManager = () => {
-                if (window.companyProfileManager) {
-                    resolve();
-                } else {
-                    setTimeout(checkManager, 50); // Check every 50ms
-                }
-            };
-            checkManager();
-        });
-    };
-    
-    try {
-        await waitForManager();
-        await window.companyProfileManager.loadCompanyData();
-        console.log('✅ Global fetchCompanyData completed');
-    } catch (error) {
-        console.error('❌ Global fetchCompanyData failed:', error);
-    }
-};
-
-/* ============================================================================
-   🚀 INITIALIZATION & EXPORTS
-   ============================================================================ */
-
-// Global instance
-let companyProfileManager = null;
-
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        companyProfileManager = new CompanyProfileManager();
-        
-        // Set global reference BEFORE initializing
-        window.companyProfileManager = companyProfileManager;
-        
-        await companyProfileManager.init();
-        
-        // Add global debug functions for testing
-        window.debugCompanyProfile = companyProfileManager;
-        window.testWebhookButton = () => {
-            console.log('🧪 Testing webhook button...');
-            if (companyProfileManager) {
-                companyProfileManager.setupWebhookToggle();
-                const btn = document.getElementById('toggleWebhookInfo');
-                const panel = document.getElementById('webhookInfoPanel');
-                console.log('Button found:', !!btn);
-                console.log('Panel found:', !!panel);
-                if (btn) {
-                    console.log('Button text:', btn.innerHTML);
-                    console.log('Button dataset:', btn.dataset);
-                }
-                if (panel) {
-                    console.log('Panel classes:', panel.className);
-                }
-            }
-        };
-        
-    } catch (error) {
-        console.error('❌ Failed to initialize company profile:', error);
-    }
-});
-
 // Export for global access
 window.CompanyProfileManager = CompanyProfileManager;
+
+// === Phase 1: Dirty tracking + Save/Reset wiring (UI only) ===
+(function phase1Init() {
+  const topDirtyBadge = document.getElementById('dirtyBadge');
+  const selfTestBtn = document.getElementById('runSelfTestBtn');
+
+  // Helper: find the module section
+  function findModule(el) {
+    return el?.closest?.('[data-module]');
+  }
+
+  // Mark a module dirty and enable its Save button
+  function markDirty(modEl) {
+    if (!modEl) return;
+    if (!modEl.classList.contains('is-dirty')) {
+      modEl.classList.add('is-dirty');
+      topDirtyBadge?.classList?.remove('hidden');
+      const saveBtn = modEl.querySelector('[data-action="save"]');
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  // Clear dirty state (after successful save or reset)
+  function clearDirty(modEl) {
+    if (!modEl) return;
+    modEl.classList.remove('is-dirty');
+    const saveBtn = modEl.querySelector('[data-action="save"]');
+    if (saveBtn) saveBtn.disabled = true;
+    // If no other modules are dirty, hide the top badge
+    const anyDirty = !!document.querySelector('[data-module].is-dirty');
+    if (!anyDirty) topDirtyBadge?.classList?.add('hidden');
+  }
+
+  // Listen for any edits inside modules
+  document.addEventListener('input', (e) => {
+    const mod = findModule(e.target);
+    if (mod) markDirty(mod);
+  }, true);
+
+  document.addEventListener('change', (e) => {
+    const mod = findModule(e.target);
+    if (mod) markDirty(mod);
+  }, true);
+
+  // Save/Reset handlers (UI only — call existing functions if present)
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+
+    const mod = findModule(btn);
+    if (!mod) return;
+
+    const action = btn.getAttribute('data-action');
+    const moduleName = mod.getAttribute('data-module') || 'unknown';
+
+    // Map known modules to existing save functions (if you already have them)
+    const saveMap = {
+      knowledge: 'saveCompanyKBSettings',
+      'agent-settings': 'saveAgentSettings',
+      intelligence: 'saveIntelligenceSettings',
+      priority: 'savePrioritySettings',
+      personality: 'saveAgentPersonalitySettings',
+      behavior: 'saveBehaviorSettings',
+      voice: 'saveVoiceSettings',
+      transfer: 'saveTransferSettings',
+      booking: 'saveBookingSettings',
+      notifications: 'saveNotificationsSettings'
+    };
+
+    if (action === 'save') {
+      btn.disabled = true;
+      // Prefer existing save function if present; otherwise fire a generic event
+      const fnName = saveMap[moduleName];
+      try {
+        if (fnName && typeof window[fnName] === 'function') {
+          await window[fnName]();
+        } else {
+          // Generic hook (no-op for now)
+          window.dispatchEvent(new CustomEvent('cv:save', { detail: { module: moduleName } }));
+        }
+        clearDirty(mod);
+        toastOK(`${moduleName} saved`);
+      } catch (err) {
+        console.error(`[Phase1] Save failed for ${moduleName}`, err);
+        toastERR(`Failed to save ${moduleName}`);
+        btn.disabled = false;
+      }
+    }
+
+    if (action === 'reset') {
+      // UI-only: emit event; we'll wire to starter pack in a later phase
+      window.dispatchEvent(new CustomEvent('cv:reset', { detail: { module: moduleName } }));
+      // Optional: you may choose to immediately clear dirty here
+      clearDirty(mod);
+      toastOK(`${moduleName} reset to default (UI)`);
+    }
+  });
+
+  // Self-Test stub (Phase 3 will wire this)
+  selfTestBtn?.addEventListener('click', () => {
+    toastINFO('Running Self-Test… (coming in Phase 3)');
+  });
+
+  // Minimal toasts (if you already have showToast, use that instead)
+  function toastOK(msg)   { genericToast(msg, '#065f46'); }
+  function toastERR(msg)  { genericToast(msg, '#991b1b'); }
+  function toastINFO(msg) { genericToast(msg, '#1e40af'); }
+  function genericToast(msg, bg='#111827') {
+    try {
+      if (typeof showToast === 'function') return showToast(msg);
+    } catch(_) {}
+    const el = document.createElement('div');
+    el.textContent = msg;
+    el.style.cssText = `
+      position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+      background: ${bg}; color: #fff; padding: 10px 14px; border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.2); font-weight:600;`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1800);
+  }
+})();
