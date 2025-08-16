@@ -9,6 +9,8 @@ const AgentConfigSnapshot = require('../models/AgentConfigSnapshot');
 const { buildCompiledConfig } = require('../services/aiConfigAssembler');
 const { getDefaultPreset, applyPresetToCompanyDoc } = require('../../services/presets');
 const { PRESETS_V1, PUBLISH_V1 } = require('../../config/flags');
+const effectiveConfigService = require('../../../server/services/effectiveConfigService');
+const { LIVE_RESOLVER_V1 } = require('../../config/flags');
 
 class AIConfigLoader {
     constructor() {
@@ -79,8 +81,22 @@ class AIConfigLoader {
             const aiLogic = company.aiAgentLogic || {};
             
             // Phase 8: Use the new assembler for consistent config structure
-            const compiledConfig = buildCompiledConfig(company.toObject ? company.toObject() : company);
+            let compiledConfig = buildCompiledConfig(company.toObject ? company.toObject() : company);
             
+            // If live resolver is enabled, prefer using resolved effective settings for key modules
+            if (LIVE_RESOLVER_V1) {
+                try {
+                    const effective = await effectiveConfigService.getEffectiveSettings(companyID);
+                    if (effective && effective.config) {
+                        console.log(`🧭 Using LIVE_RESOLVER_V1 effective settings for company ${companyID}`);
+                        // Map effective config back into compiled shape where possible
+                        compiledConfig = Object.assign({}, compiledConfig, effective.config);
+                    }
+                } catch (resolverErr) {
+                    console.warn('[AIConfigLoader] Live resolver failed, falling back to compiled config:', resolverErr.message);
+                }
+            }
+
             // Build comprehensive configuration per Blueprint (merging new assembler with legacy fields)
             const config = {
                 companyID,
