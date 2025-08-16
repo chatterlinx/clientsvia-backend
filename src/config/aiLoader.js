@@ -9,7 +9,7 @@ const AgentConfigSnapshot = require('../models/AgentConfigSnapshot');
 const { buildCompiledConfig } = require('../services/aiConfigAssembler');
 const { getDefaultPreset, applyPresetToCompanyDoc } = require('../../services/presets');
 const { PRESETS_V1, PUBLISH_V1 } = require('../../config/flags');
-const effectiveConfigService = require('../../../server/services/effectiveConfigService');
+const effectiveConfigService = require('../../server/services/effectiveConfigService');
 const { LIVE_RESOLVER_V1 } = require('../../config/flags');
 
 class AIConfigLoader {
