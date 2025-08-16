@@ -217,7 +217,8 @@ async function checkCompanyCache(req, res, next) {
     }
 }
 
-router.get('/company/:id', checkCompanyCache, async (req, res) => {
+// Extracted GET company handler and added alias to support frontend calls to /api/company/:id
+async function handleGetCompany(req, res) {
     const companyId = req.params.id;
     if (!ObjectId.isValid(companyId)) {
         return res.status(400).json({ message: 'Invalid company ID format' });
@@ -238,7 +239,10 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
         console.error('[API GET /api/company/:id] Error:', error);
         res.status(500).json({ message: 'Error fetching company details' });
     }
-});
+}
+
+router.get('/company/:id', checkCompanyCache, handleGetCompany);
+router.get('/:id', checkCompanyCache, handleGetCompany);
 
 // Delete a company completely from the database
 router.delete('/company/:id', async (req, res) => {
