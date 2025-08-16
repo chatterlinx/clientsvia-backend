@@ -399,6 +399,14 @@ router.patch('/company/:id', async (req, res) => {
         await redisClient.del(cacheKey);
         console.log(`DELETED from cache: ${cacheKey}`);
 
+        // Invalidate effective-config cache for this company
+        try {
+            effectiveConfigService.invalidate(companyId, null);
+            console.log(`[EffectiveConfig] Invalidated cache for company ${companyId} after PATCH /company/:id`);
+        } catch (invErr) {
+            console.warn('[EffectiveConfig] Cache invalidation failed after company patch:', invErr.message);
+        }
+
         res.json(updatedCompany);
     } catch (error) {
         console.error(`[API PATCH /api/company/:id] (Overview) Error updating company ${companyId}:`, error.message, error.stack);
@@ -722,6 +730,14 @@ router.patch('/company/:companyId/agentsetup', async (req, res) => {
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
         console.log(`DELETED from cache: ${cacheKey}`);
+
+        // Invalidate effective-config cache for this company
+        try {
+            effectiveConfigService.invalidate(companyId, null);
+            console.log(`[EffectiveConfig] Invalidated cache for company ${companyId} after agentsetup update`);
+        } catch (invErr) {
+            console.warn('[EffectiveConfig] Cache invalidation failed after agentsetup update:', invErr.message);
+        }
 
         res.json(updatedCompany);
     } catch (error) {
@@ -1423,7 +1439,3 @@ router.post('/company/:id/reset/:moduleKey', authenticateSingleSession, async (r
         res.status(500).json({ success: false, message: 'Failed to reset module', error: error.message });
     }
 });
-
-// ...existing code...
-
-module.exports = router;
