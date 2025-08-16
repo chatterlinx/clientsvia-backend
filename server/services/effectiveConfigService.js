@@ -15,6 +15,7 @@ const cache = require('./effectiveConfigCache');
 const starterPack = require('../presets/starterPack.hvac_v1.json');
 const platformDefaults = require('../presets/platformDefaults.json');
 const Company = require('../../models/Company');
+const { ObjectId } = require('mongodb');
 
 function hydrateWithEnv(config) {
     // Overlay environment-backed platform defaults (non-destructive)
@@ -49,35 +50,47 @@ function hydrateWithEnv(config) {
 
 async function getEffectiveSettings(companyId) {
     if (!companyId) throw new Error('companyId required');
+    if (!ObjectId.isValid(companyId)) throw new Error('Invalid companyId format');
 
-    // Try cache first
-    const cached = cache.get(companyId, 'full');
-    if (cached) {
-        return { config: hydrateWithEnv(cached.config), etag: cached.etag };
+    try {
+        // Try cache first
+        const cached = cache.get(companyId, 'full');
+        if (cached) {
+            return { config: hydrateWithEnv(cached.config), etag: cached.etag };
+        }
+
+        // Resolve fresh
+        const resolved = await resolver.getEffectiveSettings(companyId);
+        const hydrated = hydrateWithEnv(resolved);
+        const etag = cache.set(companyId, hydrated, 'full');
+
+        return { config: hydrated, etag };
+    } catch (error) {
+        console.error(`[EffectiveService] getEffectiveSettings error:`, error);
+        throw error;
     }
-
-    // Resolve fresh
-    const resolved = await resolver.getEffectiveSettings(companyId);
-    const hydrated = hydrateWithEnv(resolved);
-    const etag = cache.set(companyId, hydrated, 'full');
-
-    return { config: hydrated, etag };
 }
 
 async function getEffectiveModule(companyId, moduleKey) {
     if (!companyId) throw new Error('companyId required');
     if (!moduleKey) throw new Error('moduleKey required');
+    if (!ObjectId.isValid(companyId)) throw new Error('Invalid companyId format');
 
-    const cached = cache.get(companyId, moduleKey);
-    if (cached) {
-        return { config: hydrateWithEnv(cached.config), etag: cached.etag };
+    try {
+        const cached = cache.get(companyId, moduleKey);
+        if (cached) {
+            return { config: hydrateWithEnv(cached.config), etag: cached.etag };
+        }
+
+        const resolved = await resolver.getEffectiveModule(companyId, moduleKey);
+        const hydrated = hydrateWithEnv(resolved);
+        const etag = cache.set(companyId, hydrated, moduleKey);
+
+        return { config: hydrated, etag };
+    } catch (error) {
+        console.error(`[EffectiveService] getEffectiveModule error:`, error);
+        throw error;
     }
-
-    const resolved = await resolver.getEffectiveModule(companyId, moduleKey);
-    const hydrated = hydrateWithEnv(resolved);
-    const etag = cache.set(companyId, hydrated, moduleKey);
-
-    return { config: hydrated, etag };
 }
 
 function invalidate(companyId, moduleKey = null) {
@@ -87,9 +100,11 @@ function invalidate(companyId, moduleKey = null) {
 
 async function resetModule(companyId, moduleKey, actor = 'system') {
     if (!companyId || !moduleKey) throw new Error('companyId and moduleKey required');
+    if (!ObjectId.isValid(companyId)) throw new Error('Invalid companyId format');
 
-    const company = await Company.findById(companyId);
-    if (!company) throw new Error('Company not found');
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) throw new Error('Company not found');
 
     // Build update payload by mapping moduleKey to starterPack defaults
     const updateFields = {};
@@ -152,7 +167,13 @@ async function resetModule(companyId, moduleKey, actor = 'system') {
     // Invalidate caches and return fresh module
     invalidate(companyId, null);
     const { config, etag } = await getEffectiveModule(companyId, moduleKey);
+    
+    console.log(`[EffectiveService] ✅ Reset module '${moduleKey}' for company ${companyId} by ${actor}`);
     return { company: updated, module: config, etag };
+    } catch (error) {
+        console.error(`[EffectiveService] resetModule error:`, error);
+        throw error;
+    }
 }
 
 module.exports = {

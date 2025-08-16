@@ -4,13 +4,23 @@
  * Resolves configuration with inheritance hierarchy:
  * Company Overrides → HVAC Starter Pack → Platform Defaults
  * 
+ * Enterprise-grade with comprehensive error handling and validation
+ * 
  * @author Chief Coding Engineer
- * @version 2.0
+ * @version 2.1
  */
 
 const Company = require('../../models/Company');
-const starterPack = require('../presets/starterPack.hvac_v1.json');
-const platformDefaults = require('../presets/platformDefaults.json');
+const { ObjectId } = require('mongodb');
+
+// Lazy load presets to avoid circular dependencies
+let starterPack, platformDefaults;
+function loadPresets() {
+    if (!starterPack) {
+        starterPack = require('../presets/starterPack.hvac_v1.json');
+        platformDefaults = require('../presets/platformDefaults.json');
+    }
+}
 
 /**
  * Deep merge objects with proper array handling
@@ -43,7 +53,18 @@ function isObject(item) {
  */
 async function getEffectiveSettings(companyId) {
     try {
+        // Input validation
+        if (!companyId) {
+            throw new Error('Company ID is required');
+        }
+        if (!ObjectId.isValid(companyId)) {
+            throw new Error(`Invalid company ID format: ${companyId}`);
+        }
+
         console.log(`[EffectiveResolver] Resolving full config for company: ${companyId}`);
+        
+        // Load presets
+        loadPresets();
         
         // Load company data
         const company = await Company.findById(companyId).lean();
@@ -51,7 +72,7 @@ async function getEffectiveSettings(companyId) {
             throw new Error(`Company not found: ${companyId}`);
         }
 
-        // Start with platform defaults
+        // Start with platform defaults (deep clone)
         let effectiveConfig = JSON.parse(JSON.stringify(platformDefaults));
         
         // Merge HVAC starter pack
@@ -66,7 +87,7 @@ async function getEffectiveSettings(companyId) {
             companyId,
             resolvedAt: new Date().toISOString(),
             layers: ['platformDefaults', 'hvacStarter', 'companyOverrides'],
-            version: '2.0'
+            version: '2.1'
         };
 
         console.log(`[EffectiveResolver] ✅ Resolved full config for company ${companyId}`);
@@ -83,6 +104,17 @@ async function getEffectiveSettings(companyId) {
  */
 async function getEffectiveModule(companyId, moduleKey) {
     try {
+        // Input validation
+        if (!companyId) {
+            throw new Error('Company ID is required');
+        }
+        if (!moduleKey) {
+            throw new Error('Module key is required');
+        }
+        if (!ObjectId.isValid(companyId)) {
+            throw new Error(`Invalid company ID format: ${companyId}`);
+        }
+
         console.log(`[EffectiveResolver] Resolving module '${moduleKey}' for company: ${companyId}`);
         
         const fullConfig = await getEffectiveSettings(companyId);
