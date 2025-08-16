@@ -1134,12 +1134,12 @@
                             </div>
 
                             <!-- Advanced Voice Settings -->
-                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6" data-module="voice">
                                 <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">
                                     <h3 class="text-lg font-medium text-gray-800 flex items-center">
                                         <i class="fas fa-sliders-h mr-2 text-orange-600"></i>Advanced Voice Settings
-                                        <button type="button" id="reset-voice-settings" class="ml-auto text-sm bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded transition duration-150">
-                                            <i class="fas fa-undo mr-1"></i>Reset to Optimal
+                                        <button type="button" class="ml-auto text-sm bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded transition duration-150" data-action="reset">
+                                            <i class="fas fa-undo mr-1"></i>Reset to Default
                                         </button>
                                     </h3>
                                 </div>
@@ -10156,6 +10156,105 @@
     </script>
     
     <script src="/js/company-profile-modern.js?v=2.22"></script>
+
+    <script>
+                
+                // ============================================================================
+                // 🚀 PHASE 3 — RESET BUTTON EVENT HANDLERS
+                // ============================================================================
+                
+                // Setup event delegation for reset buttons
+                document.addEventListener('click', function(event) {
+                    // Check if clicked element is a reset button
+                    if (event.target.closest('[data-action="reset"]')) {
+                        event.preventDefault();
+                        
+                        // Find the module container
+                        const moduleContainer = event.target.closest('[data-module]');
+                        if (moduleContainer) {
+                            const moduleKey = moduleContainer.getAttribute('data-module');
+                            console.log(`[Phase3] Reset button clicked for module: ${moduleKey}`);
+                            
+                            // Call our Phase 2 reset endpoint with Phase 3 form mapping
+                            resetModuleToDefaults(moduleKey);
+                        }
+                    }
+                });
+                
+                console.log('✅ Phase 3 reset button handlers initialized');
+                
+                // Reset function that integrates Phase 2 backend with Phase 3 form mapping
+                window.resetModuleToDefaults = async function(moduleKey) {
+                    try {
+                        console.log(`[Phase3] Resetting module: ${moduleKey}`);
+                        
+                        if (!window.companyId) {
+                            console.error('[Phase3] No company ID available');
+                            return;
+                        }
+                        
+                        // Show loading state
+                        const resetBtn = document.querySelector(`[data-module="${moduleKey}"] [data-action="reset"]`);
+                        if (resetBtn) {
+                            resetBtn.disabled = true;
+                            resetBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Resetting...';
+                        }
+                        
+                        // Call Phase 2 reset endpoint
+                        const response = await fetch(`/api/company/${window.companyId}/reset/${moduleKey}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        
+                        const json = await response.json();
+                        console.log(`[Phase3] Reset response:`, json);
+                        
+                        if (json.success && json.defaults) {
+                            // Phase 3: Apply defaults to form using our mappers
+                            if (typeof window.__cv_applyDefaults === 'function') {
+                                window.cvModuleDefaults = window.cvModuleDefaults || {};
+                                window.cvModuleDefaults[moduleKey] = json.defaults;
+                                window.__cv_applyDefaults(moduleKey, json.defaults);
+                                
+                                // Show success message
+                                if (typeof showToast === 'function') {
+                                    showToast(`Loaded ${moduleKey} defaults from HVAC pack. Review & press Save.`, "info");
+                                } else {
+                                    alert(`✅ ${moduleKey} module reset to defaults. Review changes and save.`);
+                                }
+                            } else {
+                                console.warn('[Phase3] Form mappers not available, showing JSON for manual review');
+                                window.cvModuleDefaults = window.cvModuleDefaults || {};
+                                window.cvModuleDefaults[moduleKey] = json.defaults;
+                                alert(`✅ ${moduleKey} defaults loaded. Check console/window.cvModuleDefaults for values.`);
+                            }
+                        } else {
+                            throw new Error(json.error || 'Reset failed');
+                        }
+                        
+                    } catch (error) {
+                        console.error(`[Phase3] Reset failed for ${moduleKey}:`, error);
+                        alert(`❌ Failed to reset ${moduleKey}: ${error.message}`);
+                    } finally {
+                        // Restore button state
+                        const resetBtn = document.querySelector(`[data-module="${moduleKey}"] [data-action="reset"]`);
+                        if (resetBtn) {
+                            resetBtn.disabled = false;
+                            resetBtn.innerHTML = 'Reset to Default';
+                        }
+                    }
+                };
+                
+                // ============================================================================
+                // END PHASE 3 RESET HANDLERS
+                // ============================================================================
+    </script>
 
     <!-- ========================================= 
          🚀 ENTERPRISE AI AGENT LOGIC JAVASCRIPT

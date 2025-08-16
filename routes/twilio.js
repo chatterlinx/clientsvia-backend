@@ -954,6 +954,34 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
     }
     // --- END DTMF short-circuit (MVP) ---
     
+    // Phase 3: Try deterministic QnA matcher first (before AI Agent Runtime)
+    const userText = (SpeechResult || "").trim();
+    if (userText) {
+      try {
+        const qnaMatcher = require("../server/services/qnaMatcher");
+        const hit = await qnaMatcher.tryAnswer(companyID, userText);
+        if (hit.ok) {
+          console.log(`[QnA Matcher] Deterministic hit - Source: ${hit.source}, User: "${userText}"`);
+          
+          const twiml = new twilio.twiml.VoiceResponse();
+          
+          // Speak deterministic answer, then Gather again
+          await addTTSResponse(twiml, company, hit.answer);
+          
+          const gather = twiml.gather({
+            input: 'speech dtmf',
+            numDigits: 1,
+            timeout: 5,
+            action: `/api/twilio/ai-agent-respond/${companyID}`
+          });
+          
+          return res.type("text/xml").send(twiml.toString());
+        }
+      } catch (e) {
+        console.warn('[QnA Matcher] Non-fatal error:', e.message);
+      }
+    }
+    
     // Import AI Agent Runtime
     const { processCallTurn } = require('../services/aiAgentRuntime');
     

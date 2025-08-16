@@ -2046,8 +2046,10 @@ class CompanyProfileManager {
         if (!note) return;
 
         const noteCard = document.querySelector(`[data-note-id="${noteId}"]`);
-        const titleInput = noteCard?.querySelector('.note-title-edit');
-        const contentTextarea = noteCard?.querySelector('.note-content-edit');
+        if (!noteCard) return;
+
+        const titleInput = noteCard.querySelector('.note-title-edit');
+        const contentTextarea = noteCard.querySelector('.note-content-edit');
 
         if (!contentTextarea?.value.trim()) {
             this.showNotification('Note content cannot be empty', 'error');
@@ -2057,9 +2059,6 @@ class CompanyProfileManager {
         // Update note data
         const newTitle = titleInput?.value.trim() || this.extractTitleFromContent(contentTextarea.value);
         const newContent = contentTextarea.value.trim();
-        
-        note.title = newTitle;
-        note.content = newContent;
         note.tags = this.extractTagsFromContent(newContent);
         note.updatedAt = new Date().toISOString();
         note.isEditing = false;
@@ -3082,3 +3081,126 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('❌ Failed to auto-initialize CompanyProfileManager:', error);
     });
 });
+
+// ============================================================================
+// 🚀 PHASE 3 — RESET FORM MAPPING UTILITIES
+// ============================================================================
+
+// Phase 3 — map pack defaults into specific module forms
+
+function setIfExists(sel, value) {
+  const el = document.querySelector(sel);
+  if (!el) return;
+  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT") {
+    el.value = value ?? "";
+    el.dispatchEvent(new Event("input", { bubbles: true })); // keep dirty tracking consistent
+  } else {
+    el.textContent = value ?? "";
+  }
+}
+
+// ---- Knowledge module
+function mapKnowledgeDefaultsToForm(defaults) {
+  // Company KB threshold (maps to actual field ID in HTML)
+  if (defaults?.thresholds?.company) {
+    setIfExists('#company-kb-threshold', defaults.thresholds.company);
+    // Update the display value span as well
+    setIfExists('#company-kb-threshold-value', defaults.thresholds.company);
+  }
+  
+  // Fallback message (map to customEscalationMessage if it exists)
+  if (defaults?.fallbacks?.default) {
+    setIfExists('#customEscalationMessage', defaults.fallbacks.default);
+  }
+  
+  // Note: QnA data would need a more complex handler to populate tables
+  // For now, we'll store it in a global variable for manual review
+  if (defaults?.qna) {
+    window.cvKnowledgeDefaults = defaults.qna;
+    console.log('[Reset] Knowledge QnA defaults stored in window.cvKnowledgeDefaults');
+  }
+}
+
+// ---- Voice module
+function mapVoiceDefaultsToForm(defaults) {
+  // Voice provider (no specific field found, may need custom handling)
+  if (defaults?.provider) {
+    console.log('[Reset] Voice provider default:', defaults.provider);
+  }
+  
+  // Voice ID maps to voice-selector field
+  if (defaults?.voiceId) {
+    setIfExists('#voice-selector', defaults.voiceId);
+  }
+  
+  // Voice settings (if available in defaults)
+  if (defaults?.settings) {
+    if (defaults.settings.stability !== undefined) {
+      setIfExists('#voice-stability', defaults.settings.stability);
+    }
+    if (defaults.settings.similarity_boost !== undefined) {
+      setIfExists('#voice-similarity', defaults.settings.similarity_boost);
+    }
+    if (defaults.settings.style !== undefined) {
+      setIfExists('#voice-style', defaults.settings.style);
+    }
+    if (defaults.settings.use_speaker_boost !== undefined) {
+      const el = document.querySelector('#voice-speaker-boost');
+      if (el) { 
+        el.checked = !!defaults.settings.use_speaker_boost; 
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+  }
+}
+
+// ---- Booking module
+function mapBookingDefaultsToForm(defaults) {
+  // Note: The booking section uses a complex flow builder, not simple form fields
+  // For now, we'll store defaults for manual review
+  if (defaults) {
+    window.cvBookingDefaults = defaults;
+    console.log('[Reset] Booking defaults stored in window.cvBookingDefaults');
+    console.log('[Reset] Use resetBookingFlow() function for booking configuration');
+  }
+}
+
+// ---- Transfer module
+function mapTransferDefaultsToForm(defaults) {
+  // Transfer strategy maps to fa-transferStrategy field
+  if (defaults?.strategy) {
+    setIfExists('#fa-transferStrategy', defaults.strategy);
+  }
+  
+  // Service advisor number (no specific field found, store for reference)
+  if (defaults?.serviceAdvisorNumber) {
+    window.cvTransferDefaults = window.cvTransferDefaults || {};
+    window.cvTransferDefaults.serviceAdvisorNumber = defaults.serviceAdvisorNumber;
+    console.log('[Reset] Service advisor default stored in window.cvTransferDefaults');
+  }
+}
+
+// Generic dispatcher
+const MODULE_MAPPERS = {
+  knowledge: mapKnowledgeDefaultsToForm,
+  voice: mapVoiceDefaultsToForm,
+  booking: mapBookingDefaultsToForm,
+  transfer: mapTransferDefaultsToForm,
+};
+
+// Wire into Phase-2 reset handler (call after json.defaults arrives)
+function applyDefaultsToForm(moduleKey, defaults) {
+  const fn = MODULE_MAPPERS[moduleKey];
+  if (fn) { 
+    fn(defaults); 
+    // Mark module as dirty to show changes
+    if (typeof markModuleDirty === 'function') {
+      markModuleDirty(moduleKey, true);
+    }
+  } else { 
+    console.info(`[Reset] No mapper for ${moduleKey}, defaults stored in window.cvModuleDefaults for manual review.`); 
+  }
+}
+
+// Global access for Phase 2 reset integration
+window.__cv_applyDefaults = applyDefaultsToForm;
