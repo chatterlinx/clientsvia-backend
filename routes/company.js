@@ -11,6 +11,7 @@ const { apiLimiter } = require('../middleware/rateLimit'); // Rate limiting
 const { authenticateJWT, requireRole } = require('../middleware/auth'); // Authentication
 const { defaultResponses, clearCompanyResponsesCache, initializeStandardPersonalityResponses, ensurePersonalityResponsesExist } = require('../utils/personalityResponses_enhanced');
 const flags = require('../config/flags'); // Phase 6: Feature flags for presets
+const effectiveConfigService = require('../server/services/effectiveConfigService');
 
 // Google OAuth2 Client Setup
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -1362,5 +1363,67 @@ router.post('/:id/apply-preset', authenticateSingleSession, async (req, res) => 
   }
 });
 // --- END /api/company/:id/apply-preset (Phase 6) ---
+
+// --- Effective Config endpoints (Phase 2) ---
+// GET full effective config
+router.get('/company/:id/agent-config/effective', authenticateSingleSession, async (req, res) => {
+    try {
+        const companyId = req.params.id;
+        if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID' });
+
+        const ifNoneMatch = req.get('If-None-Match');
+        const { config, etag } = await effectiveConfigService.getEffectiveSettings(companyId);
+
+        if (ifNoneMatch && ifNoneMatch === etag) {
+            return res.status(304).end();
+        }
+
+        res.set('ETag', etag);
+        res.json({ success: true, config });
+    } catch (error) {
+        console.error('[EffectiveConfig] GET full error:', error.message);
+        res.status(500).json({ success: false, message: 'Failed to load effective configuration', error: error.message });
+    }
+});
+
+// GET module-level effective config
+router.get('/company/:id/agent-config/:moduleKey', authenticateSingleSession, async (req, res) => {
+    try {
+        const companyId = req.params.id;
+        const moduleKey = req.params.moduleKey;
+        if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID' });
+
+        const ifNoneMatch = req.get('If-None-Match');
+        const { config, etag } = await effectiveConfigService.getEffectiveModule(companyId, moduleKey);
+
+        if (ifNoneMatch && ifNoneMatch === etag) {
+            return res.status(304).end();
+        }
+
+        res.set('ETag', etag);
+        res.json({ success: true, module: moduleKey, config });
+    } catch (error) {
+        console.error('[EffectiveConfig] GET module error:', error.message);
+        res.status(500).json({ success: false, message: 'Failed to load module configuration', error: error.message });
+    }
+});
+
+// POST reset module to starter pack defaults
+router.post('/company/:id/reset/:moduleKey', authenticateSingleSession, async (req, res) => {
+    try {
+        const companyId = req.params.id;
+        const moduleKey = req.params.moduleKey;
+        if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID' });
+
+        const result = await effectiveConfigService.resetModule(companyId, moduleKey, req.user?.email || 'api');
+
+        res.json({ success: true, module: moduleKey, moduleConfig: result.module, etag: result.etag, company: { _id: result.company._id } });
+    } catch (error) {
+        console.error('[EffectiveConfig] RESET error:', error.message);
+        res.status(500).json({ success: false, message: 'Failed to reset module', error: error.message });
+    }
+});
+
+// ...existing code...
 
 module.exports = router;
