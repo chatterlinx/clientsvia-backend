@@ -242,7 +242,15 @@ async function handleGetCompany(req, res) {
 }
 
 router.get('/company/:id', checkCompanyCache, handleGetCompany);
-router.get('/:id', checkCompanyCache, handleGetCompany);
+// Add conditional alias - only handle valid ObjectIds to prevent route conflicts
+router.get('/:id', (req, res, next) => {
+    const { id } = req.params;
+    if (ObjectId.isValid(id)) {
+        checkCompanyCache(req, res, next);
+    } else {
+        next(); // Let other routes handle non-ObjectId paths
+    }
+}, handleGetCompany);
 
 // Delete a company completely from the database
 router.delete('/company/:id', async (req, res) => {
