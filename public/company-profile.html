@@ -13514,6 +13514,201 @@
     })();
     </script>
 
+    <!-- === Phase 2: Live Effective Settings + Reset-to-Default === -->
+    <script>
+    (function phase2Init() {
+      console.log('🔧 Initializing Phase 2: Live Effective Settings');
+      
+      const companyId = getCompanyIdFromURL(); // Assuming this function exists
+      
+      // Helper to get company ID from URL
+      function getCompanyIdFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('id') || window.companyId || window.currentCompanyId;
+      }
+      
+      // Cache for effective config to avoid repeated API calls
+      let effectiveConfigCache = null;
+      let cacheTimestamp = null;
+      const CACHE_TTL = 30000; // 30 seconds
+      
+      /**
+       * Fetch effective configuration from API
+       */
+      async function fetchEffectiveConfig(moduleKey = null) {
+        try {
+          const url = moduleKey 
+            ? `/api/company/${companyId}/agent-config/${moduleKey}`
+            : `/api/company/${companyId}/agent-config/effective`;
+            
+          const response = await fetch(url, {
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const data = await response.json();
+          console.log(`[Phase2] Fetched effective config for ${moduleKey || 'full'}:`, data);
+          
+          return moduleKey ? data.config : data.config;
+        } catch (error) {
+          console.error('[Phase2] Failed to fetch effective config:', error);
+          return null;
+        }
+      }
+      
+      /**
+       * Show effective value hints under form fields
+       */
+      async function showEffectiveHints() {
+        if (!companyId) return;
+        
+        try {
+          const effectiveConfig = await fetchEffectiveConfig();
+          if (!effectiveConfig) return;
+          
+          // Add hints for key fields
+          addEffectiveHint('#knowledge-threshold', effectiveConfig.knowledge?.thresholds?.companyKB, 'Pack');
+          addEffectiveHint('#voice-selector', effectiveConfig.voice?.voiceId, 'Platform Default');
+          addEffectiveHint('#behavior-min-pause-ms', effectiveConfig.behavior?.minPauseMs, 'Pack');
+          addEffectiveHint('#personality-style', effectiveConfig.personality?.style, 'Pack');
+          
+          console.log('[Phase2] ✅ Effective hints displayed');
+        } catch (error) {
+          console.error('[Phase2] Error showing effective hints:', error);
+        }
+      }
+      
+      /**
+       * Add effective value hint under a field
+       */
+      function addEffectiveHint(selector, effectiveValue, source) {
+        const field = document.querySelector(selector);
+        if (!field || !effectiveValue) return;
+        
+        // Remove existing hint
+        const existingHint = field.parentNode.querySelector('.effective-hint');
+        if (existingHint) existingHint.remove();
+        
+        // Create new hint
+        const hint = document.createElement('div');
+        hint.className = 'effective-hint text-xs text-gray-500 mt-1';
+        hint.innerHTML = `<i class="fas fa-info-circle mr-1"></i>Effective: <strong>${effectiveValue}</strong> (from ${source})`;
+        
+        field.parentNode.insertBefore(hint, field.nextSibling);
+      }
+      
+      /**
+       * Handle reset-to-default functionality
+       */
+      async function handleResetToDefault(moduleName) {
+        if (!companyId || !moduleName) return;
+        
+        try {
+          console.log(`[Phase2] Resetting module ${moduleName} to defaults...`);
+          
+          const response = await fetch(`/api/company/${companyId}/reset/${moduleName}`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const data = await response.json();
+          console.log(`[Phase2] ✅ Module ${moduleName} reset successfully:`, data);
+          
+          // Update form with effective values
+          if (data.moduleConfig) {
+            populateModuleForm(moduleName, data.moduleConfig);
+          }
+          
+          // Refresh effective hints
+          setTimeout(() => showEffectiveHints(), 500);
+          
+          // Show success message
+          if (typeof toastOK === 'function') {
+            toastOK(`${moduleName} reset to starter pack defaults`);
+          }
+          
+          return data;
+          
+        } catch (error) {
+          console.error(`[Phase2] Failed to reset module ${moduleName}:`, error);
+          if (typeof toastERR === 'function') {
+            toastERR(`Failed to reset ${moduleName}: ${error.message}`);
+          }
+          throw error;
+        }
+      }
+      
+      /**
+       * Populate module form with values
+       */
+      function populateModuleForm(moduleName, config) {
+        const moduleEl = document.querySelector(`[data-module="${moduleName}"]`);
+        if (!moduleEl) return;
+        
+        // Generic form population based on config structure
+        Object.keys(config).forEach(key => {
+          const value = config[key];
+          const fieldSelectors = [
+            `#${moduleName}-${key}`,
+            `#${key}`,
+            `[name="${key}"]`,
+            `[name="${moduleName}-${key}"]`
+          ];
+          
+          for (const selector of fieldSelectors) {
+            const field = moduleEl.querySelector(selector);
+            if (field) {
+              if (field.type === 'checkbox') {
+                field.checked = !!value;
+              } else if (field.tagName === 'SELECT') {
+                field.value = value;
+              } else if (typeof value === 'string' || typeof value === 'number') {
+                field.value = value;
+              }
+              field.dispatchEvent(new Event('change', { bubbles: true }));
+              break;
+            }
+          }
+        });
+      }
+      
+      // Listen for reset events from Phase 1
+      window.addEventListener('cv:reset', async (event) => {
+        const { module } = event.detail;
+        console.log(`[Phase2] Handling reset for module: ${module}`);
+        
+        try {
+          await handleResetToDefault(module);
+        } catch (error) {
+          console.error(`[Phase2] Reset failed for module ${module}:`, error);
+        }
+      });
+      
+      // Initialize effective hints on page load
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(showEffectiveHints, 1000); // Delay to ensure forms are loaded
+      });
+      
+      // Refresh hints when tab changes
+      document.addEventListener('click', (event) => {
+        if (event.target.matches('.tab-button, .nav-link')) {
+          setTimeout(showEffectiveHints, 500);
+        }
+      });
+      
+      console.log('[Phase2] ✅ Phase 2 initialization complete');
+    })();
+    </script>
+
     <!-- Modern implementation handles all initialization -->
     
 </body>
