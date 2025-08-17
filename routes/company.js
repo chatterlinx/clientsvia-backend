@@ -415,7 +415,7 @@ router.patch('/company/:id', async (req, res) => {
 
         // Invalidate effective-config cache for this company
         try {
-            effectiveConfigService.invalidate(companyId, null);
+            effectiveConfigService.invalidate(companyId);
             console.log(`[EffectiveConfig] Invalidated cache for company ${companyId} after PATCH /company/:id`);
         } catch (invErr) {
             console.warn('[EffectiveConfig] Cache invalidation failed after company patch:', invErr.message);
@@ -747,7 +747,7 @@ router.patch('/company/:companyId/agentsetup', async (req, res) => {
 
         // Invalidate effective-config cache for this company
         try {
-            effectiveConfigService.invalidate(companyId, null);
+            effectiveConfigService.invalidate(companyId);
             console.log(`[EffectiveConfig] Invalidated cache for company ${companyId} after agentsetup update`);
         } catch (invErr) {
             console.warn('[EffectiveConfig] Cache invalidation failed after agentsetup update:', invErr.message);
@@ -1394,64 +1394,29 @@ router.post('/:id/apply-preset', authenticateSingleSession, async (req, res) => 
 });
 // --- END /api/company/:id/apply-preset (Phase 6) ---
 
-// --- Effective Config endpoints (Phase 2) ---
-// GET full effective config
+// --- Phase 2: Effective Config endpoints ---
+// GET effective (full) — returns merged config with ETag
 router.get('/company/:id/agent-config/effective', authenticateSingleSession, async (req, res) => {
-    try {
-        const companyId = req.params.id;
-        if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID' });
-
-        const ifNoneMatch = req.get('If-None-Match');
-        const { config, etag } = await effectiveConfigService.getEffectiveSettings(companyId);
-
-        if (ifNoneMatch && ifNoneMatch === etag) {
-            return res.status(304).end();
-        }
-
-        res.set('ETag', etag);
-        res.json({ success: true, config });
-    } catch (error) {
-        console.error('[EffectiveConfig] GET full error:', error.message);
-        res.status(500).json({ success: false, message: 'Failed to load effective configuration', error: error.message });
-    }
+  try {
+    const { etag, config } = await effectiveConfigService.getEffectiveSettings(req.params.id);
+    res.set("ETag", etag);
+    return res.json({ ok: true, etag, config });
+  } catch (e) {
+    return res.status(400).json({ ok: false, error: e.message });
+  }
 });
 
-// GET module-level effective config
-router.get('/company/:id/agent-config/:moduleKey', authenticateSingleSession, async (req, res) => {
-    try {
-        const companyId = req.params.id;
-        const moduleKey = req.params.moduleKey;
-        if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID' });
-
-        const ifNoneMatch = req.get('If-None-Match');
-        const { config, etag } = await effectiveConfigService.getEffectiveModule(companyId, moduleKey);
-
-        if (ifNoneMatch && ifNoneMatch === etag) {
-            return res.status(304).end();
-        }
-
-        res.set('ETag', etag);
-        res.json({ success: true, module: moduleKey, config });
-    } catch (error) {
-        console.error('[EffectiveConfig] GET module error:', error.message);
-        res.status(500).json({ success: false, message: 'Failed to load module configuration', error: error.message });
-    }
-});
-
-// POST reset module to starter pack defaults
+// POST reset specific module — returns pack defaults for the module (no DB writes)
 router.post('/company/:id/reset/:moduleKey', authenticateSingleSession, async (req, res) => {
-    try {
-        const companyId = req.params.id;
-        const moduleKey = req.params.moduleKey;
-        if (!ObjectId.isValid(companyId)) return res.status(400).json({ message: 'Invalid company ID' });
-
-        const result = await effectiveConfigService.resetModule(companyId, moduleKey, req.user?.email || 'api');
-
-        res.json({ success: true, module: moduleKey, moduleConfig: result.module, etag: result.etag, company: { _id: result.company._id } });
-    } catch (error) {
-        console.error('[EffectiveConfig] RESET error:', error.message);
-        res.status(500).json({ success: false, message: 'Failed to reset module', error: error.message });
-    }
+  try {
+    const moduleKey = req.params.moduleKey;
+    const pack = require('../server/services/effectiveConfigResolver').getPackModule(moduleKey);
+    if (!pack) return res.status(404).json({ ok: false, error: "Unknown module" });
+    // frontend will fill the form with these values, then admin clicks Save (using existing PUTs)
+    return res.json({ ok: true, moduleKey, defaults: pack });
+  } catch (e) {
+    return res.status(400).json({ ok: false, error: e.message });
+  }
 });
 
 // Export the configured router so it can be mounted by the main app

@@ -1,0 +1,193 @@
+{
+  "routing": { "priority": ["companyQA", "tradeQA", "generic"] },
+  "knowledge": {
+    "thresholds": { "company": 0.8, "trade": 0.75, "generic": 0.7 },
+    "sources": { "company": [], "trade": [], "generic": [] }
+  },
+  "enterprise": { "composite": { "threshold": 0.62 } },
+  "behavior": {
+    "ack": { "style": "Ok", "minGapMs": 1800, "maxConsecutiveSilence": 2 },
+    "frustrationTriggers": ["it's a machine", "are you real"],
+    "escalation": { "mode": "enabled" }
+  },
+  "booking": {
+    "windows": ["08:00-10:00", "10:00-12:00", "12:00-14:00", "14:00-16:00"],
+    "afterHoursToNextDay": true
+  },
+  "voice": { "provider": "elevenlabs", "voiceId": "Mathew" },
+  "transfer": { "strategy": "serviceAdvisor" },
+  "fallbacks": {
+    "default": "I'm missing that info right now. I can text you a link, connect you to a person, or help with booking. What would you like to do?"
+  },
+  "qna": {
+    "companyQA": [
+      {
+        "q": ["service call fee", "diagnostic fee", "trip charge"],
+        "a": "Our standard diagnostic visit is typically in the $89–$129 range. If you proceed with a repair, we usually apply the diagnostic toward the work. Would you like the first available window today or tomorrow?"
+      },
+      {
+        "q": ["maintenance plan", "tune up", "seasonal check"],
+        "a": "Our maintenance plan is $179/year and includes two seasonal tune-ups and a 20-point inspection. Want me to book the next tune-up window for you?"
+      }
+    ],
+    "tradeQA": [
+      { "q": ["no cool", "not cooling", "warm air"], "a": "That sounds like a cooling issue. We can send a repair tech in a 2-hour window. Do you prefer morning or afternoon?" }
+    ],
+    "generic": [
+      { "q": ["speak to person", "representative", "live agent"], "a": "Sure — I can connect you to a service advisor now, or book an appointment. Which do you prefer?" }
+    ]
+  }
+}
+      {
+        "id": "hvac_emergency_hours",
+        "question": "Do you provide emergency HVAC service?",
+        "answer": "Yes, we offer 24/7 emergency HVAC service for urgent heating and cooling issues. Emergency service rates apply after normal business hours.",
+        "category": "service",
+        "confidence": 0.95
+      },
+      {
+        "id": "hvac_maintenance_cost",
+        "question": "How much does HVAC maintenance cost?",
+        "answer": "Our comprehensive HVAC maintenance service is $149 and includes a full system inspection, cleaning, and tune-up. We recommend maintenance twice yearly.",
+        "category": "pricing",
+        "confidence": 0.90
+      },
+      {
+        "id": "hvac_warranty_info",
+        "question": "What warranty do you provide?",
+        "answer": "We provide a 1-year warranty on all repairs and installations. Equipment warranties vary by manufacturer, typically 5-10 years on major components.",
+        "category": "warranty",
+        "confidence": 0.90
+      },
+      {
+        "id": "hvac_financing_options",
+        "question": "Do you offer financing?",
+        "answer": "Yes, we offer flexible financing options with approved credit, including 0% interest plans for qualified customers on new system installations.",
+        "category": "financing",
+        "confidence": 0.85
+      }
+    ]
+  },
+  
+  "agentSettings": {
+    "useLLM": true,
+    "llmModel": "gemini-pro",
+    "memoryMode": "conversational",
+    "fallbackThreshold": 0.5,
+    "escalationMode": "ask",
+    "rePromptAfterTurns": 3,
+    "maxPromptsPerCall": 2,
+    "semanticSearchEnabled": true,
+    "confidenceScoring": true,
+    "autoLearningQueue": true
+  },
+  
+  "personality": {
+    "voiceTone": "professional-friendly",
+    "responseStyle": "helpful",
+    "escalationBehavior": "polite-persistent",
+    "acknowledgmentStyle": "conversational",
+    "greetingStyle": "warm-professional"
+  },
+  
+  "intelligence": {
+    "contextualMemory": true,
+    "dynamicReasoning": true,
+    "smartEscalation": true,
+    "autoLearning": true,
+    "realtimeOptimization": true,
+    "memoryRetentionMinutes": 30
+  },
+  
+  "voice": {
+    "provider": "elevenlabs",
+    "voiceId": "21m00Tcm4TlvDq8ikWAM",
+    "speed": 1.0,
+    "pitch": 0,
+    "stability": 0.75,
+    "clarity": 0.85
+  },
+  
+  "transfer": {
+    "transferEmail": "support@company.com",
+    "transferPhone": "+1-555-COMPANY",
+    "escalationMode": "ask",
+    "transferReasons": [
+      "Complex technical issues",
+      "Pricing beyond standard rates",
+      "Customer complaint escalation",
+      "Quote for major system replacement"
+    ]
+  },
+  
+  "booking": {
+    "operatingHours": [
+      {"day": "Monday", "enabled": true, "start": "08:00", "end": "18:00"},
+      {"day": "Tuesday", "enabled": true, "start": "08:00", "end": "18:00"},
+      {"day": "Wednesday", "enabled": true, "start": "08:00", "end": "18:00"},
+      {"day": "Thursday", "enabled": true, "start": "08:00", "end": "18:00"},
+      {"day": "Friday", "enabled": true, "start": "08:00", "end": "18:00"},
+      {"day": "Saturday", "enabled": true, "start": "09:00", "end": "15:00"},
+      {"day": "Sunday", "enabled": false, "start": "09:00", "end": "15:00"}
+    ],
+    "timezone": "America/New_York",
+    "use247Routing": false,
+    "afterHoursAction": "message",
+    "appointmentTypes": [
+      {"name": "Service Call", "duration": 60, "description": "Standard HVAC service and repair"},
+      {"name": "Maintenance", "duration": 90, "description": "Comprehensive system maintenance"},
+      {"name": "Installation Estimate", "duration": 45, "description": "On-site estimate for new system installation"},
+      {"name": "Emergency Service", "duration": 60, "description": "Urgent HVAC repair service"}
+    ]
+  },
+  
+  "notifications": {
+    "emailNotifications": true,
+    "smsNotifications": true,
+    "appointmentReminders": true,
+    "serviceCompletionNotification": true
+  },
+  
+  "fallbacks": {
+    "unknownQuestionResponse": "That's a great question! Let me connect you with one of our HVAC specialists who can provide you with detailed information. They'll be able to give you the exact details you need.",
+    "technicalIssueResponse": "I want to make sure you get the best possible help with your HVAC system. Let me transfer you to one of our experienced technicians right away.",
+    "pricingBeyondStandardResponse": "For a detailed quote on that specific service, I'll connect you with our team who can provide accurate pricing based on your exact needs."
+  },
+  
+  "scenarios": {
+    "noHeatNoAC": {
+      "priority": "emergency",
+      "response": "I understand your heating/cooling system isn't working. This can definitely be an emergency, especially in extreme weather. Let me get you connected with our emergency service team right away.",
+      "action": "immediate_transfer"
+    },
+    "routineMaintenance": {
+      "priority": "standard",
+      "response": "Regular maintenance is great for keeping your HVAC system running efficiently! I can help you schedule that. What type of system do you have, and when would work best for you?",
+      "action": "book_appointment"
+    },
+    "strangeNoises": {
+      "priority": "medium",
+      "response": "Unusual noises from your HVAC system can indicate several different issues. To ensure we address this properly, I'd like to schedule a service call. Our technician can diagnose the exact cause and recommend the best solution.",
+      "action": "book_service"
+    }
+  },
+
+  "behavior": {
+    "minPauseMs": 2000,
+    "maxSilencePrompts": 2,
+    "bargeIn": true,
+    "silencePrompts": [
+      "No problem — take your time. Let me know when you're ready.",
+      "I'm here. Whenever you're set, go ahead.",
+      "All good — I can wait. What would you like to do next?"
+    ],
+    "frustration": {
+      "triggers": [
+        "are you real", "is this a machine", "robot", "human please",
+        "this is stupid", "talk to a person", "representative"
+      ],
+      "response": "Please, I am here to help you! You can speak to me naturally and ask anything you need — How can I help you?"
+    },
+    "whenInDoubt": "Ok, to ensure you get the best help, I'm transferring you to a service advisor who can assist with your service needs. Please hold."
+  }
+}
