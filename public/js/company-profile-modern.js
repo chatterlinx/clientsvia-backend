@@ -2746,68 +2746,103 @@ class CompanyProfileManager {
     // ============================================================================
 
     /**
-     * Setup preset event listeners
+     * Setup industry setup event listeners
      */
     setupPresetEventListeners() {
-        const applyPresetBtn = document.getElementById('applyPresetBtn');
-        if (applyPresetBtn) {
-            applyPresetBtn.addEventListener('click', () => this.handleApplyPreset());
+        // Setup industry configuration handlers
+        const industrySetupSelect = document.getElementById('industrySetupSelect');
+        const applyIndustryBtn = document.getElementById('applyIndustrySetup');
+        
+        if (industrySetupSelect && applyIndustryBtn) {
+            // Enable apply button when selection changes
+            industrySetupSelect.addEventListener('change', () => {
+                applyIndustryBtn.disabled = false;
+            });
+            
+            // Handle apply industry setup
+            applyIndustryBtn.addEventListener('click', () => this.handleApplyIndustrySetup());
         }
     }
 
     /**
-     * Handle apply preset button click
+     * Handle apply industry setup button click
      */
-    async handleApplyPreset() {
+    async handleApplyIndustrySetup() {
         try {
-            const presetSelect = document.getElementById('presetSelect');
-            const applyBtn = document.getElementById('applyPresetBtn');
+            const industrySelect = document.getElementById('industrySetupSelect');
+            const applyBtn = document.getElementById('applyIndustrySetup');
             
-            if (!presetSelect || !this.companyId) {
-                throw new Error('Missing preset selection or company ID');
+            if (!industrySelect || !this.companyId) {
+                throw new Error('Missing industry selection or company ID');
             }
 
-            const presetId = presetSelect.value;
+            const industryType = industrySelect.value;
+            const industryName = industrySelect.selectedOptions[0].textContent;
             const originalBtnText = applyBtn.innerHTML;
             
             // Show loading state
             applyBtn.disabled = true;
-            applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Applying...';
+            applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Applying Setup...';
 
-            console.log(`🎯 Applying preset '${presetId}' to company ${this.companyId}`);
+            console.log(`�️ Applying ${industryType} industry setup to company ${this.companyId}`);
 
-            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}/apply-preset`, {
+            // Call industry-specific configuration API
+            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}/apply-industry-setup`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 credentials: 'include',
-                body: JSON.stringify({ presetId })
+                body: JSON.stringify({ 
+                    industryType,
+                    industryName: industryName.replace(/^[🔧🚿⚡🏗️🏠🚗🏥⚖️🍽️💄💪🐾🦷🏡🎯]\s+/, '') // Remove emoji
+                })
             });
 
             const data = await response.json();
 
             if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Failed to apply preset');
+                throw new Error(data.error || 'Failed to apply industry setup');
             }
 
-            console.log('✅ Preset applied successfully:', data);
+            console.log('✅ Industry setup applied successfully:', data);
             
-            // Show success message
-            this.showToast(`Successfully applied ${data.appliedPreset?.name || presetId} preset!`, 'success');
+            // Show detailed success message
+            const setupDetails = data.appliedConfiguration || {};
+            let message = `🎉 ${industryName} setup applied successfully!`;
+            
+            if (setupDetails.modulesConfigured) {
+                message += `\n✅ Configured ${setupDetails.modulesConfigured} modules`;
+            }
+            if (setupDetails.knowledgeBase) {
+                message += `\n📚 Loaded ${setupDetails.knowledgeBase} knowledge entries`;
+            }
+            if (setupDetails.voiceSettings) {
+                message += `\n🎤 Applied industry-specific voice settings`;
+            }
+            
+            this.showToast(message, 'success');
             
             // Reload the company data to reflect changes
             await this.loadCompanyData();
             
+            // Run self-test to validate setup
+            setTimeout(() => {
+                this.showToast('Running validation test...', 'info');
+                if (typeof window.runSelfTest === 'function') {
+                    window.runSelfTest();
+                }
+            }, 1000);
+            
         } catch (error) {
-            console.error('❌ Failed to apply preset:', error);
-            this.showToast(`Failed to apply preset: ${error.message}`, 'error');
+            console.error('❌ Failed to apply industry setup:', error);
+            this.showToast(`Failed to apply industry setup: ${error.message}`, 'error');
         } finally {
             // Reset button state
-            const applyBtn = document.getElementById('applyPresetBtn');
+            const applyBtn = document.getElementById('applyIndustrySetup');
             if (applyBtn) {
-                applyBtn.disabled = false;
-                applyBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>Apply Preset';
+                applyBtn.disabled = true;
+                applyBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>Apply Industry Setup';
             }
         }
     }
@@ -3078,7 +3113,7 @@ window.CompanyProfileManager = CompanyProfileManager;
 // ============================================================================
 
 /**
- * PHASE 4: Run Self-Test (lite) - Enterprise-grade validation with detailed UI feedback
+ * PHASE 4: Industry-Aware Validation Test - Enterprise-grade validation with detailed UI feedback
  */
 async function runSelfTest() {
     const companyId = window.currentCompanyId || window.companyId;
@@ -3088,18 +3123,23 @@ async function runSelfTest() {
     }
     
     // Show loading state
-    const button = document.querySelector('[onclick*="runSelfTest"]');
+    const button = document.querySelector('#runSelfTestBtn');
     const originalText = button?.innerHTML;
     if (button) {
         button.disabled = true;
-        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Running Self-Test...';
+        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Validating Industry Setup...';
     }
     
     try {
-        console.log('🔧 Running Self-Test for company:', companyId);
+        console.log('🔧 Running Industry-Aware Validation for company:', companyId);
         const startTime = Date.now();
         
-        const res = await fetch(`/api/selftest/${companyId}`, { 
+        // Get current industry setup info
+        const industrySelect = document.getElementById('industrySetupSelect');
+        const currentIndustry = industrySelect?.value || 'unknown';
+        const industryName = industrySelect?.selectedOptions[0]?.textContent || 'Unknown Industry';
+        
+        const res = await fetch(`/api/selftest/${companyId}?industry=${currentIndustry}`, { 
             credentials: 'include',
             headers: { 
                 'Content-Type': 'application/json',
@@ -3111,35 +3151,47 @@ async function runSelfTest() {
         const executionTime = Date.now() - startTime;
         
         if (!json.ok) {
-            console.error('Self-Test failed:', json);
-            showToast(`Self-Test failed: ${json.error || 'Unknown error'}`, 'error');
+            console.error('Industry Validation failed:', json);
+            showToast(`Industry Validation failed: ${json.error || 'Unknown error'}`, 'error');
             return;
         }
 
-        // Build detailed summary with status indicators
+        // Build detailed industry-specific summary with status indicators
         const r = json.result;
         const components = [
-            `TTS: ${r.tts.ok ? '✅' : '❌'} ${r.tts.detail}`,
-            `STT: ${r.stt.ok ? '✅' : '❌'} ${r.stt.detail}`,
-            `Transfer: ${r.transfer.ok ? '✅' : '⚠️'} ${r.transfer.detail}`,
-            `Notify: ${r.notifications.ok ? '✅' : 'ℹ️'} ${r.notifications.detail.sms + r.notifications.detail.email} targets`,
-            `Knowledge: ${r.knowledge.ok ? '✅' : '❌'} ${r.knowledge.total} Q&A entries`
+            `🎤 TTS: ${r.tts.ok ? '✅' : '❌'} ${r.tts.detail}`,
+            `🗣️ STT: ${r.stt.ok ? '✅' : '❌'} ${r.stt.detail}`,
+            `📞 Transfer: ${r.transfer.ok ? '✅' : '⚠️'} ${r.transfer.detail}`,
+            `📧 Notify: ${r.notifications.ok ? '✅' : 'ℹ️'} ${r.notifications.detail.sms + r.notifications.detail.email} targets`,
+            `📚 Knowledge: ${r.knowledge.ok ? '✅' : '❌'} ${r.knowledge.total} entries`
         ];
         
+        // Add industry-specific validations if available
+        if (r.industryValidation) {
+            const iv = r.industryValidation;
+            components.push(`🏗️ Industry Config: ${iv.ok ? '✅' : '❌'} ${iv.detail}`);
+            if (iv.voiceOptimized) components.push(`🎯 Voice Tuned: ✅ ${currentIndustry}`);
+            if (iv.knowledgeSpecific) components.push(`📋 KB Specialized: ✅ ${iv.knowledgeCount} entries`);
+        }
+        
         const overallStatus = json.ok ? 'success' : 'warning';
-        const summary = `Self-Test (${executionTime}ms): ${components.join(' | ')}`;
+        const industryEmoji = getIndustryEmoji(currentIndustry);
+        const summary = `${industryEmoji} ${industryName} Validation (${executionTime}ms): ${components.join(' | ')}`;
         
         showToast(summary, overallStatus);
-        console.log('✅ Self-Test completed:', json);
+        console.log('✅ Industry-Aware Validation completed:', json);
         
         // Log detailed breakdown for debugging
         if (r.knowledge.breakdown) {
             console.log('📊 Knowledge breakdown:', r.knowledge.breakdown);
         }
+        if (r.industryValidation?.details) {
+            console.log('🏗️ Industry validation details:', r.industryValidation.details);
+        }
         
     } catch (error) {
-        console.error('❌ Self-Test error:', error);
-        showToast(`Self-Test error: ${error.message}`, 'error');
+        console.error('❌ Industry Validation error:', error);
+        showToast(`Industry Validation error: ${error.message}`, 'error');
     } finally {
         // Restore button state
         if (button && originalText) {
@@ -3147,6 +3199,30 @@ async function runSelfTest() {
             button.innerHTML = originalText;
         }
     }
+}
+
+/**
+ * Get emoji for industry type
+ */
+function getIndustryEmoji(industryType) {
+    const emojiMap = {
+        hvac: '🔧',
+        plumbing: '🚿', 
+        electrical: '⚡',
+        general_contractor: '🏗️',
+        roofing: '🏠',
+        auto_repair: '🚗',
+        medical: '🏥',
+        legal: '⚖️',
+        restaurant: '🍽️',
+        salon_spa: '💄',
+        fitness: '💪',
+        veterinary: '🐾',
+        dental: '🦷',
+        real_estate: '🏡',
+        custom: '🎯'
+    };
+    return emojiMap[industryType] || '🏢';
 }
 
 // Expose globally for button onclick handlers

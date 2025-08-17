@@ -1394,6 +1394,72 @@ router.post('/:id/apply-preset', authenticateSingleSession, async (req, res) => 
 });
 // --- END /api/company/:id/apply-preset (Phase 6) ---
 
+// --- BEGIN /api/company/:id/apply-industry-setup (Industry Configuration) ---
+const industryConfigurations = require('../server/presets/industryConfigurations');
+
+// Apply comprehensive industry setup to company
+router.post('/:id/apply-industry-setup', authenticateSingleSession, async (req, res) => {
+  try {
+    const { industryType, industryName } = req.body;
+    if (!industryType) {
+      return res.status(400).json({ error: 'industryType is required' });
+    }
+    
+    // Get current company
+    const company = await Company.findById(req.params.id);
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    console.log(`[Industry Setup] Applying ${industryType} configuration to company ${req.params.id}`);
+    
+    // Get industry-specific configuration
+    const industryConfig = industryConfigurations.getIndustryConfiguration(industryType);
+    if (!industryConfig) {
+      return res.status(400).json({ error: `Unknown industry type: ${industryType}` });
+    }
+    
+    // Apply comprehensive industry setup
+    const updatedDoc = {
+      ...company.toObject(),
+      ...industryConfig.configuration,
+      appliedIndustrySetup: {
+        type: industryType,
+        name: industryName || industryType,
+        appliedAt: new Date(),
+        version: industryConfig.version || '1.0'
+      }
+    };
+    
+    // Update company with industry configuration
+    const updated = await Company.findByIdAndUpdate(
+      req.params.id,
+      { $set: updatedDoc },
+      { new: true, runValidators: true }
+    );
+    
+    console.log(`[Industry Setup] Applied ${industryType} setup to company ${req.params.id}`);
+    
+    res.json({
+      success: true,
+      appliedConfiguration: {
+        industryType,
+        industryName: industryName || industryType,
+        modulesConfigured: Object.keys(industryConfig.configuration).length,
+        knowledgeBase: industryConfig.knowledgeEntries || 0,
+        voiceSettings: !!industryConfig.configuration.voiceSettings,
+        version: industryConfig.version || '1.0'
+      },
+      message: `Successfully applied ${industryName || industryType} industry setup`
+    });
+    
+  } catch (error) {
+    console.error('[Industry Setup] Apply error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+// --- END /api/company/:id/apply-industry-setup ---
+
 // --- Phase 2: Effective Config endpoints ---
 // GET effective (full) — returns merged config with ETag
 router.get('/company/:id/agent-config/effective', authenticateSingleSession, async (req, res) => {

@@ -1551,12 +1551,28 @@
                                 <section id="ai-top-controls" class="cv-card sticky top-0 z-30 bg-white/95 backdrop-blur border rounded-xl p-4 mb-4">
                                   <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                     <div class="flex items-center gap-3 flex-wrap">
-                                      <label for="presetSelect" class="font-medium">Preset</label>
-                                      <select id="presetSelect" class="cv-select min-w-[320px]" disabled>
-                                        <option value="hvac_starter" selected>HVAC Starter — Optimum Defaults v1</option>
-                                        <option value="plumbing" disabled>Plumbing (coming soon)</option>
-                                        <option value="electrical" disabled>Electrical (coming soon)</option>
+                                      <label for="industrySetupSelect" class="font-medium">Industry Setup</label>
+                                      <select id="industrySetupSelect" class="cv-select min-w-[320px]">
+                                        <option value="hvac" selected>🔧 HVAC Contractor — Complete Setup</option>
+                                        <option value="plumbing">🚿 Plumbing Services — Complete Setup</option>
+                                        <option value="electrical">⚡ Electrical Services — Complete Setup</option>
+                                        <option value="general_contractor">🏗️ General Contractor — Complete Setup</option>
+                                        <option value="roofing">🏠 Roofing Services — Complete Setup</option>
+                                        <option value="auto_repair">🚗 Auto Repair Shop — Complete Setup</option>
+                                        <option value="medical">🏥 Medical Practice — Complete Setup</option>
+                                        <option value="legal">⚖️ Legal Services — Complete Setup</option>
+                                        <option value="restaurant">🍽️ Restaurant/Food Service — Complete Setup</option>
+                                        <option value="salon_spa">💄 Salon & Spa — Complete Setup</option>
+                                        <option value="fitness">💪 Fitness/Gym — Complete Setup</option>
+                                        <option value="veterinary">🐾 Veterinary Clinic — Complete Setup</option>
+                                        <option value="dental">🦷 Dental Practice — Complete Setup</option>
+                                        <option value="real_estate">🏡 Real Estate — Complete Setup</option>
+                                        <option value="custom">🎯 Custom Configuration</option>
                                       </select>
+
+                                      <button id="applyIndustrySetup" type="button" class="cv-btn-primary" disabled>
+                                        <i class="fas fa-magic mr-2"></i>Apply Industry Setup
+                                      </button>
 
                                       <span id="dirtyBadge"
                                             class="hidden text-amber-700 bg-amber-100 border border-amber-300 px-2 py-1 rounded-md text-sm">
@@ -1566,7 +1582,7 @@
 
                                     <div class="flex items-center gap-2">
                                       <button id="runSelfTestBtn" type="button" class="cv-btn-secondary">
-                                        Run Self-Test
+                                        <i class="fas fa-stethoscope mr-2"></i>Validate Setup
                                       </button>
                                     </div>
                                   </div>
