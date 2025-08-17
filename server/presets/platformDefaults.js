@@ -1,5 +1,5 @@
 // Phase 2 — platform-wide fallbacks (ENV-backed)
-module.exports = {
+module.exports = () => ({
   timezone: process.env.DEFAULT_TIMEZONE || "America/New_York",
   voice: {
     provider: process.env.DEFAULT_VOICE_PROVIDER || "elevenlabs",
@@ -11,4 +11,4 @@ module.exports = {
     notifyEmail: process.env.DEFAULT_NOTIFY_EMAIL || "support@example.com",
   },
   hours: { afterHoursIntake: true },
-};
+});
