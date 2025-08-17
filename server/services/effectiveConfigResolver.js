@@ -1,9 +1,17 @@
 // Phase 2 — live resolver
 const _ = require("lodash");
-const Company = require("../../models/Company");
 const getDefaults = require("../presets/platformDefaults");
 const hvacPack = require("../presets/starterPack.hvac_v1.json");
 const cache = require("./effectiveConfigCache");
+
+// Lazy load Company model to avoid MongoDB connection on require
+let Company;
+function getCompanyModel() {
+  if (!Company) {
+    Company = require("../../models/Company");
+  }
+  return Company;
+}
 
 // custom merge: arrays prefer override if defined, else fallback
 const _merge = (top, mid, base) => _.mergeWith({}, base, mid, top, (obj, src) => {
@@ -12,6 +20,7 @@ const _merge = (top, mid, base) => _.mergeWith({}, base, mid, top, (obj, src) =>
 });
 
 async function _loadCompanyOverrides(companyId) {
+  const Company = getCompanyModel();
   const company = await Company.findById(companyId).lean();
   if (!company) throw new Error("Company not found");
   // Collect only relevant override sections you already store
