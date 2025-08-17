@@ -30,6 +30,9 @@ const bookingRoutes = require('./routes/booking');
 const transferRoutes = require('./routes/transfer');
 const notesRoutes = require('./routes/notes'); // GOLD STANDARD: Enterprise Notes API
 
+// PHASE 4: Self-Test (lite) route for production validation
+const selftestRoutes = require('./routes/selftest');
+
 // ENTERPRISE: New routes for enterprise functionality
 const knowledgeLifecycleRoutes = require('./routes/knowledgeLifecycle');
 const enterpriseAnalyticsRoutes = require('./routes/enterpriseAnalytics');
@@ -151,6 +154,9 @@ app.use('/api/agent', agentSettingsRoutes); // ENTERPRISE: AI Agent Settings Man
 app.use('/api/event-hooks', eventHooksRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/qna-learning', qnaLearningRoutes);
+
+// PHASE 4: Self-Test (lite) for production validation
+app.use('/', selftestRoutes);
 
 // Enterprise AI Intelligence routes with error handling
 let enterpriseAIIntelligenceRoutes;

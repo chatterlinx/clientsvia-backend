@@ -2046,11 +2046,10 @@ class CompanyProfileManager {
         if (!note) return;
 
         const noteCard = document.querySelector(`[data-note-id="${noteId}"]`);
-        if (!note) return;
+        if (!noteCard) return;
 
-        const noteCard = document.querySelector(`[data-note-id="${noteId}"]`);
-        const titleInput = noteCard?.querySelector('.note-title-edit');
-        const contentTextarea = noteCard?.querySelector('.note-content-edit');
+        const titleInput = noteCard.querySelector('.note-title-edit');
+        const contentTextarea = noteCard.querySelector('.note-content-edit');
 
         if (!contentTextarea?.value.trim()) {
             this.showNotification('Note content cannot be empty', 'error');
@@ -3074,6 +3073,95 @@ class CompanyProfileManager {
 // Global exports for legacy compatibility
 window.CompanyProfileManager = CompanyProfileManager;
 
+// ============================================================================
+// 🚀 PHASE 4 — SELF-TEST FRONTEND INTEGRATION
+// ============================================================================
+
+/**
+ * PHASE 4: Run Self-Test (lite) - Enterprise-grade validation with detailed UI feedback
+ */
+async function runSelfTest() {
+    const companyId = window.currentCompanyId || window.companyId;
+    if (!companyId) {
+        showToast('Company ID not found', 'error');
+        return;
+    }
+    
+    // Show loading state
+    const button = document.querySelector('[onclick*="runSelfTest"]');
+    const originalText = button?.innerHTML;
+    if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Running Self-Test...';
+    }
+    
+    try {
+        console.log('🔧 Running Self-Test for company:', companyId);
+        const startTime = Date.now();
+        
+        const res = await fetch(`/api/selftest/${companyId}`, { 
+            credentials: 'include',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest' 
+            }
+        });
+        
+        const json = await res.json();
+        const executionTime = Date.now() - startTime;
+        
+        if (!json.ok) {
+            console.error('Self-Test failed:', json);
+            showToast(`Self-Test failed: ${json.error || 'Unknown error'}`, 'error');
+            return;
+        }
+
+        // Build detailed summary with status indicators
+        const r = json.result;
+        const components = [
+            `TTS: ${r.tts.ok ? '✅' : '❌'} ${r.tts.detail}`,
+            `STT: ${r.stt.ok ? '✅' : '❌'} ${r.stt.detail}`,
+            `Transfer: ${r.transfer.ok ? '✅' : '⚠️'} ${r.transfer.detail}`,
+            `Notify: ${r.notifications.ok ? '✅' : 'ℹ️'} ${r.notifications.detail.sms + r.notifications.detail.email} targets`,
+            `Knowledge: ${r.knowledge.ok ? '✅' : '❌'} ${r.knowledge.total} Q&A entries`
+        ];
+        
+        const overallStatus = json.ok ? 'success' : 'warning';
+        const summary = `Self-Test (${executionTime}ms): ${components.join(' | ')}`;
+        
+        showToast(summary, overallStatus);
+        console.log('✅ Self-Test completed:', json);
+        
+        // Log detailed breakdown for debugging
+        if (r.knowledge.breakdown) {
+            console.log('📊 Knowledge breakdown:', r.knowledge.breakdown);
+        }
+        
+    } catch (error) {
+        console.error('❌ Self-Test error:', error);
+        showToast(`Self-Test error: ${error.message}`, 'error');
+    } finally {
+        // Restore button state
+        if (button && originalText) {
+            button.disabled = false;
+            button.innerHTML = originalText;
+        }
+    }
+}
+
+// Expose globally for button onclick handlers
+window.runSelfTest = runSelfTest;
+
+// Helper function for toast notifications (fallback if not available)
+function showToast(message, type = 'info') {
+    if (window.companyProfileManager && typeof window.companyProfileManager.showNotification === 'function') {
+        window.companyProfileManager.showNotification(message, type);
+    } else {
+        console.log(`[${type.toUpperCase()}] ${message}`);
+        alert(message); // Fallback for basic notification
+    }
+}
+
 // Auto-initialize the manager when the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Auto-initializing CompanyProfileManager...');
@@ -3181,12 +3269,72 @@ function mapTransferDefaultsToForm(defaults) {
   }
 }
 
+// ==== Phase 4: Behavior & Personality form mappers ====
+
+function mapBehaviorDefaultsToForm(def) {
+  try {
+    console.log('[Reset] Applying behavior defaults:', def);
+    
+    // Conversation pacing with validation
+    setIfExists('#behavior-min-pause-ms', def?.minPauseMs ?? 2000);
+    setIfExists('#behavior-max-silence-retries', def?.maxSilencePrompts ?? 2);
+    
+    // Barge-in toggle with safe event dispatch
+    const barge = document.querySelector('#behavior-barge-in');
+    if (barge) { 
+      barge.checked = !!def?.bargeIn; 
+      barge.dispatchEvent(new Event('change', {bubbles:true})); 
+    }
+
+    // Prompts & policies with array safety
+    setIfExists('#behavior-silence-prompts', (def?.silencePrompts || []).join('\n'));
+    setIfExists('#behavior-frustration-triggers', (def?.frustration?.triggers || []).join('\n'));
+    setIfExists('#behavior-frustration-response', def?.frustration?.response ?? '');
+    setIfExists('#behavior-when-in-doubt', def?.whenInDoubt ?? '');
+    
+    console.log('[Reset] Behavior defaults applied successfully');
+  } catch (error) {
+    console.error('[Reset] Error applying behavior defaults:', error);
+  }
+}
+
+function mapPersonalityDefaultsToForm(def) {
+  try {
+    console.log('[Reset] Applying personality defaults:', def);
+    
+    // Basic personality settings
+    setIfExists('#personality-ack-line', def?.acknowledgement ?? 'Ok.');
+    setIfExists('#personality-how-are-you', def?.howAreYou ?? 'Doing great, thanks! How can I help you?');
+    setIfExists('#personality-style', def?.style ?? 'warm-professional');
+    setIfExists('#personality-spanish-greeting', def?.spanishGreeting ?? '¡Hola! ¿En qué puedo ayudarle?');
+    
+    // Checkboxes with safe event dispatch
+    const lad = document.querySelector('#personality-language-autodetect');
+    if (lad) { 
+      lad.checked = !!def?.languageAutoDetect; 
+      lad.dispatchEvent(new Event('change', {bubbles:true})); 
+    }
+    
+    const pauses = document.querySelector('#personality-human-pauses');
+    if (pauses) { 
+      pauses.checked = !!def?.humanLikePauses; 
+      pauses.dispatchEvent(new Event('change', {bubbles:true})); 
+    }
+    
+    console.log('[Reset] Personality defaults applied successfully');
+  } catch (error) {
+    console.error('[Reset] Error applying personality defaults:', error);
+  }
+}
+
 // Generic dispatcher
 const MODULE_MAPPERS = {
   knowledge: mapKnowledgeDefaultsToForm,
   voice: mapVoiceDefaultsToForm,
   booking: mapBookingDefaultsToForm,
   transfer: mapTransferDefaultsToForm,
+  behavior: mapBehaviorDefaultsToForm,
+  personality: mapPersonalityDefaultsToForm,
 };
 
 // Wire into Phase-2 reset handler (call after json.defaults arrives)

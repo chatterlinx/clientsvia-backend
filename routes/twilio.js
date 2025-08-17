@@ -239,14 +239,28 @@ router.post('/voice', async (req, res) => {
       
       console.log(`[AI AGENT LOGIC] Call initialized, greeting: "${initResult.greeting}"`);
       
+      // PHASE 4: Get behavior-driven timing for human-like pauses with validation
+      const behaviorConfig = company.aiAgentLogic?.behavior || {};
+      const rawPauseMs = behaviorConfig.minPauseMs || 2000;
+      const minPauseMs = Math.max(1500, Math.min(7000, Number(rawPauseMs)));
+      const gatherTimeout = Math.round(minPauseMs / 1000); // Twilio needs seconds (int), 2..7 typical
+      const behaviorBargeIn = behaviorConfig.bargeIn !== undefined ? behaviorConfig.bargeIn : true;
+      
+      // Validation logging for production monitoring
+      if (rawPauseMs !== minPauseMs) {
+        console.warn(`[PHASE 4] Behavior timing adjusted: ${rawPauseMs}ms → ${minPauseMs}ms (safety bounds applied)`);
+      }
+      
+      console.log(`[PHASE 4] Behavior-driven timing applied: ${minPauseMs}ms pause → ${gatherTimeout}s gather timeout, bargeIn: ${behaviorBargeIn}`);
+      
       // Set up speech gathering with AI Agent Logic response handler
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/ai-agent-respond/${company._id}`,
         method: 'POST',
-        bargeIn: company.aiSettings?.bargeIn ?? false,
-        timeout: 5,
-        speechTimeout: 5,
+        bargeIn: behaviorBargeIn, // Use behavior setting with fallback
+        timeout: gatherTimeout, // PHASE 4: Behavior-driven timing
+        speechTimeout: gatherTimeout, // PHASE 4: Behavior-driven timing
         enhanced: true,
         speechModel: 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/ai-agent-partial/${company._id}`
@@ -292,15 +306,21 @@ router.post('/voice', async (req, res) => {
       console.error(`[AI AGENT LOGIC ERROR] Failed to initialize AI Agent Logic: ${aiError.message}`);
       console.log(`[FALLBACK] Using legacy system for call`);
       
+      // PHASE 4: Use same behavior-driven timing for fallback consistency
+      const behaviorConfig = company.aiAgentLogic?.behavior || {};
+      const minPauseMs = Math.max(1500, Math.min(7000, Number(behaviorConfig.minPauseMs || 2000)));
+      const gatherTimeout = Math.round(minPauseMs / 1000);
+      const behaviorBargeIn = behaviorConfig.bargeIn !== undefined ? behaviorConfig.bargeIn : false;
+      
       // Fallback to simple greeting if AI Agent Logic fails
       const fallbackGreeting = "Hello! Thank you for calling. How can I help you today?";
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
-        bargeIn: false,
-        timeout: 5,
-        speechTimeout: 5,
+        bargeIn: behaviorBargeIn, // PHASE 4: Consistent behavior settings
+        timeout: gatherTimeout, // PHASE 4: Consistent timing
+        speechTimeout: gatherTimeout, // PHASE 4: Consistent timing
         enhanced: true,
         speechModel: 'phone_call'
       });

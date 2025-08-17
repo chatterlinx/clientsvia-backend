@@ -1,8 +1,10 @@
 {
-  "version": "1.0",
-  "name": "HVAC Starter Pack - Optimum Defaults",
-  "description": "Production-ready HVAC configuration with top-50 scenarios",
-  "lastUpdated": "2025-08-16T00:00:00.000Z",
+  "version": "1.1",
+  "name": "HVAC Starter Pack - Phase 4 Enhanced",
+  "description": "Production-ready HVAC configuration with behavior-driven timing and top-50 scenarios",
+  "lastUpdated": "2025-08-17T00:00:00.000Z",
+  "phase": "4.0",
+  "features": ["behavior-timing", "personality-defaults", "deterministic-qna"],
   
   "answerPriority": ["companyKB", "tradeQA", "vector", "llmFallback"],
   
@@ -158,5 +160,24 @@
       "response": "Unusual noises from your HVAC system can indicate several different issues. To ensure we address this properly, I'd like to schedule a service call. Our technician can diagnose the exact cause and recommend the best solution.",
       "action": "book_service"
     }
+  },
+
+  "behavior": {
+    "minPauseMs": 2000,
+    "maxSilencePrompts": 2,
+    "bargeIn": true,
+    "silencePrompts": [
+      "No problem — take your time. Let me know when you're ready.",
+      "I'm here. Whenever you're set, go ahead.",
+      "All good — I can wait. What would you like to do next?"
+    ],
+    "frustration": {
+      "triggers": [
+        "are you real", "is this a machine", "robot", "human please",
+        "this is stupid", "talk to a person", "representative"
+      ],
+      "response": "Please, I am here to help you! You can speak to me naturally and ask anything you need — How can I help you?"
+    },
+    "whenInDoubt": "Ok, to ensure you get the best help, I'm transferring you to a service advisor who can assist with your service needs. Please hold."
   }
 }
