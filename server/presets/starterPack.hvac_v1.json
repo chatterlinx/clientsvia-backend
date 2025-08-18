@@ -28,13 +28,85 @@
       {
         "q": ["maintenance plan", "tune up", "seasonal check"],
         "a": "Our maintenance plan is $179/year and includes two seasonal tune-ups and a 20-point inspection. Want me to book the next tune-up window for you?"
+      },
+      {
+        "q": ["warranty", "parts warranty", "labor warranty"],
+        "a": "Most parts come with a 1-year warranty and labor warranty varies by service. If you have a specific part or job in mind I can check the exact terms for you."
+      },
+      {
+        "q": ["financing", "payment plan", "pay over time"],
+        "a": "We offer financing options for larger repairs and installations. I can have a service advisor review options or schedule a financing call — which would you prefer?"
+      },
+      {
+        "q": ["coupon", "discount", "promotion"],
+        "a": "We occasionally run promotions and discounts for first-time customers and maintenance plan members. I can check current offers for your area — want me to do that?"
+      },
+      {
+        "q": ["service area", "do you serve", "zip code"],
+        "a": "We service most of the [REGION] area. If you tell me your ZIP code or city I can confirm availability and give you the earliest windows."
+      },
+      {
+        "q": ["cancel appointment", "reschedule", "change appointment"],
+        "a": "I can help cancel or reschedule an existing appointment. Please provide the appointment date or confirmation number and I’ll take care of it."
+      },
+      {
+        "q": ["payment methods", "pay with", "accepts credit"],
+        "a": "We accept credit card, debit, and certain financing plans. Our techs can also accept card payments at the time of service in most cases."
+      },
+      {
+        "q": ["estimate", "quote", "how much will it cost"],
+        "a": "I can provide a rough estimate based on the symptoms you describe, but a diagnostic visit gives the most accurate quote. Would you like to schedule a diagnostic visit?"
+      },
+      {
+        "q": ["parts availability", "replacement parts", "order parts"],
+        "a": "We can order most common parts within 24–48 hours. If it’s a special-order part I can check lead times — would you like me to look up a specific part?"
       }
     ],
     "tradeQA": [
-      { "q": ["no cool", "not cooling", "warm air"], "a": "That sounds like a cooling issue. We can send a repair tech in a 2-hour window. Do you prefer morning or afternoon?" }
+      { "q": ["no cool", "not cooling", "warm air"], "a": "That sounds like a cooling issue — it could be low refrigerant, a capacitor, or a compressor problem. I can schedule a diagnostic and tech will bring gauges and common parts. Morning or afternoon?" },
+      { "q": ["no heat", "not heating", "cold air"], "a": "For heating issues it could be ignition failure, pilot, or airflow restriction. We can send a technician to diagnose and recommend fixes — would you like to book a visit?" },
+      { "q": ["short cycling", "keeps turning on and off", "cycles frequently"], "a": "Short cycling is often caused by an oversized unit, thermostat placement, or refrigerant issues. A diagnostic will identify the root cause — should I book a service?" },
+      { "q": ["won't turn on", "doesn't start", "no power"], "a": "If your unit won't start it may be a tripped breaker, failed capacitor, or control board issue. We can troubleshoot on-site — would you like immediate availability?" },
+      { "q": ["strange noise", "loud noise", "clanking", "squealing"], "a": "Different noises point to different failures (fan motor, bearings, compressor). Please describe the sound and when it occurs — I can schedule a tech with the right tools." },
+      { "q": ["water leak", "leaking", "condensate", "water on floor"], "a": "Leaks are commonly from clogged condensate drains or condensate pump failures. We’ll inspect and clear or repair as needed — book a visit?" },
+      { "q": ["thermostat not working", "thermostat issues", "display blank"], "a": "If the thermostat is blank or unresponsive it could be batteries, wiring, or the thermostat itself. Try replacing batteries first; if that doesn't help we'll dispatch a tech." },
+      { "q": ["filter replacement", "air filter", "change filter"], "a": "We recommend changing filters every 3 months (or monthly for high dust/ pets). We can include a filter service during a maintenance visit — schedule one?" },
+      { "q": ["frozen coils", "ice on evaporator", "unit iced up"], "a": "Frozen coils usually indicate airflow problems or low refrigerant. Turn the system off and call for service — I can arrange a diagnostic as soon as today." },
+      { "q": ["refrigerant leak", "low refrigerant", "needs charge"], "a": "If refrigerant is low we will locate and repair leaks before charging. I can dispatch a certified technician to diagnose and provide an estimate." },
+      { "q": ["pilot light", "gas furnace pilot", "won't stay lit"], "a": "For pilot or ignition issues we recommend scheduling a gas-safety inspection. We’ll check the pilot assembly, thermocouple, and safety controls." },
+      { "q": ["shorted breaker", "tripped breaker", "breaker keeps tripping"], "a": "Repeated breaker trips can signal electrical faults such as a bad capacitor or locked rotor on the motor. A technician can safely diagnose and correct the issue." },
+      { "q": ["burning smell", "electrical smell", "smoke smell"], "a": "A burning or electrical smell is urgent — shut off the system and we can prioritize a same-day safety inspection. Do you want immediate dispatch?" },
+      { "q": ["weak airflow", "low airflow", "poor airflow"], "a": "Low airflow is often a dirty filter, obstructed vents, or a failing blower motor. We’ll inspect the supply and return, clean components, and report findings." },
+      { "q": ["condenser not running", "outdoor unit off", "outside unit not running"], "a": "If the outdoor unit isn't running it could be a capacitor, contactor, or control issue. We’ll send a technician with common parts to diagnose." },
+      { "q": ["compressor humming", "compressor not starting", "clicking then humming"], "a": "A humming compressor commonly indicates start-capacitor or start-device problems. Technicians can test and replace the start components on-site." },
+      { "q": ["high electric bill", "energy usage increased", "power bill high"], "a": "Higher bills can be caused by low refrigerant, dirty coils, or failing components. We can perform an efficiency check and recommend improvements." },
+      { "q": ["pilot outage", "gas outage", "no gas"], "a": "Gas outages are handled by the utility — if you suspect a leak or appliance issue we can run a safety check once service is restored." },
+      { "q": ["heat pump not defrosting", "ice on outdoor unit", "heat pump ice"], "a": "Heat pump defrost problems are often control or sensor related. A trained technician will inspect the defrost cycle and controls." },
+      { "q": ["evaporator coil", "coil replacement", "coil leak"], "a": "Evaporator coil issues may require coil cleaning or replacement. I can schedule a diagnostic and provide options based on the system condition." },
+      { "q": ["capacitor", "bad capacitor", "start capacitor"], "a": "Capacitor failures are common and can prevent motors/compressors from starting. Technicians carry replacements and can perform the swap quickly." },
+      { "q": ["contactor", "relay clicking", "contactor stuck"], "a": "A stuck or pitted contactor can cause intermittent operation. We can inspect and replace the contactor during a repair visit." },
+      { "q": ["strange smell after service", "odor after repair"], "a": "If there's a lingering odor after service, let us know — we’ll return to investigate and ensure no hazards remain." },
+      { "q": ["maintenance checklist", "what's included in tune up", "service checklist"], "a": "Our tune-up includes filter check, system startup, safety inspection, blower clean, thermostat calibration, and refrigerant level check as applicable." },
+      { "q": ["installation estimate", "install new unit", "replace furnace", "new ac"], "a": "We provide on-site evaluations and detailed installation proposals tailored to your home. Would you like to schedule an estimate visit?" },
+      { "q": ["duct cleaning", "ductwork", "air ducts"], "a": "We coordinate with trusted duct specialists for cleaning or repairs. I can get a recommendation or schedule a joint visit if needed." },
+      { "q": ["carbon monoxide alarm", "co alarm", "co detector"], "a": "If you suspect carbon monoxide exposure, evacuate and call emergency services. For safety checks we can include CO testing during a service call." },
+      { "q": ["blower motor", "fan not running", "blower issues"], "a": "Blower problems are typically tested on-site; common fixes include capacitor replacement, motor repair, or belt/adjustment work." },
+      { "q": ["thermostat calibration", "thermostat off by", "temp doesn't match"], "a": "We can calibrate or replace your thermostat and check sensor placement. Smart thermostats sometimes need reconnection to Wi‑Fi if unresponsive." },
+      { "q": ["installation warranty", "new unit warranty", "manufacturer warranty"], "a": "New installations typically include manufacturer warranties and our installation guarantee. We’ll provide warranty details with any quote." },
+      { "q": ["emergency service", "after hours", "urgent repair"], "a": "We provide emergency and after‑hours service options. If this is urgent I can prioritize scheduling an emergency dispatch now." },
+      { "q": ["condensate pump", "pump not working", "water pump"], "a": "Condensate pump failures cause backups and leaks. We can repair or replace pumps and clear backups during a service visit." },
+      { "q": ["odor from vents", "mold smell", "musty smell"], "a": "Musty smells can indicate mold in the drain or ductwork — we’ll inspect and recommend cleaning or moisture remediation." },
+      { "q": ["air quality", "improve indoor air", "purifier"], "a": "We can recommend air quality improvements like UV lights, media filters, or purifiers. Want recommendations based on your home?" }
     ],
     "generic": [
-      { "q": ["speak to person", "representative", "live agent"], "a": "Sure — I can connect you to a service advisor now, or book an appointment. Which do you prefer?" }
+      { "q": ["speak to person", "representative", "live agent"], "a": "Sure — I can connect you to a service advisor now, or book an appointment. Which do you prefer?" },
+      { "q": ["business hours", "open hours", "when are you open"], "a": "Our normal business hours are Monday–Friday 8am–5pm, with emergency coverage available outside these times." },
+      { "q": ["phone number", "contact number", "call you"], "a": "You can reach our support team at (555) 555‑1234. Would you like me to call a service advisor for you?" },
+      { "q": ["email", "support email", "contact email"], "a": "Our customer service email is support@example.com — I can also text or email you a confirmation link for any booking." },
+      { "q": ["address", "location", "where are you located"], "a": "Our office is located at 123 Main St, Suite 200 in [CITY]. I can provide directions or schedule a visit." },
+      { "q": ["how it works", "process", "service process"], "a": "Typically we start with a diagnostic visit, review findings, provide an estimate, and proceed with repairs or replacement with your approval." },
+      { "q": ["confirmation", "appointment confirmation", "booking confirmation"], "a": "After booking you’ll receive a confirmation via text and email with the appointment window, tech name, and prep instructions." },
+      { "q": ["reviews", "ratings", "how are your reviews"], "a": "We maintain a strong customer satisfaction record — I can fetch recent reviews for your area if you’d like to see them." }
     ]
   }
 }
