@@ -10239,9 +10239,76 @@
         }
 
         /**
-         * [P1-UI] Effective Settings Drawer Handler
+         * [P2-RESOLVER] Fetch Effective Config with ETag caching
          */
-        function toggleEffectiveSettings() {
+        let cachedEffectiveConfig = null;
+        let cachedETag = null;
+        
+        async function fetchEffectiveConfig(forceReload = false) {
+            try {
+                console.info('[P2-RESOLVER] Fetching effective config', { 
+                    companyId: companyId,
+                    cached: !!cachedEffectiveConfig,
+                    forceReload 
+                });
+                
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                // Add If-None-Match header for 304 caching
+                if (!forceReload && cachedETag) {
+                    headers['If-None-Match'] = cachedETag;
+                }
+                
+                const response = await fetch(`/api/company/${companyId}/agent-config/effective`, {
+                    method: 'GET',
+                    headers: headers
+                });
+                
+                if (response.status === 304) {
+                    console.info('[P2-RESOLVER] hit - using cached config');
+                    return cachedEffectiveConfig;
+                }
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                const newETag = response.headers.get('ETag');
+                
+                // Cache the response
+                cachedEffectiveConfig = data.config;
+                cachedETag = newETag;
+                
+                console.info('[P2-RESOLVER] miss - loaded fresh config', { 
+                    etag: newETag,
+                    configKeys: Object.keys(data.config || {})
+                });
+                
+                return data.config;
+                
+            } catch (error) {
+                console.error('[P2-RESOLVER] Failed to fetch effective config:', error);
+                showToast('Failed to load effective configuration: ' + error.message, 'error');
+                throw error;
+            }
+        }
+        
+        /**
+         * [P2-RESOLVER] Invalidate cached config (call after saves)
+         */
+        function invalidateEffectiveConfigCache() {
+            console.info('[P2-RESOLVER] invalidated company=' + companyId);
+            cachedEffectiveConfig = null;
+            cachedETag = null;
+        }
+
+        /**
+         * [P1-UI] Enhanced Effective Settings Drawer Handler
+         */
+        async function toggleEffectiveSettings() {
             effectiveSettingsDrawerOpen = !effectiveSettingsDrawerOpen;
             console.info('[P1-UI] Effective Settings drawer', { 
                 open: effectiveSettingsDrawerOpen,
@@ -10249,11 +10316,115 @@
             });
             
             if (effectiveSettingsDrawerOpen) {
-                showToast('Effective Settings drawer opened', 'info');
-                // TODO: Load effective config in Phase 2
+                showToast('Loading effective configuration...', 'info');
+                try {
+                    const config = await fetchEffectiveConfig();
+                    showEffectiveSettingsDrawer(config);
+                } catch (error) {
+                    showToast('Failed to load effective settings', 'error');
+                    effectiveSettingsDrawerOpen = false;
+                }
             } else {
-                showToast('Effective Settings drawer closed', 'info');
+                hideEffectiveSettingsDrawer();
             }
+        }
+        
+        /**
+         * [P2-RESOLVER] Show Effective Settings Drawer
+         */
+        function showEffectiveSettingsDrawer(config) {
+            // Create drawer if it doesn't exist
+            let drawer = document.getElementById('effective-settings-drawer');
+            if (!drawer) {
+                drawer = createEffectiveSettingsDrawer();
+                document.body.appendChild(drawer);
+            }
+            
+            // Populate with config data
+            populateEffectiveSettingsDrawer(drawer, config);
+            
+            // Show the drawer
+            drawer.classList.remove('hidden');
+            
+            console.info('[P2-RESOLVER] Effective Settings drawer opened');
+            showToast('Effective configuration loaded successfully', 'success');
+        }
+        
+        /**
+         * [P2-RESOLVER] Hide Effective Settings Drawer  
+         */
+        function hideEffectiveSettingsDrawer() {
+            const drawer = document.getElementById('effective-settings-drawer');
+            if (drawer) {
+                drawer.classList.add('hidden');
+            }
+            console.info('[P2-RESOLVER] Effective Settings drawer closed');
+        }
+        
+        /**
+         * [P2-RESOLVER] Create Effective Settings Drawer DOM
+         */
+        function createEffectiveSettingsDrawer() {
+            const drawer = document.createElement('div');
+            drawer.id = 'effective-settings-drawer';
+            drawer.className = 'fixed inset-0 z-50 bg-black bg-opacity-50 hidden';
+            drawer.innerHTML = `
+                <div class="absolute right-0 top-0 h-full w-1/2 bg-white shadow-xl overflow-y-auto">
+                    <div class="p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-semibold text-gray-800">
+                                <i class="fas fa-cog mr-2 text-blue-600"></i>Effective Configuration
+                            </h3>
+                            <button onclick="toggleEffectiveSettings()" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        <div id="effective-config-content" class="space-y-4">
+                            <div class="text-center text-gray-500">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            return drawer;
+        }
+        
+        /**
+         * [P2-RESOLVER] Populate Effective Settings Drawer with Config
+         */
+        function populateEffectiveSettingsDrawer(drawer, config) {
+            const content = drawer.querySelector('#effective-config-content');
+            const modules = [
+                { key: 'routing', title: 'Answer Priority Flow', icon: 'fa-route' },
+                { key: 'knowledge', title: 'Knowledge Sources', icon: 'fa-brain' },
+                { key: 'enterprise', title: 'Enterprise Settings', icon: 'fa-building' },
+                { key: 'behavior', title: 'Agent Behavior', icon: 'fa-robot' },
+                { key: 'qna', title: 'Q&A Database', icon: 'fa-question-circle' },
+                { key: 'booking', title: 'Booking Settings', icon: 'fa-calendar' },
+                { key: 'voice', title: 'Voice Settings', icon: 'fa-microphone' }
+            ];
+            
+            content.innerHTML = modules.map(module => {
+                const moduleConfig = config[module.key] || {};
+                const isEmpty = Object.keys(moduleConfig).length === 0;
+                
+                return `
+                    <div class="border border-gray-200 rounded-lg p-4">
+                        <div class="flex items-center mb-2">
+                            <i class="fas ${module.icon} mr-2 text-blue-600"></i>
+                            <h4 class="font-medium text-gray-800">${module.title}</h4>
+                            <span class="ml-auto text-xs px-2 py-1 rounded ${isEmpty ? 'bg-gray-100 text-gray-600' : 'bg-green-100 text-green-800'}">
+                                ${isEmpty ? 'Default' : 'Configured'}
+                            </span>
+                        </div>
+                        <div class="text-sm text-gray-600">
+                            ${isEmpty ? 
+                                '<em>Using platform defaults</em>' : 
+                                `<pre class="bg-gray-50 p-2 rounded text-xs overflow-x-auto">${JSON.stringify(moduleConfig, null, 2)}</pre>`
+                            }
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         /**
