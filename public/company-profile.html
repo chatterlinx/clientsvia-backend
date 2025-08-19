@@ -623,6 +623,23 @@
         .loading-enterprise {
             animation: pulse-enterprise 2s infinite;
         }
+
+        /* 🎯 PHASE 1 — HVAC BASELINE STYLES */
+        .cv-card {
+            @apply bg-white rounded-lg shadow-sm border border-gray-200;
+        }
+        .cv-btn-primary {
+            @apply bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-150;
+        }
+        .cv-btn-secondary {
+            @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-4 py-2 rounded-lg transition-colors duration-150;
+        }
+        .cv-btn-outline {
+            @apply border border-gray-300 hover:border-gray-400 text-gray-700 hover:text-gray-900 font-medium px-4 py-2 rounded-lg transition-colors duration-150;
+        }
+        .cv-select {
+            @apply px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -1551,38 +1568,23 @@
                                 <section id="ai-top-controls" class="cv-card sticky top-0 z-30 bg-white/95 backdrop-blur border rounded-xl p-4 mb-4">
                                   <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                     <div class="flex items-center gap-3 flex-wrap">
-                                      <label for="industrySetupSelect" class="font-medium">Industry Setup</label>
-                                      <select id="industrySetupSelect" class="cv-select min-w-[320px]">
-                                        <option value="hvac" selected>🔧 HVAC Contractor — Complete Setup</option>
-                                        <option value="plumbing">🚿 Plumbing Services — Complete Setup</option>
-                                        <option value="electrical">⚡ Electrical Services — Complete Setup</option>
-                                        <option value="general_contractor">🏗️ General Contractor — Complete Setup</option>
-                                        <option value="roofing">🏠 Roofing Services — Complete Setup</option>
-                                        <option value="auto_repair">🚗 Auto Repair Shop — Complete Setup</option>
-                                        <option value="medical">🏥 Medical Practice — Complete Setup</option>
-                                        <option value="legal">⚖️ Legal Services — Complete Setup</option>
-                                        <option value="restaurant">🍽️ Restaurant/Food Service — Complete Setup</option>
-                                        <option value="salon_spa">💄 Salon & Spa — Complete Setup</option>
-                                        <option value="fitness">💪 Fitness/Gym — Complete Setup</option>
-                                        <option value="veterinary">🐾 Veterinary Clinic — Complete Setup</option>
-                                        <option value="dental">🦷 Dental Practice — Complete Setup</option>
-                                        <option value="real_estate">🏡 Real Estate — Complete Setup</option>
-                                        <option value="custom">🎯 Custom Configuration</option>
-                                      </select>
-
-                                      <button id="applyIndustrySetup" type="button" class="cv-btn-primary" disabled>
-                                        <i class="fas fa-magic mr-2"></i>Apply Industry Setup
-                                      </button>
-
+                                      <label class="font-medium text-gray-700">Preset Configuration:</label>
+                                      <span class="cv-select bg-gray-100 text-gray-600 cursor-not-allowed min-w-[200px] flex items-center">
+                                        <i class="fas fa-wrench mr-2 text-blue-600"></i>HVAC Starter (read-only)
+                                      </span>
+                                      
                                       <span id="dirtyBadge"
                                             class="hidden text-amber-700 bg-amber-100 border border-amber-300 px-2 py-1 rounded-md text-sm">
-                                        Unsaved changes
+                                        <i class="fas fa-edit mr-1"></i>Unsaved changes
                                       </span>
                                     </div>
 
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-3">
                                       <button id="runSelfTestBtn" type="button" class="cv-btn-secondary">
-                                        <i class="fas fa-stethoscope mr-2"></i>Validate Setup
+                                        <i class="fas fa-vial mr-2"></i>Run Self-Test
+                                      </button>
+                                      <button id="effectiveSettingsBtn" type="button" class="cv-btn-outline">
+                                        <i class="fas fa-cog mr-2"></i>Effective Settings
                                       </button>
                                     </div>
                                   </div>
@@ -2070,9 +2072,7 @@
                                             <button id="clientsvia-tab-flow-designer" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
                                                 <i class="fas fa-project-diagram mr-2"></i>Flow Designer
                                             </button>
-                                            <button id="clientsvia-tab-ab-testing" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
-                                                <i class="fas fa-flask mr-2"></i>A/B Testing
-                                            </button>
+                                            <!-- A/B Testing removed in Phase 1 cleanup -->
                                             <button id="clientsvia-tab-personalization" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
                                                 <i class="fas fa-user-cog mr-2"></i>Personalization
                                             </button>
@@ -2984,10 +2984,13 @@
                                         </div>
                                         
                                         <!-- ========================================= -->
-                                        <!-- A/B TESTING FRAMEWORK                   -->
-                                        <!-- Conversation Optimization Engine        -->
-                                        <!-- ========================================= -->
-                                        <div id="clientsvia-ab-testing-content" class="clientsvia-tab-content">
+                                        <!-- A/B TESTING REMOVED IN PHASE 1 CLEANUP -->
+                                        <div id="clientsvia-ab-testing-content" class="clientsvia-tab-content" style="display: none;">
+                                            <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                                                <i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>
+                                                <span class="text-red-800">A/B Testing removed in Phase 1 cleanup</span>
+                                            </div>
+                                        </div>
                                             <div class="mb-6">
                                                 <!-- Admin Help Accordion -->
                                                 <div class="bg-blue-50 border border-blue-200 rounded-lg mb-6">
@@ -4882,80 +4885,6 @@
                 
                 </div>
 
-                <!-- 🚀 MAIN AI AGENT LOGIC SAVE/PUBLISH SECTION -->
-                <div class="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-6 mt-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h4 class="text-lg font-semibold text-gray-800 flex items-center">
-                                <i class="fas fa-rocket mr-2 text-indigo-600"></i>Publish AI Agent Configuration
-                                <span class="ml-2 px-2 py-1 bg-indigo-100 text-indigo-800 text-xs font-medium rounded-full">Required</span>
-                            </h4>
-                            <p class="text-sm text-gray-600 mt-1">Save and activate your complete AI Agent Logic configuration</p>
-                            <div class="mt-2 text-xs text-gray-500">
-                                <span class="ai-config-status status-inactive">Status: Configuration Required</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center space-x-3">
-                            <span id="ai-agent-config-saved" class="text-green-600 text-sm hidden">
-                                <i class="fas fa-check-circle mr-1"></i>Configuration Published!
-                            </span>
-                            <button 
-                                type="button" 
-                                onclick="saveAIAgentLogicConfiguration()" 
-                                class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition duration-150 ease-in-out transform hover:scale-105"
-                            >
-                                <i class="fas fa-rocket mr-2"></i>Publish Configuration
-                            </button>
-                        </div>
-                    </div>
-                    <div class="mt-4 p-3 bg-white rounded-lg border border-indigo-100">
-                        <div class="text-xs text-gray-600">
-                            <strong>This will configure:</strong>
-                            <ul class="mt-1 ml-4 list-disc space-y-1">
-                                <li>Answer Priority Flow (routing.priority)</li>
-                                <li>Knowledge Source Thresholds (knowledge.thresholds)</li>
-                                <li>Composite Confidence Settings (enterprise.composite.threshold)</li>
-                                <li>Agent Personality & Behavior Controls</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 📸 PHASE 8: PUBLISH & SNAPSHOT CONFIG SECTION -->
-                <div class="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-6 mt-6" id="agent-config-publish-card">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h4 class="text-lg font-semibold text-gray-800 flex items-center">
-                                <i class="fas fa-camera mr-2 text-blue-600"></i>Agent Config — Publish Snapshot
-                                <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">Phase 8</span>
-                            </h4>
-                            <p class="text-sm text-gray-600 mt-1">Compile & publish a deterministic snapshot the runtime will use</p>
-                            <div class="mt-2 text-xs text-gray-500">
-                                <span id="publish-status">Status: Loading...</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center space-x-3">
-                            <button 
-                                type="button" 
-                                id="btn-publish-agent-config"
-                                class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition duration-150 ease-in-out transform hover:scale-105"
-                            >
-                                <i class="fas fa-upload mr-2"></i>Publish Config
-                            </button>
-                        </div>
-                    </div>
-                    <div class="mt-4 p-3 bg-white rounded-lg border border-blue-100">
-                        <div class="text-xs text-gray-600">
-                            <strong>Benefits:</strong>
-                            <ul class="mt-1 ml-4 list-disc space-y-1">
-                                <li>Eliminates router_config_missing errors</li>
-                                <li>Guarantees deterministic AI Agent Logic execution</li>
-                                <li>Immutable snapshots prevent half-saved UI states</li>
-                                <li>One-click recovery from configuration issues</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
             </div>
             
             <!-- ========================================= -->
@@ -10280,8 +10209,80 @@
     <script>
         /**
          * ========================================= 
-         * 🚀 ENTERPRISE AI AGENT LOGIC JAVASCRIPT
-         * Analytics, Flow Designer, A/B Testing, Personalization
+         * 🚀 PHASE 1 — AI AGENT LOGIC JAVASCRIPT
+         * Clean, Production-Ready HVAC Baseline
+         * ========================================= 
+         */
+
+        // [P1-UI] Phase 1 Flags & Logging
+        const RESOLVER_V1 = true;
+        const STARTER_HVAC_V1 = true;
+        const ROUTER_V1 = true;
+        const DTMF_V1 = true;
+
+        // [P1-UI] Global state tracking
+        let effectiveSettingsDrawerOpen = false;
+
+        /**
+         * [P1-UI] Run Self-Test Button Handler
+         */
+        function runSelfTest() {
+            console.info('[P1-UI] Self-Test triggered', { 
+                companyId: companyId,
+                timestamp: new Date().toISOString(),
+                flags: { RESOLVER_V1, STARTER_HVAC_V1, ROUTER_V1, DTMF_V1 }
+            });
+            
+            showToast('Self-Test initiated - check console for details', 'info');
+            
+            // TODO: Wire to actual self-test endpoint in Phase 5
+        }
+
+        /**
+         * [P1-UI] Effective Settings Drawer Handler
+         */
+        function toggleEffectiveSettings() {
+            effectiveSettingsDrawerOpen = !effectiveSettingsDrawerOpen;
+            console.info('[P1-UI] Effective Settings drawer', { 
+                open: effectiveSettingsDrawerOpen,
+                companyId: companyId 
+            });
+            
+            if (effectiveSettingsDrawerOpen) {
+                showToast('Effective Settings drawer opened', 'info');
+                // TODO: Load effective config in Phase 2
+            } else {
+                showToast('Effective Settings drawer closed', 'info');
+            }
+        }
+
+        /**
+         * [P1-UI] Initialize Phase 1 Event Handlers
+         */
+        function initializePhase1Handlers() {
+            console.info('[P1-UI] Initializing Phase 1 handlers');
+            
+            // Wire up the header controls
+            const runSelfTestBtn = document.getElementById('runSelfTestBtn');
+            const effectiveSettingsBtn = document.getElementById('effectiveSettingsBtn');
+            
+            if (runSelfTestBtn) {
+                runSelfTestBtn.addEventListener('click', runSelfTest);
+            }
+            
+            if (effectiveSettingsBtn) {
+                effectiveSettingsBtn.addEventListener('click', toggleEffectiveSettings);
+            }
+            
+            console.info('[P1-UI] Phase 1 handlers initialized successfully');
+        }
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', initializePhase1Handlers);
+
+        /**
+         * ========================================= 
+         * 🚀 LEGACY CODE (TO BE CLEANED)
          * ========================================= 
          */
 
