@@ -758,7 +758,7 @@ class CompanyProfileManager {
                 
                 this.autoSaveTimeout = setTimeout(async () => {
                     try {
-                        await this.performAutoSave();
+                        await this.saveConfigurationChanges();
                         this.setFormStatus('saved', 'All changes saved');
                     } catch (error) {
                         this.setFormStatus('error', 'Auto-save failed');
