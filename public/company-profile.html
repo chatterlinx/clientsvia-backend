@@ -7043,31 +7043,85 @@
 
         // Save Company KB settings
         async function saveCompanyKBSettings() {
+            console.log('🚀 KB SAVE PROCESS STARTED - Button clicked');
+            
             const companyId = getCurrentCompanyId();
-            if (!companyId) return;
+            console.log('🔍 Company ID extracted:', companyId);
+            
+            if (!companyId) {
+                console.error('❌ No company ID found - cannot save');
+                alert('❌ ERROR: No company ID found. Cannot save settings.');
+                return;
+            }
+
+            // Get UI elements with detailed logging
+            const thresholdElement = document.getElementById('company-kb-threshold');
+            const reviewElement = document.getElementById('company-kb-review');
+            
+            console.log('🎛️ UI Elements found:', {
+                threshold: !!thresholdElement,
+                review: !!reviewElement,
+                thresholdValue: thresholdElement?.value,
+                reviewValue: reviewElement?.value
+            });
 
             const settings = {
-                confidenceThreshold: parseFloat(document.getElementById('company-kb-threshold').value),
-                reviewFrequency: parseInt(document.getElementById('company-kb-review').value)
+                confidenceThreshold: parseFloat(thresholdElement?.value || 0.5),
+                reviewFrequency: parseInt(reviewElement?.value || 180),
+                lastUpdated: new Date().toISOString(),
+                version: '2.21'
             };
 
+            console.log('📦 Prepared settings data for save:', settings);
+            console.log('📦 Settings JSON string:', JSON.stringify(settings, null, 2));
+
             try {
-                const response = await fetch(`/api/company-kb/companies/${companyId}/settings`, {
+                const apiUrl = `/api/company-kb/companies/${companyId}/settings`;
+                console.log('🌐 Making API call to:', apiUrl);
+                console.log('📤 Request method: PUT');
+                console.log('📤 Request headers: Content-Type: application/json');
+                
+                const response = await fetch(apiUrl, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(settings)
                 });
 
+                console.log('📡 API Response received:');
+                console.log('📡 Status:', response.status);
+                console.log('📡 Status Text:', response.statusText);
+                console.log('📡 Response OK:', response.ok);
+                console.log('📡 Response Headers:', Object.fromEntries(response.headers.entries()));
+
                 const result = await response.json();
+                console.log('📄 Response Body:', result);
                 
-                if (result.success) {
-                    showNotification('Company KB settings saved', 'success');
+                if (response.ok && result.success) {
+                    console.log('✅ KB SAVE SUCCESS - Confirmed by server');
+                    console.log('🎉 SAVE CONFIRMED: Knowledge Base settings successfully saved to database');
+                    console.log('💾 Saved settings:', result.data || result);
+                    
+                    showNotification('✅ Knowledge Base settings saved successfully!', 'success');
+                    
+                    // Additional user confirmation
+                    alert('✅ SAVE CONFIRMED!\n\nKnowledge Base settings have been successfully saved to the database.\n\nSettings saved:\n- Confidence Threshold: ' + settings.confidenceThreshold + '\n- Review Frequency: ' + settings.reviewFrequency + ' days');
+                    
                 } else {
-                    throw new Error(result.message || 'Failed to save settings');
+                    const errorMsg = result.message || result.error || 'Unknown server error';
+                    console.error('❌ KB SAVE FAILED - Server reported error:', errorMsg);
+                    console.error('❌ Full server response:', result);
+                    
+                    throw new Error(`Server error: ${errorMsg}`);
                 }
             } catch (error) {
-                console.error('❌ Failed to save KB settings:', error);
-                showNotification('Failed to save KB settings', 'error');
+                console.error('❌ KB SAVE CRITICAL ERROR:', error);
+                console.error('❌ Error name:', error.name);
+                console.error('❌ Error message:', error.message);
+                console.error('❌ Error stack:', error.stack);
+                
+                const errorDetails = `Failed to save KB settings: ${error.message}`;
+                showNotification('❌ ' + errorDetails, 'error');
+                alert('❌ SAVE FAILED!\n\n' + errorDetails + '\n\nPlease check the console for detailed error information.');
             }
         }
 
