@@ -339,16 +339,34 @@ router.post('/companies/:companyId/company-kb-settings', async (req, res) => {
 // PUT endpoint for company KB settings (alternative route for frontend compatibility)
 router.put('/companies/:companyId/settings', async (req, res) => {
     try {
+        console.log('🔧 KB Settings PUT Request received:');
+        console.log('📦 Company ID:', req.params.companyId);
+        console.log('📦 Request Body:', JSON.stringify(req.body, null, 2));
+        console.log('📦 Request Headers:', req.headers['content-type']);
+        
         const { companyId } = req.params;
-        const { reviewFrequency, confidenceThreshold } = req.body;
+        const { reviewFrequency, confidenceThreshold, lastUpdated, version } = req.body;
 
+        console.log('🔍 Extracted values:', {
+            reviewFrequency,
+            confidenceThreshold,
+            lastUpdated,
+            version
+        });
+
+        console.log('🔍 Looking up company with ID:', companyId);
         const company = await Company.findById(companyId);
         if (!company) {
+            console.error('❌ Company not found:', companyId);
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
+        console.log('✅ Company found:', company.companyName || 'Unnamed Company');
+
+        console.log('🔍 Current companyKBSettings before update:', JSON.stringify(company.companyKBSettings, null, 2));
 
         // Initialize companyKBSettings with proper schema defaults if it doesn't exist
         if (!company.companyKBSettings) {
+            console.log('🆕 Initializing new companyKBSettings');
             company.companyKBSettings = {
                 enabled: true,
                 requireApproval: true,
@@ -372,6 +390,7 @@ router.put('/companies/:companyId/settings', async (req, res) => {
 
         // Ensure nested objects exist with defaults
         if (!company.companyKBSettings.priorityWeights) {
+            console.log('🔧 Adding missing priorityWeights');
             company.companyKBSettings.priorityWeights = {
                 high: 1.0,
                 normal: 0.8,
@@ -380,6 +399,7 @@ router.put('/companies/:companyId/settings', async (req, res) => {
         }
 
         if (!company.companyKBSettings.analytics) {
+            console.log('🔧 Adding missing analytics');
             company.companyKBSettings.analytics = {
                 trackUsage: true,
                 trackPerformance: true,
@@ -387,30 +407,66 @@ router.put('/companies/:companyId/settings', async (req, res) => {
             };
         }
 
+        console.log('📝 About to update settings...');
         // Update only the settings provided in the request
         if (reviewFrequency !== undefined) {
+            console.log('📝 Updating reviewFrequency from', company.companyKBSettings.reviewFrequency, 'to', reviewFrequency);
             company.companyKBSettings.reviewFrequency = reviewFrequency;
         }
         if (confidenceThreshold !== undefined) {
+            console.log('📝 Updating confidenceThreshold from', company.companyKBSettings.confidenceThreshold, 'to', confidenceThreshold);
             company.companyKBSettings.confidenceThreshold = confidenceThreshold;
         }
+        if (lastUpdated !== undefined) {
+            console.log('📝 Updating lastUpdated to', lastUpdated);
+            company.companyKBSettings.lastUpdated = lastUpdated;
+        }
+        if (version !== undefined) {
+            console.log('📝 Updating version to', version);
+            company.companyKBSettings.version = version;
+        }
+
+        console.log('📝 Final settings object before save:', JSON.stringify(company.companyKBSettings, null, 2));
 
         // Use findByIdAndUpdate to only update companyKBSettings field to avoid other validation issues
+        console.log('💾 Executing database update...');
         const updatedCompany = await Company.findByIdAndUpdate(
             companyId,
             { $set: { companyKBSettings: company.companyKBSettings } },
             { new: true, runValidators: false } // Skip validators to avoid other field issues
         );
 
+        console.log('✅ Database update completed');
+        console.log('✅ Updated company KB settings in DB:', JSON.stringify(updatedCompany.companyKBSettings, null, 2));
+
         res.json({
             success: true,
             data: updatedCompany.companyKBSettings,
-            message: 'Company KB settings updated successfully'
+            message: 'Company KB settings updated successfully',
+            debug: {
+                originalSettings: req.body,
+                finalSettings: updatedCompany.companyKBSettings,
+                timestamp: new Date().toISOString()
+            }
         });
 
     } catch (error) {
-        console.error('Error updating company KB settings:', error);
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+        console.error('❌ CRITICAL ERROR updating company KB settings:', error);
+        console.error('❌ Error name:', error.name);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
+        console.error('❌ Request body that caused error:', JSON.stringify(req.body, null, 2));
+        
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error', 
+            error: error.message,
+            debug: {
+                companyId: req.params.companyId,
+                requestBody: req.body,
+                timestamp: new Date().toISOString()
+            }
+        });
     }
 });
 
