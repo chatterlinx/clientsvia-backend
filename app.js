@@ -210,6 +210,10 @@ try {
     console.log('ℹ️ AI Agent Logic Simple routes not found (optional)');
 }
 
+// Mount Company Knowledge Base routes
+const companyKBRoutes = require('./routes/companyKB');
+app.use('/api/company-kb', companyKBRoutes);
+
 // Development routes
 if (process.env.NODE_ENV !== 'production') {
     // Serve selfCheckLogger service

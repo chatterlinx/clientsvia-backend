@@ -1134,6 +1134,10 @@ const companySchema = new mongoose.Schema({
         requireApproval: { type: Boolean, default: true },
         maxQuestions: { type: Number, default: 100, min: 1, max: 1000 },
         confidenceThreshold: { type: Number, default: 0.80, min: 0, max: 1 },
+        reviewFrequency: { type: Number, default: 180, min: 1, max: 3650 },
+        lastUpdated: { type: Date, default: Date.now },
+        version: { type: String, default: '1.0.0' },
+        entryCount: { type: Number, default: 0 },
         fuzzyMatchEnabled: { type: Boolean, default: true },
         fuzzyMatchThreshold: { type: Number, default: 0.85, min: 0, max: 1 },
         priorityWeights: {

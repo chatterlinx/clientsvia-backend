@@ -283,16 +283,22 @@ router.get('/companies/:companyId/company-kb-settings', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
 
-        const settings = company.companyKBSettings || {
-            version: '1.0.0',
-            lastUpdated: new Date(),
-            reviewFrequency: 180,
-            confidenceThreshold: 0.80,
-            entryCount: 0
-        };
+        const settings = company.companyKBSettings ?
+            (company.companyKBSettings.toObject ? company.companyKBSettings.toObject() : company.companyKBSettings) :
+            {
+                version: '1.0.0',
+                lastUpdated: new Date(),
+                reviewFrequency: 180,
+                confidenceThreshold: 0.80,
+                entryCount: 0
+            };
 
-        // Update entry count
+        // Update entry count and ensure defaults
         settings.entryCount = company.companyKB?.length || 0;
+        settings.reviewFrequency = settings.reviewFrequency ?? 180;
+        settings.confidenceThreshold = settings.confidenceThreshold ?? 0.80;
+        settings.version = settings.version || '1.0.0';
+        settings.lastUpdated = settings.lastUpdated || new Date();
 
         res.json({
             success: true,
@@ -317,8 +323,8 @@ router.post('/companies/:companyId/company-kb-settings', async (req, res) => {
 
         company.companyKBSettings = {
             ...company.companyKBSettings,
-            reviewFrequency: reviewFrequency || 180,
-            confidenceThreshold: confidenceThreshold || 0.80,
+            reviewFrequency: reviewFrequency ?? company.companyKBSettings?.reviewFrequency ?? 180,
+            confidenceThreshold: confidenceThreshold ?? company.companyKBSettings?.confidenceThreshold ?? 0.80,
             lastUpdated: new Date()
         };
 
@@ -411,19 +417,19 @@ router.put('/companies/:companyId/settings', async (req, res) => {
         // Update only the settings provided in the request
         if (reviewFrequency !== undefined) {
             console.log('📝 Updating reviewFrequency from', company.companyKBSettings.reviewFrequency, 'to', reviewFrequency);
-            company.companyKBSettings.reviewFrequency = reviewFrequency;
+            company.companyKBSettings.reviewFrequency = Number.isFinite(Number(reviewFrequency)) ? Number(reviewFrequency) : company.companyKBSettings.reviewFrequency;
         }
         if (confidenceThreshold !== undefined) {
             console.log('📝 Updating confidenceThreshold from', company.companyKBSettings.confidenceThreshold, 'to', confidenceThreshold);
-            company.companyKBSettings.confidenceThreshold = confidenceThreshold;
+            company.companyKBSettings.confidenceThreshold = Number.isFinite(Number(confidenceThreshold)) ? Number(confidenceThreshold) : company.companyKBSettings.confidenceThreshold;
         }
         if (lastUpdated !== undefined) {
             console.log('📝 Updating lastUpdated to', lastUpdated);
-            company.companyKBSettings.lastUpdated = lastUpdated;
+            company.companyKBSettings.lastUpdated = new Date(lastUpdated);
         }
         if (version !== undefined) {
             console.log('📝 Updating version to', version);
-            company.companyKBSettings.version = version;
+            company.companyKBSettings.version = String(version);
         }
 
         console.log('📝 Final settings object before save:', JSON.stringify(company.companyKBSettings, null, 2));
@@ -486,6 +492,9 @@ router.get('/companies/:companyId/settings', async (req, res) => {
             requireApproval: true,
             maxQuestions: 100,
             confidenceThreshold: 0.80,
+            reviewFrequency: 180,
+            version: '1.0.0',
+            lastUpdated: new Date(),
             fuzzyMatchEnabled: true,
             fuzzyMatchThreshold: 0.85,
             priorityWeights: {
@@ -502,9 +511,10 @@ router.get('/companies/:companyId/settings', async (req, res) => {
             entryCount: company.companyKB?.length || 0
         };
 
-        // Merge existing settings with defaults
-        const settings = company.companyKBSettings ? 
-            { ...defaultSettings, ...company.companyKBSettings.toObject() } : 
+        // Merge existing settings with defaults (support both plain object and subdoc)
+        const existingSettings = company.companyKBSettings;
+        const settings = existingSettings ? 
+            { ...defaultSettings, ...(existingSettings.toObject ? existingSettings.toObject() : existingSettings) } : 
             defaultSettings;
 
         // Ensure entry count is current
