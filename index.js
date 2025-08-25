@@ -65,13 +65,10 @@ async function loadAllRoutes() {
         routes.alertRoutes = await loadRouteWithTimeout('./routes/alerts', 'alertRoutes');
         routes.integrationsRoutes = await loadRouteWithTimeout('./routes/integrations', 'integrationsRoutes');
         routes.ttsRoutes = await loadRouteWithTimeout('./routes/tts', 'ttsRoutes');
-        routes.companyQnaRoutes = await loadRouteWithTimeout('./routes/companyQna', 'companyQnaRoutes');
-        routes.suggestionRoutes = await loadRouteWithTimeout('./routes/suggestions', 'suggestionRoutes');
         routes.twilioRoutes = await loadRouteWithTimeout('./routes/twilio', 'twilioRoutes');
         routes.aiRoutes = await loadRouteWithTimeout('./routes/ai', 'aiRoutes');
         routes.elevenLabsRoutes = await loadRouteWithTimeout('./routes/elevenLabs', 'elevenLabsRoutes');
         routes.uploadRoutes = await loadRouteWithTimeout('./routes/upload', 'uploadRoutes');
-        routes.learningRoutes = await loadRouteWithTimeout('./routes/learning', 'learningRoutes');
         routes.agentSettingsRoutes = await loadRouteWithTimeout('./routes/agentSettings', 'agentSettingsRoutes');
         routes.companyAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/agentSettings', 'companyAgentSettingsRoutes');
         routes.companyPersonalityRoutes = await loadRouteWithTimeout('./routes/company/personality', 'companyPersonalityRoutes');
@@ -83,7 +80,6 @@ async function loadAllRoutes() {
         routes.agentTestingRoutes = await loadRouteWithTimeout('./routes/company/agentTesting', 'agentTestingRoutes');
         routes.eventHooksRoutes = await loadRouteWithTimeout('./routes/eventHooks', 'eventHooksRoutes');
         routes.transferRouterRoutes = await loadRouteWithTimeout('./routes/transferRouter', 'transferRouterRoutes');
-        routes.pendingQnARoutes = await loadRouteWithTimeout('./routes/company/pendingQnA', 'pendingQnARoutes');
         routes.enhancedAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/enhancedAgentSettings', 'enhancedAgentSettingsRoutes');
         routes.aiAgentWorkflowRoutes = await loadRouteWithTimeout('./routes/aiAgentWorkflows', 'aiAgentWorkflowRoutes');
         routes.aiAgentAnalyticsRoutes = await loadRouteWithTimeout('./routes/aiAgentAnalytics', 'aiAgentAnalyticsRoutes');
@@ -188,12 +184,9 @@ function registerRoutes(routes) {
     app.use('/api/alerts', routes.alertRoutes);
     app.use('/api/integrations', routes.integrationsRoutes);
     app.use('/api/tts', routes.ttsRoutes);
-    app.use('/api/suggestions', routes.suggestionRoutes);
-    app.use('/api/company/:companyId/qna', routes.companyQnaRoutes);
     app.use('/api/ai', routes.aiRoutes);
     app.use('/api/elevenlabs', routes.elevenLabsRoutes);
     app.use('/api/upload', routes.uploadRoutes);
-    app.use('/api/learning', routes.learningRoutes);
     app.use('/api/agent', routes.agentSettingsRoutes); // ENTERPRISE: AI Agent Settings Management
     app.use('/api/auth', routes.authRoutes); // AUTH: User authentication and JWT token management
     app.use('/api/admin', routes.adminRoutes); // ADMIN: Authentication-protected endpoints (companies, alerts, suggestions)
@@ -203,7 +196,6 @@ function registerRoutes(routes) {
     app.use('/api/company', routes.companyKnowledgeRoutes); // MODULE 2: Knowledge Q&A Source Controls
     app.use('/api/knowledge', routes.newKnowledgeRoutes); // NEW: Company Q&A Knowledge Base Management
     app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
-    app.use('/api/company', routes.pendingQnARoutes); // MODULE 4: Self-Learning Knowledge Base Approval
     app.use('/api/company', routes.enhancedAgentSettingsRoutes); // Enhanced LLM Selector & Agent Settings
 
     // Register AI Agent routes

@@ -10,7 +10,7 @@ const router = express.Router();
 const { authenticateJWT } = require('../middleware/auth');
 const Company = require('../models/Company');
 const ConversationLog = require('../models/ConversationLog');
-const KnowledgeLifecycleItem = require('../models/KnowledgeLifecycleItem');
+const CompanyQnA = require('../models/knowledge/CompanyQnA');
 const logger = require('../utils/logger');
 
 /**
@@ -548,17 +548,13 @@ async function getSourceWinRateMetrics(companyId, startDate, endDate) {
  */
 async function getKnowledgeMetrics(companyId, startDate, endDate) {
     try {
-        const totalItems = await KnowledgeLifecycleItem.countDocuments({ companyId });
-        const activeItems = await KnowledgeLifecycleItem.countDocuments({ 
+        const totalItems = await CompanyQnA.countDocuments({ companyId });
+        const activeItems = await CompanyQnA.countDocuments({ 
             companyId, 
-            status: 'approved',
-            $or: [
-                { validThrough: { $exists: false } },
-                { validThrough: { $gt: new Date() } }
-            ]
+            isActive: true
         });
 
-        const recentlyUsed = await KnowledgeLifecycleItem.countDocuments({
+        const recentlyUsed = await CompanyQnA.countDocuments({
             companyId,
             lastUsed: { $gte: startDate }
         });

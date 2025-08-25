@@ -110,13 +110,13 @@ class ServiceIssueHandler {
    */
   async checkCustomKB(query, companyId, classification) {
     try {
-      const KnowledgeEntry = require('../models/KnowledgeEntry');
+      const CompanyQnA = require('../models/knowledge/CompanyQnA');
       
       // Look for entries matching the service issue category
-      const entries = await KnowledgeEntry.find({
+      const entries = await CompanyQnA.find({
         companyId,
         category: { $in: [classification.category, 'service', 'repair', 'emergency'] },
-        approved: true
+        isActive: true
       }).exec();
       
       // Check for keyword matches

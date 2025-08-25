@@ -3,7 +3,7 @@ const router = express.Router();
 const { authenticateJWT, requireRole } = require('../middleware/auth');
 const { getDB } = require('../db');
 const Alert = require('../models/Alert');
-const SuggestedKnowledgeEntry = require('../models/SuggestedKnowledgeEntry');
+const CompanyQnA = require('../models/knowledge/CompanyQnA');
 const Company = require('../models/Company');
 
 // All admin routes require authentication and admin role
@@ -97,10 +97,10 @@ router.get('/suggestions', async (req, res) => {
     try {
         console.log('[ADMIN API GET /admin/suggestions] Admin user requesting all suggestions:', req.user.email);
         
-        // Get all suggested knowledge entries with company information
-        const suggestions = await SuggestedKnowledgeEntry.find({})
+        // Get all Company Q&A entries with company information for admin review
+        const suggestions = await CompanyQnA.find({})
             .populate('companyId', 'companyName tradeTypes') // Include company name and trade types
-            .sort({ createdAt: -1 }) // Most recent first
+            .sort({ updatedAt: -1 }) // Most recent first
             .limit(1000); // Reasonable limit for admin dashboard
         
         console.log(`[ADMIN API GET /admin/suggestions] Returning ${suggestions.length} suggestions to admin`);
@@ -130,16 +130,16 @@ router.get('/dashboard', async (req, res) => {
         console.log('[ADMIN API GET /admin/dashboard] Admin dashboard requested by:', req.user.email);
         
         // Get counts for dashboard overview
-        const [companyCount, alertCount, suggestionCount] = await Promise.all([
+        const [companyCount, alertCount, qnaCount] = await Promise.all([
             Company.countDocuments({}),
             Alert.countDocuments({}),
-            SuggestedKnowledgeEntry.countDocuments({})
+            CompanyQnA.countDocuments({})
         ]);
         
         // Get recent activity
-        const [recentAlerts, recentSuggestions] = await Promise.all([
+        const [recentAlerts, recentQnAs] = await Promise.all([
             Alert.find({}).populate('companyId', 'companyName').sort({ timestamp: -1 }).limit(5),
-            SuggestedKnowledgeEntry.find({}).populate('companyId', 'companyName').sort({ createdAt: -1 }).limit(5)
+            CompanyQnA.find({}).populate('companyId', 'companyName').sort({ updatedAt: -1 }).limit(5)
         ]);
         
         res.json({
@@ -148,12 +148,12 @@ router.get('/dashboard', async (req, res) => {
                 summary: {
                     totalCompanies: companyCount,
                     totalAlerts: alertCount,
-                    totalSuggestions: suggestionCount,
+                    totalCompanyQnAs: qnaCount,
                     lastUpdated: new Date().toISOString()
                 },
                 recentActivity: {
                     alerts: recentAlerts,
-                    suggestions: recentSuggestions
+                    companyQnAs: recentQnAs
                 }
             },
             message: 'Admin dashboard data retrieved successfully'

@@ -1,6 +1,6 @@
 console.log('--- FINGERPRINT: EXECUTING services/agent.js ---'); // Added a comment to trigger re-deployment
 
-const KnowledgeEntry = require('../models/KnowledgeEntry');
+const CompanyQnA = require('../models/knowledge/CompanyQnA');
 const { getDB } = require('../db');
 
 const { google } = require('googleapis');
@@ -161,7 +161,6 @@ async function callModel(company, prompt) {
 }
 
 const { ObjectId } = require('mongodb');
-const SuggestedKnowledgeEntry = require('../models/SuggestedKnowledgeEntry');
 const agentPerformanceTracker = require('./agentPerformanceTracker');
 
 async function answerQuestion(companyId, question, responseLength = 'concise', conversationHistory = [], mainAgentScriptParam = '', personality = 'friendly', companySpecialties = '', categoryQAs = '', originalCallSid = null) {
@@ -477,18 +476,21 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     }
   }
 
-  // STEP 6: Check KnowledgeEntry (approved Q&A entries)
-  const entry = await KnowledgeEntry.findOne({ companyId, 
-    category: { $in: categories },
-    question: { $regex: new RegExp(question, 'i') },
-    approved: true
+  // STEP 6: Check CompanyQnA (Priority #1 Knowledge Source)
+  const entry = await CompanyQnA.findOne({ 
+    companyId, 
+    isActive: true,
+    $or: [
+      { question: { $regex: new RegExp(question, 'i') } },
+      { keywords: { $in: question.split(' ').map(word => new RegExp(word, 'i')) } }
+    ]
   }).exec();
 
   if (entry) {
-    console.log(`[KnowledgeBase] Found answer in KnowledgeEntry for: ${question}`);
-    responseMethod = 'qa-direct';
-    confidence = 0.9;
-    debugInfo = { section: 'knowledge-entry', entryId: entry._id };
+    console.log(`[CompanyQnA] ✅ Found answer in Company Q&A Priority #1 Source for: ${question}`);
+    responseMethod = 'company-qa-priority-1';
+    confidence = entry.confidence || 0.95;
+    debugInfo = { section: 'company-qna-priority-1', entryId: entry._id };
     
     const finalText = applyPlaceholders(entry.answer, placeholders);
     await trackPerformance(companyId, originalCallSid, question, finalText, responseMethod, confidence, debugInfo, startTime);
@@ -497,7 +499,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   }
 
   // STEP 7: Try quick Q&A reference (cheat sheet approach) with enhanced question
-  const quickQAAnswer = extractQuickAnswerFromQA(await KnowledgeEntry.find({ companyId }).exec(), enhancedQuestion, fuzzyThreshold);
+  const quickQAAnswer = extractQuickAnswerFromQA(await CompanyQnA.find({ companyId, isActive: true }).exec(), enhancedQuestion, fuzzyThreshold);
   if (quickQAAnswer) {
     console.log(`[Agent] Found quick Q&A reference for: ${enhancedQuestion}`);
     responseMethod = 'qa-intelligent';
@@ -757,17 +759,12 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   
   if (finalResponse) {
     try {
-      const newSuggestedEntry = new SuggestedKnowledgeEntry({
-        question: question,
-        suggestedAnswer: finalResponse, // Use the final concise response
-        category: categories.length > 0 ? categories[0] : 'General',
-        status: 'pending',
-        originalCallSid: originalCallSid
-      });
-      await newSuggestedEntry.save();
-      console.log(`[SuggestedKB] Created new pending suggestion for question: "${question}"`);
+      // Note: In the new Company Q&A system, learning/suggestions are handled
+      // by the CompanyKnowledgeService rather than storing directly here
+      console.log(`[Agent] AI fallback response generated for: "${question}"`);
+      console.log(`[Agent] Consider adding this Q&A to Company Knowledge Base for better future responses`);
     } catch (suggestErr) {
-      console.error(`[SuggestedKB] Error saving suggested knowledge entry:`, suggestErr.message);
+      console.error(`[Agent] Error in AI fallback logging:`, suggestErr.message);
     }
     
     // Track the LLM fallback performance

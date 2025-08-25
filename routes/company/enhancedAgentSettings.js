@@ -106,15 +106,6 @@ router.put('/companies/:companyId/agent-settings', async (req, res) => {
             }
         }
 
-        if (agentIntelligenceSettings.maxPendingQnAs !== undefined) {
-            if (agentIntelligenceSettings.maxPendingQnAs < 10 || agentIntelligenceSettings.maxPendingQnAs > 500) {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: 'Max pending Q&As must be between 10 and 500' 
-                });
-            }
-        }
-
         // Update company settings
         const company = await Company.findByIdAndUpdate(
             companyId,
@@ -224,7 +215,6 @@ router.post('/companies/:companyId/reset-agent-settings', async (req, res) => {
             autoLearningEnabled: true,
             learningApprovalMode: 'manual',
             learningConfidenceThreshold: 0.85,
-            maxPendingQnAs: 100,
             memoryMode: 'short',
             fallbackThreshold: 0.5,
             escalationMode: 'ask',

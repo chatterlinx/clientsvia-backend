@@ -204,20 +204,17 @@ router.post('/test-custom-kb-trace', async (req, res) => {
         
         console.log(`[Test Custom KB] Testing query: "${query}" for company: ${companyId}`);
         
-        // Import the checkCustomKB function with trace logging
-        const { checkCustomKB } = require('../utils/checkCustomKB');
-        const ResponseTraceLogger = require('../utils/responseTraceLogger');
+        // Use the new Company Knowledge Service (Priority #1 Source)
+        const CompanyKnowledgeService = require('../services/knowledge/CompanyKnowledgeService');
         
-        // Create a new trace logger and start tracing
-        const traceLogger = new ResponseTraceLogger();
+        // Test the Company Q&A Knowledge Base
+        const result = await CompanyKnowledgeService.findAnswerForAIAgent(query, companyId);
         
-        // Extract keywords for trace logging
-        const { extractKeywords } = require('../utils/checkCustomKB');
-        const keywords = extractKeywords(query);
-        traceLogger.startTrace(query, keywords);
-        
-        // Test the Custom KB with trace logging
-        const result = await checkCustomKB(query, companyId, null, traceLogger);
+        if (result.found) {
+            console.log(`[Test Custom KB] ✅ Found answer in Company Q&A Priority #1 Source`);
+        } else {
+            console.log(`[Test Custom KB] ❌ No answer found in Company Q&A Priority #1 Source`);
+        }
         
         // Extract the result and trace
         let response = null;
