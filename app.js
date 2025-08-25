@@ -20,7 +20,6 @@ const passport = require('./config/passport');
 const { secureHeaders } = require('./middleware/helmet');
 const { apiLimiter } = require('./middleware/rateLimit');
 
-const employeeRoutes = require("./routes/employee");
 const uploadRoutes = require("./routes/upload");
 const authRoutes = require('./routes/auth');
 const companyRoutes = require('./routes/company');
@@ -195,7 +194,6 @@ try {
     console.error('❌ Failed to load CRM Management routes:', error);
 }
 
-app.use("/api/employee", employeeRoutes);
 app.use("/api/uploads", uploadRoutes);
 
 // RESTORED - Full AI Agent Logic routes (issue was in Twilio routes, not here)
