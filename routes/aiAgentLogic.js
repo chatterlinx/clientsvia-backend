@@ -2,11 +2,36 @@
  * ClientsVia AI Agent Logic API Routes
  * Powers the dynamic intelligence configuration UI
  * 
- * Endpoints for:
- * - Answer Priority Flow management
- * - Knowledge Source Controls
- * - Agent Personality fine-tuning
- * - Real-time performance analytics
+ * 🤖 AI AGENT ROUTING REFERENCE - MAIN CONTROL CENTER:
+ * ╔══════════════════════════════════════════════════════════════════╗
+ * ║ KNOWLEDGE SOURCE PRIORITY FLOW CONTROL (THIS FILE)              ║
+ * ╠══════════════════════════════════════════════════════════════════╣
+ * ║ Priority #1: Company Q&A (line ~1037)                           ║
+ * ║ ├─ Endpoint: POST /api/ai-agent/company-knowledge/:companyId    ║
+ * ║ ├─ Service: CompanyKnowledgeService.findAnswerForAIAgent()      ║
+ * ║ ├─ Threshold: 0.80 confidence required                          ║
+ * ║ └─ Cache: Redis knowledge:company:{id}:* keys                   ║
+ * ║                                                                  ║
+ * ║ Priority #2: Trade Q&A (Future implementation)                  ║
+ * ║ ├─ Service: TradeKnowledgeService (planned)                     ║
+ * ║ ├─ Threshold: 0.75 confidence required                          ║
+ * ║ └─ Fallback: If Company Q&A confidence < threshold              ║
+ * ║                                                                  ║
+ * ║ Priority #3: Templates (Existing system)                        ║
+ * ║ Priority #4: Learning Queue (Existing system)                   ║
+ * ║ Priority #5: LLM Fallback (GPT/Gemini)                          ║
+ * ╚══════════════════════════════════════════════════════════════════╝
+ * 
+ * 🔧 TROUBLESHOOTING ENDPOINTS:
+ * • Test Priority Flow: POST /api/ai-agent/test-priority-flow/:companyId (line ~1110)
+ * • Load AI Settings: GET /api/admin/:companyID/ai-settings (line ~35)
+ * • Company Knowledge Test: POST /api/ai-agent/company-knowledge/:companyId (line ~1037)
+ * 
+ * 🚨 CRITICAL INTEGRATION POINTS:
+ * - CompanyKnowledgeService initialized line ~19
+ * - Knowledge routing logic in priority flow methods
+ * - Confidence thresholds control routing decisions
+ * - Error handling ensures graceful degradation
  */
 
 const express = require('express');
@@ -15,8 +40,14 @@ const { authenticateSingleSession } = require('../middleware/auth'); // Use sing
 const ClientsViaIntelligenceEngine = require('../services/clientsViaIntelligenceEngine');
 const Company = require('../models/Company');
 
+// 🚀 NEW: Import knowledge services for AI agent integration
+const CompanyKnowledgeService = require('../services/knowledge/CompanyKnowledgeService');
+
 // Initialize intelligence engine
 const intelligenceEngine = new ClientsViaIntelligenceEngine();
+
+// 🚀 NEW: Initialize knowledge service for AI agent integration
+const companyKnowledgeService = new CompanyKnowledgeService();
 
 /**
  * 🎯 BLUEPRINT COMPLIANCE: Admin AI Settings Endpoints
@@ -1022,6 +1053,300 @@ router.get('/verify-config', authenticateSingleSession, async (req, res) => {
  * 🎯 BLUEPRINT COMPLIANCE: Company Knowledge Base Endpoints
  * Company-specific Q&A management
  */
+
+/**
+ * 🤖 NEW: AI AGENT COMPANY KNOWLEDGE LOOKUP - PRIORITY #1 ENDPOINT
+ * This endpoint is called by the AI agent during conversations
+ * Integrates with the Knowledge Sources Priority Flow
+ * 
+ * 🔄 ROUTING FLOW - PRIORITY #1 DETAILED:
+ * ╔══════════════════════════════════════════════════════════════════╗
+ * ║ THIS ENDPOINT = FIRST STOP FOR ALL AI AGENT QUESTIONS           ║
+ * ╠══════════════════════════════════════════════════════════════════╣
+ * ║ 1. AI Agent receives customer question                          ║
+ * ║ 2. Calls THIS endpoint with query + companyId                   ║
+ * ║ 3. CompanyKnowledgeService.findAnswerForAIAgent() executed      ║
+ * ║ 4. Redis cache checked: knowledge:company:{id}:search:{hash}    ║
+ * ║ 5. If cache miss → Mongoose query on CompanyQnA model          ║
+ * ║ 6. Semantic matching using auto-generated keywords              ║
+ * ║ 7. Confidence score calculated (0.0-1.0)                       ║
+ * ║ 8. If confidence >= threshold (0.8) → Return answer            ║
+ * ║ 9. If confidence < threshold → AI tries Priority #2            ║
+ * ║ 10. Result cached in Redis for future queries                   ║
+ * ╚══════════════════════════════════════════════════════════════════╝
+ * 
+ * 🚨 CRITICAL: This endpoint determines AI routing success/failure
+ */
+router.post('/ai-agent/company-knowledge/:companyId', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { query, confidence = 0.8, maxResults = 3 } = req.body;
+
+        console.log('🤖 AI Agent requesting company knowledge:', {
+            companyId,
+            query: query?.substring(0, 50) + '...',
+            confidence,
+            maxResults
+        });
+
+        if (!query) {
+            return res.status(400).json({
+                success: false,
+                error: 'Query is required',
+                source: 'company_knowledge'
+            });
+        }
+
+        // Use the enterprise knowledge service
+        const result = await companyKnowledgeService.findAnswerForAIAgent(
+            query,
+            companyId,
+            {
+                minConfidence: confidence,
+                maxResults,
+                includeAnalytics: true
+            }
+        );
+
+        // Format response for AI agent
+        const response = {
+            success: true,
+            source: 'company_knowledge',
+            confidence: result.confidence || 0,
+            responseTime: result.responseTime,
+            cacheHit: result.cacheHit,
+            answers: result.results?.map(r => ({
+                id: r._id,
+                question: r.question,
+                answer: r.answer,
+                confidence: r.confidence,
+                relevanceScore: r.relevanceScore,
+                keywords: r.keywords,
+                category: r.category,
+                usageCount: r.usageCount
+            })) || [],
+            totalFound: result.totalFound || 0,
+            keywords: result.keywords || [],
+            analytics: {
+                searchLatency: result.responseTime,
+                keywordMatches: result.results?.[0]?.keywordMatches || 0,
+                questionSimilarity: result.results?.[0]?.questionSimilarity || 0
+            }
+        };
+
+        console.log(`✅ Company knowledge lookup completed: ${response.answers.length} answers found (${result.responseTime}ms)`);
+
+        res.json(response);
+
+    } catch (error) {
+        console.error('❌ AI Agent company knowledge lookup failed:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Company knowledge lookup failed',
+            details: error.message,
+            source: 'company_knowledge',
+            answers: []
+        });
+    }
+});
+
+/**
+ * 🧪 TEST AI AGENT PRIORITY FLOW - COMPREHENSIVE TESTING ENDPOINT
+ * Test endpoint to verify the complete AI agent routing with priority flow
+ * Used by the Knowledge Sources testing functionality
+ * 
+ * 🔄 TESTING FLOW - FULL PRIORITY CASCADE:
+ * ╔══════════════════════════════════════════════════════════════════╗
+ * ║ COMPREHENSIVE ROUTING TEST FOR ALL KNOWLEDGE SOURCES            ║
+ * ╠══════════════════════════════════════════════════════════════════╣
+ * ║ Priority #1: Company Q&A (CompanyKnowledgeService)              ║
+ * ║ ├─ Check confidence score                                       ║
+ * ║ ├─ Measure response time                                        ║
+ * ║ └─ If confidence >= 0.8 → Return (success)                     ║
+ * ║                                                                  ║
+ * ║ Priority #2: Trade Q&A (Future - TradeKnowledgeService)         ║
+ * ║ ├─ Only tested if Priority #1 fails                            ║
+ * ║ └─ If confidence >= 0.75 → Return                              ║
+ * ║                                                                  ║
+ * ║ Priority #3: Templates (Existing system)                        ║
+ * ║ Priority #4: Learning Queue (Existing system)                   ║
+ * ║ Priority #5: LLM Fallback (GPT/Gemini)                          ║
+ * ╚══════════════════════════════════════════════════════════════════╝
+ * 
+ * 🔧 TROUBLESHOOTING OUTPUT:
+ * • Detailed analytics for each source tested
+ * • Response times for performance optimization
+ * • Confidence scores for threshold tuning
+ * • Called from Knowledge Sources tab "Test Priority Flow" button
+ */
+router.post('/ai-agent/test-priority-flow/:companyId', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { query, includeAllSources = false } = req.body;
+
+        console.log('🧪 Testing AI agent priority flow:', {
+            companyId,
+            query: query?.substring(0, 50) + '...',
+            includeAllSources
+        });
+
+        if (!query) {
+            return res.status(400).json({
+                success: false,
+                error: 'Query is required for testing',
+                sources: []
+            });
+        }
+
+        // Get the company's priority flow configuration
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found',
+                sources: []
+            });
+        }
+
+        const priorityFlow = company.aiAgentLogic?.answerPriorityFlow || [];
+        const results = [];
+
+        // Test each source in priority order
+        for (const source of priorityFlow.filter(s => s.active)) {
+            const startTime = Date.now();
+            let sourceResult = null;
+
+            try {
+                if (source.id === 'company_knowledge') {
+                    // Test Company Knowledge Base
+                    const knowledgeResult = await companyKnowledgeService.findAnswerForAIAgent(
+                        query,
+                        companyId,
+                        {
+                            minConfidence: source.confidenceThreshold || 0.8,
+                            maxResults: 3,
+                            includeAnalytics: true
+                        }
+                    );
+
+                    sourceResult = {
+                        sourceId: source.id,
+                        sourceName: source.name,
+                        priority: source.priority,
+                        found: knowledgeResult.results && knowledgeResult.results.length > 0,
+                        confidence: knowledgeResult.confidence || 0,
+                        responseTime: Date.now() - startTime,
+                        threshold: source.confidenceThreshold,
+                        passed: (knowledgeResult.confidence || 0) >= (source.confidenceThreshold || 0.8),
+                        answers: knowledgeResult.results?.slice(0, 2).map(r => ({
+                            id: r._id,
+                            question: r.question,
+                            answer: r.answer.substring(0, 100) + '...',
+                            confidence: r.confidence,
+                            keywords: r.keywords?.slice(0, 5)
+                        })) || [],
+                        analytics: {
+                            totalFound: knowledgeResult.totalFound || 0,
+                            cacheHit: knowledgeResult.cacheHit || false,
+                            keywords: knowledgeResult.keywords || []
+                        }
+                    };
+                } else if (source.id === 'trade_categories') {
+                    // Placeholder for Trade Categories testing
+                    sourceResult = {
+                        sourceId: source.id,
+                        sourceName: source.name,
+                        priority: source.priority,
+                        found: false,
+                        confidence: 0,
+                        responseTime: Date.now() - startTime,
+                        threshold: source.confidenceThreshold,
+                        passed: false,
+                        answers: [],
+                        status: 'not_implemented',
+                        message: 'Trade Categories source not yet implemented'
+                    };
+                } else {
+                    // Placeholder for other sources
+                    sourceResult = {
+                        sourceId: source.id,
+                        sourceName: source.name,
+                        priority: source.priority,
+                        found: false,
+                        confidence: 0,
+                        responseTime: Date.now() - startTime,
+                        threshold: source.confidenceThreshold,
+                        passed: false,
+                        answers: [],
+                        status: 'placeholder',
+                        message: `${source.name} testing not yet implemented`
+                    };
+                }
+
+                results.push(sourceResult);
+
+                // If we found a confident answer and not testing all sources, stop here
+                if (sourceResult.passed && !includeAllSources) {
+                    console.log(`✅ Priority flow test stopped at ${source.name} with confident answer`);
+                    break;
+                }
+
+            } catch (error) {
+                console.error(`❌ Error testing source ${source.id}:`, error);
+                results.push({
+                    sourceId: source.id,
+                    sourceName: source.name,
+                    priority: source.priority,
+                    found: false,
+                    confidence: 0,
+                    responseTime: Date.now() - startTime,
+                    threshold: source.confidenceThreshold,
+                    passed: false,
+                    answers: [],
+                    error: error.message,
+                    status: 'error'
+                });
+            }
+        }
+
+        // Determine the final answer based on priority flow
+        const finalAnswer = results.find(r => r.passed && r.found);
+        const totalResponseTime = results.reduce((sum, r) => sum + r.responseTime, 0);
+
+        const response = {
+            success: true,
+            query,
+            testMode: true,
+            includeAllSources,
+            finalAnswer: finalAnswer || null,
+            totalResponseTime,
+            sourcesTestedCount: results.length,
+            priorityFlow: results,
+            recommendation: finalAnswer ? 
+                `✅ Success: Found confident answer from ${finalAnswer.sourceName}` :
+                '⚠️ No confident answer found in any priority source',
+            metadata: {
+                timestamp: new Date().toISOString(),
+                companyId,
+                totalSources: priorityFlow.length,
+                activeSources: priorityFlow.filter(s => s.active).length
+            }
+        };
+
+        console.log(`🧪 Priority flow test completed: ${response.recommendation} (${totalResponseTime}ms)`);
+
+        res.json(response);
+
+    } catch (error) {
+        console.error('❌ AI Agent priority flow test failed:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Priority flow test failed',
+            details: error.message,
+            sources: []
+        });
+    }
+});
 
 /**
  * GET /api/admin/:companyID/kb?query=thermostat

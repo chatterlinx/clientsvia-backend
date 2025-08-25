@@ -2590,6 +2590,187 @@ class CompanyProfileManager {
         }
         
         console.log(`📑 Switched to tab: ${tabName}`);
+        
+        // Special handling for Knowledge Sources tab
+        if (tabName === 'knowledge-sources') {
+            this.initializeKnowledgeSourcesTab();
+        }
+    }
+
+    /**
+     * Initialize Knowledge Sources tab functionality
+     */
+    initializeKnowledgeSourcesTab() {
+        console.log('📚 Initializing Knowledge Sources tab');
+        
+        // Setup sub-tab navigation
+        this.setupKnowledgeSubTabs();
+        
+        // Initialize Company Q&A Manager
+        this.initializeCompanyQnAManager();
+    }
+
+    /**
+     * Setup knowledge sources sub-tab navigation
+     */
+    setupKnowledgeSubTabs() {
+        const subTabs = document.querySelectorAll('.knowledge-sub-tab');
+        
+        subTabs.forEach(tab => {
+            tab.addEventListener('click', (event) => {
+                const subtabName = event.target.dataset.subtab;
+                if (subtabName) {
+                    this.switchKnowledgeSubTab(subtabName);
+                }
+            });
+        });
+        
+        // Default to company-qna sub-tab
+        this.switchKnowledgeSubTab('company-qna');
+    }
+
+    /**
+     * Switch knowledge sources sub-tabs
+     */
+    switchKnowledgeSubTab(subtabName) {
+        console.log(`📋 Switching to knowledge sub-tab: ${subtabName}`);
+        
+        // Update sub-tab buttons
+        document.querySelectorAll('.knowledge-sub-tab').forEach(btn => {
+            btn.classList.remove('border-indigo-500', 'text-indigo-600');
+            btn.classList.add('border-transparent', 'text-gray-500');
+        });
+        
+        // Hide all sub-tab panels
+        document.querySelectorAll('.knowledge-subtab-panel').forEach(panel => {
+            panel.classList.add('hidden');
+        });
+        
+        // Activate target sub-tab button
+        const targetButton = document.querySelector(`[data-subtab="${subtabName}"]`);
+        if (targetButton) {
+            targetButton.classList.add('border-indigo-500', 'text-indigo-600');
+            targetButton.classList.remove('border-transparent', 'text-gray-500');
+        }
+        
+        // Show target sub-tab panel
+        const targetPanel = document.getElementById(`${subtabName}-subtab`);
+        if (targetPanel) {
+            targetPanel.classList.remove('hidden');
+        }
+        
+        // Initialize specific sub-tab content
+        if (subtabName === 'company-qna' && !this.companyQnAManager) {
+            this.initializeCompanyQnAManager();
+        }
+    }
+
+    /**
+     * Initialize Company Q&A Manager
+     */
+    initializeCompanyQnAManager() {
+        if (this.companyQnAManager) {
+            console.log('📚 Company Q&A Manager already initialized');
+            return;
+        }
+
+        try {
+            console.log('🚀 Initializing Company Q&A Manager...');
+            
+            // Create a simple API client for the CompanyQnAManager
+            const apiClient = {
+                baseUrl: this.apiBaseUrl,
+                
+                // GET request wrapper
+                get: async (url) => {
+                    const response = await fetch(`${this.apiBaseUrl}${url}`, {
+                        method: 'GET',
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    return response.json();
+                },
+                
+                // POST request wrapper
+                post: async (url, data) => {
+                    const response = await fetch(`${this.apiBaseUrl}${url}`, {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(data)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    return response.json();
+                },
+                
+                // PUT request wrapper
+                put: async (url, data) => {
+                    const response = await fetch(`${this.apiBaseUrl}${url}`, {
+                        method: 'PUT',
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(data)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    return response.json();
+                },
+                
+                // DELETE request wrapper
+                delete: async (url) => {
+                    const response = await fetch(`${this.apiBaseUrl}${url}`, {
+                        method: 'DELETE',
+                        credentials: 'include',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    return response.json();
+                }
+            };
+
+            // Initialize CompanyQnAManager if the class is available
+            if (typeof CompanyQnAManager !== 'undefined') {
+                this.companyQnAManager = new CompanyQnAManager('company-qna-manager-container', apiClient);
+                
+                // Set the current company ID
+                if (this.companyId) {
+                    this.companyQnAManager.setCompanyId(this.companyId);
+                }
+                
+                console.log('✅ Company Q&A Manager initialized successfully');
+            } else {
+                console.error('❌ CompanyQnAManager class not found. Make sure the script is loaded.');
+                this.showNotification('Failed to load Company Q&A Manager', 'error');
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to initialize Company Q&A Manager:', error);
+            this.showNotification('Failed to initialize Company Q&A Manager', 'error');
+        }
     }
     
     /**

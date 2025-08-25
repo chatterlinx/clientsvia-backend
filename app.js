@@ -1,3 +1,11 @@
+/**
+ * ClientsVia Backend Application
+ * 
+ * 🤖 AI ROUTING REFERENCE:
+ * For troubleshooting AI agent routing issues, see: /AI_ROUTING_REFERENCE.js
+ * Company Q&A system routes: /routes/aiAgentLogic.js (Priority #1 source)
+ */
+
 require('dotenv').config();
 const express = require('express');
 const path = require('path');

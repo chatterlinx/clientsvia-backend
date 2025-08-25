@@ -75,6 +75,10 @@ async function loadAllRoutes() {
         routes.agentSettingsRoutes = await loadRouteWithTimeout('./routes/agentSettings', 'agentSettingsRoutes');
         routes.companyAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/agentSettings', 'companyAgentSettingsRoutes');
         routes.companyPersonalityRoutes = await loadRouteWithTimeout('./routes/company/personality', 'companyPersonalityRoutes');
+        // Knowledge Management Routes
+        routes.newKnowledgeRoutes = await loadRouteWithTimeout('./routes/knowledge/companyKnowledge', 'newKnowledgeRoutes');
+        
+        // Legacy Knowledge Settings (keeping for now as it handles different functionality)
         routes.companyKnowledgeRoutes = await loadRouteWithTimeout('./routes/company/knowledge', 'companyKnowledgeRoutes');
         routes.agentTestingRoutes = await loadRouteWithTimeout('./routes/company/agentTesting', 'agentTestingRoutes');
         routes.eventHooksRoutes = await loadRouteWithTimeout('./routes/eventHooks', 'eventHooksRoutes');
@@ -83,7 +87,7 @@ async function loadAllRoutes() {
         routes.enhancedAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/enhancedAgentSettings', 'enhancedAgentSettingsRoutes');
         routes.aiAgentWorkflowRoutes = await loadRouteWithTimeout('./routes/aiAgentWorkflows', 'aiAgentWorkflowRoutes');
         routes.aiAgentAnalyticsRoutes = await loadRouteWithTimeout('./routes/aiAgentAnalytics', 'aiAgentAnalyticsRoutes');
-        routes.knowledgeAutoPopulationRoutes = await loadRouteWithTimeout('./routes/knowledgeAutoPopulation', 'knowledgeAutoPopulationRoutes');
+        // REMOVED: knowledgeAutoPopulationRoutes - Replaced by comprehensive Company Q&A Management system
         routes.enhancedAIAgentRoutes = await loadRouteWithTimeout('./routes/enhancedAIAgent', 'enhancedAIAgentRoutes');
         routes.aiAgentHandlerRoutes = await loadRouteWithTimeout('./routes/aiAgentHandler', 'aiAgentHandlerRoutes');
         routes.agentPerformanceRoutes = await loadRouteWithTimeout('./routes/agentPerformance', 'agentPerformanceRoutes');
@@ -197,6 +201,7 @@ function registerRoutes(routes) {
     app.use('/api/company', routes.companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
     app.use('/api/company', routes.companyPersonalityRoutes); // MODULE 1: Agent Personality Settings
     app.use('/api/company', routes.companyKnowledgeRoutes); // MODULE 2: Knowledge Q&A Source Controls
+    app.use('/api/knowledge', routes.newKnowledgeRoutes); // NEW: Company Q&A Knowledge Base Management
     app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     app.use('/api/company', routes.pendingQnARoutes); // MODULE 4: Self-Learning Knowledge Base Approval
     app.use('/api/company', routes.enhancedAgentSettingsRoutes); // Enhanced LLM Selector & Agent Settings
@@ -207,7 +212,7 @@ function registerRoutes(routes) {
 
     app.use('/api/ai-agent-workflows', routes.aiAgentWorkflowRoutes);
     app.use('/api/ai-agent-analytics', routes.aiAgentAnalyticsRoutes);
-    app.use('/api/knowledge-auto-population', routes.knowledgeAutoPopulationRoutes);
+    // REMOVED: knowledge-auto-population routes - Replaced by comprehensive Company Q&A Management system
     app.use('/api/enhanced-ai-agent', routes.enhancedAIAgentRoutes);
     app.use('/api/ai-agent', routes.aiAgentHandlerRoutes);
     app.use('/api/agent', routes.agentPerformanceRoutes);

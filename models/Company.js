@@ -1,4 +1,7 @@
 // models/Company.js
+// 🤖 AI ROUTING REFERENCE: Company Q&A system links to this model
+// See: /models/knowledge/CompanyQnA.js (companyId field references this model)
+// AI Priority #1 knowledge source is company-specific Q&As
 const mongoose = require('mongoose');
 const { ObjectId } = mongoose.Schema.Types;
 const { defaultResponses } = require('../utils/personalityResponses_enhanced');
