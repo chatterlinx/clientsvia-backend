@@ -7,7 +7,7 @@
 
 const mongoose = require('mongoose');
 const Company = require('../models/Company');
-const KnowledgeEntry = require('../models/KnowledgeEntry');
+const CompanyQnA = require('../models/knowledge/CompanyQnA');
 const TradeQnA = require('../models/TradeQnA');
 const { ResponseTrace } = require('../src/runtime/ResponseTrace');
 
@@ -367,17 +367,20 @@ async function seedAIAgentLogic() {
       await company.save();
       console.log(`✅ AI Agent Logic configured for ${company.businessName || company._id}`);
 
-      // Add sample knowledge entries for this company
+      // Add sample knowledge entries for this company using new CompanyQnA model
       for (const entry of sampleKnowledgeEntries) {
-        const existingEntry = await KnowledgeEntry.findOne({
-          companyID: company._id,
+        const existingEntry = await CompanyQnA.findOne({
+          companyId: company._id,
           question: entry.question
         });
 
         if (!existingEntry) {
-          await KnowledgeEntry.create({
-            companyID: company._id,
-            ...entry,
+          await CompanyQnA.create({
+            companyId: company._id,
+            question: entry.question,
+            answer: entry.answer,
+            category: entry.category || 'general',
+            keywords: entry.keywords || [],
             isActive: true,
             createdAt: new Date(),
             updatedAt: new Date()

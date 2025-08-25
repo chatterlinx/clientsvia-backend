@@ -11,7 +11,7 @@ const Company = require('../models/Company');
 const { answerQuestion, loadCompanyQAs } = require('../services/agent');
 const aiAgentRuntime = require('../services/aiAgentRuntime');
 const { findCachedAnswer } = require('../utils/aiAgent');
-const KnowledgeEntry = require('../models/KnowledgeEntry');
+const CompanyQnA = require('../models/knowledge/CompanyQnA');
 const fs = require('fs');
 const path = require('path');
 const { synthesizeSpeech } = require('../services/elevenLabsService');
@@ -457,11 +457,11 @@ router.post('/handle-speech', async (req, res) => {
     }
     await redisClient.del(repeatKey);
 
-    // Process QA matching
+    // Process QA matching using new Company Q&A system
     const companyId = company._id.toString();
-    const qnaEntries = await KnowledgeEntry.find({ companyId });
-    console.log(`[Q&A] Loaded ${qnaEntries.length} entries for company ${companyId}`);
-    console.log(`[Q&A DEBUG] Loaded entries for company ${companyId}:`, qnaEntries.map(e => ({
+    const qnaEntries = await CompanyQnA.find({ companyId, isActive: true });
+    console.log(`[Q&A] Loaded ${qnaEntries.length} Company Q&A entries for company ${companyId}`);
+    console.log(`[Q&A DEBUG] Loaded Company Q&A entries for company ${companyId}:`, qnaEntries.map(e => ({
       question: e.question,
       keywords: e.keywords,
       answer: e.answer

@@ -507,7 +507,7 @@ function analyzeAgentProcessing(logs, query) {
     return processingChain;
   }
   
-  if (agentLogs.includes('Found answer in KnowledgeEntry')) {
+  if (agentLogs.includes('Found answer in CompanyQnA')) {
     processingChain.push(`${stepNumber++}. ✅ Found direct Q&A match in knowledge base`);
     return processingChain;
   }
@@ -560,7 +560,7 @@ function extractConfidenceFromLogs(logs) {
   }
   
   // Infer confidence based on method used
-  if (agentLogs.includes('Found answer in KnowledgeEntry')) return 95;
+  if (agentLogs.includes('Found answer in CompanyQnA')) return 95;
   if (agentLogs.includes('Using specific scenario protocol')) return 90;
   if (agentLogs.includes('Found quick Q&A reference')) return 85;
   if (agentLogs.includes('Using personality response')) return 80;
@@ -579,7 +579,7 @@ function extractMethodFromLogs(logs) {
   
   if (agentLogs.includes('Using specific scenario protocol')) return 'Protocol Match';
   if (agentLogs.includes('Using personality response')) return 'Personality Response';
-  if (agentLogs.includes('Found answer in KnowledgeEntry')) return 'Direct Q&A Match';
+  if (agentLogs.includes('Found answer in CompanyQnA')) return 'Direct Q&A Match';
   if (agentLogs.includes('Found quick Q&A reference')) return 'Intelligent Q&A Match';
   if (agentLogs.includes('Found quick company Q&A')) return 'Company Q&A Match';
   if (agentLogs.includes('Generated smart conversational')) return 'Smart Conversational AI';
