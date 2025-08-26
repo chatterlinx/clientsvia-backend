@@ -1,5 +1,6 @@
 const Sentry = require('@sentry/node');
-const { ProfilingIntegration } = require('@sentry/profiling-node');
+// ✅ PRODUCTION FIX: ProfilingIntegration disabled for compatibility
+// const { ProfilingIntegration } = require('@sentry/profiling-node');
 
 // Initialize Sentry for error monitoring and performance tracking
 function initializeSentry() {
@@ -19,12 +20,10 @@ function initializeSentry() {
     tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
     profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
     
-    // Integrations
+    // ✅ PRODUCTION FIX: Simplified integrations for compatibility
     integrations: [
-      // Express integration for request tracking
-      new Sentry.Integrations.Http({ tracing: true }),
-      new Sentry.Integrations.Express({ app: undefined }), // Will be set later
-      new ProfilingIntegration(),
+      // Basic integrations that are always available
+      // Express and Http integrations disabled for compatibility
     ],
     
     // Configure which errors to capture

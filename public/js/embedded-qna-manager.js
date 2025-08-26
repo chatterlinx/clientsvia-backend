@@ -12,11 +12,24 @@
 
 class EmbeddedQnAManager {
     constructor(apiBaseUrl) {
-        this.apiBaseUrl = apiBaseUrl || 'http://localhost:3000';
-        this.companyId = window.companyId || null;
+        // ✅ PRODUCTION FIX: Use current origin if no base URL provided
+        this.apiBaseUrl = apiBaseUrl || window.location.origin || 'http://localhost:3000';
+        this.companyId = window.companyId || this.extractCompanyIdFromURL();
         this.initialized = false;
         
         console.log('🚀 PRODUCTION: Embedded Q&A Manager initializing...');
+        console.log('🌐 API Base URL:', this.apiBaseUrl);
+        console.log('🏢 Company ID:', this.companyId);
+    }
+
+    /**
+     * Extract company ID from current URL
+     */
+    extractCompanyIdFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const companyId = urlParams.get('id');
+        console.log('🔍 Extracted company ID from URL:', companyId);
+        return companyId;
     }
 
     /**
@@ -45,9 +58,15 @@ class EmbeddedQnAManager {
         try {
             console.log('📚 Loading Company Q&A entries...');
             
+            // ✅ PRODUCTION FIX: Validate required elements exist
             const loadingEl = document.getElementById('qna-loading');
             const listEl = document.getElementById('qna-entries-list');
             const emptyEl = document.getElementById('qna-empty-state');
+            
+            if (!loadingEl || !listEl || !emptyEl) {
+                console.warn('⚠️ Required Q&A DOM elements not found - tab may not be active yet');
+                return;
+            }
             
             // Show loading state
             if (loadingEl) loadingEl.classList.remove('hidden');
@@ -314,20 +333,39 @@ class EmbeddedQnAManager {
 // Global instance
 let embeddedQnAManager = null;
 
-// Initialize when DOM is ready
+// ✅ PRODUCTION FIX: Enhanced initialization with better timing
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 PRODUCTION: Setting up embedded Q&A manager initialization...');
+    
     // Initialize when AI Agent Logic tab is accessed
     const aiAgentTab = document.getElementById('tab-ai-agent-logic');
     if (aiAgentTab) {
         aiAgentTab.addEventListener('click', function() {
+            console.log('🎯 AI Agent Logic tab clicked - initializing Q&A manager...');
             setTimeout(() => {
                 if (!embeddedQnAManager) {
                     embeddedQnAManager = new EmbeddedQnAManager();
                     embeddedQnAManager.initialize();
+                } else {
+                    // Re-initialize if tab is switched back
+                    embeddedQnAManager.initialize();
                 }
-            }, 100);
+            }, 200); // Increased delay to ensure DOM is ready
         });
     }
+    
+    // Also initialize when knowledge tab within AI Agent Logic is clicked
+    document.addEventListener('click', function(event) {
+        if (event.target && event.target.id === 'clientsvia-tab-knowledge') {
+            console.log('🎯 Knowledge tab clicked within AI Agent Logic...');
+            setTimeout(() => {
+                if (!embeddedQnAManager) {
+                    embeddedQnAManager = new EmbeddedQnAManager();
+                }
+                embeddedQnAManager.initialize();
+            }, 300);
+        }
+    });
 });
 
 // Global functions for HTML onclick handlers
