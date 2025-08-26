@@ -2004,18 +2004,23 @@
                                                         </div>
                                                     </div>
                                                     
-                                                    <!-- Confidence Threshold Control -->
-                                                    <div class="mb-4">
-                                                        <label class="flex items-center space-x-3 text-sm">
-                                                            <span class="text-gray-700 font-medium">Confidence Threshold:</span>
-                                                            <input type="range" 
-                                                                id="clientsvia-threshold-companyQnA" 
-                                                                class="flex-1 max-w-xs" 
-                                                                min="0" max="1" step="0.05" value="0.8"
-                                                                onchange="updateCompanyQnAThreshold(this.value)">
-                                                            <span id="clientsvia-threshold-value-companyQnA" class="text-sm font-mono bg-gray-100 px-2 py-1 rounded min-w-[60px] text-center">0.80</span>
-                                                        </label>
-                                                        <p class="text-xs text-gray-500 mt-1">Minimum confidence required to use Company Q&A answers (higher = more selective)</p>
+                                                    <!-- Confidence Threshold - Synced with Priority Settings -->
+                                                    <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                                        <div class="flex items-center justify-between">
+                                                            <div class="flex items-center space-x-2">
+                                                                <i class="fas fa-link text-blue-600"></i>
+                                                                <span class="text-sm font-medium text-blue-800">Confidence Threshold</span>
+                                                            </div>
+                                                            <div class="flex items-center space-x-2">
+                                                                <span class="text-sm text-blue-700">Current:</span>
+                                                                <span id="company-qna-sync-threshold-display" class="text-sm font-mono bg-blue-100 px-2 py-1 rounded">0.80</span>
+                                                            </div>
+                                                        </div>
+                                                        <p class="text-xs text-blue-600 mt-2">
+                                                            <i class="fas fa-info-circle mr-1"></i>
+                                                            This setting is controlled in the <strong>Knowledge Source Priority</strong> section above. 
+                                                            All threshold adjustments are unified there for consistent AI routing.
+                                                        </p>
                                                     </div>
                                                 </div>
                                                 
@@ -2410,18 +2415,22 @@
                                                             </div>
                                                         </div>
                                                         
-                                                        <!-- Confidence Threshold Control -->
-                                                        <div class="mb-4">
-                                                            <label class="flex items-center space-x-3 text-sm">
-                                                                <span class="text-gray-700 font-medium">Confidence Threshold:</span>
-                                                                <input type="range" 
-                                                                    id="clientsvia-threshold-tradeQnA" 
-                                                                    class="flex-1 max-w-xs" 
-                                                                    min="0" max="1" step="0.05" value="0.75"
-                                                                    onchange="updateTradeQnAThreshold(this.value)">
-                                                                <span id="clientsvia-threshold-value-tradeQnA" class="text-sm font-mono bg-gray-100 px-2 py-1 rounded min-w-[60px] text-center">0.75</span>
-                                                            </label>
-                                                            <p class="text-xs text-gray-500 mt-1">Minimum confidence required to use Trade Q&A answers (higher = more selective)</p>
+                                                        <!-- Confidence Threshold - Synced with Priority Settings -->
+                                                        <div class="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                                                            <div class="flex items-center justify-between">
+                                                                <div class="flex items-center space-x-2">
+                                                                    <i class="fas fa-link text-purple-600"></i>
+                                                                    <span class="text-sm font-medium text-purple-800">Confidence Threshold</span>
+                                                                </div>
+                                                                <div class="flex items-center space-x-2">
+                                                                    <span class="text-sm text-purple-700">Current:</span>
+                                                                    <span id="trade-qna-sync-threshold-display" class="text-sm font-mono bg-purple-100 px-2 py-1 rounded">0.75</span>
+                                                                </div>
+                                                            </div>
+                                                            <p class="text-xs text-purple-600 mt-2">
+                                                                <i class="fas fa-info-circle mr-1"></i>
+                                                                This setting is controlled in the <strong>Knowledge Source Priority</strong> section above. 
+                                                                All threshold adjustments are unified there for consistent AI routing.</p>
                                                         </div>
                                                     </div>
                                                     
@@ -9605,10 +9614,14 @@ Key Metrics:
                     // Store original value for change detection
                     slider.dataset.originalValue = slider.value;
                     
-                    // Update display on change
+                    // Update display on change and sync with tab displays
                     slider.addEventListener('input', () => {
                         const value = parseFloat(slider.value).toFixed(2);
                         display.textContent = value;
+                        
+                        // Sync with individual tab displays
+                        syncThresholdDisplays(source, value);
+                        
                         showCalibrationFeedback(source, value);
                         markKnowledgeSourceAsChanged(`${source} confidence threshold`, value);
                     });
@@ -9695,6 +9708,9 @@ Key Metrics:
             
             // Initialize page unload warning
             initPageUnloadWarning();
+            
+            // Initialize sync displays with current values
+            initializeSyncDisplays();
             
             console.log('✅ Knowledge Source Calibration System with Save Controls initialized');
         }
@@ -10171,6 +10187,46 @@ Key Metrics:
                     return message;
                 }
             });
+        }
+        
+        // ✅ PRODUCTION: Initialize sync displays with current values
+        function initializeSyncDisplays() {
+            console.log('🔄 Initializing threshold sync displays...');
+            
+            // Sync all threshold displays with current slider values
+            ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'].forEach(source => {
+                const slider = document.getElementById(`clientsvia-threshold-${source}`);
+                if (slider) {
+                    const value = parseFloat(slider.value).toFixed(2);
+                    syncThresholdDisplays(source, value);
+                }
+            });
+        }
+        
+        // ✅ PRODUCTION: Sync threshold displays across tabs
+        function syncThresholdDisplays(source, value) {
+            console.log(`🔄 Syncing ${source} threshold display to ${value}`);
+            
+            // Update individual tab displays
+            switch (source) {
+                case 'companyQnA':
+                    const companyDisplay = document.getElementById('company-qna-sync-threshold-display');
+                    if (companyDisplay) companyDisplay.textContent = value;
+                    break;
+                    
+                case 'tradeQnA':
+                    const tradeDisplay = document.getElementById('trade-qna-sync-threshold-display');
+                    if (tradeDisplay) tradeDisplay.textContent = value;
+                    break;
+                    
+                case 'vectorSearch':
+                    // No individual tab for vector search, only in priority section
+                    break;
+                    
+                case 'llmFallback':
+                    // No individual tab for LLM fallback, only in priority section
+                    break;
+            }
         }
         
         // Update drag-and-drop to include change tracking
