@@ -70,19 +70,20 @@ class CompanyKnowledgeService {
    */
   async initializeRedis() {
     try {
+      // Redis v5+ URL-based connection format
+      const redisUrl = process.env.REDIS_URL || 
+        `redis://${process.env.REDIS_PASSWORD ? `:${process.env.REDIS_PASSWORD}@` : ''}${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || 6379}`;
+      
       redisClient = redis.createClient({
-        host: process.env.REDIS_HOST || 'localhost',
-        port: process.env.REDIS_PORT || 6379,
-        password: process.env.REDIS_PASSWORD || undefined,
-        retry_strategy: (options) => {
-          if (options.error && options.error.code === 'ECONNREFUSED') {
-            logger.warn('Redis connection refused. Operating without cache.');
-            return undefined; // Don't retry
+        url: redisUrl,
+        socket: {
+          reconnectStrategy: (retries) => {
+            if (retries > 3) {
+              logger.warn('Redis max reconnection attempts reached. Operating without cache.');
+              return false; // Stop retrying
+            }
+            return Math.min(retries * 100, 3000);
           }
-          if (options.total_retry_time > 1000 * 60 * 60) {
-            return new Error('Retry time exhausted');
-          }
-          return Math.min(options.attempt * 100, 3000);
         }
       });
 
@@ -95,6 +96,9 @@ class CompanyKnowledgeService {
         redisClient = null; // Disable Redis operations
       });
 
+      // Connect to Redis (required in v5+)
+      await redisClient.connect();
+      
       // Test connection
       await redisClient.ping();
       logger.info('🚀 CompanyKnowledgeService initialized with Redis caching');
