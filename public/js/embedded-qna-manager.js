@@ -318,12 +318,228 @@ class EmbeddedQnAManager {
     }
 
     /**
-     * Placeholder methods for future implementation
+     * 🎯 PRODUCTION FIX: Implement missing button functionality
      */
-    editEntry(id) { console.log('Edit Q&A:', id); }
-    deleteEntry(id) { console.log('Delete Q&A:', id); }
-    showAddModal() { console.log('Show add modal'); }
-    testPriorityFlow() { console.log('Test priority flow'); }
+    
+    /**
+     * Test Priority Flow - Connect to AI Agent routing system
+     */
+    async testPriorityFlow() {
+        try {
+            console.log('🧪 Testing AI Agent Priority Flow...');
+            
+            // Show loading state
+            const testBtn = document.getElementById('test-priority-flow-btn');
+            if (testBtn) {
+                testBtn.disabled = true;
+                testBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Testing...';
+            }
+            
+            const testQuery = prompt('Enter a test question to test AI routing:', 'What are your business hours?');
+            if (!testQuery) {
+                this.resetTestButton();
+                return;
+            }
+            
+            const response = await fetch(`${this.apiBaseUrl}/api/ai-agent/test-priority-flow/${this.companyId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.getAuthToken()}`
+                },
+                body: JSON.stringify({
+                    query: testQuery,
+                    includeAllSources: true
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showPriorityFlowResults(result);
+            } else {
+                this.showNotification('❌ Priority flow test failed: ' + result.error, 'error');
+            }
+            
+        } catch (error) {
+            console.error('❌ Priority flow test failed:', error);
+            this.showNotification('❌ Test failed: ' + error.message, 'error');
+        } finally {
+            this.resetTestButton();
+        }
+    }
+    
+    /**
+     * Reset test button state
+     */
+    resetTestButton() {
+        const testBtn = document.getElementById('test-priority-flow-btn');
+        if (testBtn) {
+            testBtn.disabled = false;
+            testBtn.innerHTML = '<i class="fas fa-vial mr-2"></i>Test Priority Flow';
+        }
+    }
+    
+    /**
+     * Show priority flow test results
+     */
+    showPriorityFlowResults(results) {
+        const resultsHtml = results.sources.map(source => `
+            <div class="mb-4 p-4 border rounded-lg ${source.passed ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}">
+                <div class="flex items-center justify-between mb-2">
+                    <h5 class="font-semibold">${source.sourceName}</h5>
+                    <span class="px-2 py-1 text-xs rounded ${source.passed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                        ${source.passed ? '✅ PASSED' : '❌ FAILED'}
+                    </span>
+                </div>
+                <div class="text-sm space-y-1">
+                    <p><strong>Confidence:</strong> ${(source.confidence * 100).toFixed(1)}% (threshold: ${(source.threshold * 100).toFixed(0)}%)</p>
+                    <p><strong>Response Time:</strong> ${source.responseTime}ms</p>
+                    <p><strong>Found:</strong> ${source.found ? 'Yes' : 'No'}</p>
+                </div>
+            </div>
+        `).join('');
+        
+        const modalHtml = `
+            <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+                <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+                    <div class="flex items-center justify-between pb-4 border-b">
+                        <h3 class="text-lg font-semibold">🧪 AI Agent Priority Flow Test Results</h3>
+                        <button onclick="this.parentElement.parentElement.parentElement.remove()" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="mt-4 max-h-96 overflow-y-auto">
+                        ${resultsHtml}
+                    </div>
+                    <div class="mt-4 text-sm text-gray-600">
+                        <p><strong>Total Response Time:</strong> ${results.totalResponseTime}ms</p>
+                        <p><strong>Sources Tested:</strong> ${results.sources.length}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    /**
+     * Show Add Q&A Modal
+     */
+    showAddModal() {
+        const modalHtml = `
+            <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+                <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+                    <div class="flex items-center justify-between pb-4 border-b">
+                        <h3 class="text-lg font-semibold">➕ Add New Company Q&A</h3>
+                        <button onclick="this.parentElement.parentElement.parentElement.remove()" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <form id="add-qna-form" class="mt-4 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Question</label>
+                            <input type="text" id="new-question" class="form-input w-full" placeholder="Enter the question..." required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Answer</label>
+                            <textarea id="new-answer" class="form-textarea w-full" rows="4" placeholder="Enter the answer..." required></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                            <select id="new-category" class="form-select w-full">
+                                <option value="general">General</option>
+                                <option value="services">Services</option>
+                                <option value="pricing">Pricing</option>
+                                <option value="scheduling">Scheduling</option>
+                                <option value="emergency">Emergency</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg">
+                                <i class="fas fa-save mr-2"></i>Save Q&A
+                            </button>
+                            <button type="button" onclick="this.closest('.fixed').remove()" class="bg-gray-300 hover:bg-gray-400 text-gray-700 font-medium py-2 px-4 rounded-lg">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Add form submit handler
+        document.getElementById('add-qna-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveNewQnA();
+        });
+    }
+    
+    /**
+     * Save new Q&A entry
+     */
+    async saveNewQnA() {
+        try {
+            const question = document.getElementById('new-question').value.trim();
+            const answer = document.getElementById('new-answer').value.trim();
+            const category = document.getElementById('new-category').value;
+            
+            if (!question || !answer) {
+                this.showNotification('❌ Question and answer are required', 'error');
+                return;
+            }
+            
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.getAuthToken()}`
+                },
+                body: JSON.stringify({
+                    question,
+                    answer,
+                    category,
+                    isActive: true
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showNotification('✅ Q&A entry created successfully!', 'success');
+                // Close modal
+                document.querySelector('.fixed').remove();
+                // Reload entries
+                this.loadCompanyQnAEntries();
+            } else {
+                this.showNotification('❌ Failed to create Q&A: ' + result.error, 'error');
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to save Q&A:', error);
+            this.showNotification('❌ Save failed: ' + error.message, 'error');
+        }
+    }
+    
+    /**
+     * Edit Q&A entry
+     */
+    editEntry(id) {
+        console.log('🔧 Edit Q&A entry:', id);
+        this.showNotification('⚠️ Edit functionality coming soon!', 'info');
+    }
+    
+    /**
+     * Delete Q&A entry
+     */
+    deleteEntry(id) {
+        if (confirm('Are you sure you want to delete this Q&A entry?')) {
+            console.log('🗑️ Delete Q&A entry:', id);
+            this.showNotification('⚠️ Delete functionality coming soon!', 'info');
+        }
+    }
 }
 
 // ========================================= 

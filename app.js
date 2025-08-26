@@ -172,6 +172,12 @@ try {
 // Enterprise Knowledge Lifecycle Management
 app.use('/api/knowledge-lifecycle', knowledgeLifecycleRoutes);
 
+// ✅ PRODUCTION FIX: Company Knowledge Base API for AI Agent Integration
+// CRITICAL: This powers the Priority #1 knowledge source for AI routing
+const companyKnowledgeRoutes = require('./routes/knowledge/companyKnowledge');
+app.use('/api/knowledge', companyKnowledgeRoutes);
+console.log('✅ Company Knowledge Base routes registered at /api/knowledge - AI Agent Priority #1 source active');
+
 // Enterprise Analytics and Reporting
 app.use('/api/enterprise-analytics', enterpriseAnalyticsRoutes);
 
