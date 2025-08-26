@@ -9411,6 +9411,8 @@ Key Metrics:
                             console.log('📚 Knowledge Sources tab activated - initializing sub-tabs');
                             // Initialize Company Q&A sub-tab by default (Priority #1)
                             switchKnowledgeSubTab('company-qna');
+                            // Initialize Knowledge Source calibration system
+                            initClientsViaKnowledgeSources();
                             break;
                         case 'analytics':
                             console.log('📊 Analytics Dashboard tab activated');
@@ -9507,22 +9509,35 @@ Key Metrics:
             });
         }
         
-        // Initialize ClientsVia Knowledge Source controls
+        // ✅ PRODUCTION: Initialize Knowledge Source Priority Calibration System
         function initClientsViaKnowledgeSources() {
-            // Update threshold displays
+            console.log('🎯 Initializing Knowledge Source Priority Calibration System...');
+            
+            // Initialize drag-and-drop for knowledge source priority
+            initKnowledgeSourceDragDrop();
+            
+            // Update threshold displays and connect to AI Agent calibration
             const thresholds = ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'];
             thresholds.forEach(source => {
                 const slider = document.getElementById(`clientsvia-threshold-${source}`);
                 const display = document.getElementById(`clientsvia-threshold-value-${source}`);
                 
                 if (slider && display) {
+                    // Update display on change
                     slider.addEventListener('input', () => {
-                        display.textContent = parseFloat(slider.value).toFixed(2);
+                        const value = parseFloat(slider.value).toFixed(2);
+                        display.textContent = value;
+                        showCalibrationFeedback(source, value);
+                    });
+                    
+                    // Save to AI Agent on change (debounced)
+                    slider.addEventListener('change', () => {
+                        calibrateKnowledgeSource(source, parseFloat(slider.value));
                     });
                 }
             });
             
-            // Context retention slider
+            // Context retention slider with AI Agent calibration
             const contextSlider = document.getElementById('clientsvia-contextRetentionSlider');
             const contextDisplay = document.getElementById('clientsvia-contextRetentionValue');
             
@@ -9530,9 +9545,153 @@ Key Metrics:
                 contextSlider.addEventListener('input', () => {
                     contextDisplay.textContent = `${contextSlider.value} minutes`;
                 });
+                
+                contextSlider.addEventListener('change', () => {
+                    calibrateMemorySettings({ contextRetention: parseInt(contextSlider.value) });
+                });
             }
             
-
+            console.log('✅ Knowledge Source Calibration System initialized');
+        }
+        
+        // ✅ PRODUCTION: Initialize drag-and-drop for Knowledge Source Priority
+        function initKnowledgeSourceDragDrop() {
+            const container = document.getElementById('clientsvia-source-priority-container');
+            if (!container) return;
+            
+            console.log('🔄 Initializing Knowledge Source drag-and-drop...');
+            
+            // Enable drag and drop for knowledge source items
+            const items = container.querySelectorAll('.clientsvia-source-item');
+            items.forEach((item, index) => {
+                item.draggable = true;
+                item.addEventListener('dragstart', handleKnowledgeSourceDragStart);
+                item.addEventListener('dragover', handleKnowledgeSourceDragOver);
+                item.addEventListener('drop', handleKnowledgeSourceDrop);
+                item.addEventListener('dragend', handleKnowledgeSourceDragEnd);
+            });
+            
+            console.log(`✅ Enabled drag-and-drop for ${items.length} knowledge sources`);
+        }
+        
+        // Knowledge Source drag handlers
+        let knowledgeSourceDraggedElement = null;
+        
+        function handleKnowledgeSourceDragStart(e) {
+            knowledgeSourceDraggedElement = this;
+            this.style.opacity = '0.5';
+            console.log('🔄 Dragging knowledge source:', this.dataset.source);
+        }
+        
+        function handleKnowledgeSourceDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        }
+        
+        function handleKnowledgeSourceDrop(e) {
+            e.preventDefault();
+            if (this !== knowledgeSourceDraggedElement) {
+                const container = document.getElementById('clientsvia-source-priority-container');
+                const allItems = Array.from(container.children);
+                const draggedIndex = allItems.indexOf(knowledgeSourceDraggedElement);
+                const droppedIndex = allItems.indexOf(this);
+                
+                console.log(`🔄 Reordering: ${knowledgeSourceDraggedElement.dataset.source} from position ${draggedIndex + 1} to ${droppedIndex + 1}`);
+                
+                if (draggedIndex < droppedIndex) {
+                    container.insertBefore(knowledgeSourceDraggedElement, this.nextSibling);
+                } else {
+                    container.insertBefore(knowledgeSourceDraggedElement, this);
+                }
+                
+                updateKnowledgeSourcePriorities();
+                calibrateKnowledgeSourcePriorities();
+            }
+        }
+        
+        function handleKnowledgeSourceDragEnd(e) {
+            this.style.opacity = '1';
+            knowledgeSourceDraggedElement = null;
+        }
+        
+        // ✅ PRODUCTION: Update Knowledge Source priority numbers
+        function updateKnowledgeSourcePriorities() {
+            const container = document.getElementById('clientsvia-source-priority-container');
+            const items = container.querySelectorAll('.clientsvia-source-item');
+            
+            items.forEach((item, index) => {
+                const priorityElement = item.querySelector('.priority-value');
+                if (priorityElement) {
+                    priorityElement.textContent = index + 1;
+                }
+                item.setAttribute('data-priority-order', index + 1);
+            });
+            
+            console.log('✅ Knowledge Source priorities updated');
+        }
+        
+        // ✅ PRODUCTION: Calibrate Knowledge Source priorities
+        function calibrateKnowledgeSourcePriorities() {
+            console.log('🎯 Calibrating Knowledge Source priorities for AI Agent...');
+            
+            const container = document.getElementById('clientsvia-source-priority-container');
+            const items = container.querySelectorAll('.clientsvia-source-item');
+            
+            const priorityConfig = [];
+            items.forEach((item, index) => {
+                priorityConfig.push({
+                    source: item.dataset.source,
+                    priority: index + 1,
+                    isActive: true
+                });
+            });
+            
+            const companyId = getCurrentCompanyId();
+            if (companyId) {
+                saveAIAgentLogicSettings({ knowledgeSourcePriorities: priorityConfig });
+            }
+            
+            showNotification('Calibration Complete', 'Knowledge source priorities updated for AI Agent routing', 'success');
+        }
+        
+        // ✅ PRODUCTION: Calibrate individual knowledge source thresholds
+        function calibrateKnowledgeSource(source, threshold) {
+            console.log(`🎯 Calibrating ${source} threshold to ${threshold}`);
+            
+            const companyId = getCurrentCompanyId();
+            if (companyId) {
+                const thresholds = {};
+                thresholds[source] = threshold;
+                saveAIAgentLogicSettings({ thresholds: thresholds });
+            }
+        }
+        
+        // ✅ PRODUCTION: Calibrate memory settings
+        function calibrateMemorySettings(settings) {
+            console.log('🧠 Calibrating memory settings:', settings);
+            
+            const companyId = getCurrentCompanyId();
+            if (companyId) {
+                saveAIAgentLogicSettings({ memorySettings: settings });
+            }
+        }
+        
+        // ✅ PRODUCTION: Show real-time calibration feedback
+        function showCalibrationFeedback(source, threshold) {
+            const percentage = (parseFloat(threshold) * 100).toFixed(0);
+            let message = '';
+            
+            if (threshold >= 0.9) {
+                message = `${source}: Very strict (${percentage}%) - Only highest confidence answers`;
+            } else if (threshold >= 0.75) {
+                message = `${source}: Balanced (${percentage}%) - Good confidence required`;
+            } else if (threshold >= 0.6) {
+                message = `${source}: Permissive (${percentage}%) - Lower confidence accepted`;
+            } else {
+                message = `${source}: Very permissive (${percentage}%) - Most answers accepted`;
+            }
+            
+            console.log(`🎯 Calibration: ${message}`);
         }
         
         // AI Settings Only Save Function - Prevents main form validation interference
