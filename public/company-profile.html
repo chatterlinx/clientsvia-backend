@@ -2300,11 +2300,87 @@
                                                 </div>
                                             </div>
                                             
-                                            <!-- ClientsVia Knowledge Status -->
-                                            <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                                <div class="flex items-center text-sm text-blue-800">
-                                                    <i class="fas fa-info-circle mr-2"></i>
-                                                    <strong>ClientsVia Knowledge Status:</strong> Advanced knowledge source configuration active. Drag to reorder priority and adjust confidence thresholds.
+                                            <!-- ========================================= -->
+                                            <!-- 💾 KNOWLEDGE SOURCE SAVE CONTROLS -->
+                                            <!-- Professional save system with unsaved changes detection -->
+                                            <!-- ========================================= -->
+                                            <div class="mt-6 space-y-4">
+                                                <!-- Unsaved Changes Warning -->
+                                                <div id="knowledge-sources-unsaved-warning" class="hidden p-4 bg-amber-50 border-l-4 border-amber-400 rounded-lg">
+                                                    <div class="flex items-center">
+                                                        <div class="flex-shrink-0">
+                                                            <i class="fas fa-exclamation-triangle text-amber-400 text-lg"></i>
+                                                        </div>
+                                                        <div class="ml-3 flex-1">
+                                                            <p class="text-sm text-amber-700">
+                                                                <strong>Unsaved Changes Detected!</strong> You have modified knowledge source settings that haven't been saved yet.
+                                                            </p>
+                                                            <p class="text-xs text-amber-600 mt-1">
+                                                                Changes include: <span id="unsaved-changes-list" class="font-medium">None</span>
+                                                            </p>
+                                                        </div>
+                                                        <div class="flex-shrink-0 ml-4">
+                                                            <button onclick="discardKnowledgeSourceChanges()" class="text-xs text-amber-600 hover:text-amber-800 underline">
+                                                                Discard Changes
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Save Controls -->
+                                                <div class="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                                                    <div class="flex items-center space-x-4">
+                                                        <div class="flex items-center text-sm text-gray-600">
+                                                            <i class="fas fa-info-circle mr-2 text-blue-500"></i>
+                                                            <span><strong>Knowledge Source Configuration:</strong> Drag to reorder priorities, adjust confidence thresholds, and configure memory settings.</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="flex items-center space-x-3">
+                                                        <!-- Save Status Indicator -->
+                                                        <div id="knowledge-sources-save-status" class="flex items-center text-sm">
+                                                            <div id="save-status-saved" class="flex items-center text-green-600">
+                                                                <i class="fas fa-check-circle mr-1"></i>
+                                                                <span>All changes saved</span>
+                                                            </div>
+                                                            <div id="save-status-unsaved" class="hidden flex items-center text-amber-600">
+                                                                <i class="fas fa-clock mr-1"></i>
+                                                                <span>Unsaved changes</span>
+                                                            </div>
+                                                            <div id="save-status-saving" class="hidden flex items-center text-blue-600">
+                                                                <i class="fas fa-spinner fa-spin mr-1"></i>
+                                                                <span>Saving...</span>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <!-- Auto-save Toggle -->
+                                                        <div class="flex items-center">
+                                                            <label class="flex items-center text-sm text-gray-600">
+                                                                <input type="checkbox" id="knowledge-sources-auto-save" class="form-checkbox mr-2" checked>
+                                                                <span>Auto-save</span>
+                                                            </label>
+                                                        </div>
+                                                        
+                                                        <!-- Manual Save Button -->
+                                                        <button id="save-knowledge-sources-btn" 
+                                                                class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
+                                                                onclick="saveKnowledgeSourceSettings()"
+                                                                disabled>
+                                                            <i class="fas fa-save mr-2"></i>
+                                                            <span id="save-btn-text">Save Changes</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Last Saved Information -->
+                                                <div class="text-xs text-gray-500 text-center">
+                                                    <span id="knowledge-sources-last-saved">
+                                                        Last saved: <span id="last-saved-timestamp">Never</span>
+                                                    </span>
+                                                    <span class="mx-2">•</span>
+                                                    <span>
+                                                        Auto-save: <span id="auto-save-status">Enabled</span>
+                                                    </span>
                                                 </div>
                                             </div>
                                             </div>
@@ -9513,45 +9589,114 @@ Key Metrics:
         function initClientsViaKnowledgeSources() {
             console.log('🎯 Initializing Knowledge Source Priority Calibration System...');
             
+            // Initialize save system and change tracking
+            initKnowledgeSourceSaveSystem();
+            
             // Initialize drag-and-drop for knowledge source priority
             initKnowledgeSourceDragDrop();
             
-            // Update threshold displays and connect to AI Agent calibration
+            // Update threshold displays and connect to change tracking
             const thresholds = ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'];
             thresholds.forEach(source => {
                 const slider = document.getElementById(`clientsvia-threshold-${source}`);
                 const display = document.getElementById(`clientsvia-threshold-value-${source}`);
                 
                 if (slider && display) {
+                    // Store original value for change detection
+                    slider.dataset.originalValue = slider.value;
+                    
                     // Update display on change
                     slider.addEventListener('input', () => {
                         const value = parseFloat(slider.value).toFixed(2);
                         display.textContent = value;
                         showCalibrationFeedback(source, value);
+                        markKnowledgeSourceAsChanged(`${source} confidence threshold`, value);
                     });
                     
-                    // Save to AI Agent on change (debounced)
+                    // Handle auto-save on change
                     slider.addEventListener('change', () => {
-                        calibrateKnowledgeSource(source, parseFloat(slider.value));
+                        handleKnowledgeSourceChange('threshold', source, parseFloat(slider.value));
                     });
                 }
             });
             
-            // Context retention slider with AI Agent calibration
+            // Context retention slider with change tracking
             const contextSlider = document.getElementById('clientsvia-contextRetentionSlider');
             const contextDisplay = document.getElementById('clientsvia-contextRetentionValue');
             
             if (contextSlider && contextDisplay) {
+                contextSlider.dataset.originalValue = contextSlider.value;
+                
                 contextSlider.addEventListener('input', () => {
                     contextDisplay.textContent = `${contextSlider.value} minutes`;
+                    markKnowledgeSourceAsChanged('context retention time', `${contextSlider.value} minutes`);
                 });
                 
                 contextSlider.addEventListener('change', () => {
-                    calibrateMemorySettings({ contextRetention: parseInt(contextSlider.value) });
+                    handleKnowledgeSourceChange('memory', 'contextRetention', parseInt(contextSlider.value));
                 });
             }
             
-            console.log('✅ Knowledge Source Calibration System initialized');
+            // Memory mode selection with change tracking
+            const memorySelect = document.getElementById('clientsvia-memoryModeSelect');
+            if (memorySelect) {
+                memorySelect.dataset.originalValue = memorySelect.value;
+                
+                memorySelect.addEventListener('change', () => {
+                    markKnowledgeSourceAsChanged('memory mode', memorySelect.value);
+                    handleKnowledgeSourceChange('memory', 'memoryMode', memorySelect.value);
+                });
+            }
+            
+            // Fallback toggles with change tracking
+            const rejectToggle = document.getElementById('clientsvia-rejectLowConfidenceToggle');
+            const escalateToggle = document.getElementById('clientsvia-escalateNoMatchToggle');
+            const fallbackMessage = document.getElementById('clientsvia-fallbackMessageInput');
+            
+            if (rejectToggle) {
+                rejectToggle.dataset.originalValue = rejectToggle.checked;
+                rejectToggle.addEventListener('change', () => {
+                    markKnowledgeSourceAsChanged('reject low confidence', rejectToggle.checked ? 'enabled' : 'disabled');
+                    handleKnowledgeSourceChange('fallback', 'rejectLowConfidence', rejectToggle.checked);
+                });
+            }
+            
+            if (escalateToggle) {
+                escalateToggle.dataset.originalValue = escalateToggle.checked;
+                escalateToggle.addEventListener('change', () => {
+                    markKnowledgeSourceAsChanged('escalate on no match', escalateToggle.checked ? 'enabled' : 'disabled');
+                    handleKnowledgeSourceChange('fallback', 'escalateOnNoMatch', escalateToggle.checked);
+                });
+            }
+            
+            if (fallbackMessage) {
+                fallbackMessage.dataset.originalValue = fallbackMessage.value;
+                fallbackMessage.addEventListener('input', () => {
+                    markKnowledgeSourceAsChanged('fallback message', 'modified');
+                });
+                fallbackMessage.addEventListener('change', () => {
+                    handleKnowledgeSourceChange('fallback', 'message', fallbackMessage.value);
+                });
+            }
+            
+            // Auto-save toggle
+            const autoSaveToggle = document.getElementById('knowledge-sources-auto-save');
+            if (autoSaveToggle) {
+                autoSaveToggle.addEventListener('change', () => {
+                    const isEnabled = autoSaveToggle.checked;
+                    document.getElementById('auto-save-status').textContent = isEnabled ? 'Enabled' : 'Disabled';
+                    
+                    if (isEnabled && window.knowledgeSourceUnsavedChanges.size > 0) {
+                        // Auto-save if there are unsaved changes and auto-save is enabled
+                        saveKnowledgeSourceSettings();
+                    }
+                });
+            }
+            
+            // Initialize page unload warning
+            initPageUnloadWarning();
+            
+            console.log('✅ Knowledge Source Calibration System with Save Controls initialized');
         }
         
         // ✅ PRODUCTION: Initialize drag-and-drop for Knowledge Source Priority
@@ -9692,6 +9837,322 @@ Key Metrics:
             }
             
             console.log(`🎯 Calibration: ${message}`);
+        }
+        
+        // ========================================= 
+        // 💾 KNOWLEDGE SOURCE SAVE SYSTEM
+        // =========================================
+        
+        // Global variable to track unsaved changes
+        window.knowledgeSourceUnsavedChanges = new Map();
+        
+        // ✅ PRODUCTION: Initialize save system
+        function initKnowledgeSourceSaveSystem() {
+            console.log('💾 Initializing Knowledge Source save system...');
+            
+            // Initialize unsaved changes tracking
+            window.knowledgeSourceUnsavedChanges = new Map();
+            
+            // Update UI to show saved state initially
+            updateSaveStatus('saved');
+            
+            console.log('✅ Knowledge Source save system initialized');
+        }
+        
+        // ✅ PRODUCTION: Mark setting as changed
+        function markKnowledgeSourceAsChanged(settingName, value) {
+            window.knowledgeSourceUnsavedChanges.set(settingName, value);
+            updateUnsavedChangesUI();
+            updateSaveStatus('unsaved');
+            
+            // Enable save button
+            const saveBtn = document.getElementById('save-knowledge-sources-btn');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('bg-gray-400');
+                saveBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            }
+        }
+        
+        // ✅ PRODUCTION: Handle knowledge source changes
+        function handleKnowledgeSourceChange(type, setting, value) {
+            console.log(`🔄 Knowledge source change: ${type}.${setting} = ${value}`);
+            
+            // Check if auto-save is enabled
+            const autoSaveToggle = document.getElementById('knowledge-sources-auto-save');
+            const isAutoSaveEnabled = autoSaveToggle ? autoSaveToggle.checked : true;
+            
+            if (isAutoSaveEnabled) {
+                // Auto-save with debouncing
+                if (window.knowledgeSourceAutoSaveTimeout) {
+                    clearTimeout(window.knowledgeSourceAutoSaveTimeout);
+                }
+                
+                window.knowledgeSourceAutoSaveTimeout = setTimeout(() => {
+                    saveKnowledgeSourceSettings();
+                }, 1000); // 1 second delay for auto-save
+            }
+        }
+        
+        // ✅ PRODUCTION: Update unsaved changes UI
+        function updateUnsavedChangesUI() {
+            const warningDiv = document.getElementById('knowledge-sources-unsaved-warning');
+            const changesList = document.getElementById('unsaved-changes-list');
+            
+            if (window.knowledgeSourceUnsavedChanges.size > 0) {
+                // Show warning
+                if (warningDiv) warningDiv.classList.remove('hidden');
+                
+                // Update changes list
+                const changes = Array.from(window.knowledgeSourceUnsavedChanges.keys()).slice(0, 3);
+                let changesText = changes.join(', ');
+                if (window.knowledgeSourceUnsavedChanges.size > 3) {
+                    changesText += ` and ${window.knowledgeSourceUnsavedChanges.size - 3} more`;
+                }
+                
+                if (changesList) changesList.textContent = changesText;
+            } else {
+                // Hide warning
+                if (warningDiv) warningDiv.classList.add('hidden');
+                if (changesList) changesList.textContent = 'None';
+            }
+        }
+        
+        // ✅ PRODUCTION: Update save status indicator
+        function updateSaveStatus(status) {
+            const savedIndicator = document.getElementById('save-status-saved');
+            const unsavedIndicator = document.getElementById('save-status-unsaved');
+            const savingIndicator = document.getElementById('save-status-saving');
+            
+            // Hide all indicators first
+            if (savedIndicator) savedIndicator.classList.add('hidden');
+            if (unsavedIndicator) unsavedIndicator.classList.add('hidden');
+            if (savingIndicator) savingIndicator.classList.add('hidden');
+            
+            // Show appropriate indicator
+            switch (status) {
+                case 'saved':
+                    if (savedIndicator) savedIndicator.classList.remove('hidden');
+                    break;
+                case 'unsaved':
+                    if (unsavedIndicator) unsavedIndicator.classList.remove('hidden');
+                    break;
+                case 'saving':
+                    if (savingIndicator) savingIndicator.classList.remove('hidden');
+                    break;
+            }
+        }
+        
+        // ✅ PRODUCTION: Save knowledge source settings
+        async function saveKnowledgeSourceSettings() {
+            console.log('💾 Saving knowledge source settings...');
+            
+            const saveBtn = document.getElementById('save-knowledge-sources-btn');
+            const saveBtnText = document.getElementById('save-btn-text');
+            
+            // Update UI to show saving state
+            updateSaveStatus('saving');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                saveBtn.classList.add('bg-gray-400');
+            }
+            if (saveBtnText) saveBtnText.textContent = 'Saving...';
+            
+            try {
+                // Collect all current settings
+                const settings = {
+                    thresholds: {},
+                    memorySettings: {},
+                    fallbackBehavior: {},
+                    knowledgeSourcePriorities: [],
+                    timestamp: new Date().toISOString()
+                };
+                
+                // Collect threshold values
+                ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'].forEach(source => {
+                    const slider = document.getElementById(`clientsvia-threshold-${source}`);
+                    if (slider) {
+                        settings.thresholds[source] = parseFloat(slider.value);
+                    }
+                });
+                
+                // Collect memory settings
+                const memorySelect = document.getElementById('clientsvia-memoryModeSelect');
+                const contextSlider = document.getElementById('clientsvia-contextRetentionSlider');
+                if (memorySelect) settings.memorySettings.memoryMode = memorySelect.value;
+                if (contextSlider) settings.memorySettings.contextRetention = parseInt(contextSlider.value);
+                
+                // Collect fallback behavior
+                const rejectToggle = document.getElementById('clientsvia-rejectLowConfidenceToggle');
+                const escalateToggle = document.getElementById('clientsvia-escalateNoMatchToggle');
+                const fallbackMessage = document.getElementById('clientsvia-fallbackMessageInput');
+                
+                if (rejectToggle) settings.fallbackBehavior.rejectLowConfidence = rejectToggle.checked;
+                if (escalateToggle) settings.fallbackBehavior.escalateOnNoMatch = escalateToggle.checked;
+                if (fallbackMessage) settings.fallbackBehavior.message = fallbackMessage.value;
+                
+                // Collect knowledge source priorities
+                const container = document.getElementById('clientsvia-source-priority-container');
+                if (container) {
+                    const items = container.querySelectorAll('.clientsvia-source-item');
+                    items.forEach((item, index) => {
+                        settings.knowledgeSourcePriorities.push({
+                            source: item.dataset.source,
+                            priority: index + 1,
+                            isActive: true
+                        });
+                    });
+                }
+                
+                // Save to backend
+                const companyId = getCurrentCompanyId();
+                if (companyId) {
+                    const success = await saveAIAgentLogicSettings(settings);
+                    
+                    if (success !== false) {
+                        // Save successful
+                        window.knowledgeSourceUnsavedChanges.clear();
+                        updateUnsavedChangesUI();
+                        updateSaveStatus('saved');
+                        updateLastSavedTimestamp();
+                        
+                        showNotification('Settings Saved', 'Knowledge source configuration saved successfully', 'success');
+                        console.log('✅ Knowledge source settings saved successfully');
+                    } else {
+                        throw new Error('Save operation failed');
+                    }
+                } else {
+                    throw new Error('Company ID not found');
+                }
+                
+            } catch (error) {
+                console.error('❌ Failed to save knowledge source settings:', error);
+                updateSaveStatus('unsaved');
+                showNotification('Save Failed', 'Failed to save settings. Please try again.', 'error');
+            } finally {
+                // Reset button state
+                if (saveBtn) {
+                    saveBtn.disabled = window.knowledgeSourceUnsavedChanges.size === 0;
+                    if (window.knowledgeSourceUnsavedChanges.size === 0) {
+                        saveBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                        saveBtn.classList.add('bg-gray-400');
+                    } else {
+                        saveBtn.classList.remove('bg-gray-400');
+                        saveBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                    }
+                }
+                if (saveBtnText) saveBtnText.textContent = 'Save Changes';
+            }
+        }
+        
+        // ✅ PRODUCTION: Discard unsaved changes
+        function discardKnowledgeSourceChanges() {
+            if (!confirm('Are you sure you want to discard all unsaved changes? This action cannot be undone.')) {
+                return;
+            }
+            
+            console.log('🗑️ Discarding knowledge source changes...');
+            
+            // Reset all form elements to their original values
+            ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'].forEach(source => {
+                const slider = document.getElementById(`clientsvia-threshold-${source}`);
+                const display = document.getElementById(`clientsvia-threshold-value-${source}`);
+                if (slider && slider.dataset.originalValue) {
+                    slider.value = slider.dataset.originalValue;
+                    if (display) display.textContent = parseFloat(slider.dataset.originalValue).toFixed(2);
+                }
+            });
+            
+            const contextSlider = document.getElementById('clientsvia-contextRetentionSlider');
+            const contextDisplay = document.getElementById('clientsvia-contextRetentionValue');
+            if (contextSlider && contextSlider.dataset.originalValue) {
+                contextSlider.value = contextSlider.dataset.originalValue;
+                if (contextDisplay) contextDisplay.textContent = `${contextSlider.dataset.originalValue} minutes`;
+            }
+            
+            const memorySelect = document.getElementById('clientsvia-memoryModeSelect');
+            if (memorySelect && memorySelect.dataset.originalValue) {
+                memorySelect.value = memorySelect.dataset.originalValue;
+            }
+            
+            const rejectToggle = document.getElementById('clientsvia-rejectLowConfidenceToggle');
+            if (rejectToggle && rejectToggle.dataset.originalValue !== undefined) {
+                rejectToggle.checked = rejectToggle.dataset.originalValue === 'true';
+            }
+            
+            const escalateToggle = document.getElementById('clientsvia-escalateNoMatchToggle');
+            if (escalateToggle && escalateToggle.dataset.originalValue !== undefined) {
+                escalateToggle.checked = escalateToggle.dataset.originalValue === 'true';
+            }
+            
+            const fallbackMessage = document.getElementById('clientsvia-fallbackMessageInput');
+            if (fallbackMessage && fallbackMessage.dataset.originalValue) {
+                fallbackMessage.value = fallbackMessage.dataset.originalValue;
+            }
+            
+            // Clear unsaved changes
+            window.knowledgeSourceUnsavedChanges.clear();
+            updateUnsavedChangesUI();
+            updateSaveStatus('saved');
+            
+            // Disable save button
+            const saveBtn = document.getElementById('save-knowledge-sources-btn');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                saveBtn.classList.add('bg-gray-400');
+            }
+            
+            showNotification('Changes Discarded', 'All unsaved changes have been discarded', 'info');
+            console.log('✅ Knowledge source changes discarded');
+        }
+        
+        // ✅ PRODUCTION: Update last saved timestamp
+        function updateLastSavedTimestamp() {
+            const timestampElement = document.getElementById('last-saved-timestamp');
+            if (timestampElement) {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString();
+                timestampElement.textContent = timeString;
+            }
+        }
+        
+        // ✅ PRODUCTION: Initialize page unload warning
+        function initPageUnloadWarning() {
+            window.addEventListener('beforeunload', (event) => {
+                if (window.knowledgeSourceUnsavedChanges && window.knowledgeSourceUnsavedChanges.size > 0) {
+                    const message = 'You have unsaved changes to your knowledge source configuration. Are you sure you want to leave?';
+                    event.preventDefault();
+                    event.returnValue = message;
+                    return message;
+                }
+            });
+        }
+        
+        // Update drag-and-drop to include change tracking
+        function calibrateKnowledgeSourcePriorities() {
+            console.log('🎯 Calibrating Knowledge Source priorities for AI Agent...');
+            
+            const container = document.getElementById('clientsvia-source-priority-container');
+            const items = container.querySelectorAll('.clientsvia-source-item');
+            
+            const priorityConfig = [];
+            items.forEach((item, index) => {
+                priorityConfig.push({
+                    source: item.dataset.source,
+                    priority: index + 1,
+                    isActive: true
+                });
+            });
+            
+            // Mark as changed for save system
+            markKnowledgeSourceAsChanged('knowledge source priorities', 'reordered');
+            
+            // Handle auto-save
+            handleKnowledgeSourceChange('priorities', 'order', priorityConfig);
+            
+            showNotification('Priority Updated', 'Knowledge source priorities updated. Don\'t forget to save your changes!', 'info');
         }
         
         // AI Settings Only Save Function - Prevents main form validation interference
