@@ -10050,7 +10050,7 @@ Key Metrics:
                                 },
                                 agentIntelligenceSettings: {
                                     memoryMode: settings.memorySettings.memoryMode || 'conversational',
-                                    contextRetention: settings.memorySettings.contextRetention || 30
+                                    contextRetention: parseInt(settings.memorySettings.contextRetention) || 30
                                 }
                             })
                         });
