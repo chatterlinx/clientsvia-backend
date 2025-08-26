@@ -10033,9 +10033,9 @@ Key Metrics:
                     // Try multiple API endpoints to ensure compatibility
                     let success = false;
                     
-                    // Use the correct agent settings endpoint
+                    // Use the correct company agent settings endpoint that properly handles aiAgentLogic
                     try {
-                        const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
+                        const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
@@ -10051,7 +10051,9 @@ Key Metrics:
                                 agentIntelligenceSettings: {
                                     memoryMode: settings.memorySettings.memoryMode || 'conversational',
                                     contextRetention: parseInt(settings.memorySettings.contextRetention) || 30
-                                }
+                                },
+                                tradeCategories: [],
+                                answerPriorityFlow: []
                             })
                         });
                         
@@ -10060,7 +10062,7 @@ Key Metrics:
                         if (response.ok) {
                             const data = await response.json();
                             success = true;
-                            console.log('✅ Knowledge source settings saved via agent settings endpoint');
+                            console.log('✅ Knowledge source settings saved via company agent settings endpoint');
                             console.log('📄 Save response data:', data);
                         } else {
                             const errorText = await response.text();
