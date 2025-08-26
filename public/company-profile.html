@@ -10033,10 +10033,10 @@ Key Metrics:
                     // Try multiple API endpoints to ensure compatibility
                     let success = false;
                     
-                    // Use the same API pattern as the existing working system
+                    // Use the correct agent settings endpoint
                     try {
-                        const response = await fetch(`/api/company/${companyId}`, {
-                            method: 'PATCH',
+                        const response = await fetch(`/api/agent/companies/${companyId}/agent-settings`, {
+                            method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
                             },
@@ -10060,11 +10060,11 @@ Key Metrics:
                         if (response.ok) {
                             const data = await response.json();
                             success = true;
-                            console.log('✅ Knowledge source settings saved via company PATCH endpoint');
+                            console.log('✅ Knowledge source settings saved via agent settings endpoint');
                             console.log('📄 Save response data:', data);
                         } else {
                             const errorText = await response.text();
-                            console.error('❌ Company PATCH endpoint failed with status:', response.status);
+                            console.error('❌ Agent settings endpoint failed with status:', response.status);
                             console.error('❌ Error response:', errorText);
                             try {
                                 const errorData = JSON.parse(errorText);
@@ -10074,7 +10074,7 @@ Key Metrics:
                             }
                         }
                     } catch (error) {
-                        console.warn('⚠️ Company PATCH endpoint failed:', error.message);
+                        console.warn('⚠️ Agent settings endpoint failed:', error.message);
                     }
                     
                     // Final fallback to the existing saveAIAgentLogicSettings function
