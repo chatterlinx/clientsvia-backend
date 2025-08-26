@@ -386,6 +386,50 @@ const companySchema = new mongoose.Schema({
         smartEscalation: { type: Boolean, default: true },
         contextRetentionMinutes: { type: Number, min: 5, max: 120, default: 30 }
     },
+    
+    // 🧠 AI AGENT LOGIC CONFIGURATION - 7-TAB ENTERPRISE SYSTEM
+    // Stores all settings from the AI Agent Logic module tabs
+    aiAgentLogic: {
+        // Tab 1: Answer Priority Flow - Knowledge source routing priorities
+        thresholds: {
+            companyQnA: { type: Number, min: 0, max: 1, default: 0.8 },
+            tradeQnA: { type: Number, min: 0, max: 1, default: 0.75 },
+            vectorSearch: { type: Number, min: 0, max: 1, default: 0.7 },
+            llmFallback: { type: Number, min: 0, max: 1, default: 0.6 }
+        },
+        
+        // Memory & Intelligence Settings
+        memorySettings: {
+            memoryMode: { type: String, enum: ['short', 'conversational', 'persistent'], default: 'conversational' },
+            contextRetention: { type: Number, min: 5, max: 120, default: 30 }
+        },
+        
+        // Fallback Behavior Configuration
+        fallbackBehavior: {
+            rejectLowConfidence: { type: Boolean, default: true },
+            escalateOnNoMatch: { type: Boolean, default: true },
+            message: { type: String, default: 'I want to make sure I give you accurate information. Let me connect you with a specialist who can help.' }
+        },
+        
+        // Knowledge Source Priority Order
+        knowledgeSourcePriorities: [{
+            source: { type: String, required: true },
+            priority: { type: Number, required: true },
+            isActive: { type: Boolean, default: true }
+        }],
+        
+        // Timestamps and metadata
+        lastUpdated: { type: Date, default: Date.now },
+        
+        // Tab 2-7: Additional configurations can be added here as needed
+        // Analytics settings, A/B testing configs, flow designer data, etc.
+        analyticsSettings: { type: mongoose.Schema.Types.Mixed, default: {} },
+        abTestingConfigs: { type: mongoose.Schema.Types.Mixed, default: {} },
+        flowDesignerData: { type: mongoose.Schema.Types.Mixed, default: {} },
+        personalizationRules: { type: mongoose.Schema.Types.Mixed, default: {} },
+        personalitySettings: { type: mongoose.Schema.Types.Mixed, default: {} }
+    },
+    
     bookingFlow: [{
         name: { type: String, required: true },
         prompt: { type: String, required: true },

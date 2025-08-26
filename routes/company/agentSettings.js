@@ -115,7 +115,8 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
         companyName: company.companyName,
         tradeCategories: company.tradeCategories,
         agentIntelligenceSettings: company.agentIntelligenceSettings,
-        answerPriorityFlow: company.answerPriorityFlow // NEW: Include Answer Priority Flow in response
+        answerPriorityFlow: company.answerPriorityFlow, // NEW: Include Answer Priority Flow in response
+        aiAgentLogic: company.aiAgentLogic // NEW: Include AI Agent Logic in response for verification
       }
     });
 
