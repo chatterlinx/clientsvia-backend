@@ -9966,6 +9966,7 @@ Key Metrics:
         // ✅ PRODUCTION: Save knowledge source settings
         async function saveKnowledgeSourceSettings() {
             console.log('💾 Saving knowledge source settings...');
+            console.log('🔍 CHECKPOINT 1: Save function started');
             
             const saveBtn = document.getElementById('save-knowledge-sources-btn');
             const saveBtnText = document.getElementById('save-btn-text');
@@ -9980,6 +9981,8 @@ Key Metrics:
             if (saveBtnText) saveBtnText.textContent = 'Saving...';
             
             try {
+                console.log('🔍 CHECKPOINT 2: Starting data collection');
+                
                 // Collect all current settings
                 const settings = {
                     thresholds: {},
@@ -9989,19 +9992,36 @@ Key Metrics:
                     timestamp: new Date().toISOString()
                 };
                 
+                console.log('🔍 CHECKPOINT 3: Collecting threshold values');
+                
                 // Collect threshold values
                 ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'].forEach(source => {
                     const slider = document.getElementById(`clientsvia-threshold-${source}`);
                     if (slider) {
                         settings.thresholds[source] = parseFloat(slider.value);
+                        console.log(`🎯 THRESHOLD COLLECTED: ${source} = ${slider.value}`);
+                    } else {
+                        console.log(`⚠️ THRESHOLD SLIDER NOT FOUND: ${source}`);
                     }
                 });
+                
+                console.log('🔍 CHECKPOINT 4: Collecting memory settings');
                 
                 // Collect memory settings
                 const memorySelect = document.getElementById('clientsvia-memoryModeSelect');
                 const contextSlider = document.getElementById('clientsvia-contextRetentionSlider');
-                if (memorySelect) settings.memorySettings.memoryMode = memorySelect.value;
-                if (contextSlider) settings.memorySettings.contextRetention = parseInt(contextSlider.value);
+                if (memorySelect) {
+                    settings.memorySettings.memoryMode = memorySelect.value;
+                    console.log(`🧠 MEMORY MODE COLLECTED: ${memorySelect.value}`);
+                } else {
+                    console.log('⚠️ MEMORY SELECT NOT FOUND');
+                }
+                if (contextSlider) {
+                    settings.memorySettings.contextRetention = parseInt(contextSlider.value);
+                    console.log(`⏰ CONTEXT RETENTION COLLECTED: ${contextSlider.value}`);
+                } else {
+                    console.log('⚠️ CONTEXT SLIDER NOT FOUND');
+                }
                 
                 // Collect fallback behavior
                 const rejectToggle = document.getElementById('clientsvia-rejectLowConfidenceToggle');
@@ -10025,45 +10045,65 @@ Key Metrics:
                     });
                 }
                 
+                console.log('🔍 CHECKPOINT 5: Collected settings:', settings);
+                
                 // Save to backend using correct API endpoint
                 const companyId = getCurrentCompanyId();
+                console.log('🔍 CHECKPOINT 6: Company ID retrieved:', companyId);
+                
                 if (companyId) {
                     console.log('💾 Saving knowledge source settings to backend...');
+                    console.log('🔍 CHECKPOINT 7: Starting API call');
                     
                     // Try multiple API endpoints to ensure compatibility
                     let success = false;
                     
+                    const payload = {
+                        aiAgentLogic: {
+                            thresholds: settings.thresholds,
+                            memorySettings: settings.memorySettings,
+                            fallbackBehavior: settings.fallbackBehavior,
+                            knowledgeSourcePriorities: settings.knowledgeSourcePriorities,
+                            lastUpdated: settings.timestamp
+                        },
+                        agentIntelligenceSettings: {
+                            memoryMode: settings.memorySettings.memoryMode || 'conversational',
+                            contextRetention: parseInt(settings.memorySettings.contextRetention) || 30
+                        },
+                        tradeCategories: [],
+                        answerPriorityFlow: []
+                    };
+                    
+                    console.log('🔍 CHECKPOINT 8: Payload prepared:', JSON.stringify(payload, null, 2));
+                    
                     // Use the correct company agent settings endpoint that properly handles aiAgentLogic
                     try {
+                        console.log('🔍 CHECKPOINT 9: Making fetch request to /api/company/companies/' + companyId + '/agent-settings');
+                        
                         const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
                             },
-                            body: JSON.stringify({
-                                aiAgentLogic: {
-                                    thresholds: settings.thresholds,
-                                    memorySettings: settings.memorySettings,
-                                    fallbackBehavior: settings.fallbackBehavior,
-                                    knowledgeSourcePriorities: settings.knowledgeSourcePriorities,
-                                    lastUpdated: settings.timestamp
-                                },
-                                agentIntelligenceSettings: {
-                                    memoryMode: settings.memorySettings.memoryMode || 'conversational',
-                                    contextRetention: parseInt(settings.memorySettings.contextRetention) || 30
-                                },
-                                tradeCategories: [],
-                                answerPriorityFlow: []
-                            })
+                            body: JSON.stringify(payload)
                         });
                         
                         console.log('📡 Response status:', response.status, response.statusText);
+                        console.log('🔍 CHECKPOINT 10: Response received, status:', response.status);
                         
                         if (response.ok) {
+                            console.log('🔍 CHECKPOINT 11: Response is OK, parsing JSON');
                             const data = await response.json();
                             success = true;
                             console.log('✅ Knowledge source settings saved via company agent settings endpoint');
                             console.log('📄 Save response data:', data);
+                            console.log('🔍 CHECKPOINT 12: Checking if aiAgentLogic was saved in response');
+                            
+                            if (data.company && data.company.aiAgentLogic) {
+                                console.log('✅ VERIFICATION: aiAgentLogic found in response:', data.company.aiAgentLogic);
+                            } else {
+                                console.log('⚠️ WARNING: aiAgentLogic not found in response - may not have been saved');
+                            }
                         } else {
                             const errorText = await response.text();
                             console.error('❌ Agent settings endpoint failed with status:', response.status);
@@ -10086,15 +10126,65 @@ Key Metrics:
                     }
                     
                     if (success) {
+                        console.log('🔍 CHECKPOINT 13: Save reported as successful, verifying...');
+                        
+                        // VERIFICATION STEP: Load fresh data to confirm save worked
+                        try {
+                            console.log('🔍 CHECKPOINT 14: Loading fresh data to verify save');
+                            const verifyResponse = await fetch(`/api/company/companies/${companyId}/agent-settings?_verify=${Date.now()}`);
+                            
+                            if (verifyResponse.ok) {
+                                const verifyData = await verifyResponse.json();
+                                console.log('🔍 CHECKPOINT 15: Verification data loaded:', verifyData);
+                                
+                                if (verifyData.company && verifyData.company.aiAgentLogic && verifyData.company.aiAgentLogic.thresholds) {
+                                    console.log('✅ VERIFICATION SUCCESS: aiAgentLogic thresholds found in database:', verifyData.company.aiAgentLogic.thresholds);
+                                    
+                                    // Check if our saved values match what's in the database
+                                    const savedThresholds = verifyData.company.aiAgentLogic.thresholds;
+                                    let allMatch = true;
+                                    
+                                    Object.keys(settings.thresholds).forEach(source => {
+                                        const ourValue = settings.thresholds[source];
+                                        const dbValue = savedThresholds[source];
+                                        
+                                        if (Math.abs(ourValue - dbValue) > 0.01) { // Allow for small float differences
+                                            console.log(`❌ MISMATCH: ${source} - Our value: ${ourValue}, DB value: ${dbValue}`);
+                                            allMatch = false;
+                                        } else {
+                                            console.log(`✅ MATCH: ${source} - ${ourValue} = ${dbValue}`);
+                                        }
+                                    });
+                                    
+                                    if (allMatch) {
+                                        console.log('🎉 VERIFICATION COMPLETE: All values successfully saved and verified!');
+                                        showNotification('Settings Verified', 'Knowledge source settings saved and verified in database!', 'success');
+                                    } else {
+                                        console.log('⚠️ VERIFICATION WARNING: Some values did not save correctly');
+                                        showNotification('Partial Save', 'Settings saved but some values may not have persisted correctly', 'warning');
+                                    }
+                                } else {
+                                    console.log('❌ VERIFICATION FAILED: aiAgentLogic not found in verification response');
+                                    showNotification('Save Warning', 'Settings saved but could not verify persistence', 'warning');
+                                }
+                            } else {
+                                console.log('❌ VERIFICATION ERROR: Could not load verification data');
+                                showNotification('Settings Saved', 'Knowledge source settings saved (verification unavailable)', 'success');
+                            }
+                        } catch (verifyError) {
+                            console.error('❌ VERIFICATION EXCEPTION:', verifyError);
+                            showNotification('Settings Saved', 'Knowledge source settings saved (verification failed)', 'success');
+                        }
+                        
                         // Save successful
                         window.knowledgeSourceUnsavedChanges.clear();
                         updateUnsavedChangesUI();
                         updateSaveStatus('saved');
                         updateLastSavedTimestamp();
                         
-                        showNotification('Settings Saved', 'Knowledge source configuration saved successfully', 'success');
                         console.log('✅ Knowledge source settings saved successfully');
                     } else {
+                        console.log('🔍 CHECKPOINT 16: All save attempts failed');
                         throw new Error('All save attempts failed');
                     }
                 } else {
