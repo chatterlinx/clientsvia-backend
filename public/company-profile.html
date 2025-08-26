@@ -9802,23 +9802,13 @@ Key Metrics:
         // ✅ PRODUCTION: Calibrate individual knowledge source thresholds
         function calibrateKnowledgeSource(source, threshold) {
             console.log(`🎯 Calibrating ${source} threshold to ${threshold}`);
-            
-            const companyId = getCurrentCompanyId();
-            if (companyId) {
-                const thresholds = {};
-                thresholds[source] = threshold;
-                saveAIAgentLogicSettings({ thresholds: thresholds });
-            }
+            // This will be handled by the auto-save system in handleKnowledgeSourceChange
         }
         
         // ✅ PRODUCTION: Calibrate memory settings
         function calibrateMemorySettings(settings) {
             console.log('🧠 Calibrating memory settings:', settings);
-            
-            const companyId = getCurrentCompanyId();
-            if (companyId) {
-                saveAIAgentLogicSettings({ memorySettings: settings });
-            }
+            // This will be handled by the auto-save system in handleKnowledgeSourceChange
         }
         
         // ✅ PRODUCTION: Show real-time calibration feedback
@@ -10005,12 +9995,65 @@ Key Metrics:
                     });
                 }
                 
-                // Save to backend
+                // Save to backend using correct API endpoint
                 const companyId = getCurrentCompanyId();
                 if (companyId) {
-                    const success = await saveAIAgentLogicSettings(settings);
+                    console.log('💾 Saving knowledge source settings to backend...');
                     
-                    if (success !== false) {
+                    // Try multiple API endpoints to ensure compatibility
+                    let success = false;
+                    
+                    // Use the same API pattern as the existing working system
+                    try {
+                        const response = await fetch(`/api/company/${companyId}`, {
+                            method: 'PATCH',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                aiAgentLogic: {
+                                    thresholds: settings.thresholds,
+                                    memorySettings: settings.memorySettings,
+                                    fallbackBehavior: settings.fallbackBehavior,
+                                    knowledgeSourcePriorities: settings.knowledgeSourcePriorities,
+                                    lastUpdated: settings.timestamp
+                                },
+                                agentIntelligenceSettings: {
+                                    memoryMode: settings.memorySettings.memoryMode || 'conversational',
+                                    contextRetention: settings.memorySettings.contextRetention || 30
+                                }
+                            })
+                        });
+                        
+                        console.log('📡 Response status:', response.status, response.statusText);
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            success = true;
+                            console.log('✅ Knowledge source settings saved via company PATCH endpoint');
+                            console.log('📄 Save response data:', data);
+                        } else {
+                            const errorText = await response.text();
+                            console.error('❌ Company PATCH endpoint failed with status:', response.status);
+                            console.error('❌ Error response:', errorText);
+                            try {
+                                const errorData = JSON.parse(errorText);
+                                console.error('❌ Parsed error data:', errorData);
+                            } catch (e) {
+                                console.error('❌ Could not parse error response as JSON');
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('⚠️ Company PATCH endpoint failed:', error.message);
+                    }
+                    
+                    // Final fallback to the existing saveAIAgentLogicSettings function
+                    if (!success) {
+                        console.log('🔄 Trying existing saveAIAgentLogicSettings function...');
+                        success = await saveAIAgentLogicSettings(settings);
+                    }
+                    
+                    if (success) {
                         // Save successful
                         window.knowledgeSourceUnsavedChanges.clear();
                         updateUnsavedChangesUI();
@@ -10020,7 +10063,7 @@ Key Metrics:
                         showNotification('Settings Saved', 'Knowledge source configuration saved successfully', 'success');
                         console.log('✅ Knowledge source settings saved successfully');
                     } else {
-                        throw new Error('Save operation failed');
+                        throw new Error('All save attempts failed');
                     }
                 } else {
                     throw new Error('Company ID not found');
