@@ -206,12 +206,19 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
         return res.status(400).json({ message: 'Invalid company ID format' });
     }
     try {
-        const company = await Company.findById(companyId);
+        // Explicitly include aiAgentLogic field in the query
+        const company = await Company.findById(companyId).lean();
         if (!company) return res.status(404).json({ message: 'Company not found' });
 
         const cacheKey = `company:${companyId}`;
         await redisClient.setEx(cacheKey, 3600, JSON.stringify(company));
         console.log(`SAVED to cache: ${cacheKey}`);
+        
+        // Debug: Log if aiAgentLogic exists
+        console.log(`🔍 DEBUG: aiAgentLogic exists in response: ${!!company.aiAgentLogic}`);
+        if (company.aiAgentLogic) {
+            console.log(`🔍 DEBUG: aiAgentLogic thresholds:`, company.aiAgentLogic.thresholds);
+        }
 
         if (company.aiSettings?.elevenLabs?.apiKey) {
             company.aiSettings.elevenLabs.apiKey = '*****';

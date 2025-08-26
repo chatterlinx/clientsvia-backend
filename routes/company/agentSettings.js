@@ -101,11 +101,22 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
       return res.status(404).json({ error: 'Company not found' });
     }
 
-    // Log the update for audit trail
+    // 🔥 CRITICAL: Clear Redis cache after save to ensure fresh data on next load
+    const { redisClient } = require('../../clients');
+    const cacheKey = `company:${companyId}`;
+    try {
+      await redisClient.del(cacheKey);
+      console.log(`🗑️ CACHE CLEARED: ${cacheKey} - Fresh aiAgentLogic will be loaded on next request`);
+    } catch (cacheError) {
+      console.warn(`⚠️ Cache clear failed for ${cacheKey}:`, cacheError.message);
+    }
+
+    // Log the update for audit trail  
     console.log(`✅ Agent settings updated for company ${company.companyName} (${companyId}):`, {
       tradeCategories: tradeCategories.length,
       llmModel: validatedSettings.llmModel,
-      useLLM: validatedSettings.useLLM
+      useLLM: validatedSettings.useLLM,
+      aiAgentLogicSaved: !!company.aiAgentLogic // NEW: Confirm aiAgentLogic was saved
     });
 
     res.json({ 
