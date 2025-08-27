@@ -50,8 +50,20 @@ class EmbeddedQnAManager {
                 throw new Error('Company ID is required for Q&A Manager initialization');
             }
             
-            if (!this.getAuthToken()) {
+            const authToken = this.getAuthToken();
+            if (!authToken) {
                 console.warn('⚠️ No auth token found - Q&A operations may fail');
+                console.warn('🔍 Token search results:', {
+                    adminToken: !!localStorage.getItem('adminToken'),
+                    authToken: !!localStorage.getItem('authToken'),
+                    sessionAuthToken: !!sessionStorage.getItem('authToken'),
+                    token: !!localStorage.getItem('token'),
+                    sessionToken: !!sessionStorage.getItem('token'),
+                    cookieToken: !!this.getCookieValue('token'),
+                    cookieAuthToken: !!this.getCookieValue('authToken')
+                });
+            } else {
+                console.log('✅ Auth token found:', authToken.substring(0, 10) + '...');
             }
             
             await this.loadCompanyQnAEntries();
@@ -393,8 +405,9 @@ class EmbeddedQnAManager {
      */
     getAuthToken() {
         // Try multiple token storage locations for maximum compatibility
-        // Check authToken first as it's the primary token used in most of the app
-        return localStorage.getItem('authToken') || 
+        // Check adminToken first as it's the primary token used by login system
+        return localStorage.getItem('adminToken') ||  // PRIMARY: Used by login system
+               localStorage.getItem('authToken') || 
                sessionStorage.getItem('authToken') ||
                localStorage.getItem('token') || 
                sessionStorage.getItem('token') ||

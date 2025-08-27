@@ -5660,7 +5660,8 @@
         // Universal authentication token getter - checks all possible locations
         function getUniversalAuthToken() {
             // Check all possible token storage locations in order of preference
-            return localStorage.getItem('authToken') || 
+            return localStorage.getItem('adminToken') ||  // PRIMARY: Used by login system
+                   localStorage.getItem('authToken') || 
                    sessionStorage.getItem('authToken') ||
                    localStorage.getItem('token') || 
                    sessionStorage.getItem('token') ||
@@ -5670,6 +5671,7 @@
         
         // Get auth token source for debugging
         function getAuthTokenSource() {
+            if (localStorage.getItem('adminToken')) return 'localStorage.adminToken';
             if (localStorage.getItem('authToken')) return 'localStorage.authToken';
             if (sessionStorage.getItem('authToken')) return 'sessionStorage.authToken';
             if (localStorage.getItem('token')) return 'localStorage.token';
