@@ -33,21 +33,37 @@ class EmbeddedQnAManager {
     }
 
     /**
-     * Initialize the embedded Q&A manager
+     * Initialize the embedded Q&A manager - Enhanced with validation
      */
     async initialize() {
-        if (this.initialized) return;
+        if (this.initialized) {
+            console.log('🔄 Q&A Manager already initialized, refreshing data...');
+            await this.loadCompanyQnAEntries();
+            return;
+        }
         
         try {
+            console.log('🚀 Initializing Embedded Q&A Manager...');
+            
+            // Validate prerequisites
+            if (!this.companyId) {
+                throw new Error('Company ID is required for Q&A Manager initialization');
+            }
+            
+            if (!this.getAuthToken()) {
+                console.warn('⚠️ No auth token found - Q&A operations may fail');
+            }
+            
             await this.loadCompanyQnAEntries();
             this.setupEventListeners();
             this.initializeRealTimeFeatures();
             
             this.initialized = true;
-            console.log('✅ Embedded Q&A Manager ready');
+            console.log('✅ Embedded Q&A Manager ready for company:', this.companyId);
             
         } catch (error) {
             console.error('❌ Failed to initialize Embedded Q&A Manager:', error);
+            this.showErrorState('Initialization failed: ' + error.message);
         }
     }
 
@@ -207,11 +223,17 @@ class EmbeddedQnAManager {
      */
     async updateThreshold(value) {
         try {
+            console.log('🎯 Updating Company Q&A threshold to:', value);
+            
             const displayEl = document.getElementById('company-qna-threshold-display');
             const valueEl = document.getElementById('clientsvia-threshold-value-companyQnA');
+            const syncDisplayEl = document.getElementById('company-qna-sync-threshold-display');
             
-            if (displayEl) displayEl.textContent = parseFloat(value).toFixed(2);
-            if (valueEl) valueEl.textContent = parseFloat(value).toFixed(2);
+            // Update all display elements
+            const formattedValue = parseFloat(value).toFixed(2);
+            if (displayEl) displayEl.textContent = formattedValue;
+            if (valueEl) valueEl.textContent = formattedValue;
+            if (syncDisplayEl) syncDisplayEl.textContent = formattedValue;
 
             // Save to backend
             const response = await fetch(`${this.apiBaseUrl}/api/ai-agent-logic/admin/${this.companyId}/ai-settings`, {
@@ -225,20 +247,39 @@ class EmbeddedQnAManager {
                 })
             });
 
-            if (response.ok) {
-                console.log(`✅ Threshold updated to ${value}`);
-                
-                // Visual feedback
-                if (valueEl) {
-                    valueEl.classList.add('bg-green-100', 'text-green-800');
-                    setTimeout(() => {
-                        valueEl.classList.remove('bg-green-100', 'text-green-800');
-                    }, 1000);
-                }
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Threshold update failed:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    errorBody: errorText
+                });
+                this.showNotification('❌ Failed to update threshold: HTTP ' + response.status, 'error');
+                return;
+            }
+
+            const result = await response.json();
+            console.log('✅ Threshold update response:', result);
+            console.log(`✅ Company Q&A threshold updated to ${formattedValue}`);
+            
+            // Visual feedback
+            if (valueEl) {
+                valueEl.classList.add('bg-green-100', 'text-green-800');
+                setTimeout(() => {
+                    valueEl.classList.remove('bg-green-100', 'text-green-800');
+                }, 1000);
+            }
+            
+            // Sync with main Knowledge Sources threshold slider
+            const mainSlider = document.getElementById('clientsvia-threshold-companyQnA');
+            if (mainSlider && mainSlider.value !== value) {
+                mainSlider.value = value;
+                console.log('🔄 Synced main threshold slider with Q&A manager update');
             }
 
         } catch (error) {
             console.error('❌ Failed to update threshold:', error);
+            this.showNotification('❌ Threshold update failed: ' + error.message, 'error');
         }
     }
 
