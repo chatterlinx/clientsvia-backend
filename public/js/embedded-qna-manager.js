@@ -91,12 +91,20 @@ class EmbeddedQnAManager {
             if (listEl) listEl.classList.add('hidden');
             if (emptyEl) emptyEl.classList.add('hidden');
 
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            // Add authorization header if token is available
+            const token = this.getAuthToken();
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
             const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`, {
                 method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.getAuthToken()}`
-                }
+                headers: headers,
+                credentials: 'include' // Include cookies for additional auth
             });
 
             if (!response.ok) {
@@ -236,12 +244,20 @@ class EmbeddedQnAManager {
             if (syncDisplayEl) syncDisplayEl.textContent = formattedValue;
 
             // Save to backend
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            // Add authorization header if token is available
+            const token = this.getAuthToken();
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
             const response = await fetch(`${this.apiBaseUrl}/api/ai-agent-logic/admin/${this.companyId}/ai-settings`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.getAuthToken()}`
-                },
+                headers: headers,
+                credentials: 'include', // Include cookies for additional auth
                 body: JSON.stringify({
                     thresholds: { companyKB: parseFloat(value) }
                 })
@@ -377,11 +393,13 @@ class EmbeddedQnAManager {
      */
     getAuthToken() {
         // Try multiple token storage locations for maximum compatibility
-        return localStorage.getItem('token') || 
-               sessionStorage.getItem('token') ||
-               localStorage.getItem('authToken') || 
+        // Check authToken first as it's the primary token used in most of the app
+        return localStorage.getItem('authToken') || 
                sessionStorage.getItem('authToken') ||
-               this.getCookieValue('token') || '';
+               localStorage.getItem('token') || 
+               sessionStorage.getItem('token') ||
+               this.getCookieValue('token') || 
+               this.getCookieValue('authToken') || '';
     }
 
     /**
@@ -568,12 +586,20 @@ class EmbeddedQnAManager {
                 return;
             }
             
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            // Add authorization header if token is available
+            const token = this.getAuthToken();
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
             const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.getAuthToken()}`
-                },
+                headers: headers,
+                credentials: 'include', // Include cookies for additional auth
                 body: JSON.stringify({
                     question,
                     answer,

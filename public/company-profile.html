@@ -5657,6 +5657,36 @@
             }
         }
 
+        // Universal authentication token getter - checks all possible locations
+        function getUniversalAuthToken() {
+            // Check all possible token storage locations in order of preference
+            return localStorage.getItem('authToken') || 
+                   sessionStorage.getItem('authToken') ||
+                   localStorage.getItem('token') || 
+                   sessionStorage.getItem('token') ||
+                   getCookieValue('token') || 
+                   getCookieValue('authToken') || '';
+        }
+        
+        // Get auth token source for debugging
+        function getAuthTokenSource() {
+            if (localStorage.getItem('authToken')) return 'localStorage.authToken';
+            if (sessionStorage.getItem('authToken')) return 'sessionStorage.authToken';
+            if (localStorage.getItem('token')) return 'localStorage.token';
+            if (sessionStorage.getItem('token')) return 'sessionStorage.token';
+            if (getCookieValue('token')) return 'cookie.token';
+            if (getCookieValue('authToken')) return 'cookie.authToken';
+            return 'none';
+        }
+        
+        // Helper function to extract token from cookies
+        function getCookieValue(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return '';
+        }
+
         // Global function to get current company ID
         function getCurrentCompanyId() {
             // Multi-tenant production validation
@@ -10059,9 +10089,10 @@ Key Metrics:
                     console.log('💾 Saving knowledge source settings to backend...');
                     console.log('🔍 CHECKPOINT 7: Starting API call');
                     
-                    // Check authentication
-                    const authToken = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+                    // Check authentication - Enhanced token retrieval
+                    const authToken = getUniversalAuthToken();
                     console.log('🔑 Auth token available:', !!authToken);
+                    console.log('🔑 Auth token source:', getAuthTokenSource());
                     
                     // Try multiple API endpoints to ensure compatibility
                     let success = false;
@@ -10088,11 +10119,19 @@ Key Metrics:
                     try {
                         console.log('🔍 CHECKPOINT 9: Making fetch request to /api/company/companies/' + companyId + '/agent-settings');
                         
+                        const headers = {
+                            'Content-Type': 'application/json'
+                        };
+                        
+                        // Add authorization header if token is available
+                        if (authToken) {
+                            headers['Authorization'] = `Bearer ${authToken}`;
+                        }
+                        
                         const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
+                            headers: headers,
+                            credentials: 'include', // Include cookies for additional auth
                             body: JSON.stringify(payload)
                         });
                         
@@ -10144,7 +10183,21 @@ Key Metrics:
                         // VERIFICATION STEP: Load fresh data to confirm save worked
                         try {
                             console.log('🔍 CHECKPOINT 14: Loading fresh data to verify save');
-                            const verifyResponse = await fetch(`/api/company/companies/${companyId}/agent-settings?_verify=${Date.now()}`);
+                            
+                            const verifyHeaders = {
+                                'Content-Type': 'application/json'
+                            };
+                            
+                            // Add authorization header if token is available
+                            if (authToken) {
+                                verifyHeaders['Authorization'] = `Bearer ${authToken}`;
+                            }
+                            
+                            const verifyResponse = await fetch(`/api/company/companies/${companyId}/agent-settings?_verify=${Date.now()}`, {
+                                method: 'GET',
+                                headers: verifyHeaders,
+                                credentials: 'include' // Include cookies for additional auth
+                            });
                             
                             if (verifyResponse.ok) {
                                 const verifyData = await verifyResponse.json();
