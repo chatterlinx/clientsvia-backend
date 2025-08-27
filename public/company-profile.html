@@ -10142,10 +10142,25 @@ Key Metrics:
                         
                         if (response.ok) {
                             console.log('🔍 CHECKPOINT 11: Response is OK, parsing JSON');
-                            const data = await response.json();
-                            success = true;
-                            console.log('✅ Knowledge source settings saved via company agent settings endpoint');
-                            console.log('📄 Save response data:', data);
+                            
+                            let data;
+                            try {
+                                data = await response.json();
+                                success = true;
+                                console.log('✅ Knowledge source settings saved via company agent settings endpoint');
+                                console.log('📄 Save response data:', data);
+                            } catch (jsonError) {
+                                console.error('❌ CRITICAL ERROR: Failed to parse JSON response:', {
+                                    jsonError: jsonError.message,
+                                    jsonStack: jsonError.stack,
+                                    responseStatus: response.status,
+                                    responseStatusText: response.statusText,
+                                    responseUrl: response.url,
+                                    timestamp: new Date().toISOString()
+                                });
+                                console.error('🔍 FULL JSON PARSE ERROR FOR DEBUGGING:', jsonError);
+                                throw new Error(`JSON parsing failed: ${jsonError.message}`);
+                            }
                             console.log('🔍 CHECKPOINT 12: Checking if aiAgentLogic was saved in response');
                             
                             if (data.company && data.company.aiAgentLogic) {
@@ -10154,13 +10169,31 @@ Key Metrics:
                                 console.log('⚠️ WARNING: aiAgentLogic not found in response - may not have been saved');
                             }
                         } else {
-                            const errorText = await response.text();
-                            console.error('❌ Agent settings endpoint failed:', {
+                            let errorText = 'Unknown error';
+                            try {
+                                errorText = await response.text();
+                            } catch (textError) {
+                                console.error('❌ Failed to read error response text:', textError);
+                                errorText = `Failed to read error: ${textError.message}`;
+                            }
+                            
+                            console.error('❌ CRITICAL ERROR: Agent settings endpoint failed:', {
                                 status: response.status,
                                 statusText: response.statusText,
                                 url: response.url,
                                 errorBody: errorText,
-                                requestPayload: JSON.stringify(payload, null, 2)
+                                requestPayload: JSON.stringify(payload, null, 2),
+                                timestamp: new Date().toISOString(),
+                                authTokenAvailable: !!authToken,
+                                authTokenSource: getAuthTokenSource(),
+                                companyId: companyId
+                            });
+                            
+                            // NEVER mask errors - make them visible for debugging
+                            console.error('🔍 FULL API ERROR RESPONSE FOR DEBUGGING:', {
+                                response: response,
+                                errorText: errorText,
+                                headers: Object.fromEntries(response.headers.entries())
                             });
                             try {
                                 const errorData = JSON.parse(errorText);
@@ -10268,9 +10301,36 @@ Key Metrics:
                 }
                 
             } catch (error) {
-                console.error('❌ Failed to save knowledge source settings:', error);
+                console.error('❌ CRITICAL ERROR: Failed to save knowledge source settings:', {
+                    errorMessage: error.message,
+                    errorStack: error.stack,
+                    companyId: companyId,
+                    timestamp: new Date().toISOString(),
+                    authTokenAvailable: !!getUniversalAuthToken(),
+                    authTokenSource: getAuthTokenSource(),
+                    settingsPayload: JSON.stringify(payload, null, 2),
+                    fullError: error
+                });
+                
                 updateSaveStatus('unsaved');
-                showNotification('Save Failed', 'Failed to save settings. Please try again.', 'error');
+                showNotification('Save Failed', `Failed to save settings: ${error.message}`, 'error');
+                
+                // NEVER mask errors - make them visible for debugging
+                console.error('🔍 FULL KNOWLEDGE SOURCES SAVE ERROR FOR DEBUGGING:', error);
+                console.error('🔍 COMPLETE ERROR CONTEXT:', {
+                    errorType: error.constructor.name,
+                    errorMessage: error.message,
+                    errorStack: error.stack,
+                    timestamp: new Date().toISOString(),
+                    userAgent: navigator.userAgent,
+                    url: window.location.href,
+                    companyId: companyId,
+                    authStatus: {
+                        tokenAvailable: !!getUniversalAuthToken(),
+                        tokenSource: getAuthTokenSource(),
+                        tokenPreview: getUniversalAuthToken() ? getUniversalAuthToken().substring(0, 10) + '...' : 'none'
+                    }
+                });
             } finally {
                 // Reset button state
                 if (saveBtn) {

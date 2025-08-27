@@ -145,8 +145,23 @@ class EmbeddedQnAManager {
             console.log(`✅ Loaded ${data.data?.length || 0} Company Q&A entries`);
 
         } catch (error) {
-            console.error('❌ Failed to load Company Q&A entries:', error);
-            this.showErrorState(error.message);
+            console.error('❌ CRITICAL ERROR: Failed to load Company Q&A entries:', {
+                errorMessage: error.message,
+                errorStack: error.stack,
+                companyId: this.companyId,
+                apiBaseUrl: this.apiBaseUrl,
+                timestamp: new Date().toISOString(),
+                authTokenAvailable: !!this.getAuthToken(),
+                authTokenSource: this.getAuthTokenSource(),
+                requestUrl: `${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`,
+                fullError: error
+            });
+            
+            // Show detailed error state
+            this.showErrorState(`Q&A Load Failed: ${error.message}`);
+            
+            // NEVER mask errors - make them visible for debugging
+            console.error('🔍 FULL ERROR DETAILS FOR DEBUGGING:', error);
         }
     }
 
@@ -306,8 +321,24 @@ class EmbeddedQnAManager {
             }
 
         } catch (error) {
-            console.error('❌ Failed to update threshold:', error);
+            console.error('❌ CRITICAL ERROR: Failed to update threshold:', {
+                errorMessage: error.message,
+                errorStack: error.stack,
+                companyId: this.companyId,
+                apiBaseUrl: this.apiBaseUrl,
+                timestamp: new Date().toISOString(),
+                authTokenAvailable: !!this.getAuthToken(),
+                authTokenSource: this.getAuthTokenSource(),
+                requestUrl: `${this.apiBaseUrl}/api/ai-agent-logic/admin/${this.companyId}/ai-settings`,
+                thresholdValue: value,
+                requestData: { thresholds: { companyKB: parseFloat(value) } },
+                fullError: error
+            });
+            
             this.showNotification('❌ Threshold update failed: ' + error.message, 'error');
+            
+            // NEVER mask errors - make them visible for debugging
+            console.error('🔍 FULL THRESHOLD ERROR DETAILS FOR DEBUGGING:', error);
         }
     }
 
@@ -423,6 +454,20 @@ class EmbeddedQnAManager {
         const parts = value.split(`; ${name}=`);
         if (parts.length === 2) return parts.pop().split(';').shift();
         return '';
+    }
+
+    /**
+     * Get auth token source for debugging - NEVER mask this information
+     */
+    getAuthTokenSource() {
+        if (localStorage.getItem('adminToken')) return 'localStorage.adminToken';
+        if (localStorage.getItem('authToken')) return 'localStorage.authToken';
+        if (sessionStorage.getItem('authToken')) return 'sessionStorage.authToken';
+        if (localStorage.getItem('token')) return 'localStorage.token';
+        if (sessionStorage.getItem('token')) return 'sessionStorage.token';
+        if (this.getCookieValue('token')) return 'cookie.token';
+        if (this.getCookieValue('authToken')) return 'cookie.authToken';
+        return 'none';
     }
 
     /**
@@ -647,8 +692,23 @@ class EmbeddedQnAManager {
             }
             
         } catch (error) {
-            console.error('❌ Failed to save Q&A:', error);
+            console.error('❌ CRITICAL ERROR: Failed to save Q&A:', {
+                errorMessage: error.message,
+                errorStack: error.stack,
+                companyId: this.companyId,
+                apiBaseUrl: this.apiBaseUrl,
+                timestamp: new Date().toISOString(),
+                authTokenAvailable: !!this.getAuthToken(),
+                authTokenSource: this.getAuthTokenSource(),
+                requestUrl: `${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`,
+                requestData: { question, answer, category },
+                fullError: error
+            });
+            
             this.showNotification('❌ Save failed: ' + error.message, 'error');
+            
+            // NEVER mask errors - make them visible for debugging
+            console.error('🔍 FULL SAVE ERROR DETAILS FOR DEBUGGING:', error);
         }
     }
     
