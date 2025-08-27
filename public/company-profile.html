@@ -10051,9 +10051,17 @@ Key Metrics:
                 const companyId = getCurrentCompanyId();
                 console.log('🔍 CHECKPOINT 6: Company ID retrieved:', companyId);
                 
+                if (!companyId) {
+                    throw new Error('Company ID is required for saving settings');
+                }
+                
                 if (companyId) {
                     console.log('💾 Saving knowledge source settings to backend...');
                     console.log('🔍 CHECKPOINT 7: Starting API call');
+                    
+                    // Check authentication
+                    const authToken = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+                    console.log('🔑 Auth token available:', !!authToken);
                     
                     // Try multiple API endpoints to ensure compatibility
                     let success = false;
@@ -10106,8 +10114,13 @@ Key Metrics:
                             }
                         } else {
                             const errorText = await response.text();
-                            console.error('❌ Agent settings endpoint failed with status:', response.status);
-                            console.error('❌ Error response:', errorText);
+                            console.error('❌ Agent settings endpoint failed:', {
+                                status: response.status,
+                                statusText: response.statusText,
+                                url: response.url,
+                                errorBody: errorText,
+                                requestPayload: JSON.stringify(payload, null, 2)
+                            });
                             try {
                                 const errorData = JSON.parse(errorText);
                                 console.error('❌ Parsed error data:', errorData);
@@ -10183,6 +10196,14 @@ Key Metrics:
                         updateLastSavedTimestamp();
                         
                         console.log('✅ Knowledge source settings saved successfully');
+                        
+                        // Reload the embedded Q&A manager to reflect changes
+                        if (window.embeddedQnAManager) {
+                            console.log('🔄 Reloading Q&A manager after successful save');
+                            setTimeout(() => {
+                                window.embeddedQnAManager.loadCompanyQnAEntries();
+                            }, 1000);
+                        }
                     } else {
                         console.log('🔍 CHECKPOINT 16: All save attempts failed');
                         throw new Error('All save attempts failed');

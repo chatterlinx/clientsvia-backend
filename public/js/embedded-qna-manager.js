@@ -57,6 +57,8 @@ class EmbeddedQnAManager {
     async loadCompanyQnAEntries() {
         try {
             console.log('📚 Loading Company Q&A entries...');
+            console.log('🔑 Auth token available:', !!this.getAuthToken());
+            console.log('🏢 Company ID:', this.companyId);
             
             // ✅ PRODUCTION FIX: Validate required elements exist
             const loadingEl = document.getElementById('qna-loading');
@@ -82,7 +84,14 @@ class EmbeddedQnAManager {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const errorText = await response.text();
+                console.error('❌ API Error Details:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    url: response.url,
+                    errorBody: errorText
+                });
+                throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
             }
 
             const data = await response.json();
@@ -90,14 +99,14 @@ class EmbeddedQnAManager {
             // Hide loading state
             if (loadingEl) loadingEl.classList.add('hidden');
 
-            if (data.success && data.qnas && data.qnas.length > 0) {
-                this.renderQnAEntries(data.qnas);
+            if (data.success && data.data && data.data.length > 0) {
+                this.renderQnAEntries(data.data);
                 if (listEl) listEl.classList.remove('hidden');
             } else {
                 if (emptyEl) emptyEl.classList.remove('hidden');
             }
 
-            console.log(`✅ Loaded ${data.qnas?.length || 0} Company Q&A entries`);
+            console.log(`✅ Loaded ${data.data?.length || 0} Company Q&A entries`);
 
         } catch (error) {
             console.error('❌ Failed to load Company Q&A entries:', error);
@@ -293,11 +302,23 @@ class EmbeddedQnAManager {
     }
 
     /**
-     * Show notification
+     * Show notification - Enhanced with better user feedback
      */
     showNotification(message, type = 'info') {
         console.log(`${type.toUpperCase()}: ${message}`);
-        // Can be enhanced with toast notifications
+        
+        // Try to use the global notification system if available
+        if (typeof showNotification === 'function') {
+            const title = type === 'error' ? 'Error' : type === 'success' ? 'Success' : 'Info';
+            showNotification(title, message, type);
+        } else {
+            // Fallback to alert for critical messages
+            if (type === 'error') {
+                alert('❌ ' + message);
+            } else if (type === 'success') {
+                alert('✅ ' + message);
+            }
+        }
     }
 
     /**
@@ -311,10 +332,25 @@ class EmbeddedQnAManager {
     }
 
     /**
-     * Get auth token
+     * Get auth token - Enhanced to check multiple storage locations
      */
     getAuthToken() {
-        return localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
+        // Try multiple token storage locations for maximum compatibility
+        return localStorage.getItem('token') || 
+               sessionStorage.getItem('token') ||
+               localStorage.getItem('authToken') || 
+               sessionStorage.getItem('authToken') ||
+               this.getCookieValue('token') || '';
+    }
+
+    /**
+     * Helper function to extract token from cookies
+     */
+    getCookieValue(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return '';
     }
 
     /**
@@ -505,16 +541,29 @@ class EmbeddedQnAManager {
                 })
             });
             
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Save Q&A API Error:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    errorBody: errorText
+                });
+                this.showNotification('❌ Failed to create Q&A: HTTP ' + response.status, 'error');
+                return;
+            }
+
             const result = await response.json();
+            console.log('✅ Save Q&A Response:', result);
             
             if (result.success) {
                 this.showNotification('✅ Q&A entry created successfully!', 'success');
                 // Close modal
-                document.querySelector('.fixed').remove();
+                const modal = document.querySelector('.fixed');
+                if (modal) modal.remove();
                 // Reload entries
                 this.loadCompanyQnAEntries();
             } else {
-                this.showNotification('❌ Failed to create Q&A: ' + result.error, 'error');
+                this.showNotification('❌ Failed to create Q&A: ' + (result.error || 'Unknown error'), 'error');
             }
             
         } catch (error) {
