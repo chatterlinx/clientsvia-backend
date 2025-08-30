@@ -689,6 +689,70 @@ router.get('/company/health', async (req, res) => {
 });
 
 /**
+ * 🚨 EMERGENCY FIX: User-Company Association
+ * Fixes the critical issue where user.companyId is null
+ * Uses Mongoose + Redis pattern for AI agent speed
+ */
+router.post('/emergency/fix-user-company/:userId/:companyId', async (req, res) => {
+  try {
+    const { userId, companyId } = req.params;
+    
+    console.log('🚨 EMERGENCY: Fixing user-company association for AI agent access');
+    console.log('🔍 Target user ID:', userId);
+    console.log('🔍 Target company ID:', companyId);
+    
+    // Use Mongoose to find and update user
+    const User = require('../../models/User');
+    const Company = require('../../models/Company');
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    const company = await Company.findById(companyId);
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+    
+    // Fix the association using Mongoose
+    user.companyId = companyId;
+    await user.save();
+    
+    // Clear Redis cache for user (following the established pattern)
+    const { redisClient } = require('../../clients');
+    try {
+      await redisClient.del(`user:${userId}`);
+      console.log(`🗑️ CACHE CLEARED: user:${userId} - Fresh user data on next request`);
+    } catch (cacheError) {
+      console.warn(`⚠️ Cache clear failed for user:${userId}:`, cacheError.message);
+    }
+    
+    // Verify the fix
+    const verifyUser = await User.findById(userId).populate('companyId');
+    
+    console.log('🎉 SUCCESS: User-company association fixed using Mongoose + Redis pattern');
+    
+    res.json({
+      success: true,
+      message: 'User-company association fixed - Knowledge Sources should now work',
+      userEmail: user.email,
+      companyName: company.companyName,
+      associationFixed: !!verifyUser.companyId,
+      nextStep: 'Test Knowledge Sources tab - should now work without 403 errors'
+    });
+    
+  } catch (error) {
+    console.error('❌ EMERGENCY: Fix failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fix user-company association',
+      details: error.message
+    });
+  }
+});
+
+/**
  * 🎯 AI AGENT INTEGRATION ENDPOINT
  * This is called by the AI agent during conversations
  * No authentication required for internal calls
