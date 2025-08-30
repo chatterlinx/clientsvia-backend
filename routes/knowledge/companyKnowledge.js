@@ -116,11 +116,30 @@ router.get('/company/:companyId/qnas', authenticateJWT, async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('❌ Failed to fetch company Q&As:', error);
+    // Enhanced error logging for debugging 500 errors
+    console.error('❌ CRITICAL: Q&A Fetch Route Error - FULL DETAILS:');
+    console.error('❌ CHECKPOINT: Error message:', error.message);
+    console.error('❌ CHECKPOINT: Error stack:', error.stack);
+    console.error('❌ CHECKPOINT: Request params:', {
+      companyId: req.params.companyId,
+      userId: req.user?._id,
+      userCompanyId: req.user?.companyId?.toString(),
+      queryParams: req.query
+    });
+    
+    logger.error('❌ Failed to fetch company Q&As:', {
+      error: error.message,
+      stack: error.stack,
+      companyId: req.params.companyId,
+      userId: req.user?._id,
+      queryParams: req.query
+    });
+    
     res.status(500).json({
       success: false,
       error: 'Failed to fetch Q&As',
-      details: error.message
+      details: error.message,
+      checkpoint: 'Q&A fetch route error - check server logs for full details'
     });
   }
 });
@@ -189,11 +208,31 @@ router.post('/company/:companyId/qnas', authenticateJWT, async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('❌ Failed to create Q&A:', error);
+    // Enhanced error logging for debugging 500 errors
+    console.error('❌ CRITICAL: Q&A Creation Route Error - FULL DETAILS:');
+    console.error('❌ CHECKPOINT: Error message:', error.message);
+    console.error('❌ CHECKPOINT: Error stack:', error.stack);
+    console.error('❌ CHECKPOINT: Error name:', error.name);
+    console.error('❌ CHECKPOINT: Request data:', {
+      companyId: req.params.companyId,
+      userId: req.user?._id,
+      userCompanyId: req.user?.companyId?.toString(),
+      requestBody: req.body
+    });
+    
+    logger.error('❌ Failed to create Q&A:', {
+      error: error.message,
+      stack: error.stack,
+      companyId: req.params.companyId,
+      userId: req.user?._id,
+      requestData: req.body
+    });
+    
     res.status(500).json({
       success: false,
       error: 'Failed to create Q&A entry',
-      details: error.message
+      details: error.message,
+      checkpoint: 'Q&A creation route error - check server logs for full details'
     });
   }
 });

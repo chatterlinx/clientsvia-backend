@@ -264,8 +264,12 @@ class CompanyKnowledgeService {
   // Create new Q&A entry
   async createQnA(companyId, qnaData, userId = null) {
     try {
+      console.log('🧠 CHECKPOINT: CompanyKnowledgeService.createQnA started');
+      console.log('🧠 CHECKPOINT: Input data:', { companyId, userId, qnaData });
+      
       logger.info(`📝 Creating new Q&A for company ${companyId}`);
 
+      console.log('🧠 CHECKPOINT: Creating new CompanyQnA instance');
       const qna = new CompanyQnA({
         ...qnaData,
         companyId,
@@ -273,15 +277,19 @@ class CompanyKnowledgeService {
         lastModifiedBy: userId
       });
 
+      console.log('🧠 CHECKPOINT: Running validation');
       // Validate before saving
       await qna.validate();
       
+      console.log('🧠 CHECKPOINT: Validation passed, attempting save');
       // Save (triggers keyword generation middleware)
       const savedQnA = await qna.save();
       
+      console.log('🧠 CHECKPOINT: Q&A saved successfully, invalidating caches');
       // Invalidate relevant caches
       await this.invalidateCompanyCaches(companyId);
       
+      console.log('✅ CHECKPOINT: Q&A creation completed successfully');
       logger.info(`✅ Q&A created successfully: ${savedQnA._id}`);
       
       return {
@@ -291,12 +299,19 @@ class CompanyKnowledgeService {
       };
 
     } catch (error) {
+      console.error('❌ CRITICAL: CompanyKnowledgeService.createQnA failed:');
+      console.error('❌ CHECKPOINT: Error message:', error.message);
+      console.error('❌ CHECKPOINT: Error stack:', error.stack);
+      console.error('❌ CHECKPOINT: Error name:', error.name);
+      console.error('❌ CHECKPOINT: Input data that caused error:', { companyId, userId, qnaData });
+      
       logger.error('❌ Failed to create Q&A:', error);
       
       return {
         success: false,
         error: error.message,
-        details: error.errors || {}
+        details: error.errors || {},
+        checkpoint: 'CompanyKnowledgeService.createQnA method failed'
       };
     }
   }
