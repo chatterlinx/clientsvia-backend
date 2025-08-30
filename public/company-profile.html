@@ -2187,6 +2187,11 @@
                                                                     </div>
                                                                 </div>
                                                                 
+                                                                <!-- ✅ CRITICAL FIX: Add missing trade-categories-checkboxes container -->
+                                                                <div id="trade-categories-checkboxes" class="mt-3">
+                                                                    <!-- Checkboxes will be populated by loadAgentTradeCategories() -->
+                                                                </div>
+                                                                
                                                                 <div class="mt-2">
                                                                     <label class="flex items-center space-x-2 text-sm">
                                                                         <span class="text-gray-700">Confidence:</span>
@@ -6567,13 +6572,23 @@
                 
                 const categories = result.data;
                 
-                // Populate the original dropdown (for compatibility)
+                // Populate the original dropdown (for compatibility) - with null safety
                 const selector = document.getElementById('agent-trade-categories');
-                selector.innerHTML = '';
+                if (selector) {
+                    selector.innerHTML = '';
+                } else {
+                    console.warn('⚠️ CHECKPOINT: agent-trade-categories element not found - using fallback');
+                }
                 
-                // Populate the new checkboxes container
+                // Populate the new checkboxes container - with null safety
                 const checkboxContainer = document.getElementById('trade-categories-checkboxes');
-                checkboxContainer.innerHTML = '';
+                if (checkboxContainer) {
+                    checkboxContainer.innerHTML = '';
+                } else {
+                    console.error('❌ CRITICAL: trade-categories-checkboxes element not found');
+                    console.error('❌ CHECKPOINT: This element should exist in the AI Agent Logic tab');
+                    return; // Exit early if the container doesn't exist
+                }
                 
                 categories.forEach(category => {
                     // Add to dropdown
@@ -6726,13 +6741,21 @@
                     }
                 };
                 
-                // Set values safely
-                safeSetValue('agent-useLLM', settings.useLLM !== false ? 'true' : 'false');
-                safeSetValue('agent-llmModel', settings.llmModel || 'gemini-pro');
-                safeSetValue('agent-memoryMode', settings.memoryMode || 'short');
-                safeSetValue('agent-escalationMode', settings.escalationMode || 'ask');
-                safeSetValue('agent-rePromptAfterTurns', settings.rePromptAfterTurns || 3);
-                safeSetValue('agent-maxPromptsPerCall', settings.maxPromptsPerCall || 2);
+                // Set values safely - using ACTUAL element IDs that exist in current HTML
+                console.log('✅ CHECKPOINT: Loading agent settings into current AI Agent Logic structure');
+                
+                // Current structure uses 'ai-memory-mode' not 'agent-memoryMode'
+                safeSetValue('ai-memory-mode', settings.memoryMode || 'conversational');
+                
+                // Set contextual memory toggle if it exists
+                const contextualMemoryToggle = document.getElementById('ai-contextual-memory');
+                if (contextualMemoryToggle) {
+                    contextualMemoryToggle.checked = settings.contextualMemory !== false;
+                    console.log('✅ Set contextual memory toggle');
+                }
+                
+                // Skip legacy elements that don't exist in current structure
+                console.log('ℹ️ CHECKPOINT: Legacy agent elements (agent-useLLM, agent-llmModel, etc.) not in current structure - this is normal');
                 
                 // Fallback threshold slider with safety checks
                 const thresholdSlider = document.getElementById('agent-fallbackThreshold');
