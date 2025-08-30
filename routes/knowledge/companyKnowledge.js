@@ -31,7 +31,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticateSingleSession } = require('../../middleware/auth');
+const { authenticateJWT, authenticateSingleSession } = require('../../middleware/auth');
 const CompanyKnowledgeService = require('../../services/knowledge/CompanyKnowledgeService');
 const winston = require('winston');
 
@@ -61,7 +61,7 @@ const logger = winston.createLogger({
  * Cache: Redis key pattern: knowledge:company:{id}:list:{hash}
  * Performance: Sub-200ms response time with Redis cache
  */
-router.get('/company/:companyId/qnas', authenticateSingleSession, async (req, res) => {
+router.get('/company/:companyId/qnas', authenticateJWT, async (req, res) => {
   try {
     const { companyId } = req.params;
     const {
@@ -129,7 +129,7 @@ router.get('/company/:companyId/qnas', authenticateSingleSession, async (req, re
  * ➕ CREATE NEW Q&A ENTRY
  * Used by the "Add New Q&A" button in the frontend
  */
-router.post('/company/:companyId/qnas', authenticateSingleSession, async (req, res) => {
+router.post('/company/:companyId/qnas', authenticateJWT, async (req, res) => {
   try {
     const { companyId } = req.params;
     const qnaData = req.body;
@@ -202,7 +202,7 @@ router.post('/company/:companyId/qnas', authenticateSingleSession, async (req, r
  * ✏️ UPDATE EXISTING Q&A ENTRY
  * Used by the "Edit" button in the frontend Q&A list
  */
-router.put('/company/:companyId/qnas/:id', authenticateSingleSession, async (req, res) => {
+router.put('/company/:companyId/qnas/:id', authenticateJWT, async (req, res) => {
   try {
     const { companyId, id } = req.params;
     const updateData = req.body;
@@ -256,7 +256,7 @@ router.put('/company/:companyId/qnas/:id', authenticateSingleSession, async (req
  * 🗑️ DELETE Q&A ENTRY (SOFT DELETE)
  * Used by the "Delete" button in the frontend Q&A list
  */
-router.delete('/company/:companyId/qnas/:id', authenticateSingleSession, async (req, res) => {
+router.delete('/company/:companyId/qnas/:id', authenticateJWT, async (req, res) => {
   try {
     const { companyId, id } = req.params;
 
@@ -303,7 +303,7 @@ router.delete('/company/:companyId/qnas/:id', authenticateSingleSession, async (
  * 🔍 SEARCH Q&AS
  * Used by the search functionality in the frontend
  */
-router.get('/company/:companyId/search', authenticateSingleSession, async (req, res) => {
+router.get('/company/:companyId/search', authenticateJWT, async (req, res) => {
   try {
     const { companyId } = req.params;
     const { query, limit = 10, minConfidence = 0.7 } = req.query;
@@ -363,7 +363,7 @@ router.get('/company/:companyId/search', authenticateSingleSession, async (req, 
  * 📈 GET ANALYTICS AND PERFORMANCE METRICS
  * Used by the analytics dashboard in the frontend
  */
-router.get('/company/:companyId/analytics', authenticateSingleSession, async (req, res) => {
+router.get('/company/:companyId/analytics', authenticateJWT, async (req, res) => {
   try {
     const { companyId } = req.params;
 
@@ -428,7 +428,7 @@ router.get('/company/:companyId/analytics', authenticateSingleSession, async (re
  * 📥 BULK IMPORT Q&AS
  * Used by the "Import" functionality in the frontend
  */
-router.post('/company/:companyId/bulk-import', authenticateSingleSession, async (req, res) => {
+router.post('/company/:companyId/bulk-import', authenticateJWT, async (req, res) => {
   try {
     const { companyId } = req.params;
     const { qnas } = req.body;

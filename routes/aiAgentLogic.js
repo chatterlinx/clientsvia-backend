@@ -36,7 +36,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticateSingleSession } = require('../middleware/auth'); // Use single session auth
+const { authenticateJWT, authenticateSingleSession } = require('../middleware/auth'); // Use both auth types
 const ClientsViaIntelligenceEngine = require('../services/clientsViaIntelligenceEngine');
 const Company = require('../models/Company');
 
@@ -66,7 +66,7 @@ const companyKnowledgeService = new CompanyKnowledgeService();
  * Cache: Redis key: ai-settings:company:{id}
  * TTL: 300 seconds (5 minutes) for configuration data
  */
-router.get('/admin/:companyID/ai-settings', authenticateSingleSession, async (req, res) => {
+router.get('/admin/:companyID/ai-settings', authenticateJWT, async (req, res) => {
     try {
         const { companyID } = req.params;
         
@@ -134,7 +134,7 @@ router.get('/admin/:companyID/ai-settings', authenticateSingleSession, async (re
  * PUT /api/admin/:companyID/ai-settings
  * Update AI settings for a specific company (Blueprint compliance)
  */
-router.put('/admin/:companyID/ai-settings', authenticateSingleSession, async (req, res) => {
+router.put('/admin/:companyID/ai-settings', authenticateJWT, async (req, res) => {
     try {
         const { companyID } = req.params;
         const updates = req.body;
