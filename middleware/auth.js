@@ -36,13 +36,21 @@ async function authenticateJWT(req, res, next) {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('🔍 AUTH CHECKPOINT: JWT decoded successfully, userId:', decoded.userId);
+    
     const user = await User.findById(decoded.userId).populate('companyId');
+    console.log('🔍 AUTH CHECKPOINT: User found:', !!user);
+    console.log('🔍 AUTH CHECKPOINT: User companyId field:', user?.companyId);
+    console.log('🔍 AUTH CHECKPOINT: User companyId type:', typeof user?.companyId);
+    console.log('🔍 AUTH CHECKPOINT: User status:', user?.status);
     
     if (!user || user.status !== 'active') {
+      console.error('❌ AUTH CHECKPOINT: User not found or inactive');
       return res.status(401).json({ message: 'User not found or inactive' });
     }
 
     req.user = user;
+    console.log('✅ AUTH CHECKPOINT: Authentication successful, user attached to request');
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Invalid token' });

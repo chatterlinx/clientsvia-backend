@@ -74,13 +74,39 @@ router.get('/company/:companyId/qnas', authenticateJWT, async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
-    // Validate company access
-    if (!req.user.emergency && req.user.companyId.toString() !== companyId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied to this company data'
-      });
+    // Validate company access with enhanced null checking
+    console.log('🔍 CHECKPOINT: Validating company access for GET request');
+    console.log('🔍 CHECKPOINT: req.user.emergency:', req.user.emergency);
+    console.log('🔍 CHECKPOINT: req.user.companyId:', req.user.companyId);
+    console.log('🔍 CHECKPOINT: typeof req.user.companyId:', typeof req.user.companyId);
+    console.log('🔍 CHECKPOINT: companyId from params:', companyId);
+    
+    // Enhanced company access validation with null safety
+    if (!req.user.emergency) {
+      const userCompanyId = req.user.companyId?.toString() || req.user.companyId;
+      
+      if (!userCompanyId) {
+        console.error('❌ CRITICAL: User has no companyId - possible data corruption');
+        return res.status(403).json({
+          success: false,
+          error: 'User not associated with any company',
+          checkpoint: 'User missing companyId field - check User model population'
+        });
+      }
+      
+      if (userCompanyId !== companyId) {
+        console.error('❌ CRITICAL: Company access denied');
+        console.error('❌ CHECKPOINT: User company:', userCompanyId);
+        console.error('❌ CHECKPOINT: Requested company:', companyId);
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied to this company data',
+          checkpoint: 'Company ID mismatch'
+        });
+      }
     }
+    
+    console.log('✅ CHECKPOINT: Company access validation passed for GET request');
 
     logger.info(`📋 Fetching Q&As for company ${companyId}`, {
       userId: req.user._id,
@@ -153,12 +179,27 @@ router.post('/company/:companyId/qnas', authenticateJWT, async (req, res) => {
     const { companyId } = req.params;
     const qnaData = req.body;
 
-    // Validate company access
-    if (!req.user.emergency && req.user.companyId.toString() !== companyId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied to this company data'
-      });
+    // Validate company access with enhanced null checking
+    if (!req.user.emergency) {
+      const userCompanyId = req.user.companyId?.toString() || req.user.companyId;
+      
+      if (!userCompanyId) {
+        console.error('❌ CRITICAL: User has no companyId - possible data corruption');
+        return res.status(403).json({
+          success: false,
+          error: 'User not associated with any company',
+          checkpoint: 'User missing companyId field - check User model population'
+        });
+      }
+      
+      if (userCompanyId !== companyId) {
+        console.error('❌ CRITICAL: Company access denied');
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied to this company data',
+          checkpoint: 'Company ID mismatch'
+        });
+      }
     }
 
     // Validate required fields
@@ -246,12 +287,27 @@ router.put('/company/:companyId/qnas/:id', authenticateJWT, async (req, res) => 
     const { companyId, id } = req.params;
     const updateData = req.body;
 
-    // Validate company access
-    if (!req.user.emergency && req.user.companyId.toString() !== companyId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied to this company data'
-      });
+    // Validate company access with enhanced null checking
+    if (!req.user.emergency) {
+      const userCompanyId = req.user.companyId?.toString() || req.user.companyId;
+      
+      if (!userCompanyId) {
+        console.error('❌ CRITICAL: User has no companyId - possible data corruption');
+        return res.status(403).json({
+          success: false,
+          error: 'User not associated with any company',
+          checkpoint: 'User missing companyId field - check User model population'
+        });
+      }
+      
+      if (userCompanyId !== companyId) {
+        console.error('❌ CRITICAL: Company access denied');
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied to this company data',
+          checkpoint: 'Company ID mismatch'
+        });
+      }
     }
 
     logger.info(`✏️ Updating Q&A ${id} for company ${companyId}`, {
@@ -299,12 +355,27 @@ router.delete('/company/:companyId/qnas/:id', authenticateJWT, async (req, res) 
   try {
     const { companyId, id } = req.params;
 
-    // Validate company access
-    if (!req.user.emergency && req.user.companyId.toString() !== companyId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied to this company data'
-      });
+    // Validate company access with enhanced null checking
+    if (!req.user.emergency) {
+      const userCompanyId = req.user.companyId?.toString() || req.user.companyId;
+      
+      if (!userCompanyId) {
+        console.error('❌ CRITICAL: User has no companyId - possible data corruption');
+        return res.status(403).json({
+          success: false,
+          error: 'User not associated with any company',
+          checkpoint: 'User missing companyId field - check User model population'
+        });
+      }
+      
+      if (userCompanyId !== companyId) {
+        console.error('❌ CRITICAL: Company access denied');
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied to this company data',
+          checkpoint: 'Company ID mismatch'
+        });
+      }
     }
 
     logger.info(`🗑️ Deleting Q&A ${id} for company ${companyId}`, {
@@ -347,12 +418,27 @@ router.get('/company/:companyId/search', authenticateJWT, async (req, res) => {
     const { companyId } = req.params;
     const { query, limit = 10, minConfidence = 0.7 } = req.query;
 
-    // Validate company access
-    if (!req.user.emergency && req.user.companyId.toString() !== companyId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied to this company data'
-      });
+    // Validate company access with enhanced null checking
+    if (!req.user.emergency) {
+      const userCompanyId = req.user.companyId?.toString() || req.user.companyId;
+      
+      if (!userCompanyId) {
+        console.error('❌ CRITICAL: User has no companyId - possible data corruption');
+        return res.status(403).json({
+          success: false,
+          error: 'User not associated with any company',
+          checkpoint: 'User missing companyId field - check User model population'
+        });
+      }
+      
+      if (userCompanyId !== companyId) {
+        console.error('❌ CRITICAL: Company access denied');
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied to this company data',
+          checkpoint: 'Company ID mismatch'
+        });
+      }
     }
 
     if (!query) {
@@ -406,12 +492,27 @@ router.get('/company/:companyId/analytics', authenticateJWT, async (req, res) =>
   try {
     const { companyId } = req.params;
 
-    // Validate company access
-    if (!req.user.emergency && req.user.companyId.toString() !== companyId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied to this company data'
-      });
+    // Validate company access with enhanced null checking
+    if (!req.user.emergency) {
+      const userCompanyId = req.user.companyId?.toString() || req.user.companyId;
+      
+      if (!userCompanyId) {
+        console.error('❌ CRITICAL: User has no companyId - possible data corruption');
+        return res.status(403).json({
+          success: false,
+          error: 'User not associated with any company',
+          checkpoint: 'User missing companyId field - check User model population'
+        });
+      }
+      
+      if (userCompanyId !== companyId) {
+        console.error('❌ CRITICAL: Company access denied');
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied to this company data',
+          checkpoint: 'Company ID mismatch'
+        });
+      }
     }
 
     logger.info(`📈 Fetching analytics for company ${companyId}`, {
@@ -472,12 +573,27 @@ router.post('/company/:companyId/bulk-import', authenticateJWT, async (req, res)
     const { companyId } = req.params;
     const { qnas } = req.body;
 
-    // Validate company access
-    if (!req.user.emergency && req.user.companyId.toString() !== companyId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied to this company data'
-      });
+    // Validate company access with enhanced null checking
+    if (!req.user.emergency) {
+      const userCompanyId = req.user.companyId?.toString() || req.user.companyId;
+      
+      if (!userCompanyId) {
+        console.error('❌ CRITICAL: User has no companyId - possible data corruption');
+        return res.status(403).json({
+          success: false,
+          error: 'User not associated with any company',
+          checkpoint: 'User missing companyId field - check User model population'
+        });
+      }
+      
+      if (userCompanyId !== companyId) {
+        console.error('❌ CRITICAL: Company access denied');
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied to this company data',
+          checkpoint: 'Company ID mismatch'
+        });
+      }
     }
 
     if (!qnas || !Array.isArray(qnas) || qnas.length === 0) {
