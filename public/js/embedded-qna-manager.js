@@ -16,6 +16,7 @@ class EmbeddedQnAManager {
         this.apiBaseUrl = apiBaseUrl || window.location.origin || 'http://localhost:3000';
         this.companyId = window.companyId || this.extractCompanyIdFromURL();
         this.initialized = false;
+        this.qnas = []; // Initialize qnas array for edit functionality
         
         console.log('🚀 PRODUCTION: Embedded Q&A Manager initializing...');
         console.log('🌐 API Base URL:', this.apiBaseUrl);
@@ -136,9 +137,16 @@ class EmbeddedQnAManager {
             if (loadingEl) loadingEl.classList.add('hidden');
 
             if (data.success && data.data && data.data.length > 0) {
+                // Store Q&A entries for edit functionality
+                this.qnas = data.data;
+                console.log('✅ CHECKPOINT: Q&A entries stored for edit functionality:', this.qnas.length);
+                
                 this.renderQnAEntries(data.data);
                 if (listEl) listEl.classList.remove('hidden');
             } else {
+                // Initialize empty array even when no data
+                this.qnas = [];
+                console.log('✅ CHECKPOINT: No Q&A entries - initialized empty array');
                 if (emptyEl) emptyEl.classList.remove('hidden');
             }
 
@@ -720,9 +728,18 @@ class EmbeddedQnAManager {
             console.log('🔧 CHECKPOINT: Starting Q&A edit for ID:', id);
             
             // Find the Q&A entry to edit
-            const qna = this.qnas.find(q => q._id === id);
+            console.log('🔍 CHECKPOINT: Looking for Q&A in qnas array:', !!this.qnas);
+            console.log('🔍 CHECKPOINT: qnas array length:', this.qnas?.length || 0);
+            
+            if (!this.qnas || !Array.isArray(this.qnas)) {
+                console.error('❌ CHECKPOINT: qnas array not available - reloading entries');
+                await this.loadCompanyQnAEntries();
+            }
+            
+            const qna = this.qnas?.find(q => q._id === id);
             if (!qna) {
                 console.error('❌ CHECKPOINT: Q&A entry not found for editing');
+                console.error('❌ CHECKPOINT: Available IDs:', this.qnas?.map(q => q._id) || []);
                 this.showNotification('❌ Q&A entry not found', 'error');
                 return;
             }
