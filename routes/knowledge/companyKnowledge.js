@@ -1182,6 +1182,85 @@ router.get('/company/health', async (req, res) => {
 });
 
 /**
+ * 🚨 PRODUCTION FIX: User-Company Association by Email
+ * Fixes user-company association using email (more reliable than ID)
+ * Uses Mongoose + Redis pattern for AI agent speed
+ */
+router.post('/emergency/fix-user-by-email/:email/:companyId', async (req, res) => {
+  try {
+    const { email, companyId } = req.params;
+    
+    console.log('🚨 PRODUCTION: Fixing user-company association by email');
+    console.log('🔍 Target email:', email);
+    console.log('🔍 Target company ID:', companyId);
+    
+    // Use Mongoose to find user by email
+    const User = require('../../models/User');
+    const Company = require('../../models/Company');
+    
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'User not found',
+        details: { email }
+      });
+    }
+    
+    const company = await Company.findById(companyId);
+    if (!company) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Company not found',
+        details: { companyId }
+      });
+    }
+    
+    console.log('✅ Found user:', user.email, 'Current companyId:', user.companyId);
+    console.log('✅ Found company:', company.companyName);
+    
+    // Fix the association using Mongoose
+    const oldCompanyId = user.companyId;
+    user.companyId = companyId;
+    await user.save();
+    
+    // Clear Redis cache following established pattern
+    const { redisClient } = require('../../clients');
+    try {
+      await redisClient.del(`user:${user._id}`);
+      console.log(`🗑️ CACHE CLEARED: user:${user._id} - Association fixed`);
+    } catch (cacheError) {
+      console.warn(`⚠️ Cache clear failed for user:${user._id}:`, cacheError.message);
+    }
+    
+    // Verify the fix
+    const verifyUser = await User.findById(user._id).populate('companyId');
+    
+    console.log('🎉 SUCCESS: User-company association fixed by email');
+    
+    res.json({
+      success: true,
+      message: 'User-company association fixed - Knowledge Base should now work',
+      userEmail: user.email,
+      userId: user._id,
+      oldCompanyId: oldCompanyId,
+      newCompanyId: companyId,
+      companyName: company.companyName,
+      associationFixed: !!verifyUser.companyId,
+      nextStep: 'Test Knowledge Base save - should now work without 403 errors'
+    });
+    
+  } catch (error) {
+    console.error('❌ PRODUCTION: Fix by email failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fix user-company association by email',
+      details: error.message
+    });
+  }
+});
+
+/**
  * 🚨 EMERGENCY FIX: User-Company Association
  * Fixes the critical issue where user.companyId is null
  * Uses Mongoose + Redis pattern for AI agent speed
