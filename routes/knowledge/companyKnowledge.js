@@ -33,6 +33,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateJWT, authenticateSingleSession } = require('../../middleware/auth');
 const CompanyKnowledgeService = require('../../services/knowledge/CompanyKnowledgeService');
+const CompanyQnA = require('../../models/knowledge/CompanyQnA'); // For emergency fixes
 const winston = require('winston');
 
 // Initialize service and logger
@@ -1334,6 +1335,55 @@ router.post('/emergency/fix-user-company/:userId/:companyId', async (req, res) =
     res.status(500).json({
       success: false,
       error: 'Failed to fix user-company association',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * 🚨 EMERGENCY: Restore All Q&A Entries to Active Status
+ * Critical fix when all Q&A entries become invisible to AI agent
+ */
+router.post('/emergency/restore-active-status/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    
+    console.log('🚨 EMERGENCY: Restoring all Q&A entries to active status');
+    console.log('🚨 CHECKPOINT: Company ID:', companyId);
+    
+    // Update ALL Q&A entries for this company to active status
+    const result = await CompanyQnA.updateMany(
+      { companyId: companyId },
+      { 
+        status: 'active',
+        lastModified: new Date()
+      }
+    );
+    
+    console.log('✅ EMERGENCY: Updated Q&A entries:', result.modifiedCount);
+    
+    // Clear Redis cache to ensure fresh data
+    const { redisClient } = require('../../clients');
+    try {
+      await redisClient.del(`knowledge:company:${companyId}:*`);
+      console.log('🗑️ CACHE CLEARED: All knowledge cache for company');
+    } catch (cacheError) {
+      console.warn('⚠️ Cache clear failed:', cacheError.message);
+    }
+    
+    res.json({
+      success: true,
+      message: 'All Q&A entries restored to active status',
+      entriesUpdated: result.modifiedCount,
+      companyId: companyId,
+      nextStep: 'Refresh Knowledge Sources tab - all entries should now be visible and usable by AI agent'
+    });
+    
+  } catch (error) {
+    console.error('❌ EMERGENCY: Failed to restore Q&A entries:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to restore Q&A entries to active status',
       details: error.message
     });
   }
