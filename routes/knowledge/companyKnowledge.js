@@ -267,11 +267,50 @@ router.post('/company/:companyId/qnas', authenticateJWT, async (req, res) => {
       }
       
       if (userCompanyId !== companyId) {
-        console.error('❌ CRITICAL: Company access denied');
+        console.error('❌ CRITICAL: Company ID mismatch - FULL DEBUGGING INFO:');
+        console.error('❌ CHECKPOINT: User companyId:', userCompanyId);
+        console.error('❌ CHECKPOINT: Requested companyId:', companyId);
+        console.error('❌ CHECKPOINT: User ID:', req.user._id);
+        console.error('❌ CHECKPOINT: User email:', req.user.email);
+        console.error('❌ CHECKPOINT: User object companyId field:', req.user.companyId);
+        console.error('❌ CHECKPOINT: User object companyId type:', typeof req.user.companyId);
+        
+        // Check if this is a known user who should have access
+        const knownUserCompanyCombinations = [
+          { userId: '688bdd8b2f0ec14cfaf88139', companyId: '68813026dd95f599c74e49c7' }
+        ];
+        
+        const shouldHaveAccess = knownUserCompanyCombinations.some(combo => 
+          combo.userId === req.user._id.toString() && combo.companyId === companyId
+        );
+        
+        if (shouldHaveAccess) {
+          console.error('🚨 CRITICAL: Known user should have access but company IDs don\'t match!');
+          console.error('🚨 CHECKPOINT: This indicates the auto-fix didn\'t work properly');
+          console.error('🚨 CHECKPOINT: Manual intervention required');
+          
+          return res.status(403).json({
+            success: false,
+            error: 'User-company association needs manual fix',
+            checkpoint: 'Auto-fix failed - known user has wrong companyId',
+            details: {
+              userCompanyId,
+              requestedCompanyId: companyId,
+              userId: req.user._id,
+              userEmail: req.user.email,
+              autoFixNeeded: true
+            }
+          });
+        }
+        
         return res.status(403).json({
           success: false,
           error: 'Access denied to this company data',
-          checkpoint: 'Company ID mismatch'
+          checkpoint: 'Company ID mismatch - user belongs to different company',
+          details: {
+            userCompanyId,
+            requestedCompanyId: companyId
+          }
         });
       }
     }
@@ -412,11 +451,50 @@ router.put('/company/:companyId/qnas/:id', authenticateJWT, async (req, res) => 
       }
       
       if (userCompanyId !== companyId) {
-        console.error('❌ CRITICAL: Company access denied');
+        console.error('❌ CRITICAL: Company ID mismatch - FULL DEBUGGING INFO:');
+        console.error('❌ CHECKPOINT: User companyId:', userCompanyId);
+        console.error('❌ CHECKPOINT: Requested companyId:', companyId);
+        console.error('❌ CHECKPOINT: User ID:', req.user._id);
+        console.error('❌ CHECKPOINT: User email:', req.user.email);
+        console.error('❌ CHECKPOINT: User object companyId field:', req.user.companyId);
+        console.error('❌ CHECKPOINT: User object companyId type:', typeof req.user.companyId);
+        
+        // Check if this is a known user who should have access
+        const knownUserCompanyCombinations = [
+          { userId: '688bdd8b2f0ec14cfaf88139', companyId: '68813026dd95f599c74e49c7' }
+        ];
+        
+        const shouldHaveAccess = knownUserCompanyCombinations.some(combo => 
+          combo.userId === req.user._id.toString() && combo.companyId === companyId
+        );
+        
+        if (shouldHaveAccess) {
+          console.error('🚨 CRITICAL: Known user should have access but company IDs don\'t match!');
+          console.error('🚨 CHECKPOINT: This indicates the auto-fix didn\'t work properly');
+          console.error('🚨 CHECKPOINT: Manual intervention required');
+          
+          return res.status(403).json({
+            success: false,
+            error: 'User-company association needs manual fix',
+            checkpoint: 'Auto-fix failed - known user has wrong companyId',
+            details: {
+              userCompanyId,
+              requestedCompanyId: companyId,
+              userId: req.user._id,
+              userEmail: req.user.email,
+              autoFixNeeded: true
+            }
+          });
+        }
+        
         return res.status(403).json({
           success: false,
           error: 'Access denied to this company data',
-          checkpoint: 'Company ID mismatch'
+          checkpoint: 'Company ID mismatch - user belongs to different company',
+          details: {
+            userCompanyId,
+            requestedCompanyId: companyId
+          }
         });
       }
     }
@@ -517,11 +595,50 @@ router.delete('/company/:companyId/qnas/:id', authenticateJWT, async (req, res) 
       }
       
       if (userCompanyId !== companyId) {
-        console.error('❌ CRITICAL: Company access denied');
+        console.error('❌ CRITICAL: Company ID mismatch - FULL DEBUGGING INFO:');
+        console.error('❌ CHECKPOINT: User companyId:', userCompanyId);
+        console.error('❌ CHECKPOINT: Requested companyId:', companyId);
+        console.error('❌ CHECKPOINT: User ID:', req.user._id);
+        console.error('❌ CHECKPOINT: User email:', req.user.email);
+        console.error('❌ CHECKPOINT: User object companyId field:', req.user.companyId);
+        console.error('❌ CHECKPOINT: User object companyId type:', typeof req.user.companyId);
+        
+        // Check if this is a known user who should have access
+        const knownUserCompanyCombinations = [
+          { userId: '688bdd8b2f0ec14cfaf88139', companyId: '68813026dd95f599c74e49c7' }
+        ];
+        
+        const shouldHaveAccess = knownUserCompanyCombinations.some(combo => 
+          combo.userId === req.user._id.toString() && combo.companyId === companyId
+        );
+        
+        if (shouldHaveAccess) {
+          console.error('🚨 CRITICAL: Known user should have access but company IDs don\'t match!');
+          console.error('🚨 CHECKPOINT: This indicates the auto-fix didn\'t work properly');
+          console.error('🚨 CHECKPOINT: Manual intervention required');
+          
+          return res.status(403).json({
+            success: false,
+            error: 'User-company association needs manual fix',
+            checkpoint: 'Auto-fix failed - known user has wrong companyId',
+            details: {
+              userCompanyId,
+              requestedCompanyId: companyId,
+              userId: req.user._id,
+              userEmail: req.user.email,
+              autoFixNeeded: true
+            }
+          });
+        }
+        
         return res.status(403).json({
           success: false,
           error: 'Access denied to this company data',
-          checkpoint: 'Company ID mismatch'
+          checkpoint: 'Company ID mismatch - user belongs to different company',
+          details: {
+            userCompanyId,
+            requestedCompanyId: companyId
+          }
         });
       }
     }
@@ -617,11 +734,50 @@ router.get('/company/:companyId/search', authenticateJWT, async (req, res) => {
       }
       
       if (userCompanyId !== companyId) {
-        console.error('❌ CRITICAL: Company access denied');
+        console.error('❌ CRITICAL: Company ID mismatch - FULL DEBUGGING INFO:');
+        console.error('❌ CHECKPOINT: User companyId:', userCompanyId);
+        console.error('❌ CHECKPOINT: Requested companyId:', companyId);
+        console.error('❌ CHECKPOINT: User ID:', req.user._id);
+        console.error('❌ CHECKPOINT: User email:', req.user.email);
+        console.error('❌ CHECKPOINT: User object companyId field:', req.user.companyId);
+        console.error('❌ CHECKPOINT: User object companyId type:', typeof req.user.companyId);
+        
+        // Check if this is a known user who should have access
+        const knownUserCompanyCombinations = [
+          { userId: '688bdd8b2f0ec14cfaf88139', companyId: '68813026dd95f599c74e49c7' }
+        ];
+        
+        const shouldHaveAccess = knownUserCompanyCombinations.some(combo => 
+          combo.userId === req.user._id.toString() && combo.companyId === companyId
+        );
+        
+        if (shouldHaveAccess) {
+          console.error('🚨 CRITICAL: Known user should have access but company IDs don\'t match!');
+          console.error('🚨 CHECKPOINT: This indicates the auto-fix didn\'t work properly');
+          console.error('🚨 CHECKPOINT: Manual intervention required');
+          
+          return res.status(403).json({
+            success: false,
+            error: 'User-company association needs manual fix',
+            checkpoint: 'Auto-fix failed - known user has wrong companyId',
+            details: {
+              userCompanyId,
+              requestedCompanyId: companyId,
+              userId: req.user._id,
+              userEmail: req.user.email,
+              autoFixNeeded: true
+            }
+          });
+        }
+        
         return res.status(403).json({
           success: false,
           error: 'Access denied to this company data',
-          checkpoint: 'Company ID mismatch'
+          checkpoint: 'Company ID mismatch - user belongs to different company',
+          details: {
+            userCompanyId,
+            requestedCompanyId: companyId
+          }
         });
       }
     }
@@ -728,11 +884,50 @@ router.get('/company/:companyId/analytics', authenticateJWT, async (req, res) =>
       }
       
       if (userCompanyId !== companyId) {
-        console.error('❌ CRITICAL: Company access denied');
+        console.error('❌ CRITICAL: Company ID mismatch - FULL DEBUGGING INFO:');
+        console.error('❌ CHECKPOINT: User companyId:', userCompanyId);
+        console.error('❌ CHECKPOINT: Requested companyId:', companyId);
+        console.error('❌ CHECKPOINT: User ID:', req.user._id);
+        console.error('❌ CHECKPOINT: User email:', req.user.email);
+        console.error('❌ CHECKPOINT: User object companyId field:', req.user.companyId);
+        console.error('❌ CHECKPOINT: User object companyId type:', typeof req.user.companyId);
+        
+        // Check if this is a known user who should have access
+        const knownUserCompanyCombinations = [
+          { userId: '688bdd8b2f0ec14cfaf88139', companyId: '68813026dd95f599c74e49c7' }
+        ];
+        
+        const shouldHaveAccess = knownUserCompanyCombinations.some(combo => 
+          combo.userId === req.user._id.toString() && combo.companyId === companyId
+        );
+        
+        if (shouldHaveAccess) {
+          console.error('🚨 CRITICAL: Known user should have access but company IDs don\'t match!');
+          console.error('🚨 CHECKPOINT: This indicates the auto-fix didn\'t work properly');
+          console.error('🚨 CHECKPOINT: Manual intervention required');
+          
+          return res.status(403).json({
+            success: false,
+            error: 'User-company association needs manual fix',
+            checkpoint: 'Auto-fix failed - known user has wrong companyId',
+            details: {
+              userCompanyId,
+              requestedCompanyId: companyId,
+              userId: req.user._id,
+              userEmail: req.user.email,
+              autoFixNeeded: true
+            }
+          });
+        }
+        
         return res.status(403).json({
           success: false,
           error: 'Access denied to this company data',
-          checkpoint: 'Company ID mismatch'
+          checkpoint: 'Company ID mismatch - user belongs to different company',
+          details: {
+            userCompanyId,
+            requestedCompanyId: companyId
+          }
         });
       }
     }
@@ -846,11 +1041,50 @@ router.post('/company/:companyId/bulk-import', authenticateJWT, async (req, res)
       }
       
       if (userCompanyId !== companyId) {
-        console.error('❌ CRITICAL: Company access denied');
+        console.error('❌ CRITICAL: Company ID mismatch - FULL DEBUGGING INFO:');
+        console.error('❌ CHECKPOINT: User companyId:', userCompanyId);
+        console.error('❌ CHECKPOINT: Requested companyId:', companyId);
+        console.error('❌ CHECKPOINT: User ID:', req.user._id);
+        console.error('❌ CHECKPOINT: User email:', req.user.email);
+        console.error('❌ CHECKPOINT: User object companyId field:', req.user.companyId);
+        console.error('❌ CHECKPOINT: User object companyId type:', typeof req.user.companyId);
+        
+        // Check if this is a known user who should have access
+        const knownUserCompanyCombinations = [
+          { userId: '688bdd8b2f0ec14cfaf88139', companyId: '68813026dd95f599c74e49c7' }
+        ];
+        
+        const shouldHaveAccess = knownUserCompanyCombinations.some(combo => 
+          combo.userId === req.user._id.toString() && combo.companyId === companyId
+        );
+        
+        if (shouldHaveAccess) {
+          console.error('🚨 CRITICAL: Known user should have access but company IDs don\'t match!');
+          console.error('🚨 CHECKPOINT: This indicates the auto-fix didn\'t work properly');
+          console.error('🚨 CHECKPOINT: Manual intervention required');
+          
+          return res.status(403).json({
+            success: false,
+            error: 'User-company association needs manual fix',
+            checkpoint: 'Auto-fix failed - known user has wrong companyId',
+            details: {
+              userCompanyId,
+              requestedCompanyId: companyId,
+              userId: req.user._id,
+              userEmail: req.user.email,
+              autoFixNeeded: true
+            }
+          });
+        }
+        
         return res.status(403).json({
           success: false,
           error: 'Access denied to this company data',
-          checkpoint: 'Company ID mismatch'
+          checkpoint: 'Company ID mismatch - user belongs to different company',
+          details: {
+            userCompanyId,
+            requestedCompanyId: companyId
+          }
         });
       }
     }

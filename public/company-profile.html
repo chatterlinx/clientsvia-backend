@@ -6591,27 +6591,41 @@
                 }
                 
                 categories.forEach(category => {
-                    // Add to dropdown
-                    const option = document.createElement('option');
-                    option.value = category.name;
-                    const qaCount = category.qnas ? category.qnas.length : 0;
-                    option.textContent = `${category.name} (${qaCount} Q&As)`;
-                    selector.appendChild(option);
+                    console.log('🔍 CHECKPOINT: Processing trade category:', category.name);
                     
-                    // Add to checkboxes
-                    const checkboxDiv = document.createElement('div');
-                    checkboxDiv.className = 'flex items-center space-x-3 p-2 hover:bg-gray-100 rounded';
-                    checkboxDiv.innerHTML = `
-                        <input type="checkbox" 
-                               id="trade-cat-${category.name}" 
-                               value="${category.name}" 
-                               onchange="handleTradeCheckboxChange()"
-                               class="form-checkbox h-4 w-4 text-blue-600">
-                        <label for="trade-cat-${category.name}" class="flex-1 text-sm text-gray-700 cursor-pointer">
-                            ${category.name} <span class="text-gray-500">(${qaCount} Q&As)</span>
-                        </label>
-                    `;
-                    checkboxContainer.appendChild(checkboxDiv);
+                    // Add to dropdown (only if selector exists)
+                    if (selector) {
+                        console.log('✅ CHECKPOINT: Adding to dropdown selector');
+                        const option = document.createElement('option');
+                        option.value = category.name;
+                        const qaCount = category.qnas ? category.qnas.length : 0;
+                        option.textContent = `${category.name} (${qaCount} Q&As)`;
+                        selector.appendChild(option);
+                    } else {
+                        console.log('⚠️ CHECKPOINT: Skipping dropdown - selector is null');
+                    }
+                    
+                    // Add to checkboxes (with enhanced error checking)
+                    if (checkboxContainer) {
+                        console.log('✅ CHECKPOINT: Adding to checkbox container');
+                        const checkboxDiv = document.createElement('div');
+                        checkboxDiv.className = 'flex items-center space-x-3 p-2 hover:bg-gray-100 rounded';
+                        checkboxDiv.innerHTML = `
+                            <input type="checkbox" 
+                                   id="trade-cat-${category.name}" 
+                                   value="${category.name}" 
+                                   onchange="handleTradeCheckboxChange()"
+                                   class="form-checkbox h-4 w-4 text-blue-600">
+                            <label for="trade-cat-${category.name}" class="flex-1 text-sm text-gray-700 cursor-pointer">
+                                ${category.name} <span class="text-gray-500">(${category.qnas?.length || 0} Q&As)</span>
+                            </label>
+                        `;
+                        checkboxContainer.appendChild(checkboxDiv);
+                        console.log('✅ CHECKPOINT: Checkbox added successfully for:', category.name);
+                    } else {
+                        console.error('❌ CRITICAL CHECKPOINT: checkboxContainer is null - cannot add checkbox');
+                        console.error('❌ CHECKPOINT: This should not happen - container was validated above');
+                    }
                 });
                 
 
