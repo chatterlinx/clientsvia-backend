@@ -13,33 +13,45 @@ const express = require('express');
 const router = express.Router();
 const Company = require('../models/Company');
 const { ObjectId } = require('mongodb');
-const { authenticateSingleSession } = require('../middleware/auth');
+const { authenticateJWT, authenticateSingleSession } = require('../middleware/auth');
 
 // ===============================================
 // 🚀 GET ENTERPRISE AI INTELLIGENCE SETTINGS
 // ===============================================
 
-router.get('/companies/:companyId/enterprise-ai-settings', authenticateSingleSession, async (req, res) => {
+router.get('/companies/:companyId/enterprise-ai-settings', authenticateJWT, async (req, res) => {
     try {
+        console.log('🏢 CHECKPOINT: Enterprise AI settings endpoint called');
+        console.log('🏢 CHECKPOINT: Company ID:', req.params.companyId);
+        
         const { companyId } = req.params;
         
         if (!ObjectId.isValid(companyId)) {
+            console.error('❌ CHECKPOINT: Invalid company ID format for Enterprise AI');
             return res.status(400).json({ 
                 success: false, 
-                error: 'Invalid company ID format' 
+                error: 'Invalid company ID format',
+                checkpoint: 'Enterprise AI company ID validation failed',
+                details: { companyId, expectedFormat: 'MongoDB ObjectId (24 chars)' }
             });
         }
 
-        logger.info('Enterprise AI settings requested', { companyId });
+        console.log('🏢 CHECKPOINT: Looking up company for Enterprise AI settings');
 
         const company = await Company.findById(companyId).select('enterpriseAIIntelligence tradeCategories');
 
         if (!company) {
+            console.error('❌ CHECKPOINT: Company not found for Enterprise AI');
             return res.status(404).json({ 
                 success: false, 
-                error: 'Company not found' 
+                error: 'Company not found',
+                checkpoint: 'Enterprise AI company lookup failed',
+                details: { companyId }
             });
         }
+
+        console.log('✅ CHECKPOINT: Company found for Enterprise AI:', company.companyName || 'Unnamed');
+        console.log('🏢 CHECKPOINT: Has existing Enterprise AI settings:', !!company.enterpriseAIIntelligence);
 
         // Return enterprise AI settings with production defaults if not set
         const enterpriseSettings = company.enterpriseAIIntelligence || getEnterpriseDefaults();
@@ -47,21 +59,36 @@ router.get('/companies/:companyId/enterprise-ai-settings', authenticateSingleSes
         // Include trade categories for frontend weight configuration
         const tradeCategories = company.tradeCategories || [];
 
-        logger.info('Enterprise AI settings retrieved successfully', { companyId });
+        console.log('✅ CHECKPOINT: Enterprise AI settings prepared successfully');
+        console.log('🏢 CHECKPOINT: Settings include', Object.keys(enterpriseSettings).length, 'configuration sections');
 
         res.json({ 
             success: true, 
             settings: enterpriseSettings,
             tradeCategories: tradeCategories,
-            configVersion: enterpriseSettings.configVersion || '1.0.0'
+            configVersion: enterpriseSettings.configVersion || '1.0.0',
+            timestamp: new Date().toISOString()
         });
 
     } catch (error) {
-        logger.error('Enterprise AI settings retrieval error', { error: error.message, companyId });
+        // NEVER mask errors - enhance with comprehensive checkpoints
+        console.error('❌ CRITICAL: Enterprise AI settings endpoint failed - FULL ERROR DETAILS:');
+        console.error('❌ CHECKPOINT: Error message:', error.message);
+        console.error('❌ CHECKPOINT: Error stack:', error.stack);
+        console.error('❌ CHECKPOINT: Error name:', error.name);
+        console.error('❌ CHECKPOINT: Request details:', {
+            companyId: req.params.companyId,
+            method: req.method,
+            url: req.originalUrl,
+            userAgent: req.headers['user-agent']
+        });
+        
         res.status(500).json({ 
             success: false, 
             error: 'Failed to get enterprise AI settings',
-            details: error.message 
+            details: error.message,
+            checkpoint: 'Enterprise AI settings route error - check server logs for full details',
+            timestamp: new Date().toISOString()
         });
     }
 });
@@ -70,7 +97,7 @@ router.get('/companies/:companyId/enterprise-ai-settings', authenticateSingleSes
 // 🚀 UPDATE ENTERPRISE AI INTELLIGENCE SETTINGS
 // ===============================================
 
-router.put('/companies/:companyId/enterprise-ai-settings', authenticateSingleSession, async (req, res) => {
+router.put('/companies/:companyId/enterprise-ai-settings', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { enterpriseAISettings } = req.body;
@@ -179,7 +206,7 @@ router.get('/enterprise-ai-defaults', (req, res) => {
 // 🚀 VALIDATE ENTERPRISE CONFIGURATION
 // ===============================================
 
-router.post('/companies/:companyId/validate-ai-config', authenticateSingleSession, async (req, res) => {
+router.post('/companies/:companyId/validate-ai-config', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         const { config } = req.body;
@@ -223,7 +250,7 @@ router.post('/companies/:companyId/validate-ai-config', authenticateSingleSessio
 // 🚀 RESET TO ENTERPRISE DEFAULTS
 // ===============================================
 
-router.post('/companies/:companyId/reset-enterprise-ai', authenticateSingleSession, async (req, res) => {
+router.post('/companies/:companyId/reset-enterprise-ai', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         
