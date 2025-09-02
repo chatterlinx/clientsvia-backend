@@ -713,11 +713,176 @@ class EmbeddedQnAManager {
     }
     
     /**
-     * Edit Q&A entry
+     * Edit Q&A entry - Full implementation with Mongoose + Redis pattern
      */
-    editEntry(id) {
-        console.log('🔧 Edit Q&A entry:', id);
-        this.showNotification('⚠️ Edit functionality coming soon!', 'info');
+    async editEntry(id) {
+        try {
+            console.log('🔧 CHECKPOINT: Starting Q&A edit for ID:', id);
+            
+            // Find the Q&A entry to edit
+            const qna = this.qnas.find(q => q._id === id);
+            if (!qna) {
+                console.error('❌ CHECKPOINT: Q&A entry not found for editing');
+                this.showNotification('❌ Q&A entry not found', 'error');
+                return;
+            }
+            
+            console.log('✅ CHECKPOINT: Q&A entry found for editing:', qna.question.substring(0, 50));
+            
+            // Create edit modal HTML
+            const editModalHtml = `
+                <div id="edit-qna-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                        <div class="p-6">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800">
+                                    <i class="fas fa-edit mr-2 text-blue-600"></i>Edit Q&A Entry
+                                </h3>
+                                <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-times text-xl"></i>
+                                </button>
+                            </div>
+                            
+                            <form id="edit-qna-form" onsubmit="saveEditedQnA(event, '${id}')">
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Question</label>
+                                        <input type="text" id="edit-question" value="${qna.question.replace(/"/g, '&quot;')}" 
+                                               class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                               required>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Answer</label>
+                                        <textarea id="edit-answer" rows="4" 
+                                                  class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                  required>${qna.answer}</textarea>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                                        <select id="edit-category" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <option value="general" ${qna.category === 'general' ? 'selected' : ''}>General</option>
+                                            <option value="pricing" ${qna.category === 'pricing' ? 'selected' : ''}>Pricing</option>
+                                            <option value="services" ${qna.category === 'services' ? 'selected' : ''}>Services</option>
+                                            <option value="technical" ${qna.category === 'technical' ? 'selected' : ''}>Technical</option>
+                                            <option value="emergency" ${qna.category === 'emergency' ? 'selected' : ''}>Emergency</option>
+                                            <option value="scheduling" ${qna.category === 'scheduling' ? 'selected' : ''}>Scheduling</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex justify-end space-x-3 mt-6 pt-4 border-t">
+                                    <button type="button" onclick="closeEditModal()" 
+                                            class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" 
+                                            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md transition-colors">
+                                        <i class="fas fa-save mr-2"></i>Save Changes
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Add modal to page
+            document.body.insertAdjacentHTML('beforeend', editModalHtml);
+            
+            console.log('✅ CHECKPOINT: Edit modal created and displayed');
+            
+        } catch (error) {
+            console.error('❌ CRITICAL: Edit modal creation failed:', error);
+            this.showNotification('❌ Failed to open edit dialog', 'error');
+        }
+    }
+    
+    /**
+     * Save edited Q&A entry using Mongoose + Redis pattern
+     */
+    async saveEditedQnA(event, qnaId) {
+        event.preventDefault();
+        
+        try {
+            console.log('💾 CHECKPOINT: Starting Q&A edit save for ID:', qnaId);
+            
+            const question = document.getElementById('edit-question').value.trim();
+            const answer = document.getElementById('edit-answer').value.trim();
+            const category = document.getElementById('edit-category').value;
+            
+            if (!question || !answer) {
+                this.showNotification('❌ Question and answer are required', 'error');
+                return;
+            }
+            
+            console.log('💾 CHECKPOINT: Edit data collected:', { question: question.substring(0, 50), category });
+            
+            this.showLoading('Saving changes...');
+            
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            // Add authorization header
+            const token = this.getAuthToken();
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
+            console.log('💾 CHECKPOINT: Making PUT request to update Q&A');
+            
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas/${qnaId}`, {
+                method: 'PUT',
+                headers: headers,
+                credentials: 'include',
+                body: JSON.stringify({
+                    question,
+                    answer,
+                    category,
+                    lastModified: new Date()
+                })
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ CHECKPOINT: Edit save failed:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    errorBody: errorText
+                });
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+            
+            const result = await response.json();
+            console.log('✅ CHECKPOINT: Q&A edit saved successfully:', result);
+            
+            // Close modal
+            this.closeEditModal();
+            
+            // Reload Q&A list to show changes (triggers Redis cache refresh)
+            await this.loadCompanyQnAEntries();
+            
+            this.showNotification('✅ Q&A updated successfully!', 'success');
+            
+        } catch (error) {
+            console.error('❌ CRITICAL: Q&A edit save failed:', error);
+            this.showNotification('❌ Failed to save changes: ' + error.message, 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+    
+    /**
+     * Close edit modal
+     */
+    closeEditModal() {
+        const modal = document.getElementById('edit-qna-modal');
+        if (modal) {
+            modal.remove();
+            console.log('✅ CHECKPOINT: Edit modal closed');
+        }
     }
     
     /**
@@ -777,6 +942,21 @@ document.addEventListener('DOMContentLoaded', function() {
 function updateCompanyQnAThreshold(value) {
     if (embeddedQnAManager) {
         embeddedQnAManager.updateThreshold(value);
+    }
+}
+
+// Global function for closing edit modal
+function closeEditModal() {
+    if (embeddedQnAManager) {
+        embeddedQnAManager.closeEditModal();
+    }
+}
+
+// Global function for saving edited Q&A
+function saveEditedQnA(event, qnaId) {
+    event.preventDefault();
+    if (embeddedQnAManager) {
+        embeddedQnAManager.saveEditedQnA(event, qnaId);
     }
 }
 
