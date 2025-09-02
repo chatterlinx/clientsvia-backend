@@ -670,7 +670,7 @@ class EmbeddedQnAManager {
                     question,
                     answer,
                     category,
-                    isActive: true
+                    status: 'active'  // Fixed: Use 'status' field instead of 'isActive'
                 })
             });
             
@@ -787,6 +787,16 @@ class EmbeddedQnAManager {
                                             <option value="scheduling" ${qna.category === 'scheduling' ? 'selected' : ''}>Scheduling</option>
                                         </select>
                                     </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                                        <select id="edit-status" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <option value="active" ${qna.status === 'active' ? 'selected' : ''}>Active</option>
+                                            <option value="draft" ${qna.status === 'draft' ? 'selected' : ''}>Draft</option>
+                                            <option value="under_review" ${qna.status === 'under_review' ? 'selected' : ''}>Under Review</option>
+                                            <option value="archived" ${qna.status === 'archived' ? 'selected' : ''}>Archived</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 
                                 <div class="flex justify-end space-x-3 mt-6 pt-4 border-t">
@@ -828,13 +838,14 @@ class EmbeddedQnAManager {
             const question = document.getElementById('edit-question').value.trim();
             const answer = document.getElementById('edit-answer').value.trim();
             const category = document.getElementById('edit-category').value;
+            const status = document.getElementById('edit-status').value;
             
             if (!question || !answer) {
                 this.showNotification('❌ Question and answer are required', 'error');
                 return;
             }
             
-            console.log('💾 CHECKPOINT: Edit data collected:', { question: question.substring(0, 50), category });
+            console.log('💾 CHECKPOINT: Edit data collected:', { question: question.substring(0, 50), category, status });
             
             this.showLoading('Saving changes...');
             
@@ -858,6 +869,7 @@ class EmbeddedQnAManager {
                     question,
                     answer,
                     category,
+                    status,  // Include status field for proper Active/Inactive control
                     lastModified: new Date()
                 })
             });
@@ -948,12 +960,75 @@ class EmbeddedQnAManager {
     }
     
     /**
-     * Delete Q&A entry
+     * Delete Q&A entry - Full implementation with Mongoose + Redis pattern
      */
-    deleteEntry(id) {
-        if (confirm('Are you sure you want to delete this Q&A entry?')) {
-            console.log('🗑️ Delete Q&A entry:', id);
-            this.showNotification('⚠️ Delete functionality coming soon!', 'info');
+    async deleteEntry(id) {
+        try {
+            console.log('🗑️ CHECKPOINT: Starting Q&A delete for ID:', id);
+            
+            // Find the Q&A entry to delete
+            const qna = this.qnas?.find(q => q._id === id);
+            if (!qna) {
+                console.error('❌ CHECKPOINT: Q&A entry not found for deletion');
+                this.showNotification('❌ Q&A entry not found', 'error');
+                return;
+            }
+            
+            console.log('✅ CHECKPOINT: Q&A entry found for deletion:', qna.question.substring(0, 50));
+            
+            // Show confirmation dialog
+            const confirmed = confirm(`Are you sure you want to delete this Q&A?\n\nQuestion: ${qna.question}\n\nThis action cannot be undone.`);
+            
+            if (!confirmed) {
+                console.log('ℹ️ CHECKPOINT: Delete operation cancelled by user');
+                return;
+            }
+            
+            console.log('🗑️ CHECKPOINT: Delete confirmed by user, proceeding...');
+            
+            this.showLoading('Deleting Q&A entry...');
+            
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            // Add authorization header
+            const token = this.getAuthToken();
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
+            console.log('🗑️ CHECKPOINT: Making DELETE request to API');
+            
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas/${id}`, {
+                method: 'DELETE',
+                headers: headers,
+                credentials: 'include'
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ CHECKPOINT: Delete operation failed:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    errorBody: errorText
+                });
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+            
+            const result = await response.json();
+            console.log('✅ CHECKPOINT: Q&A deleted successfully:', result);
+            
+            // Reload Q&A list to show changes (triggers Redis cache refresh)
+            await this.loadCompanyQnAEntries();
+            
+            this.showNotification('✅ Q&A entry deleted successfully!', 'success');
+            
+        } catch (error) {
+            console.error('❌ CRITICAL: Q&A delete failed:', error);
+            this.showNotification('❌ Failed to delete Q&A entry: ' + error.message, 'error');
+        } finally {
+            this.hideLoading();
         }
     }
 }
