@@ -6751,7 +6751,13 @@
                         element.checked = checked;
                         console.log(`✓ Set ${id} checked = ${checked}`);
                     } else {
-                        console.warn(`⚠️ Element not found: ${id}`);
+                        // Enhanced messaging for legacy elements
+                        const legacyElements = ['agent-semanticSearchEnabled', 'agent-confidenceScoring', 'agent-autoLearningQueue'];
+                        if (legacyElements.includes(id)) {
+                            console.log(`ℹ️ CHECKPOINT: Legacy element ${id} not in current structure (this is normal)`);
+                        } else {
+                            console.warn(`⚠️ Element not found: ${id}`);
+                        }
                     }
                 };
                 
