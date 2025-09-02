@@ -208,6 +208,15 @@ const aiAgentLogicRoutes = require('./routes/aiAgentLogic');
 app.use('/api/ai-agent-logic', aiAgentLogicRoutes); // ClientsVia Intelligence Platform
 app.use('/api', aiAgentLogicRoutes); // Also mount for direct API access (includes /api/tradeqa)
 
+// Admin routes for system management
+try {
+    const adminRoutes = require('./routes/admin');
+    app.use('/api/admin', adminRoutes);
+    console.log('✅ Admin management routes loaded');
+} catch (error) {
+    console.error('❌ Failed to load admin routes:', error);
+}
+
 // Add simplified AI Agent Logic routes as fallback (no auth required for basic functionality)
 try {
     const aiAgentLogicSimpleRoutes = require('./routes/aiAgentLogicSimple');

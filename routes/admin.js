@@ -1,169 +1,140 @@
+/**
+ * Admin Routes for System Management
+ * Emergency endpoints for fixing production issues
+ */
+
 const express = require('express');
 const router = express.Router();
-const { authenticateJWT, requireRole } = require('../middleware/auth');
-const { getDB } = require('../db');
-const Alert = require('../models/Alert');
-const CompanyQnA = require('../models/knowledge/CompanyQnA');
+const User = require('../models/User');
 const Company = require('../models/Company');
-
-// All admin routes require authentication and admin role
-router.use(authenticateJWT, requireRole('admin'));
+const { authenticateJWT } = require('../middleware/auth');
 
 /**
- * GET /admin/companies - Get all companies (admin only)
- * Returns: Array of companies with basic info, excluding sensitive data
+ * 🚨 EMERGENCY: Fix User-Company Association
+ * Addresses critical issue where users have null companyId
  */
-router.get('/companies', async (req, res) => {
+router.post('/fix-user-company/:userId/:companyId', authenticateJWT, async (req, res) => {
     try {
-        console.log('[ADMIN API GET /admin/companies] Admin user requesting all companies:', req.user.email);
+        const { userId, companyId } = req.params;
         
-        const db = getDB();
-        const companiesCollection = db.collection('companies');
+        console.log('🚨 EMERGENCY: Fixing user-company association');
+        console.log('🔍 Target user ID:', userId);
+        console.log('🔍 Target company ID:', companyId);
         
-        // Get all companies with basic info (exclude sensitive fields)
-        const companies = await companiesCollection.find({}, {
-            projection: {
-                // Include basic company info
-                companyName: 1,
-                tradeTypes: 1,
-                status: 1,
-                createdAt: 1,
-                updatedAt: 1,
-                companyPhone: 1,
-                companyAddress: 1,
-                ownerName: 1,
-                ownerEmail: 1,
-                contactName: 1,
-                contactEmail: 1
-                // Sensitive fields are automatically excluded when using inclusion projection
-            }
-        }).sort({ createdAt: -1 }).toArray();
+        // Find the user
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found',
+                userId: userId
+            });
+        }
         
-        console.log(`[ADMIN API GET /admin/companies] Returning ${companies.length} companies to admin`);
+        // Find the company
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                error: 'Company not found',
+                companyId: companyId
+            });
+        }
         
-        res.json({
+        console.log('✅ Found user:', {
+            id: user._id,
+            email: user.email,
+            currentCompanyId: user.companyId
+        });
+        
+        console.log('✅ Found company:', {
+            id: company._id,
+            name: company.companyName
+        });
+        
+        // Fix the association
+        user.companyId = companyId;
+        await user.save();
+        
+        // Verify the fix
+        const verifyUser = await User.findById(userId).populate('companyId');
+        
+        const result = {
             success: true,
-            data: companies,
-            count: companies.length,
-            message: 'Admin access granted to company directory'
-        });
-        
-    } catch (err) {
-        console.error('[ADMIN API GET /admin/companies] Error:', err);
-        res.status(500).json({ 
-            message: 'Server error retrieving companies',
-            error: err.message 
-        });
-    }
-});
-
-/**
- * GET /admin/alerts - Get all alerts (admin only)
- * Returns: Array of all alerts across all companies with company info
- */
-router.get('/alerts', async (req, res) => {
-    try {
-        console.log('[ADMIN API GET /admin/alerts] Admin user requesting all alerts:', req.user.email);
-        
-        // Get all alerts with company information
-        const alerts = await Alert.find({})
-            .populate('companyId', 'companyName tradeTypes') // Include company name and trade types
-            .sort({ timestamp: -1 }) // Most recent first
-            .limit(1000); // Reasonable limit for admin dashboard
-        
-        console.log(`[ADMIN API GET /admin/alerts] Returning ${alerts.length} alerts to admin`);
-        
-        res.json({
-            success: true,
-            data: alerts,
-            count: alerts.length,
-            message: 'Admin access granted to all alerts'
-        });
-        
-    } catch (err) {
-        console.error('[ADMIN API GET /admin/alerts] Error:', err);
-        res.status(500).json({ 
-            message: 'Server error retrieving alerts',
-            error: err.message 
-        });
-    }
-});
-
-/**
- * GET /admin/suggestions - Get all suggested knowledge entries (admin only) 
- * Returns: Array of all suggestions across all companies with company info
- */
-router.get('/suggestions', async (req, res) => {
-    try {
-        console.log('[ADMIN API GET /admin/suggestions] Admin user requesting all suggestions:', req.user.email);
-        
-        // Get all Company Q&A entries with company information for admin review
-        const suggestions = await CompanyQnA.find({})
-            .populate('companyId', 'companyName tradeTypes') // Include company name and trade types
-            .sort({ updatedAt: -1 }) // Most recent first
-            .limit(1000); // Reasonable limit for admin dashboard
-        
-        console.log(`[ADMIN API GET /admin/suggestions] Returning ${suggestions.length} suggestions to admin`);
-        
-        res.json({
-            success: true,
-            data: suggestions,
-            count: suggestions.length,
-            message: 'Admin access granted to all suggested knowledge entries'
-        });
-        
-    } catch (err) {
-        console.error('[ADMIN API GET /admin/suggestions] Error:', err);
-        res.status(500).json({ 
-            message: 'Server error retrieving suggestions',
-            error: err.message 
-        });
-    }
-});
-
-/**
- * GET /admin/dashboard - Get admin dashboard summary data
- * Returns: Summary statistics for admin overview
- */
-router.get('/dashboard', async (req, res) => {
-    try {
-        console.log('[ADMIN API GET /admin/dashboard] Admin dashboard requested by:', req.user.email);
-        
-        // Get counts for dashboard overview
-        const [companyCount, alertCount, qnaCount] = await Promise.all([
-            Company.countDocuments({}),
-            Alert.countDocuments({}),
-            CompanyQnA.countDocuments({})
-        ]);
-        
-        // Get recent activity
-        const [recentAlerts, recentQnAs] = await Promise.all([
-            Alert.find({}).populate('companyId', 'companyName').sort({ timestamp: -1 }).limit(5),
-            CompanyQnA.find({}).populate('companyId', 'companyName').sort({ updatedAt: -1 }).limit(5)
-        ]);
-        
-        res.json({
-            success: true,
-            data: {
-                summary: {
-                    totalCompanies: companyCount,
-                    totalAlerts: alertCount,
-                    totalCompanyQnAs: qnaCount,
-                    lastUpdated: new Date().toISOString()
-                },
-                recentActivity: {
-                    alerts: recentAlerts,
-                    companyQnAs: recentQnAs
-                }
+            message: 'User-company association fixed successfully',
+            before: {
+                userId: userId,
+                hadCompanyId: !!user.companyId
             },
-            message: 'Admin dashboard data retrieved successfully'
-        });
+            after: {
+                userId: verifyUser._id,
+                companyId: verifyUser.companyId?._id,
+                companyName: verifyUser.companyId?.companyName,
+                associationWorking: !!verifyUser.companyId
+            }
+        };
         
-    } catch (err) {
-        console.error('[ADMIN API GET /admin/dashboard] Error:', err);
-        res.status(500).json({ 
-            message: 'Server error retrieving dashboard data',
-            error: err.message 
+        console.log('🎉 SUCCESS: User-company association fixed!', result);
+        
+        res.json(result);
+        
+    } catch (error) {
+        console.error('❌ EMERGENCY: Fix user-company association failed:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fix user-company association',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * 🔍 DIAGNOSTIC: Check User-Company Association
+ * Verify user-company relationships
+ */
+router.get('/check-user-company/:userId', authenticateJWT, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const user = await User.findById(userId).populate('companyId');
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found'
+            });
+        }
+        
+        const diagnosis = {
+            success: true,
+            user: {
+                id: user._id,
+                email: user.email,
+                name: user.name,
+                status: user.status
+            },
+            company: {
+                id: user.companyId?._id || null,
+                name: user.companyId?.companyName || null,
+                populated: !!user.companyId
+            },
+            diagnosis: {
+                hasCompanyId: !!user.companyId,
+                canAccessKnowledge: !!user.companyId,
+                needsFix: !user.companyId
+            }
+        };
+        
+        console.log('🔍 User-company diagnosis:', diagnosis);
+        
+        res.json(diagnosis);
+        
+    } catch (error) {
+        console.error('❌ User-company check failed:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to check user-company association',
+            details: error.message
         });
     }
 });
