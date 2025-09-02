@@ -1089,6 +1089,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
                 if (!embeddedQnAManager) {
                     embeddedQnAManager = new EmbeddedQnAManager();
+                    window.embeddedQnAManager = embeddedQnAManager; // Make globally available
                     embeddedQnAManager.initialize();
                 } else {
                     // Re-initialize if tab is switched back
@@ -1105,6 +1106,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
                 if (!embeddedQnAManager) {
                     embeddedQnAManager = new EmbeddedQnAManager();
+                    window.embeddedQnAManager = embeddedQnAManager; // Make globally available
                 }
                 embeddedQnAManager.initialize();
             }, 300);

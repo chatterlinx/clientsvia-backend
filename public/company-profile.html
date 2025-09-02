@@ -9065,10 +9065,16 @@ Key Metrics:
             console.log('📚 Initializing Company Q&A tab...');
             
             // Load Company Q&A data if embedded manager exists
-            if (window.embeddedQnAManager && typeof window.embeddedQnAManager.loadQnAEntries === 'function') {
-                window.embeddedQnAManager.loadQnAEntries();
+            console.log('🔍 CHECKPOINT: Checking for embedded Q&A manager');
+            console.log('🔍 CHECKPOINT: embeddedQnAManager exists:', !!window.embeddedQnAManager);
+            console.log('🔍 CHECKPOINT: loadCompanyQnAEntries method exists:', !!(window.embeddedQnAManager?.loadCompanyQnAEntries));
+            
+            if (window.embeddedQnAManager && typeof window.embeddedQnAManager.loadCompanyQnAEntries === 'function') {
+                console.log('✅ CHECKPOINT: Using embedded Q&A manager (preferred method)');
+                window.embeddedQnAManager.loadCompanyQnAEntries();
             } else {
-                console.log('📚 Embedded Q&A Manager not available, using fallback');
+                console.log('⚠️ CHECKPOINT: Embedded Q&A Manager not available, using fallback');
+                console.log('🔍 CHECKPOINT: This may cause display conflicts - embedded manager should be used');
                 loadCompanyQnAFallback();
             }
         }
