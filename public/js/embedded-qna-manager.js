@@ -927,8 +927,53 @@ class EmbeddedQnAManager {
             // Close modal
             this.closeEditModal();
             
-            // Reload Q&A list to show changes (triggers Redis cache refresh)
+            console.log('🔄 CHECKPOINT: Edit successful, reloading Q&A list to show changes');
+            
+            // Force refresh by adding cache-busting parameter
+            const originalApiCall = this.loadCompanyQnAEntries;
+            this.loadCompanyQnAEntries = async () => {
+                const cacheBuster = `?_cb=${Date.now()}`;
+                const originalUrl = `${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`;
+                
+                console.log('🔄 CHECKPOINT: Force refreshing with cache buster:', cacheBuster);
+                
+                const headers = { 'Content-Type': 'application/json' };
+                const token = this.getAuthToken();
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+                
+                const response = await fetch(originalUrl + cacheBuster, {
+                    method: 'GET',
+                    headers: headers,
+                    credentials: 'include'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    this.qnas = data.data;
+                    console.log('✅ CHECKPOINT: Force refresh loaded entries:', this.qnas.length);
+                    this.renderQnAEntries(data.data);
+                    
+                    const listEl = document.getElementById('qna-entries-list');
+                    const emptyEl = document.getElementById('qna-empty-state');
+                    
+                    if (data.data.length > 0) {
+                        if (listEl) listEl.classList.remove('hidden');
+                        if (emptyEl) emptyEl.classList.add('hidden');
+                    } else {
+                        if (listEl) listEl.classList.add('hidden');
+                        if (emptyEl) emptyEl.classList.remove('hidden');
+                    }
+                }
+            };
+            
+            // Reload Q&A list to show changes (with force refresh)
             await this.loadCompanyQnAEntries();
+            
+            // Restore original method
+            this.loadCompanyQnAEntries = originalApiCall;
+            
+            console.log('✅ CHECKPOINT: Q&A list force refreshed after edit');
             
             this.showNotification('✅ Q&A updated successfully!', 'success');
             
