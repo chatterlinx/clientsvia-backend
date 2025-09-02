@@ -109,21 +109,40 @@ console.log('🔍 CHECKPOINT 1: Starting session configuration...');
 console.log('SESSION_SECRET exists:', !!process.env.SESSION_SECRET);
 console.log('NODE_ENV:', process.env.NODE_ENV);
 
-// Simple session configuration for OAuth
-console.log('🔍 CHECKPOINT 2: Creating session middleware...');
+// 🚨 CRITICAL PRODUCTION FIX: Redis session store for production scaling
+console.log('🔍 CHECKPOINT 2: Creating Redis session store for production...');
+
+// Initialize Redis client for sessions
+const redisClient = redis.createClient({
+  url: process.env.REDIS_URL || 'redis://localhost:6379'
+});
+
+redisClient.on('error', (err) => {
+  console.error('❌ CRITICAL: Redis session store error:', err);
+});
+
+redisClient.on('connect', () => {
+  console.log('✅ PRODUCTION: Redis session store connected successfully');
+});
+
+// Connect to Redis
+redisClient.connect().catch(err => {
+  console.error('❌ CRITICAL: Failed to connect Redis session store:', err);
+});
+
 app.use(session({
-  store: new session.MemoryStore(),
+  store: new RedisStore({ client: redisClient }),
   secret: process.env.SESSION_SECRET || 'fallback-secret-key',
   resave: false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: false, // Set to false for now to avoid issues
+    secure: process.env.NODE_ENV === 'production', // true on HTTPS (like Render)
     sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
-console.log('🔍 CHECKPOINT 3: Session middleware applied successfully');
+console.log('✅ PRODUCTION: Redis session store configured - memory leaks eliminated!');
 
 // Initialize Passport
 console.log('🔍 CHECKPOINT 4: Initializing Passport...');

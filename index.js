@@ -139,9 +139,14 @@ console.log('🔍 SESSION CHECKPOINT 1: Starting session configuration in index.
 const session = require('express-session');
 const passport = require('./config/passport');
 
-console.log('🔍 SESSION CHECKPOINT 2: Creating session middleware...');
+console.log('🔍 SESSION CHECKPOINT 2: Creating Redis session store for production...');
+
+// 🚨 CRITICAL PRODUCTION FIX: Use Redis instead of MemoryStore
+const RedisStore = require('connect-redis').default;
+const { redisClient } = require('./clients');
+
 app.use(session({
-  store: new session.MemoryStore(),
+  store: new RedisStore({ client: redisClient }),
   secret: process.env.SESSION_SECRET || 'fallback-secret-key',
   resave: false,
   saveUninitialized: false,
@@ -152,6 +157,7 @@ app.use(session({
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
+console.log('✅ PRODUCTION: Redis session store configured - no more memory leaks!');
 console.log('🔍 SESSION CHECKPOINT 3: Session middleware applied successfully');
 
 // Initialize Passport
