@@ -49,33 +49,40 @@ async function authenticateJWT(req, res, next) {
       return res.status(401).json({ message: 'User not found or inactive' });
     }
 
-    // 🚨 CRITICAL: Auto-fix missing companyId for known users (Mongoose + Redis)
-    if (!user.companyId) {
-      const knownAssociations = [
-        { userId: '688bdd8b2f0ec14cfaf88139', companyId: '68813026dd95f599c74e49c7' }
-      ];
+    // 🚨 PRODUCTION: Auto-fix user-company association for known users (Mongoose + Redis)
+    const knownAssociations = [
+      { userId: '688bdd8b2f0ec14cfaf88139', companyId: '68813026dd95f599c74e49c7', email: 'chatterlinx@gmail.com' }
+    ];
+    
+    const association = knownAssociations.find(a => 
+      a.userId === user._id.toString() || a.email === user.email.toLowerCase()
+    );
+    
+    if (association && (!user.companyId || user.companyId.toString() !== association.companyId)) {
+      console.log('🚨 PRODUCTION: Auto-fixing user-company association in JWT auth middleware');
+      console.log('🔍 User email:', user.email);
+      console.log('🔍 Current companyId:', user.companyId);
+      console.log('🔍 Target companyId:', association.companyId);
       
-      const association = knownAssociations.find(a => a.userId === user._id.toString());
-      
-      if (association) {
-        console.log('🚨 CRITICAL: Auto-fixing user-company association in JWT auth middleware');
+      try {
+        const oldCompanyId = user.companyId;
+        user.companyId = association.companyId;
+        await user.save();
+        
+        // Clear Redis cache following established pattern
+        const { redisClient } = require('../clients');
         try {
-          user.companyId = association.companyId;
-          await user.save();
-          
-          // Clear Redis cache following established pattern
-          const { redisClient } = require('../clients');
-          try {
-            await redisClient.del(`user:${user._id}`);
-            console.log(`🗑️ CACHE CLEARED: user:${user._id} - Association fixed in JWT auth`);
-          } catch (cacheError) {
-            console.warn(`⚠️ Cache clear failed:`, cacheError.message);
-          }
-          
-          console.log('✅ User-company association fixed in JWT auth middleware');
-        } catch (fixError) {
-          console.error('⚠️ JWT auth auto-fix failed:', fixError.message);
+          await redisClient.del(`user:${user._id}`);
+          console.log(`🗑️ CACHE CLEARED: user:${user._id} - Association fixed in JWT auth`);
+        } catch (cacheError) {
+          console.warn(`⚠️ Cache clear failed:`, cacheError.message);
         }
+        
+        console.log('✅ User-company association fixed in JWT auth middleware');
+        console.log('✅ Changed from:', oldCompanyId, 'to:', association.companyId);
+        
+      } catch (fixError) {
+        console.error('⚠️ JWT auth auto-fix failed:', fixError.message);
       }
     }
 
