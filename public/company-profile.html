@@ -6778,13 +6778,16 @@
                     thresholdSlider.value = settings.fallbackThreshold || 0.5;
                     thresholdValue.textContent = thresholdSlider.value;
                 } else {
-                    console.warn('⚠️ Threshold slider elements not found');
+                    console.log('ℹ️ CHECKPOINT: Legacy threshold slider elements not in current HTML structure (this is normal)');
+                    console.log('ℹ️ CHECKPOINT: Current structure uses Knowledge Source threshold controls instead');
                 }
                 
-                // Advanced features with safety checks
+                // Advanced features with safety checks - enhanced for current structure
+                console.log('ℹ️ CHECKPOINT: Attempting to set advanced features (these may not exist in current structure)');
                 safeSetChecked('agent-semanticSearchEnabled', settings.semanticSearchEnabled !== false);
                 safeSetChecked('agent-confidenceScoring', settings.confidenceScoring !== false);
                 safeSetChecked('agent-autoLearningQueue', settings.autoLearningQueue !== false);
+                console.log('ℹ️ CHECKPOINT: Advanced features processing complete (warnings above are normal for current structure)');
                 
 
                 
