@@ -903,6 +903,51 @@ class EmbeddedQnAManager {
     }
     
     /**
+     * Show loading state for edit operations
+     */
+    showLoading(message = 'Loading...') {
+        try {
+            // Create or update loading overlay
+            let loadingOverlay = document.getElementById('qna-edit-loading');
+            if (!loadingOverlay) {
+                loadingOverlay = document.createElement('div');
+                loadingOverlay.id = 'qna-edit-loading';
+                loadingOverlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+                loadingOverlay.innerHTML = `
+                    <div class="bg-white rounded-lg p-6 shadow-xl">
+                        <div class="flex items-center space-x-3">
+                            <i class="fas fa-spinner fa-spin text-blue-600 text-xl"></i>
+                            <span class="text-gray-800 font-medium">${message}</span>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(loadingOverlay);
+            } else {
+                loadingOverlay.querySelector('span').textContent = message;
+                loadingOverlay.style.display = 'flex';
+            }
+            console.log('✅ CHECKPOINT: Loading state shown:', message);
+        } catch (error) {
+            console.error('❌ CHECKPOINT: Failed to show loading state:', error);
+        }
+    }
+    
+    /**
+     * Hide loading state
+     */
+    hideLoading() {
+        try {
+            const loadingOverlay = document.getElementById('qna-edit-loading');
+            if (loadingOverlay) {
+                loadingOverlay.remove();
+                console.log('✅ CHECKPOINT: Loading state hidden');
+            }
+        } catch (error) {
+            console.error('❌ CHECKPOINT: Failed to hide loading state:', error);
+        }
+    }
+    
+    /**
      * Delete Q&A entry
      */
     deleteEntry(id) {
