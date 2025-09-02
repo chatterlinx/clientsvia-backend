@@ -141,13 +141,38 @@ class EmbeddedQnAManager {
                 this.qnas = data.data;
                 console.log('✅ CHECKPOINT: Q&A entries stored for edit functionality:', this.qnas.length);
                 
+                // Enhanced debugging for display issue
+                console.log('🔍 CHECKPOINT: About to render Q&A entries');
+                console.log('🔍 CHECKPOINT: listEl exists:', !!listEl);
+                console.log('🔍 CHECKPOINT: emptyEl exists:', !!emptyEl);
+                
                 this.renderQnAEntries(data.data);
-                if (listEl) listEl.classList.remove('hidden');
+                
+                if (listEl) {
+                    listEl.classList.remove('hidden');
+                    console.log('✅ CHECKPOINT: Q&A list element shown (hidden class removed)');
+                } else {
+                    console.error('❌ CHECKPOINT: listEl is null - cannot show Q&A entries');
+                }
+                
+                if (emptyEl) {
+                    emptyEl.classList.add('hidden');
+                    console.log('✅ CHECKPOINT: Empty state hidden');
+                }
             } else {
                 // Initialize empty array even when no data
                 this.qnas = [];
                 console.log('✅ CHECKPOINT: No Q&A entries - initialized empty array');
-                if (emptyEl) emptyEl.classList.remove('hidden');
+                
+                if (listEl) {
+                    listEl.classList.add('hidden');
+                    console.log('✅ CHECKPOINT: Q&A list hidden (no entries)');
+                }
+                
+                if (emptyEl) {
+                    emptyEl.classList.remove('hidden');
+                    console.log('✅ CHECKPOINT: Empty state shown');
+                }
             }
 
             console.log(`✅ Loaded ${data.data?.length || 0} Company Q&A entries`);
@@ -177,8 +202,16 @@ class EmbeddedQnAManager {
      * Render Q&A entries with enterprise UI
      */
     renderQnAEntries(qnas) {
+        console.log('🎨 CHECKPOINT: Starting to render Q&A entries');
+        console.log('🎨 CHECKPOINT: Number of entries to render:', qnas?.length || 0);
+        
         const container = document.getElementById('qna-entries-list');
-        if (!container) return;
+        if (!container) {
+            console.error('❌ CHECKPOINT: qna-entries-list container not found');
+            return;
+        }
+        
+        console.log('✅ CHECKPOINT: Q&A container found, rendering entries');
 
         container.innerHTML = qnas.map(qna => `
             <div class="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow duration-200" data-qna-id="${qna._id}">
@@ -224,6 +257,10 @@ class EmbeddedQnAManager {
                 </div>
             </div>
         `).join('');
+        
+        console.log('✅ CHECKPOINT: Q&A entries HTML generated and inserted into container');
+        console.log('🎨 CHECKPOINT: Container innerHTML length:', container.innerHTML.length);
+        console.log('🎨 CHECKPOINT: Rendered entries for company:', this.companyId);
     }
 
     /**
