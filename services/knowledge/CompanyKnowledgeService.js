@@ -379,25 +379,42 @@ class CompanyKnowledgeService {
   // Update Q&A entry
   async updateQnA(qnaId, updateData, userId = null) {
     try {
+      console.log('🧠 CHECKPOINT: CompanyKnowledgeService.updateQnA called');
+      console.log('🧠 CHECKPOINT: Q&A ID:', qnaId);
+      console.log('🧠 CHECKPOINT: Update data received:', updateData);
+      console.log('🧠 CHECKPOINT: Status in update data:', updateData.status);
+      
       logger.info(`✏️ Updating Q&A: ${qnaId}`);
 
       const qna = await CompanyQnA.findById(qnaId);
       if (!qna) {
+        console.error('❌ CHECKPOINT: Q&A entry not found in database');
         return {
           success: false,
           error: 'Q&A entry not found'
         };
       }
 
+      console.log('✅ CHECKPOINT: Q&A found in database');
+      console.log('🧠 CHECKPOINT: Current Q&A status:', qna.status);
+      console.log('🧠 CHECKPOINT: New status to set:', updateData.status);
+
       // Update fields
       Object.assign(qna, updateData);
       qna.lastModifiedBy = userId;
       
+      console.log('🧠 CHECKPOINT: Fields assigned, Q&A status after assign:', qna.status);
+      console.log('🧠 CHECKPOINT: About to save Q&A to database');
+      
       // Save (triggers keyword regeneration if question/answer changed)
       const updatedQnA = await qna.save();
       
+      console.log('✅ CHECKPOINT: Q&A saved to database successfully');
+      console.log('🧠 CHECKPOINT: Final Q&A status in database:', updatedQnA.status);
+      
       // Invalidate caches
       await this.invalidateCompanyCaches(qna.companyId);
+      console.log('✅ CHECKPOINT: Redis caches invalidated');
       
       logger.info(`✅ Q&A updated successfully: ${qnaId}`);
       

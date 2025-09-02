@@ -503,16 +503,27 @@ router.put('/company/:companyId/qnas/:id', authenticateJWT, async (req, res) => 
       }
     }
 
+    // Enhanced debugging for status update issues
+    console.log('✏️ CHECKPOINT: Q&A PUT request received');
+    console.log('✏️ CHECKPOINT: Q&A ID:', id);
+    console.log('✏️ CHECKPOINT: Update data:', updateData);
+    console.log('✏️ CHECKPOINT: Status field in update:', updateData.status);
+    console.log('✏️ CHECKPOINT: All fields to update:', Object.keys(updateData));
+
     logger.info(`✏️ Updating Q&A ${id} for company ${companyId}`, {
       userId: req.user._id,
-      fieldsUpdated: Object.keys(updateData)
+      fieldsUpdated: Object.keys(updateData),
+      statusUpdate: updateData.status
     });
 
+    console.log('✏️ CHECKPOINT: Calling knowledgeService.updateQnA');
     const result = await knowledgeService.updateQnA(
       id,
       updateData,
       req.user._id
     );
+    
+    console.log('✏️ CHECKPOINT: knowledgeService.updateQnA result:', result);
 
     if (!result.success) {
       return res.status(400).json(result);
