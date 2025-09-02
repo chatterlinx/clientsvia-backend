@@ -15,6 +15,19 @@ const Company = require('../models/Company');
 const { ObjectId } = require('mongodb');
 const { authenticateJWT, authenticateSingleSession } = require('../middleware/auth');
 
+// Add missing logger import
+const winston = require('winston');
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console()
+  ]
+});
+
 // ===============================================
 // 🚀 GET ENTERPRISE AI INTELLIGENCE SETTINGS
 // ===============================================
