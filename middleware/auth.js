@@ -49,6 +49,36 @@ async function authenticateJWT(req, res, next) {
       return res.status(401).json({ message: 'User not found or inactive' });
     }
 
+    // 🚨 CRITICAL: Auto-fix missing companyId for known users (Mongoose + Redis)
+    if (!user.companyId) {
+      const knownAssociations = [
+        { userId: '688bdd8b2f0ec14cfaf88139', companyId: '68813026dd95f599c74e49c7' }
+      ];
+      
+      const association = knownAssociations.find(a => a.userId === user._id.toString());
+      
+      if (association) {
+        console.log('🚨 CRITICAL: Auto-fixing user-company association in JWT auth middleware');
+        try {
+          user.companyId = association.companyId;
+          await user.save();
+          
+          // Clear Redis cache following established pattern
+          const { redisClient } = require('../clients');
+          try {
+            await redisClient.del(`user:${user._id}`);
+            console.log(`🗑️ CACHE CLEARED: user:${user._id} - Association fixed in JWT auth`);
+          } catch (cacheError) {
+            console.warn(`⚠️ Cache clear failed:`, cacheError.message);
+          }
+          
+          console.log('✅ User-company association fixed in JWT auth middleware');
+        } catch (fixError) {
+          console.error('⚠️ JWT auth auto-fix failed:', fixError.message);
+        }
+      }
+    }
+
     req.user = user;
     console.log('✅ AUTH CHECKPOINT: Authentication successful, user attached to request');
     next();
@@ -155,6 +185,36 @@ async function authenticateSingleSession(req, res, next) {
         message: 'User not found or inactive',
         code: 'USER_INACTIVE'
       });
+    }
+
+    // 🚨 PRODUCTION FIX: Auto-fix missing companyId for known users (Mongoose + Redis)
+    if (!user.companyId) {
+      const knownAssociations = [
+        { userId: '688bdd8b2f0ec14cfaf88139', companyId: '68813026dd95f599c74e49c7' }
+      ];
+      
+      const association = knownAssociations.find(a => a.userId === user._id.toString());
+      
+      if (association) {
+        console.log('🚨 PRODUCTION: Auto-fixing user-company association in auth middleware');
+        try {
+          user.companyId = association.companyId;
+          await user.save();
+          
+          // Clear Redis cache following established pattern
+          const { redisClient } = require('../clients');
+          try {
+            await redisClient.del(`user:${user._id}`);
+            console.log(`🗑️ CACHE CLEARED: user:${user._id} - Association fixed in auth`);
+          } catch (cacheError) {
+            console.warn(`⚠️ Cache clear failed:`, cacheError.message);
+          }
+          
+          console.log('✅ User-company association fixed in auth middleware');
+        } catch (fixError) {
+          console.error('⚠️ Auth auto-fix failed:', fixError.message);
+        }
+      }
     }
 
     // Attach user and session info to request
