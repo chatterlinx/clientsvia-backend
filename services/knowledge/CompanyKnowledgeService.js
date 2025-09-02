@@ -330,9 +330,15 @@ class CompanyKnowledgeService {
       } = options;
 
       const query = {
-        companyId,
-        status
+        companyId
       };
+      
+      // Only add status filter if status is specified (not undefined for 'all')
+      if (status !== undefined && status !== null) {
+        query.status = status;
+      }
+      
+      console.log('🔍 CHECKPOINT: MongoDB query for Q&A entries:', query);
 
       // Add filters
       if (category) query.category = category;
