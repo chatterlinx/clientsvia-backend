@@ -114,7 +114,7 @@ class EmbeddedQnAManager {
                 headers['Authorization'] = `Bearer ${token}`;
             }
             
-            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas?status=all`, {
                 method: 'GET',
                 headers: headers,
                 credentials: 'include' // Include cookies for additional auth
@@ -941,7 +941,7 @@ class EmbeddedQnAManager {
                 const token = this.getAuthToken();
                 if (token) headers['Authorization'] = `Bearer ${token}`;
                 
-                const response = await fetch(originalUrl + cacheBuster, {
+                const response = await fetch(originalUrl + cacheBuster + '&status=all', {
                     method: 'GET',
                     headers: headers,
                     credentials: 'include'

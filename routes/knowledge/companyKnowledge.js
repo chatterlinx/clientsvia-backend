@@ -73,6 +73,10 @@ router.get('/company/:companyId/qnas', authenticateJWT, async (req, res) => {
       sortBy = 'updatedAt',
       sortOrder = 'desc'
     } = req.query;
+    
+    // 🔧 CRITICAL FIX: Handle 'all' status to show all Q&A entries regardless of status
+    const effectiveStatus = status === 'all' ? undefined : status;
+    console.log('🔍 CHECKPOINT: Status filter applied:', { requested: status, effective: effectiveStatus });
 
     // Validate company access with enhanced null checking
     console.log('🔍 CHECKPOINT: Validating company access for GET request');
@@ -157,7 +161,7 @@ router.get('/company/:companyId/qnas', authenticateJWT, async (req, res) => {
       page: parseInt(page),
       limit: parseInt(limit),
       category,
-      status,
+      status: effectiveStatus,  // Use effectiveStatus (undefined for 'all')
       search,
       sortBy,
       sortOrder: sortOrder === 'desc' ? -1 : 1
