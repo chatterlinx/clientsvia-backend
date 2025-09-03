@@ -127,18 +127,17 @@ router.get('/company/:companyId/qnas', authenticateJWT, async (req, res) => {
             checkpoint: 'User missing companyId field - check User model population'
           });
         }
-      }
-    }
-      
-      if (userCompanyId !== companyId) {
-        console.error('❌ CRITICAL: Company access denied');
-        console.error('❌ CHECKPOINT: User company:', userCompanyId);
-        console.error('❌ CHECKPOINT: Requested company:', companyId);
-        return res.status(403).json({
-          success: false,
-          error: 'Access denied to this company data',
-          checkpoint: 'Company ID mismatch'
-        });
+        
+        if (userCompanyId !== companyId) {
+          console.error('❌ CRITICAL: Company access denied');
+          console.error('❌ CHECKPOINT: User company:', userCompanyId);
+          console.error('❌ CHECKPOINT: Requested company:', companyId);
+          return res.status(403).json({
+            success: false,
+            error: 'Access denied to this company data',
+            checkpoint: 'Company ID mismatch'
+          });
+        }
       }
     }
     
