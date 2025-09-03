@@ -898,7 +898,7 @@ class EmbeddedQnAManager {
             
             console.log('💾 CHECKPOINT: Making PUT request to update Q&A');
             
-            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas/${qnaId}`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/emergency/${this.companyId}/qnas/${qnaId}`, {
                 method: 'PUT',
                 headers: headers,
                 credentials: 'include',
