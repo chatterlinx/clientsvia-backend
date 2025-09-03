@@ -1331,6 +1331,30 @@ router.post('/emergency/:companyId/qnas', async (req, res) => {
   }
 });
 
+router.put('/emergency/:companyId/qnas/:id', async (req, res) => {
+  try {
+    console.log('🚨 EMERGENCY: Simple Q&A PUT - No authentication');
+    const { companyId, id } = req.params;
+    const updateData = req.body;
+    
+    console.log('✏️ EMERGENCY: Updating Q&A:', id, 'with data:', updateData);
+    
+    const result = await knowledgeService.updateQnA(id, updateData, null);
+    
+    console.log('✅ EMERGENCY: Q&A updated:', result.success);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('❌ EMERGENCY: Simple Q&A PUT failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Emergency Q&A update failed',
+      details: error.message
+    });
+  }
+});
+
 /**
  * 🚨 EMERGENCY: Restore All Q&A Entries to Active Status
  * Critical fix when all Q&A entries become invisible to AI agent
