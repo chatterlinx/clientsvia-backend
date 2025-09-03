@@ -1313,7 +1313,7 @@ router.post('/emergency/:companyId/qnas', async (req, res) => {
     const { companyId } = req.params;
     const qnaData = req.body;
     
-    const result = await knowledgeService.createQnA(companyId, qnaData, 'emergency-user');
+    const result = await knowledgeService.createQnA(companyId, qnaData, null);
     
     console.log('✅ EMERGENCY: Q&A created:', result.success);
     
