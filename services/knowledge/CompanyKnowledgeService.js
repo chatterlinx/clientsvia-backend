@@ -323,7 +323,7 @@ class CompanyKnowledgeService {
         page = 1,
         limit = 20,
         category = null,
-        status = 'active',
+        status = null,  // Changed default to null for emergency access
         search = null,
         sortBy = 'updatedAt',
         sortOrder = -1
