@@ -1283,10 +1283,12 @@ router.get('/emergency/:companyId/qnas', async (req, res) => {
     console.log('🚨 EMERGENCY: Simple Q&A GET - No authentication');
     const { companyId } = req.params;
     
+    // Force get ALL entries regardless of status for emergency
+    console.log('🚨 EMERGENCY: Requesting ALL Q&A entries regardless of status');
     const result = await knowledgeService.getCompanyQnAs(companyId, {
       page: 1,
       limit: 50,
-      status: undefined  // Get all statuses
+      status: null  // Explicitly null to bypass status filtering
     });
     
     console.log('✅ EMERGENCY: Q&A entries loaded:', result.data?.length || 0);
