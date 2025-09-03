@@ -114,7 +114,7 @@ class EmbeddedQnAManager {
                 headers['Authorization'] = `Bearer ${token}`;
             }
             
-            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/emergency/${this.companyId}/qnas`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas?status=all&_cb=${Date.now()}`, {
                 method: 'GET',
                 headers: headers,
                 credentials: 'include' // Include cookies for additional auth
@@ -151,7 +151,7 @@ class EmbeddedQnAManager {
                 if (listEl) {
                     listEl.classList.remove('hidden');
                     console.log('✅ CHECKPOINT: Q&A list element shown (hidden class removed)');
-                } else {
+            } else {
                     console.error('❌ CHECKPOINT: listEl is null - cannot show Q&A entries');
                 }
                 
@@ -699,7 +699,7 @@ class EmbeddedQnAManager {
                 headers['Authorization'] = `Bearer ${token}`;
             }
             
-            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/emergency/${this.companyId}/qnas`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`, {
                 method: 'POST',
                 headers: headers,
                 credentials: 'include', // Include cookies for additional auth
@@ -898,7 +898,7 @@ class EmbeddedQnAManager {
             
             console.log('💾 CHECKPOINT: Making PUT request to update Q&A');
             
-            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/emergency/${this.companyId}/qnas/${qnaId}`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas/${qnaId}`, {
                 method: 'PUT',
                 headers: headers,
                 credentials: 'include',
