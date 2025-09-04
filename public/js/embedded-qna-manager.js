@@ -259,7 +259,7 @@ class EmbeddedQnAManager {
                                 class="bg-green-600 hover:bg-green-700 text-white text-xs font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center">
                             <i class="fas fa-vial mr-1"></i>Test AI
                         </button>
-                        <button onclick="embeddedQnAManager.editEntry('${qna._id}')" 
+                        <button onclick="console.log('🔧 Edit button clicked for:', '${qna._id}'); if(window.embeddedQnAManager) { window.embeddedQnAManager.editEntry('${qna._id}'); } else { console.error('❌ embeddedQnAManager not available'); }" 
                                 class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium py-2 px-3 rounded-md transition-colors duration-200 flex items-center">
                             <i class="fas fa-edit mr-1"></i>Edit
                         </button>
