@@ -9692,15 +9692,20 @@ Key Metrics:
          * ✅ PRODUCTION: Update Trade Q&A statistics display
          */
         function updateTradeQnAStats(stats) {
+            console.log('📊 Updating Trade Q&A stats display:', stats);
+            
             const totalEl = document.getElementById('trade-qna-total-count');
             const activeEl = document.getElementById('trade-qna-active-count');
             const confidenceEl = document.getElementById('trade-qna-avg-confidence');
             const categoriesEl = document.getElementById('trade-qna-categories-count');
             
-            if (totalEl) totalEl.textContent = stats.totalQnAs || '0';
-            if (activeEl) activeEl.textContent = stats.activeQnAs || '0';
+            // Fixed: Use correct field names from API response
+            if (totalEl) totalEl.textContent = stats.total || stats.totalQnAs || '0';
+            if (activeEl) activeEl.textContent = stats.active || stats.activeQnAs || '0';
             if (confidenceEl) confidenceEl.textContent = stats.avgConfidence || '--';
-            if (categoriesEl) categoriesEl.textContent = stats.tradeCategories || '0';
+            if (categoriesEl) categoriesEl.textContent = Object.keys(stats.breakdown || {}).length || '0';
+            
+            console.log('✅ Trade Q&A stats display updated');
         }
         
         /**
