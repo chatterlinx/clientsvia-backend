@@ -215,7 +215,7 @@ companyQnASchema.pre('save', async function(next) {
         
         const context = {
           tradeCategories: company?.tradeCategories || this.tradeCategories || [],
-          companyName: company?.companyName,
+          companyName: '', // Don't include company name in keyword generation
           businessType: company?.businessType
         };
         
