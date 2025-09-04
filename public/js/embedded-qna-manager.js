@@ -199,11 +199,20 @@ class EmbeddedQnAManager {
     }
 
     /**
-     * Render Q&A entries with enterprise UI
+     * Render Q&A entries with enterprise UI - Enhanced with status coordination
      */
     renderQnAEntries(qnas) {
         console.log('🎨 CHECKPOINT: Starting to render Q&A entries');
         console.log('🎨 CHECKPOINT: Number of entries to render:', qnas?.length || 0);
+        
+        // Enhanced debugging for status coordination
+        if (qnas && qnas.length > 0) {
+            const statusCounts = {};
+            qnas.forEach(qna => {
+                statusCounts[qna.status] = (statusCounts[qna.status] || 0) + 1;
+            });
+            console.log('📊 CHECKPOINT: Q&A status distribution:', statusCounts);
+        }
         
         const container = document.getElementById('qna-entries-list');
         if (!container) {
@@ -221,9 +230,9 @@ class EmbeddedQnAManager {
                             <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
                                 ${qna.category || 'General'}
                             </span>
-                            <span class="px-2 py-1 ${qna.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} text-xs font-medium rounded-full">
-                                <i class="fas fa-${qna.isActive ? 'check' : 'pause'} mr-1"></i>
-                                ${qna.isActive ? 'Active' : 'Inactive'}
+                            <span class="px-2 py-1 ${this.getStatusStyle(qna.status)} text-xs font-medium rounded-full">
+                                <i class="fas fa-${this.getStatusIcon(qna.status)} mr-1"></i>
+                                ${this.getStatusLabel(qna.status)}
                             </span>
                         </div>
                         <h4 class="text-lg font-semibold text-gray-900 mb-3">
@@ -1019,6 +1028,45 @@ class EmbeddedQnAManager {
             modal.remove();
             console.log('✅ CHECKPOINT: Edit modal closed');
         }
+    }
+    
+    /**
+     * Get status styling for consistent UI
+     */
+    getStatusStyle(status) {
+        const styles = {
+            'active': 'bg-green-100 text-green-800',
+            'draft': 'bg-yellow-100 text-yellow-800', 
+            'under_review': 'bg-blue-100 text-blue-800',
+            'archived': 'bg-gray-100 text-gray-800'
+        };
+        return styles[status] || 'bg-gray-100 text-gray-800';
+    }
+    
+    /**
+     * Get status icon for consistent UI
+     */
+    getStatusIcon(status) {
+        const icons = {
+            'active': 'check-circle',
+            'draft': 'edit',
+            'under_review': 'clock',
+            'archived': 'archive'
+        };
+        return icons[status] || 'question';
+    }
+    
+    /**
+     * Get status label for consistent UI
+     */
+    getStatusLabel(status) {
+        const labels = {
+            'active': 'Active',
+            'draft': 'Draft',
+            'under_review': 'Under Review', 
+            'archived': 'Archived'
+        };
+        return labels[status] || 'Unknown';
     }
     
     /**
