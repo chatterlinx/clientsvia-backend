@@ -424,7 +424,94 @@ class EmbeddedQnAManager {
             });
         }
 
+        // 🔧 CRITICAL: Connect Status Filter dropdown to Q&A filtering
+        const statusFilter = document.getElementById('qna-status-filter');
+        if (statusFilter) {
+            statusFilter.addEventListener('change', (e) => {
+                const selectedStatus = e.target.value;
+                console.log('🔍 CHECKPOINT: Status filter changed to:', selectedStatus);
+                this.filterQnAByStatus(selectedStatus);
+            });
+            console.log('✅ CHECKPOINT: Status filter dropdown connected');
+        } else {
+            console.warn('⚠️ CHECKPOINT: qna-status-filter dropdown not found');
+        }
+
         console.log('✅ Event listeners configured');
+    }
+
+    /**
+     * Filter Q&A entries by status (coordinated with Status Filter dropdown)
+     */
+    async filterQnAByStatus(status) {
+        try {
+            console.log('🔍 CHECKPOINT: Filtering Q&A entries by status:', status);
+            
+            // Determine the API status parameter
+            let apiStatus = status;
+            if (status === '' || status === 'all') {
+                apiStatus = 'all';  // Show all entries
+            }
+            
+            console.log('🔍 CHECKPOINT: API status parameter:', apiStatus);
+            
+            // Reload Q&A entries with the selected status filter
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            const token = this.getAuthToken();
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
+            const url = `${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas?status=${apiStatus}&_cb=${Date.now()}`;
+            console.log('🔍 CHECKPOINT: Filtering URL:', url);
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: headers,
+                credentials: 'include'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            console.log('✅ CHECKPOINT: Filtered Q&A data received:', data.data?.length || 0);
+            
+            if (data.success && data.data) {
+                this.qnas = data.data;
+                
+                // Show status distribution for debugging
+                const statusCounts = {};
+                data.data.forEach(qna => {
+                    statusCounts[qna.status] = (statusCounts[qna.status] || 0) + 1;
+                });
+                console.log('📊 CHECKPOINT: Filtered status distribution:', statusCounts);
+                
+                this.renderQnAEntries(data.data);
+                
+                // Update UI visibility
+                const listEl = document.getElementById('qna-entries-list');
+                const emptyEl = document.getElementById('qna-empty-state');
+                
+                if (data.data.length > 0) {
+                    if (listEl) listEl.classList.remove('hidden');
+                    if (emptyEl) emptyEl.classList.add('hidden');
+                } else {
+                    if (listEl) listEl.classList.add('hidden');
+                    if (emptyEl) emptyEl.classList.remove('hidden');
+                }
+                
+                console.log(`✅ CHECKPOINT: Status filter applied - showing ${data.data.length} entries with status: ${status || 'all'}`);
+            }
+            
+        } catch (error) {
+            console.error('❌ CRITICAL: Status filtering failed:', error);
+            this.showNotification('❌ Failed to filter by status', 'error');
+        }
     }
 
     /**
