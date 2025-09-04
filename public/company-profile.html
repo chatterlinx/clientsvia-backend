@@ -2528,6 +2528,57 @@
                                                             </div>
                                                         </div>
                                                         
+                                                        <!-- ========================================= -->
+                                                        <!-- ENTERPRISE TRADE CATEGORY SELECTION -->
+                                                        <!-- Multi-tenant trade selection with keyword optimization -->
+                                                        <!-- ========================================= -->
+                                                        <div class="bg-gradient-to-r from-purple-50 to-orange-50 border border-purple-200 rounded-xl p-6 mb-6">
+                                                            <div class="flex items-center justify-between mb-6">
+                                                                <div>
+                                                                    <h4 class="text-lg font-bold text-purple-800 flex items-center">
+                                                                        <i class="fas fa-tools mr-3 text-purple-600"></i>Company Trade Categories
+                                                                        <span class="ml-2 px-2 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">MULTI-TENANT</span>
+                                                                    </h4>
+                                                                    <p class="text-sm text-purple-600 mt-1">Select your company's trade categories for optimized AI agent keyword generation</p>
+                                                                </div>
+                                                                <div class="flex items-center space-x-3">
+                                                                    <button onclick="loadGlobalTradeCategories()" 
+                                                                            class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm transition-colors">
+                                                                        <i class="fas fa-sync mr-2"></i>Refresh Categories
+                                                                    </button>
+                                                                    <button onclick="saveCompanyTradeSelection()" 
+                                                                            class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm transition-colors">
+                                                                        <i class="fas fa-save mr-2"></i>Save Selection
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            <!-- Available Trade Categories (Multi-select) -->
+                                                            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                                <div id="available-trade-categories" class="space-y-3">
+                                                                    <!-- Global trade categories will be populated here -->
+                                                                    <div class="text-center text-gray-500 py-4">
+                                                                        <i class="fas fa-spinner fa-spin mr-2"></i>Loading global trade categories...
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            <!-- Selected Categories Summary -->
+                                                            <div class="mt-6 p-4 bg-white rounded-lg border border-purple-200">
+                                                                <div class="flex items-center justify-between mb-3">
+                                                                    <h5 class="font-semibold text-gray-800">
+                                                                        <i class="fas fa-check-circle text-green-600 mr-2"></i>Selected Trade Categories
+                                                                    </h5>
+                                                                    <span id="selected-trades-count" class="px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
+                                                                        0 selected
+                                                                    </span>
+                                                                </div>
+                                                                <div id="selected-trades-display" class="flex flex-wrap gap-2">
+                                                                    <div class="text-gray-500 text-sm">No trade categories selected</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
                                                         <!-- Trade Q&A List Container -->
                                                         <div id="trade-qna-list-container" class="p-6">
                                                             <!-- Loading State -->
@@ -9081,12 +9132,250 @@ Key Metrics:
         }
         
         /**
-         * ✅ PRODUCTION: Initialize Trade Q&A tab  
+         * ✅ ENTERPRISE: Initialize Trade Q&A tab with sophisticated trade category system
          */
         function initializeTradeQnATab() {
-            console.log('🔧 Initializing Trade Q&A tab...');
+            console.log('🔧 Initializing Enterprise Trade Q&A tab...');
+            
+            // Load global trade categories for selection
+            loadGlobalTradeCategories();
+            
+            // Load company's current trade selection
+            loadCompanyTradeSelection();
+            
+            // Load Trade Q&A entries filtered by selected trades
             loadTradeQnAEntries();
             loadTradeQnAStats();
+        }
+        
+        /**
+         * 🌐 ENTERPRISE: Load Global Trade Categories for Multi-Tenant Selection
+         */
+        async function loadGlobalTradeCategories() {
+            try {
+                console.log('🌐 Loading global trade categories for company selection...');
+                
+                const companyId = getCurrentCompanyId();
+                const response = await fetch(`/api/enterprise-trade-categories?includeGlobal=true&companyId=${companyId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.message || 'Failed to load global trade categories');
+                }
+                
+                console.log('✅ Global trade categories loaded:', result.data?.length || 0);
+                
+                renderGlobalTradeCategories(result.data || []);
+                
+            } catch (error) {
+                console.error('❌ Failed to load global trade categories:', error);
+                const container = document.getElementById('available-trade-categories');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="text-center text-red-500 py-4">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            Failed to load trade categories
+                        </div>
+                    `;
+                }
+            }
+        }
+        
+        /**
+         * 🎨 ENTERPRISE: Render Global Trade Categories with Sophisticated UI
+         */
+        function renderGlobalTradeCategories(categories) {
+            const container = document.getElementById('available-trade-categories');
+            if (!container) return;
+            
+            console.log('🎨 Rendering global trade categories:', categories.length);
+            
+            container.innerHTML = categories.map(category => `
+                <div class="trade-category-option border border-gray-300 rounded-lg p-4 hover:border-purple-500 hover:bg-purple-50 transition-all duration-200 cursor-pointer"
+                     data-category-name="${category.name}"
+                     onclick="toggleTradeCategory('${category.name}')">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <input type="checkbox" 
+                                   id="trade-cat-${category.name.replace(/\s+/g, '-').toLowerCase()}"
+                                   class="trade-category-checkbox mr-3 h-4 w-4 text-purple-600 rounded focus:ring-purple-500"
+                                   data-category="${category.name}">
+                            <div>
+                                <h6 class="font-semibold text-gray-800">${category.name}</h6>
+                                <p class="text-xs text-gray-600">${category.description || 'Trade category'}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xs text-purple-600 font-medium">
+                                ${category.qnas?.length || 0} Q&As
+                            </div>
+                            <div class="text-xs text-orange-600">
+                                ${category.keywords?.length || 0} Keywords
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Trade-specific features -->
+                    <div class="mt-3 pt-3 border-t border-gray-200">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-gray-500">
+                                <i class="fas fa-brain mr-1"></i>AI Optimization: 
+                                <span class="text-green-600 font-medium">${category.aiOptimized ? 'Enabled' : 'Standard'}</span>
+                            </span>
+                            <span class="text-gray-500">
+                                Updated: ${new Date(category.lastUpdated || category.createdAt).toLocaleDateString()}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            console.log('✅ Global trade categories rendered successfully');
+        }
+        
+        /**
+         * 🔧 ENTERPRISE: Toggle Trade Category Selection
+         */
+        function toggleTradeCategory(categoryName) {
+            const checkbox = document.getElementById(`trade-cat-${categoryName.replace(/\s+/g, '-').toLowerCase()}`);
+            const option = document.querySelector(`[data-category-name="${categoryName}"]`);
+            
+            if (checkbox && option) {
+                checkbox.checked = !checkbox.checked;
+                
+                // Visual feedback
+                if (checkbox.checked) {
+                    option.classList.add('bg-purple-100', 'border-purple-500');
+                    option.classList.remove('border-gray-300');
+                } else {
+                    option.classList.remove('bg-purple-100', 'border-purple-500');
+                    option.classList.add('border-gray-300');
+                }
+                
+                updateSelectedTradesDisplay();
+                console.log(`🔧 Trade category ${checkbox.checked ? 'selected' : 'deselected'}:`, categoryName);
+            }
+        }
+        
+        /**
+         * 📊 ENTERPRISE: Update Selected Trades Display
+         */
+        function updateSelectedTradesDisplay() {
+            const checkboxes = document.querySelectorAll('.trade-category-checkbox:checked');
+            const selectedTrades = Array.from(checkboxes).map(cb => cb.dataset.category);
+            
+            const countEl = document.getElementById('selected-trades-count');
+            const displayEl = document.getElementById('selected-trades-display');
+            
+            if (countEl) {
+                countEl.textContent = `${selectedTrades.length} selected`;
+            }
+            
+            if (displayEl) {
+                if (selectedTrades.length > 0) {
+                    displayEl.innerHTML = selectedTrades.map(trade => `
+                        <span class="px-3 py-1 bg-purple-100 text-purple-800 text-sm font-medium rounded-full">
+                            <i class="fas fa-tools mr-1"></i>${trade}
+                        </span>
+                    `).join('');
+                } else {
+                    displayEl.innerHTML = '<div class="text-gray-500 text-sm">No trade categories selected</div>';
+                }
+            }
+            
+            console.log('📊 Selected trades updated:', selectedTrades);
+        }
+        
+        /**
+         * 📥 ENTERPRISE: Load Company's Current Trade Selection
+         */
+        async function loadCompanyTradeSelection() {
+            try {
+                const companyId = getCurrentCompanyId();
+                const response = await fetch(`/api/company/${companyId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const company = await response.json();
+                const selectedTrades = company.tradeCategories || [];
+                
+                console.log('📥 Company trade selection loaded:', selectedTrades);
+                
+                // Update checkboxes to reflect current selection
+                setTimeout(() => {
+                    selectedTrades.forEach(tradeName => {
+                        const checkbox = document.getElementById(`trade-cat-${tradeName.replace(/\s+/g, '-').toLowerCase()}`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            toggleTradeCategory(tradeName); // Apply visual styling
+                        }
+                    });
+                    
+                    updateSelectedTradesDisplay();
+                }, 500); // Small delay to ensure categories are rendered first
+                
+            } catch (error) {
+                console.error('❌ Failed to load company trade selection:', error);
+            }
+        }
+        
+        /**
+         * 💾 ENTERPRISE: Save Company Trade Selection (Mongoose + Redis)
+         */
+        async function saveCompanyTradeSelection() {
+            try {
+                console.log('💾 Saving company trade selection...');
+                
+                const checkboxes = document.querySelectorAll('.trade-category-checkbox:checked');
+                const selectedTrades = Array.from(checkboxes).map(cb => cb.dataset.category);
+                
+                if (selectedTrades.length === 0) {
+                    showNotification('Please select at least one trade category for your company.', 'warning');
+                    return;
+                }
+                
+                const companyId = getCurrentCompanyId();
+                
+                console.log('💾 Saving selected trades for company:', companyId);
+                console.log('💾 Selected trades:', selectedTrades);
+                
+                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        tradeCategories: selectedTrades,
+                        source: 'trade-category-selection',
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to save trade categories');
+                }
+                
+                const result = await response.json();
+                console.log('✅ Trade categories saved successfully:', result);
+                
+                // Show success notification
+                showNotification(`Trade categories saved! Selected: ${selectedTrades.join(', ')}. AI agent will use these for optimized keyword generation.`, 'success');
+                
+                // Reload Trade Q&A entries to reflect new trade selection
+                loadTradeQnAEntries();
+                
+            } catch (error) {
+                console.error('❌ Failed to save trade categories:', error);
+                showNotification('Failed to save trade categories: ' + error.message, 'error');
+            }
         }
         
         /**
@@ -9110,34 +9399,113 @@ Key Metrics:
             if (listEl) listEl.classList.add('hidden');
             if (emptyEl) emptyEl.classList.add('hidden');
             
-            // Fetch Trade Q&A data from backend
-            fetch(`/api/enterprise-trade-categories/qnas/${companyId}`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken') || sessionStorage.getItem('authToken')}`,
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (loadingEl) loadingEl.classList.add('hidden');
-                
-                if (data.success && data.qnas && data.qnas.length > 0) {
-                    displayTradeQnAEntries(data.qnas);
-                    if (listEl) listEl.classList.remove('hidden');
-                } else {
-                    if (emptyEl) emptyEl.classList.remove('hidden');
-                }
-            })
-            .catch(error => {
-                console.error('❌ Failed to load Trade Q&A entries:', error);
-                if (loadingEl) loadingEl.classList.add('hidden');
-                if (emptyEl) emptyEl.classList.remove('hidden');
-            });
+            // 🚀 ENTERPRISE: Load Trade Q&A filtered by selected trade categories
+            loadCompanyTradeQnAEntries(companyId, loadingEl, listEl, emptyEl);
         }
         
         /**
-         * ✅ PRODUCTION: Display Trade Q&A entries in the UI
+         * 🚀 ENTERPRISE: Load Company Trade Q&A Entries (Sophisticated Multi-Tenant System)
+         */
+        async function loadCompanyTradeQnAEntries(companyId, loadingEl, listEl, emptyEl) {
+            try {
+                console.log('🚀 Loading company-specific Trade Q&A entries...');
+                
+                // First, get company's selected trade categories
+                const companyResponse = await fetch(`/api/company/${companyId}`);
+                if (!companyResponse.ok) {
+                    throw new Error('Failed to load company data');
+                }
+                
+                const company = await companyResponse.json();
+                const selectedTrades = company.tradeCategories || [];
+                
+                console.log('🔧 Company selected trades for Q&A filtering:', selectedTrades);
+                
+                if (selectedTrades.length === 0) {
+                    console.log('ℹ️ No trade categories selected - showing selection prompt');
+                    if (loadingEl) loadingEl.classList.add('hidden');
+                    if (emptyEl) emptyEl.classList.remove('hidden');
+                    
+                    // Update empty state to prompt trade selection
+                    const emptyMessage = emptyEl?.querySelector('p');
+                    if (emptyMessage) {
+                        emptyMessage.innerHTML = `
+                            <i class="fas fa-tools text-4xl text-purple-300 mb-4"></i>
+                            <h3 class="text-lg font-medium text-gray-900 mb-2">Select Trade Categories First</h3>
+                            <p class="text-gray-500 mb-6">Choose your company's trade categories above to manage trade-specific Q&A entries.</p>
+                            <button onclick="document.getElementById('available-trade-categories').scrollIntoView()" 
+                                    class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition-colors">
+                                <i class="fas fa-arrow-up mr-2"></i>Select Trade Categories
+                            </button>
+                        `;
+                    }
+                    return;
+                }
+                
+                // Load Trade Q&A entries for selected trades
+                const tradesParam = selectedTrades.join(',');
+                const tradeQnAResponse = await fetch(`/api/enterprise-trade-categories/qnas/${companyId}?trades=${tradesParam}&status=active`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken') || localStorage.getItem('authToken')}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                let tradeQnAs = [];
+                if (tradeQnAResponse.ok) {
+                    const result = await tradeQnAResponse.json();
+                    tradeQnAs = result.data || result.qnas || [];
+                    console.log('✅ Trade Q&A entries loaded:', tradeQnAs.length);
+                    
+                    // Enhanced logging for trade-specific entries
+                    if (tradeQnAs.length > 0) {
+                        const tradeBreakdown = {};
+                        tradeQnAs.forEach(qna => {
+                            const trade = qna.tradeCategory || 'Unknown';
+                            tradeBreakdown[trade] = (tradeBreakdown[trade] || 0) + 1;
+                        });
+                        console.log('📊 Trade Q&A breakdown by category:', tradeBreakdown);
+                    }
+                } else {
+                    console.log('ℹ️ No Trade Q&A entries found for selected trades');
+                }
+                
+                // Display the entries
+                displayTradeQnAEntries(tradeQnAs);
+                
+                // Update UI state
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (tradeQnAs.length > 0) {
+                    if (listEl) listEl.classList.remove('hidden');
+                } else {
+                    if (emptyEl) emptyEl.classList.remove('hidden');
+                    
+                    // Update empty state for trade-specific context
+                    const emptyMessage = emptyEl?.querySelector('p');
+                    if (emptyMessage) {
+                        emptyMessage.innerHTML = `
+                            <i class="fas fa-plus-circle text-4xl text-orange-300 mb-4"></i>
+                            <h3 class="text-lg font-medium text-gray-900 mb-2">No Trade Q&A Entries Yet</h3>
+                            <p class="text-gray-500 mb-6">Add company-specific Q&A entries for your selected trade categories: <strong>${selectedTrades.join(', ')}</strong></p>
+                            <button onclick="showAddTradeQnAModal()" 
+                                    class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md transition-colors">
+                                <i class="fas fa-plus mr-2"></i>Add Trade Q&A
+                            </button>
+                        `;
+                    }
+                }
+                
+            } catch (error) {
+                console.error('❌ Failed to load company Trade Q&A entries:', error);
+                
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (emptyEl) emptyEl.classList.remove('hidden');
+            }
+        }
+        
+        /**
+         * ✅ ENTERPRISE: Display Trade Q&A entries with sophisticated UI
          */
         function displayTradeQnAEntries(qnas) {
             const listContainer = document.getElementById('trade-qna-entries-list');
