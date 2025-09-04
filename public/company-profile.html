@@ -2487,13 +2487,8 @@
                                                                 <div>
                                                                     <label class="block text-sm font-medium text-gray-700 mb-2">Trade Category</label>
                                                                     <select id="trade-category-filter" class="form-select">
-                                                                        <option value="">All Trade Categories</option>
-                                                                        <option value="plumbing">Plumbing</option>
-                                                                        <option value="electrical">Electrical</option>
-                                                                        <option value="hvac">HVAC</option>
-                                                                        <option value="roofing">Roofing</option>
-                                                                        <option value="landscaping">Landscaping</option>
-                                                                        <option value="cleaning">Cleaning Services</option>
+                                                                        <option value="">All Selected Trade Categories</option>
+                                                                        <!-- Dynamic options populated by populateCompanyTradeDropdown() -->
                                                                     </select>
                                                                 </div>
                                                                 <div>
@@ -9322,10 +9317,112 @@ Key Metrics:
                     });
                     
                     updateSelectedTradesDisplay();
+                    
+                    // 🔧 CRITICAL: Populate Trade Category dropdown with company's selected trades only
+                    populateCompanyTradeDropdown(selectedTrades);
+                    
                 }, 500); // Small delay to ensure categories are rendered first
                 
             } catch (error) {
                 console.error('❌ Failed to load company trade selection:', error);
+            }
+        }
+        
+        /**
+         * 🔧 ENTERPRISE: Populate Trade Category Dropdown with Company's Selected Trades
+         */
+        function populateCompanyTradeDropdown(selectedTrades) {
+            const dropdown = document.getElementById('trade-category-filter');
+            if (!dropdown) {
+                console.error('❌ Trade category filter dropdown not found');
+                return;
+            }
+            
+            console.log('🔧 Populating trade dropdown with company selected trades:', selectedTrades);
+            
+            // Clear existing options except "All"
+            dropdown.innerHTML = '<option value="">All Selected Trade Categories</option>';
+            
+            // Add options for each selected trade category
+            selectedTrades.forEach(tradeName => {
+                const option = document.createElement('option');
+                option.value = tradeName;
+                option.textContent = tradeName;
+                dropdown.appendChild(option);
+            });
+            
+            // Add event listener for filtering Trade Q&As by selected trade
+            dropdown.addEventListener('change', (e) => {
+                const selectedTrade = e.target.value;
+                console.log('🔍 Trade category filter changed to:', selectedTrade);
+                filterTradeQnAsByCategory(selectedTrade);
+            });
+            
+            console.log('✅ Trade category dropdown populated with company trades');
+        }
+        
+        /**
+         * 🔍 ENTERPRISE: Filter Trade Q&As by Selected Trade Category
+         */
+        async function filterTradeQnAsByCategory(tradeCategory) {
+            try {
+                console.log('🔍 Filtering Trade Q&As by category:', tradeCategory);
+                
+                const companyId = getCurrentCompanyId();
+                const loadingEl = document.getElementById('trade-qna-loading');
+                const listEl = document.getElementById('trade-qna-entries-list');
+                const emptyEl = document.getElementById('trade-qna-empty-state');
+                
+                // Show loading state
+                if (loadingEl) loadingEl.classList.remove('hidden');
+                if (listEl) listEl.classList.add('hidden');
+                if (emptyEl) emptyEl.classList.add('hidden');
+                
+                // Build API URL with trade filter
+                let apiUrl = `/api/enterprise-trade-categories/qnas/${companyId}?status=active`;
+                if (tradeCategory) {
+                    apiUrl += `&trades=${encodeURIComponent(tradeCategory)}`;
+                }
+                
+                console.log('🔍 Loading Trade Q&As with filter URL:', apiUrl);
+                
+                const response = await fetch(`${window.location.origin}${apiUrl}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('adminToken') || localStorage.getItem('authToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                const filteredQnAs = result.data || [];
+                
+                console.log('✅ Filtered Trade Q&As loaded:', filteredQnAs.length);
+                console.log('🔍 Trade filter applied:', tradeCategory || 'all');
+                
+                // Display filtered results
+                displayTradeQnAEntries(filteredQnAs);
+                
+                // Update UI state
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (filteredQnAs.length > 0) {
+                    if (listEl) listEl.classList.remove('hidden');
+                } else {
+                    if (emptyEl) emptyEl.classList.remove('hidden');
+                }
+                
+            } catch (error) {
+                console.error('❌ Failed to filter Trade Q&As by category:', error);
+                
+                const loadingEl = document.getElementById('trade-qna-loading');
+                const emptyEl = document.getElementById('trade-qna-empty-state');
+                
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (emptyEl) emptyEl.classList.remove('hidden');
             }
         }
         
@@ -9371,6 +9468,9 @@ Key Metrics:
                 
                 // Show success notification
                 showNotification(`Trade categories saved! Selected: ${selectedTrades.join(', ')}. AI agent will use these for optimized keyword generation.`, 'success');
+                
+                // 🔧 CRITICAL: Update Trade Category dropdown with new selection
+                populateCompanyTradeDropdown(selectedTrades);
                 
                 // Reload Trade Q&A entries to reflect new trade selection
                 loadTradeQnAEntries();
