@@ -2592,10 +2592,7 @@
                                                                 <i class="fas fa-tools text-4xl text-gray-300 mb-4"></i>
                                                                 <h3 class="text-lg font-medium text-gray-900 mb-2">No Trade Q&A Entries Found</h3>
                                                                 <p class="text-gray-500 mb-6">Get started by adding your first trade-specific question and answer with auto-generated keywords.</p>
-                                                                <button onclick="showAddTradeQnAModal()" 
-                                                                        class="bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out">
-                                                                    <i class="fas fa-plus mr-2"></i>Add Your First Trade Q&A
-                                                                </button>
+                                                                <p class="text-sm text-purple-600">Use the "Add Trade Q&A" button above to create your first entry.</p>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -9747,30 +9744,53 @@ Key Metrics:
         /**
          * ✅ PRODUCTION: Show Add Trade Q&A Modal
          */
-        function showAddTradeQnAModal() {
+        async function showAddTradeQnAModal() {
             console.log('🔧 Opening Add Trade Q&A Modal...');
+            
+            // Get company's selected trade categories for the dropdown
+            const companyId = getCurrentCompanyId();
+            let selectedTrades = [];
+            
+            try {
+                const response = await fetch(`/api/company/${companyId}`);
+                if (response.ok) {
+                    const company = await response.json();
+                    selectedTrades = company.tradeCategories || [];
+                }
+            } catch (error) {
+                console.error('❌ Failed to load company trades for modal:', error);
+            }
+            
+            console.log('🔧 Company selected trades for modal:', selectedTrades);
+            
+            // Generate trade category options from company's selected trades only
+            const tradeOptions = selectedTrades.length > 0 
+                ? selectedTrades.map(trade => `<option value="${trade}">${trade}</option>`).join('')
+                : '<option value="">No trade categories selected - please select trades first</option>';
             
             const modalHtml = `
                 <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
                     <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
                         <div class="flex items-center justify-between pb-4 border-b">
-                            <h3 class="text-lg font-semibold">🔧 Add Trade Q&A</h3>
+                            <h3 class="text-lg font-semibold">🔧 Add Company-Specific Trade Q&A</h3>
                             <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-gray-600">
                                 <i class="fas fa-times text-xl"></i>
                             </button>
                         </div>
                         <div class="mt-4 space-y-6">
+                            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                                <p class="text-sm text-purple-700">
+                                    <i class="fas fa-info-circle mr-2"></i>
+                                    <strong>Company-Specific Trade Knowledge:</strong> Add Q&As that are specific to your company's operations and don't belong in the global trade knowledge base.
+                                </p>
+                            </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-2">Trade Category</label>
-                                    <select id="new-trade-category" class="w-full border border-gray-300 rounded-md px-3 py-2">
-                                        <option value="plumbing">Plumbing</option>
-                                        <option value="electrical">Electrical</option>
-                                        <option value="hvac">HVAC</option>
-                                        <option value="roofing">Roofing</option>
-                                        <option value="landscaping">Landscaping</option>
-                                        <option value="cleaning">Cleaning Services</option>
+                                    <select id="new-trade-category" class="w-full border border-gray-300 rounded-md px-3 py-2" ${selectedTrades.length === 0 ? 'disabled' : ''}>
+                                        ${tradeOptions}
                                     </select>
+                                    ${selectedTrades.length === 0 ? '<p class="text-xs text-red-500 mt-1">Please select trade categories first in the section above.</p>' : ''}
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-2">Confidence Score</label>
