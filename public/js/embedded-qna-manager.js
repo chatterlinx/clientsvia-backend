@@ -17,6 +17,7 @@ class EmbeddedQnAManager {
         this.companyId = window.companyId || this.extractCompanyIdFromURL();
         this.initialized = false;
         this.qnas = []; // Initialize qnas array for edit functionality
+        this.currentStatusFilter = 'all'; // Track current status filter
         
         console.log('🚀 PRODUCTION: Embedded Q&A Manager initializing...');
         console.log('🌐 API Base URL:', this.apiBaseUrl);
@@ -114,7 +115,9 @@ class EmbeddedQnAManager {
                 headers['Authorization'] = `Bearer ${token}`;
             }
             
-            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas?status=all&_cb=${Date.now()}`, {
+            // Use current filter state instead of always 'all'
+            const filterStatus = this.currentStatusFilter || 'all';
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas?status=${filterStatus}&_cb=${Date.now()}`, {
                 method: 'GET',
                 headers: headers,
                 credentials: 'include' // Include cookies for additional auth
@@ -202,8 +205,10 @@ class EmbeddedQnAManager {
      * Render Q&A entries with enterprise UI - Enhanced with status coordination
      */
     renderQnAEntries(qnas) {
-        console.log('🎨 CHECKPOINT: Starting to render Q&A entries');
+        const renderId = Date.now();
+        console.log(`🎨 CHECKPOINT: Starting to render Q&A entries (Render ID: ${renderId})`);
         console.log('🎨 CHECKPOINT: Number of entries to render:', qnas?.length || 0);
+        console.log('🎨 CHECKPOINT: Current filter state:', this.currentStatusFilter);
         
         // Enhanced debugging for status coordination
         if (qnas && qnas.length > 0) {
@@ -447,6 +452,10 @@ class EmbeddedQnAManager {
         try {
             console.log('🔍 CHECKPOINT: Filtering Q&A entries by status:', status);
             
+            // Update current filter state
+            this.currentStatusFilter = status || 'all';
+            console.log('🔍 CHECKPOINT: Updated current filter state to:', this.currentStatusFilter);
+            
             // Determine the API status parameter
             let apiStatus = status;
             if (status === '' || status === 'all') {
@@ -491,21 +500,40 @@ class EmbeddedQnAManager {
                 });
                 console.log('📊 CHECKPOINT: Filtered status distribution:', statusCounts);
                 
+                console.log('🔍 CHECKPOINT: About to render filtered entries');
                 this.renderQnAEntries(data.data);
+                console.log('🔍 CHECKPOINT: Finished rendering filtered entries');
                 
                 // Update UI visibility
                 const listEl = document.getElementById('qna-entries-list');
                 const emptyEl = document.getElementById('qna-empty-state');
                 
+                console.log('🔍 CHECKPOINT: Updating UI visibility for filtered results');
+                console.log('🔍 CHECKPOINT: listEl exists:', !!listEl);
+                console.log('🔍 CHECKPOINT: emptyEl exists:', !!emptyEl);
+                
                 if (data.data.length > 0) {
-                    if (listEl) listEl.classList.remove('hidden');
-                    if (emptyEl) emptyEl.classList.add('hidden');
+                    if (listEl) {
+                        listEl.classList.remove('hidden');
+                        console.log('✅ CHECKPOINT: Filtered Q&A list shown');
+                    }
+                    if (emptyEl) {
+                        emptyEl.classList.add('hidden');
+                        console.log('✅ CHECKPOINT: Empty state hidden for filtered results');
+                    }
                 } else {
-                    if (listEl) listEl.classList.add('hidden');
-                    if (emptyEl) emptyEl.classList.remove('hidden');
+                    if (listEl) {
+                        listEl.classList.add('hidden');
+                        console.log('⚠️ CHECKPOINT: Q&A list hidden - no filtered results');
+                    }
+                    if (emptyEl) {
+                        emptyEl.classList.remove('hidden');
+                        console.log('⚠️ CHECKPOINT: Empty state shown for filtered results');
+                    }
                 }
                 
                 console.log(`✅ CHECKPOINT: Status filter applied - showing ${data.data.length} entries with status: ${status || 'all'}`);
+                console.log('🔍 CHECKPOINT: UI should now show only filtered entries');
             }
             
         } catch (error) {
