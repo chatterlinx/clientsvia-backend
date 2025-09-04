@@ -932,26 +932,47 @@ class EmbeddedQnAManager {
             // Force refresh by adding cache-busting parameter
             const originalApiCall = this.loadCompanyQnAEntries;
             this.loadCompanyQnAEntries = async () => {
-                const cacheBuster = `?_cb=${Date.now()}`;
+                const cacheBuster = `&_cb=${Date.now()}`;
                 const originalUrl = `${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`;
+                const fullUrl = `${originalUrl}?status=all${cacheBuster}`;
                 
-                console.log('🔄 CHECKPOINT: Force refreshing with cache buster:', cacheBuster);
+                console.log('🔄 CHECKPOINT: Force refreshing after edit');
+                console.log('🔄 CHECKPOINT: Full URL being called:', fullUrl);
+                console.log('🔄 CHECKPOINT: Expected to get ALL entries regardless of status');
                 
                 const headers = { 'Content-Type': 'application/json' };
                 const token = this.getAuthToken();
-                if (token) headers['Authorization'] = `Bearer ${token}`;
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                    console.log('🔄 CHECKPOINT: Auth token included in force refresh');
+                }
                 
-                const response = await fetch(`${originalUrl}?status=all${cacheBuster}`, {
+                const response = await fetch(fullUrl, {
                     method: 'GET',
                     headers: headers,
                     credentials: 'include'
                 });
                 
+                console.log('🔄 CHECKPOINT: Force refresh response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ CHECKPOINT: Force refresh failed:', {
+                        status: response.status,
+                        errorBody: errorText,
+                        url: fullUrl
+                    });
+                    return;
+                }
+                
                 const data = await response.json();
+                console.log('🔄 CHECKPOINT: Force refresh response data:', data);
                 
                 if (data.success && data.data) {
                     this.qnas = data.data;
                     console.log('✅ CHECKPOINT: Force refresh loaded entries:', this.qnas.length);
+                    console.log('🔄 CHECKPOINT: Entry statuses:', this.qnas.map(q => q.status));
+                    
                     this.renderQnAEntries(data.data);
                     
                     const listEl = document.getElementById('qna-entries-list');
@@ -960,10 +981,14 @@ class EmbeddedQnAManager {
                     if (data.data.length > 0) {
                         if (listEl) listEl.classList.remove('hidden');
                         if (emptyEl) emptyEl.classList.add('hidden');
+                        console.log('✅ CHECKPOINT: Q&A list shown after force refresh');
                     } else {
                         if (listEl) listEl.classList.add('hidden');
                         if (emptyEl) emptyEl.classList.remove('hidden');
+                        console.log('⚠️ CHECKPOINT: Empty state shown - no entries found');
                     }
+                } else {
+                    console.error('❌ CHECKPOINT: Invalid response data from force refresh:', data);
                 }
             };
             
