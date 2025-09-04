@@ -9672,18 +9672,28 @@ Key Metrics:
             })
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    updateTradeQnAStats(data.stats);
+                console.log('📊 Trade Q&A stats API response:', data);
+                if (data.success && data.data) {
+                    // Use data.data (correct field from API)
+                    updateTradeQnAStats(data.data);
+                } else {
+                    console.log('ℹ️ No stats data - using defaults');
+                    updateTradeQnAStats({
+                        total: 0,
+                        active: 0,
+                        avgConfidence: '--',
+                        breakdown: {}
+                    });
                 }
             })
             .catch(error => {
                 console.error('❌ Failed to load Trade Q&A stats:', error);
                 // Set default stats on error
                 updateTradeQnAStats({
-                    totalQnAs: 0,
-                    activeQnAs: 0,
+                    total: 0,
+                    active: 0,
                     avgConfidence: '--',
-                    tradeCategories: 0
+                    breakdown: {}
                 });
             });
         }
