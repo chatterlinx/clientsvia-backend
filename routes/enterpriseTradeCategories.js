@@ -309,6 +309,65 @@ router.get('/qnas/:companyId', async (req, res) => {
 });
 
 /**
+ * @route   GET /api/enterprise-trade-categories/stats/:companyId
+ * @desc    Get Trade Q&A statistics for company
+ */
+router.get('/stats/:companyId', async (req, res) => {
+    try {
+        console.log('📊 ENTERPRISE: Loading Trade Q&A stats');
+        
+        const { companyId } = req.params;
+        
+        const CompanyQnA = require('../models/knowledge/CompanyQnA');
+        
+        // Get trade Q&A statistics
+        const totalTradeQnAs = await CompanyQnA.countDocuments({ 
+            companyId: companyId,
+            tradeCategories: { $exists: true, $not: { $size: 0 } }
+        });
+        
+        const activeTradeQnAs = await CompanyQnA.countDocuments({ 
+            companyId: companyId,
+            status: 'active',
+            tradeCategories: { $exists: true, $not: { $size: 0 } }
+        });
+        
+        // Get trade category breakdown
+        const tradeBreakdown = await CompanyQnA.aggregate([
+            { $match: { companyId: companyId } },
+            { $unwind: '$tradeCategories' },
+            { $group: { _id: '$tradeCategories', count: { $sum: 1 } } }
+        ]);
+        
+        const stats = {
+            total: totalTradeQnAs,
+            active: activeTradeQnAs,
+            draft: totalTradeQnAs - activeTradeQnAs,
+            breakdown: tradeBreakdown.reduce((acc, item) => {
+                acc[item._id] = item.count;
+                return acc;
+            }, {}),
+            lastUpdated: new Date()
+        };
+        
+        console.log('✅ Trade Q&A stats loaded:', stats);
+        
+        res.json({
+            success: true,
+            data: stats
+        });
+        
+    } catch (error) {
+        console.error('❌ Failed to load Trade Q&A stats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to load Trade Q&A stats',
+            error: error.message
+        });
+    }
+});
+
+/**
  * @route   POST /api/enterprise-trade-categories/:id/qna
  * @desc    Add Q&A to a trade category with auto-generated keywords
  */

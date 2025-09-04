@@ -9239,26 +9239,29 @@ Key Metrics:
         }
         
         /**
-         * 🔧 ENTERPRISE: Toggle Trade Category Selection
+         * 🔧 ENTERPRISE: Toggle Trade Category Selection (Fixed Logic)
          */
         function toggleTradeCategory(categoryName) {
             const checkbox = document.getElementById(`trade-cat-${categoryName.replace(/\s+/g, '-').toLowerCase()}`);
             const option = document.querySelector(`[data-category-name="${categoryName}"]`);
             
             if (checkbox && option) {
-                checkbox.checked = !checkbox.checked;
-                
-                // Visual feedback
-                if (checkbox.checked) {
-                    option.classList.add('bg-purple-100', 'border-purple-500');
-                    option.classList.remove('border-gray-300');
-                } else {
-                    option.classList.remove('bg-purple-100', 'border-purple-500');
-                    option.classList.add('border-gray-300');
-                }
-                
-                updateSelectedTradesDisplay();
-                console.log(`🔧 Trade category ${checkbox.checked ? 'selected' : 'deselected'}:`, categoryName);
+                // Don't toggle - let the checkbox handle its own state
+                // Just update visual feedback based on current state
+                setTimeout(() => {
+                    // Visual feedback based on checkbox state
+                    if (checkbox.checked) {
+                        option.classList.add('bg-purple-100', 'border-purple-500');
+                        option.classList.remove('border-gray-300');
+                        console.log(`✅ Trade category SELECTED:`, categoryName);
+                    } else {
+                        option.classList.remove('bg-purple-100', 'border-purple-500');
+                        option.classList.add('border-gray-300');
+                        console.log(`❌ Trade category DESELECTED:`, categoryName);
+                    }
+                    
+                    updateSelectedTradesDisplay();
+                }, 10); // Small delay to let checkbox update
             }
         }
         
