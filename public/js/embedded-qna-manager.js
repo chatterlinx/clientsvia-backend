@@ -430,16 +430,23 @@ class EmbeddedQnAManager {
         }
 
         // 🔧 CRITICAL: Connect Status Filter dropdown to Q&A filtering
+        console.log('🔍 CHECKPOINT: Looking for qna-status-filter element');
         const statusFilter = document.getElementById('qna-status-filter');
+        console.log('🔍 CHECKPOINT: qna-status-filter found:', !!statusFilter);
+        
         if (statusFilter) {
+            console.log('🔍 CHECKPOINT: Status filter element exists, adding event listener');
             statusFilter.addEventListener('change', (e) => {
                 const selectedStatus = e.target.value;
                 console.log('🔍 CHECKPOINT: Status filter changed to:', selectedStatus);
+                console.log('🔍 CHECKPOINT: Triggering filterQnAByStatus method');
                 this.filterQnAByStatus(selectedStatus);
             });
-            console.log('✅ CHECKPOINT: Status filter dropdown connected');
+            console.log('✅ CHECKPOINT: Status filter dropdown connected successfully');
         } else {
-            console.warn('⚠️ CHECKPOINT: qna-status-filter dropdown not found');
+            console.error('❌ CHECKPOINT: qna-status-filter dropdown not found in DOM');
+            console.log('🔍 CHECKPOINT: Available select elements:', 
+                Array.from(document.querySelectorAll('select')).map(s => s.id).filter(id => id));
         }
 
         console.log('✅ Event listeners configured');
