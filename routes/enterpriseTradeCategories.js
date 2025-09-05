@@ -336,6 +336,18 @@ router.get('/stats/:companyId', async (req, res) => {
             tradeCategories: { $exists: true, $not: { $size: 0 } }
         });
         
+        const draftTradeQnAs = await CompanyQnA.countDocuments({ 
+            companyId: companyId,
+            status: 'draft',
+            tradeCategories: { $exists: true, $not: { $size: 0 } }
+        });
+        
+        const reviewTradeQnAs = await CompanyQnA.countDocuments({ 
+            companyId: companyId,
+            status: 'under_review',
+            tradeCategories: { $exists: true, $not: { $size: 0 } }
+        });
+        
         // Get trade category breakdown
         const tradeBreakdown = await CompanyQnA.aggregate([
             { $match: { companyId: companyId } },
@@ -346,7 +358,9 @@ router.get('/stats/:companyId', async (req, res) => {
         const stats = {
             total: totalTradeQnAs,
             active: activeTradeQnAs,
-            draft: totalTradeQnAs - activeTradeQnAs,
+            draft: draftTradeQnAs,
+            under_review: reviewTradeQnAs,
+            inactive: totalTradeQnAs - activeTradeQnAs - draftTradeQnAs - reviewTradeQnAs,
             breakdown: tradeBreakdown.reduce((acc, item) => {
                 acc[item._id] = item.count;
                 return acc;
