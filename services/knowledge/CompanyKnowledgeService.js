@@ -31,6 +31,7 @@
 
 const CompanyQnA = require('../../models/knowledge/CompanyQnA');
 const KeywordGenerationService = require('./KeywordGenerationService');
+const natural = require('natural');
 const winston = require('winston');
 
 // Initialize Redis client
@@ -156,9 +157,21 @@ class CompanyKnowledgeService {
         { companyId }
       );
 
+      // Step 2.1: Build or load per-company phonetic dictionary for trade terms
+      const phoneticDict = await this.getCompanyPhoneticDictionary(companyId);
+      const metaphone = natural.Metaphone;
+
+      // Create a trade-scoped fuzzy set from the generated query keywords
+      const expandedQueryKeywords = new Set(queryKeywords.primary);
+      queryKeywords.primary.forEach(token => {
+        const key = metaphone.process(token);
+        const expansions = phoneticDict[key] || [];
+        expansions.forEach(exp => expandedQueryKeywords.add(exp));
+      });
+
       // Step 3: Search database with optimized query
       const searchResults = await this.performOptimizedSearch(
-        queryKeywords.primary,
+        Array.from(expandedQueryKeywords),
         companyId,
         { minConfidence, maxResults }
       );
@@ -238,13 +251,15 @@ class CompanyKnowledgeService {
       // Calculate relevance score
       const keywordMatches = this.countKeywordMatches(result.keywords, keywords);
       const questionSimilarity = this.calculateStringSimilarity(originalQuery, result.question);
+      const phoneticSimilarity = this.phoneticSimilarity(originalQuery, result.question);
       const usageScore = Math.min(result.usageCount / 100, 1); // Normalize usage count
       
       // Weighted scoring
       const relevanceScore = (
-        (keywordMatches * 0.4) +
-        (questionSimilarity * 0.4) +
-        (result.confidence * 0.15) +
+        (keywordMatches * 0.35) +
+        (questionSimilarity * 0.35) +
+        (phoneticSimilarity * 0.15) +
+        (result.confidence * 0.1) +
         (usageScore * 0.05)
       );
 
@@ -252,7 +267,8 @@ class CompanyKnowledgeService {
         ...result,
         relevanceScore,
         keywordMatches,
-        questionSimilarity
+        questionSimilarity,
+        phoneticSimilarity
       };
     }).sort((a, b) => b.relevanceScore - a.relevanceScore);
   }
@@ -593,6 +609,66 @@ class CompanyKnowledgeService {
     
     const editDistance = this.levenshteinDistance(longer, shorter);
     return (longer.length - editDistance) / longer.length;
+  }
+
+  // Phonetic similarity (Metaphone Jaccard)
+  phoneticSimilarity(a, b) {
+    try {
+      const tok = (s) => (s || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean);
+      const meta = (w) => natural.Metaphone.process(w);
+      const setA = new Set(tok(a).map(meta));
+      const setB = new Set(tok(b).map(meta));
+      if (setA.size === 0 || setB.size === 0) return 0;
+      let inter = 0;
+      setA.forEach(v => { if (setB.has(v)) inter++; });
+      const union = setA.size + setB.size - inter;
+      return union === 0 ? 0 : inter / union;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  // Build/load per-company phonetic dictionary and cache in Redis
+  async getCompanyPhoneticDictionary(companyId) {
+    const cacheKey = `company:${companyId}:phonetic:dict:v1`;
+    if (redisClient) {
+      try {
+        const cached = await redisClient.get(cacheKey);
+        if (cached) return JSON.parse(cached);
+      } catch (_) {}
+    }
+
+    // Derive dictionary from existing active Q&A keywords and trade terms
+    const activeQnas = await CompanyQnA.find({ companyId, status: 'active' })
+      .select('keywords tradeCategories')
+      .limit(200)
+      .lean();
+    const metaphone = natural.Metaphone;
+    const dict = {};
+    activeQnas.forEach(q => {
+      (q.keywords || []).forEach(kw => {
+        const key = metaphone.process((kw || '').toLowerCase());
+        if (!key) return;
+        if (!dict[key]) dict[key] = [];
+        if (!dict[key].includes(kw)) dict[key].push(kw);
+      });
+      // Include trade category labels as anchors
+      (q.tradeCategories || []).forEach(tc => {
+        const key = metaphone.process((tc || '').toLowerCase());
+        if (!key) return;
+        if (!dict[key]) dict[key] = [];
+        if (!dict[key].includes(tc)) dict[key].push(tc);
+      });
+    });
+
+    if (redisClient) {
+      try { await redisClient.setex(cacheKey, 3600, JSON.stringify(dict)); } catch (_) {}
+    }
+    return dict;
   }
 
   levenshteinDistance(str1, str2) {
