@@ -9221,7 +9221,7 @@ Key Metrics:
                                 ${category.qnas?.length || 0} Q&As
                             </div>
                             <div class="text-xs text-orange-600">
-                                ${category.keywords?.length || 0} Keywords
+                                ${category.totalKeywords || getTotalKeywordsForCategory(category)} Keywords
                             </div>
                         </div>
                     </div>
@@ -9234,7 +9234,7 @@ Key Metrics:
                                 <span class="text-green-600 font-medium">${category.aiOptimized ? 'Enabled' : 'Standard'}</span>
                             </span>
                             <span class="text-gray-500">
-                                Updated: ${new Date(category.lastUpdated || category.createdAt).toLocaleDateString()}
+                                Updated: ${formatTradeDate(category.lastUpdated || category.createdAt || category.updatedAt)}
                             </span>
                         </div>
                     </div>
@@ -10085,6 +10085,52 @@ Key Metrics:
                 case 'draft': return 'Draft';
                 case 'under_review': return 'Under Review';
                 default: return status || 'Unknown';
+            }
+        }
+
+        /**
+         * 🔢 HELPER: Calculate total keywords for a trade category
+         */
+        function getTotalKeywordsForCategory(category) {
+            if (!category.qnas || !Array.isArray(category.qnas)) return 0;
+            
+            let totalKeywords = 0;
+            category.qnas.forEach(qna => {
+                if (qna.keywords && Array.isArray(qna.keywords)) {
+                    totalKeywords += qna.keywords.length;
+                }
+            });
+            return totalKeywords;
+        }
+
+        /**
+         * 📅 HELPER: Format trade category dates safely
+         */
+        function formatTradeDate(dateInput) {
+            if (!dateInput) return 'Not Available';
+            
+            try {
+                let date;
+                if (typeof dateInput === 'string') {
+                    date = new Date(dateInput);
+                } else if (dateInput instanceof Date) {
+                    date = dateInput;
+                } else {
+                    return 'Not Available';
+                }
+                
+                if (isNaN(date.getTime())) {
+                    return 'Not Available';
+                }
+                
+                return date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            } catch (error) {
+                console.warn('Date formatting error:', error);
+                return 'Not Available';
             }
         }
 

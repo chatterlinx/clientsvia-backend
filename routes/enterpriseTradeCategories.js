@@ -152,13 +152,63 @@ router.get('/', async (req, res) => {
             .sort({ name: 1 })
             .toArray();
         
-        logger.info('Trade categories retrieved', { count: categories.length, companyId });
+        // 🔧 PRODUCTION FIX: Enrich categories with Q&A and keyword data
+        const CompanyQnA = require('../models/knowledge/CompanyQnA');
+        
+        const enrichedCategories = await Promise.all(categories.map(async (category) => {
+            try {
+                // Get Q&As for this trade category (if companyId is provided)
+                let qnas = [];
+                if (companyId && companyId !== 'global') {
+                    qnas = await CompanyQnA.find({
+                        companyId: companyId,
+                        tradeCategories: category.name,
+                        status: { $in: ['active', 'draft', 'under_review'] } // Include all visible statuses
+                    }).select('question keywords createdAt updatedAt status').lean();
+                }
+                
+                // Calculate total keywords from all Q&As
+                const totalKeywords = qnas.reduce((total, qna) => {
+                    return total + (qna.keywords ? qna.keywords.length : 0);
+                }, 0);
+                
+                // Get the latest update date from Q&As or category
+                let lastUpdated = category.updatedAt || category.createdAt;
+                if (qnas.length > 0) {
+                    const latestQnA = qnas.reduce((latest, qna) => {
+                        const qnaDate = qna.updatedAt || qna.createdAt;
+                        return qnaDate > latest ? qnaDate : latest;
+                    }, new Date(0));
+                    
+                    if (latestQnA > new Date(lastUpdated || 0)) {
+                        lastUpdated = latestQnA;
+                    }
+                }
+                
+                return {
+                    ...category,
+                    qnas: qnas, // Include Q&As for frontend
+                    totalKeywords: totalKeywords,
+                    lastUpdated: lastUpdated
+                };
+            } catch (error) {
+                console.error('Error enriching category:', category.name, error);
+                return {
+                    ...category,
+                    qnas: [],
+                    totalKeywords: 0,
+                    lastUpdated: category.updatedAt || category.createdAt
+                };
+            }
+        }));
+        
+        logger.info('Trade categories retrieved and enriched', { count: enrichedCategories.length, companyId });
         
         res.json({
             success: true,
-            data: categories,
+            data: enrichedCategories,
             meta: {
-                total: categories.length,
+                total: enrichedCategories.length,
                 companyId,
                 includeGlobal: includeGlobal === 'true'
             }
