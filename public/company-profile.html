@@ -15218,6 +15218,9 @@ Key Metrics:
                     apiBaseUrl: window.location.origin
                 });
 
+                // Make it globally available for keyword management functions
+                window.companyQnAManagerInstance = companyQnAManagerInstance;
+
                 console.log('✅ Company Q&A Manager initialized successfully in modal');
                 
             } catch (error) {

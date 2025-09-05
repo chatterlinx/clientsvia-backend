@@ -77,6 +77,31 @@ class CompanyQnAManager {
      */
     render() {
         this.container.innerHTML = `
+            <style>
+                .keyword-display-container {
+                    min-height: 40px;
+                    padding: 8px 12px;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    background-color: #f8f9fa;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 4px;
+                    align-items: center;
+                }
+                
+                .btn-purple {
+                    background-color: #6f42c1;
+                    border-color: #6f42c1;
+                    color: white;
+                }
+                
+                .btn-purple:hover {
+                    background-color: #5a359a;
+                    border-color: #5a359a;
+                    color: white;
+                }
+            </style>
             <div class="company-qna-manager">
                 <!-- Header with Actions -->
                 <div class="qna-header">
@@ -200,11 +225,39 @@ class CompanyQnAManager {
                                 </div>
                             </div>
                             
+                            <!-- 🔑 KEYWORD EDITOR SECTION -->
                             <div class="form-group">
-                                <label for="customKeywords">Custom Keywords (Optional)</label>
-                                <input type="text" id="customKeywords" class="form-control" 
-                                       placeholder="additional, keywords, separated, by, commas">
-                                <small class="form-help">Keywords are auto-generated, but you can add custom ones</small>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label">Keywords</label>
+                                    <small class="text-muted">AI uses these to match customer questions</small>
+                                </div>
+                                
+                                <!-- Current Keywords Display -->
+                                <div class="mb-3">
+                                    <div id="company-keywords-display" class="keyword-display-container">
+                                        <span class="text-muted">No keywords yet</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Add New Keyword -->
+                                <div class="input-group mb-2">
+                                    <input id="company-new-keyword-input" type="text" class="form-control" 
+                                           placeholder="Add new keyword..." 
+                                           onkeypress="if(event.key==='Enter') this.parentElement.nextElementSibling.click()">
+                                    <div class="input-group-append">
+                                        <button type="button" onclick="addCompanyKeyword()" class="btn btn-success btn-sm">
+                                            <i class="fas fa-plus"></i> Add
+                                        </button>
+                                        <button type="button" onclick="regenerateCompanyKeywords()" class="btn btn-purple btn-sm" title="Auto-generate keywords">
+                                            <i class="fas fa-magic"></i> Regenerate
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <small class="form-help">
+                                    <i class="fas fa-lightbulb"></i>
+                                    Tip: Add specific terms your customers use. Remove problematic keywords that cause wrong matches.
+                                </small>
                             </div>
                             
                             <div class="form-group">
@@ -579,10 +632,9 @@ class CompanyQnAManager {
             status: document.getElementById('statusSelect').value
         };
 
-        // Add custom keywords if provided
-        const customKeywords = document.getElementById('customKeywords').value.trim();
-        if (customKeywords) {
-            qnaData.customKeywords = customKeywords.split(',').map(k => k.trim()).filter(k => k);
+        // Include edited keywords
+        if (window.companyEditingKeywords && window.companyEditingKeywords.length > 0) {
+            qnaData.keywords = window.companyEditingKeywords;
         }
 
         // Validate required fields
@@ -649,11 +701,124 @@ class CompanyQnAManager {
         document.getElementById('prioritySelect').value = qna.priority;
         document.getElementById('statusSelect').value = qna.status;
         
-        // Populate custom keywords
-        const customKeywords = qna.keywordCategories?.custom || [];
-        document.getElementById('customKeywords').value = customKeywords.join(', ');
+        // Initialize keywords for editing
+        this.initializeKeywordEditor(qna);
 
         this.showModal();
+    }
+
+    /**
+     * 🔑 KEYWORD MANAGEMENT METHODS
+     */
+    initializeKeywordEditor(qna = null) {
+        // Initialize global keyword array for editing
+        window.companyEditingKeywords = [];
+        
+        if (qna) {
+            // For editing: load existing keywords
+            const existingKeywords = qna.keywords || qna.keywordCategories?.custom || [];
+            window.companyEditingKeywords = [...existingKeywords];
+        }
+        
+        this.updateKeywordDisplay();
+    }
+
+    updateKeywordDisplay() {
+        const display = document.getElementById('company-keywords-display');
+        if (!display) return;
+        
+        const keywords = window.companyEditingKeywords || [];
+        
+        if (keywords.length === 0) {
+            display.innerHTML = '<span class="text-muted">No keywords yet</span>';
+            return;
+        }
+        
+        display.innerHTML = keywords.map(keyword => `
+            <span class="badge badge-info mr-1 mb-1" style="font-size: 0.85em;">
+                ${keyword}
+                <button type="button" onclick="removeCompanyKeyword('${keyword}')" 
+                        class="btn btn-link p-0 ml-1 text-white" style="font-size: 0.7em;" title="Remove keyword">
+                    <i class="fas fa-times"></i>
+                </button>
+            </span>
+        `).join('');
+    }
+
+    addKeyword(keyword) {
+        if (!keyword || !keyword.trim()) return false;
+        
+        const cleanKeyword = keyword.trim().toLowerCase();
+        
+        if (!window.companyEditingKeywords) {
+            window.companyEditingKeywords = [];
+        }
+        
+        if (window.companyEditingKeywords.includes(cleanKeyword)) {
+            this.showWarning('Keyword already exists');
+            return false;
+        }
+        
+        window.companyEditingKeywords.push(cleanKeyword);
+        this.updateKeywordDisplay();
+        this.showSuccess(`Added keyword: "${cleanKeyword}"`);
+        return true;
+    }
+
+    removeKeyword(keyword) {
+        if (!window.companyEditingKeywords) return;
+        
+        window.companyEditingKeywords = window.companyEditingKeywords.filter(k => k !== keyword);
+        this.updateKeywordDisplay();
+        this.showSuccess(`Removed keyword: "${keyword}"`);
+    }
+
+    async regenerateKeywords() {
+        const question = document.getElementById('questionInput')?.value;
+        const answer = document.getElementById('answerInput')?.value;
+        
+        if (!question || !answer) {
+            this.showError('Please enter question and answer first');
+            return;
+        }
+        
+        try {
+            this.showInfo('Regenerating keywords...');
+            
+            // Basic keyword extraction (can be enhanced with API call)
+            const text = `${question} ${answer}`.toLowerCase();
+            const words = text.match(/\b\w{3,}\b/g) || [];
+            const uniqueWords = [...new Set(words)];
+            
+            // Filter out common words
+            const stopWords = ['the', 'and', 'but', 'you', 'are', 'for', 'can', 'will', 'have', 'this', 'that', 'with', 'from', 'what', 'how', 'when', 'where', 'why', 'who'];
+            const newKeywords = uniqueWords.filter(word => !stopWords.includes(word)).slice(0, 8);
+            
+            // Merge with existing keywords
+            if (!window.companyEditingKeywords) {
+                window.companyEditingKeywords = [];
+            }
+            
+            const addedKeywords = [];
+            newKeywords.forEach(keyword => {
+                if (!window.companyEditingKeywords.includes(keyword)) {
+                    window.companyEditingKeywords.push(keyword);
+                    addedKeywords.push(keyword);
+                }
+            });
+            
+            this.updateKeywordDisplay();
+            
+            if (addedKeywords.length > 0) {
+                this.showSuccess(`Generated ${addedKeywords.length} new keywords`);
+            } else {
+                this.showInfo('No new keywords generated (all already exist)');
+            }
+            
+        } catch (error) {
+            console.error('Keyword regeneration failed:', error);
+            this.showError('Failed to regenerate keywords');
+        }
     }
 
     /**
@@ -767,6 +932,10 @@ class CompanyQnAManager {
         document.getElementById('modalTitle').textContent = 'Add New Q&A';
         document.getElementById('qnaForm').reset();
         document.getElementById('statusSelect').value = 'active';
+        
+        // Initialize keyword editor for new Q&A
+        this.initializeKeywordEditor();
+        
         this.showModal();
     }
 
@@ -1054,6 +1223,37 @@ class CompanyQnAManager {
             info: 'info-circle'
         };
         return icons[type] || 'info-circle';
+    }
+}
+
+// 🌐 GLOBAL FUNCTIONS FOR COMPANY Q&A KEYWORD MANAGEMENT
+// These functions are called from onclick handlers in the HTML
+
+function addCompanyKeyword() {
+    const input = document.getElementById('company-new-keyword-input');
+    if (!input) return;
+    
+    const keyword = input.value.trim();
+    if (!keyword) return;
+    
+    // Get the manager instance
+    const manager = window.companyQnAManagerInstance;
+    if (manager && manager.addKeyword(keyword)) {
+        input.value = '';
+    }
+}
+
+function removeCompanyKeyword(keyword) {
+    const manager = window.companyQnAManagerInstance;
+    if (manager) {
+        manager.removeKeyword(keyword);
+    }
+}
+
+function regenerateCompanyKeywords() {
+    const manager = window.companyQnAManagerInstance;
+    if (manager) {
+        manager.regenerateKeywords();
     }
 }
 
