@@ -6619,7 +6619,7 @@
                 // Populate the original dropdown (for compatibility) - with null safety
                 const selector = document.getElementById('agent-trade-categories');
                 if (selector) {
-                    selector.innerHTML = '';
+                selector.innerHTML = '';
                 } else {
                     console.warn('⚠️ CHECKPOINT: agent-trade-categories element not found - using fallback');
                 }
@@ -6627,7 +6627,7 @@
                 // Populate the new checkboxes container - with null safety
                 const checkboxContainer = document.getElementById('trade-categories-checkboxes');
                 if (checkboxContainer) {
-                    checkboxContainer.innerHTML = '';
+                checkboxContainer.innerHTML = '';
                 } else {
                     console.error('❌ CRITICAL: trade-categories-checkboxes element not found');
                     console.error('❌ CHECKPOINT: This element should exist in the AI Agent Logic tab');
@@ -6640,11 +6640,11 @@
                     // Add to dropdown (only if selector exists)
                     if (selector) {
                         console.log('✅ CHECKPOINT: Adding to dropdown selector');
-                        const option = document.createElement('option');
-                        option.value = category.name;
-                        const qaCount = category.qnas ? category.qnas.length : 0;
-                        option.textContent = `${category.name} (${qaCount} Q&As)`;
-                        selector.appendChild(option);
+                    const option = document.createElement('option');
+                    option.value = category.name;
+                    const qaCount = category.qnas ? category.qnas.length : 0;
+                    option.textContent = `${category.name} (${qaCount} Q&As)`;
+                    selector.appendChild(option);
                     } else {
                         console.log('⚠️ CHECKPOINT: Skipping dropdown - selector is null');
                     }
@@ -6652,19 +6652,19 @@
                     // Add to checkboxes (with enhanced error checking)
                     if (checkboxContainer) {
                         console.log('✅ CHECKPOINT: Adding to checkbox container');
-                        const checkboxDiv = document.createElement('div');
-                        checkboxDiv.className = 'flex items-center space-x-3 p-2 hover:bg-gray-100 rounded';
-                        checkboxDiv.innerHTML = `
-                            <input type="checkbox" 
-                                   id="trade-cat-${category.name}" 
-                                   value="${category.name}" 
-                                   onchange="handleTradeCheckboxChange()"
-                                   class="form-checkbox h-4 w-4 text-blue-600">
-                            <label for="trade-cat-${category.name}" class="flex-1 text-sm text-gray-700 cursor-pointer">
+                    const checkboxDiv = document.createElement('div');
+                    checkboxDiv.className = 'flex items-center space-x-3 p-2 hover:bg-gray-100 rounded';
+                    checkboxDiv.innerHTML = `
+                        <input type="checkbox" 
+                               id="trade-cat-${category.name}" 
+                               value="${category.name}" 
+                               onchange="handleTradeCheckboxChange()"
+                               class="form-checkbox h-4 w-4 text-blue-600">
+                        <label for="trade-cat-${category.name}" class="flex-1 text-sm text-gray-700 cursor-pointer">
                                 ${category.name} <span class="text-gray-500">(${category.qnas?.length || 0} Q&As)</span>
-                            </label>
-                        `;
-                        checkboxContainer.appendChild(checkboxDiv);
+                        </label>
+                    `;
+                    checkboxContainer.appendChild(checkboxDiv);
                         console.log('✅ CHECKPOINT: Checkbox added successfully for:', category.name);
                     } else {
                         console.error('❌ CRITICAL CHECKPOINT: checkboxContainer is null - cannot add checkbox');
@@ -6799,8 +6799,8 @@
                         const legacyElements = ['agent-semanticSearchEnabled', 'agent-confidenceScoring', 'agent-autoLearningQueue'];
                         if (legacyElements.includes(id)) {
                             console.log(`ℹ️ CHECKPOINT: Legacy element ${id} not in current structure (this is normal)`);
-                        } else {
-                            console.warn(`⚠️ Element not found: ${id}`);
+                    } else {
+                        console.warn(`⚠️ Element not found: ${id}`);
                         }
                     }
                 };
@@ -9545,11 +9545,11 @@ Key Metrics:
                 // Load Trade Q&A entries for selected trades
                 const tradesParam = selectedTrades.join(',');
                 const tradeQnAResponse = await fetch(`/api/enterprise-trade-categories/qnas/${companyId}?trades=${tradesParam}&status=active`, {
-                    method: 'GET',
-                    headers: {
+                method: 'GET',
+                headers: {
                         'Authorization': `Bearer ${localStorage.getItem('adminToken') || localStorage.getItem('authToken')}`,
-                        'Content-Type': 'application/json'
-                    }
+                    'Content-Type': 'application/json'
+                }
                 });
                 
                 let tradeQnAs = [];
@@ -9557,6 +9557,8 @@ Key Metrics:
                     const result = await tradeQnAResponse.json();
                     tradeQnAs = result.data || result.qnas || [];
                     console.log('✅ Trade Q&A entries loaded:', tradeQnAs.length);
+                    // Store for edit/delete handlers
+                    window.tradeQnAs = Array.isArray(tradeQnAs) ? tradeQnAs : [];
                     
                     // Enhanced logging for trade-specific entries
                     if (tradeQnAs.length > 0) {
@@ -9878,8 +9880,121 @@ Key Metrics:
          * ✅ PRODUCTION: Edit Trade Q&A entry
          */
         function editTradeQnA(qnaId) {
-            console.log(`✏️ Editing Trade Q&A: ${qnaId}`);
-            showNotification('Edit Mode', `Editing Trade Q&A entry ${qnaId}. Full edit interface available.`, 'info');
+            try {
+                console.log('✏️ EDIT: Opening Trade Q&A editor for', qnaId);
+                const qnaList = window.tradeQnAs || [];
+                const qna = qnaList.find(q => (q.id || q._id) === qnaId);
+                if (!qna) {
+                    console.error('❌ EDIT: Q&A not found in cached list');
+                    showNotification('Error', 'Q&A entry not found. Try refreshing.', 'error');
+                    return;
+                }
+
+                // Build modal
+                const modalId = 'trade-qna-edit-modal';
+                const existing = document.getElementById(modalId);
+                if (existing) existing.remove();
+
+                const modal = document.createElement('div');
+                modal.id = modalId;
+                modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40';
+                modal.innerHTML = `
+                    <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl">
+                        <div class="px-5 py-3 border-b flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-gray-800">Edit Trade Q&A</h3>
+                            <button id="trade-qna-edit-close" class="text-gray-500 hover:text-gray-700"><i class="fas fa-times"></i></button>
+                        </div>
+                        <div class="p-5 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Trade Category</label>
+                                <input id="edit-trade-category" type="text" class="w-full px-3 py-2 border border-gray-300 rounded" value="${(qna.tradeCategory || (qna.tradeCategories && qna.tradeCategories[0]) || 'General').toString()}">
+                                <p class="text-xs text-gray-500 mt-1">Keep as-is or adjust to a selected company trade (optional)</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Question</label>
+                                <textarea id="edit-trade-question" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded">${qna.question || ''}</textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Answer</label>
+                                <textarea id="edit-trade-answer" rows="5" class="w-full px-3 py-2 border border-gray-300 rounded">${qna.answer || ''}</textarea>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                    <select id="edit-trade-status" class="w-full px-3 py-2 border border-gray-300 rounded">
+                                        <option value="active" ${qna.status === 'active' || qna.isActive ? 'selected' : ''}>Active</option>
+                                        <option value="draft" ${qna.status === 'draft' ? 'selected' : ''}>Draft</option>
+                                        <option value="under_review" ${qna.status === 'under_review' ? 'selected' : ''}>Under Review</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Confidence</label>
+                                    <input id="edit-trade-confidence" type="number" min="0" max="1" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded" value="${(qna.confidence ?? 0.85).toFixed(2)}">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="px-5 py-4 border-t flex items-center justify-end space-x-2">
+                            <button id="trade-qna-edit-cancel" class="px-4 py-2 rounded border text-gray-700">Cancel</button>
+                            <button id="trade-qna-edit-save" class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Save Changes</button>
+                        </div>
+                    </div>`;
+
+                document.body.appendChild(modal);
+
+                const closeModal = () => document.getElementById(modalId)?.remove();
+                document.getElementById('trade-qna-edit-close').onclick = closeModal;
+                document.getElementById('trade-qna-edit-cancel').onclick = closeModal;
+
+                document.getElementById('trade-qna-edit-save').onclick = async () => {
+                    try {
+                        const companyId = getCurrentCompanyId();
+                        const question = document.getElementById('edit-trade-question').value.trim();
+                        const answer = document.getElementById('edit-trade-answer').value.trim();
+                        const status = document.getElementById('edit-trade-status').value;
+                        const confidence = parseFloat(document.getElementById('edit-trade-confidence').value);
+                        const tradeCategory = document.getElementById('edit-trade-category').value.trim();
+
+                        if (!question || !answer) {
+                            showNotification('Error', 'Please provide both question and answer', 'error');
+                            return;
+                        }
+
+                        const token = localStorage.getItem('adminToken') || localStorage.getItem('authToken');
+                        const resp = await fetch(`/api/knowledge/company/${companyId}/qnas/${qnaId}`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                            },
+                            body: JSON.stringify({
+                                question,
+                                answer,
+                                status,
+                                confidence,
+                                tradeCategories: tradeCategory ? [tradeCategory] : (qna.tradeCategories || [])
+                            })
+                        });
+
+                        if (!resp.ok) {
+                            const errorText = await resp.text();
+                            console.error('❌ EDIT SAVE FAILED:', resp.status, errorText);
+                            showNotification('Error', `Failed to save changes: ${resp.status}`, 'error');
+                            return;
+                        }
+
+                        showNotification('Success', 'Trade Q&A updated successfully!', 'success');
+                        closeModal();
+                        loadTradeQnAEntries();
+                        loadTradeQnAStats();
+                    } catch (e) {
+                        console.error('❌ EDIT SAVE ERROR:', e);
+                        showNotification('Error', e.message, 'error');
+                    }
+                };
+            } catch (err) {
+                console.error('❌ EDIT MODAL ERROR:', err);
+                showNotification('Error', 'Failed to open editor', 'error');
+            }
         }
         
         /**
@@ -9892,10 +10007,12 @@ Key Metrics:
             
             console.log(`🗑️ Deleting Trade Q&A: ${qnaId}`);
             
-            fetch(`/api/enterprise-trade-categories/qna/${qnaId}`, {
+            const companyId = getCurrentCompanyId();
+            const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('adminToken');
+            fetch(`/api/knowledge/company/${companyId}/qnas/${qnaId}`, {
                 method: 'DELETE',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken') || sessionStorage.getItem('authToken')}`
+                    'Authorization': token ? `Bearer ${token}` : ''
                 }
             })
             .then(response => response.json())
@@ -10680,14 +10797,14 @@ Key Metrics:
                     try {
                         console.log('🔍 CHECKPOINT 9: Making fetch request to /api/company/companies/' + companyId + '/agent-settings');
                         
-                        const headers = {
-                            'Content-Type': 'application/json'
-                        };
-                        
-                        // Add authorization header if token is available
-                        if (authToken) {
-                            headers['Authorization'] = `Bearer ${authToken}`;
-                        }
+                    const headers = {
+                        'Content-Type': 'application/json'
+                    };
+                    
+                    // Add authorization header if token is available
+                    if (authToken) {
+                        headers['Authorization'] = `Bearer ${authToken}`;
+                    }
                         
                         const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
                             method: 'POST',
