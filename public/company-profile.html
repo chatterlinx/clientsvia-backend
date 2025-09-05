@@ -10049,8 +10049,8 @@ Key Metrics:
                 testBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Testing...';
             }
             
-            // Test with sample trade question
-            const testQuestion = "How much does plumbing repair cost?";
+            // Test with sample trade question that includes potential typos/fuzzy matches
+            const testQuestion = "How much does plumbing repare cost and do you carrie parts?";
             
             fetch(`/api/ai-agent/test-priority-flow/${companyId}`, {
                 method: 'POST',
