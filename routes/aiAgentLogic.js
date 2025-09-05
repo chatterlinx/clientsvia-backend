@@ -1262,7 +1262,9 @@ router.post('/ai-agent/test-priority-flow/:companyId', async (req, res) => {
                         analytics: {
                             totalFound: knowledgeResult.totalFound || 0,
                             cacheHit: knowledgeResult.cacheHit || false,
-                            keywords: knowledgeResult.keywords || []
+                            keywords: knowledgeResult.keywords || [],
+                            keywordMatchCount: knowledgeResult.keywordMatchCount || 0,
+                            phoneticSimilarity: knowledgeResult.phoneticSimilarity || 0
                         }
                     };
                 } else if (source.id === 'trade_categories') {

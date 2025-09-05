@@ -10071,11 +10071,22 @@ Key Metrics:
                 }
                 
                 if (data.success) {
+                    try {
+                        const pf = Array.isArray(data.priorityFlow) ? data.priorityFlow : [];
+                        const companyNode = pf.find(n => n.sourceId === 'company_knowledge');
+                        const km = companyNode?.analytics?.keywordMatchCount ?? 0;
+                        const indicator = document.getElementById('trade-fuzzy-indicator');
+                        const countSpan = document.getElementById('trade-match-count');
+                        if (indicator && countSpan) {
+                            countSpan.textContent = km.toString();
+                            indicator.classList.remove('hidden');
+                        }
+                    } catch (e) { console.warn('Indicator update failed:', e); }
+
                     const confidence = (data.confidence * 100).toFixed(1);
                     const responseTime = data.responseTime || 'N/A';
-                    
-                    showNotification('Test Complete', 
-                        `Trade Q&A Test Results:\n✅ Confidence: ${confidence}%\n⚡ Response Time: ${responseTime}ms\n📊 Source: ${data.source || 'Trade Categories'}`, 
+                    showNotification('Test Complete',
+                        `Trade Q&A Test Results\n✅ Confidence: ${confidence}%\n⚡ Response Time: ${responseTime}ms`,
                         'success');
                 } else {
                     showNotification('Test Failed', data.error || 'Trade priority flow test failed', 'error');

@@ -201,7 +201,9 @@ class CompanyKnowledgeService {
         source: 'database',
         cacheHit: false,
         query: query,
-        keywords: queryKeywords.primary,
+        keywords: Array.from(new Set([...(queryKeywords.primary || [])])),
+        keywordMatchCount: rankedResults[0]?.keywordMatches ?? 0,
+        phoneticSimilarity: rankedResults[0]?.phoneticSimilarity ?? 0,
         totalFound: rankedResults.length,
         confidence: rankedResults[0]?.confidence || 0
       };
