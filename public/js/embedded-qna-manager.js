@@ -248,9 +248,29 @@ class EmbeddedQnAManager {
                             <p class="text-gray-700">${this.escapeHtml(qna.answer)}</p>
                         </div>
                         
+                        <!-- Keywords Display -->
+                        <div class="mb-3">
+                            <div class="flex flex-wrap gap-1">
+                                ${(qna.keywords || []).slice(0, 8).map(keyword => `
+                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 border border-blue-200">
+                                        ${keyword}
+                                    </span>
+                                `).join('')}
+                                ${(qna.keywords || []).length > 8 ? `
+                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-600 border border-gray-200">
+                                        +${(qna.keywords || []).length - 8} more
+                                    </span>
+                                ` : ''}
+                                ${(!qna.keywords || qna.keywords.length === 0) ? `
+                                    <span class="text-gray-400 text-xs italic">No keywords</span>
+                                ` : ''}
+                            </div>
+                        </div>
+                        
                         <div class="flex items-center text-xs text-gray-500 space-x-4">
                             <span><i class="fas fa-calendar mr-1"></i>Created: ${new Date(qna.createdAt).toLocaleDateString()}</span>
                             ${qna.analytics?.useCount ? `<span><i class="fas fa-chart-line mr-1"></i>Used: ${qna.analytics.useCount} times</span>` : ''}
+                            <span><i class="fas fa-key mr-1"></i>Keywords: ${(qna.keywords || []).length}</span>
                         </div>
                     </div>
                     
@@ -583,10 +603,10 @@ class EmbeddedQnAManager {
     showNotification(message, type = 'info') {
         console.log(`${type.toUpperCase()}: ${message}`);
         
-        // Try to use the global notification system if available
-        if (typeof showNotification === 'function') {
+        // Try to use the global notification system if available (avoid circular reference)
+        if (typeof window.showNotification === 'function' && window.showNotification !== showNotification) {
             const title = type === 'error' ? 'Error' : type === 'success' ? 'Success' : 'Info';
-            showNotification(title, message, type);
+            window.showNotification(title, message, type);
         } else {
             // Fallback to alert for critical messages
             if (type === 'error') {
