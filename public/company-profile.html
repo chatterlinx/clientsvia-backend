@@ -9972,6 +9972,47 @@ Key Metrics:
                                     <input id="edit-trade-confidence" type="number" min="0" max="1" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded" value="${(qna.confidence ?? 0.85).toFixed(2)}">
                                 </div>
                             </div>
+                            
+                            <!-- 🔑 KEYWORD EDITOR SECTION -->
+                            <div class="mt-6 border-t pt-4">
+                                <div class="flex items-center justify-between mb-3">
+                                    <label class="block text-sm font-medium text-gray-700">Keywords</label>
+                                    <span class="text-xs text-gray-500">AI uses these to match customer questions</span>
+                                </div>
+                                
+                                <!-- Current Keywords Display -->
+                                <div class="mb-3">
+                                    <div id="edit-keywords-display" class="flex flex-wrap gap-2 min-h-[40px] p-3 border border-gray-200 rounded bg-gray-50">
+                                        ${(qna.keywords || []).map(keyword => `
+                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 border border-blue-200">
+                                                ${keyword}
+                                                <button type="button" onclick="removeKeyword('${keyword}')" class="ml-1 text-blue-600 hover:text-red-600" title="Remove keyword">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </span>
+                                        `).join('')}
+                                        ${(qna.keywords || []).length === 0 ? '<span class="text-gray-400 text-sm">No keywords yet</span>' : ''}
+                                    </div>
+                                </div>
+                                
+                                <!-- Add New Keyword -->
+                                <div class="flex gap-2">
+                                    <input id="new-keyword-input" type="text" placeholder="Add new keyword..." 
+                                           class="flex-1 px-3 py-2 border border-gray-300 rounded text-sm"
+                                           onkeypress="if(event.key==='Enter') addKeyword()">
+                                    <button type="button" onclick="addKeyword()" class="px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+                                        <i class="fas fa-plus mr-1"></i>Add
+                                    </button>
+                                    <button type="button" onclick="regenerateKeywords('${qnaId}')" class="px-3 py-2 bg-purple-600 text-white rounded text-sm hover:bg-purple-700" title="Auto-generate keywords">
+                                        <i class="fas fa-magic mr-1"></i>Regenerate
+                                    </button>
+                                </div>
+                                
+                                <p class="text-xs text-gray-500 mt-2">
+                                    <i class="fas fa-lightbulb mr-1"></i>
+                                    Tip: Add specific terms your customers use. Remove problematic keywords that cause wrong matches.
+                                </p>
+                            </div>
                         </div>
                         <div class="px-5 py-4 border-t flex items-center justify-end space-x-2">
                             <button id="trade-qna-edit-cancel" class="px-4 py-2 rounded border text-gray-700">Cancel</button>
@@ -9980,6 +10021,9 @@ Key Metrics:
                     </div>`;
 
                 document.body.appendChild(modal);
+
+                // Initialize editing keywords with current keywords
+                editingKeywords = [...(qna.keywords || [])];
 
                 const closeModal = () => document.getElementById(modalId)?.remove();
                 document.getElementById('trade-qna-edit-close').onclick = closeModal;
@@ -10011,7 +10055,8 @@ Key Metrics:
                                 answer,
                                 status,
                                 confidence,
-                                tradeCategories: tradeCategory ? [tradeCategory] : (qna.tradeCategories || [])
+                                tradeCategories: tradeCategory ? [tradeCategory] : (qna.tradeCategories || []),
+                                keywords: editingKeywords // Include edited keywords
                             })
                         });
 
@@ -10149,6 +10194,90 @@ Key Metrics:
             } catch (error) {
                 console.warn('Date formatting error:', error);
                 return 'Not Available';
+            }
+        }
+
+        /**
+         * 🔑 KEYWORD EDITING FUNCTIONS
+         */
+        let editingKeywords = [];
+
+        function removeKeyword(keyword) {
+            console.log('🗑️ Removing keyword:', keyword);
+            editingKeywords = editingKeywords.filter(k => k !== keyword);
+            updateKeywordDisplay();
+        }
+
+        function addKeyword() {
+            const input = document.getElementById('new-keyword-input');
+            const keyword = input.value.trim().toLowerCase();
+            
+            if (!keyword) {
+                showNotification('Error', 'Please enter a keyword', 'error');
+                return;
+            }
+            
+            if (editingKeywords.includes(keyword)) {
+                showNotification('Warning', 'Keyword already exists', 'warning');
+                return;
+            }
+            
+            console.log('➕ Adding keyword:', keyword);
+            editingKeywords.push(keyword);
+            input.value = '';
+            updateKeywordDisplay();
+            showNotification('Success', `Added keyword: "${keyword}"`, 'success');
+        }
+
+        function updateKeywordDisplay() {
+            const display = document.getElementById('edit-keywords-display');
+            if (!display) return;
+            
+            if (editingKeywords.length === 0) {
+                display.innerHTML = '<span class="text-gray-400 text-sm">No keywords yet</span>';
+                return;
+            }
+            
+            display.innerHTML = editingKeywords.map(keyword => `
+                <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 border border-blue-200">
+                    ${keyword}
+                    <button type="button" onclick="removeKeyword('${keyword}')" class="ml-1 text-blue-600 hover:text-red-600" title="Remove keyword">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </span>
+            `).join('');
+        }
+
+        async function regenerateKeywords(qnaId) {
+            const question = document.getElementById('edit-trade-question')?.value;
+            const answer = document.getElementById('edit-trade-answer')?.value;
+            
+            if (!question || !answer) {
+                showNotification('Error', 'Please enter question and answer first', 'error');
+                return;
+            }
+            
+            try {
+                console.log('🔄 Regenerating keywords for Q&A...');
+                showNotification('Info', 'Regenerating keywords...', 'info');
+                
+                // This would call the keyword generation service
+                // For now, we'll simulate with some basic keyword extraction
+                const text = `${question} ${answer}`.toLowerCase();
+                const words = text.match(/\b\w{3,}\b/g) || [];
+                const uniqueWords = [...new Set(words)];
+                
+                // Filter out common words and keep relevant ones
+                const stopWords = ['the', 'and', 'but', 'you', 'are', 'for', 'can', 'will', 'have', 'this', 'that', 'with', 'from'];
+                const newKeywords = uniqueWords.filter(word => !stopWords.includes(word)).slice(0, 10);
+                
+                editingKeywords = [...new Set([...editingKeywords, ...newKeywords])];
+                updateKeywordDisplay();
+                
+                showNotification('Success', `Generated ${newKeywords.length} new keywords`, 'success');
+            } catch (error) {
+                console.error('❌ Keyword regeneration failed:', error);
+                showNotification('Error', 'Failed to regenerate keywords', 'error');
             }
         }
 
