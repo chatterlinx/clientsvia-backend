@@ -2467,7 +2467,7 @@
                                                                     <h4 class="text-lg font-semibold text-gray-800">Trade Categories Q&A Management</h4>
                                                                 </div>
                                                                 <div class="flex items-center space-x-3">
-                                                                    <span id="trade-fuzzy-indicator" class="hidden px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Fuzzy/Phonetic: On • <span id="trade-match-count">0</span> matches</span>
+                                                                    <span id="trade-fuzzy-indicator" class="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Fuzzy/Phonetic: Ready • <span id="trade-match-count">0</span> matches</span>
                                                                     <button id="add-new-trade-qna-btn" 
                                                                             class="bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
                                                                             onclick="showAddTradeQnAModal()">
@@ -10073,16 +10073,38 @@ Key Metrics:
                 
                 if (data.success) {
                     try {
+                        console.log('🔍 FUZZY INDICATOR: Test response data:', data);
                         const pf = Array.isArray(data.priorityFlow) ? data.priorityFlow : [];
+                        console.log('🔍 FUZZY INDICATOR: Priority flow found:', pf.length, 'sources');
+                        
                         const companyNode = pf.find(n => n.sourceId === 'company_knowledge');
-                        const km = companyNode?.analytics?.keywordMatchCount ?? 0;
-                        const indicator = document.getElementById('trade-fuzzy-indicator');
-                        const countSpan = document.getElementById('trade-match-count');
-                        if (indicator && countSpan) {
-                            countSpan.textContent = km.toString();
-                            indicator.classList.remove('hidden');
+                        console.log('🔍 FUZZY INDICATOR: Company knowledge node:', companyNode);
+                        
+                        if (companyNode && companyNode.analytics) {
+                            const km = companyNode.analytics.keywordMatchCount || 0;
+                            const ps = companyNode.analytics.phoneticSimilarity || 0;
+                            console.log('🔍 FUZZY INDICATOR: Analytics found - keyword matches:', km, 'phonetic similarity:', ps);
+                            
+                            const indicator = document.getElementById('trade-fuzzy-indicator');
+                            const countSpan = document.getElementById('trade-match-count');
+                            
+                            if (indicator && countSpan) {
+                                countSpan.textContent = km.toString();
+                                indicator.innerHTML = `Fuzzy/Phonetic: Active • <span id="trade-match-count">${km}</span> matches`;
+                                indicator.classList.remove('hidden');
+                                indicator.classList.add('bg-green-100', 'text-green-800');
+                                indicator.classList.remove('bg-purple-100', 'text-purple-800');
+                                console.log('✅ FUZZY INDICATOR: Updated successfully with', km, 'matches');
+                            } else {
+                                console.warn('⚠️ FUZZY INDICATOR: Elements not found - indicator:', !!indicator, 'countSpan:', !!countSpan);
+                            }
+                        } else {
+                            console.warn('⚠️ FUZZY INDICATOR: No company_knowledge node or analytics found in response');
                         }
-                    } catch (e) { console.warn('Indicator update failed:', e); }
+                    } catch (e) { 
+                        console.error('❌ FUZZY INDICATOR: Update failed:', e);
+                        console.log('🔍 FUZZY INDICATOR: Full error details:', e.stack);
+                    }
 
                     const confidence = (data.confidence * 100).toFixed(1);
                     const responseTime = data.responseTime || 'N/A';
