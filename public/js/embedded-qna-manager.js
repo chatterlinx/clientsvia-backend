@@ -965,6 +965,47 @@ class EmbeddedQnAManager {
                                             <option value="archived" ${qna.status === 'archived' ? 'selected' : ''}>Archived</option>
                                         </select>
                                     </div>
+                                    
+                                    <!-- 🔑 KEYWORD EDITOR SECTION -->
+                                    <div class="mt-6 border-t pt-4">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <label class="block text-sm font-medium text-gray-700">Keywords</label>
+                                            <span class="text-xs text-gray-500">AI uses these to match customer questions</span>
+                                        </div>
+                                        
+                                        <!-- Current Keywords Display -->
+                                        <div class="mb-3">
+                                            <div id="embedded-keywords-display" class="flex flex-wrap gap-2 min-h-[40px] p-3 border border-gray-200 rounded bg-gray-50">
+                                                ${(qna.keywords || []).map(keyword => `
+                                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 border border-blue-200">
+                                                        ${keyword}
+                                                        <button type="button" onclick="removeEmbeddedKeyword('${keyword}')" class="ml-1 text-blue-600 hover:text-red-600" title="Remove keyword">
+                                                            <i class="fas fa-times"></i>
+                                                        </button>
+                                                    </span>
+                                                `).join('')}
+                                                ${(qna.keywords || []).length === 0 ? '<span class="text-gray-400 text-sm">No keywords yet</span>' : ''}
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Add New Keyword -->
+                                        <div class="flex gap-2">
+                                            <input id="embedded-new-keyword-input" type="text" placeholder="Add new keyword..." 
+                                                   class="flex-1 px-3 py-2 border border-gray-300 rounded text-sm"
+                                                   onkeypress="if(event.key==='Enter') addEmbeddedKeyword()">
+                                            <button type="button" onclick="addEmbeddedKeyword()" class="px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+                                                <i class="fas fa-plus mr-1"></i>Add
+                                            </button>
+                                            <button type="button" onclick="regenerateEmbeddedKeywords('${id}')" class="px-3 py-2 bg-purple-600 text-white rounded text-sm hover:bg-purple-700" title="Auto-generate keywords">
+                                                <i class="fas fa-magic mr-1"></i>Regenerate
+                                            </button>
+                                        </div>
+                                        
+                                        <p class="text-xs text-gray-500 mt-2">
+                                            <i class="fas fa-lightbulb mr-1"></i>
+                                            Tip: Add specific terms your customers use. Remove problematic keywords that cause wrong matches.
+                                        </p>
+                                    </div>
                                 </div>
                                 
                                 <div class="flex justify-end space-x-3 mt-6 pt-4 border-t">
@@ -985,6 +1026,9 @@ class EmbeddedQnAManager {
             
             // Add modal to page
             document.body.insertAdjacentHTML('beforeend', editModalHtml);
+            
+            // Initialize keywords for editing
+            window.embeddedEditingKeywords = [...(qna.keywords || [])];
             
             console.log('✅ CHECKPOINT: Edit modal created and displayed');
             
@@ -1038,6 +1082,7 @@ class EmbeddedQnAManager {
                     answer,
                     category,
                     status,  // Include status field for proper Active/Inactive control
+                    keywords: window.embeddedEditingKeywords || [], // Include edited keywords
                     lastModified: new Date()
                 })
             });
@@ -1379,5 +1424,117 @@ function saveEditedQnA(event, qnaId) {
 function showAddQnAModal() {
     if (embeddedQnAManager) {
         embeddedQnAManager.showAddModal();
+    }
+}
+
+// 🔑 EMBEDDED Q&A KEYWORD MANAGEMENT FUNCTIONS
+function addEmbeddedKeyword() {
+    const input = document.getElementById('embedded-new-keyword-input');
+    if (!input) return;
+    
+    const keyword = input.value.trim().toLowerCase();
+    if (!keyword) {
+        showNotification('Please enter a keyword', 'error');
+        return;
+    }
+    
+    if (!window.embeddedEditingKeywords) {
+        window.embeddedEditingKeywords = [];
+    }
+    
+    if (window.embeddedEditingKeywords.includes(keyword)) {
+        showNotification('Keyword already exists', 'warning');
+        return;
+    }
+    
+    window.embeddedEditingKeywords.push(keyword);
+    input.value = '';
+    updateEmbeddedKeywordDisplay();
+    showNotification(`Added keyword: "${keyword}"`, 'success');
+}
+
+function removeEmbeddedKeyword(keyword) {
+    if (!window.embeddedEditingKeywords) return;
+    
+    window.embeddedEditingKeywords = window.embeddedEditingKeywords.filter(k => k !== keyword);
+    updateEmbeddedKeywordDisplay();
+    showNotification(`Removed keyword: "${keyword}"`, 'success');
+}
+
+function updateEmbeddedKeywordDisplay() {
+    const display = document.getElementById('embedded-keywords-display');
+    if (!display) return;
+    
+    const keywords = window.embeddedEditingKeywords || [];
+    
+    if (keywords.length === 0) {
+        display.innerHTML = '<span class="text-gray-400 text-sm">No keywords yet</span>';
+        return;
+    }
+    
+    display.innerHTML = keywords.map(keyword => `
+        <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 border border-blue-200">
+            ${keyword}
+            <button type="button" onclick="removeEmbeddedKeyword('${keyword}')" class="ml-1 text-blue-600 hover:text-red-600" title="Remove keyword">
+                <i class="fas fa-times"></i>
+            </button>
+        </span>
+    `).join('');
+}
+
+function regenerateEmbeddedKeywords(qnaId) {
+    const question = document.getElementById('edit-question')?.value;
+    const answer = document.getElementById('edit-answer')?.value;
+    
+    if (!question || !answer) {
+        showNotification('Please enter question and answer first', 'error');
+        return;
+    }
+    
+    try {
+        showNotification('Regenerating keywords...', 'info');
+        
+        // Basic keyword extraction (can be enhanced with API call)
+        const text = `${question} ${answer}`.toLowerCase();
+        const words = text.match(/\b\w{3,}\b/g) || [];
+        const uniqueWords = [...new Set(words)];
+        
+        // Filter out common words
+        const stopWords = ['the', 'and', 'but', 'you', 'are', 'for', 'can', 'will', 'have', 'this', 'that', 'with', 'from', 'what', 'how', 'when', 'where', 'why', 'who'];
+        const newKeywords = uniqueWords.filter(word => !stopWords.includes(word)).slice(0, 8);
+        
+        // Merge with existing keywords
+        if (!window.embeddedEditingKeywords) {
+            window.embeddedEditingKeywords = [];
+        }
+        
+        const addedKeywords = [];
+        newKeywords.forEach(keyword => {
+            if (!window.embeddedEditingKeywords.includes(keyword)) {
+                window.embeddedEditingKeywords.push(keyword);
+                addedKeywords.push(keyword);
+            }
+        });
+        
+        updateEmbeddedKeywordDisplay();
+        
+        if (addedKeywords.length > 0) {
+            showNotification(`Generated ${addedKeywords.length} new keywords`, 'success');
+        } else {
+            showNotification('No new keywords generated (all already exist)', 'info');
+        }
+        
+    } catch (error) {
+        console.error('Keyword regeneration failed:', error);
+        showNotification('Failed to regenerate keywords', 'error');
+    }
+}
+
+// Helper function for notifications (reuse existing notification system)
+function showNotification(message, type) {
+    if (window.embeddedQnAManager && window.embeddedQnAManager.showNotification) {
+        window.embeddedQnAManager.showNotification(message, type);
+    } else {
+        console.log(`${type.toUpperCase()}: ${message}`);
     }
 }
