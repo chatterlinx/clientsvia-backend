@@ -9573,6 +9573,7 @@ Key Metrics:
                     const result = await tradeQnAResponse.json();
                     tradeQnAs = result.data || result.qnas || [];
                     console.log('✅ Trade Q&A entries loaded:', tradeQnAs.length);
+                    console.log('🔍 CHECKPOINT: First few entries:', tradeQnAs.slice(0, 2));
                     // Store for edit/delete handlers
                     window.tradeQnAs = Array.isArray(tradeQnAs) ? tradeQnAs : [];
                     
@@ -9626,9 +9627,14 @@ Key Metrics:
          * ✅ ENTERPRISE: Display Trade Q&A entries with sophisticated UI
          */
         function displayTradeQnAEntries(qnas) {
+            console.log('🎨 CHECKPOINT: displayTradeQnAEntries called with', qnas.length, 'entries');
             const listContainer = document.getElementById('trade-qna-entries-list');
-            if (!listContainer) return;
+            if (!listContainer) {
+                console.error('❌ CHECKPOINT: trade-qna-entries-list element not found!');
+                return;
+            }
             
+            console.log('🎨 CHECKPOINT: Clearing container and rendering entries...');
             listContainer.innerHTML = '';
             
             qnas.forEach(qna => {
@@ -9641,8 +9647,8 @@ Key Metrics:
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                                     ${qna.tradeCategory || 'General'}
                                 </span>
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${qna.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
-                                    ${qna.isActive ? 'Active' : 'Inactive'}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(qna.status)}">
+                                    ${getStatusDisplayText(qna.status)}
                                 </span>
                                 <span class="text-xs text-gray-500">Confidence: ${(qna.confidence || 0.85).toFixed(2)}</span>
                             </div>
@@ -10054,6 +10060,32 @@ Key Metrics:
         function getTradeQnAStatusFilter() {
             const filterElement = document.getElementById('trade-status-filter');
             return filterElement ? filterElement.value : 'all';
+        }
+
+        /**
+         * 🎨 HELPER: Get status badge CSS classes
+         */
+        function getStatusBadgeClass(status) {
+            switch (status) {
+                case 'active': return 'bg-green-100 text-green-800';
+                case 'inactive': return 'bg-gray-100 text-gray-800';
+                case 'draft': return 'bg-yellow-100 text-yellow-800';
+                case 'under_review': return 'bg-blue-100 text-blue-800';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+        /**
+         * 🎨 HELPER: Get status display text
+         */
+        function getStatusDisplayText(status) {
+            switch (status) {
+                case 'active': return 'Active';
+                case 'inactive': return 'Inactive';
+                case 'draft': return 'Draft';
+                case 'under_review': return 'Under Review';
+                default: return status || 'Unknown';
+            }
         }
 
         /**

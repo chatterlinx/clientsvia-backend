@@ -268,9 +268,13 @@ router.get('/qnas/:companyId', async (req, res) => {
         
         // Build query for company-specific trade Q&As
         const query = {
-            companyId: companyId,
-            status: status
+            companyId: companyId
         };
+        
+        // Only add status filter if not 'all'
+        if (status && status !== 'all') {
+            query.status = status;
+        }
         
         // Filter by trade categories if specified
         if (trades) {
