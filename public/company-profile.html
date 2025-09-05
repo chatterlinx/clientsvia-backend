@@ -2515,10 +2515,11 @@
                                                                 <div>
                                                                     <label class="block text-sm font-medium text-gray-700 mb-2">Status Filter</label>
                                                                     <select id="trade-status-filter" class="form-select">
-                                                                        <option value="">All Status</option>
+                                                                        <option value="all" selected>All Status</option>
                                                                         <option value="active">Active</option>
                                                                         <option value="inactive">Inactive</option>
-                                                                        <option value="pending">Pending Review</option>
+                                                                        <option value="draft">Draft</option>
+                                                                        <option value="under_review">Under Review</option>
                                                                     </select>
                                                                 </div>
                                                             </div>
@@ -9139,6 +9140,18 @@ Key Metrics:
             // Load Trade Q&A entries filtered by selected trades
             loadTradeQnAEntries();
             loadTradeQnAStats();
+            
+            // 🔧 CRITICAL: Setup status filter event listener
+            const statusFilter = document.getElementById('trade-status-filter');
+            if (statusFilter) {
+                statusFilter.addEventListener('change', function() {
+                    console.log('🔍 Trade Q&A status filter changed to:', this.value);
+                    loadTradeQnAEntries(); // Reload entries with new status filter
+                });
+                console.log('✅ Trade Q&A status filter event listener attached');
+            } else {
+                console.warn('⚠️ Trade status filter element not found');
+            }
         }
         
         /**
@@ -9376,8 +9389,9 @@ Key Metrics:
                 if (listEl) listEl.classList.add('hidden');
                 if (emptyEl) emptyEl.classList.add('hidden');
                 
-                // Build API URL with trade filter
-                let apiUrl = `/api/enterprise-trade-categories/qnas/${companyId}?status=active`;
+                // Build API URL with trade filter (show all statuses by default)
+                const statusFilter = getTradeQnAStatusFilter() || 'all';
+                let apiUrl = `/api/enterprise-trade-categories/qnas/${companyId}?status=${statusFilter}`;
                 if (tradeCategory) {
                     apiUrl += `&trades=${encodeURIComponent(tradeCategory)}`;
                 }
@@ -9543,9 +9557,10 @@ Key Metrics:
                     return;
                 }
                 
-                // Load Trade Q&A entries for selected trades
+                // Load Trade Q&A entries for selected trades (show all statuses by default)
                 const tradesParam = selectedTrades.join(',');
-                const tradeQnAResponse = await fetch(`/api/enterprise-trade-categories/qnas/${companyId}?trades=${tradesParam}&status=active`, {
+                const statusFilter = getTradeQnAStatusFilter() || 'all';
+                const tradeQnAResponse = await fetch(`/api/enterprise-trade-categories/qnas/${companyId}?trades=${tradesParam}&status=${statusFilter}`, {
                 method: 'GET',
                 headers: {
                         'Authorization': `Bearer ${localStorage.getItem('adminToken') || localStorage.getItem('authToken')}`,
@@ -10033,6 +10048,14 @@ Key Metrics:
             });
         }
         
+        /**
+         * 🔧 HELPER: Get Trade Q&A Status Filter
+         */
+        function getTradeQnAStatusFilter() {
+            const filterElement = document.getElementById('trade-status-filter');
+            return filterElement ? filterElement.value : 'all';
+        }
+
         /**
          * ✅ PRODUCTION: Test Trade Priority Flow
          */
