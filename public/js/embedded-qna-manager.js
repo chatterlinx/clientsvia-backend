@@ -39,9 +39,8 @@ class EmbeddedQnAManager {
      */
     async initialize() {
         if (this.initialized) {
-            console.log('🔄 Q&A Manager already initialized, refreshing data...');
-            await this.loadCompanyQnAEntries();
-            return;
+            console.log('🔄 Q&A Manager already initialized, skipping duplicate initialization...');
+            return; // Skip data reload to prevent repeated API calls
         }
         
         try {
@@ -117,7 +116,7 @@ class EmbeddedQnAManager {
             
             // Use emergency routes to bypass authentication issues
             const filterStatus = this.currentStatusFilter || 'all';
-            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/emergency/${this.companyId}/qnas`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`, {
                 method: 'GET',
                 headers: headers,
                 credentials: 'include' // Include cookies for additional auth
@@ -850,7 +849,7 @@ class EmbeddedQnAManager {
                 headers['Authorization'] = `Bearer ${token}`;
             }
             
-            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/emergency/${this.companyId}/qnas`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`, {
                 method: 'POST',
                 headers: headers,
                 credentials: 'include', // Include cookies for additional auth
@@ -1093,7 +1092,7 @@ class EmbeddedQnAManager {
             
             console.log('💾 CHECKPOINT: Making PUT request to update Q&A');
             
-            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/emergency/${this.companyId}/qnas/${qnaId}`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas/${qnaId}`, {
                 method: 'PUT',
                 headers: headers,
                 credentials: 'include',
@@ -1404,16 +1403,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Also initialize when knowledge tab within AI Agent Logic is clicked
+    // Also initialize when knowledge tab within AI Agent Logic is clicked (with debouncing)
+    let knowledgeTabClickTimeout = null;
     document.addEventListener('click', function(event) {
         if (event.target && event.target.id === 'clientsvia-tab-knowledge') {
             console.log('🎯 Knowledge tab clicked within AI Agent Logic...');
-            setTimeout(() => {
+            
+            // Clear previous timeout to debounce rapid clicks
+            if (knowledgeTabClickTimeout) {
+                clearTimeout(knowledgeTabClickTimeout);
+            }
+            
+            knowledgeTabClickTimeout = setTimeout(() => {
                 if (!embeddedQnAManager) {
                     embeddedQnAManager = new EmbeddedQnAManager();
                     window.embeddedQnAManager = embeddedQnAManager; // Make globally available
+                    embeddedQnAManager.initialize();
+                } else {
+                    console.log('🔄 Knowledge tab: Manager already exists, skipping re-initialization');
                 }
-                embeddedQnAManager.initialize();
             }, 300);
         }
     });
