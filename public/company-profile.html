@@ -1951,21 +1951,32 @@
                                         <!-- 📊 ANALYTICS: Real-time testing + performance metrics -->
                                         <!-- ========================================= -->
                                         <div id="clientsvia-knowledge-content" class="clientsvia-tab-content" data-config-section="knowledge-sources">
-                                            
-                                            <!-- ========================================= -->
-                                            <!-- 📚 KNOWLEDGE SOURCES - SIMPLIFIED -->
-                                            <!-- Clean interface without complex sub-tabs -->
-                                            <!-- ========================================= -->
-                                            <div class="mb-6">
-                                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                                    <div class="flex items-center">
-                                                        <i class="fas fa-info-circle text-blue-600 mr-2"></i>
-                                                        <p class="text-sm text-blue-800">
-                                                            <strong>Knowledge Sources Management:</strong> All priority settings and configurations are controlled in the "Answer Priority Flow" tab above. This section provides simple access to knowledge content management.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                                             <!-- ========================================= -->
+                            <!-- 🎯 KNOWLEDGE SOURCES SUB-TABS -->
+                            <!-- Company Q&A + Trade Q&A Sub-navigation -->
+                            <!-- ========================================= -->
+                            <div class="mb-6">
+                                <div class="border-b border-gray-200">
+                                    <nav class="-mb-px flex space-x-8">
+                                        <button id="knowledge-subtab-company-qna" 
+                                                class="knowledge-subtab-btn active whitespace-nowrap py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600"
+                                                onclick="switchKnowledgeSubTab('company-qna')">
+                                            <i class="fas fa-building mr-2"></i>Company Q&A
+                                            <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                Priority #1
+                                            </span>
+                                        </button>
+                                        <button id="knowledge-subtab-trade-qna" 
+                                                class="knowledge-subtab-btn whitespace-nowrap py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                                                onclick="switchKnowledgeSubTab('trade-qna')">
+                                            <i class="fas fa-tools mr-2"></i>Trade Q&A
+                                            <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                                Priority #2
+                                            </span>
+                                        </button>
+                                    </nav>
+                                </div>
+                            </div>
                                             
                                             <!-- ========================================= -->
                                             <!-- 📚 COMPANY Q&A SUB-TAB CONTENT -->
@@ -9056,9 +9067,41 @@ Key Metrics:
         // =========================================
         
         /**
-         * ✅ CLEANED: Legacy switchKnowledgeSubTab function removed
-         * Knowledge Sources now use simplified interface without complex sub-tabs
+         * ✅ PRODUCTION: Switch between Knowledge Sources sub-tabs
          */
+        function switchKnowledgeSubTab(tabName) {
+            console.log(`🔄 Switching to Knowledge sub-tab: ${tabName}`);
+            
+            // Update tab buttons
+            document.querySelectorAll('.knowledge-subtab-btn').forEach(btn => {
+                btn.classList.remove('active', 'border-blue-500', 'text-blue-600');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
+            
+            // Hide all sub-tab content
+            document.querySelectorAll('.knowledge-subtab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // Activate selected tab
+            const activeBtn = document.getElementById(`knowledge-subtab-${tabName}`);
+            const activeContent = document.getElementById(`knowledge-subtab-${tabName}-content`);
+            
+            if (activeBtn && activeContent) {
+                activeBtn.classList.add('active', 'border-blue-500', 'text-blue-600');
+                activeBtn.classList.remove('border-transparent', 'text-gray-500');
+                activeContent.classList.remove('hidden');
+                
+                // Initialize content based on tab
+                if (tabName === 'company-qna') {
+                    initializeCompanyQnATab();
+                } else if (tabName === 'trade-qna') {
+                    initializeTradeQnATab();
+                }
+                
+                showNotification('Tab Switched', `Switched to ${tabName === 'company-qna' ? 'Company Q&A' : 'Trade Q&A'} management`, 'info');
+            }
+        }
         
         /**
          * ✅ PRODUCTION: Initialize Company Q&A tab
