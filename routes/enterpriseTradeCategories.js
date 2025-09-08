@@ -136,6 +136,7 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
     try {
         const { companyId = 'global', includeGlobal = 'true' } = req.query;
+        console.log(`🚀 ENTERPRISE TRADE CATEGORIES: Loading for companyId="${companyId}", includeGlobal="${includeGlobal}"`);
         
         const db = getDB();
         const collection = db.collection(COLLECTION_NAME);
@@ -151,6 +152,8 @@ router.get('/', async (req, res) => {
             .find(query)
             .sort({ name: 1 })
             .toArray();
+        
+        console.log(`📋 Found ${categories.length} trade categories:`, categories.map(c => c.name));
         
         // 🔧 PRODUCTION FIX: Enrich categories with Q&A and keyword data
         const CompanyQnA = require('../models/knowledge/CompanyQnA');
@@ -168,14 +171,40 @@ router.get('/', async (req, res) => {
                     }).select('question keywords createdAt updatedAt status').lean();
                 } else if (companyId === 'global') {
                     // For global view, show sample Q&As from all companies for this trade category
+                    console.log(`🔍 GLOBAL VIEW: Looking for Q&As for category "${category.name}"`);
+                    
+                    // First try exact match
                     qnas = await CompanyQnA.find({
                         tradeCategories: category.name,
-                        status: 'active' // Only show active Q&As for global view
+                        status: { $in: ['active', 'draft', 'under_review'] }
                     })
-                    .select('question keywords createdAt updatedAt status companyId')
-                    .limit(10) // Limit to prevent overwhelming display
-                    .sort({ usageCount: -1, createdAt: -1 }) // Show most used/recent first
+                    .select('question answer keywords createdAt updatedAt status companyId tradeCategories')
+                    .limit(10)
+                    .sort({ createdAt: -1 })
                     .lean();
+                    
+                    console.log(`📊 Found ${qnas.length} Q&As with exact category match`);
+                    
+                    // If no exact matches, try partial match or show all Q&As for debugging
+                    if (qnas.length === 0) {
+                        console.log(`🔍 No exact matches, trying broader search...`);
+                        qnas = await CompanyQnA.find({
+                            $or: [
+                                { tradeCategories: { $regex: category.name.replace('*', ''), $options: 'i' } },
+                                { tradeCategories: { $in: [category.name] } },
+                                { status: 'active' } // Show any active Q&As as fallback
+                            ]
+                        })
+                        .select('question answer keywords createdAt updatedAt status companyId tradeCategories')
+                        .limit(5)
+                        .sort({ createdAt: -1 })
+                        .lean();
+                        
+                        console.log(`📊 Broader search found ${qnas.length} Q&As`);
+                        if (qnas.length > 0) {
+                            console.log('Sample Q&A trade categories:', qnas[0]?.tradeCategories);
+                        }
+                    }
                 }
                 
                 // Calculate total keywords from all Q&As
