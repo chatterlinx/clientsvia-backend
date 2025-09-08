@@ -349,11 +349,15 @@
                 return '<p class="text-xs text-gray-500">No keywords available</p>';
             }
 
+            // Ensure autoKeywords and manualKeywords are arrays
+            const autoKeywordsArray = Array.isArray(autoKeywords) ? autoKeywords : [];
+            const manualKeywordsArray = Array.isArray(manualKeywords) ? manualKeywords : [];
+
             return `
                 <div class="flex flex-wrap gap-1 mb-2">
                     ${allKeywords.map(keyword => {
-                        const isAuto = autoKeywords.includes(keyword);
-                        const isManual = manualKeywords.includes(keyword);
+                        const isAuto = autoKeywordsArray.includes(keyword);
+                        const isManual = manualKeywordsArray.includes(keyword);
                         const cssClass = isManual ? 'manual-keyword' : 'auto-keyword';
                         const title = isManual ? 'Manual keyword' : 'Auto-generated keyword';
                         
