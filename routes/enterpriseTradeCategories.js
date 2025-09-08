@@ -157,14 +157,25 @@ router.get('/', async (req, res) => {
         
         const enrichedCategories = await Promise.all(categories.map(async (category) => {
             try {
-                // Get Q&As for this trade category (if companyId is provided)
+                // Get Q&As for this trade category
                 let qnas = [];
                 if (companyId && companyId !== 'global') {
+                    // Company-specific Q&As
                     qnas = await CompanyQnA.find({
                         companyId: companyId,
                         tradeCategories: category.name,
                         status: { $in: ['active', 'draft', 'under_review'] } // Include all visible statuses
                     }).select('question keywords createdAt updatedAt status').lean();
+                } else if (companyId === 'global') {
+                    // For global view, show sample Q&As from all companies for this trade category
+                    qnas = await CompanyQnA.find({
+                        tradeCategories: category.name,
+                        status: 'active' // Only show active Q&As for global view
+                    })
+                    .select('question keywords createdAt updatedAt status companyId')
+                    .limit(10) // Limit to prevent overwhelming display
+                    .sort({ usageCount: -1, createdAt: -1 }) // Show most used/recent first
+                    .lean();
                 }
                 
                 // Calculate total keywords from all Q&As

@@ -401,4 +401,5 @@ companyQnASchema.statics.regenerateAllKeywords = async function(companyId) {
   return results;
 };
 
-module.exports = mongoose.model('CompanyQnA', companyQnASchema);
+// Export with explicit collection name to match existing 'qna' collection
+module.exports = mongoose.model('CompanyQnA', companyQnASchema, 'qna');
