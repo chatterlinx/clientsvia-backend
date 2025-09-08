@@ -187,6 +187,7 @@ function registerRoutes(routes) {
     
     // --- API Routes ---
     app.use('/api', routes.companyRoutes);
+    app.use('/api/debug', require('./routes/debug-qna')); // Temporary debug route
     app.use('/api/alerts', routes.alertRoutes);
     app.use('/api/integrations', routes.integrationsRoutes);
     app.use('/api/tts', routes.ttsRoutes);
