@@ -193,6 +193,26 @@ router.get('/', async (req, res) => {
                     // Get embedded Q&As from the category document
                     qnas = category.qnas || [];
                     
+                    // Fix legacy Q&As that don't have proper _id fields
+                    let needsUpdate = false;
+                    qnas = qnas.map(qna => {
+                        if (!qna._id) {
+                            qna._id = new ObjectId();
+                            needsUpdate = true;
+                            console.log(`🔧 Fixed legacy Q&A "${qna.question?.substring(0, 30)}..." - added _id`);
+                        }
+                        return qna;
+                    });
+                    
+                    // Update the category document if we fixed any Q&As
+                    if (needsUpdate) {
+                        await collection.updateOne(
+                            { _id: category._id },
+                            { $set: { qnas: qnas } }
+                        );
+                        console.log(`✅ Updated category "${category.name}" with fixed Q&A IDs`);
+                    }
+                    
                     // Filter only active Q&As
                     qnas = qnas.filter(qna => qna.isActive !== false && qna.status !== 'archived');
                     
