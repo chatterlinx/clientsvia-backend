@@ -414,21 +414,31 @@
 
         // Open Q&A modal
         function openQnAModal(categoryId, qnaId = null) {
+            console.log('🔄 MODAL: Opening Q&A modal', { categoryId, qnaId, isEdit: !!qnaId });
+            
             const modal = document.getElementById('qna-modal');
             const title = document.getElementById('modal-title');
+            
+            if (!modal) {
+                console.error('❌ MODAL: Q&A modal element not found');
+                return;
+            }
             
             document.getElementById('modal-category-id').value = categoryId;
             document.getElementById('modal-qna-id').value = qnaId || '';
             
             if (qnaId) {
+                console.log('✏️ MODAL: Setting up edit mode');
                 title.textContent = 'Edit Q&A';
                 loadQnAForEdit(categoryId, qnaId);
             } else {
+                console.log('➕ MODAL: Setting up add mode');
                 title.textContent = 'Add Q&A';
                 document.getElementById('qna-form').reset();
                 document.getElementById('keyword-preview').classList.add('hidden');
             }
             
+            console.log('✅ MODAL: Showing modal');
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
@@ -444,15 +454,35 @@
 
         // Load Q&A for editing
         function loadQnAForEdit(categoryId, qnaId) {
+            console.log('🔍 EDIT: Loading Q&A for editing', { categoryId, qnaId });
+            console.log('🔍 EDIT: Available categories:', currentCategories?.length || 0);
+            
             const category = currentCategories.find(c => c._id === categoryId);
-            if (!category) return;
+            if (!category) {
+                console.error('❌ EDIT: Category not found for ID:', categoryId);
+                console.log('📊 EDIT: Available category IDs:', currentCategories?.map(c => c._id) || []);
+                return;
+            }
             
-            const qna = category.qnas.find(q => q.id === qnaId);
-            if (!qna) return;
+            console.log('✅ EDIT: Category found:', category.name);
+            console.log('🔍 EDIT: Category has Q&As:', category.qnas?.length || 0);
             
-            document.getElementById('qna-question').value = qna.question;
-            document.getElementById('qna-answer').value = qna.answer;
+            // FIX: Use _id instead of id
+            const qna = category.qnas.find(q => q._id === qnaId);
+            if (!qna) {
+                console.error('❌ EDIT: Q&A not found for ID:', qnaId);
+                console.log('📊 EDIT: Available Q&A IDs:', category.qnas?.map(q => q._id) || []);
+                return;
+            }
+            
+            console.log('✅ EDIT: Q&A found for editing:', qna.question?.substring(0, 50) + '...');
+            
+            // Populate form fields
+            document.getElementById('qna-question').value = qna.question || '';
+            document.getElementById('qna-answer').value = qna.answer || '';
             document.getElementById('manual-keywords').value = (qna.manualKeywords || []).join(', ');
+            
+            console.log('✅ EDIT: Form populated successfully');
             
             updateKeywordPreview();
         }
@@ -511,6 +541,7 @@
 
         // Edit Q&A
         function editQnA(categoryId, qnaId) {
+            console.log('🚀 EDIT: Edit Q&A clicked', { categoryId, qnaId });
             openQnAModal(categoryId, qnaId);
         }
 
