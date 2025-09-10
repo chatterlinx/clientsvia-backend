@@ -44,7 +44,7 @@
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div class="bg-white rounded-lg shadow p-6">
                 <div class="flex items-center">
                     <div class="p-2 bg-blue-100 rounded-lg">
@@ -75,17 +75,6 @@
                     <div class="ml-4">
                         <p class="text-sm font-medium text-gray-500">Total Keywords</p>
                         <p id="stats-keywords" class="text-2xl font-semibold text-gray-900">0</p>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="p-2 bg-yellow-100 rounded-lg">
-                        <i class="fas fa-robot text-yellow-600"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-500">Auto Keywords</p>
-                        <p id="stats-auto-keywords" class="text-2xl font-semibold text-gray-900">0</p>
                     </div>
                 </div>
             </div>
@@ -770,26 +759,11 @@
             const totalQnAs = currentCategories.reduce((sum, cat) => sum + (cat.qnas?.length || 0), 0);
             const totalKeywords = currentCategories.reduce((sum, cat) => sum + getTotalKeywords(cat), 0);
             
-            // Calculate auto keywords properly
-            const autoKeywords = currentCategories.reduce((sum, cat) => {
-                if (cat.autoKeywords !== undefined && cat.autoKeywords !== null) {
-                    return sum + cat.autoKeywords; // Use API-provided count
-                } else {
-                    // Calculate from Q&As - auto keywords = total keywords - manual keywords
-                    return sum + (cat.qnas || []).reduce((qnaSum, qna) => {
-                        const totalKeywords = qna.keywords?.length || 0;
-                        const manualKeywords = qna.manualKeywords?.length || 0;
-                        return qnaSum + (totalKeywords - manualKeywords);
-                    }, 0);
-                }
-            }, 0);
-            
             document.getElementById('stats-categories').textContent = totalCategories;
             document.getElementById('stats-qnas').textContent = totalQnAs;
             document.getElementById('stats-keywords').textContent = totalKeywords;
-            document.getElementById('stats-auto-keywords').textContent = autoKeywords;
             
-            console.log('📊 Stats updated:', { totalCategories, totalQnAs, totalKeywords, autoKeywords });
+            console.log('📊 Stats updated:', { totalCategories, totalQnAs, totalKeywords });
         }
 
         // Helper functions
