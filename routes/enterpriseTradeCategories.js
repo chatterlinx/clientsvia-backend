@@ -67,7 +67,7 @@ function generateKeywords(question, answer, categoryName) {
         allKeywords.push(...categoryKeywords[categoryKey]);
     }
     
-    return [...new Set(allKeywords)].slice(0, 15); // Limit to 15 most relevant keywords
+    return [...new Set(allKeywords)]; // Return all unique keywords - no artificial limits
 }
 
 /**
@@ -661,9 +661,19 @@ router.put('/:id/qna/:qnaId', async (req, res) => {
         // For global trade categories, Q&As are stored in CompanyQnA collection
         const CompanyQnA = require('../models/knowledge/CompanyQnA');
         
-        // Regenerate keywords if question or answer changed
+        // Generate fresh auto keywords from question/answer content
         const autoKeywords = generateKeywords(question, answer, category.name);
+        
+        // Combine manual and auto keywords - manual keywords take priority
         const allKeywords = [...new Set([...manualKeywords, ...autoKeywords])];
+        
+        console.log('🔧 KEYWORD LOGIC:', {
+            manualCount: manualKeywords.length,
+            autoCount: autoKeywords.length, 
+            totalCount: allKeywords.length,
+            manual: manualKeywords,
+            auto: autoKeywords.slice(0, 5) // Show first 5 auto keywords
+        });
         
         const updateResult = await CompanyQnA.findByIdAndUpdate(qnaId, {
             question: question.trim(),
