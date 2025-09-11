@@ -210,6 +210,103 @@ router.post('/seed-company-qna/:companyId', authenticateJWT, async (req, res) =>
 });
 
 /**
+ * @route   POST /api/test-save-company-qna/:companyId
+ * @desc    Test Company Q&A save functionality (bypasses auth for debugging)
+ * @access  Public (for debugging only)
+ */
+router.post('/test-save-company-qna/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { question, answer, category = 'general' } = req.body;
+    
+    console.log('🧪 PRODUCTION TEST: Testing Company Q&A save functionality');
+    console.log('🧪 PRODUCTION TEST: Company ID:', companyId);
+    console.log('🧪 PRODUCTION TEST: Question:', question);
+    console.log('🧪 PRODUCTION TEST: Answer:', answer);
+    
+    if (!question || !answer) {
+      return res.status(400).json({
+        success: false,
+        error: 'Question and answer are required',
+        received: { question: !!question, answer: !!answer }
+      });
+    }
+    
+    // Validate company exists
+    const Company = require('../models/Company');
+    const company = await Company.findById(companyId);
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        error: 'Company not found',
+        companyId
+      });
+    }
+    
+    console.log(`🧪 PRODUCTION TEST: Company found: ${company.companyName}`);
+    
+    // Create Q&A directly using the service
+    const CompanyKnowledgeService = require('../services/knowledge/CompanyKnowledgeService');
+    const knowledgeService = new CompanyKnowledgeService();
+    
+    const qnaData = {
+      question: question.trim(),
+      answer: answer.trim(),
+      category,
+      status: 'active',
+      priority: 'normal'
+    };
+    
+    console.log('🧪 PRODUCTION TEST: Creating Q&A with data:', qnaData);
+    
+    const result = await knowledgeService.createQnA(companyId, qnaData, null);
+    
+    console.log('🧪 PRODUCTION TEST: Service result:', result);
+    
+    if (result.success) {
+      // Test retrieval immediately
+      const retrievalTest = await knowledgeService.getCompanyQnAs(companyId, { limit: 5 });
+      
+      res.json({
+        success: true,
+        message: 'Company Q&A test save successful',
+        created: {
+          id: result.data._id,
+          question: result.data.question,
+          keywordCount: result.data.keywords ? result.data.keywords.length : 0,
+          keywords: result.data.keywords ? result.data.keywords.slice(0, 5) : []
+        },
+        verification: {
+          totalQnAs: retrievalTest.data ? retrievalTest.data.length : 0,
+          retrievalSuccess: retrievalTest.success
+        },
+        company: {
+          id: companyId,
+          name: company.companyName
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Failed to create Q&A',
+        details: result.error,
+        serviceResult: result
+      });
+    }
+    
+  } catch (error) {
+    console.error('🧪 PRODUCTION TEST: Company Q&A save test failed:', error);
+    
+    res.status(500).json({
+      success: false,
+      error: 'Company Q&A save test failed',
+      details: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+/**
  * @route   GET /api/test-company-qna/:companyId
  * @desc    Test Company Q&A retrieval for debugging
  * @access  Protected (JWT)
