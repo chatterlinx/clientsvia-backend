@@ -9435,11 +9435,19 @@ Key Metrics:
             }
         }
         
+        // Debounce mechanism for trade category saving
+        let saveTradeTimeout = null;
+        
         /**
          * 💾 ENTERPRISE: Save Company Trade Selection (Mongoose + Redis)
          */
         async function saveCompanyTradeSelection() {
             try {
+                // Clear any pending save to debounce rapid clicks
+                if (saveTradeTimeout) {
+                    clearTimeout(saveTradeTimeout);
+                }
+                
                 console.log('💾 Saving company trade selection...');
                 
                 const checkboxes = document.querySelectorAll('.trade-category-checkbox:checked');
@@ -9481,9 +9489,29 @@ Key Metrics:
                 // Show success notification with production performance indicator
                 showNotification(`🚀 Trade categories saved! Selected: ${selectedTrades.join(', ')}. Mongoose + Redis optimized for sub-50ms AI agent performance.`, 'success');
                 
-                // Force refresh the trade categories display to show updated counts
-                setTimeout(() => {
-                    loadGlobalTradeCategories();
+                // Force refresh the trade categories display to show updated counts and restore selection state
+                setTimeout(async () => {
+                    // Store the selected trades before refresh
+                    const currentlySelected = selectedTrades;
+                    
+                    // Refresh the display
+                    await loadGlobalTradeCategories();
+                    
+                    // Immediately restore the selection state
+                    currentlySelected.forEach(tradeName => {
+                        const checkbox = document.getElementById(`trade-cat-${tradeName.replace(/\s+/g, '-').toLowerCase()}`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                            // Also trigger the visual styling
+                            const categoryDiv = checkbox.closest('.trade-category-option');
+                            if (categoryDiv) {
+                                categoryDiv.classList.add('border-purple-500', 'bg-purple-50');
+                            }
+                        }
+                    });
+                    
+                    // Update the selected trades display
+                    updateSelectedTradesDisplay();
                 }, 500);
                 
                 // 🔧 CRITICAL: Update Trade Category dropdown with new selection
