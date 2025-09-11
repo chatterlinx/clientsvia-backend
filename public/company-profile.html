@@ -9207,6 +9207,16 @@ Key Metrics:
             
             console.log('🎨 Rendering global trade categories:', categories.length);
             
+            // 🔍 DEBUG: Log first category data structure for debugging counts
+            if (categories.length > 0) {
+                console.log('🔍 DEBUG: First category data:', {
+                    name: categories[0].name,
+                    qnasLength: categories[0].qnas?.length,
+                    totalKeywords: categories[0].totalKeywords,
+                    metadata: categories[0].metadata
+                });
+            }
+            
             container.innerHTML = categories.map(category => `
                 <div class="trade-category-option border border-gray-200 rounded-lg p-3 hover:border-purple-400 hover:bg-purple-25 transition-all duration-150 cursor-pointer"
                      data-category-name="${category.name}"
@@ -9222,11 +9232,11 @@ Key Metrics:
                                 <div class="flex items-center space-x-2 text-xs text-gray-500">
                                     <span class="flex items-center">
                                         <i class="fas fa-question-circle mr-1 text-purple-500"></i>
-                                        ${category.qnas?.length || 0}
+                                        ${category.metadata?.totalQAs || category.qnas?.length || 0}
                                     </span>
                                     <span class="flex items-center">
                                         <i class="fas fa-tags mr-1 text-orange-500"></i>
-                                        ${category.totalKeywords || getTotalKeywordsForCategory(category)}
+                                        ${category.metadata?.totalKeywords || category.totalKeywords || getTotalKeywordsForCategory(category)}
                                     </span>
                                 </div>
                                 <div class="text-xs text-gray-400">
