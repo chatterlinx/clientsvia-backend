@@ -230,6 +230,11 @@ class EmbeddedQnAManager {
         
         console.log('✅ CHECKPOINT: Q&A container found, rendering entries');
 
+        // Debug logging for category display
+        qnas.forEach(qna => {
+            console.log(`🎨 RENDER DEBUG: Q&A ${qna._id} - Category: "${qna.category}" - Question: "${qna.question.substring(0, 30)}"`);
+        });
+        
         container.innerHTML = qnas.map(qna => `
             <div class="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow duration-200" data-qna-id="${qna._id}">
                 <div class="flex items-start justify-between mb-4">
