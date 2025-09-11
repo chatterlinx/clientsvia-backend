@@ -149,6 +149,9 @@ class EmbeddedQnAManager {
                 console.log('🔍 CHECKPOINT: listEl exists:', !!listEl);
                 console.log('🔍 CHECKPOINT: emptyEl exists:', !!emptyEl);
                 
+                // Store current Q&As for keyword regeneration functionality
+                this.currentQnAs = data.data;
+                
                 this.renderQnAEntries(data.data);
                 
                 if (listEl) {
@@ -248,6 +251,44 @@ class EmbeddedQnAManager {
                             <p class="text-gray-700">${this.escapeHtml(qna.answer)}</p>
                         </div>
                         
+                        <!-- Keywords Display -->
+                        ${qna.keywords && qna.keywords.length > 0 ? `
+                            <div class="mb-4">
+                                <div class="flex items-center mb-2">
+                                    <i class="fas fa-tags text-orange-500 mr-2"></i>
+                                    <span class="text-sm font-medium text-gray-700">Keywords (${qna.keywords.length})</span>
+                                    <span class="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
+                                        AI Generated
+                                    </span>
+                                </div>
+                                <div class="flex flex-wrap gap-1">
+                                    ${qna.keywords.slice(0, 8).map(keyword => `
+                                        <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
+                                            ${this.escapeHtml(keyword)}
+                                        </span>
+                                    `).join('')}
+                                    ${qna.keywords.length > 8 ? `
+                                        <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                                            +${qna.keywords.length - 8} more
+                                        </span>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="mb-4">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center text-sm text-gray-500">
+                                        <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>
+                                        <span>No keywords generated - may affect AI agent matching</span>
+                                    </div>
+                                    <button onclick="embeddedQnAManager.regenerateKeywords('${qna._id}')" 
+                                            class="text-xs bg-orange-600 hover:bg-orange-700 text-white font-medium py-1 px-2 rounded transition-colors duration-200">
+                                        <i class="fas fa-magic mr-1"></i>Generate Keywords
+                                    </button>
+                                </div>
+                            </div>
+                        `}
+                        
                         <div class="flex items-center text-xs text-gray-500 space-x-4">
                             <span><i class="fas fa-calendar mr-1"></i>Created: ${new Date(qna.createdAt).toLocaleDateString()}</span>
                             ${qna.analytics?.useCount ? `<span><i class="fas fa-chart-line mr-1"></i>Used: ${qna.analytics.useCount} times</span>` : ''}
@@ -275,6 +316,69 @@ class EmbeddedQnAManager {
         console.log('✅ CHECKPOINT: Q&A entries HTML generated and inserted into container');
         console.log('🎨 CHECKPOINT: Container innerHTML length:', container.innerHTML.length);
         console.log('🎨 CHECKPOINT: Rendered entries for company:', this.companyId);
+    }
+
+    /**
+     * Regenerate keywords for a Q&A entry
+     */
+    async regenerateKeywords(qnaId) {
+        try {
+            console.log('🔄 Regenerating keywords for Q&A:', qnaId);
+            
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            const token = this.getAuthToken();
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            
+            // Find the Q&A entry
+            const qna = this.currentQnAs.find(q => q._id === qnaId);
+            if (!qna) {
+                this.showNotification('❌ Q&A entry not found', 'error');
+                return;
+            }
+            
+            console.log('🔄 Updating Q&A to trigger keyword regeneration...');
+            
+            // Update the Q&A (this will trigger keyword regeneration middleware)
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas/${qnaId}`, {
+                method: 'PUT',
+                headers: headers,
+                credentials: 'include',
+                body: JSON.stringify({
+                    question: qna.question,
+                    answer: qna.answer,
+                    category: qna.category,
+                    status: qna.status,
+                    forceKeywordRegeneration: true // Flag to force regeneration
+                })
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Keyword regeneration failed:', errorText);
+                this.showNotification('❌ Failed to regenerate keywords', 'error');
+                return;
+            }
+            
+            const result = await response.json();
+            console.log('✅ Keywords regenerated:', result);
+            
+            if (result.success) {
+                this.showNotification('✅ Keywords regenerated successfully!', 'success');
+                // Reload the entries to show updated keywords
+                await this.loadCompanyQnAEntries();
+            } else {
+                this.showNotification('❌ Failed to regenerate keywords: ' + result.error, 'error');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error regenerating keywords:', error);
+            this.showNotification('❌ Error regenerating keywords: ' + error.message, 'error');
+        }
     }
 
     /**
