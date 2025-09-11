@@ -2604,27 +2604,7 @@
                                                     </div>
                                                 </div>
                                                 
-                                                <!-- Trade Q&A Performance Stats -->
-                                                <div class="mt-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
-                                                        <div>
-                                                            <div class="text-2xl font-bold text-orange-600" id="trade-qna-total-count">0</div>
-                                                            <div class="text-sm text-gray-600">Total Trade Q&As</div>
-                                                        </div>
-                                                        <div>
-                                                            <div class="text-2xl font-bold text-green-600" id="trade-qna-active-count">0</div>
-                                                            <div class="text-sm text-gray-600">Active Entries</div>
-                                                        </div>
-                                                        <div>
-                                                            <div class="text-2xl font-bold text-blue-600" id="trade-qna-avg-confidence">--</div>
-                                                            <div class="text-sm text-gray-600">Avg Confidence</div>
-                                                        </div>
-                                                        <div>
-                                                            <div class="text-2xl font-bold text-purple-600" id="trade-qna-categories-count">0</div>
-                                                            <div class="text-sm text-gray-600">Trade Categories</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                <!-- Trade Q&A Statistics Section Removed for Cleaner UI -->
                                             </div>
                                         </div>
 
@@ -9143,7 +9123,6 @@ Key Metrics:
             
             // Load Trade Q&A entries filtered by selected trades
             loadTradeQnAEntries();
-            loadTradeQnAStats();
             
             // 🔧 CRITICAL: Setup status filter event listener
             const statusFilter = document.getElementById('trade-status-filter');
@@ -9803,64 +9782,9 @@ Key Metrics:
         /**
          * ✅ PRODUCTION: Load Trade Q&A statistics
          */
-        function loadTradeQnAStats() {
-            const companyId = getCurrentCompanyId();
-            if (!companyId) return;
-            
-            fetch(`/api/enterprise-trade-categories/stats/${companyId}`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken') || sessionStorage.getItem('authToken')}`,
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('📊 Trade Q&A stats API response:', data);
-                if (data.success && data.data) {
-                    // Use data.data (correct field from API)
-                    updateTradeQnAStats(data.data);
-                } else {
-                    console.log('ℹ️ No stats data - using defaults');
-                    updateTradeQnAStats({
-                        total: 0,
-                        active: 0,
-                        avgConfidence: '--',
-                        breakdown: {}
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('❌ Failed to load Trade Q&A stats:', error);
-                // Set default stats on error
-                updateTradeQnAStats({
-                    total: 0,
-                    active: 0,
-                    avgConfidence: '--',
-                    breakdown: {}
-                });
-            });
-        }
+        // Trade Q&A statistics function removed for cleaner UI
         
-        /**
-         * ✅ PRODUCTION: Update Trade Q&A statistics display
-         */
-        function updateTradeQnAStats(stats) {
-            console.log('📊 Updating Trade Q&A stats display:', stats);
-            
-            const totalEl = document.getElementById('trade-qna-total-count');
-            const activeEl = document.getElementById('trade-qna-active-count');
-            const confidenceEl = document.getElementById('trade-qna-avg-confidence');
-            const categoriesEl = document.getElementById('trade-qna-categories-count');
-            
-            // Fixed: Use correct field names from API response
-            if (totalEl) totalEl.textContent = stats.total || stats.totalQnAs || '0';
-            if (activeEl) activeEl.textContent = stats.active || stats.activeQnAs || '0';
-            if (confidenceEl) confidenceEl.textContent = stats.avgConfidence || '--';
-            if (categoriesEl) categoriesEl.textContent = Object.keys(stats.breakdown || {}).length || '0';
-            
-            console.log('✅ Trade Q&A stats display updated');
-        }
+        // Trade Q&A statistics update function removed for cleaner UI
         
         /**
          * ✅ PRODUCTION: Update Trade Q&A threshold
@@ -10008,7 +9932,6 @@ Key Metrics:
                     showNotification('Success', 'Trade Q&A created successfully with auto-generated keywords!', 'success');
                     document.querySelector('.fixed').remove();
                     loadTradeQnAEntries();
-                    loadTradeQnAStats();
                 } else {
                     showNotification('Error', data.message || 'Failed to create Trade Q&A', 'error');
                 }
@@ -10175,7 +10098,6 @@ Key Metrics:
                         showNotification('Success', 'Trade Q&A updated successfully!', 'success');
                         closeModal();
                         loadTradeQnAEntries();
-                        loadTradeQnAStats();
                     } catch (e) {
                         console.error('❌ EDIT SAVE ERROR:', e);
                         showNotification('Error', e.message, 'error');
@@ -10210,7 +10132,6 @@ Key Metrics:
                 if (data.success) {
                     showNotification('Success', 'Trade Q&A deleted successfully!', 'success');
                     loadTradeQnAEntries();
-                    loadTradeQnAStats();
                 } else {
                     showNotification('Error', data.message || 'Failed to delete Trade Q&A', 'error');
                 }
