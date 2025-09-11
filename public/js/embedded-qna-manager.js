@@ -115,9 +115,9 @@ class EmbeddedQnAManager {
                 headers['Authorization'] = `Bearer ${token}`;
             }
             
-            // Use emergency routes to bypass authentication issues
+            // Use proper authenticated routes
             const filterStatus = this.currentStatusFilter || 'all';
-            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/emergency/${this.companyId}/qnas`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`, {
                 method: 'GET',
                 headers: headers,
                 credentials: 'include' // Include cookies for additional auth
@@ -830,7 +830,7 @@ class EmbeddedQnAManager {
                 headers['Authorization'] = `Bearer ${token}`;
             }
             
-            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/emergency/${this.companyId}/qnas`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas`, {
                 method: 'POST',
                 headers: headers,
                 credentials: 'include', // Include cookies for additional auth
@@ -1029,7 +1029,7 @@ class EmbeddedQnAManager {
             
             console.log('💾 CHECKPOINT: Making PUT request to update Q&A');
             
-            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/emergency/${this.companyId}/qnas/${qnaId}`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/knowledge/company/${this.companyId}/qnas/${qnaId}`, {
                 method: 'PUT',
                 headers: headers,
                 credentials: 'include',

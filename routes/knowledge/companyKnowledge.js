@@ -1338,86 +1338,8 @@ router.post('/emergency/fix-user-company/:userId/:companyId', async (req, res) =
   }
 });
 
-/**
- * 🚨 EMERGENCY: Simple Q&A Access (No Authentication)
- * Temporary routes for AI agent emergency access
- */
-router.get('/emergency/:companyId/qnas', async (req, res) => {
-  try {
-    console.log('🚨 EMERGENCY: Simple Q&A GET - No authentication');
-    const { companyId } = req.params;
-    
-    // Force get ALL entries regardless of status for emergency
-    console.log('🚨 EMERGENCY: Requesting ALL Q&A entries regardless of status');
-    const result = await knowledgeService.getCompanyQnAs(companyId, {
-      page: 1,
-      limit: 50,
-      status: null  // Explicitly null to bypass status filtering
-    });
-    
-    console.log('✅ EMERGENCY: Q&A entries loaded:', result.data?.length || 0);
-    
-    res.json({
-      success: true,
-      data: result.data || [],
-      emergency: true
-    });
-    
-  } catch (error) {
-    console.error('❌ EMERGENCY: Simple Q&A GET failed:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Emergency Q&A access failed',
-      details: error.message
-    });
-  }
-});
-
-router.post('/emergency/:companyId/qnas', async (req, res) => {
-  try {
-    console.log('🚨 EMERGENCY: Simple Q&A POST - No authentication');
-    const { companyId } = req.params;
-    const qnaData = req.body;
-    
-    const result = await knowledgeService.createQnA(companyId, qnaData, null);
-    
-    console.log('✅ EMERGENCY: Q&A created:', result.success);
-    
-    res.json(result);
-    
-  } catch (error) {
-    console.error('❌ EMERGENCY: Simple Q&A POST failed:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Emergency Q&A creation failed',
-      details: error.message
-    });
-  }
-});
-
-router.put('/emergency/:companyId/qnas/:id', async (req, res) => {
-  try {
-    console.log('🚨 EMERGENCY: Simple Q&A PUT - No authentication');
-    const { companyId, id } = req.params;
-    const updateData = req.body;
-    
-    console.log('✏️ EMERGENCY: Updating Q&A:', id, 'with data:', updateData);
-    
-    const result = await knowledgeService.updateQnA(id, updateData, null);
-    
-    console.log('✅ EMERGENCY: Q&A updated:', result.success);
-    
-    res.json(result);
-    
-  } catch (error) {
-    console.error('❌ EMERGENCY: Simple Q&A PUT failed:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Emergency Q&A update failed',
-      details: error.message
-    });
-  }
-});
+// SECURITY FIX: Removed unauthenticated emergency routes - these were security vulnerabilities
+// All Q&A operations now use proper authenticated routes with JWT middleware
 
 /**
  * 🚨 EMERGENCY: Restore All Q&A Entries to Active Status
