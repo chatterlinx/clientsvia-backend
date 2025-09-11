@@ -433,8 +433,13 @@ router.get('/qnas/:companyId', async (req, res) => {
         } else {
             // Load company's selected trade categories
             const Company = require('../models/Company');
-            const company = await Company.findById(companyId);
-            selectedTrades = company?.tradeCategories || [];
+            try {
+                const company = await Company.findById(companyId);
+                selectedTrades = company?.tradeCategories || [];
+            } catch (error) {
+                console.warn('⚠️ Failed to load company or invalid company ID:', companyId);
+                selectedTrades = [];
+            }
         }
         
         console.log('🔧 Company selected trade categories:', selectedTrades);
