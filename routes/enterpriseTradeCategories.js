@@ -414,11 +414,11 @@ router.post('/qna', async (req, res) => {
 
 /**
  * @route   GET /api/enterprise-trade-categories/qnas/:companyId
- * @desc    Get company-specific Trade Q&As filtered by trade categories
+ * @desc    Get global Trade Q&As filtered by company's selected trade categories
  */
 router.get('/qnas/:companyId', async (req, res) => {
     try {
-        console.log('🔍 ENTERPRISE: Loading company Trade Q&As');
+        console.log('🔍 ENTERPRISE: Loading global Trade Q&As for company');
         
         const { companyId } = req.params;
         const { trades, status = 'active' } = req.query;
@@ -426,41 +426,66 @@ router.get('/qnas/:companyId', async (req, res) => {
         console.log('🔍 Loading Trade Q&As for company:', companyId);
         console.log('🔍 Trade filter:', trades);
         
-        const CompanyQnA = require('../models/knowledge/CompanyQnA');
-        
-        // Build query for company-specific trade Q&As
-        const query = {
-            companyId: companyId
-        };
-        
-        // Only add status filter if not 'all'
-        if (status && status !== 'all') {
-            query.status = status;
-        }
-        
-        // Filter by trade categories if specified
+        // Get company's selected trade categories if no specific trades filter
+        let selectedTrades = [];
         if (trades) {
-            const tradeList = trades.split(',').map(t => t.trim());
-            query.tradeCategories = { $in: tradeList };
-            console.log('🔧 Filtering by trade categories:', tradeList);
+            selectedTrades = trades.split(',').map(t => t.trim());
+        } else {
+            // Load company's selected trade categories
+            const Company = require('../models/Company');
+            const company = await Company.findById(companyId);
+            selectedTrades = company?.tradeCategories || [];
         }
         
-        console.log('🔍 MongoDB query for Trade Q&As:', query);
+        console.log('🔧 Company selected trade categories:', selectedTrades);
         
-        const tradeQnAs = await CompanyQnA.find(query)
-            .sort({ createdAt: -1 })
-            .lean();
+        if (selectedTrades.length === 0) {
+            return res.json({
+                success: true,
+                data: [],
+                meta: {
+                    total: 0,
+                    companyId: companyId,
+                    message: 'No trade categories selected by company',
+                    tradeFilter: trades,
+                    statusFilter: status
+                }
+            });
+        }
         
-        console.log('✅ Trade Q&As loaded:', tradeQnAs.length);
+        // Get global trade categories with embedded Q&As
+        const db = getDB();
+        const categories = await db.collection('enterpriseTradeCategories').find({
+            name: { $in: selectedTrades }
+        }).toArray();
+        
+        console.log('🔍 Found trade categories:', categories.length);
+        
+        // Extract all Q&As from selected categories
+        let allQnAs = [];
+        categories.forEach(category => {
+            if (category.qnas && Array.isArray(category.qnas)) {
+                const categoryQnAs = category.qnas.map(qna => ({
+                    ...qna,
+                    tradeCategory: category.name,
+                    categoryId: category._id
+                }));
+                allQnAs = allQnAs.concat(categoryQnAs);
+            }
+        });
+        
+        console.log('✅ Global Trade Q&As loaded:', allQnAs.length);
         
         res.json({
             success: true,
-            data: tradeQnAs,
+            data: allQnAs,
             meta: {
-                total: tradeQnAs.length,
+                total: allQnAs.length,
                 companyId: companyId,
+                selectedTrades: selectedTrades,
                 tradeFilter: trades,
-                statusFilter: status
+                statusFilter: status,
+                source: 'global_trade_categories'
             }
         });
         
