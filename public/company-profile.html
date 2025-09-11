@@ -2421,7 +2421,7 @@
                                                                 <i class="fas fa-tools mr-3 text-orange-600 text-xl"></i>
                                                                 <div>
                                                                     <h3 class="text-lg font-semibold text-gray-800">Trade Categories Q&A</h3>
-                                                                    <p class="text-sm text-gray-600">Manage trade-specific knowledge with auto-generated keywords</p>
+                                                                    <p class="text-sm text-gray-600">Dual-layer system: Global trade Q&As + Company-specific Q&As</p>
                                                                 </div>
                                                             </div>
                                                             <div class="flex items-center space-x-3">
@@ -2467,10 +2467,15 @@
                                                                 </div>
                                                                 <div class="flex items-center space-x-3">
                                                                     <span id="trade-fuzzy-indicator" class="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Fuzzy/Phonetic: Ready • <span id="trade-match-count">0</span> matches</span>
-                                                                    <button id="manage-global-trade-qna-btn" 
+                                                                    <button id="add-company-trade-qna-btn" 
                                                                             class="bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
+                                                                            onclick="showAddTradeQnAModal()">
+                                                                        <i class="fas fa-plus mr-2"></i>Add Company Q&A
+                                                                    </button>
+                                                                    <button id="manage-global-trade-qna-btn" 
+                                                                            class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
                                                                             onclick="window.open('/enterprise-trade-categories.html', '_blank')">
-                                                                        <i class="fas fa-external-link-alt mr-2"></i>Manage Global Q&As
+                                                                        <i class="fas fa-external-link-alt mr-2"></i>Global Q&As
                                                                     </button>
                                                                     <button id="test-trade-priority-flow-btn" 
                                                                             class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
@@ -9605,11 +9610,18 @@ Key Metrics:
                         emptyMessage.innerHTML = `
                             <i class="fas fa-tools text-4xl text-orange-300 mb-4"></i>
                             <h3 class="text-lg font-medium text-gray-900 mb-2">No Q&As in Selected Trade Categories</h3>
-                            <p class="text-gray-500 mb-6">Your selected trade categories (${selectedTrades.join(', ')}) don't have any Q&As yet. Global trade Q&As are managed in the Enterprise Trade Categories section.</p>
-                            <button onclick="window.open('/enterprise-trade-categories.html', '_blank')" 
-                                    class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md transition-colors">
-                                <i class="fas fa-external-link-alt mr-2"></i>Manage Global Trade Q&As
-                            </button>
+                            <p class="text-gray-500 mb-6">No Q&As found for your selected trade categories: <strong>${selectedTrades.join(', ')}</strong><br>
+                            Add company-specific Q&As or check if global Q&As exist for these categories.</p>
+                            <div class="flex space-x-3 justify-center">
+                                <button onclick="showAddTradeQnAModal()" 
+                                        class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md transition-colors">
+                                    <i class="fas fa-plus mr-2"></i>Add Company Q&A
+                                </button>
+                                <button onclick="window.open('/enterprise-trade-categories.html', '_blank')" 
+                                        class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition-colors">
+                                    <i class="fas fa-external-link-alt mr-2"></i>View Global Q&As
+                                </button>
+                            </div>
                         `;
                     }
                 }
@@ -9646,6 +9658,10 @@ Key Metrics:
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                                     ${qna.tradeCategory || 'General'}
                                 </span>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${qna.isGlobal ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}">
+                                    <i class="fas ${qna.isGlobal ? 'fa-globe' : 'fa-building'} mr-1"></i>
+                                    ${qna.isGlobal ? 'Global' : 'Company'}
+                                </span>
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(qna.status)}">
                                     ${getStatusDisplayText(qna.status)}
                                 </span>
@@ -9681,12 +9697,18 @@ Key Metrics:
                             ` : ''}
                         </div>
                         <div class="flex items-center space-x-2 ml-4">
-                            <button onclick="editTradeQnA('${qna.id || qna._id}')" class="text-blue-600 hover:text-blue-800">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button onclick="deleteTradeQnA('${qna.id || qna._id}')" class="text-red-600 hover:text-red-800">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                            ${!qna.isGlobal ? `
+                                <button onclick="editTradeQnA('${qna.id || qna._id}')" class="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded" title="Edit company Q&A">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="deleteTradeQnA('${qna.id || qna._id}')" class="text-red-600 hover:text-red-800 p-2 hover:bg-red-50 rounded" title="Delete company Q&A">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            ` : `
+                                <span class="text-xs text-purple-600 px-2 py-1 bg-purple-50 rounded" title="Global Q&As are managed in Enterprise Trade Categories">
+                                    <i class="fas fa-lock mr-1"></i>Global
+                                </span>
+                            `}
                         </div>
                     </div>
                 `;
@@ -9882,9 +9904,9 @@ Key Metrics:
             const tradeQnAData = {
                 question: question.trim(),
                 answer: answer.trim(),
-                tradeCategory: category,
+                category: 'trade', // General category for trade Q&As
+                tradeCategory: category, // Specific trade category
                 confidence: confidence,
-                isActive: true,
                 companyId: companyId
             };
             

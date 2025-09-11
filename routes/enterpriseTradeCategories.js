@@ -414,11 +414,11 @@ router.post('/qna', async (req, res) => {
 
 /**
  * @route   GET /api/enterprise-trade-categories/qnas/:companyId
- * @desc    Get global Trade Q&As filtered by company's selected trade categories
+ * @desc    Get DUAL-LAYER Trade Q&As: Global + Company-specific filtered by trade categories
  */
 router.get('/qnas/:companyId', async (req, res) => {
     try {
-        console.log('🔍 ENTERPRISE: Loading global Trade Q&As for company');
+        console.log('🔍 ENTERPRISE: Loading DUAL-LAYER Trade Q&As (Global + Company-specific)');
         
         const { companyId } = req.params;
         const { trades, status = 'active' } = req.query;
@@ -453,39 +453,78 @@ router.get('/qnas/:companyId', async (req, res) => {
             });
         }
         
-        // Get global trade categories with embedded Q&As
+        // LAYER 1: Get global trade categories with embedded Q&As
         const db = getDB();
         const categories = await db.collection('enterpriseTradeCategories').find({
             name: { $in: selectedTrades }
         }).toArray();
         
-        console.log('🔍 Found trade categories:', categories.length);
+        console.log('🌐 Found global trade categories:', categories.length);
         
-        // Extract all Q&As from selected categories
-        let allQnAs = [];
+        // Extract global Q&As from selected categories
+        let globalQnAs = [];
         categories.forEach(category => {
             if (category.qnas && Array.isArray(category.qnas)) {
                 const categoryQnAs = category.qnas.map(qna => ({
                     ...qna,
                     tradeCategory: category.name,
-                    categoryId: category._id
+                    categoryId: category._id,
+                    source: 'global',
+                    isGlobal: true
                 }));
-                allQnAs = allQnAs.concat(categoryQnAs);
+                globalQnAs = globalQnAs.concat(categoryQnAs);
             }
         });
         
-        console.log('✅ Global Trade Q&As loaded:', allQnAs.length);
+        console.log('🌐 Global Trade Q&As loaded:', globalQnAs.length);
+        
+        // LAYER 2: Get company-specific trade Q&As
+        const CompanyQnA = require('../models/knowledge/CompanyQnA');
+        
+        const companyQuery = {
+            companyId: companyId,
+            tradeCategories: { $in: selectedTrades }
+        };
+        
+        // Only add status filter if not 'all'
+        if (status && status !== 'all') {
+            companyQuery.status = status;
+        }
+        
+        console.log('🏢 MongoDB query for company-specific Trade Q&As:', companyQuery);
+        
+        const companyQnAs = await CompanyQnA.find(companyQuery)
+            .sort({ createdAt: -1 })
+            .lean();
+        
+        // Add metadata to company Q&As
+        const companyQnAsWithMeta = companyQnAs.map(qna => ({
+            ...qna,
+            source: 'company',
+            isGlobal: false
+        }));
+        
+        console.log('🏢 Company-specific Trade Q&As loaded:', companyQnAsWithMeta.length);
+        
+        // COMBINE: Merge global and company-specific Q&As
+        // Company-specific Q&As come first (higher priority for company branding)
+        const allQnAs = [...companyQnAsWithMeta, ...globalQnAs];
+        
+        console.log('✅ DUAL-LAYER Trade Q&As combined:', allQnAs.length, 
+                   `(${companyQnAsWithMeta.length} company + ${globalQnAs.length} global)`);
         
         res.json({
             success: true,
             data: allQnAs,
             meta: {
                 total: allQnAs.length,
+                companySpecific: companyQnAsWithMeta.length,
+                global: globalQnAs.length,
                 companyId: companyId,
                 selectedTrades: selectedTrades,
                 tradeFilter: trades,
                 statusFilter: status,
-                source: 'global_trade_categories'
+                architecture: 'dual_layer'
             }
         });
         
