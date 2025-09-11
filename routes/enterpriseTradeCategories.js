@@ -27,47 +27,69 @@ function getKeywordArrayForCategory(categoryName) {
 const COLLECTION_NAME = 'enterpriseTradeCategories';
 
 // AI-powered keyword generator
+// OPTIMIZED AI AGENT KEYWORD GENERATION
+// Designed for fast, accurate Q&A matching during phone calls
 function generateKeywords(question, answer, categoryName) {
+    console.log('🔧 KEYWORD GENERATION:', { 
+        question: question.substring(0, 50) + '...', 
+        answer: answer.substring(0, 50) + '...',
+        categoryName 
+    });
+    
     const text = `${question} ${answer} ${categoryName}`.toLowerCase();
     
-    // Extract technical terms, brand names, and service types
+    // PRIORITY 1: Core technical terms (high weight for AI matching)
     const technicalTerms = text.match(/\b(?:hvac|plumbing|electrical|repair|maintenance|installation|service|emergency|commercial|residential|industrial)\b/g) || [];
     
-    // Extract specific equipment/systems
-    const equipment = text.match(/\b(?:furnace|boiler|water\s*heater|ac|air\s*conditioner|pipe|drain|circuit|breaker|outlet|switch|pump|valve|thermostat|duct|filter)\b/g) || [];
+    // PRIORITY 2: Specific equipment (exact match importance)
+    const equipment = text.match(/\b(?:furnace|boiler|water\s*heater|ac|air\s*conditioner|pipe|drain|circuit|breaker|outlet|switch|pump|valve|thermostat|duct|filter|unit|system)\b/g) || [];
     
-    // Extract service actions
-    const actions = text.match(/\b(?:install|repair|replace|maintain|clean|inspect|diagnose|fix|upgrade|service|troubleshoot)\b/g) || [];
+    // PRIORITY 3: Service actions (what customer needs)
+    const actions = text.match(/\b(?:install|repair|replace|maintain|clean|inspect|diagnose|fix|upgrade|service|troubleshoot|check)\b/g) || [];
     
-    // Extract urgency indicators
-    const urgency = text.match(/\b(?:emergency|urgent|immediate|asap|leak|flood|no\s*heat|no\s*cooling|outage|broken)\b/g) || [];
+    // PRIORITY 4: Problem indicators (urgent matching)
+    const problems = text.match(/\b(?:broken|not\s*working|leaking|clogged|blocked|frozen|overheating|noisy|blank|dead|tripped)\b/g) || [];
     
-    // Extract location indicators
+    // PRIORITY 5: Location context
     const locations = text.match(/\b(?:basement|attic|kitchen|bathroom|garage|office|warehouse|retail|home|business)\b/g) || [];
     
-    // Combine and deduplicate
-    const allKeywords = [...new Set([
+    // Combine with priority weighting (most important first)
+    let allKeywords = [
         ...technicalTerms,
-        ...equipment,
+        ...equipment, 
         ...actions,
-        ...urgency,
+        ...problems,
         ...locations
-    ])];
+    ];
     
-    // Add category-specific keywords
+    // Add category-specific high-value keywords
     const categoryKeywords = {
-        'hvac': ['heating', 'cooling', 'ventilation', 'climate', 'temperature'],
-        'plumbing': ['water', 'sewer', 'drainage', 'pipes', 'fixtures'],
-        'electrical': ['power', 'wiring', 'outlets', 'lighting', 'voltage'],
-        'general': ['maintenance', 'repair', 'service', 'inspection']
+        'hvac residential': ['heating', 'cooling', 'temperature', 'climate'],
+        'plumbing': ['water', 'leak', 'drain', 'pipe'],
+        'electrical': ['power', 'wiring', 'electric'],
+        'general': ['service', 'repair']
     };
     
-    const categoryKey = categoryName.toLowerCase();
-    if (categoryKeywords[categoryKey]) {
-        allKeywords.push(...categoryKeywords[categoryKey]);
-    }
+    const categoryKey = categoryName.toLowerCase().replace(/[*]/g, '');
+    Object.keys(categoryKeywords).forEach(key => {
+        if (categoryKey.includes(key) || key.includes(categoryKey.split(' ')[0])) {
+            allKeywords.push(...categoryKeywords[key]);
+        }
+    });
     
-    return [...new Set(allKeywords)]; // Return all unique keywords - no artificial limits
+    // CRITICAL: Ensure proper array handling and deduplication
+    const uniqueKeywords = [...new Set(allKeywords.filter(k => k && k.length > 1))];
+    
+    // OPTIMIZATION: Limit to 8-12 most relevant keywords for fast AI matching
+    const finalKeywords = uniqueKeywords.slice(0, 12);
+    
+    console.log('✅ KEYWORDS GENERATED:', { 
+        count: finalKeywords.length, 
+        keywords: finalKeywords,
+        categories: { technicalTerms: technicalTerms.length, equipment: equipment.length, actions: actions.length, problems: problems.length }
+    });
+    
+    return finalKeywords;
 }
 
 /**
@@ -193,14 +215,39 @@ router.get('/', async (req, res) => {
                     // Get embedded Q&As from the category document
                     qnas = category.qnas || [];
                     
-                    // Fix legacy Q&As that don't have proper _id fields
+                    // Fix legacy Q&As that don't have proper _id fields or broken keywords
                     let needsUpdate = false;
                     qnas = qnas.map(qna => {
+                        let qnaUpdated = false;
+                        
+                        // Fix missing _id
                         if (!qna._id) {
                             qna._id = new ObjectId();
                             needsUpdate = true;
+                            qnaUpdated = true;
                             console.log(`🔧 Fixed legacy Q&A "${qna.question?.substring(0, 30)}..." - added _id`);
                         }
+                        
+                        // Fix broken keywords (character-level splits)
+                        if (qna.keywords && Array.isArray(qna.keywords)) {
+                            const hasBrokenKeywords = qna.keywords.some(k => k.length === 1 || k === ' ' || k === ',');
+                            if (hasBrokenKeywords) {
+                                console.log(`🔧 FIXING BROKEN KEYWORDS for "${qna.question?.substring(0, 30)}..."`);
+                                console.log(`   OLD: [${qna.keywords.slice(0, 5).join(', ')}...]`);
+                                
+                                // Regenerate keywords properly
+                                qna.keywords = generateKeywords(qna.question || '', qna.answer || '', category.name);
+                                needsUpdate = true;
+                                qnaUpdated = true;
+                                
+                                console.log(`   NEW: [${qna.keywords.join(', ')}]`);
+                            }
+                        }
+                        
+                        if (qnaUpdated) {
+                            console.log(`✅ Updated Q&A "${qna.question?.substring(0, 30)}..."`);
+                        }
+                        
                         return qna;
                     });
                     
