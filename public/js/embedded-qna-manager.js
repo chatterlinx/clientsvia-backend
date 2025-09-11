@@ -967,6 +967,17 @@ class EmbeddedQnAManager {
             
             if (result.success) {
                 this.showNotification('✅ Q&A entry created successfully!', 'success');
+                
+                // ✅ CRITICAL FIX: Clear unsaved changes flag after successful save
+                console.log('🔧 CHECKPOINT: Clearing hasUnsavedChanges flag after successful Q&A creation');
+                if (window.companyProfileManager && window.companyProfileManager.setUnsavedChanges) {
+                    window.companyProfileManager.setUnsavedChanges(false);
+                    console.log('✅ CHECKPOINT: hasUnsavedChanges flag cleared via companyProfileManager');
+                } else if (window.hasUnsavedChanges !== undefined) {
+                    window.hasUnsavedChanges = false;
+                    console.log('✅ CHECKPOINT: Global hasUnsavedChanges flag cleared');
+                }
+                
                 // Close modal
                 const modal = document.querySelector('.fixed');
                 if (modal) modal.remove();
@@ -991,6 +1002,14 @@ class EmbeddedQnAManager {
             });
             
             this.showNotification('❌ Save failed: ' + error.message, 'error');
+            
+            // ✅ ALSO CLEAR FLAG ON ERROR to prevent stuck "Leave site?" dialog
+            console.log('🔧 CHECKPOINT: Clearing hasUnsavedChanges flag after error (prevent stuck dialog)');
+            if (window.companyProfileManager && window.companyProfileManager.setUnsavedChanges) {
+                window.companyProfileManager.setUnsavedChanges(false);
+            } else if (window.hasUnsavedChanges !== undefined) {
+                window.hasUnsavedChanges = false;
+            }
             
             // NEVER mask errors - make them visible for debugging
             console.error('🔍 FULL SAVE ERROR DETAILS FOR DEBUGGING:', error);
