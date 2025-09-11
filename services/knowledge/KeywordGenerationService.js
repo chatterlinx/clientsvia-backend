@@ -212,24 +212,28 @@ class KeywordGenerationService {
 
   /**
    * 🔄 SEMANTIC VARIATION GENERATION
+   * FIXED: Removed broken stemming that corrupted words
    */
   generateSemanticVariations(tokens) {
     const variations = new Set();
     
     tokens.forEach(token => {
-      // Add stemmed version
-      const stemmed = this.stemmer.stem(token);
-      if (stemmed !== token && stemmed.length >= 3) {
-        variations.add(stemmed);
+      // ✅ FIXED: Add the original token (most important!)
+      if (token.length >= 3) {
+        variations.add(token);
       }
       
-      // Add synonyms
+      // Add synonyms if available
       const synonyms = this.synonymMaps[token] || [];
       synonyms.forEach(synonym => variations.add(synonym));
       
-      // Add related terms
+      // Add related terms if available
       const related = this.getRelatedTerms(token);
       related.forEach(term => variations.add(term));
+      
+      // Add common variations for business terms
+      const businessVariations = this.getBusinessVariations(token);
+      businessVariations.forEach(variation => variations.add(variation));
     });
     
     return [...variations];
@@ -516,6 +520,30 @@ class KeywordGenerationService {
     // Check if term is contextually relevant to the tokens
     const termWords = term.split(' ');
     return termWords.some(word => tokens.includes(word.toLowerCase()));
+  }
+  
+  /**
+   * 🏢 BUSINESS TERM VARIATIONS
+   * Generate common business variations without corrupting words
+   */
+  getBusinessVariations(token) {
+    const variations = [];
+    
+    // Common business term mappings
+    const businessTerms = {
+      'open': ['hours', 'schedule', 'available'],
+      'monday': ['weekday', 'business day'],
+      'address': ['location', 'directions', 'where'],
+      'phone': ['number', 'contact', 'call'],
+      'price': ['cost', 'pricing', 'rate'],
+      'service': ['work', 'job', 'repair'],
+      'emergency': ['urgent', 'immediate', 'asap'],
+      'fort': ['ft'],
+      'myers': ['florida', 'fl'],
+      'market': ['street', 'st']
+    };
+    
+    return businessTerms[token] || [];
   }
 }
 
