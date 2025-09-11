@@ -9274,6 +9274,10 @@ Key Metrics:
                     console.log('🔍 CHECKPOINT: About to call updateSelectedTradesDisplay');
                     updateSelectedTradesDisplay();
                     console.log('🔍 CHECKPOINT: updateSelectedTradesDisplay completed');
+                    
+                    // 🔧 EXPLICIT SAVE: Save after user toggles a checkbox
+                    console.log('🔍 CHECKPOINT: Saving after user checkbox toggle');
+                    saveCompanyTradeSelection();
                 }, 10); // Small delay to let checkbox update
             }
         }
@@ -9313,14 +9317,9 @@ Key Metrics:
             
             console.log('📊 Selected trades updated:', selectedTrades);
             
-            // 🔍 CRITICAL CHECKPOINT: Check if this triggers auto-save
-            console.log('🔍 CHECKPOINT: About to check if auto-save should trigger...');
-            if (selectedTrades.length > 0) {
-                console.log('🔍 CHECKPOINT: Selected trades > 0, calling saveCompanyTradeSelection');
-                saveCompanyTradeSelection();
-            } else {
-                console.log('🔍 CHECKPOINT: No trades selected, skipping save');
-            }
+            // 🚨 CRITICAL FIX: Removed auto-save to prevent infinite loop
+            // Save should only happen when user explicitly clicks save or checks/unchecks a box
+            console.log('🔍 CHECKPOINT: Display updated - no auto-save to prevent infinite loops');
         }
         
         /**
@@ -9556,29 +9555,9 @@ Key Metrics:
                 showNotification(`🚀 Trade categories saved! Selected: ${selectedTrades.join(', ')}. Mongoose + Redis optimized for sub-50ms AI agent performance.`, 'success');
                 
                 // Force refresh the trade categories display to show updated counts and restore selection state
-                setTimeout(async () => {
-                    // Store the selected trades before refresh
-                    const currentlySelected = selectedTrades;
-                    
-                    // Refresh the display
-                    await loadGlobalTradeCategories();
-                    
-                    // Immediately restore the selection state
-                    currentlySelected.forEach(tradeName => {
-                        const checkbox = document.getElementById(`trade-cat-${tradeName.replace(/\s+/g, '-').toLowerCase()}`);
-                        if (checkbox) {
-                            checkbox.checked = true;
-                            // Also trigger the visual styling
-                            const categoryDiv = checkbox.closest('.trade-category-option');
-                            if (categoryDiv) {
-                                categoryDiv.classList.add('border-purple-500', 'bg-purple-50');
-                            }
-                        }
-                    });
-                    
-                    // Update the selected trades display
-                    updateSelectedTradesDisplay();
-                }, 500);
+                // 🚨 CRITICAL FIX: Removed infinite loop refresh logic
+                // Save was successful - checkboxes should remain in their current state
+                console.log('✅ Trade categories saved successfully - no refresh needed to prevent infinite loop');
                 
                 // 🔧 CRITICAL: Update Trade Category dropdown with new selection
                 populateCompanyTradeDropdown(selectedTrades);
