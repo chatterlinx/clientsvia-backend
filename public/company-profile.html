@@ -2388,7 +2388,7 @@
                                                         <!-- Manual Save Button -->
                                                         <button id="save-knowledge-sources-btn" 
                                                                 class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
-                                                                onclick="showNotification('Settings Moved', 'Knowledge source settings are now controlled in the Answer Priority Flow tab above', 'info')"
+                                                                onclick="saveClientsViaConfiguration()"
                                                                 disabled>
                                                             <i class="fas fa-save mr-2"></i>
                                                             <span id="save-btn-text">Save Changes</span>
@@ -10755,7 +10755,8 @@ Key Metrics:
                     
                     if (isEnabled && window.knowledgeSourceUnsavedChanges.size > 0) {
                         // Auto-save if there are unsaved changes and auto-save is enabled
-                        saveKnowledgeSourceSettings();
+                        console.log('🔄 Auto-save toggle triggered - using correct save function...');
+                        saveClientsViaConfiguration();
                     }
                 });
             }
@@ -10932,7 +10933,8 @@ Key Metrics:
                 }
                 
                 window.knowledgeSourceAutoSaveTimeout = setTimeout(() => {
-                    saveKnowledgeSourceSettings();
+                    console.log('🔄 Auto-saving knowledge source settings via correct save function...');
+                    saveClientsViaConfiguration();
                 }, 1000); // 1 second delay for auto-save
             }
         }
@@ -11766,6 +11768,29 @@ Key Metrics:
                 if (response.ok) {
                     const result = await response.json();
                     showNotification('AI Agent Logic configuration saved successfully!', 'success');
+                    
+                    // ✅ CRITICAL FIX: Clear unsaved changes flags after successful save
+                    console.log('🔧 CHECKPOINT: Clearing all unsaved changes flags after successful save');
+                    
+                    // Clear Knowledge Source unsaved changes
+                    if (window.knowledgeSourceUnsavedChanges) {
+                        window.knowledgeSourceUnsavedChanges.clear();
+                        updateUnsavedChangesUI();
+                        updateSaveStatus('saved');
+                        console.log('✅ CHECKPOINT: Knowledge source unsaved changes cleared');
+                    }
+                    
+                    // Clear Company Profile Manager unsaved changes
+                    if (window.companyProfileManager && window.companyProfileManager.setUnsavedChanges) {
+                        window.companyProfileManager.setUnsavedChanges(false);
+                        console.log('✅ CHECKPOINT: Company profile unsaved changes cleared');
+                    }
+                    
+                    // Clear global unsaved changes flag
+                    if (window.hasUnsavedChanges !== undefined) {
+                        window.hasUnsavedChanges = false;
+                        console.log('✅ CHECKPOINT: Global unsaved changes flag cleared');
+                    }
 
                 } else if (response.status === 401) {
                     throw new Error('Authentication required - please log in again');
