@@ -9245,13 +9245,21 @@ Key Metrics:
          * 🔧 ENTERPRISE: Toggle Trade Category Selection (Fixed Logic)
          */
         function toggleTradeCategory(categoryName) {
+            console.log('🔍 CHECKPOINT: toggleTradeCategory called for:', categoryName);
+            
             const checkbox = document.getElementById(`trade-cat-${categoryName.replace(/\s+/g, '-').toLowerCase()}`);
             const option = document.querySelector(`[data-category-name="${categoryName}"]`);
             
+            console.log('🔍 CHECKPOINT: checkbox found:', !!checkbox, 'option found:', !!option);
+            
             if (checkbox && option) {
+                console.log('🔍 CHECKPOINT: checkbox.checked before toggle:', checkbox.checked);
+                
                 // Don't toggle - let the checkbox handle its own state
                 // Just update visual feedback based on current state
                 setTimeout(() => {
+                    console.log('🔍 CHECKPOINT: checkbox.checked after timeout:', checkbox.checked);
+                    
                     // Visual feedback based on checkbox state
                     if (checkbox.checked) {
                         option.classList.add('bg-purple-100', 'border-purple-500');
@@ -9263,7 +9271,9 @@ Key Metrics:
                         console.log(`❌ Trade category DESELECTED:`, categoryName);
                     }
                     
+                    console.log('🔍 CHECKPOINT: About to call updateSelectedTradesDisplay');
                     updateSelectedTradesDisplay();
+                    console.log('🔍 CHECKPOINT: updateSelectedTradesDisplay completed');
                 }, 10); // Small delay to let checkbox update
             }
         }
@@ -9272,14 +9282,20 @@ Key Metrics:
          * 📊 ENTERPRISE: Update Selected Trades Display
          */
         function updateSelectedTradesDisplay() {
+            console.log('🔍 CHECKPOINT: updateSelectedTradesDisplay started');
+            
             const checkboxes = document.querySelectorAll('.trade-category-checkbox:checked');
             const selectedTrades = Array.from(checkboxes).map(cb => cb.dataset.category);
+            
+            console.log('🔍 CHECKPOINT: Found', checkboxes.length, 'checked checkboxes');
+            console.log('🔍 CHECKPOINT: Selected trades:', selectedTrades);
             
             const countEl = document.getElementById('selected-trades-count');
             const displayEl = document.getElementById('selected-trades-display');
             
             if (countEl) {
                 countEl.textContent = `${selectedTrades.length} selected`;
+                console.log('🔍 CHECKPOINT: Updated count element to:', countEl.textContent);
             }
             
             if (displayEl) {
@@ -9292,9 +9308,19 @@ Key Metrics:
                 } else {
                     displayEl.innerHTML = '<div class="text-gray-500 text-sm">No trade categories selected</div>';
                 }
+                console.log('🔍 CHECKPOINT: Updated display element');
             }
             
             console.log('📊 Selected trades updated:', selectedTrades);
+            
+            // 🔍 CRITICAL CHECKPOINT: Check if this triggers auto-save
+            console.log('🔍 CHECKPOINT: About to check if auto-save should trigger...');
+            if (selectedTrades.length > 0) {
+                console.log('🔍 CHECKPOINT: Selected trades > 0, calling saveCompanyTradeSelection');
+                saveCompanyTradeSelection();
+            } else {
+                console.log('🔍 CHECKPOINT: No trades selected, skipping save');
+            }
         }
         
         /**
@@ -9485,6 +9511,46 @@ Key Metrics:
                 
                 const result = await response.json();
                 console.log('✅ Trade categories saved successfully via Mongoose + Redis:', result);
+                
+                // 🔧 DEBUGGING: Add checkpoints to identify "Leave site?" dialog cause
+                // NEVER mask errors - instead add MORE debugging to find the root cause
+                console.log('🔍 CHECKPOINT: Analyzing unsaved changes state after successful save...');
+                
+                // Check CompanyProfileManager state
+                if (window.companyProfileManager) {
+                    console.log('🔍 CHECKPOINT: CompanyProfileManager found');
+                    console.log('🔍 CHECKPOINT: Current hasUnsavedChanges =', window.companyProfileManager.hasUnsavedChanges);
+                    console.log('🔍 CHECKPOINT: CompanyProfileManager initialized =', window.companyProfileManager.initialized);
+                    
+                    // Clear the state and verify it's cleared
+                    window.companyProfileManager.setUnsavedChanges(false);
+                    console.log('🔍 CHECKPOINT: After clearing - hasUnsavedChanges =', window.companyProfileManager.hasUnsavedChanges);
+                } else {
+                    console.error('❌ CHECKPOINT: CompanyProfileManager NOT FOUND - this may cause "Leave site?" dialog');
+                }
+                
+                // Check for other potential sources of unsaved changes warnings
+                console.log('🔍 CHECKPOINT: Checking other unsaved changes sources...');
+                if (window.knowledgeSourceUnsavedChanges) {
+                    console.log('🔍 CHECKPOINT: knowledgeSourceUnsavedChanges size =', window.knowledgeSourceUnsavedChanges.size);
+                    console.log('🔍 CHECKPOINT: knowledgeSourceUnsavedChanges contents =', Array.from(window.knowledgeSourceUnsavedChanges.keys()));
+                }
+                
+                // Check for any form elements that might be flagged as changed
+                const formElements = document.querySelectorAll('input, textarea, select');
+                let changedElements = [];
+                formElements.forEach(el => {
+                    if (el.dataset.originalValue && el.value !== el.dataset.originalValue) {
+                        changedElements.push(`${el.id || el.name}: "${el.dataset.originalValue}" -> "${el.value}"`);
+                    }
+                });
+                if (changedElements.length > 0) {
+                    console.warn('⚠️ CHECKPOINT: Form elements with changed values detected:', changedElements);
+                } else {
+                    console.log('✅ CHECKPOINT: No form elements with changed values detected');
+                }
+                
+                console.log('🔍 CHECKPOINT: Unsaved changes analysis complete');
                 
                 // Show success notification with production performance indicator
                 showNotification(`🚀 Trade categories saved! Selected: ${selectedTrades.join(', ')}. Mongoose + Redis optimized for sub-50ms AI agent performance.`, 'success');
