@@ -1004,11 +1004,16 @@ class EmbeddedQnAManager {
             console.log('🔍 CHECKPOINT: qnas array length:', this.qnas?.length || 0);
             
             if (!this.qnas || !Array.isArray(this.qnas)) {
-                console.error('❌ CHECKPOINT: qnas array not available - reloading entries');
-                await this.loadCompanyQnAEntries();
+                console.error('❌ CHECKPOINT: qnas array not available - using currentQnAs or reloading');
+                // Try using currentQnAs first, then reload if needed
+                if (this.currentQnAs && Array.isArray(this.currentQnAs)) {
+                    this.qnas = this.currentQnAs;
+                } else {
+                    await this.loadCompanyQnAEntries();
+                }
             }
             
-            const qna = this.qnas?.find(q => q._id === id);
+            const qna = this.qnas?.find(q => q._id === id) || this.currentQnAs?.find(q => q._id === id);
             if (!qna) {
                 console.error('❌ CHECKPOINT: Q&A entry not found for editing');
                 console.error('❌ CHECKPOINT: Available IDs:', this.qnas?.map(q => q._id) || []);
@@ -1069,6 +1074,34 @@ class EmbeddedQnAManager {
                                             <option value="archived" ${qna.status === 'archived' ? 'selected' : ''}>Archived</option>
                                         </select>
                                     </div>
+                                    
+                                    <!-- Keywords Editing Section -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                                            <i class="fas fa-tags mr-1 text-orange-500"></i>Keywords
+                                        </label>
+                                        <div class="mb-2">
+                                            <div class="text-xs text-gray-600 mb-2">
+                                                Current AI-generated keywords (${qna.keywords ? qna.keywords.length : 0}):
+                                            </div>
+                                            <div class="flex flex-wrap gap-1 mb-3 p-2 bg-gray-50 rounded border min-h-[40px]">
+                                                ${qna.keywords && qna.keywords.length > 0 ? 
+                                                    qna.keywords.map(keyword => `
+                                                        <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
+                                                            ${keyword}
+                                                        </span>
+                                                    `).join('') 
+                                                    : '<span class="text-xs text-gray-500">No keywords generated</span>'
+                                                }
+                                            </div>
+                                        </div>
+                                        <textarea id="edit-keywords" rows="2" 
+                                                  placeholder="Add custom keywords (comma-separated). Leave empty to regenerate automatically."
+                                                  class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">${(qna.keywordCategories?.custom || []).join(', ')}</textarea>
+                                        <div class="text-xs text-gray-500 mt-1">
+                                            💡 Tip: Keywords help AI agents find this Q&A faster during phone calls
+                                        </div>
+                                    </div>
                                 </div>
                                 
                                 <div class="flex justify-end space-x-3 mt-6 pt-4 border-t">
@@ -1111,13 +1144,19 @@ class EmbeddedQnAManager {
             const answer = document.getElementById('edit-answer').value.trim();
             const category = document.getElementById('edit-category').value;
             const status = document.getElementById('edit-status').value;
+            const customKeywords = document.getElementById('edit-keywords').value.trim();
             
             if (!question || !answer) {
                 this.showNotification('❌ Question and answer are required', 'error');
                 return;
             }
             
-            console.log('💾 CHECKPOINT: Edit data collected:', { question: question.substring(0, 50), category, status });
+            console.log('💾 CHECKPOINT: Edit data collected:', { 
+                question: question.substring(0, 50), 
+                category, 
+                status, 
+                customKeywords: customKeywords.substring(0, 50) 
+            });
             
             this.showLoading('Saving changes...');
             
@@ -1142,6 +1181,7 @@ class EmbeddedQnAManager {
                     answer,
                     category,
                     status,  // Include status field for proper Active/Inactive control
+                    customKeywords: customKeywords ? customKeywords.split(',').map(k => k.trim()).filter(k => k) : [],
                     lastModified: new Date()
                 })
             });
