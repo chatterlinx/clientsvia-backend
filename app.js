@@ -204,6 +204,11 @@ app.use('/api/enterprise-analytics', enterpriseAnalyticsRoutes);
 app.use('/api/enterprise-trade-categories', enterpriseTradeCategories);
 console.log('✅ Enterprise Trade Categories routes registered at /api/enterprise-trade-categories');
 
+// Company Q&A Seeding (Production Testing)
+const seedCompanyQnARoutes = require('./routes/seed-company-qna-production');
+app.use('/api', seedCompanyQnARoutes);
+console.log('✅ Company Q&A seeding routes registered at /api/seed-company-qna and /api/test-company-qna');
+
 // Contact Lookup for Real-time Caller Identification
 const contactLookupRoutes = require('./routes/contactLookup');
 app.use('/api/contact-lookup', contactLookupRoutes);
