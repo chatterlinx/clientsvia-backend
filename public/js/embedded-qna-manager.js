@@ -1207,6 +1207,16 @@ class EmbeddedQnAManager {
             // Close modal
             this.closeEditModal();
             
+            // ✅ CRITICAL FIX: Clear unsaved changes flag after successful save
+            console.log('🔧 CHECKPOINT: Clearing hasUnsavedChanges flag after successful save');
+            if (window.companyProfileManager && window.companyProfileManager.setUnsavedChanges) {
+                window.companyProfileManager.setUnsavedChanges(false);
+                console.log('✅ CHECKPOINT: hasUnsavedChanges flag cleared via companyProfileManager');
+            } else if (window.hasUnsavedChanges !== undefined) {
+                window.hasUnsavedChanges = false;
+                console.log('✅ CHECKPOINT: Global hasUnsavedChanges flag cleared');
+            }
+            
             console.log('🔄 CHECKPOINT: Edit successful, reloading Q&A list to show changes');
             
             // Force refresh by adding cache-busting parameter
@@ -1285,6 +1295,14 @@ class EmbeddedQnAManager {
         } catch (error) {
             console.error('❌ CRITICAL: Q&A edit save failed:', error);
             this.showNotification('❌ Failed to save changes: ' + error.message, 'error');
+            
+            // ✅ ALSO CLEAR FLAG ON ERROR to prevent stuck "Leave site?" dialog
+            console.log('🔧 CHECKPOINT: Clearing hasUnsavedChanges flag after error (prevent stuck dialog)');
+            if (window.companyProfileManager && window.companyProfileManager.setUnsavedChanges) {
+                window.companyProfileManager.setUnsavedChanges(false);
+            } else if (window.hasUnsavedChanges !== undefined) {
+                window.hasUnsavedChanges = false;
+            }
         } finally {
             this.hideLoading();
         }
