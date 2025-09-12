@@ -11814,11 +11814,13 @@ Key Metrics:
                     body: JSON.stringify({ 
                         agentKnowledgeSettings: {
                             confidenceThresholds: thresholds,
-                            sourcePriority: answerPriority.map(item => ({
-                                source: item.source,
-                                priority: item.priority,
-                                active: item.active
-                            }))
+                            sourcePriority: answerPriority
+                                .filter(item => item && item.source) // 🩺 NULL SAFETY: Filter out undefined items
+                                .map(item => ({
+                                    source: item.source,
+                                    priority: item.priority,
+                                    active: item.active
+                                }))
                         },
                         aiAgentLogic: clientsViaConfig,
                         timestamp: new Date().toISOString(),
