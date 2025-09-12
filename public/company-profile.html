@@ -11804,17 +11804,22 @@ Key Metrics:
                     lastUpdated: new Date().toISOString()
                 };
                 
-                // Save to backend - Production API endpoint
-                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
-                    method: 'POST',
+                // 🩺 CRITICAL FIX: Use correct Mongoose + Redis endpoint
+                const response = await fetch(`/api/company/${companyId}`, {
+                    method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Company-Context': companyId // Multi-tenant security header
+                        'Authorization': `Bearer ${localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || localStorage.getItem('adminToken')}`
                     },
                     body: JSON.stringify({ 
-                        tradeCategories,
-                        agentIntelligenceSettings: clientsViaConfig.agentSettings,
-                        answerPriorityFlow: answerPriorityFlow,
+                        agentKnowledgeSettings: {
+                            confidenceThresholds: thresholds,
+                            sourcePriority: answerPriority.map(item => ({
+                                source: item.source,
+                                priority: item.priority,
+                                active: item.active
+                            }))
+                        },
                         aiAgentLogic: clientsViaConfig,
                         timestamp: new Date().toISOString(),
                         source: 'ai-agent-logic-module'
