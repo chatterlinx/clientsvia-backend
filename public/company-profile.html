@@ -10687,13 +10687,20 @@ Key Metrics:
                         }
                     });
                     
-                    // Save on blur (when user finishes editing)
+                    // 🩺 DEBOUNCED SAVE: Prevent cascading updates
+                    let saveTimeout;
                     input.addEventListener('blur', () => {
                         const value = parseFloat(input.value);
                         if (value >= 0 && value <= 1) {
-                            console.log(`💾 Saving ${source} threshold: ${value}`);
-                            handleKnowledgeSourceChange('threshold', source, value);
-                            markKnowledgeSourceAsChanged(`${source} confidence threshold`, value);
+                            // Clear any pending save
+                            clearTimeout(saveTimeout);
+                            
+                            // Debounce save to prevent cascade
+                            saveTimeout = setTimeout(() => {
+                                console.log(`💾 DEBOUNCED: Saving ${source} threshold: ${value}`);
+                                handleKnowledgeSourceChange('threshold', source, value);
+                                markKnowledgeSourceAsChanged(`${source} confidence threshold`, value);
+                            }, 300);
                         }
                     });
                 }
@@ -11658,6 +11665,43 @@ Key Metrics:
                     window.companyProfileManager.collectOverviewData = originalCollectData;
                     console.log('🛡️ Restored global form validation');
                 }, 1000);
+            }
+            
+            // 🩺 EMERGENCY REPAIR: Missing function restored
+            function getCurrentAnswerPriority() {
+                console.log('🎯 Getting current answer priority flow...');
+                try {
+                    // Get the sortable container
+                    const sortableContainer = document.getElementById('clientsvia-sortable-sources');
+                    if (!sortableContainer) {
+                        console.warn('⚠️ Sortable container not found, using default priority');
+                        return [
+                            { source: "companyQnA", priority: 1, active: true },
+                            { source: "tradeQnA", priority: 2, active: true },
+                            { source: "vectorSearch", priority: 3, active: true },
+                            { source: "llmFallback", priority: 4, active: true }
+                        ];
+                    }
+                    
+                    // Extract current order from DOM
+                    const items = Array.from(sortableContainer.children);
+                    const priorityFlow = items.map((item, index) => ({
+                        source: item.dataset.source,
+                        priority: index + 1,
+                        active: !item.classList.contains('disabled')
+                    }));
+                    
+                    console.log('✅ Priority flow extracted:', priorityFlow);
+                    return priorityFlow;
+                } catch (error) {
+                    console.error('❌ Error getting priority flow:', error);
+                    return [
+                        { source: "companyQnA", priority: 1, active: true },
+                        { source: "tradeQnA", priority: 2, active: true },
+                        { source: "vectorSearch", priority: 3, active: true },
+                        { source: "llmFallback", priority: 4, active: true }
+                    ];
+                }
             }
             
             try {
