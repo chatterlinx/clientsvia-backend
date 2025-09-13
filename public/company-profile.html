@@ -11716,11 +11716,12 @@ Key Metrics:
                 const answerPriorityFlow = getCurrentAnswerPriority();
                 
                 // Collect knowledge source data - CORRECTED DATABASE FIELD MAPPING
+                // 🏢 [IN-HOUSE ONLY] - Threshold Configuration (No LLM)
                 const thresholds = {
                     companyQnA: parseFloat(document.getElementById('clientsvia-threshold-companyQnA').value),
                     tradeQnA: parseFloat(document.getElementById('clientsvia-threshold-tradeQnA').value),
-                    vectorSearch: parseFloat(document.getElementById('clientsvia-threshold-vectorSearch').value),
-                    llmFallback: parseFloat(document.getElementById('clientsvia-threshold-llmFallback').value)
+                    vectorSearch: 0.0, // 🚫 BUSINESS RULE: Vector search disabled for in-house only
+                    llmFallback: 1.0 // 🚫 BUSINESS RULE: LLM threshold set to impossible value (disabled)
                 };
                 
                 // Answer priority flow (blueprint format) - using new comprehensive data
@@ -11745,17 +11746,26 @@ Key Metrics:
                     retentionMinutes: parseInt(document.getElementById('clientsvia-contextRetentionSlider')?.value || 30)
                 };
                 
-                // Escalation settings (blueprint required)
+                // 🏢 [IN-HOUSE ONLY] - Professional Fallback Behavior
                 const escalation = {
-                    onNoMatch: document.getElementById('clientsvia-escalateNoMatchToggle')?.checked || true,
-                    strategy: "ask-confirm"
+                    onNoMatch: true, // 🏢 BUSINESS RULE: Always escalate when no in-house match
+                    strategy: "transfer-or-message"
                 };
                 
-                // Model configuration (blueprint required)
+                // Professional fallback messages for in-house only approach
+                const fallbackBehavior = {
+                    rejectLowConfidence: true,
+                    escalateOnNoMatch: true,
+                    message: "I apologize, but I don't have the specific information you're looking for in our knowledge base. I can either take a message and have someone get back to you as soon as possible, or I can transfer you directly to our customer service team. Which would you prefer?",
+                    transferMessage: "Let me connect you with one of our customer service representatives who can better assist you.",
+                    messageOption: "I'd be happy to take your message and contact information, and someone will get back to you within 24 hours."
+                };
+                
+                // 🏢 [IN-HOUSE ONLY] - Model Configuration (No External LLM)
                 const modelConfig = {
-                    primary: "gemini-pro",
-                    fallback: "gpt-4o-mini", 
-                    allowed: ["gemini-pro", "gpt-4o-mini", "claude-3-haiku"]
+                    primary: "in-house-knowledge", // 🏢 BUSINESS RULE: Only internal knowledge
+                    fallback: "transfer-to-human", // 🏢 BUSINESS RULE: Human transfer instead of LLM
+                    allowed: [] // 🚫 BUSINESS RULE: No external LLM models allowed
                 };
                 
                 // Get selected trade categories from checkboxes
@@ -11783,32 +11793,39 @@ Key Metrics:
                     }
                 };
 
-                // Collect comprehensive agent settings
+                // 🏢 [IN-HOUSE ONLY] - Enterprise Knowledge Architecture (Micro-Surgery #3B)
+                // BUSINESS DECISION: No external LLM - only in-house knowledge sources
                 const agentSettings = {
-                    useLLM: safeGetValue('agent-useLLM') === 'true',
-                    llmModel: safeGetValue('agent-llmModel', 'gemini-pro'),
-                    memoryMode: safeGetValue('agent-memoryMode', 'short'),
-                    fallbackThreshold: parseFloat(safeGetValue('agent-fallbackThreshold', '0.5')),
-                    escalationMode: safeGetValue('agent-escalationMode', 'ask'),
-                    rePromptAfterTurns: parseInt(safeGetValue('agent-rePromptAfterTurns', '3')),
-                    maxPromptsPerCall: parseInt(safeGetValue('agent-maxPromptsPerCall', '2')),
-                    semanticSearchEnabled: safeGetChecked('agent-semanticSearchEnabled', true),
-                    confidenceScoring: safeGetChecked('agent-confidenceScoring', true),
-                    autoLearningQueue: safeGetChecked('agent-autoLearningQueue', true)
+                    useLLM: false, // 🚫 BUSINESS RULE: No external LLM allowed
+                    llmModel: 'none', // 🚫 BUSINESS RULE: In-house knowledge only
+                    memoryMode: safeGetValue('ai-memory-mode', 'short'), // 🔧 [FIXED] - Mapped to current element
+                    fallbackThreshold: 1.0, // 🚫 BUSINESS RULE: No LLM fallback - use transfer instead
+                    escalationMode: 'transfer', // 🏢 BUSINESS RULE: Transfer to live agent when no match
+                    rePromptAfterTurns: 1, // 🏢 BUSINESS RULE: Single attempt, then transfer
+                    maxPromptsPerCall: 1, // 🏢 BUSINESS RULE: One response attempt only
+                    semanticSearchEnabled: true, // ✅ Keep for in-house knowledge matching
+                    confidenceScoring: true, // ✅ Keep for quality control
+                    autoLearningQueue: false // 🚫 BUSINESS RULE: No auto-learning from external sources
                 };
                 
-                // Blueprint-compliant configuration
+                // 🏢 [IN-HOUSE ONLY] - Blueprint-compliant configuration
                 const clientsViaConfig = {
                     answerPriority,
                     thresholds,
                     memory,
                     escalation,
+                    fallbackBehavior, // 🏢 Professional fallback messages
                     rePromptAfterTurns: agentSettings.rePromptAfterTurns,
                     maxPromptsPerCall: agentSettings.maxPromptsPerCall,
                     modelConfig,
                     tradeCategories,
                     agentSettings,  // Include all agent settings
-                    lastUpdated: new Date().toISOString()
+                    lastUpdated: new Date().toISOString(),
+                    businessRules: {
+                        inHouseOnly: true,
+                        noExternalLLM: true,
+                        alwaysEscalateOnNoMatch: true
+                    }
                 };
                 
                 // 🩺 CRITICAL FIX: Use correct Mongoose + Redis endpoint
