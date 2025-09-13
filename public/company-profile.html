@@ -1733,10 +1733,8 @@
                                     <!-- Tab Navigation - Fixed Responsive Design -->
                                     <div class="border-b border-gray-200 overflow-x-auto overflow-y-hidden" style="scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9;">
                                         <div class="flex space-x-0 min-w-max">
-                                            <button id="clientsvia-tab-priority" class="clientsvia-tab-btn active flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50 whitespace-nowrap transition-all duration-200">
-                                                <i class="fas fa-layer-group mr-2"></i>Answer Priority Flow
-                                            </button>
-                                            <button id="clientsvia-tab-knowledge" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
+<!-- REMOVED: Answer Priority Flow tab - Legacy feature not needed for simple, effective platform -->
+                                            <button id="clientsvia-tab-knowledge" class="clientsvia-tab-btn active flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50 whitespace-nowrap transition-all duration-200">
                                                 <i class="fas fa-book-open mr-2"></i>Knowledge Sources
                                             </button>
                                             <button id="clientsvia-tab-analytics" class="clientsvia-tab-btn flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition-all duration-200">
@@ -1766,8 +1764,9 @@
                                         <!-- Purpose: Define search order & thresholds -->
                                         <!-- Data: answerPriority array + thresholds   -->
                                         <!-- ========================================= -->
-                                        <!-- TAB 1: Answer Priority Flow -->
-                                        <div id="clientsvia-priority-content" class="clientsvia-tab-content active" data-config-section="answer-priority-flow">
+                                        <!-- REMOVED: Answer Priority Flow content - Legacy feature not needed -->
+                                        <!-- Knowledge Sources is now the default active tab -->
+                                        <div id="clientsvia-priority-content" class="clientsvia-tab-content" data-config-section="answer-priority-flow" style="display: none;">
                                             <div class="mb-6">
                                                 <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                                                     <i class="fas fa-flow-chart mr-2 text-indigo-600"></i>Answer Priority Flow
@@ -10571,8 +10570,8 @@ Key Metrics:
                     // ✅ PRODUCTION: Initialize specific enterprise features when tabs are activated
                     switch(targetTab) {
                         case 'priority':
-                            console.log('🔄 Answer Priority Flow tab activated');
-                            initClientsViaPriorityFlow();
+                            console.log('⚠️ Answer Priority Flow removed - redirecting to Knowledge Sources');
+                            switchClientsViaTab('knowledge');
                             break;
                         case 'knowledge':
                             console.log('📚 Knowledge Sources tab activated - simplified interface loaded');
