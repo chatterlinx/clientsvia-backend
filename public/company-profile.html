@@ -6738,6 +6738,23 @@
                 
                 console.log('📥 Received agent settings data:', data);
                 
+                // 🔧 [FIXED] - Load threshold values from aiAgentLogic.thresholds
+                if (data.company?.aiAgentLogic?.thresholds) {
+                    console.log('🎯 Loading thresholds from aiAgentLogic:', data.company.aiAgentLogic.thresholds);
+                    
+                    Object.entries(data.company.aiAgentLogic.thresholds).forEach(([source, value]) => {
+                        const slider = document.getElementById(`clientsvia-threshold-${source}`);
+                        if (slider) {
+                            slider.value = value;
+                            console.log(`✅ Set ${source} threshold to ${value}`);
+                            // Update displays
+                            syncThresholdDisplays(source, value);
+                        }
+                    });
+                } else {
+                    console.log('⚠️ No aiAgentLogic.thresholds found, using default values');
+                }
+                
                 // Populate trade categories
                 const tradeSelector = document.getElementById('agent-trade-categories');
                 const selectedTrades = data.company?.tradeCategories || [];
@@ -11716,12 +11733,12 @@ Key Metrics:
                 const answerPriorityFlow = getCurrentAnswerPriority();
                 
                 // Collect knowledge source data - CORRECTED DATABASE FIELD MAPPING
-                // 🏢 [IN-HOUSE ONLY] - Threshold Configuration (No LLM)
+                // 🏢 [FIXED] - Use actual user threshold values (not hardcoded)
                 const thresholds = {
                     companyQnA: parseFloat(document.getElementById('clientsvia-threshold-companyQnA').value),
                     tradeQnA: parseFloat(document.getElementById('clientsvia-threshold-tradeQnA').value),
-                    vectorSearch: 0.0, // 🚫 BUSINESS RULE: Vector search disabled for in-house only
-                    llmFallback: 1.0 // 🚫 BUSINESS RULE: LLM threshold set to impossible value (disabled)
+                    vectorSearch: parseFloat(document.getElementById('clientsvia-threshold-vectorSearch').value), // 🔧 [FIXED] - Use actual user value
+                    llmFallback: parseFloat(document.getElementById('clientsvia-threshold-llmFallback').value) // 🔧 [FIXED] - Use actual user value
                 };
                 
                 // Answer priority flow (blueprint format) - using new comprehensive data
@@ -11956,10 +11973,10 @@ Key Metrics:
                 // Apply thresholds
                 if (config.thresholds) {
                     const thresholdMapping = {
-                        'companyKB': 'clientsvia-threshold-companyQnA',
-                        'tradeQA': 'clientsvia-threshold-tradeQnA', 
-                        'vector': 'clientsvia-threshold-vectorSearch',
-                        'llmFallback': 'clientsvia-threshold-llmFallback'
+                        'companyQnA': 'clientsvia-threshold-companyQnA', // 🔧 [FIXED] - Correct field name
+                        'tradeQnA': 'clientsvia-threshold-tradeQnA',     // 🔧 [FIXED] - Correct field name
+                        'vectorSearch': 'clientsvia-threshold-vectorSearch', // 🔧 [FIXED] - Correct field name
+                        'llmFallback': 'clientsvia-threshold-llmFallback'    // 🔧 [FIXED] - Correct field name
                     };
                     
                     Object.entries(config.thresholds).forEach(([key, value]) => {
