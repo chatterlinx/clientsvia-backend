@@ -131,6 +131,13 @@ class EmbeddedQnAManager {
                     url: response.url,
                     errorBody: errorText
                 });
+                
+                // 🔧 ENGINEERING FIX: Better token error handling
+                if (response.status === 401) {
+                    console.warn('🔐 AUTH TOKEN EXPIRED - Please refresh page and re-login');
+                    this.showNotification('🔐 Session expired. Please refresh the page and log in again.', 'warning');
+                }
+                
                 throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
             }
 
@@ -449,8 +456,8 @@ class EmbeddedQnAManager {
                 headers['Authorization'] = `Bearer ${token}`;
             }
             
-            const response = await fetch(`${this.apiBaseUrl}/api/ai-agent-logic/admin/${this.companyId}/ai-settings`, {
-                method: 'PUT',
+            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`, {
+                method: 'PATCH',
                 headers: headers,
                 credentials: 'include', // Include cookies for additional auth
                 body: JSON.stringify({
