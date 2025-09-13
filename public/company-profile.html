@@ -6740,6 +6740,9 @@
                 console.log('🔍 DEBUG: Full aiAgentLogic object:', data.company?.aiAgentLogic);
                 console.log('🔍 DEBUG: aiAgentLogic keys:', Object.keys(data.company?.aiAgentLogic || {}));
                 
+                // 🔧 [FIXED] - Store company data globally for save operations
+                window.currentCompanyData = data.company;
+                
                 // 🔧 [FIXED] - Load threshold values from aiAgentLogic.thresholds
                 if (data.company?.aiAgentLogic?.thresholds) {
                     console.log('🎯 Loading thresholds from aiAgentLogic:', data.company.aiAgentLogic.thresholds);
@@ -11141,6 +11144,7 @@ Key Metrics:
                     
                     const payload = {
                         aiAgentLogic: {
+                            ...window.currentCompanyData?.aiAgentLogic, // 🔧 [FIXED] - Preserve existing aiAgentLogic properties
                             thresholds: settings.thresholds,
                             memorySettings: settings.memorySettings,
                             fallbackBehavior: settings.fallbackBehavior,
