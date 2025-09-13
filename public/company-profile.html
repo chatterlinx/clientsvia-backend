@@ -6737,6 +6737,8 @@
                 const data = await response.json();
                 
                 console.log('📥 Received agent settings data:', data);
+                console.log('🔍 DEBUG: Full aiAgentLogic object:', data.company?.aiAgentLogic);
+                console.log('🔍 DEBUG: aiAgentLogic keys:', Object.keys(data.company?.aiAgentLogic || {}));
                 
                 // 🔧 [FIXED] - Load threshold values from aiAgentLogic.thresholds
                 if (data.company?.aiAgentLogic?.thresholds) {
@@ -11154,6 +11156,8 @@ Key Metrics:
                     };
                     
                     console.log('🔍 CHECKPOINT 8: Payload prepared:', JSON.stringify(payload, null, 2));
+                    console.log('🔍 DEBUG: Thresholds being saved:', settings.thresholds);
+                    console.log('🔍 DEBUG: aiAgentLogic being saved:', payload.aiAgentLogic);
                     
                     // Use the correct company agent settings endpoint that properly handles aiAgentLogic
                     try {
