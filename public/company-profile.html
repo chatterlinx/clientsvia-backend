@@ -11702,6 +11702,65 @@ Key Metrics:
                     window.companyProfileManager.collectOverviewData = originalCollectData;
                     console.log('🛡️ Restored global form validation');
                 }, 1000);
+                
+                // 🔧 [CRITICAL FIX] - MOVED ALL SAVE LOGIC INSIDE FUNCTION
+                // Collect knowledge source data - CORRECTED DATABASE FIELD MAPPING
+                // 🏢 [FIXED] - Use actual user threshold values (not hardcoded)
+                const thresholds = {
+                    companyQnA: parseFloat(document.getElementById('clientsvia-threshold-companyQnA').value),
+                    tradeQnA: parseFloat(document.getElementById('clientsvia-threshold-tradeQnA').value),
+                    vectorSearch: parseFloat(document.getElementById('clientsvia-threshold-vectorSearch').value),
+                    llmFallback: parseFloat(document.getElementById('clientsvia-threshold-llmFallback').value)
+                };
+                
+                console.log('🔍 CHECKPOINT 3: Collected thresholds:', thresholds);
+                
+                // Build the complete save settings
+                const settings = {
+                    thresholds: thresholds,
+                    memorySettings: { memoryMode: 'conversational', contextRetention: 30 },
+                    fallbackBehavior: { escalateOnNoMatch: true, rejectLowConfidence: true },
+                    knowledgeSourcePriorities: ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'],
+                    timestamp: new Date().toISOString()
+                };
+                
+                // 🔧 [FIXED] - Build aiAgentLogic payload with proper merging
+                const existingAiAgentLogic = window.currentCompanyData?.aiAgentLogic || {};
+                console.log('🔍 DEBUG: Existing aiAgentLogic for merge:', existingAiAgentLogic);
+                console.log('🔍 DEBUG: New thresholds to save:', settings.thresholds);
+                
+                const payload = {
+                    aiAgentLogic: {
+                        ...existingAiAgentLogic, // Preserve existing properties
+                        thresholds: settings.thresholds, // Override with new thresholds
+                        memorySettings: settings.memorySettings,
+                        fallbackBehavior: settings.fallbackBehavior,
+                        knowledgeSourcePriorities: settings.knowledgeSourcePriorities,
+                        lastUpdated: settings.timestamp
+                    }
+                };
+                
+                console.log('🔍 CHECKPOINT 8: Payload prepared:', JSON.stringify(payload, null, 2));
+                
+                // Save to backend
+                try {
+                    const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        console.log('✅ Thresholds saved successfully:', result);
+                        showNotification('Knowledge source settings saved successfully', 'success');
+                    } else {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                } catch (error) {
+                    console.error('❌ Failed to save thresholds:', error);
+                    showNotification('Failed to save settings: ' + error.message, 'error');
+                }
             }
             
             // 🩺 EMERGENCY REPAIR: Missing function restored
