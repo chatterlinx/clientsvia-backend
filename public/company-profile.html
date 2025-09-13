@@ -10655,7 +10655,14 @@ Key Metrics:
         
         // ✅ PRODUCTION: Initialize Knowledge Source Priority Calibration System
         function initClientsViaKnowledgeSources() {
+            // 🔧 [FIXED] - Initialization Guard (Micro-Surgery #2)
+            if (window.knowledgeSourcesInitialized) {
+                console.log('🛡️ Knowledge Sources already initialized, skipping...');
+                return;
+            }
+            
             console.log('🎯 Initializing Knowledge Source Priority Calibration System...');
+            window.knowledgeSourcesInitialized = true;
             
             // Initialize save system and change tracking
             initKnowledgeSourceSaveSystem();

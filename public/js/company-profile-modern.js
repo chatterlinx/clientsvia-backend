@@ -57,7 +57,14 @@ class CompanyProfileManager {
      */
     async init() {
         try {
+            // 🔧 [FIXED] - Initialization Guard (Micro-Surgery #2)
+            if (this.initialized) {
+                console.log('🛡️ Company Profile Manager already initialized, skipping...');
+                return;
+            }
+            
             console.log('🚀 Initializing Company Profile Manager...');
+            this.initialized = true;
             
             // Extract company ID from URL
             this.extractCompanyId();
@@ -264,6 +271,12 @@ class CompanyProfileManager {
      */
     async loadCompanyData() {
         try {
+            // 🔧 [FIXED] - Data Loading Guard (Micro-Surgery #2)
+            if (this.companyDataLoaded) {
+                console.log('🛡️ Company data already loaded, skipping...');
+                return this.companyData;
+            }
+            
             console.log('📥 Loading company data for ID:', this.companyId);
             console.log('🌐 API Base URL:', this.apiBaseUrl);
             this.showLoading(true);
@@ -278,6 +291,8 @@ class CompanyProfileManager {
             }
 
             this.currentData = await response.json();
+            this.companyData = this.currentData; // Store for guard check
+            this.companyDataLoaded = true; // 🔧 [FIXED] - Set loaded flag
             console.log('✅ Company data loaded:', this.currentData);
 
             // Populate all tabs with data
