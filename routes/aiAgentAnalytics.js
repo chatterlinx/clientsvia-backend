@@ -8,7 +8,28 @@ const router = express.Router();
 const AIAgentAnalyticsService = require('../services/aiAgentAnalytics');
 const { authenticateJWT } = require('../middleware/auth');
 
-// Get comprehensive analytics
+// Get comprehensive analytics (both paths for compatibility)
+router.get('/:companyId', authenticateJWT, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        const dateRange = { startDate, endDate };
+        
+        const analytics = await AIAgentAnalyticsService.getAgentAnalytics(req.params.companyId, dateRange);
+        
+        res.json({
+            success: true,
+            analytics: analytics
+        });
+    } catch (error) {
+        console.error('Failed to get analytics:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve analytics',
+            error: error.message
+        });
+    }
+});
+
 router.get('/analytics/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
@@ -135,6 +156,54 @@ router.get('/benchmarks', authenticateJWT, async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to retrieve benchmarks',
+            error: error.message
+        });
+    }
+});
+
+// A/B Testing endpoints (for frontend compatibility)
+router.get('/:companyId/ab-tests', authenticateJWT, async (req, res) => {
+    try {
+        // Mock A/B testing data for now
+        const abTests = {
+            active: [],
+            completed: [],
+            draft: []
+        };
+        
+        res.json({
+            success: true,
+            abTests: abTests
+        });
+    } catch (error) {
+        console.error('Failed to get A/B tests:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve A/B tests',
+            error: error.message
+        });
+    }
+});
+
+// Personalization endpoints (for frontend compatibility)  
+router.get('/:companyId/personalization', authenticateJWT, async (req, res) => {
+    try {
+        // Mock personalization data for now
+        const personalization = {
+            rules: [],
+            segments: [],
+            campaigns: []
+        };
+        
+        res.json({
+            success: true,
+            personalization: personalization
+        });
+    } catch (error) {
+        console.error('Failed to get personalization:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve personalization',
             error: error.message
         });
     }
