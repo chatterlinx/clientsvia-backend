@@ -1766,175 +1766,7 @@
                                         <!-- ========================================= -->
                                         <!-- REMOVED: Answer Priority Flow content - Legacy feature not needed -->
                                         <!-- Knowledge Sources is now the default active tab -->
-                                        <div id="clientsvia-priority-content" class="clientsvia-tab-content" data-config-section="answer-priority-flow" style="display: none;">
-                                            <div class="mb-6">
-                                                <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
-                                                    <i class="fas fa-flow-chart mr-2 text-indigo-600"></i>Answer Priority Flow
-                                                    <span class="ml-2 text-sm text-gray-600">(Drag to reorder)</span>
-                                                </h4>
-                                                
-                                                <!-- Sortable Priority Items -->
-                                                <div id="clientsvia-priority-flow-container" class="space-y-3">
-                                                    <!-- Company Knowledge Base -->
-                                                    <div class="clientsvia-priority-item" data-priority-type="company-knowledge" data-priority-order="1" draggable="true">
-                                                        <div class="flex items-center justify-between p-4 bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 rounded-lg cursor-move hover:shadow-md transition-all duration-200">
-                                                            <div class="flex items-center">
-                                                                <div class="drag-handle flex items-center justify-center w-8 h-8 bg-emerald-600 text-white rounded-full mr-3">
-                                                                    <i class="fas fa-grip-vertical"></i>
-                                                                </div>
-                                                                <div class="priority-number flex items-center justify-center w-8 h-8 bg-emerald-700 text-white rounded-full mr-3">
-                                                                    <span class="font-bold text-sm">1</span>
-                                                                </div>
-                                                                <div class="flex items-center mr-3">
-                                                                    <i class="fas fa-building text-emerald-600 text-lg mr-2"></i>
-                                                                    <div>
-                                                                        <h5 class="font-semibold text-gray-800">Company Knowledge Base</h5>
-                                                                        <p class="text-xs text-gray-600">Company-specific Q&A and internal documentation</p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="flex items-center space-x-2">
-                                                                <label class="flex items-center">
-                                                                    <input type="checkbox" class="clientsvia-priority-toggle" checked />
-                                                                    <span class="ml-2 text-sm text-gray-700">Active</span>
-                                                                </label>
-                                                                <span class="px-2 py-1 bg-emerald-100 text-emerald-800 text-xs font-medium rounded-full">
-                                                                    <i class="fas fa-star mr-1"></i>Primary
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <!-- Trade Categories -->
-                                                    <div class="clientsvia-priority-item" data-priority-type="trade-categories" data-priority-order="2" draggable="true">
-                                                        <div class="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg cursor-move hover:shadow-md transition-all duration-200">
-                                                            <div class="flex items-center">
-                                                                <div class="drag-handle flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full mr-3">
-                                                                    <i class="fas fa-grip-vertical"></i>
-                                                                </div>
-                                                                <div class="priority-number flex items-center justify-center w-8 h-8 bg-blue-700 text-white rounded-full mr-3">
-                                                                    <span class="font-bold text-sm">2</span>
-                                                                </div>
-                                                                <div class="flex items-center mr-3">
-                                                                    <i class="fas fa-briefcase text-blue-600 text-lg mr-2"></i>
-                                                                    <div>
-                                                                        <h5 class="font-semibold text-gray-800">Trade Categories Q&A</h5>
-                                                                        <p class="text-xs text-gray-600">Industry-specific questions and answers</p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="flex items-center space-x-2">
-                                                                <label class="flex items-center">
-                                                                    <input type="checkbox" class="clientsvia-priority-toggle" checked />
-                                                                    <span class="ml-2 text-sm text-gray-700">Active</span>
-                                                                </label>
-                                                                <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-                                                                    <i class="fas fa-tools mr-1"></i>Industry
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <!-- Template Intelligence -->
-                                                    <div class="clientsvia-priority-item" data-priority-type="template-intelligence" data-priority-order="3" draggable="true">
-                                                        <div class="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-lg cursor-move hover:shadow-md transition-all duration-200">
-                                                            <div class="flex items-center">
-                                                                <div class="drag-handle flex items-center justify-center w-8 h-8 bg-purple-600 text-white rounded-full mr-3">
-                                                                    <i class="fas fa-grip-vertical"></i>
-                                                                </div>
-                                                                <div class="priority-number flex items-center justify-center w-8 h-8 bg-purple-700 text-white rounded-full mr-3">
-                                                                    <span class="font-bold text-sm">3</span>
-                                                                </div>
-                                                                <div class="flex items-center mr-3">
-                                                                    <i class="fas fa-magic text-purple-600 text-lg mr-2"></i>
-                                                                    <div>
-                                                                        <h5 class="font-semibold text-gray-800">Template Intelligence</h5>
-                                                                        <p class="text-xs text-gray-600">Smart templates and conversation patterns</p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="flex items-center space-x-2">
-                                                                <label class="flex items-center">
-                                                                    <input type="checkbox" class="clientsvia-priority-toggle" checked />
-                                                                    <span class="ml-2 text-sm text-gray-700">Active</span>
-                                                                </label>
-                                                                <span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
-                                                                    <i class="fas fa-lightbulb mr-1"></i>Smart
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <!-- Learning Queue -->
-                                                    <div class="clientsvia-priority-item" data-priority-type="learning-queue" data-priority-order="4" draggable="true">
-                                                        <div class="flex items-center justify-between p-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-2 border-amber-200 rounded-lg cursor-move hover:shadow-md transition-all duration-200">
-                                                            <div class="flex items-center">
-                                                                <div class="drag-handle flex items-center justify-center w-8 h-8 bg-amber-600 text-white rounded-full mr-3">
-                                                                    <i class="fas fa-grip-vertical"></i>
-                                                                </div>
-                                                                <div class="priority-number flex items-center justify-center w-8 h-8 bg-amber-700 text-white rounded-full mr-3">
-                                                                    <span class="font-bold text-sm">4</span>
-                                                                </div>
-                                                                <div class="flex items-center mr-3">
-                                                                    <i class="fas fa-graduation-cap text-amber-600 text-lg mr-2"></i>
-                                                                    <div>
-                                                                        <h5 class="font-semibold text-gray-800">Learning Queue Insights</h5>
-                                                                        <p class="text-xs text-gray-600">Previously learned patterns and approved answers</p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="flex items-center space-x-2">
-                                                                <label class="flex items-center">
-                                                                    <input type="checkbox" class="clientsvia-priority-toggle" checked />
-                                                                    <span class="ml-2 text-sm text-gray-700">Active</span>
-                                                                </label>
-                                                                <span class="px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">
-                                                                    <i class="fas fa-brain mr-1"></i>Learning
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <!-- Emergency LLM -->
-                                                    <div class="clientsvia-priority-item" data-priority-type="emergency-llm" data-priority-order="5" draggable="true">
-                                                        <div class="flex items-center justify-between p-4 bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200 rounded-lg cursor-move hover:shadow-md transition-all duration-200">
-                                                            <div class="flex items-center">
-                                                                <div class="drag-handle flex items-center justify-center w-8 h-8 bg-red-600 text-white rounded-full mr-3">
-                                                                    <i class="fas fa-grip-vertical"></i>
-                                                                </div>
-                                                                <div class="priority-number flex items-center justify-center w-8 h-8 bg-red-700 text-white rounded-full mr-3">
-                                                                    <span class="font-bold text-sm">5</span>
-                                                                </div>
-                                                                <div class="flex items-center mr-3">
-                                                                    <i class="fas fa-exclamation-triangle text-red-600 text-lg mr-2"></i>
-                                                                    <div>
-                                                                        <h5 class="font-semibold text-gray-800">Emergency LLM Fallback</h5>
-                                                                        <p class="text-xs text-gray-600">Last resort: external AI when no knowledge matches</p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="flex items-center space-x-2">
-                                                                <label class="flex items-center">
-                                                                    <input type="checkbox" class="clientsvia-priority-toggle" checked />
-                                                                    <span class="ml-2 text-sm text-gray-700">Active</span>
-                                                                </label>
-                                                                <span class="px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full">
-                                                                    <i class="fas fa-life-ring mr-1"></i>Emergency
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <!-- ClientsVia Priority Status -->
-                                            <div class="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                                                <div class="flex items-center text-sm text-green-800">
-                                                    <i class="fas fa-check-circle mr-2"></i>
-                                                    <strong>ClientsVia Priority Status:</strong> Interactive drag & drop enabled! Reorder priorities and toggle active states.
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <!-- REMOVED: Answer Priority Flow content - Legacy feature cleaned up for simple, effective platform -->
                                         
                                         <!-- ========================================= -->
                                         <!-- KNOWLEDGE SOURCE CONTROLS                -->
@@ -10500,11 +10332,11 @@ Key Metrics:
             const tabButtons = document.querySelectorAll('.clientsvia-tab-btn');
             const tabContents = document.querySelectorAll('.clientsvia-tab-content');
             
-            // Force initial state - make sure priority tab is active by default
+            // Force initial state - make sure knowledge tab is active by default
             setTimeout(() => {
-                const priorityTab = document.getElementById('clientsvia-tab-priority');
-                const priorityContent = document.getElementById('clientsvia-priority-content');
-                if (priorityTab && priorityContent) {
+                const knowledgeTab = document.getElementById('clientsvia-tab-knowledge');
+                const knowledgeContent = document.getElementById('clientsvia-knowledge-content');
+                if (knowledgeTab && knowledgeContent) {
                     // Clear all active states first
                     tabButtons.forEach(btn => {
                         btn.classList.remove('active', 'border-blue-500', 'border-indigo-500', 'text-blue-600', 'text-indigo-600', 'bg-indigo-50');
@@ -10514,10 +10346,10 @@ Key Metrics:
                         content.classList.remove('active');
                     });
                     
-                    // Activate priority tab
-                    priorityTab.classList.add('active', 'border-indigo-500', 'text-indigo-600', 'bg-indigo-50');
-                    priorityTab.classList.remove('border-transparent', 'text-gray-500');
-                    priorityContent.classList.add('active');
+                    // Activate knowledge tab
+                    knowledgeTab.classList.add('active', 'border-indigo-500', 'text-indigo-600', 'bg-indigo-50');
+                    knowledgeTab.classList.remove('border-transparent', 'text-gray-500');
+                    knowledgeContent.classList.add('active');
                 }
             }, 100);
             
@@ -10607,72 +10439,7 @@ Key Metrics:
             });
         }
         
-        // Initialize ClientsVia Priority Flow drag & drop
-        function initClientsViaPriorityFlow() {
-            const container = document.getElementById('clientsvia-priority-flow-container');
-            if (!container) return;
-            
-            // Enable drag and drop
-            const items = container.querySelectorAll('.clientsvia-priority-item');
-            items.forEach((item, index) => {
-                item.addEventListener('dragstart', handleClientsViaDragStart);
-                item.addEventListener('dragover', handleClientsViaDragOver);
-                item.addEventListener('drop', handleClientsViaDrop);
-                item.addEventListener('dragend', handleClientsViaDragEnd);
-            });
-            
-
-        }
-        
-        // ClientsVia drag handlers
-        let clientsViaDraggedElement = null;
-        
-        function handleClientsViaDragStart(e) {
-            clientsViaDraggedElement = this;
-            this.style.opacity = '0.5';
-        }
-        
-        function handleClientsViaDragOver(e) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-        }
-        
-        function handleClientsViaDrop(e) {
-            e.preventDefault();
-            if (this !== clientsViaDraggedElement) {
-                // Swap the elements
-                const container = document.getElementById('clientsvia-priority-flow-container');
-                const allItems = Array.from(container.children);
-                const draggedIndex = allItems.indexOf(clientsViaDraggedElement);
-                const droppedIndex = allItems.indexOf(this);
-                
-                if (draggedIndex < droppedIndex) {
-                    container.insertBefore(clientsViaDraggedElement, this.nextSibling);
-                } else {
-                    container.insertBefore(clientsViaDraggedElement, this);
-                }
-                
-                // Update priority numbers
-                updateClientsViaPriorityNumbers();
-            }
-        }
-        
-        function handleClientsViaDragEnd(e) {
-            this.style.opacity = '1';
-            clientsViaDraggedElement = null;
-        }
-        
-        // Update priority numbers after drag
-        function updateClientsViaPriorityNumbers() {
-            const items = document.querySelectorAll('.clientsvia-priority-item');
-            items.forEach((item, index) => {
-                const numberElement = item.querySelector('.priority-number span');
-                if (numberElement) {
-                    numberElement.textContent = index + 1;
-                }
-                item.setAttribute('data-priority-order', index + 1);
-            });
-        }
+        // REMOVED: Priority flow drag & drop functions - Legacy feature cleaned up
         
         // ✅ PRODUCTION: Initialize Knowledge Source Priority Calibration System
         function initClientsViaKnowledgeSources() {
@@ -11763,45 +11530,11 @@ Key Metrics:
             }
             
             // 🩺 EMERGENCY REPAIR: Missing function restored
-            function getCurrentAnswerPriority() {
-                console.log('🎯 Getting current answer priority flow...');
-                try {
-                    // Get the sortable container
-                    const sortableContainer = document.getElementById('clientsvia-sortable-sources');
-                    if (!sortableContainer) {
-                        console.warn('⚠️ Sortable container not found, using default priority');
-                        return [
-                            { source: "companyQnA", priority: 1, active: true },
-                            { source: "tradeQnA", priority: 2, active: true },
-                            { source: "vectorSearch", priority: 3, active: true },
-                            { source: "llmFallback", priority: 4, active: true }
-                        ];
-                    }
-                    
-                    // Extract current order from DOM
-                    const items = Array.from(sortableContainer.children);
-                    const priorityFlow = items.map((item, index) => ({
-                        source: item.dataset.source,
-                        priority: index + 1,
-                        active: !item.classList.contains('disabled')
-                    }));
-                    
-                    console.log('✅ Priority flow extracted:', priorityFlow);
-                    return priorityFlow;
-                } catch (error) {
-                    console.error('❌ Error getting priority flow:', error);
-                    return [
-                        { source: "companyQnA", priority: 1, active: true },
-                        { source: "tradeQnA", priority: 2, active: true },
-                        { source: "vectorSearch", priority: 3, active: true },
-                        { source: "llmFallback", priority: 4, active: true }
-                    ];
-                }
-            }
+            // REMOVED: getCurrentAnswerPriority function - Legacy priority flow feature cleaned up
             
             try {
-                // Collect priority flow data using the new comprehensive function
-                const answerPriorityFlow = getCurrentAnswerPriority();
+                // REMOVED: Answer priority flow collection - Legacy feature cleaned up
+                const answerPriorityFlow = []; // Default empty array
                 
                 // Collect knowledge source data - CORRECTED DATABASE FIELD MAPPING
                 // 🏢 [FIXED] - Use actual user threshold values (not hardcoded)
@@ -11994,7 +11727,7 @@ Key Metrics:
         // Initialize ClientsVia Intelligence
         function initClientsViaIntelligence() {
             initClientsViaTabs();
-            initClientsViaPriorityFlow();
+            // initClientsViaPriorityFlow(); // REMOVED: Legacy priority flow function
             initClientsViaKnowledgeSources();
             
             // Load existing configuration
@@ -12556,7 +12289,7 @@ Key Metrics:
                 // Collect all enterprise settings
                 const enterpriseSettings = {
                     // Core AI settings
-                    answerPriority: getCurrentAnswerPriority(),
+                    // answerPriority: getCurrentAnswerPriority(), // REMOVED: Legacy priority flow
                     thresholds: getCurrentThresholds(),
                     memory: getCurrentMemorySettings(),
                     escalation: getCurrentEscalationSettings(),
