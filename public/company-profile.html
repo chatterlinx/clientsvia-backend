@@ -11142,10 +11142,15 @@ Key Metrics:
                     // Try multiple API endpoints to ensure compatibility
                     let success = false;
                     
+                    // 🔧 [FIXED] - Build aiAgentLogic payload with proper merging
+                    const existingAiAgentLogic = window.currentCompanyData?.aiAgentLogic || {};
+                    console.log('🔍 DEBUG: Existing aiAgentLogic for merge:', existingAiAgentLogic);
+                    console.log('🔍 DEBUG: New thresholds to save:', settings.thresholds);
+                    
                     const payload = {
                         aiAgentLogic: {
-                            ...window.currentCompanyData?.aiAgentLogic, // 🔧 [FIXED] - Preserve existing aiAgentLogic properties
-                            thresholds: settings.thresholds,
+                            ...existingAiAgentLogic, // Preserve existing properties
+                            thresholds: settings.thresholds, // Override with new thresholds
                             memorySettings: settings.memorySettings,
                             fallbackBehavior: settings.fallbackBehavior,
                             knowledgeSourcePriorities: settings.knowledgeSourcePriorities,
