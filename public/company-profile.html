@@ -2170,7 +2170,7 @@
                                                 
                                                 <!-- SINGLE SAVE BUTTON -->
                                                 <div class="text-center">
-                                                    <button onclick="saveKnowledgeSourceSettings()" 
+                                                    <button onclick="console.log('🖱️ BUTTON CLICKED: saveKnowledgeSourceSettings'); saveKnowledgeSourceSettings()" 
                                                             class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg shadow-sm transition duration-150 ease-in-out">
                                                         <i class="fas fa-save mr-2"></i>
                                                         Save Changes
@@ -5540,6 +5540,9 @@
 
         // Utility function to show notifications
         function showNotification(message, type = 'info') {
+            console.log('🔔 NOTIFICATION CALLED:', message, 'Type:', type);
+            console.log('🔔 NOTIFICATION STACK:', new Error().stack);
+            
             // Create notification element
             const notification = document.createElement('div');
             notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 transform translate-x-full`;
@@ -10751,6 +10754,8 @@ Key Metrics:
         // 🎯 WORKING: Manual save function for Knowledge Source settings
         async function saveKnowledgeSourceSettings() {
             console.log('🚀 MANUAL SAVE: Starting Knowledge Source save...');
+            console.log('🔍 CHECKPOINT 1: Function called, checking for redirects...');
+            console.log('🔍 CHECKPOINT 2: Current function stack:', new Error().stack);
             
             try {
                 const companyId = window.companyId;
