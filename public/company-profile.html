@@ -1782,6 +1782,23 @@
                                         <!-- 📊 ANALYTICS: Real-time testing + performance metrics -->
                                         <!-- ========================================= -->
                                         <div id="clientsvia-knowledge-content" class="clientsvia-tab-content" data-config-section="knowledge-sources">
+                            
+                            <!-- 💾 PROMINENT SAVE BUTTON AT TOP -->
+                            <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-info-circle text-blue-500 mr-2"></i>
+                                        <span class="text-sm text-blue-700">Make changes to thresholds, then click save</span>
+                                    </div>
+                                    <button id="save-knowledge-sources-btn-top" 
+                                            class="knowledge-source-save-btn bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
+                                            onclick="saveKnowledgeSourceSettings()">
+                                        <i class="fas fa-save mr-2"></i>
+                                        <span>Save Changes</span>
+                                    </button>
+                                </div>
+                            </div>
+                            
                                                              <!-- ========================================= -->
                             <!-- 🎯 KNOWLEDGE SOURCES SUB-TABS -->
                             <!-- Company Q&A + Trade Q&A Sub-navigation -->
@@ -2098,8 +2115,24 @@
                                                             </div>
                                                         </div>
                                                     </div>
+                                                    
+                                                    <!-- 💾 SAVE BUTTON - RIGHT AFTER THRESHOLDS -->
+                                                    <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                                        <div class="flex items-center justify-between">
+                                                            <div class="text-sm text-blue-700">
+                                                                <i class="fas fa-info-circle mr-1"></i>
+                                                                Changes made? Click save to persist them.
+                                                            </div>
+                                                            <button id="save-knowledge-sources-btn-visible" 
+                                                                    class="knowledge-source-save-btn bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
+                                                                    onclick="saveKnowledgeSourceSettings()">
+                                                                <i class="fas fa-save mr-2"></i>
+                                                                <span>Save Changes</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </div>
-
+                                                
                                                 <!-- Right Column: Memory & Fallback Settings -->
                                                 <div class="space-y-5">
                                                     <h4 class="text-md font-semibold text-gray-700 border-b pb-2">
