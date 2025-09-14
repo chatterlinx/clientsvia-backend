@@ -2222,9 +2222,8 @@
                                                         
                                                         <!-- Manual Save Button -->
                                                         <button id="save-knowledge-sources-btn" 
-                                                                class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
-                                                                onclick="saveClientsViaConfiguration()"
-                                                                disabled>
+                                                                class="knowledge-source-save-btn bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
+                                                                onclick="saveKnowledgeSourceSettings()">
                                                             <i class="fas fa-save mr-2"></i>
                                                             <span id="save-btn-text">Save Changes</span>
                                                         </button>
@@ -10482,20 +10481,13 @@ Key Metrics:
                         }
                     });
                     
-                    // 🩺 DEBOUNCED SAVE: Prevent cascading updates
-                    let saveTimeout;
+                    // 🔄 TRACK CHANGES ONLY (NO AUTO-SAVE)
                     input.addEventListener('blur', () => {
                         const value = parseFloat(input.value);
                         if (value >= 0 && value <= 1) {
-                            // Clear any pending save
-                            clearTimeout(saveTimeout);
-                            
-                            // Debounce save to prevent cascade
-                            saveTimeout = setTimeout(() => {
-                                console.log(`💾 DEBOUNCED: Saving ${source} threshold: ${value}`);
-                                handleKnowledgeSourceChange('threshold', source, value);
-                                markKnowledgeSourceAsChanged(`${source} confidence threshold`, value);
-                            }, 300);
+                            console.log(`📝 Threshold changed: ${source} = ${value} (use Save button)`);
+                            handleKnowledgeSourceChange('threshold', source, value);
+                            markKnowledgeSourceAsChanged(`${source} confidence threshold`, value);
                         }
                     });
                 }
@@ -10732,24 +10724,123 @@ Key Metrics:
             }
         }
         
-        // ✅ PRODUCTION: Handle knowledge source changes
+        // 🔄 SIMPLIFIED: Track knowledge source changes (MANUAL SAVE ONLY)
         function handleKnowledgeSourceChange(type, setting, value) {
             console.log(`🔄 Knowledge source change: ${type}.${setting} = ${value}`);
             
-            // Check if auto-save is enabled
-            const autoSaveToggle = document.getElementById('knowledge-sources-auto-save');
-            const isAutoSaveEnabled = autoSaveToggle ? autoSaveToggle.checked : true;
+            // Track unsaved changes
+            if (!window.knowledgeSourceUnsavedChanges) {
+                window.knowledgeSourceUnsavedChanges = new Set();
+            }
+            window.knowledgeSourceUnsavedChanges.add(`${type}.${setting}`);
             
-            if (isAutoSaveEnabled) {
-                // Auto-save with debouncing
-                if (window.knowledgeSourceAutoSaveTimeout) {
-                    clearTimeout(window.knowledgeSourceAutoSaveTimeout);
+            // Show unsaved changes indicator
+            showUnsavedChangesIndicator();
+            console.log('💾 Changes tracked - click SAVE CHANGES button to persist');
+        }
+        
+        // Show unsaved changes indicator
+        function showUnsavedChangesIndicator() {
+            const saveButton = document.querySelector('.knowledge-source-save-btn');
+            if (saveButton) {
+                saveButton.textContent = '💾 Save Changes';
+                saveButton.classList.add('bg-red-600', 'hover:bg-red-700', 'animate-pulse');
+                saveButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            }
+        }
+        
+        // 🎯 SIMPLIFIED: Manual Save Function (RELIABLE)
+        async function saveKnowledgeSourceSettings() {
+            console.log('🚀 MANUAL SAVE: Starting Knowledge Source save...');
+            
+            const saveButton = document.querySelector('.knowledge-source-save-btn');
+            if (saveButton) {
+                saveButton.disabled = true;
+                saveButton.textContent = '💾 Saving...';
+            }
+            
+            try {
+                const companyId = window.companyId;
+                if (!companyId) {
+                    throw new Error('Company ID not found');
                 }
                 
-                window.knowledgeSourceAutoSaveTimeout = setTimeout(() => {
-                    console.log('🔄 Auto-saving knowledge source settings via correct save function...');
-                    saveClientsViaConfiguration();
-                }, 1000); // 1 second delay for auto-save
+                // Collect all threshold values
+                const thresholds = {};
+                ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'].forEach(source => {
+                    const input = document.getElementById(`clientsvia-threshold-${source}`);
+                    if (input) {
+                        thresholds[source] = parseFloat(input.value) || 0.7;
+                    }
+                });
+                
+                console.log('🔍 MANUAL SAVE: Collected thresholds:', thresholds);
+                
+                // Get existing aiAgentLogic and merge
+                const existingData = window.currentCompanyData?.aiAgentLogic || {};
+                const payload = {
+                    aiAgentLogic: {
+                        ...existingData,
+                        thresholds,
+                        lastUpdated: new Date().toISOString()
+                    }
+                };
+                
+                console.log('🔍 MANUAL SAVE: Payload:', JSON.stringify(payload, null, 2));
+                
+                // Save to API
+                const response = await fetch(`/api/company/${companyId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('✅ MANUAL SAVE: Success!', result);
+                
+                // Update save button
+                if (saveButton) {
+                    saveButton.textContent = '✅ Saved!';
+                    saveButton.classList.remove('bg-red-600', 'hover:bg-red-700', 'animate-pulse');
+                    saveButton.classList.add('bg-green-600', 'hover:bg-green-700');
+                    
+                    setTimeout(() => {
+                        saveButton.textContent = '💾 Save Changes';
+                        saveButton.classList.remove('bg-green-600', 'hover:bg-green-700');
+                        saveButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                    }, 2000);
+                }
+                
+                // Clear unsaved changes
+                if (window.knowledgeSourceUnsavedChanges) {
+                    window.knowledgeSourceUnsavedChanges.clear();
+                }
+                
+                return result;
+                
+            } catch (error) {
+                console.error('❌ MANUAL SAVE: Failed!', error);
+                
+                if (saveButton) {
+                    saveButton.textContent = '❌ Save Failed';
+                    saveButton.classList.add('bg-red-600', 'hover:bg-red-700');
+                    
+                    setTimeout(() => {
+                        saveButton.textContent = '💾 Save Changes';
+                    }, 3000);
+                }
+                
+                throw error;
+            } finally {
+                if (saveButton) {
+                    saveButton.disabled = false;
+                }
             }
         }
         
