@@ -10824,18 +10824,14 @@ Key Metrics:
                 const result = await response.json();
                 console.log('✅ MANUAL SAVE: API Success!', result);
                 
-                // 🔍 VERIFICATION: Read back the data to confirm it was actually saved
-                console.log('🔍 VERIFICATION: Reading back saved data...');
-                const verifyResponse = await fetch(`/api/company/${companyId}`);
-                if (!verifyResponse.ok) {
-                    throw new Error('Verification failed: Could not read back saved data');
-                }
-                
-                const verifyData = await verifyResponse.json();
-                console.log('🔍 VERIFICATION: Read back data:', verifyData.aiAgentLogic?.thresholds);
+                // 🔍 VERIFICATION: Use the response data directly (POST returns saved company)
+                console.log('🔍 VERIFICATION: Checking response data...');
+                console.log('🔍 VERIFICATION: Response structure:', Object.keys(result));
+                console.log('🔍 VERIFICATION: Company data exists:', !!result.company);
+                console.log('🔍 VERIFICATION: aiAgentLogic exists:', !!result.company?.aiAgentLogic);
                 
                 // Check if our saved thresholds match what we just saved
-                const savedThresholds = verifyData.aiAgentLogic?.thresholds;
+                const savedThresholds = result.company?.aiAgentLogic?.thresholds;
                 if (!savedThresholds) {
                     throw new Error('Verification failed: No thresholds found in saved data');
                 }
