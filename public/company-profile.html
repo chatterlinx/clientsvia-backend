@@ -10803,14 +10803,18 @@ Key Metrics:
                 
                 console.log('🔍 ENTERPRISE SAVE: Mongoose+Redis Payload:', JSON.stringify(payload, null, 2));
                 
-                // 🎯 CORRECT ENDPOINT: Use simple/admin/ai-settings for aiAgentLogic data (no auth required)
-                console.log('🔍 SAVE FIX: Using simple aiAgentLogic endpoint - /api/simple/admin/' + companyId + '/ai-settings');
-                const response = await fetch(`/api/simple/admin/${companyId}/ai-settings`, {
-                    method: 'PUT',
+                // 🎯 WORKING ENDPOINT: Use company/companies/agent-settings (POST) - known to work
+                console.log('🔍 SAVE FIX: Using working agent-settings POST endpoint - /api/company/companies/' + companyId + '/agent-settings');
+                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
+                    method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(payload.aiAgentLogic) // Send only aiAgentLogic data
+                    body: JSON.stringify({
+                        aiAgentLogic: payload.aiAgentLogic,
+                        tradeCategories: [],
+                        agentIntelligenceSettings: {}
+                    }) // Send required format for POST endpoint
                 });
                 
                 if (!response.ok) {

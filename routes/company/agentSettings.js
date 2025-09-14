@@ -8,6 +8,12 @@ const { getDB } = require('../../db');
 // 🚀 Save AI Agent Intelligence Settings (Updated for Answer Priority Flow)
 router.post('/companies/:id/agent-settings', async (req, res) => {
   try {
+    console.log('🚀 CHECKPOINT 1: Agent Settings POST request received');
+    console.log('🔍 CHECKPOINT 2: Company ID:', req.params.id);
+    console.log('🔍 CHECKPOINT 3: Request body keys:', Object.keys(req.body));
+    console.log('🔍 CHECKPOINT 4: aiAgentLogic in request:', !!req.body.aiAgentLogic);
+    console.log('🔍 CHECKPOINT 5: aiAgentLogic thresholds:', req.body.aiAgentLogic?.thresholds);
+    
     const { 
       tradeCategories = [], 
       agentIntelligenceSettings = {},
@@ -84,6 +90,8 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
       contextRetentionMinutes: Math.min(Math.max(agentIntelligenceSettings.contextRetention || 30, 5), 120)
     };
 
+    console.log('🔍 CHECKPOINT 6: About to save aiAgentLogic:', JSON.stringify(aiAgentLogic, null, 2));
+    
     // Update company with validated data
     const company = await Company.findByIdAndUpdate(
       companyId,
@@ -96,6 +104,9 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
       },
       { new: true, runValidators: true }
     );
+    
+    console.log('✅ CHECKPOINT 7: Company updated successfully');
+    console.log('🔍 CHECKPOINT 8: Saved aiAgentLogic thresholds:', company.aiAgentLogic?.thresholds);
 
     if (!company) {
       return res.status(404).json({ error: 'Company not found' });
