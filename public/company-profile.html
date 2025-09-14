@@ -6513,21 +6513,22 @@
             try {
 
                 console.log('⏰ Agent Settings load timestamp:', new Date().toISOString());
-                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`);
+                console.log('🔍 LOAD FIX: Using same endpoint as save - /api/company/' + companyId);
+                const response = await fetch(`/api/company/${companyId}`);
                 const data = await response.json();
                 
                 console.log('📥 Received agent settings data:', data);
-                console.log('🔍 DEBUG: Full aiAgentLogic object:', data.company?.aiAgentLogic);
-                console.log('🔍 DEBUG: aiAgentLogic keys:', Object.keys(data.company?.aiAgentLogic || {}));
+                console.log('🔍 DEBUG: Full aiAgentLogic object:', data.aiAgentLogic);
+                console.log('🔍 DEBUG: aiAgentLogic keys:', Object.keys(data.aiAgentLogic || {}));
                 
-                // 🔧 [FIXED] - Store company data globally for save operations
-                window.currentCompanyData = data.company;
+                // 🔧 [FIXED] - Store company data globally for save operations  
+                window.currentCompanyData = data;
                 
                 // 🔧 [FIXED] - Load threshold values from aiAgentLogic.thresholds
-                if (data.company?.aiAgentLogic?.thresholds) {
-                    console.log('🎯 Loading thresholds from aiAgentLogic:', data.company.aiAgentLogic.thresholds);
+                if (data.aiAgentLogic?.thresholds) {
+                    console.log('🎯 Loading thresholds from aiAgentLogic:', data.aiAgentLogic.thresholds);
                     
-                    Object.entries(data.company.aiAgentLogic.thresholds).forEach(([source, value]) => {
+                    Object.entries(data.aiAgentLogic.thresholds).forEach(([source, value]) => {
                         const slider = document.getElementById(`clientsvia-threshold-${source}`);
                         if (slider) {
                             slider.value = value;
@@ -10816,7 +10817,42 @@ Key Metrics:
                 }
                 
                 const result = await response.json();
-                console.log('✅ MANUAL SAVE: Success!', result);
+                console.log('✅ MANUAL SAVE: API Success!', result);
+                
+                // 🔍 VERIFICATION: Read back the data to confirm it was actually saved
+                console.log('🔍 VERIFICATION: Reading back saved data...');
+                const verifyResponse = await fetch(`/api/company/${companyId}`);
+                if (!verifyResponse.ok) {
+                    throw new Error('Verification failed: Could not read back saved data');
+                }
+                
+                const verifyData = await verifyResponse.json();
+                console.log('🔍 VERIFICATION: Read back data:', verifyData.aiAgentLogic?.thresholds);
+                
+                // Check if our saved thresholds match what we just saved
+                const savedThresholds = verifyData.aiAgentLogic?.thresholds;
+                if (!savedThresholds) {
+                    throw new Error('Verification failed: No thresholds found in saved data');
+                }
+                
+                let allMatch = true;
+                Object.keys(thresholds).forEach(source => {
+                    const ourValue = thresholds[source];
+                    const savedValue = savedThresholds[source];
+                    
+                    if (Math.abs(ourValue - savedValue) > 0.01) { // Allow for small float differences
+                        console.error(`❌ VERIFICATION FAILED: ${source} - Sent: ${ourValue}, Got: ${savedValue}`);
+                        allMatch = false;
+                    } else {
+                        console.log(`✅ VERIFIED: ${source} = ${savedValue}`);
+                    }
+                });
+                
+                if (!allMatch) {
+                    throw new Error('Verification failed: Saved values do not match sent values');
+                }
+                
+                console.log('✅ VERIFICATION: All thresholds confirmed saved correctly!');
                 
                 // Clear unsaved changes
                 try {
@@ -10832,7 +10868,7 @@ Key Metrics:
                     window.knowledgeSourceUnsavedChanges = new Set();
                 }
                 
-                showNotification('Settings Saved', 'Knowledge source thresholds have been saved successfully', 'success');
+                showNotification('✅ VERIFIED: Settings Saved & Confirmed', 'Thresholds saved and verified in database', 'success');
                 return result;
                 
             } catch (error) {
