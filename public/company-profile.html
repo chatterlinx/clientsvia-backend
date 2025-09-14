@@ -2212,12 +2212,10 @@
                                                             </div>
                                                         </div>
                                                         
-                                                        <!-- Auto-save Toggle -->
-                                                        <div class="flex items-center">
-                                                            <label class="flex items-center text-sm text-gray-600">
-                                                                <input type="checkbox" id="knowledge-sources-auto-save" class="form-checkbox mr-2" checked>
-                                                                <span>Auto-save</span>
-                                                            </label>
+                                                        <!-- Manual Save Only -->
+                                                        <div class="flex items-center text-sm text-gray-600">
+                                                            <i class="fas fa-info-circle mr-2 text-blue-500"></i>
+                                                            <span>Manual save - click button to save changes</span>
                                                         </div>
                                                         
                                                         <!-- Manual Save Button -->
@@ -2237,7 +2235,7 @@
                                                     </span>
                                                     <span class="mx-2">•</span>
                                                     <span>
-                                                        Auto-save: <span id="auto-save-status">Enabled</span>
+                                                        Manual save required
                                                     </span>
                                                 </div>
                                             </div>
@@ -10552,20 +10550,8 @@ Key Metrics:
                 });
             }
             
-            // Auto-save toggle
-            const autoSaveToggle = document.getElementById('knowledge-sources-auto-save');
-            if (autoSaveToggle) {
-                autoSaveToggle.addEventListener('change', () => {
-                    const isEnabled = autoSaveToggle.checked;
-                    document.getElementById('auto-save-status').textContent = isEnabled ? 'Enabled' : 'Disabled';
-                    
-                    if (isEnabled && window.knowledgeSourceUnsavedChanges.size > 0) {
-                        // Auto-save if there are unsaved changes and auto-save is enabled
-                        console.log('🔄 Auto-save toggle triggered - using correct save function...');
-                        saveClientsViaConfiguration();
-                    }
-                });
-            }
+            // 🚫 AUTO-SAVE REMOVED - Manual save only
+            console.log('📝 Manual save system active - no auto-save toggle needed');
             
             // Initialize page unload warning
             initPageUnloadWarning();
