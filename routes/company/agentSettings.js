@@ -156,6 +156,11 @@ router.get('/companies/:id/agent-settings', async (req, res) => {
       ...company.agentIntelligenceSettings // New intelligence settings
     };
 
+    // 🔍 DEBUG: Log what we're returning for threshold debugging
+    console.log('🔍 LOAD DEBUG - Company ID:', req.params.id);
+    console.log('🔍 LOAD DEBUG - aiAgentLogic exists:', !!company.aiAgentLogic);
+    console.log('🔍 LOAD DEBUG - aiAgentLogic.thresholds:', company.aiAgentLogic?.thresholds);
+    
     res.json({
       success: true,
       company: {
