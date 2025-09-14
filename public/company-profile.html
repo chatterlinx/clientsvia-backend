@@ -1783,21 +1783,6 @@
                                         <!-- ========================================= -->
                                         <div id="clientsvia-knowledge-content" class="clientsvia-tab-content" data-config-section="knowledge-sources">
                             
-                            <!-- 💾 PROMINENT SAVE BUTTON AT TOP -->
-                            <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center">
-                                        <i class="fas fa-info-circle text-blue-500 mr-2"></i>
-                                        <span class="text-sm text-blue-700">Make changes to thresholds, then click save</span>
-                                    </div>
-                                    <button id="save-knowledge-sources-btn-top" 
-                                            class="knowledge-source-save-btn bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
-                                            onclick="saveKnowledgeSourceSettings()">
-                                        <i class="fas fa-save mr-2"></i>
-                                        <span>Save Changes</span>
-                                    </button>
-                                </div>
-                            </div>
                             
                                                              <!-- ========================================= -->
                             <!-- 🎯 KNOWLEDGE SOURCES SUB-TABS -->
@@ -2116,21 +2101,6 @@
                                                         </div>
                                                     </div>
                                                     
-                                                    <!-- 💾 SAVE BUTTON - RIGHT AFTER THRESHOLDS -->
-                                                    <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                                        <div class="flex items-center justify-between">
-                                                            <div class="text-sm text-blue-700">
-                                                                <i class="fas fa-info-circle mr-1"></i>
-                                                                Changes made? Click save to persist them.
-                                                            </div>
-                                                            <button id="save-knowledge-sources-btn-visible" 
-                                                                    class="knowledge-source-save-btn bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
-                                                                    onclick="saveKnowledgeSourceSettings()">
-                                                                <i class="fas fa-save mr-2"></i>
-                                                                <span>Save Changes</span>
-                                                            </button>
-                                                        </div>
-                                                    </div>
                                                 </div>
                                                 
                                                 <!-- Right Column: Memory & Fallback Settings -->
@@ -2197,68 +2167,14 @@
                                             <!-- Professional save system with unsaved changes detection -->
                                             <!-- ========================================= -->
                                             <div class="mt-6 space-y-4">
-                                                <!-- Unsaved Changes Warning -->
-                                                <div id="knowledge-sources-unsaved-warning" class="hidden p-4 bg-amber-50 border-l-4 border-amber-400 rounded-lg">
-                                                    <div class="flex items-center">
-                                                        <div class="flex-shrink-0">
-                                                            <i class="fas fa-exclamation-triangle text-amber-400 text-lg"></i>
-                                                        </div>
-                                                        <div class="ml-3 flex-1">
-                                                            <p class="text-sm text-amber-700">
-                                                                <strong>Unsaved Changes Detected!</strong> You have modified knowledge source settings that haven't been saved yet.
-                                                            </p>
-                                                            <p class="text-xs text-amber-600 mt-1">
-                                                                Changes include: <span id="unsaved-changes-list" class="font-medium">None</span>
-                                                            </p>
-                                                        </div>
-                                                        <div class="flex-shrink-0 ml-4">
-                                                            <button onclick="discardKnowledgeSourceChanges()" class="text-xs text-amber-600 hover:text-amber-800 underline">
-                                                                Discard Changes
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
                                                 
-                                                <!-- Save Controls -->
-                                                <div class="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                                                    <div class="flex items-center space-x-4">
-                                                        <div class="flex items-center text-sm text-gray-600">
-                                                            <i class="fas fa-info-circle mr-2 text-blue-500"></i>
-                                                            <span><strong>Knowledge Source Configuration:</strong> Drag to reorder priorities, adjust confidence thresholds, and configure memory settings.</span>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <div class="flex items-center space-x-3">
-                                                        <!-- Save Status Indicator -->
-                                                        <div id="knowledge-sources-save-status" class="flex items-center text-sm">
-                                                            <div id="save-status-saved" class="flex items-center text-green-600">
-                                                                <i class="fas fa-check-circle mr-1"></i>
-                                                                <span>All changes saved</span>
-                                                            </div>
-                                                            <div id="save-status-unsaved" class="hidden flex items-center text-amber-600">
-                                                                <i class="fas fa-clock mr-1"></i>
-                                                                <span>Unsaved changes</span>
-                                                            </div>
-                                                            <div id="save-status-saving" class="hidden flex items-center text-blue-600">
-                                                                <i class="fas fa-spinner fa-spin mr-1"></i>
-                                                                <span>Saving...</span>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <!-- Manual Save Only -->
-                                                        <div class="flex items-center text-sm text-gray-600">
-                                                            <i class="fas fa-info-circle mr-2 text-blue-500"></i>
-                                                            <span>Manual save - click button to save changes</span>
-                                                        </div>
-                                                        
-                                                        <!-- Manual Save Button -->
-                                                        <button id="save-knowledge-sources-btn" 
-                                                                class="knowledge-source-save-btn bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center"
-                                                                onclick="saveKnowledgeSourceSettings()">
-                                                            <i class="fas fa-save mr-2"></i>
-                                                            <span id="save-btn-text">Save Changes</span>
-                                                        </button>
-                                                    </div>
+                                                <!-- SINGLE SAVE BUTTON -->
+                                                <div class="text-center">
+                                                    <button onclick="saveKnowledgeSourceSettings()" 
+                                                            class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg shadow-sm transition duration-150 ease-in-out">
+                                                        <i class="fas fa-save mr-2"></i>
+                                                        Save Changes
+                                                    </button>
                                                 </div>
                                                 
                                                 <!-- Last Saved Information -->
