@@ -10713,14 +10713,15 @@ Key Metrics:
         // =========================================
         
         // Global variable to track unsaved changes
-        window.knowledgeSourceUnsavedChanges = new Map();
+        window.knowledgeSourceUnsavedChanges = new Set();
         
         // ✅ PRODUCTION: Initialize save system
         function initKnowledgeSourceSaveSystem() {
             console.log('💾 Initializing Knowledge Source save system...');
             
-            // Initialize unsaved changes tracking
-            window.knowledgeSourceUnsavedChanges = new Map();
+            // Initialize unsaved changes tracking as Set (not Map)
+            window.knowledgeSourceUnsavedChanges = new Set();
+            console.log('✅ Unsaved changes tracking initialized as Set');
             
             // Update UI to show saved state initially
             updateSaveStatus('saved');
@@ -10730,7 +10731,10 @@ Key Metrics:
         
         // ✅ PRODUCTION: Mark setting as changed
         function markKnowledgeSourceAsChanged(settingName, value) {
-            window.knowledgeSourceUnsavedChanges.set(settingName, value);
+            if (!window.knowledgeSourceUnsavedChanges) {
+                window.knowledgeSourceUnsavedChanges = new Set();
+            }
+            window.knowledgeSourceUnsavedChanges.add(`${settingName}: ${value}`);
             updateUnsavedChangesUI();
             updateSaveStatus('unsaved');
             
@@ -10747,11 +10751,21 @@ Key Metrics:
         function handleKnowledgeSourceChange(type, setting, value) {
             console.log(`🔄 Knowledge source change: ${type}.${setting} = ${value}`);
             
-            // Track unsaved changes
+            // Initialize tracking if needed
             if (!window.knowledgeSourceUnsavedChanges) {
                 window.knowledgeSourceUnsavedChanges = new Set();
             }
-            window.knowledgeSourceUnsavedChanges.add(`${type}.${setting}`);
+            
+            // Track the change
+            try {
+                window.knowledgeSourceUnsavedChanges.add(`${type}.${setting}`);
+                console.log('✅ Change tracked successfully');
+            } catch (error) {
+                console.error('❌ Error tracking change:', error);
+                // Reinitialize and try again
+                window.knowledgeSourceUnsavedChanges = new Set();
+                window.knowledgeSourceUnsavedChanges.add(`${type}.${setting}`);
+            }
             
             // Show unsaved changes indicator
             showUnsavedChangesIndicator();
@@ -10837,8 +10851,17 @@ Key Metrics:
                 }
                 
                 // Clear unsaved changes
-                if (window.knowledgeSourceUnsavedChanges) {
-                    window.knowledgeSourceUnsavedChanges.clear();
+                try {
+                    if (window.knowledgeSourceUnsavedChanges && typeof window.knowledgeSourceUnsavedChanges.clear === 'function') {
+                        window.knowledgeSourceUnsavedChanges.clear();
+                        console.log('✅ Unsaved changes cleared');
+                    } else {
+                        window.knowledgeSourceUnsavedChanges = new Set();
+                        console.log('✅ Unsaved changes tracking reinitialized');
+                    }
+                } catch (error) {
+                    console.error('❌ Error clearing changes:', error);
+                    window.knowledgeSourceUnsavedChanges = new Set();
                 }
                 
                 return result;
