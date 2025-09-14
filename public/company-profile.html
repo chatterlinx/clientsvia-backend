@@ -10698,109 +10698,6 @@ Key Metrics:
             }
         }
         
-        // 🎯 SIMPLIFIED: Manual Save Function (RELIABLE)
-        async function saveKnowledgeSourceSettings() {
-            console.log('🚀 MANUAL SAVE: Starting Knowledge Source save...');
-            
-            const saveButton = document.querySelector('.knowledge-source-save-btn');
-            if (saveButton) {
-                saveButton.disabled = true;
-                saveButton.textContent = '💾 Saving...';
-            }
-            
-            try {
-                const companyId = window.companyId;
-                if (!companyId) {
-                    throw new Error('Company ID not found');
-                }
-                
-                // Collect all threshold values
-                const thresholds = {};
-                ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'].forEach(source => {
-                    const input = document.getElementById(`clientsvia-threshold-${source}`);
-                    if (input) {
-                        thresholds[source] = parseFloat(input.value) || 0.7;
-                    }
-                });
-                
-                console.log('🔍 MANUAL SAVE: Collected thresholds:', thresholds);
-                
-                // Get existing aiAgentLogic and merge
-                const existingData = window.currentCompanyData?.aiAgentLogic || {};
-                const payload = {
-                    aiAgentLogic: {
-                        ...existingData,
-                        thresholds,
-                        lastUpdated: new Date().toISOString()
-                    }
-                };
-                
-                console.log('🔍 MANUAL SAVE: Payload:', JSON.stringify(payload, null, 2));
-                
-                // Save to API
-                const response = await fetch(`/api/company/${companyId}`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const result = await response.json();
-                console.log('✅ MANUAL SAVE: Success!', result);
-                
-                // Update save button
-                if (saveButton) {
-                    saveButton.textContent = '✅ Saved!';
-                    saveButton.classList.remove('bg-red-600', 'hover:bg-red-700', 'animate-pulse');
-                    saveButton.classList.add('bg-green-600', 'hover:bg-green-700');
-                    
-                    setTimeout(() => {
-                        saveButton.textContent = '💾 Save Changes';
-                        saveButton.classList.remove('bg-green-600', 'hover:bg-green-700');
-                        saveButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
-                    }, 2000);
-                }
-                
-                // Clear unsaved changes
-                try {
-                    if (window.knowledgeSourceUnsavedChanges && typeof window.knowledgeSourceUnsavedChanges.clear === 'function') {
-                        window.knowledgeSourceUnsavedChanges.clear();
-                        console.log('✅ Unsaved changes cleared');
-                    } else {
-                        window.knowledgeSourceUnsavedChanges = new Set();
-                        console.log('✅ Unsaved changes tracking reinitialized');
-                    }
-                } catch (error) {
-                    console.error('❌ Error clearing changes:', error);
-                    window.knowledgeSourceUnsavedChanges = new Set();
-                }
-                
-                return result;
-                
-            } catch (error) {
-                console.error('❌ MANUAL SAVE: Failed!', error);
-                
-                if (saveButton) {
-                    saveButton.textContent = '❌ Save Failed';
-                    saveButton.classList.add('bg-red-600', 'hover:bg-red-700');
-                    
-                    setTimeout(() => {
-                        saveButton.textContent = '💾 Save Changes';
-                    }, 3000);
-                }
-                
-                throw error;
-            } finally {
-                if (saveButton) {
-                    saveButton.disabled = false;
-                }
-            }
-        }
         
         // ✅ PRODUCTION: Update unsaved changes UI
         function updateUnsavedChangesUI() {
@@ -10851,12 +10748,93 @@ Key Metrics:
             }
         }
         
-        // ✅ CLEANED: Legacy save function removed
-        // Knowledge source settings are now controlled in Answer Priority Flow tab
+        // 🎯 WORKING: Manual save function for Knowledge Source settings
         async function saveKnowledgeSourceSettings() {
-            console.log('⚠️ DEPRECATED: saveKnowledgeSourceSettings called - redirecting to Answer Priority Flow');
-            showNotification('Settings Moved', 'Knowledge source settings are now controlled in the Answer Priority Flow tab above', 'info');
-            return;
+            console.log('🚀 MANUAL SAVE: Starting Knowledge Source save...');
+            
+            try {
+                const companyId = window.companyId;
+                if (!companyId) {
+                    throw new Error('Company ID not found');
+                }
+                
+                // Collect all threshold values
+                const thresholds = {};
+                ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'].forEach(source => {
+                    const input = document.getElementById(`clientsvia-threshold-${source}`);
+                    if (input) {
+                        thresholds[source] = parseFloat(input.value) || 0.7;
+                    }
+                });
+                
+                console.log('🔍 MANUAL SAVE: Collected thresholds:', thresholds);
+                
+                // 🎯 ENTERPRISE: Mongoose + Redis format for sub-50ms performance
+                const existingData = window.currentCompanyData?.aiAgentLogic || {};
+                const payload = {
+                    aiAgentLogic: {
+                        ...existingData,
+                        thresholds,
+                        memorySettings: {
+                            memoryMode: "conversational",
+                            contextRetention: 30
+                        },
+                        fallbackBehavior: {
+                            escalateOnNoMatch: true,
+                            rejectLowConfidence: true
+                        },
+                        knowledgeSourcePriorities: [
+                            "companyQnA",
+                            "tradeQnA", 
+                            "vectorSearch",
+                            "llmFallback"
+                        ],
+                        lastUpdated: new Date().toISOString(),
+                        version: 1,
+                        enabled: true
+                    }
+                };
+                
+                console.log('🔍 ENTERPRISE SAVE: Mongoose+Redis Payload:', JSON.stringify(payload, null, 2));
+                
+                // Save to API
+                const response = await fetch(`/api/company/${companyId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('✅ MANUAL SAVE: Success!', result);
+                
+                // Clear unsaved changes
+                try {
+                    if (window.knowledgeSourceUnsavedChanges && typeof window.knowledgeSourceUnsavedChanges.clear === 'function') {
+                        window.knowledgeSourceUnsavedChanges.clear();
+                        console.log('✅ Unsaved changes cleared');
+                    } else {
+                        window.knowledgeSourceUnsavedChanges = new Set();
+                        console.log('✅ Unsaved changes tracking reinitialized');
+                    }
+                } catch (error) {
+                    console.error('❌ Error clearing changes:', error);
+                    window.knowledgeSourceUnsavedChanges = new Set();
+                }
+                
+                showNotification('Settings Saved', 'Knowledge source thresholds have been saved successfully', 'success');
+                return result;
+                
+            } catch (error) {
+                console.error('❌ MANUAL SAVE: Failed!', error);
+                showNotification('Save Failed', `Error saving settings: ${error.message}`, 'error');
+                throw error;
+            }
             
             const saveBtn = document.getElementById('save-knowledge-sources-btn');
             const saveBtnText = document.getElementById('save-btn-text');
