@@ -49,10 +49,20 @@ router.put('/admin/:companyID/ai-settings', async (req, res) => {
         const { companyID } = req.params;
         const aiSettings = req.body;
 
+        console.log('🚀 CHECKPOINT 1: AI Settings PUT request received');
+        console.log('🔍 CHECKPOINT 2: Company ID:', companyID);
+        console.log('🔍 CHECKPOINT 3: Request body keys:', Object.keys(aiSettings));
+        console.log('🔍 CHECKPOINT 4: Thresholds in request:', aiSettings.thresholds);
+
         const company = await Company.findById(companyID);
         if (!company) {
+            console.log('❌ CHECKPOINT 5: Company not found');
             return res.status(404).json({ success: false, error: 'Company not found' });
         }
+
+        console.log('✅ CHECKPOINT 6: Company found:', company.companyName);
+        console.log('🔍 CHECKPOINT 7: Existing aiAgentLogic:', !!company.aiAgentLogic);
+        console.log('🔍 CHECKPOINT 8: Existing thresholds:', company.aiAgentLogic?.thresholds);
 
         company.aiAgentLogic = {
             ...company.aiAgentLogic,
@@ -60,7 +70,12 @@ router.put('/admin/:companyID/ai-settings', async (req, res) => {
             lastUpdated: new Date()
         };
         
+        console.log('🔍 CHECKPOINT 9: Updated aiAgentLogic thresholds:', company.aiAgentLogic.thresholds);
+        
         await company.save();
+        
+        console.log('✅ CHECKPOINT 10: Company saved successfully');
+        console.log('🔍 CHECKPOINT 11: Final thresholds in saved company:', company.aiAgentLogic.thresholds);
 
         res.json({
             success: true,
@@ -68,7 +83,7 @@ router.put('/admin/:companyID/ai-settings', async (req, res) => {
             data: company.aiAgentLogic
         });
     } catch (error) {
-        console.error('Error updating AI settings:', error);
+        console.error('❌ CHECKPOINT ERROR: Error updating AI settings:', error);
         res.status(500).json({ 
             success: false, 
             error: 'Failed to update AI settings',

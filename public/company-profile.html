@@ -10803,13 +10803,14 @@ Key Metrics:
                 
                 console.log('🔍 ENTERPRISE SAVE: Mongoose+Redis Payload:', JSON.stringify(payload, null, 2));
                 
-                // Save to API
-                const response = await fetch(`/api/company/${companyId}`, {
-                    method: 'PATCH',
+                // 🎯 CORRECT ENDPOINT: Use admin/ai-settings for aiAgentLogic data (no auth required)
+                console.log('🔍 SAVE FIX: Using aiAgentLogic endpoint - /api/admin/' + companyId + '/ai-settings');
+                const response = await fetch(`/api/admin/${companyId}/ai-settings`, {
+                    method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload.aiAgentLogic) // Send only aiAgentLogic data
                 });
                 
                 if (!response.ok) {
