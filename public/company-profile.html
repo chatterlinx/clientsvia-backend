@@ -10348,8 +10348,8 @@ Key Metrics:
                     // ✅ PRODUCTION: Initialize specific enterprise features when tabs are activated
                     switch(targetTab) {
                         case 'priority':
-                            console.log('⚠️ Answer Priority Flow removed - redirecting to Knowledge Sources');
-                            switchClientsViaTab('knowledge');
+                            // Priority tab removed - default to knowledge
+                            targetTab = 'knowledge';
                             break;
                         case 'knowledge':
                             console.log('📚 Knowledge Sources tab activated - simplified interface loaded');
