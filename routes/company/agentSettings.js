@@ -13,6 +13,7 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     console.log('🔍 CHECKPOINT 3: Request body keys:', Object.keys(req.body));
     console.log('🔍 CHECKPOINT 4: aiAgentLogic in request:', !!req.body.aiAgentLogic);
     console.log('🔍 CHECKPOINT 5: aiAgentLogic thresholds:', req.body.aiAgentLogic?.thresholds);
+    console.log('🔍 CHECKPOINT 5.1: Full req.body.aiAgentLogic:', JSON.stringify(req.body.aiAgentLogic, null, 2));
     
     const { 
       tradeCategories = [], 
@@ -20,6 +21,9 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
       answerPriorityFlow = [],  // NEW: Answer Priority Flow data
       aiAgentLogic = {}  // NEW: Complete AI Agent Logic config
     } = req.body;
+    
+    console.log('🔍 CHECKPOINT 5.2: Destructured aiAgentLogic:', JSON.stringify(aiAgentLogic, null, 2));
+    console.log('🔍 CHECKPOINT 5.3: Destructured aiAgentLogic.thresholds:', aiAgentLogic.thresholds);
     const companyId = req.params.id;
 
     // Validate trade categories exist in enterprise system
