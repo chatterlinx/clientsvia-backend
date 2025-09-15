@@ -112,16 +112,24 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     console.log('🔍 CHECKPOINT 6.2.5: Converted existing aiAgentLogic:', existingPlain);
     
     // 🔧 EXPLICIT MERGE: Manually merge to ensure thresholds are preserved
+    // CRITICAL: Check if aiAgentLogic.thresholds exists before merging
+    console.log('🔍 CHECKPOINT 6.2.6: aiAgentLogic.thresholds exists?', !!aiAgentLogic.thresholds);
+    console.log('🔍 CHECKPOINT 6.2.7: existingPlain.thresholds exists?', !!existingPlain.thresholds);
+    
     const mergedAiAgentLogic = {
       ...existingPlain,
       ...aiAgentLogic,
-      // Explicitly ensure thresholds are merged
-      thresholds: {
-        ...existingPlain.thresholds,
-        ...aiAgentLogic.thresholds
-      },
+      // Explicitly ensure thresholds are merged (only if they exist)
+      ...(aiAgentLogic.thresholds ? {
+        thresholds: {
+          ...existingPlain.thresholds,
+          ...aiAgentLogic.thresholds
+        }
+      } : {}),
       lastUpdated: new Date()
     };
+    
+    console.log('🔍 CHECKPOINT 6.2.8: Final merged thresholds:', mergedAiAgentLogic.thresholds);
     
     console.log('🔍 CHECKPOINT 6.3: Existing logic keys:', Object.keys(existingPlain));
     console.log('🔍 CHECKPOINT 6.4: New logic keys:', Object.keys(aiAgentLogic));
