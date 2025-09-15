@@ -1953,14 +1953,19 @@
                                                 <div class="space-y-5">
                                                     <h4 class="text-md font-semibold text-gray-700 border-b pb-2">
                                                         <i class="fas fa-layer-group mr-2 text-indigo-600"></i>Knowledge Source Priority
-                                                        <span class="text-xs text-gray-500 ml-2">(Drag to reorder)</span>
+                                                        <span class="text-xs text-gray-500 ml-2">(Use arrows to reorder)</span>
                                                     </h4>
                                                     
                                                     <div id="clientsvia-source-priority-container" class="space-y-2">
                                                         <!-- Company Q&A - Priority #1 Knowledge Source -->
-                                                        <div id="clientsvia-source-companyQnA" data-source="companyQnA" class="clientsvia-source-item flex items-center p-3 bg-white border border-gray-300 rounded-lg cursor-move hover:bg-green-50 transition duration-150">
-                                                            <div class="handle mr-3 text-gray-400">
-                                                                <i class="fas fa-grip-vertical"></i>
+                                                        <div id="clientsvia-source-companyQnA" data-source="companyQnA" class="clientsvia-source-item flex items-center p-3 bg-white border border-gray-300 rounded-lg hover:bg-green-50 transition duration-150">
+                                                            <div class="priority-controls mr-3 flex flex-col space-y-1">
+                                                                <button onclick="movePriorityUp('companyQnA')" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-green-600 hover:bg-green-100 rounded text-xs transition-colors" title="Move up">
+                                                                    <i class="fas fa-chevron-up"></i>
+                                                                </button>
+                                                                <button onclick="movePriorityDown('companyQnA')" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-green-600 hover:bg-green-100 rounded text-xs transition-colors" title="Move down">
+                                                                    <i class="fas fa-chevron-down"></i>
+                                                                </button>
                                                             </div>
                                                             <div class="flex-1">
                                                                 <div class="flex items-center justify-between">
@@ -1997,9 +2002,14 @@
                                                         </div>
                                                         
                                                         <!-- Trade Category Q&A -->
-                                                        <div id="clientsvia-source-tradeQnA" data-source="tradeQnA" class="clientsvia-source-item flex items-center p-3 bg-white border border-gray-300 rounded-lg cursor-move hover:bg-blue-50 transition duration-150">
-                                                            <div class="handle mr-3 text-gray-400">
-                                                                <i class="fas fa-grip-vertical"></i>
+                                                        <div id="clientsvia-source-tradeQnA" data-source="tradeQnA" class="clientsvia-source-item flex items-center p-3 bg-white border border-gray-300 rounded-lg hover:bg-blue-50 transition duration-150">
+                                                            <div class="priority-controls mr-3 flex flex-col space-y-1">
+                                                                <button onclick="movePriorityUp('tradeQnA')" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-purple-600 hover:bg-purple-100 rounded text-xs transition-colors" title="Move up">
+                                                                    <i class="fas fa-chevron-up"></i>
+                                                                </button>
+                                                                <button onclick="movePriorityDown('tradeQnA')" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-purple-600 hover:bg-purple-100 rounded text-xs transition-colors" title="Move down">
+                                                                    <i class="fas fa-chevron-down"></i>
+                                                                </button>
                                                             </div>
                                                             <div class="flex-1">
                                                                 <div class="flex items-center justify-between">
@@ -2041,9 +2051,14 @@
                                                         </div>
                                                         
                                                         <!-- Vector Search -->
-                                                        <div id="clientsvia-source-vectorSearch" data-source="vectorSearch" class="clientsvia-source-item flex items-center p-3 bg-white border border-gray-300 rounded-lg cursor-move hover:bg-blue-50 transition duration-150">
-                                                            <div class="handle mr-3 text-gray-400">
-                                                                <i class="fas fa-grip-vertical"></i>
+                                                        <div id="clientsvia-source-vectorSearch" data-source="vectorSearch" class="clientsvia-source-item flex items-center p-3 bg-white border border-gray-300 rounded-lg hover:bg-blue-50 transition duration-150">
+                                                            <div class="priority-controls mr-3 flex flex-col space-y-1">
+                                                                <button onclick="movePriorityUp('vectorSearch')" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-100 rounded text-xs transition-colors" title="Move up">
+                                                                    <i class="fas fa-chevron-up"></i>
+                                                                </button>
+                                                                <button onclick="movePriorityDown('vectorSearch')" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-100 rounded text-xs transition-colors" title="Move down">
+                                                                    <i class="fas fa-chevron-down"></i>
+                                                                </button>
                                                             </div>
                                                             <div class="flex-1">
                                                                 <div class="flex items-center justify-between">
@@ -2071,9 +2086,14 @@
                                                         </div>
                                                         
                                                         <!-- LLM Fallback -->
-                                                        <div id="clientsvia-source-llmFallback" data-source="llmFallback" class="clientsvia-source-item flex items-center p-3 bg-white border border-gray-300 rounded-lg cursor-move hover:bg-blue-50 transition duration-150">
-                                                            <div class="handle mr-3 text-gray-400">
-                                                                <i class="fas fa-grip-vertical"></i>
+                                                        <div id="clientsvia-source-llmFallback" data-source="llmFallback" class="clientsvia-source-item flex items-center p-3 bg-white border border-gray-300 rounded-lg hover:bg-blue-50 transition duration-150">
+                                                            <div class="priority-controls mr-3 flex flex-col space-y-1">
+                                                                <button onclick="movePriorityUp('llmFallback')" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-orange-600 hover:bg-orange-100 rounded text-xs transition-colors" title="Move up">
+                                                                    <i class="fas fa-chevron-up"></i>
+                                                                </button>
+                                                                <button onclick="movePriorityDown('llmFallback')" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-orange-600 hover:bg-orange-100 rounded text-xs transition-colors" title="Move down">
+                                                                    <i class="fas fa-chevron-down"></i>
+                                                                </button>
                                                             </div>
                                                             <div class="flex-1">
                                                                 <div class="flex items-center justify-between">
@@ -2102,7 +2122,7 @@
                                                     </div>
                                                     
                                                 </div>
-                                                
+
                                                 <!-- Right Column: Memory & Fallback Settings -->
                                                 <div class="space-y-5">
                                                     <h4 class="text-md font-semibold text-gray-700 border-b pb-2">
@@ -2172,9 +2192,9 @@
                                                 <div class="text-center">
                                                     <button onclick="console.log('🖱️ BUTTON CLICKED: saveKnowledgeSourceSettings'); saveKnowledgeSourceSettings()" 
                                                             class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg shadow-sm transition duration-150 ease-in-out">
-                                                        <i class="fas fa-save mr-2"></i>
+                                                            <i class="fas fa-save mr-2"></i>
                                                         Save Changes
-                                                    </button>
+                                                        </button>
                                                 </div>
                                                 
                                                 <!-- Last Saved Information -->
@@ -2338,12 +2358,12 @@
                             <!-- Available Trade Categories (Compact Multi-select) -->
                             <div class="bg-white border border-gray-200 rounded-lg p-4">
                                 <div id="available-trade-categories" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                                    <!-- Global trade categories will be populated here -->
+                                                                    <!-- Global trade categories will be populated here -->
                                     <div class="col-span-full text-center text-gray-500 py-4">
-                                        <i class="fas fa-spinner fa-spin mr-2"></i>Loading global trade categories...
-                                    </div>
-                                </div>
-                            </div>
+                                                                        <i class="fas fa-spinner fa-spin mr-2"></i>Loading global trade categories...
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                             
                                                             <!-- Selected Categories Summary -->
                                                             <div class="mt-6 p-4 bg-white rounded-lg border border-purple-200">
@@ -6436,7 +6456,7 @@
                 // 🎯 NEW: Display selected categories as clean sections (NO CHECKBOXES!)
                 const checkboxContainer = document.getElementById('trade-categories-checkboxes');
                 if (checkboxContainer) {
-                    checkboxContainer.innerHTML = '';
+                checkboxContainer.innerHTML = '';
                     
                     // Add header
                     const headerDiv = document.createElement('div');
@@ -6486,10 +6506,10 @@
                         checkboxContainer.appendChild(categoryDiv);
                     });
                     
-                } else {
+                    } else {
                     console.error('❌ CRITICAL: trade-categories-checkboxes element not found');
                     return;
-                }
+                    }
 
             } catch (error) {
                 console.error('❌ Failed to load trade categories:', error);
@@ -7129,58 +7149,13 @@
             }
             const items = container.querySelectorAll('.priority-item');
             
-            // Simple click-based priority switching (since full drag-drop requires libraries)
-            items.forEach(item => {
-                item.addEventListener('click', function() {
-                    if (event.target.tagName === 'INPUT') return; // Don't trigger on slider clicks
-                    
-                    // Ask user which priority to assign
-                    const currentPriority = parseInt(this.querySelector('.priority-value').textContent);
-                    const newPriority = prompt(`Change "${this.dataset.source}" priority (1-4):`, currentPriority);
-                    
-                    if (newPriority && !isNaN(newPriority) && newPriority >= 1 && newPriority <= 4) {
-                        // Find the item that currently has the target priority
-                        const targetItem = Array.from(items).find(i => 
-                            parseInt(i.querySelector('.priority-value').textContent) === parseInt(newPriority)
-                        );
-                        
-                        if (targetItem) {
-                            // Swap priorities
-                            targetItem.querySelector('.priority-value').textContent = currentPriority;
-                            this.querySelector('.priority-value').textContent = newPriority;
-                            
-                            // Update visual order
-                            updateSourcePriorityOrder();
-                        }
-                    }
-                });
-            });
+            // 🗑️ REMOVED: Old click-based priority switching with prompts
+            // Now using clean arrow buttons for priority control
             
 
         }
         
-        // Update the visual order of sources based on priority
-        function updateSourcePriorityOrder() {
-            const container = document.getElementById('clientsvia-source-priority-container');
-            if (!container) {
-                console.warn('⚠️ Source priority container not found for reordering');
-                return;
-            }
-            const items = Array.from(container.querySelectorAll('.priority-item'));
-            
-            // Sort items by priority
-            items.sort((a, b) => {
-                const priorityA = parseInt(a.querySelector('.priority-value').textContent);
-                const priorityB = parseInt(b.querySelector('.priority-value').textContent);
-                return priorityA - priorityB;
-            });
-            
-            // Remove all items
-            items.forEach(item => container.removeChild(item));
-            
-            // Add them back in sorted order
-            items.forEach(item => container.appendChild(item));
-        }
+        // 🗑️ REMOVED: updateSourcePriorityOrder() - replaced with direct DOM manipulation in arrow functions
         
         // Load knowledge settings from API
         async function loadKnowledgeSettings() {
@@ -9067,10 +9042,10 @@ Key Metrics:
                      data-category-name="${category.name}"
                      onclick="toggleTradeCategory('${category.name}')">
                     <div class="flex items-start space-x-3">
-                        <input type="checkbox" 
-                               id="trade-cat-${category.name.replace(/\s+/g, '-').toLowerCase()}"
+                            <input type="checkbox" 
+                                   id="trade-cat-${category.name.replace(/\s+/g, '-').toLowerCase()}"
                                class="trade-category-checkbox mt-1 h-4 w-4 text-purple-600 rounded focus:ring-purple-500"
-                               data-category="${category.name}">
+                                   data-category="${category.name}">
                         <div class="flex-1 min-w-0">
                             <h6 class="font-medium text-gray-800 text-sm truncate" title="${category.name}">${category.name}</h6>
                             <div class="flex items-center justify-between mt-1">
@@ -9083,10 +9058,10 @@ Key Metrics:
                                         <i class="fas fa-tags mr-1 text-orange-500"></i>
                                         ${category.metadata?.totalKeywords || category.totalKeywords || getTotalKeywordsForCategory(category)}
                                     </span>
-                                </div>
+                            </div>
                                 <div class="text-xs text-gray-400">
                                     <i class="fas fa-tools"></i>
-                                </div>
+                        </div>
                             </div>
                         </div>
                     </div>
@@ -9542,10 +9517,10 @@ Key Metrics:
                             <p class="text-gray-500 mb-6">No Q&As found for your selected trade categories: <strong>${selectedTrades.join(', ')}</strong><br>
                             Add company-specific Q&As or check if global Q&As exist for these categories.</p>
                             <div class="flex space-x-3 justify-center">
-                                <button onclick="showAddTradeQnAModal()" 
-                                        class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md transition-colors">
+                            <button onclick="showAddTradeQnAModal()" 
+                                    class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md transition-colors">
                                     <i class="fas fa-plus mr-2"></i>Add Company Q&A
-                                </button>
+                            </button>
                                 <button onclick="window.open('/enterprise-trade-categories.html', '_blank')" 
                                         class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition-colors">
                                     <i class="fas fa-external-link-alt mr-2"></i>View Global Q&As
@@ -9628,11 +9603,11 @@ Key Metrics:
                         <div class="flex items-center space-x-2 ml-4">
                             ${!qna.isGlobal ? `
                                 <button onclick="editTradeQnA('${qna.id || qna._id}')" class="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded" title="Edit company Q&A">
-                                    <i class="fas fa-edit"></i>
-                                </button>
+                                <i class="fas fa-edit"></i>
+                            </button>
                                 <button onclick="deleteTradeQnA('${qna.id || qna._id}')" class="text-red-600 hover:text-red-800 p-2 hover:bg-red-50 rounded" title="Delete company Q&A">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                                <i class="fas fa-trash"></i>
+                            </button>
                             ` : `
                                 <span class="text-xs text-purple-600 px-2 py-1 bg-purple-50 rounded" title="Global Q&As are managed in Enterprise Trade Categories">
                                     <i class="fas fa-lock mr-1"></i>Global
@@ -10497,7 +10472,7 @@ Key Metrics:
                         if (value >= 0 && value <= 1) {
                             console.log(`📝 Threshold changed: ${source} = ${value} (use Save button)`);
                             handleKnowledgeSourceChange('threshold', source, value);
-                            markKnowledgeSourceAsChanged(`${source} confidence threshold`, value);
+                        markKnowledgeSourceAsChanged(`${source} confidence threshold`, value);
                         }
                     });
                 }
@@ -10577,44 +10552,61 @@ Key Metrics:
         // ✅ CLEANED: Legacy drag-and-drop function removed
         // Knowledge Source Priority is now controlled in Answer Priority Flow tab
         
-        // Knowledge Source drag handlers
-        let knowledgeSourceDraggedElement = null;
-        
-        function handleKnowledgeSourceDragStart(e) {
-            knowledgeSourceDraggedElement = this;
-            this.style.opacity = '0.5';
-            console.log('🔄 Dragging knowledge source:', this.dataset.source);
-        }
-        
-        function handleKnowledgeSourceDragOver(e) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-        }
-        
-        function handleKnowledgeSourceDrop(e) {
-            e.preventDefault();
-            if (this !== knowledgeSourceDraggedElement) {
-                const container = document.getElementById('clientsvia-source-priority-container');
-                const allItems = Array.from(container.children);
-                const draggedIndex = allItems.indexOf(knowledgeSourceDraggedElement);
-                const droppedIndex = allItems.indexOf(this);
+        // 🎯 NEW: Clean Arrow-Based Priority Control (Replacing Drag & Drop)
+        function movePriorityUp(sourceType) {
+            console.log(`⬆️ Moving ${sourceType} priority up`);
+            
+            const container = document.getElementById('clientsvia-source-priority-container');
+            const items = Array.from(container.querySelectorAll('.clientsvia-source-item'));
+            const currentItem = items.find(item => item.dataset.source === sourceType);
+            
+            if (!currentItem) {
+                console.warn(`❌ Source item not found: ${sourceType}`);
+                return;
+            }
+            
+            const currentIndex = items.indexOf(currentItem);
+            if (currentIndex > 0) {
+                // Swap with previous item
+                const previousItem = items[currentIndex - 1];
+                container.insertBefore(currentItem, previousItem);
                 
-                console.log(`🔄 Reordering: ${knowledgeSourceDraggedElement.dataset.source} from position ${draggedIndex + 1} to ${droppedIndex + 1}`);
-                
-                if (draggedIndex < droppedIndex) {
-                    container.insertBefore(knowledgeSourceDraggedElement, this.nextSibling);
-                } else {
-                    container.insertBefore(knowledgeSourceDraggedElement, this);
-                }
-                
+                // Update priority numbers
                 updateKnowledgeSourcePriorities();
                 calibrateKnowledgeSourcePriorities();
+                
+                console.log(`✅ Moved ${sourceType} from position ${currentIndex + 1} to ${currentIndex}`);
+            } else {
+                console.log(`ℹ️ ${sourceType} is already at the top`);
             }
         }
         
-        function handleKnowledgeSourceDragEnd(e) {
-            this.style.opacity = '1';
-            knowledgeSourceDraggedElement = null;
+        function movePriorityDown(sourceType) {
+            console.log(`⬇️ Moving ${sourceType} priority down`);
+            
+            const container = document.getElementById('clientsvia-source-priority-container');
+            const items = Array.from(container.querySelectorAll('.clientsvia-source-item'));
+            const currentItem = items.find(item => item.dataset.source === sourceType);
+            
+            if (!currentItem) {
+                console.warn(`❌ Source item not found: ${sourceType}`);
+                return;
+            }
+            
+            const currentIndex = items.indexOf(currentItem);
+            if (currentIndex < items.length - 1) {
+                // Swap with next item
+                const nextItem = items[currentIndex + 1];
+                container.insertBefore(nextItem, currentItem);
+                
+                // Update priority numbers
+                updateKnowledgeSourcePriorities();
+                calibrateKnowledgeSourcePriorities();
+                
+                console.log(`✅ Moved ${sourceType} from position ${currentIndex + 1} to ${currentIndex + 2}`);
+            } else {
+                console.log(`ℹ️ ${sourceType} is already at the bottom`);
+            }
         }
         
         // ✅ PRODUCTION: Update Knowledge Source priority numbers
