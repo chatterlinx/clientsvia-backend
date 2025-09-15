@@ -2191,13 +2191,9 @@
                                                 <!-- SINGLE SAVE BUTTON -->
                                                 <div class="text-center">
                                                     <button onclick="console.log('🖱️ BUTTON CLICKED: saveKnowledgeSourceSettings'); saveKnowledgeSourceSettings()" 
-                                                            class="group relative bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl active:shadow-md transform hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all duration-150 ease-in-out border border-blue-500 hover:border-blue-400 active:border-blue-600">
-                                                        <span class="relative z-10 flex items-center">
-                                                            <i class="fas fa-save mr-2 group-active:scale-90 transition-transform duration-150"></i>
-                                                            <span class="group-active:scale-95 transition-transform duration-150">Save Changes</span>
-                                                        </span>
-                                                        <!-- Ripple effect overlay -->
-                                                        <div class="absolute inset-0 bg-white opacity-0 group-active:opacity-20 rounded-lg transition-opacity duration-150"></div>
+                                                            class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl active:shadow-md transform hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all duration-150 ease-in-out border border-blue-500 hover:border-blue-400 active:border-blue-600">
+                                                        <i class="fas fa-save mr-2"></i>
+                                                        Save Changes
                                                     </button>
                                                 </div>
                                                 
@@ -11127,21 +11123,18 @@ Key Metrics:
                 // Add extra visual satisfaction
                 if (saveButton) {
                     saveButton.innerHTML = `
-                        <span class="relative z-10 flex items-center">
-                            <i class="fas fa-check mr-2 text-green-300 animate-bounce"></i>
-                            <span>Saved!</span>
-                        </span>
+                        <i class="fas fa-check mr-2 text-green-300 animate-bounce"></i>
+                        Saved!
                     `;
+                    saveButton.className = 'bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-150 ease-in-out border border-green-500';
                     
                     // Revert button after 2 seconds
                     setTimeout(() => {
                         saveButton.innerHTML = `
-                            <span class="relative z-10 flex items-center">
-                                <i class="fas fa-save mr-2 group-active:scale-90 transition-transform duration-150"></i>
-                                <span class="group-active:scale-95 transition-transform duration-150">Save Changes</span>
-                            </span>
-                            <div class="absolute inset-0 bg-white opacity-0 group-active:opacity-20 rounded-lg transition-opacity duration-150"></div>
+                            <i class="fas fa-save mr-2"></i>
+                            Save Changes
                         `;
+                        saveButton.className = 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl active:shadow-md transform hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all duration-150 ease-in-out border border-blue-500 hover:border-blue-400 active:border-blue-600';
                     }, 2000);
                 }
                 return result;
