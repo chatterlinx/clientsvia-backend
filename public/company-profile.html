@@ -10953,31 +10953,68 @@ Key Metrics:
                 console.log('🔍 VERIFICATION: aiAgentLogic contents:', result.company?.aiAgentLogic);
                 console.log('🔍 VERIFICATION: aiAgentLogic keys:', Object.keys(result.company?.aiAgentLogic || {}));
                 
-                // Check if our saved thresholds match what we just saved
+                // 🎯 COMPREHENSIVE VERIFICATION: Check BOTH thresholds AND priorities
                 const savedThresholds = result.company?.aiAgentLogic?.thresholds;
+                const savedPriorities = result.company?.aiAgentLogic?.knowledgeSourcePriorities;
+                
                 console.log('🔍 VERIFICATION: Found thresholds:', savedThresholds);
+                console.log('🔍 VERIFICATION: Found priorities:', savedPriorities);
+                
                 if (!savedThresholds) {
-                    throw new Error('Verification failed: No thresholds found in saved data');
+                    throw new Error('❌ CRITICAL VERIFICATION FAILED: No thresholds found in saved data');
+                }
+                
+                if (!savedPriorities) {
+                    throw new Error('❌ CRITICAL VERIFICATION FAILED: No knowledgeSourcePriorities found in saved data');
                 }
                 
                 let allMatch = true;
+                
+                // 1️⃣ VERIFY THRESHOLDS
+                console.log('🔍 STEP 1: Verifying thresholds...');
                 Object.keys(thresholds).forEach(source => {
                     const ourValue = thresholds[source];
                     const savedValue = savedThresholds[source];
                     
                     if (Math.abs(ourValue - savedValue) > 0.01) { // Allow for small float differences
-                        console.error(`❌ VERIFICATION FAILED: ${source} - Sent: ${ourValue}, Got: ${savedValue}`);
+                        console.error(`❌ THRESHOLD VERIFICATION FAILED: ${source} - Sent: ${ourValue}, Got: ${savedValue}`);
                         allMatch = false;
                     } else {
-                        console.log(`✅ VERIFIED: ${source} = ${savedValue}`);
+                        console.log(`✅ THRESHOLD VERIFIED: ${source} = ${savedValue}`);
                     }
                 });
                 
-                if (!allMatch) {
-                    throw new Error('Verification failed: Saved values do not match sent values');
+                // 2️⃣ VERIFY KNOWLEDGE SOURCE PRIORITIES
+                console.log('🔍 STEP 2: Verifying knowledge source priorities...');
+                console.log('🔍 SENT priorities:', JSON.stringify(knowledgeSourcePriorities));
+                console.log('🔍 SAVED priorities:', JSON.stringify(savedPriorities));
+                
+                if (!Array.isArray(savedPriorities)) {
+                    console.error('❌ PRIORITY VERIFICATION FAILED: Saved priorities is not an array');
+                    allMatch = false;
+                } else if (savedPriorities.length !== knowledgeSourcePriorities.length) {
+                    console.error(`❌ PRIORITY VERIFICATION FAILED: Length mismatch - Sent: ${knowledgeSourcePriorities.length}, Got: ${savedPriorities.length}`);
+                    allMatch = false;
+                } else {
+                    // Check each priority position
+                    for (let i = 0; i < knowledgeSourcePriorities.length; i++) {
+                        const sentPriority = knowledgeSourcePriorities[i];
+                        const savedPriority = savedPriorities[i];
+                        
+                        if (sentPriority !== savedPriority) {
+                            console.error(`❌ PRIORITY VERIFICATION FAILED: Position ${i+1} - Sent: "${sentPriority}", Got: "${savedPriority}"`);
+                            allMatch = false;
+                        } else {
+                            console.log(`✅ PRIORITY VERIFIED: Position ${i+1} = "${savedPriority}"`);
+                        }
+                    }
                 }
                 
-                console.log('✅ VERIFICATION: All thresholds confirmed saved correctly!');
+                if (!allMatch) {
+                    throw new Error('❌ CRITICAL VERIFICATION FAILED: Saved data does not match sent data - this was a FAKE SAVE!');
+                }
+                
+                console.log('✅ COMPREHENSIVE VERIFICATION: All thresholds AND priorities confirmed saved correctly!');
                 
                 // Clear unsaved changes
                 try {
@@ -10993,12 +11030,27 @@ Key Metrics:
                     window.knowledgeSourceUnsavedChanges = new Set();
                 }
                 
-                showNotification('✅ VERIFIED: Settings Saved & Confirmed', 'Thresholds saved and verified in database', 'success');
+                showNotification('✅ VERIFIED: Complete Settings Saved & Confirmed', 'Both thresholds AND knowledge source priorities saved and verified in database', 'success');
                 return result;
                 
             } catch (error) {
                 console.error('❌ MANUAL SAVE: Failed!', error);
-                showNotification('Save Failed', `Error saving settings: ${error.message}`, 'error');
+                
+                // 🚨 ENHANCED ERROR HANDLING: Provide specific feedback based on error type
+                if (error.message.includes('FAKE SAVE')) {
+                    showNotification('❌ FAKE SAVE DETECTED!', 'Settings appeared to save but verification failed. Data was NOT actually saved to database.', 'error');
+                } else if (error.message.includes('No thresholds found')) {
+                    showNotification('❌ Threshold Save Failed', 'Thresholds were not found in the saved data. Save operation failed.', 'error');
+                } else if (error.message.includes('No knowledgeSourcePriorities found')) {
+                    showNotification('❌ Priority Save Failed', 'Knowledge Source Priorities were not found in the saved data. Save operation failed.', 'error');
+                } else if (error.message.includes('THRESHOLD VERIFICATION FAILED')) {
+                    showNotification('❌ Threshold Verification Failed', 'Saved thresholds do not match the values you set. Save operation failed.', 'error');
+                } else if (error.message.includes('PRIORITY VERIFICATION FAILED')) {
+                    showNotification('❌ Priority Verification Failed', 'Saved priority order does not match your reordering. Save operation failed.', 'error');
+                } else {
+                    showNotification('Save Failed', `Error saving settings: ${error.message}`, 'error');
+                }
+                
                 throw error;
             }
             
