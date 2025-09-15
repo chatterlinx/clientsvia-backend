@@ -6394,17 +6394,23 @@
         
         // 🎯 FIXED: Load ONLY company's selected trade categories for Q&A management
         async function loadAgentTradeCategories() {
+            console.log('🚀 loadAgentTradeCategories() CALLED - Starting trade category load...');
             try {
                 const companyId = getCurrentCompanyId();
+                console.log('🔍 Company ID:', companyId);
                 
                 // 🔍 STEP 1: Get company's selected trade categories
                 console.log('🔍 Loading company trade selection first...');
+                console.log('🔍 API URL:', `/api/company/${companyId}`);
                 const companyResponse = await fetch(`/api/company/${companyId}`);
                 if (!companyResponse.ok) {
                     throw new Error('Failed to load company data');
                 }
                 
                 const company = await companyResponse.json();
+                console.log('🔍 RAW COMPANY DATA:', company);
+                console.log('🔍 company.tradeCategories:', company.tradeCategories);
+                console.log('🔍 company.tradeTypes:', company.tradeTypes);
                 let selectedTrades = company.tradeCategories || [];
                 
                 console.log('✅ Company selected trades from DB:', selectedTrades);
