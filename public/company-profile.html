@@ -10868,11 +10868,14 @@ Key Metrics:
                 
                 // 🎯 ENTERPRISE: Mongoose + Redis format for sub-50ms performance
                 const existingData = window.currentCompanyData?.aiAgentLogic || {};
+                console.log('EXISTING DATA knowledgeSourcePriorities:', existingData.knowledgeSourcePriorities);
+                console.log('NEW knowledgeSourcePriorities:', knowledgeSourcePriorities);
+                
                 const payload = {
                     aiAgentLogic: {
                         ...existingData,
                         thresholds,
-                        knowledgeSourcePriorities,
+                        knowledgeSourcePriorities: knowledgeSourcePriorities, // Explicit override
                         memorySettings: {
                             memoryMode: "conversational",
                             contextRetention: 30
@@ -10893,6 +10896,7 @@ Key Metrics:
                     }
                 };
                 
+                console.log('FINAL PAYLOAD knowledgeSourcePriorities:', payload.aiAgentLogic.knowledgeSourcePriorities);
                 console.log('🔍 ENTERPRISE SAVE: Mongoose+Redis Payload:', JSON.stringify(payload, null, 2));
                 
                 // 🔍 CLIENT CHECKPOINT 1: Verify payload structure before sending
