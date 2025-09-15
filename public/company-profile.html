@@ -6433,21 +6433,6 @@
                 
                 console.log(`✅ Filtered to ${selectedCategories.length} selected categories out of ${allCategories.length} total`);
                 
-                // Populate the original dropdown (for compatibility) - with null safety
-                const selector = document.getElementById('agent-trade-categories');
-                if (selector) {
-                    selector.innerHTML = '';
-                    selectedCategories.forEach(category => {
-                        const option = document.createElement('option');
-                        option.value = category.name;
-                        const qaCount = category.qnas ? category.qnas.length : 0;
-                        option.textContent = `${category.name} (${qaCount} Q&As)`;
-                        selector.appendChild(option);
-                    });
-                } else {
-                    console.warn('⚠️ CHECKPOINT: agent-trade-categories element not found - using fallback');
-                }
-                
                 // 🎯 NEW: Display selected categories as clean sections (NO CHECKBOXES!)
                 const checkboxContainer = document.getElementById('trade-categories-checkboxes');
                 if (checkboxContainer) {
@@ -6550,17 +6535,8 @@
             }
         }
 
-        // Handle trade category selection change
-        function handleTradeCategoryChange() {
-            const selector = document.getElementById('agent-trade-categories');
-            if (!selector) return;
-            
-            const selectedCategories = Array.from(selector.selectedOptions).map(option => option.value);
-
-            
-            // Update any related UI or trigger save
-            // This function maintains compatibility with the original system
-        }
+        // 🗑️ REMOVED: handleTradeCategoryChange() - old dropdown system removed
+        // Trade categories are now managed through the clean sections interface
 
         // 🗑️ REMOVED: handleTradeCheckboxChange() - no longer needed since we removed checkboxes
         // Trade categories are now managed in the Overview tab and displayed as clean sections here
