@@ -339,13 +339,18 @@ router.patch('/company/:id', async (req, res) => {
 
         for (const key in updates) {
             if (Object.prototype.hasOwnProperty.call(updates, key)) {
-                if (key === 'tradeTypes') {
+                if (key === 'tradeTypes' || key === 'tradeCategories') {
                     if (Array.isArray(updates[key])) {
-                        updateOperation[key] = updates[key];
+                        // 🎯 ENTERPRISE: Save to both legacy and new fields for compatibility
+                        updateOperation['tradeTypes'] = updates[key];      // Legacy field
+                        updateOperation['tradeCategories'] = updates[key]; // Enterprise field
+                        console.log(`💾 [TRADE CATEGORIES] Saving to both fields:`, updates[key]);
                     } else if (updates[key]) {
-                        updateOperation[key] = [updates[key]];
+                        updateOperation['tradeTypes'] = [updates[key]];
+                        updateOperation['tradeCategories'] = [updates[key]];
                     } else {
-                        updateOperation[key] = [];
+                        updateOperation['tradeTypes'] = [];
+                        updateOperation['tradeCategories'] = [];
                     }
                 } else if (key === 'isActive' && typeof updates[key] !== 'boolean') {
                     updateOperation[key] = updates[key] === 'true' || updates[key] === true;
