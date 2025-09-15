@@ -6372,11 +6372,40 @@
 
         // 🚀 ENTERPRISE AI AGENT FUNCTIONS
         
-        // Load trade categories for agent configuration
+        // 🎯 FIXED: Load ONLY company's selected trade categories for Q&A management
         async function loadAgentTradeCategories() {
             try {
-                // Use the ENTERPRISE trade categories endpoint
                 const companyId = getCurrentCompanyId();
+                
+                // 🔍 STEP 1: Get company's selected trade categories
+                console.log('🔍 Loading company trade selection first...');
+                const companyResponse = await fetch(`/api/company/${companyId}`);
+                if (!companyResponse.ok) {
+                    throw new Error('Failed to load company data');
+                }
+                
+                const company = await companyResponse.json();
+                const selectedTrades = company.tradeCategories || [];
+                
+                console.log('✅ Company selected trades:', selectedTrades);
+                
+                if (selectedTrades.length === 0) {
+                    // Show message to select trade categories first
+                    const checkboxContainer = document.getElementById('trade-categories-checkboxes');
+                    if (checkboxContainer) {
+                        checkboxContainer.innerHTML = `
+                            <div class="text-center text-gray-500 py-8">
+                                <i class="fas fa-info-circle text-3xl mb-3"></i>
+                                <p class="text-lg font-medium mb-2">No Trade Categories Selected</p>
+                                <p class="text-sm">Please select your company's trade categories in the Overview tab first.</p>
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+                
+                // 🔍 STEP 2: Load Q&A data for selected categories only
+                console.log('🔍 Loading Q&A data for selected categories...');
                 const response = await fetch(`/api/enterprise-trade-categories?companyId=${companyId || 'global'}&includeGlobal=true`);
                 const result = await response.json();
                 
@@ -6384,72 +6413,128 @@
                     throw new Error(result.message || 'Failed to load trade categories');
                 }
                 
-                const categories = result.data;
+                // 🎯 FILTER: Only show selected trade categories
+                const allCategories = result.data;
+                const selectedCategories = allCategories.filter(category => 
+                    selectedTrades.includes(category.name)
+                );
+                
+                console.log(`✅ Filtered to ${selectedCategories.length} selected categories out of ${allCategories.length} total`);
                 
                 // Populate the original dropdown (for compatibility) - with null safety
                 const selector = document.getElementById('agent-trade-categories');
                 if (selector) {
-                selector.innerHTML = '';
+                    selector.innerHTML = '';
+                    selectedCategories.forEach(category => {
+                        const option = document.createElement('option');
+                        option.value = category.name;
+                        const qaCount = category.qnas ? category.qnas.length : 0;
+                        option.textContent = `${category.name} (${qaCount} Q&As)`;
+                        selector.appendChild(option);
+                    });
                 } else {
                     console.warn('⚠️ CHECKPOINT: agent-trade-categories element not found - using fallback');
                 }
                 
-                // Populate the new checkboxes container - with null safety
+                // 🎯 NEW: Display selected categories as clean sections (NO CHECKBOXES!)
                 const checkboxContainer = document.getElementById('trade-categories-checkboxes');
                 if (checkboxContainer) {
-                checkboxContainer.innerHTML = '';
+                    checkboxContainer.innerHTML = '';
+                    
+                    // Add header
+                    const headerDiv = document.createElement('div');
+                    headerDiv.className = 'mb-4 pb-2 border-b border-gray-200';
+                    headerDiv.innerHTML = `
+                        <h4 class="text-sm font-medium text-gray-700">
+                            <i class="fas fa-tools mr-2 text-purple-500"></i>
+                            Selected Trade Categories (${selectedCategories.length})
+                        </h4>
+                        <p class="text-xs text-gray-500 mt-1">Managing Q&As for your company's trade specializations</p>
+                    `;
+                    checkboxContainer.appendChild(headerDiv);
+                    
+                    // Add each selected category as a clean section
+                    selectedCategories.forEach(category => {
+                        console.log('🎨 Rendering selected category:', category.name);
+                        
+                        const categoryDiv = document.createElement('div');
+                        categoryDiv.className = 'mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200';
+                        categoryDiv.innerHTML = `
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-tools text-purple-500"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="text-sm font-medium text-gray-800">${category.name}</h5>
+                                        <div class="flex items-center space-x-4 mt-1">
+                                            <span class="text-xs text-gray-500">
+                                                <i class="fas fa-question-circle mr-1"></i>
+                                                ${category.qnas?.length || 0} Q&As
+                                            </span>
+                                            <span class="text-xs text-purple-600 bg-purple-100 px-2 py-0.5 rounded">
+                                                Active
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <button class="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50"
+                                            onclick="viewCategoryQnAs('${category.name}')">
+                                        <i class="fas fa-eye mr-1"></i>View Q&As
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        checkboxContainer.appendChild(categoryDiv);
+                    });
+                    
                 } else {
                     console.error('❌ CRITICAL: trade-categories-checkboxes element not found');
-                    console.error('❌ CHECKPOINT: This element should exist in the AI Agent Logic tab');
-                    return; // Exit early if the container doesn't exist
+                    return;
                 }
-                
-                categories.forEach(category => {
-                    console.log('🔍 CHECKPOINT: Processing trade category:', category.name);
-                    
-                    // Add to dropdown (only if selector exists)
-                    if (selector) {
-                        console.log('✅ CHECKPOINT: Adding to dropdown selector');
-                    const option = document.createElement('option');
-                    option.value = category.name;
-                    const qaCount = category.qnas ? category.qnas.length : 0;
-                    option.textContent = `${category.name} (${qaCount} Q&As)`;
-                    selector.appendChild(option);
-                    } else {
-                        console.log('⚠️ CHECKPOINT: Skipping dropdown - selector is null');
-                    }
-                    
-                    // Add to checkboxes (with enhanced error checking)
-                    if (checkboxContainer) {
-                        console.log('✅ CHECKPOINT: Adding to checkbox container');
-                    const checkboxDiv = document.createElement('div');
-                    checkboxDiv.className = 'flex items-center space-x-3 p-2 hover:bg-gray-100 rounded';
-                    checkboxDiv.innerHTML = `
-                        <input type="checkbox" 
-                               id="trade-cat-${category.name}" 
-                               value="${category.name}" 
-                               onchange="handleTradeCheckboxChange()"
-                               class="form-checkbox h-4 w-4 text-blue-600">
-                        <label for="trade-cat-${category.name}" class="flex-1 text-sm text-gray-700 cursor-pointer">
-                                ${category.name} <span class="text-gray-500">(${category.qnas?.length || 0} Q&As)</span>
-                        </label>
-                    `;
-                    checkboxContainer.appendChild(checkboxDiv);
-                        console.log('✅ CHECKPOINT: Checkbox added successfully for:', category.name);
-                    } else {
-                        console.error('❌ CRITICAL CHECKPOINT: checkboxContainer is null - cannot add checkbox');
-                        console.error('❌ CHECKPOINT: This should not happen - container was validated above');
-                    }
-                });
-                
 
             } catch (error) {
                 console.error('❌ Failed to load trade categories:', error);
                 // Show error in checkboxes container
                 const checkboxContainer = document.getElementById('trade-categories-checkboxes');
                 if (checkboxContainer) {
-                    checkboxContainer.innerHTML = '<div class="text-center text-red-500"><i class="fas fa-exclamation-triangle mr-2"></i>Failed to load categories</div>';
+                    checkboxContainer.innerHTML = `
+                        <div class="text-center text-red-500 py-8">
+                            <i class="fas fa-exclamation-triangle text-3xl mb-3"></i>
+                            <p class="text-lg font-medium mb-2">Failed to Load Trade Categories</p>
+                            <p class="text-sm">${error.message}</p>
+                        </div>
+                    `;
                 }
+            }
+        }
+
+        // 🎯 NEW: View Q&As for a specific trade category
+        function viewCategoryQnAs(categoryName) {
+            console.log('👁️ Viewing Q&As for category:', categoryName);
+            
+            // Set the filter to show only this category's Q&As
+            const categoryFilter = document.getElementById('All Selected Trade Categories');
+            if (categoryFilter) {
+                // Update dropdown to show this specific category
+                categoryFilter.value = categoryName;
+                
+                // Trigger filter update if there's a filter function
+                if (typeof filterTradeQnAs === 'function') {
+                    filterTradeQnAs();
+                }
+            }
+            
+            // Scroll to Q&A list area
+            const qnaListArea = document.querySelector('.trade-qna-list') || document.querySelector('#trade-qna-entries');
+            if (qnaListArea) {
+                qnaListArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            
+            // Show notification
+            if (typeof showNotification === 'function') {
+                showNotification(`Viewing Q&As for ${categoryName}`, 'info');
             }
         }
 
@@ -6465,22 +6550,8 @@
             // This function maintains compatibility with the original system
         }
 
-        // Handle checkbox change for trade categories
-        function handleTradeCheckboxChange() {
-            const checkboxes = document.querySelectorAll('#trade-categories-checkboxes input[type="checkbox"]:checked');
-            const selectedCategories = Array.from(checkboxes).map(checkbox => checkbox.value);
-            
-            // Update the dropdown to match checkboxes
-            const selector = document.getElementById('agent-trade-categories');
-            if (selector) {
-                Array.from(selector.options).forEach(option => {
-                    option.selected = selectedCategories.includes(option.value);
-                });
-            }
-            
-            // Update display
-            updateSelectedCategoriesDisplay(selectedCategories);
-        }
+        // 🗑️ REMOVED: handleTradeCheckboxChange() - no longer needed since we removed checkboxes
+        // Trade categories are now managed in the Overview tab and displayed as clean sections here
 
         // Update the selected categories display
         function updateSelectedCategoriesDisplay(selectedCategories) {
