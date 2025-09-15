@@ -107,9 +107,15 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     const existingPlain = existingLogic.toObject ? existingLogic.toObject() : existingLogic;
     console.log('🔍 CHECKPOINT 6.2.5: Converted existing aiAgentLogic:', existingPlain);
     
+    // 🔧 EXPLICIT MERGE: Manually merge to ensure thresholds are preserved
     const mergedAiAgentLogic = {
       ...existingPlain,
       ...aiAgentLogic,
+      // Explicitly ensure thresholds are merged
+      thresholds: {
+        ...existingPlain.thresholds,
+        ...aiAgentLogic.thresholds
+      },
       lastUpdated: new Date()
     };
     
