@@ -6385,9 +6385,21 @@
                 }
                 
                 const company = await companyResponse.json();
-                const selectedTrades = company.tradeCategories || [];
+                let selectedTrades = company.tradeCategories || [];
                 
-                console.log('✅ Company selected trades:', selectedTrades);
+                console.log('✅ Company selected trades from DB:', selectedTrades);
+                
+                // 🔧 FALLBACK: If no saved trades, check current UI selection
+                if (selectedTrades.length === 0) {
+                    console.log('🔍 No saved trades found, checking current UI selection...');
+                    const checkedBoxes = document.querySelectorAll('.trade-category-checkbox:checked');
+                    if (checkedBoxes.length > 0) {
+                        selectedTrades = Array.from(checkedBoxes).map(checkbox => checkbox.dataset.category);
+                        console.log('✅ Found current UI selection:', selectedTrades);
+                    }
+                }
+                
+                console.log('🎯 Final selected trades to use:', selectedTrades);
                 
                 if (selectedTrades.length === 0) {
                     // Show message to select trade categories first
