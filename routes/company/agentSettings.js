@@ -24,6 +24,13 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     
     console.log('🔍 CHECKPOINT 5.2: Destructured aiAgentLogic:', JSON.stringify(aiAgentLogic, null, 2));
     console.log('🔍 CHECKPOINT 5.3: Destructured aiAgentLogic.thresholds:', aiAgentLogic.thresholds);
+    
+    // 🚨 FAILSAFE: If thresholds are missing after destructuring, extract from req.body directly
+    if (!aiAgentLogic.thresholds && req.body.aiAgentLogic?.thresholds) {
+      console.log('🚨 FAILSAFE: Thresholds missing after destructuring, extracting directly');
+      aiAgentLogic.thresholds = req.body.aiAgentLogic.thresholds;
+      console.log('🚨 FAILSAFE: Restored thresholds:', aiAgentLogic.thresholds);
+    }
     const companyId = req.params.id;
 
     // Validate trade categories exist in enterprise system
