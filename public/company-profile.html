@@ -10852,12 +10852,27 @@ Key Metrics:
                 
                 console.log('🔍 MANUAL SAVE: Collected thresholds:', thresholds);
                 
+                // COLLECT KNOWLEDGE SOURCE PRIORITIES
+                const container = document.getElementById('clientsvia-source-priority-container');
+                let knowledgeSourcePriorities = ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback']; // Default order
+                if (container) {
+                    const items = container.querySelectorAll('.clientsvia-source-item');
+                    knowledgeSourcePriorities = [];
+                    items.forEach((item, index) => {
+                        knowledgeSourcePriorities.push(item.dataset.source);
+                    });
+                    console.log('PRIORITY ARRAY FOR SAVE:', knowledgeSourcePriorities);
+                } else {
+                    console.log('WARNING: Priority container not found, using default order');
+                }
+                
                 // 🎯 ENTERPRISE: Mongoose + Redis format for sub-50ms performance
                 const existingData = window.currentCompanyData?.aiAgentLogic || {};
                 const payload = {
                     aiAgentLogic: {
                         ...existingData,
                         thresholds,
+                        knowledgeSourcePriorities,
                         memorySettings: {
                             memoryMode: "conversational",
                             contextRetention: 30
