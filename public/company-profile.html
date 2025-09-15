@@ -10649,10 +10649,13 @@ Key Metrics:
             
             const companyId = getCurrentCompanyId();
             if (companyId) {
-                saveAIAgentLogicSettings({ knowledgeSourcePriorities: priorityConfig });
+                console.log('💾 Saving priority config:', priorityConfig);
+                // Mark as changed for the save system
+                markKnowledgeSourceAsChanged('knowledgeSourcePriorities', JSON.stringify(priorityConfig));
+                
+                // Trigger the manual save notification
+                showNotification('Priority Updated', 'Knowledge source priorities reordered. Click "Save Settings" to persist changes!', 'info');
             }
-            
-            showNotification('Calibration Complete', 'Knowledge source priorities updated for AI Agent routing', 'success');
         }
         
         // ✅ PRODUCTION: Calibrate individual knowledge source thresholds
@@ -11433,30 +11436,8 @@ Key Metrics:
             }
         }
         
-        // Update drag-and-drop to include change tracking
-        function calibrateKnowledgeSourcePriorities() {
-            console.log('🎯 Calibrating Knowledge Source priorities for AI Agent...');
-            
-            const container = document.getElementById('clientsvia-source-priority-container');
-            const items = container.querySelectorAll('.clientsvia-source-item');
-            
-            const priorityConfig = [];
-            items.forEach((item, index) => {
-                priorityConfig.push({
-                    source: item.dataset.source,
-                    priority: index + 1,
-                    isActive: true
-                });
-            });
-            
-            // Mark as changed for save system
-            markKnowledgeSourceAsChanged('knowledge source priorities', 'reordered');
-            
-            // Handle auto-save
-            handleKnowledgeSourceChange('priorities', 'order', priorityConfig);
-            
-            showNotification('Priority Updated', 'Knowledge source priorities updated. Don\'t forget to save your changes!', 'info');
-        }
+        // 🗑️ REMOVED: Duplicate calibrateKnowledgeSourcePriorities() function
+        // The correct version is above that actually saves the data
         
         // AI Settings Only Save Function - Prevents main form validation interference
         async function saveAISettingsOnly(event) {
