@@ -10811,10 +10811,16 @@ Key Metrics:
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        aiAgentLogic: payload.aiAgentLogic,
+                        aiAgentLogic: {
+                            thresholds: payload.aiAgentLogic.thresholds,
+                            memorySettings: payload.aiAgentLogic.memorySettings,
+                            fallbackBehavior: payload.aiAgentLogic.fallbackBehavior,
+                            knowledgeSourcePriorities: payload.aiAgentLogic.knowledgeSourcePriorities,
+                            lastUpdated: payload.aiAgentLogic.lastUpdated
+                        },
                         tradeCategories: [],
                         agentIntelligenceSettings: {}
-                    }) // Send required format for POST endpoint
+                    }) // Send only essential aiAgentLogic fields to avoid 502 errors
                 });
                 
                 if (!response.ok) {

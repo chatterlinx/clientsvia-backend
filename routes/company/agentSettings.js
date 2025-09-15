@@ -92,6 +92,21 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
 
     console.log('🔍 CHECKPOINT 6: About to save aiAgentLogic:', JSON.stringify(aiAgentLogic, null, 2));
     
+    // 🔧 ENTERPRISE MERGE: Get existing company data to merge aiAgentLogic properly
+    const existingCompany = await Company.findById(companyId);
+    if (!existingCompany) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    // Merge new aiAgentLogic with existing data (preserve all existing fields)
+    const mergedAiAgentLogic = {
+      ...existingCompany.aiAgentLogic?.toObject?.() || existingCompany.aiAgentLogic || {},
+      ...aiAgentLogic,
+      lastUpdated: new Date()
+    };
+    
+    console.log('🔍 CHECKPOINT 6.5: Merged aiAgentLogic:', JSON.stringify(mergedAiAgentLogic, null, 2));
+    
     // Update company with validated data
     const company = await Company.findByIdAndUpdate(
       companyId,
@@ -99,7 +114,7 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
         tradeCategories, 
         agentIntelligenceSettings: validatedSettings,
         answerPriorityFlow: validatedPriorityFlow, // NEW: Save validated Answer Priority Flow
-        aiAgentLogic, // NEW: Save AI Agent Logic config
+        aiAgentLogic: mergedAiAgentLogic, // NEW: Save merged AI Agent Logic config
         updatedAt: new Date()
       },
       { new: true, runValidators: true }
