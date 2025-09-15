@@ -10871,11 +10871,16 @@ Key Metrics:
                 console.log('EXISTING DATA knowledgeSourcePriorities:', existingData.knowledgeSourcePriorities);
                 console.log('NEW knowledgeSourcePriorities:', knowledgeSourcePriorities);
                 
+                // CRITICAL DEBUG: Remove existing priorities to prevent override
+                const cleanExistingData = { ...existingData };
+                delete cleanExistingData.knowledgeSourcePriorities;
+                console.log('CLEANED EXISTING DATA (no priorities):', Object.keys(cleanExistingData));
+                
                 const payload = {
                     aiAgentLogic: {
-                        ...existingData,
+                        ...cleanExistingData,
                         thresholds,
-                        knowledgeSourcePriorities: knowledgeSourcePriorities, // Explicit override
+                        knowledgeSourcePriorities, // Now guaranteed to be our reordered array
                         memorySettings: {
                             memoryMode: "conversational",
                             contextRetention: 30
