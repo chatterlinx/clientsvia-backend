@@ -6610,6 +6610,14 @@
                 // 🔧 [FIXED] - Store company data globally for save operations  
                 window.currentCompanyData = data;
                 
+                // 🎯 CRITICAL FIX: Apply saved knowledge source priorities to DOM order
+                if (data.aiAgentLogic?.knowledgeSourcePriorities) {
+                    console.log('🎯 APPLYING SAVED PRIORITIES:', data.aiAgentLogic.knowledgeSourcePriorities);
+                    applyKnowledgeSourcePriorityOrder(data.aiAgentLogic.knowledgeSourcePriorities);
+                } else {
+                    console.log('ℹ️ No saved priorities found, using default HTML order');
+                }
+                
                 // 🔧 [FIXED] - Load threshold values from aiAgentLogic.thresholds
                 if (data.aiAgentLogic?.thresholds) {
                     console.log('🎯 Loading thresholds from aiAgentLogic:', data.aiAgentLogic.thresholds);
@@ -10651,6 +10659,56 @@ Key Metrics:
             });
             
             console.log('✅ Knowledge Source priorities updated');
+        }
+        
+        // 🎯 CRITICAL FIX: Apply saved knowledge source priority order to DOM
+        function applyKnowledgeSourcePriorityOrder(savedPriorities) {
+            console.log('🎯 REORDERING DOM: Applying saved priority order to HTML elements');
+            console.log('🔍 SAVED ORDER:', savedPriorities);
+            
+            const container = document.getElementById('clientsvia-source-priority-container');
+            if (!container) {
+                console.warn('❌ Priority container not found, cannot apply saved order');
+                return;
+            }
+            
+            // Get all current items
+            const currentItems = Array.from(container.querySelectorAll('.clientsvia-source-item'));
+            console.log('🔍 CURRENT DOM ORDER:', currentItems.map(item => item.dataset.source));
+            
+            // Create ordered array based on saved priorities
+            const reorderedItems = [];
+            
+            // First, add items in the saved priority order
+            savedPriorities.forEach(sourceType => {
+                const item = currentItems.find(item => item.dataset.source === sourceType);
+                if (item) {
+                    reorderedItems.push(item);
+                } else {
+                    console.warn(`⚠️ Saved priority source "${sourceType}" not found in DOM`);
+                }
+            });
+            
+            // Then add any remaining items that weren't in the saved priorities (safety fallback)
+            currentItems.forEach(item => {
+                if (!reorderedItems.includes(item)) {
+                    console.warn(`⚠️ DOM item "${item.dataset.source}" not in saved priorities, adding to end`);
+                    reorderedItems.push(item);
+                }
+            });
+            
+            console.log('🔍 REORDERED ITEMS:', reorderedItems.map(item => item.dataset.source));
+            
+            // Clear container and re-append in correct order
+            container.innerHTML = '';
+            reorderedItems.forEach(item => {
+                container.appendChild(item);
+            });
+            
+            // Update priority numbers
+            updateKnowledgeSourcePriorities();
+            
+            console.log('✅ DOM REORDERED: Knowledge source priorities applied from database');
         }
         
         // ✅ PRODUCTION: Calibrate Knowledge Source priorities
