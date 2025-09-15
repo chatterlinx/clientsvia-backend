@@ -10803,6 +10803,11 @@ Key Metrics:
                 
                 console.log('🔍 ENTERPRISE SAVE: Mongoose+Redis Payload:', JSON.stringify(payload, null, 2));
                 
+                // 🔍 CLIENT CHECKPOINT 1: Verify payload structure before sending
+                console.log('🔍 CLIENT CHECKPOINT 1: Payload aiAgentLogic keys:', Object.keys(payload.aiAgentLogic));
+                console.log('🔍 CLIENT CHECKPOINT 2: Payload thresholds:', payload.aiAgentLogic.thresholds);
+                console.log('🔍 CLIENT CHECKPOINT 3: Payload memorySettings:', payload.aiAgentLogic.memorySettings);
+                
                 // 🎯 WORKING ENDPOINT: Use company/companies/agent-settings (POST) - known to work
                 console.log('🔍 SAVE FIX: Using working agent-settings POST endpoint - /api/company/companies/' + companyId + '/agent-settings');
                 const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
@@ -10829,6 +10834,11 @@ Key Metrics:
                 
                 const result = await response.json();
                 console.log('✅ MANUAL SAVE: API Success!', result);
+                
+                // 🔍 CLIENT CHECKPOINT 4: Analyze response immediately after receiving
+                console.log('🔍 CLIENT CHECKPOINT 4: Response received, analyzing...');
+                console.log('🔍 CLIENT CHECKPOINT 5: Response type:', typeof result);
+                console.log('🔍 CLIENT CHECKPOINT 6: Response success flag:', result.success);
                 
                 // 🔍 VERIFICATION: Use the response data directly (POST returns saved company)
                 console.log('🔍 VERIFICATION: Checking response data...');

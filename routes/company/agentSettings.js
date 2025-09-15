@@ -100,9 +100,12 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     
     // Merge new aiAgentLogic with existing data (preserve all existing fields)
     const existingLogic = existingCompany.aiAgentLogic || {};
+    console.log('🔍 CHECKPOINT 6.1: Raw existing aiAgentLogic type:', typeof existingLogic);
+    console.log('🔍 CHECKPOINT 6.2: Raw existing aiAgentLogic:', existingLogic);
     
     // Convert Mongoose document to plain object if needed
     const existingPlain = existingLogic.toObject ? existingLogic.toObject() : existingLogic;
+    console.log('🔍 CHECKPOINT 6.2.5: Converted existing aiAgentLogic:', existingPlain);
     
     const mergedAiAgentLogic = {
       ...existingPlain,
@@ -112,8 +115,11 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     
     console.log('🔍 CHECKPOINT 6.3: Existing logic keys:', Object.keys(existingPlain));
     console.log('🔍 CHECKPOINT 6.4: New logic keys:', Object.keys(aiAgentLogic));
+    console.log('🔍 CHECKPOINT 6.5: New aiAgentLogic thresholds incoming:', aiAgentLogic.thresholds);
     
-    console.log('🔍 CHECKPOINT 6.5: Merged aiAgentLogic:', JSON.stringify(mergedAiAgentLogic, null, 2));
+    console.log('🔍 CHECKPOINT 6.6: Merged aiAgentLogic keys:', Object.keys(mergedAiAgentLogic));
+    console.log('🔍 CHECKPOINT 6.7: Merged aiAgentLogic thresholds:', mergedAiAgentLogic.thresholds);
+    console.log('🔍 CHECKPOINT 6.8: Full merged aiAgentLogic:', JSON.stringify(mergedAiAgentLogic, null, 2));
     
     // Update company with validated data
     const company = await Company.findByIdAndUpdate(
@@ -129,7 +135,9 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     );
     
     console.log('✅ CHECKPOINT 7: Company updated successfully');
-    console.log('🔍 CHECKPOINT 8: Saved aiAgentLogic thresholds:', company.aiAgentLogic?.thresholds);
+    console.log('🔍 CHECKPOINT 8: Saved aiAgentLogic keys:', Object.keys(company.aiAgentLogic || {}));
+    console.log('🔍 CHECKPOINT 9: Saved aiAgentLogic thresholds:', company.aiAgentLogic?.thresholds);
+    console.log('🔍 CHECKPOINT 10: Full saved aiAgentLogic:', JSON.stringify(company.aiAgentLogic, null, 2));
 
     if (!company) {
       return res.status(404).json({ error: 'Company not found' });
@@ -153,7 +161,8 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
       aiAgentLogicSaved: !!company.aiAgentLogic // NEW: Confirm aiAgentLogic was saved
     });
 
-    res.json({ 
+    // 🔍 CHECKPOINT 11: Building response object
+    const responseData = {
       success: true, 
       company: {
         _id: company._id,
@@ -163,7 +172,13 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
         answerPriorityFlow: company.answerPriorityFlow, // NEW: Include Answer Priority Flow in response
         aiAgentLogic: company.aiAgentLogic // NEW: Include AI Agent Logic in response for verification
       }
-    });
+    };
+    
+    console.log('🔍 CHECKPOINT 12: Response aiAgentLogic keys:', Object.keys(responseData.company.aiAgentLogic || {}));
+    console.log('🔍 CHECKPOINT 13: Response aiAgentLogic thresholds:', responseData.company.aiAgentLogic?.thresholds);
+    console.log('🔍 CHECKPOINT 14: Sending response to client');
+    
+    res.json(responseData);
 
   } catch (err) {
     console.error('❌ Error saving agent settings:', err);
