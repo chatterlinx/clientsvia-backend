@@ -2191,10 +2191,14 @@
                                                 <!-- SINGLE SAVE BUTTON -->
                                                 <div class="text-center">
                                                     <button onclick="console.log('🖱️ BUTTON CLICKED: saveKnowledgeSourceSettings'); saveKnowledgeSourceSettings()" 
-                                                            class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg shadow-sm transition duration-150 ease-in-out">
-                                                            <i class="fas fa-save mr-2"></i>
-                                                        Save Changes
-                                                        </button>
+                                                            class="group relative bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl active:shadow-md transform hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all duration-150 ease-in-out border border-blue-500 hover:border-blue-400 active:border-blue-600">
+                                                        <span class="relative z-10 flex items-center">
+                                                            <i class="fas fa-save mr-2 group-active:scale-90 transition-transform duration-150"></i>
+                                                            <span class="group-active:scale-95 transition-transform duration-150">Save Changes</span>
+                                                        </span>
+                                                        <!-- Ripple effect overlay -->
+                                                        <div class="absolute inset-0 bg-white opacity-0 group-active:opacity-20 rounded-lg transition-opacity duration-150"></div>
+                                                    </button>
                                                 </div>
                                                 
                                                 <!-- Last Saved Information -->
@@ -10900,6 +10904,26 @@ Key Metrics:
             console.log('🔍 CHECKPOINT 1: Function called, checking for redirects...');
             console.log('🔍 CHECKPOINT 2: Current function stack:', new Error().stack);
             
+            // 🎨 ENHANCED UX: Add satisfying button press feedback
+            const saveButton = event?.target?.closest('button');
+            if (saveButton) {
+                // Add immediate visual feedback
+                saveButton.classList.add('animate-pulse');
+                saveButton.style.transform = 'scale(0.95)';
+                
+                // Create a success ripple effect
+                const ripple = document.createElement('div');
+                ripple.className = 'absolute inset-0 bg-green-400 opacity-30 rounded-lg animate-ping pointer-events-none';
+                saveButton.appendChild(ripple);
+                
+                // Clean up ripple after animation
+                setTimeout(() => {
+                    if (ripple.parentNode) ripple.remove();
+                    saveButton.classList.remove('animate-pulse');
+                    saveButton.style.transform = '';
+                }, 600);
+            }
+            
             try {
                 const companyId = window.companyId;
                 if (!companyId) {
@@ -11088,7 +11112,29 @@ Key Metrics:
                     window.knowledgeSourceUnsavedChanges = new Set();
                 }
                 
-                showNotification('✅ VERIFIED: Complete Settings Saved & Confirmed', 'Both thresholds AND knowledge source priorities saved and verified in database', 'success');
+                // 🎉 ENHANCED SUCCESS FEEDBACK
+                showNotification('🎉 Settings Saved Successfully!', 'All changes have been verified and saved to the database', 'success');
+                
+                // Add extra visual satisfaction
+                if (saveButton) {
+                    saveButton.innerHTML = `
+                        <span class="relative z-10 flex items-center">
+                            <i class="fas fa-check mr-2 text-green-300 animate-bounce"></i>
+                            <span>Saved!</span>
+                        </span>
+                    `;
+                    
+                    // Revert button after 2 seconds
+                    setTimeout(() => {
+                        saveButton.innerHTML = `
+                            <span class="relative z-10 flex items-center">
+                                <i class="fas fa-save mr-2 group-active:scale-90 transition-transform duration-150"></i>
+                                <span class="group-active:scale-95 transition-transform duration-150">Save Changes</span>
+                            </span>
+                            <div class="absolute inset-0 bg-white opacity-0 group-active:opacity-20 rounded-lg transition-opacity duration-150"></div>
+                        `;
+                    }, 2000);
+                }
                 return result;
                 
             } catch (error) {
