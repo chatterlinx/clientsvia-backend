@@ -14,6 +14,7 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     console.log('🔍 CHECKPOINT 4: aiAgentLogic in request:', !!req.body.aiAgentLogic);
     console.log('🔍 CHECKPOINT 5: aiAgentLogic thresholds:', req.body.aiAgentLogic?.thresholds);
     console.log('🔍 CHECKPOINT 5.1: Full req.body.aiAgentLogic:', JSON.stringify(req.body.aiAgentLogic, null, 2));
+    console.log('🔍 CHECKPOINT 5.1.1: knowledgeSourcePriorities in request:', req.body.aiAgentLogic?.knowledgeSourcePriorities);
     
     const { 
       tradeCategories = [], 
@@ -146,13 +147,15 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     console.log('🔍 CHECKPOINT 6.7: Merged aiAgentLogic thresholds:', mergedAiAgentLogic.thresholds);
     console.log('🔍 CHECKPOINT 6.8: Full merged aiAgentLogic:', JSON.stringify(mergedAiAgentLogic, null, 2));
     
-    // 🔧 CRITICAL TEST: Save ONLY the thresholds to test basic functionality
-    console.log('🚨 CRITICAL TEST: Bypassing merge, saving only thresholds');
+    // 🔧 ENTERPRISE: Save thresholds AND knowledgeSourcePriorities
+    console.log('🎯 ENTERPRISE SAVE: Preserving thresholds and priority order');
     const testAiAgentLogic = {
       ...existingPlain,
       thresholds: aiAgentLogic.thresholds,
+      knowledgeSourcePriorities: aiAgentLogic.knowledgeSourcePriorities || existingPlain.knowledgeSourcePriorities || ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'],
       lastUpdated: new Date()
     };
+    console.log('🎯 PRIORITY DEBUG: Saving knowledgeSourcePriorities:', testAiAgentLogic.knowledgeSourcePriorities);
     console.log('🚨 TEST: About to save aiAgentLogic with thresholds:', testAiAgentLogic.thresholds);
     
     // 🚨 MONGOOSE DEBUG: Log exactly what we're trying to save
@@ -181,6 +184,7 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     console.log('✅ CHECKPOINT 7: Company updated successfully');
     console.log('🔍 CHECKPOINT 8: Saved aiAgentLogic keys:', Object.keys(company.aiAgentLogic || {}));
     console.log('🔍 CHECKPOINT 9: Saved aiAgentLogic thresholds:', company.aiAgentLogic?.thresholds);
+    console.log('🔍 CHECKPOINT 9.1: Saved aiAgentLogic knowledgeSourcePriorities:', company.aiAgentLogic?.knowledgeSourcePriorities);
     console.log('🔍 CHECKPOINT 10: Full saved aiAgentLogic:', JSON.stringify(company.aiAgentLogic, null, 2));
 
     if (!company) {
