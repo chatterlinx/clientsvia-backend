@@ -155,6 +155,11 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     };
     console.log('🚨 TEST: About to save aiAgentLogic with thresholds:', testAiAgentLogic.thresholds);
     
+    // 🚨 MONGOOSE DEBUG: Log exactly what we're trying to save
+    console.log('🚨 MONGOOSE DEBUG: About to call findByIdAndUpdate with:');
+    console.log('🚨 MONGOOSE DEBUG: companyId:', companyId);
+    console.log('🚨 MONGOOSE DEBUG: testAiAgentLogic:', JSON.stringify(testAiAgentLogic, null, 2));
+    
     // Update company with validated data
     const company = await Company.findByIdAndUpdate(
       companyId,
@@ -166,7 +171,12 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
         updatedAt: new Date()
       },
       { new: true, runValidators: true }
-    );
+    ).catch(err => {
+      console.error('🚨 MONGOOSE ERROR:', err);
+      throw err;
+    });
+    
+    console.log('🚨 MONGOOSE DEBUG: Save completed successfully');
     
     console.log('✅ CHECKPOINT 7: Company updated successfully');
     console.log('🔍 CHECKPOINT 8: Saved aiAgentLogic keys:', Object.keys(company.aiAgentLogic || {}));
