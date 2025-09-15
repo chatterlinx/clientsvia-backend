@@ -139,6 +139,15 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     console.log('🔍 CHECKPOINT 6.7: Merged aiAgentLogic thresholds:', mergedAiAgentLogic.thresholds);
     console.log('🔍 CHECKPOINT 6.8: Full merged aiAgentLogic:', JSON.stringify(mergedAiAgentLogic, null, 2));
     
+    // 🔧 CRITICAL TEST: Save ONLY the thresholds to test basic functionality
+    console.log('🚨 CRITICAL TEST: Bypassing merge, saving only thresholds');
+    const testAiAgentLogic = {
+      ...existingPlain,
+      thresholds: aiAgentLogic.thresholds,
+      lastUpdated: new Date()
+    };
+    console.log('🚨 TEST: About to save aiAgentLogic with thresholds:', testAiAgentLogic.thresholds);
+    
     // Update company with validated data
     const company = await Company.findByIdAndUpdate(
       companyId,
@@ -146,7 +155,7 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
         tradeCategories, 
         agentIntelligenceSettings: validatedSettings,
         answerPriorityFlow: validatedPriorityFlow, // NEW: Save validated Answer Priority Flow
-        aiAgentLogic: mergedAiAgentLogic, // NEW: Save merged AI Agent Logic config
+        aiAgentLogic: testAiAgentLogic, // CRITICAL TEST: Use simplified logic
         updatedAt: new Date()
       },
       { new: true, runValidators: true }
