@@ -10660,13 +10660,20 @@ Key Metrics:
             const container = document.getElementById('clientsvia-source-priority-container');
             const items = container.querySelectorAll('.clientsvia-source-item');
             
+            console.log('🚨 CRITICAL DEBUG: Container found:', !!container);
+            console.log('🚨 CRITICAL DEBUG: Items found:', items.length);
+            
             // 🎯 FIXED: Create simple string array (not objects) for knowledgeSourcePriorities
             const priorityArray = [];
             items.forEach((item, index) => {
-                priorityArray.push(item.dataset.source);
+                const source = item.dataset.source;
+                priorityArray.push(source);
+                console.log(`🔍 DOM Item ${index + 1}: ${source} (element id: ${item.id})`);
             });
             
             console.log('🎯 PRIORITY ARRAY CREATED:', priorityArray);
+            console.log('🚨 CRITICAL DEBUG: Priority array type:', typeof priorityArray);
+            console.log('🚨 CRITICAL DEBUG: Priority array JSON:', JSON.stringify(priorityArray));
             
             // Mark as changed for save system
             markKnowledgeSourceAsChanged('knowledgeSourcePriorities', JSON.stringify(priorityArray));
@@ -10902,6 +10909,9 @@ Key Metrics:
                 };
                 
                 console.log('FINAL PAYLOAD knowledgeSourcePriorities:', payload.aiAgentLogic.knowledgeSourcePriorities);
+                console.log('🚨 CRITICAL DEBUG: Payload priorities type:', typeof payload.aiAgentLogic.knowledgeSourcePriorities);
+                console.log('🚨 CRITICAL DEBUG: Payload priorities length:', payload.aiAgentLogic.knowledgeSourcePriorities?.length);
+                console.log('🚨 CRITICAL DEBUG: Payload priorities JSON:', JSON.stringify(payload.aiAgentLogic.knowledgeSourcePriorities));
                 console.log('🔍 ENTERPRISE SAVE: Mongoose+Redis Payload:', JSON.stringify(payload, null, 2));
                 
                 // 🔍 CLIENT CHECKPOINT 1: Verify payload structure before sending
