@@ -6411,7 +6411,8 @@
                 console.log('🔍 RAW COMPANY DATA:', company);
                 console.log('🔍 company.tradeCategories:', company.tradeCategories);
                 console.log('🔍 company.tradeTypes:', company.tradeTypes);
-                let selectedTrades = company.tradeCategories || [];
+                // 🔧 FIX: Use tradeTypes field (where data is actually stored) with fallback to tradeCategories
+                let selectedTrades = company.tradeTypes || company.tradeCategories || [];
                 
                 console.log('✅ Company selected trades from DB:', selectedTrades);
                 
@@ -6628,7 +6629,7 @@
                 
                 // Populate trade categories
                 const tradeSelector = document.getElementById('agent-trade-categories');
-                const selectedTrades = data.company?.tradeCategories || [];
+                const selectedTrades = data.company?.tradeTypes || data.company?.tradeCategories || [];
                 
                 console.log('📋 Trade categories to set:', selectedTrades);
                 
@@ -7161,7 +7162,28 @@
 
         }
         
-        // 🗑️ REMOVED: updateSourcePriorityOrder() - replaced with direct DOM manipulation in arrow functions
+        // Update the visual order of sources based on priority
+        function updateSourcePriorityOrder() {
+            const container = document.getElementById('clientsvia-source-priority-container');
+            if (!container) {
+                console.warn('⚠️ Source priority container not found for reordering');
+                return;
+            }
+            const items = Array.from(container.querySelectorAll('.priority-item'));
+            
+            // Sort items by priority
+            items.sort((a, b) => {
+                const priorityA = parseInt(a.querySelector('.priority-value').textContent);
+                const priorityB = parseInt(b.querySelector('.priority-value').textContent);
+                return priorityA - priorityB;
+            });
+            
+            // Remove all items
+            items.forEach(item => container.removeChild(item));
+            
+            // Add them back in sorted order
+            items.forEach(item => container.appendChild(item));
+        }
         
         // Load knowledge settings from API
         async function loadKnowledgeSettings() {
@@ -9171,7 +9193,7 @@ Key Metrics:
                 }
                 
                 const company = await response.json();
-                const selectedTrades = company.tradeCategories || [];
+                const selectedTrades = company.tradeTypes || company.tradeCategories || [];
                 
                 console.log('📥 Company trade selection loaded:', selectedTrades);
                 
@@ -9446,7 +9468,7 @@ Key Metrics:
                 }
                 
                 const company = await companyResponse.json();
-                const selectedTrades = company.tradeCategories || [];
+                const selectedTrades = company.tradeTypes || company.tradeCategories || [];
                 
                 console.log('🔧 Company selected trades for Q&A filtering:', selectedTrades);
                 
@@ -9673,7 +9695,7 @@ Key Metrics:
                 const response = await fetch(`/api/company/${companyId}`);
                 if (response.ok) {
                     const company = await response.json();
-                    selectedTrades = company.tradeCategories || [];
+                    selectedTrades = company.tradeTypes || company.tradeCategories || [];
                 }
             } catch (error) {
                 console.error('❌ Failed to load company trades for modal:', error);
