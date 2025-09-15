@@ -6449,7 +6449,8 @@
                 
                 // 🔍 STEP 2: Load Q&A data for selected categories only
                 console.log('🔍 Loading Q&A data for selected categories...');
-                const response = await fetch(`/api/enterprise-trade-categories?companyId=${companyId || 'global'}&includeGlobal=true`);
+                // 🎯 CRITICAL FIX: Always get global data to ensure correct Q&A counts
+                const response = await fetch(`/api/enterprise-trade-categories?companyId=global&includeGlobal=true`);
                 const result = await response.json();
                 
                 if (!result.success) {
@@ -6463,6 +6464,14 @@
                 );
                 
                 console.log(`✅ Filtered to ${selectedCategories.length} selected categories out of ${allCategories.length} total`);
+                
+                // 🔍 DEBUG: Log Q&A counts for each category
+                selectedCategories.forEach(category => {
+                    console.log(`🔍 CATEGORY DEBUG: "${category.name}" - qnas.length: ${category.qnas?.length || 0}, metadata.totalQAs: ${category.metadata?.totalQAs || 'undefined'}`);
+                    if (category.qnas && category.qnas.length > 0) {
+                        console.log(`🔍 FIRST Q&A SAMPLE:`, category.qnas[0]);
+                    }
+                });
                 
                 // 🎯 NEW: Display selected categories as clean sections (NO CHECKBOXES!)
                 const checkboxContainer = document.getElementById('trade-categories-checkboxes');
