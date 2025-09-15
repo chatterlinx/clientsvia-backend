@@ -10835,9 +10835,12 @@ Key Metrics:
                 console.log('🔍 VERIFICATION: Response structure:', Object.keys(result));
                 console.log('🔍 VERIFICATION: Company data exists:', !!result.company);
                 console.log('🔍 VERIFICATION: aiAgentLogic exists:', !!result.company?.aiAgentLogic);
+                console.log('🔍 VERIFICATION: aiAgentLogic contents:', result.company?.aiAgentLogic);
+                console.log('🔍 VERIFICATION: aiAgentLogic keys:', Object.keys(result.company?.aiAgentLogic || {}));
                 
                 // Check if our saved thresholds match what we just saved
                 const savedThresholds = result.company?.aiAgentLogic?.thresholds;
+                console.log('🔍 VERIFICATION: Found thresholds:', savedThresholds);
                 if (!savedThresholds) {
                     throw new Error('Verification failed: No thresholds found in saved data');
                 }

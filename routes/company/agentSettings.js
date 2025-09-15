@@ -99,11 +99,19 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     }
     
     // Merge new aiAgentLogic with existing data (preserve all existing fields)
+    const existingLogic = existingCompany.aiAgentLogic || {};
+    
+    // Convert Mongoose document to plain object if needed
+    const existingPlain = existingLogic.toObject ? existingLogic.toObject() : existingLogic;
+    
     const mergedAiAgentLogic = {
-      ...existingCompany.aiAgentLogic?.toObject?.() || existingCompany.aiAgentLogic || {},
+      ...existingPlain,
       ...aiAgentLogic,
       lastUpdated: new Date()
     };
+    
+    console.log('🔍 CHECKPOINT 6.3: Existing logic keys:', Object.keys(existingPlain));
+    console.log('🔍 CHECKPOINT 6.4: New logic keys:', Object.keys(aiAgentLogic));
     
     console.log('🔍 CHECKPOINT 6.5: Merged aiAgentLogic:', JSON.stringify(mergedAiAgentLogic, null, 2));
     
