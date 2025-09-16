@@ -58,16 +58,16 @@ class AIConfigLoader {
                 
                 // Memory Configuration
                 memory: {
-                    mode: "conversational",
-                    retentionMinutes: 30,
-                    ...aiLogic.memory
+                    mode: aiLogic.memorySettings?.memoryMode || "conversational",
+                    retentionMinutes: aiLogic.memorySettings?.contextRetention || 30
                 },
                 
                 // Escalation Rules
                 escalation: {
-                    onNoMatch: true,
+                    onNoMatch: aiLogic.fallbackBehavior?.escalateOnNoMatch !== undefined ? aiLogic.fallbackBehavior.escalateOnNoMatch : true,
+                    rejectLowConfidence: aiLogic.fallbackBehavior?.rejectLowConfidence !== undefined ? aiLogic.fallbackBehavior.rejectLowConfidence : true,
                     strategy: "ask-confirm",
-                    ...aiLogic.escalation
+                    message: aiLogic.fallbackBehavior?.message || "I want to make sure I give you accurate information. Let me connect you with a specialist who can help."
                 },
                 
                 // Conversation Management
