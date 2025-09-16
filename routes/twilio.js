@@ -832,8 +832,9 @@ router.post('/voice/:companyID', async (req, res) => {
       
       gather.say('');
       
-      // Fallback if no input - only transfer if enabled
-      handleTransfer(twiml, company, "Thank you for calling. Please try again later or visit our website.");
+      // Fallback if no input - just hang up, don't transfer
+      twiml.say("Thank you for calling. Please try again later or visit our website.");
+      twiml.hangup();
       
     } else {
       // Fall back to existing voice flow
@@ -927,9 +928,9 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       
       gather.say('');
       
-      // Fallback - only transfer if enabled
-      const company = await Company.findById(companyID);
-      handleTransfer(twiml, company, "Thank you for calling. Please try again later.");
+      // Fallback - just hang up, don't transfer
+      twiml.say("Thank you for calling. Please try again later.");
+      twiml.hangup();
     }
     
     res.type('text/xml');
