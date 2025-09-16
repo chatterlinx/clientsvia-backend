@@ -433,6 +433,12 @@ const companySchema = new mongoose.Schema({
         bargeInMode: { type: Boolean, default: true },
         acknowledgeEmotion: { type: Boolean, default: true },
         useEmojis: { type: Boolean, default: false },
+        // Versioning & lifecycle metadata
+        version: { type: Number, default: 1 },
+        state: { type: String, enum: ['draft', 'published', 'archived'], default: 'draft' },
+        updatedAt: { type: Date, default: Date.now },
+        publishedAt: { type: Date },
+        updatedBy: { type: String, default: 'system' },
         // Response categories for customizable agent messages
         responses: [{
             key: { type: String, required: true },
