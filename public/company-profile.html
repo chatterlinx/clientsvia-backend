@@ -11134,19 +11134,37 @@ Key Metrics:
                 }
                 if (contextSlider) {
                     settings.memorySettings.contextRetention = parseInt(contextSlider.value);
-                    console.log(`⏰ CONTEXT RETENTION COLLECTED: ${contextSlider.value}`);
+                    console.log(`⏰ CONTEXT RETENTION COLLECTED: ${contextSlider.value} minutes`);
+                    console.log(`🔍 ANTI-FAKE-SAVE: Context slider value = ${contextSlider.value}, NOT hardcoded 30`);
                 } else {
                     console.log('⚠️ CONTEXT SLIDER NOT FOUND');
                 }
+                
+                console.log('🔍 CHECKPOINT 5: Collecting fallback behavior');
                 
                 // Collect fallback behavior
                 const rejectToggle = document.getElementById('clientsvia-rejectLowConfidenceToggle');
                 const escalateToggle = document.getElementById('clientsvia-escalateNoMatchToggle');
                 const fallbackMessage = document.getElementById('clientsvia-fallbackMessageInput');
                 
-                if (rejectToggle) settings.fallbackBehavior.rejectLowConfidence = rejectToggle.checked;
-                if (escalateToggle) settings.fallbackBehavior.escalateOnNoMatch = escalateToggle.checked;
-                if (fallbackMessage) settings.fallbackBehavior.message = fallbackMessage.value;
+                if (rejectToggle) {
+                    settings.fallbackBehavior.rejectLowConfidence = rejectToggle.checked;
+                    console.log(`🚫 REJECT LOW CONFIDENCE COLLECTED: ${rejectToggle.checked}`);
+                } else {
+                    console.log('⚠️ REJECT TOGGLE NOT FOUND');
+                }
+                if (escalateToggle) {
+                    settings.fallbackBehavior.escalateOnNoMatch = escalateToggle.checked;
+                    console.log(`📞 ESCALATE ON NO MATCH COLLECTED: ${escalateToggle.checked}`);
+                } else {
+                    console.log('⚠️ ESCALATE TOGGLE NOT FOUND');
+                }
+                if (fallbackMessage) {
+                    settings.fallbackBehavior.message = fallbackMessage.value;
+                    console.log(`💬 FALLBACK MESSAGE COLLECTED: ${fallbackMessage.value.length} characters`);
+                } else {
+                    console.log('⚠️ FALLBACK MESSAGE NOT FOUND');
+                }
                 
                 // 🎯 FIXED: Collect knowledge source priorities as simple string array
                 const container = document.getElementById('clientsvia-source-priority-container');
@@ -11732,26 +11750,21 @@ Key Metrics:
                 
                 console.log('🔍 CHECKPOINT 3: Collected thresholds:', thresholds);
                 
-                // Build the complete save settings
-                const settings = {
-                    thresholds: thresholds,
-                    memorySettings: { memoryMode: 'conversational', contextRetention: 30 },
-                    fallbackBehavior: { escalateOnNoMatch: true, rejectLowConfidence: true },
-                    knowledgeSourcePriorities: ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'],
-                    timestamp: new Date().toISOString()
-                };
+                // REMOVED: Hardcoded settings - using dynamic collection from earlier in function
                 
-                // 🔧 [FIXED] - Build aiAgentLogic payload with proper merging
+                // 🔧 [FIXED] - Build aiAgentLogic payload with proper merging using dynamically collected settings
                 const existingAiAgentLogic = window.currentCompanyData?.aiAgentLogic || {};
                 console.log('🔍 DEBUG: Existing aiAgentLogic for merge:', existingAiAgentLogic);
                 console.log('🔍 DEBUG: New thresholds to save:', settings.thresholds);
+                console.log('🔍 DEBUG: New memorySettings to save:', settings.memorySettings);
+                console.log('🔍 DEBUG: New fallbackBehavior to save:', settings.fallbackBehavior);
                 
                 const payload = {
                     aiAgentLogic: {
                         ...existingAiAgentLogic, // Preserve existing properties
                         thresholds: settings.thresholds, // Override with new thresholds
-                        memorySettings: settings.memorySettings,
-                        fallbackBehavior: settings.fallbackBehavior,
+                        memorySettings: settings.memorySettings, // Use dynamically collected memory settings
+                        fallbackBehavior: settings.fallbackBehavior, // Use dynamically collected fallback behavior
                         knowledgeSourcePriorities: settings.knowledgeSourcePriorities,
                         lastUpdated: settings.timestamp
                     }
