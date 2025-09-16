@@ -2,7 +2,6 @@
 const express = require('express');
 const router = express.Router();
 const Company = require('../../models/Company');
-const { defaultResponses } = require('../../utils/personalityResponses_enhanced');
 
 console.log('✅ Agent Personality routes loading...');
 
