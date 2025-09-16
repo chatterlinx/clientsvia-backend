@@ -28,8 +28,18 @@ router.get('/:id/personality', async (req, res) => {
       useEmojis: false
     };
     
-    console.log(`✅ Personality settings loaded for ${company.companyName}`);
-    res.json(personalitySettings);
+    // Return call transfer configuration with defaults if not set
+    const callTransferConfig = company.aiAgentLogic?.callTransferConfig || {
+      dialOutEnabled: false,
+      dialOutNumber: null,
+      transferMessage: 'Let me connect you with someone who can better assist you.'
+    };
+    
+    console.log(`✅ Personality and transfer settings loaded for ${company.companyName}`);
+    res.json({ 
+      personalitySettings,
+      callTransferConfig 
+    });
   } catch (error) {
     console.error('❌ Error fetching personality settings:', error);
     res.status(500).json({ error: 'Failed to fetch personality settings' });
@@ -101,6 +111,80 @@ router.put('/:id/personality', async (req, res) => {
   } catch (error) {
     console.error('❌ Error saving personality settings:', error);
     res.status(500).json({ error: 'Failed to save personality settings' });
+  }
+});
+
+/**
+ * @route   POST /api/company/:id/personality
+ * @desc    Save company agent personality settings and call transfer configuration
+ * @access  Private (per company)
+ */
+router.post('/:id/personality', async (req, res) => {
+  try {
+    const { personalitySettings, callTransferConfig } = req.body;
+    
+    // Find company
+    const company = await Company.findById(req.params.id);
+    
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    // Initialize aiAgentLogic if it doesn't exist
+    if (!company.aiAgentLogic) {
+      company.aiAgentLogic = {
+        enabled: true,
+        version: 1,
+        lastUpdated: new Date()
+      };
+    }
+    
+    // Update personality settings
+    if (personalitySettings) {
+      if (!company.agentPersonalitySettings) {
+        company.agentPersonalitySettings = {};
+      }
+      
+      Object.assign(company.agentPersonalitySettings, {
+        voiceTone: personalitySettings.voiceTone || 'friendly',
+        speechPace: personalitySettings.speechPace || 'normal',
+        bargeInMode: personalitySettings.bargeIn !== undefined ? Boolean(personalitySettings.bargeIn) : true,
+        acknowledgeEmotion: personalitySettings.acknowledgeEmotion !== undefined ? Boolean(personalitySettings.acknowledgeEmotion) : true,
+        useEmojis: personalitySettings.useEmojis !== undefined ? Boolean(personalitySettings.useEmojis) : false
+      });
+    }
+    
+    // Update call transfer configuration
+    if (callTransferConfig) {
+      if (!company.aiAgentLogic.callTransferConfig) {
+        company.aiAgentLogic.callTransferConfig = {};
+      }
+      
+      Object.assign(company.aiAgentLogic.callTransferConfig, {
+        dialOutEnabled: Boolean(callTransferConfig.dialOutEnabled),
+        dialOutNumber: callTransferConfig.dialOutNumber ? callTransferConfig.dialOutNumber.trim() : null,
+        transferMessage: callTransferConfig.transferMessage ? callTransferConfig.transferMessage.trim() : 'Let me connect you with someone who can better assist you.'
+      });
+      
+      // Update lastUpdated timestamp
+      company.aiAgentLogic.lastUpdated = new Date();
+    }
+    
+    // Save changes
+    await company.save();
+    
+    console.log(`✅ Personality and transfer settings saved for ${company.companyName}`);
+    console.log(`📞 Transfer enabled: ${company.aiAgentLogic?.callTransferConfig?.dialOutEnabled}, Number: ${company.aiAgentLogic?.callTransferConfig?.dialOutNumber}`);
+    
+    res.json({ 
+      success: true,
+      message: 'Personality and transfer settings saved successfully',
+      personalitySettings: company.agentPersonalitySettings,
+      callTransferConfig: company.aiAgentLogic?.callTransferConfig
+    });
+  } catch (error) {
+    console.error('❌ Error saving personality and transfer settings:', error);
+    res.status(500).json({ error: 'Failed to save settings' });
   }
 });
 

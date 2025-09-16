@@ -806,6 +806,28 @@ const companySchema = new mongoose.Schema({
             }
         },
         
+        // 📞 Call Transfer & Escalation Configuration
+        callTransferConfig: {
+            dialOutEnabled: { type: Boolean, default: false },
+            dialOutNumber: { 
+                type: String, 
+                trim: true, 
+                default: null,
+                validate: {
+                    validator: function(v) {
+                        // Allow null/empty or valid phone number format
+                        return !v || /^\+?[1-9]\d{1,14}$/.test(v.replace(/[\s\-\(\)]/g, ''));
+                    },
+                    message: 'Please enter a valid phone number (e.g., +1234567890)'
+                }
+            },
+            transferMessage: { 
+                type: String, 
+                trim: true, 
+                default: 'Let me connect you with someone who can better assist you.' 
+            }
+        },
+        
         // Legacy fields (keeping for backward compatibility)
         highlevelApiKey: { type: String, trim: true, default: null },
         highlevelCalendarId: { type: String, trim: true, default: null },

@@ -3310,6 +3310,76 @@
                                                     </div>
                                                 </div>
 
+                                                <!-- 📞 Call Transfer & Escalation Configuration -->
+                                                <div class="mt-8 p-6 bg-gradient-to-br from-orange-50 to-red-50 border border-orange-200 rounded-xl shadow-sm">
+                                                    <div class="flex items-center justify-between mb-6">
+                                                        <div>
+                                                            <h5 class="text-lg font-semibold text-gray-800 flex items-center">
+                                                                <i class="fas fa-phone-alt mr-2 text-orange-600"></i>Call Transfer & Escalation
+                                                            </h5>
+                                                            <p class="text-sm text-gray-600 mt-1">Configure where calls should be transferred when the AI needs to escalate</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                                        <!-- Left Column: Transfer Settings -->
+                                                        <div class="space-y-4">
+                                                            <h6 class="text-md font-semibold text-gray-700 border-b pb-2">
+                                                                <i class="fas fa-toggle-on mr-2 text-orange-600"></i>Transfer Configuration
+                                                            </h6>
+                                                            
+                                                            <!-- Enable Transfer Toggle -->
+                                                            <label class="flex items-center p-3 bg-orange-50 rounded-lg border border-orange-200">
+                                                                <input type="checkbox" id="clientsvia-dialOutEnabled" class="form-checkbox">
+                                                                <div class="ml-3">
+                                                                    <span class="text-sm font-medium text-gray-900">Enable Call Transfer</span>
+                                                                    <p class="text-xs text-gray-500">Allow AI to transfer calls to a live agent</p>
+                                                                </div>
+                                                            </label>
+
+                                                            <!-- Transfer Number Input -->
+                                                            <div id="clientsvia-transferNumberSection" class="hidden">
+                                                                <label for="clientsvia-dialOutNumber" class="form-label">Transfer Phone Number</label>
+                                                                <div class="flex items-center space-x-2">
+                                                                    <input type="tel" id="clientsvia-dialOutNumber" class="form-input flex-1" 
+                                                                           placeholder="+1234567890" 
+                                                                           pattern="^\+?[1-9]\d{1,14}$">
+                                                                    <button type="button" onclick="testTransferNumber()" 
+                                                                            class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-md text-sm">
+                                                                        <i class="fas fa-phone mr-1"></i>Test
+                                                                    </button>
+                                                                </div>
+                                                                <p class="text-xs text-gray-500 mt-1">Enter the phone number where calls should be transferred (e.g., main office, department)</p>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- Right Column: Transfer Message -->
+                                                        <div class="space-y-4">
+                                                            <h6 class="text-md font-semibold text-gray-700 border-b pb-2">
+                                                                <i class="fas fa-comment mr-2 text-red-600"></i>Transfer Message
+                                                            </h6>
+                                                            
+                                                            <div id="clientsvia-transferMessageSection" class="hidden">
+                                                                <label for="clientsvia-transferMessage" class="form-label">Message Before Transfer</label>
+                                                                <textarea id="clientsvia-transferMessage" class="form-textarea" rows="3" 
+                                                                          placeholder="Let me connect you with someone who can better assist you."></textarea>
+                                                                <p class="text-xs text-gray-500 mt-1">What the AI says before transferring the call</p>
+                                                            </div>
+
+                                                            <!-- Transfer Status Display -->
+                                                            <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                                                <div class="flex items-center justify-between">
+                                                                    <span class="text-sm font-medium text-gray-700">Current Status:</span>
+                                                                    <span id="clientsvia-transferStatus" class="text-sm text-red-600">
+                                                                        <i class="fas fa-times-circle mr-1"></i>Transfer Disabled
+                                                                    </span>
+                                                                </div>
+                                                                <p class="text-xs text-gray-500 mt-1">When disabled, AI will provide a fallback message and end the call</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
                                                 <!-- Action Buttons -->
                                                 <div class="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center">
                                                     <div class="flex items-center space-x-4">
@@ -8137,13 +8207,23 @@
                 useEmojis: document.getElementById('clientsvia-emojiToggle').checked
             };
 
+            // Collect call transfer settings
+            const callTransferConfig = {
+                dialOutEnabled: document.getElementById('clientsvia-dialOutEnabled').checked,
+                dialOutNumber: document.getElementById('clientsvia-dialOutNumber').value.trim(),
+                transferMessage: document.getElementById('clientsvia-transferMessage').value.trim() || 'Let me connect you with someone who can better assist you.'
+            };
+
             try {
                 const response = await fetch(`/api/company/${companyId}/personality`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ personalitySettings })
+                    body: JSON.stringify({ 
+                        personalitySettings,
+                        callTransferConfig 
+                    })
                 });
 
                 if (response.ok) {
@@ -8178,6 +8258,17 @@
                         document.getElementById('clientsvia-bargeInToggle').checked = settings.bargeIn !== false;
                         document.getElementById('clientsvia-emotionToggle').checked = settings.acknowledgeEmotion !== false;
                         document.getElementById('clientsvia-emojiToggle').checked = settings.useEmojis || false;
+                    }
+
+                    // Load call transfer settings
+                    if (data.callTransferConfig) {
+                        const transferConfig = data.callTransferConfig;
+                        document.getElementById('clientsvia-dialOutEnabled').checked = transferConfig.dialOutEnabled || false;
+                        document.getElementById('clientsvia-dialOutNumber').value = transferConfig.dialOutNumber || '';
+                        document.getElementById('clientsvia-transferMessage').value = transferConfig.transferMessage || 'Let me connect you with someone who can better assist you.';
+                        
+                        // Update UI visibility and status
+                        toggleTransferConfiguration();
                     }
 
                 } else if (response.status === 404) {
@@ -12345,6 +12436,55 @@ Key Metrics:
                         loadAgentAnalytics();
                     }, 100);
                 });
+            }
+        });
+
+        // Toggle transfer configuration UI visibility
+        function toggleTransferConfiguration() {
+            const enabled = document.getElementById('clientsvia-dialOutEnabled').checked;
+            const numberSection = document.getElementById('clientsvia-transferNumberSection');
+            const messageSection = document.getElementById('clientsvia-transferMessageSection');
+            const statusElement = document.getElementById('clientsvia-transferStatus');
+            
+            if (enabled) {
+                numberSection.classList.remove('hidden');
+                messageSection.classList.remove('hidden');
+                statusElement.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Transfer Enabled';
+                statusElement.className = 'text-sm text-green-600';
+            } else {
+                numberSection.classList.add('hidden');
+                messageSection.classList.add('hidden');
+                statusElement.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Transfer Disabled';
+                statusElement.className = 'text-sm text-red-600';
+            }
+        }
+
+        // Test transfer number format
+        function testTransferNumber() {
+            const numberInput = document.getElementById('clientsvia-dialOutNumber');
+            const number = numberInput.value.trim();
+            
+            if (!number) {
+                alert('Please enter a phone number to test.');
+                return;
+            }
+            
+            // Basic phone number validation
+            const phoneRegex = /^\+?[1-9]\d{1,14}$/;
+            const cleanNumber = number.replace(/[\s\-\(\)]/g, '');
+            
+            if (phoneRegex.test(cleanNumber)) {
+                alert(`✅ Phone number format is valid: ${number}\n\nNote: This only validates the format. Make sure this number can receive calls and is the correct destination for transfers.`);
+            } else {
+                alert(`❌ Invalid phone number format: ${number}\n\nPlease use international format (e.g., +1234567890) or standard format (e.g., 123-456-7890).`);
+            }
+        }
+
+        // Add event listener for transfer toggle
+        document.addEventListener('DOMContentLoaded', function() {
+            const transferToggle = document.getElementById('clientsvia-dialOutEnabled');
+            if (transferToggle) {
+                transferToggle.addEventListener('change', toggleTransferConfiguration);
             }
         });
     </script>
