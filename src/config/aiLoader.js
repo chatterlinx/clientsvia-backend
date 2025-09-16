@@ -38,6 +38,14 @@ class AIConfigLoader {
             }
 
             const aiLogic = company.aiAgentLogic || {};
+            const uiPersonality = company.agentPersonalitySettings || {
+                voiceTone: 'friendly',
+                speechPace: 'normal',
+                bargeInMode: true,
+                acknowledgeEmotion: true,
+                useEmojis: false,
+                responses: []
+            };
             
             // Build comprehensive configuration per Blueprint
             const config = {
@@ -85,21 +93,47 @@ class AIConfigLoader {
                 // Trade Categories
                 tradeCategories: company.tradeCategories || ["HVAC Residential", "Plumbing Residential"],
                 
-                // Agent Personality
+                // Agent Personality (normalized from Company.agentPersonalitySettings)
                 agentPersonality: {
-                    voiceTone: "friendly",
-                    speechPace: "moderate",
+                    enabled: true,
+                    voice: {
+                        tone: uiPersonality.voiceTone || 'friendly',
+                        pace: (uiPersonality.speechPace || 'normal')
+                    },
+                    // Map simple voiceTone to a style used by BehaviorEngine
+                    style: (function mapToneToStyle(t){
+                        if (t === 'professional') return 'professional';
+                        if (t === 'playful') return 'casual';
+                        return 'friendly';
+                    })(uiPersonality.voiceTone),
+                    enthusiasm: 'moderate',
+                    text: {
+                        useEmojis: !!uiPersonality.useEmojis
+                    },
                     ...aiLogic.agentPersonality
                 },
                 
-                // Behavior Controls
+                // Behavior Controls (augment with UI personality toggles)
                 behaviorControls: {
-                    allowBargeIn: false,
-                    acknowledgeEmotion: false,
-                    useEmails: false,
+                    // Legacy flags (kept for backward compatibility)
+                    allowBargeIn: uiPersonality.bargeInMode === true,
+                    acknowledgeEmotion: uiPersonality.acknowledgeEmotion === true,
+                    useFigures: uiPersonality.useEmojis === true,
                     silencePolicy: {
                         maxSilences: 2,
-                        warnBeforeHangup: true
+                        warnBeforeHangup: true,
+                        ...aiLogic.behaviorControls?.silencePolicy
+                    },
+                    // BehaviorEngine expects `bargeInHandling` and `emotionAcknowledgment`
+                    bargeInHandling: {
+                        enabled: uiPersonality.bargeInMode === true,
+                        strategy: 'immediate',
+                        maxSpeechDuration: 30000,
+                        ...aiLogic.behaviorControls?.bargeInHandling
+                    },
+                    emotionAcknowledgment: {
+                        enabled: uiPersonality.acknowledgeEmotion === true,
+                        ...aiLogic.behaviorControls?.emotionAcknowledgment
                     },
                     hangupScript: "I may have lost you. I'll send a text and follow up.",
                     ...aiLogic.behaviorControls
@@ -107,6 +141,8 @@ class AIConfigLoader {
                 
                 // Response Categories
                 responseCategories: aiLogic.responseCategories || {},
+                // Personality response categories from UI (kept separately for runtime helpers)
+                personalityResponses: Array.isArray(uiPersonality.responses) ? uiPersonality.responses : [],
                 
                 // Knowledge Base
                 knowledgeBase: aiLogic.knowledgeBase || [],

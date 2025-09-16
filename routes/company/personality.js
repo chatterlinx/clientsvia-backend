@@ -49,7 +49,9 @@ router.put('/:id/personality', async (req, res) => {
       bargeInMode,
       acknowledgeEmotion,
       useEmojis,
-      personalityResponses
+      personalityResponses,
+      state,
+      updatedBy
     } = req.body;
 
     // Validate input
@@ -66,18 +68,21 @@ router.put('/:id/personality', async (req, res) => {
 
     // Prepare update object
     const personalityUpdate = {
-      agentPersonalitySettings: {
-        voiceTone: voiceTone || 'friendly',
-        speechPace: speechPace || 'normal',
-        bargeInMode: bargeInMode !== undefined ? Boolean(bargeInMode) : true,
-        acknowledgeEmotion: acknowledgeEmotion !== undefined ? Boolean(acknowledgeEmotion) : true,
-        useEmojis: useEmojis !== undefined ? Boolean(useEmojis) : false
+      $set: {
+        'agentPersonalitySettings.voiceTone': voiceTone || 'friendly',
+        'agentPersonalitySettings.speechPace': speechPace || 'normal',
+        'agentPersonalitySettings.bargeInMode': bargeInMode !== undefined ? Boolean(bargeInMode) : true,
+        'agentPersonalitySettings.acknowledgeEmotion': acknowledgeEmotion !== undefined ? Boolean(acknowledgeEmotion) : true,
+        'agentPersonalitySettings.useEmojis': useEmojis !== undefined ? Boolean(useEmojis) : false,
+        'agentPersonalitySettings.updatedAt': new Date(),
+        ...(state ? { 'agentPersonalitySettings.state': state } : {}),
+        ...(updatedBy ? { 'agentPersonalitySettings.updatedBy': updatedBy } : {})
       }
     };
 
     // Add personality responses if provided
     if (personalityResponses) {
-      personalityUpdate.agentPersonalitySettings.personalityResponses = personalityResponses;
+      personalityUpdate.$set['agentPersonalitySettings.responses'] = personalityResponses;
     }
 
     const company = await Company.findByIdAndUpdate(
@@ -101,6 +106,72 @@ router.put('/:id/personality', async (req, res) => {
   } catch (error) {
     console.error('❌ Error saving personality settings:', error);
     res.status(500).json({ error: 'Failed to save personality settings' });
+  }
+});
+
+/**
+ * @route   POST /api/company/:id/personality/publish
+ * @desc    Publish current personality settings (version bump + state)
+ */
+router.post('/:id/personality/publish', async (req, res) => {
+  try {
+    const { publishedBy } = req.body || {};
+    const company = await Company.findById(req.params.id);
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    if (!company.agentPersonalitySettings) {
+      company.agentPersonalitySettings = {
+        voiceTone: 'friendly',
+        speechPace: 'normal',
+        bargeInMode: true,
+        acknowledgeEmotion: true,
+        useEmojis: false
+      };
+    }
+    company.agentPersonalitySettings.version = (company.agentPersonalitySettings.version || 1) + 1;
+    company.agentPersonalitySettings.state = 'published';
+    company.agentPersonalitySettings.publishedAt = new Date();
+    company.agentPersonalitySettings.updatedAt = new Date();
+    if (publishedBy) company.agentPersonalitySettings.updatedBy = publishedBy;
+    await company.save();
+    return res.json({
+      success: true,
+      message: 'Personality published',
+      version: company.agentPersonalitySettings.version,
+      state: company.agentPersonalitySettings.state,
+      publishedAt: company.agentPersonalitySettings.publishedAt
+    });
+  } catch (error) {
+    console.error('❌ Error publishing personality:', error);
+    res.status(500).json({ error: 'Failed to publish personality' });
+  }
+});
+
+/**
+ * @route GET /api/company/:id/personality/meta
+ * @desc  Get personality metadata and linkage
+ */
+router.get('/:id/personality/meta', async (req, res) => {
+  try {
+    const company = await Company.findById(req.params.id).lean();
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+    const s = company.agentPersonalitySettings || {};
+    return res.json({
+      version: s.version || 1,
+      state: s.state || 'draft',
+      updatedAt: s.updatedAt || null,
+      publishedAt: s.publishedAt || null,
+      updatedBy: s.updatedBy || 'system',
+      links: {
+        knowledgeBase: '/api/knowledge/company/' + company._id + '/qnas',
+        tradeQnA: '/api/knowledge/company/' + company._id + '/analytics',
+        priorityFlow: '/api/ai-agent/logic/' + company._id
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error fetching personality meta:', error);
+    res.status(500).json({ error: 'Failed to fetch personality metadata' });
   }
 });
 
