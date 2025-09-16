@@ -10667,7 +10667,73 @@ Key Metrics:
                 item.setAttribute('data-priority-order', index + 1);
             });
             
+            // Update tab priority labels to match new order
+            updateTabPriorityLabels();
+            
             console.log('✅ Knowledge Source priorities updated');
+        }
+        
+        // NEW: Update priority labels in tabs to match current order
+        function updateTabPriorityLabels() {
+            const container = document.getElementById('clientsvia-source-priority-container');
+            const items = container.querySelectorAll('.clientsvia-source-item');
+            
+            // Create priority map from current DOM order
+            const priorityMap = {};
+            items.forEach((item, index) => {
+                const source = item.dataset.source;
+                priorityMap[source] = index + 1;
+            });
+            
+            console.log('🔄 Updating tab priority labels:', priorityMap);
+            
+            // Update Company Q&A tab labels
+            if (priorityMap.companyQnA) {
+                const companyPriority = priorityMap.companyQnA;
+                // Update subtab button
+                const companySubtab = document.querySelector('#knowledge-subtab-company-qna span');
+                if (companySubtab) {
+                    companySubtab.textContent = `Priority #${companyPriority}`;
+                }
+                
+                // Update all spans that contain "Priority #1 Source" or "Priority #2 Source" for Company Q&A
+                const allSpans = document.querySelectorAll('span');
+                allSpans.forEach(span => {
+                    if (span.textContent.includes('Priority #1 Source') || 
+                        span.textContent.includes('Priority #2 Source')) {
+                        // Check if this is in a Company Q&A context
+                        const parent = span.closest('.bg-green-100, .bg-blue-100');
+                        if (parent && parent.textContent.includes('Company')) {
+                            span.innerHTML = `<i class="fas fa-star mr-1"></i>Priority #${companyPriority} Source`;
+                        }
+                    }
+                });
+            }
+            
+            // Update Trade Q&A tab labels  
+            if (priorityMap.tradeQnA) {
+                const tradePriority = priorityMap.tradeQnA;
+                // Update subtab button
+                const tradeSubtab = document.querySelector('#knowledge-subtab-trade-qna span');
+                if (tradeSubtab) {
+                    tradeSubtab.textContent = `Priority #${tradePriority}`;
+                }
+                
+                // Update all spans that contain "Priority #2 Source" for Trade Q&A
+                const allSpans = document.querySelectorAll('span');
+                allSpans.forEach(span => {
+                    if (span.textContent.includes('Priority #1 Source') || 
+                        span.textContent.includes('Priority #2 Source')) {
+                        // Check if this is in a Trade Q&A context
+                        const parent = span.closest('.bg-orange-100');
+                        if (parent) {
+                            span.innerHTML = `<i class="fas fa-star mr-1"></i>Priority #${tradePriority} Source`;
+                        }
+                    }
+                });
+            }
+            
+            console.log('✅ Tab priority labels updated');
         }
         
         // 🎯 CRITICAL FIX: Apply saved knowledge source priority order to DOM
@@ -10714,7 +10780,7 @@ Key Metrics:
                 container.appendChild(item);
             });
             
-            // Update priority numbers
+            // Update priority numbers and tab labels
             updateKnowledgeSourcePriorities();
             
             console.log('✅ DOM REORDERED: Knowledge source priorities applied from database');
