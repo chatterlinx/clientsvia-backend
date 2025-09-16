@@ -10696,16 +10696,21 @@ Key Metrics:
                     companySubtab.textContent = `Priority #${companyPriority}`;
                 }
                 
-                // Update all spans that contain "Priority #1 Source" or "Priority #2 Source" for Company Q&A
-                const allSpans = document.querySelectorAll('span');
+                // Update Company Q&A header badge (green badge)
+                const allSpans = document.querySelectorAll('span.bg-green-100');
                 allSpans.forEach(span => {
-                    if (span.textContent.includes('Priority #1 Source') || 
-                        span.textContent.includes('Priority #2 Source')) {
-                        // Check if this is in a Company Q&A context
-                        const parent = span.closest('.bg-green-100, .bg-blue-100');
-                        if (parent && parent.textContent.includes('Company')) {
-                            span.innerHTML = `<i class="fas fa-star mr-1"></i>Priority #${companyPriority} Source`;
-                        }
+                    if (span.textContent.includes('Priority #') && span.textContent.includes('Source')) {
+                        console.log('Updating Company Q&A header badge:', span.textContent, '->', `Priority #${companyPriority} Source`);
+                        span.innerHTML = `<i class="fas fa-star mr-1"></i>Priority #${companyPriority} Source`;
+                    }
+                });
+                
+                // Also update any blue badges in Company Q&A context
+                const blueSpans = document.querySelectorAll('span.bg-blue-100');
+                blueSpans.forEach(span => {
+                    if (span.textContent.includes('Priority #') && span.textContent.includes('Knowledge Source')) {
+                        console.log('Updating Company Q&A knowledge source badge:', span.textContent, '->', `Priority #${companyPriority} Knowledge Source`);
+                        span.textContent = `Priority #${companyPriority} Knowledge Source`;
                     }
                 });
             }
@@ -10719,16 +10724,12 @@ Key Metrics:
                     tradeSubtab.textContent = `Priority #${tradePriority}`;
                 }
                 
-                // Update all spans that contain "Priority #2 Source" for Trade Q&A
-                const allSpans = document.querySelectorAll('span');
-                allSpans.forEach(span => {
-                    if (span.textContent.includes('Priority #1 Source') || 
-                        span.textContent.includes('Priority #2 Source')) {
-                        // Check if this is in a Trade Q&A context
-                        const parent = span.closest('.bg-orange-100');
-                        if (parent) {
-                            span.innerHTML = `<i class="fas fa-star mr-1"></i>Priority #${tradePriority} Source`;
-                        }
+                // Update Trade Q&A header badge (orange badge)
+                const orangeSpans = document.querySelectorAll('span.bg-orange-100');
+                orangeSpans.forEach(span => {
+                    if (span.textContent.includes('Priority #') && span.textContent.includes('Source')) {
+                        console.log('Updating Trade Q&A header badge:', span.textContent, '->', `Priority #${tradePriority} Source`);
+                        span.innerHTML = `<i class="fas fa-star mr-1"></i>Priority #${tradePriority} Source`;
                     }
                 });
             }
