@@ -6265,7 +6265,10 @@
                 // 🔍 STEP 1: Get company's selected trade categories
                 console.log('🔍 Loading company trade selection first...');
                 console.log('🔍 API URL:', `/api/company/${companyId}`);
-                const companyResponse = await fetch(`/api/company/${companyId}`);
+                // 🔧 CACHE BUSTING: Add timestamp to force fresh data load
+                const cacheBuster = Date.now();
+                console.log('🔧 CACHE BUSTER: Trade categories using timestamp', cacheBuster);
+                const companyResponse = await fetch(`/api/company/${companyId}?_cb=${cacheBuster}`);
                 if (!companyResponse.ok) {
                     throw new Error('Failed to load company data');
                 }
@@ -6471,8 +6474,11 @@
             try {
 
                 console.log('⏰ Agent Settings load timestamp:', new Date().toISOString());
-                console.log('🔍 LOAD FIX: Using same endpoint as save - /api/company/' + companyId);
-                const response = await fetch(`/api/company/${companyId}`);
+            console.log('🔍 LOAD FIX: Using same endpoint as save - /api/company/' + companyId);
+            // 🔧 CACHE BUSTING: Add timestamp to force fresh data load
+            const cacheBuster = Date.now();
+            console.log('🔧 CACHE BUSTER: Using timestamp', cacheBuster, 'to force fresh data');
+            const response = await fetch(`/api/company/${companyId}?_cb=${cacheBuster}`);
                 const data = await response.json();
                 
                 console.log('📥 Received agent settings data:', data);
