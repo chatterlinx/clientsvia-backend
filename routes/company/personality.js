@@ -120,6 +120,10 @@ router.put('/:id/personality', async (req, res) => {
  */
 router.post('/:id/personality', async (req, res) => {
   try {
+    console.log('🔧 POST /personality endpoint called');
+    console.log('🔧 Request body:', JSON.stringify(req.body, null, 2));
+    console.log('🔧 Company ID:', req.params.id);
+    
     const { personalitySettings, callTransferConfig } = req.body;
     
     // Find company
@@ -170,6 +174,7 @@ router.post('/:id/personality', async (req, res) => {
     }
     
     // Save changes
+    console.log('🔧 About to save company with aiAgentLogic:', JSON.stringify(company.aiAgentLogic, null, 2));
     await company.save();
     
     console.log(`✅ Personality and transfer settings saved for ${company.companyName}`);
