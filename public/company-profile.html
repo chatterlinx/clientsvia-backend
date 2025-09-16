@@ -2190,9 +2190,9 @@
                                                 
                                                 <!-- SINGLE SAVE BUTTON -->
                                                 <div class="text-center">
-                                                    <button onclick="console.log('🖱️ BUTTON CLICKED: saveKnowledgeSourceSettings'); saveKnowledgeSourceSettings()" 
-                                                            class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl active:shadow-md transform hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all duration-150 ease-in-out border border-blue-500 hover:border-blue-400 active:border-blue-600">
-                                                        <i class="fas fa-save mr-2"></i>
+                                                    <button onclick="console.log('BUTTON CLICKED: saveKnowledgeSourceSettings'); saveKnowledgeSourceSettings()" 
+                                                            class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium py-2.5 px-6 rounded-md shadow-sm hover:shadow-md active:shadow-sm transition-all duration-200 ease-in-out">
+                                                        <i class="fas fa-save mr-2 text-sm"></i>
                                                         Save Changes
                                                     </button>
                                                 </div>
@@ -11120,21 +11120,21 @@ Key Metrics:
                 // 🎉 ENHANCED SUCCESS FEEDBACK
                 showNotification('🎉 Settings Saved Successfully!', 'All changes have been verified and saved to the database', 'success');
                 
-                // Add extra visual satisfaction
+                // Add professional success feedback
                 if (saveButton) {
                     saveButton.innerHTML = `
-                        <i class="fas fa-check mr-2 text-green-300 animate-bounce"></i>
-                        Saved!
+                        <i class="fas fa-check mr-2 text-sm"></i>
+                        Saved
                     `;
-                    saveButton.className = 'bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-8 rounded-lg shadow-lg transition-all duration-150 ease-in-out border border-green-500';
+                    saveButton.className = 'bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-6 rounded-md shadow-sm transition-all duration-200 ease-in-out';
                     
                     // Revert button after 2 seconds
                     setTimeout(() => {
                         saveButton.innerHTML = `
-                            <i class="fas fa-save mr-2"></i>
+                            <i class="fas fa-save mr-2 text-sm"></i>
                             Save Changes
                         `;
-                        saveButton.className = 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:shadow-xl active:shadow-md transform hover:-translate-y-0.5 active:translate-y-0 active:scale-95 transition-all duration-150 ease-in-out border border-blue-500 hover:border-blue-400 active:border-blue-600';
+                        saveButton.className = 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium py-2.5 px-6 rounded-md shadow-sm hover:shadow-md active:shadow-sm transition-all duration-200 ease-in-out';
                     }, 2000);
                 }
                 return result;
