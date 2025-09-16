@@ -6521,16 +6521,33 @@
                     }
                     
                     // Load context retention
-                    if (data.aiAgentLogic.memorySettings.contextRetention) {
+                    console.log('🔍 DEEP DEBUG: contextRetention value from DB:', data.aiAgentLogic.memorySettings.contextRetention);
+                    console.log('🔍 DEEP DEBUG: contextRetention type:', typeof data.aiAgentLogic.memorySettings.contextRetention);
+                    
+                    if (data.aiAgentLogic.memorySettings.contextRetention !== undefined && data.aiAgentLogic.memorySettings.contextRetention !== null) {
                         const contextSlider = document.getElementById('clientsvia-contextRetentionSlider');
                         const contextDisplay = document.getElementById('clientsvia-contextRetentionValue');
+                        
+                        console.log('🔍 DEEP DEBUG: contextSlider found?', !!contextSlider);
+                        console.log('🔍 DEEP DEBUG: contextDisplay found?', !!contextDisplay);
+                        
                         if (contextSlider) {
+                            console.log('🔍 DEEP DEBUG: Setting slider value to:', data.aiAgentLogic.memorySettings.contextRetention);
                             contextSlider.value = data.aiAgentLogic.memorySettings.contextRetention;
-                            console.log(`✅ Set context retention to ${data.aiAgentLogic.memorySettings.contextRetention} minutes`);
+                            console.log('🔍 DEEP DEBUG: Slider value after setting:', contextSlider.value);
+                            console.log(`✅ CHECKPOINT: Set context retention to ${data.aiAgentLogic.memorySettings.contextRetention} minutes`);
+                            
                             if (contextDisplay) {
                                 contextDisplay.textContent = `${data.aiAgentLogic.memorySettings.contextRetention} minutes`;
+                                console.log(`✅ CHECKPOINT: Updated display to ${data.aiAgentLogic.memorySettings.contextRetention} minutes`);
+                            } else {
+                                console.log('❌ CRITICAL: contextDisplay element not found');
                             }
+                        } else {
+                            console.log('❌ CRITICAL: contextSlider element not found - this explains why loading fails!');
                         }
+                    } else {
+                        console.log('❌ CRITICAL: contextRetention is undefined/null in database');
                     }
                 } else {
                     console.log('⚠️ No aiAgentLogic.memorySettings found, using default values');

@@ -147,15 +147,19 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     console.log('🔍 CHECKPOINT 6.7: Merged aiAgentLogic thresholds:', mergedAiAgentLogic.thresholds);
     console.log('🔍 CHECKPOINT 6.8: Full merged aiAgentLogic:', JSON.stringify(mergedAiAgentLogic, null, 2));
     
-    // 🔧 ENTERPRISE: Save thresholds AND knowledgeSourcePriorities
-    console.log('🎯 ENTERPRISE SAVE: Preserving thresholds and priority order');
+    // 🔧 ENTERPRISE: Save thresholds, priorities, AND Memory & Fallback Options
+    console.log('🎯 ENTERPRISE SAVE: Preserving thresholds, priority order, memory settings, and fallback behavior');
     const testAiAgentLogic = {
       ...existingPlain,
       thresholds: aiAgentLogic.thresholds,
       knowledgeSourcePriorities: aiAgentLogic.knowledgeSourcePriorities || existingPlain.knowledgeSourcePriorities || ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'],
+      memorySettings: aiAgentLogic.memorySettings || existingPlain.memorySettings || { memoryMode: 'conversational', contextRetention: 30 },
+      fallbackBehavior: aiAgentLogic.fallbackBehavior || existingPlain.fallbackBehavior || { escalateOnNoMatch: true, rejectLowConfidence: true },
       lastUpdated: new Date()
     };
     console.log('🎯 PRIORITY DEBUG: Saving knowledgeSourcePriorities:', testAiAgentLogic.knowledgeSourcePriorities);
+    console.log('🎯 MEMORY DEBUG: Saving memorySettings:', testAiAgentLogic.memorySettings);
+    console.log('🎯 FALLBACK DEBUG: Saving fallbackBehavior:', testAiAgentLogic.fallbackBehavior);
     console.log('🚨 TEST: About to save aiAgentLogic with thresholds:', testAiAgentLogic.thresholds);
     
     // 🚨 MONGOOSE DEBUG: Log exactly what we're trying to save
