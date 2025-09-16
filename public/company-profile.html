@@ -10894,18 +10894,29 @@ Key Metrics:
                 delete cleanExistingData.knowledgeSourcePriorities;
                 console.log('CLEANED EXISTING DATA (no priorities):', Object.keys(cleanExistingData));
                 
+                // CRITICAL: Collect actual UI values for memory settings
+                const memoryModeValue = document.getElementById('clientsvia-memoryModeSelect')?.value || 'conversational';
+                const contextRetentionValue = parseInt(document.getElementById('clientsvia-contextRetentionSlider')?.value) || 30;
+                const escalateValue = document.getElementById('clientsvia-escalateNoMatchToggle')?.checked || true;
+                const rejectValue = document.getElementById('clientsvia-rejectLowConfidenceToggle')?.checked || true;
+                console.log('MEMORY COLLECTION: memoryMode =', memoryModeValue);
+                console.log('MEMORY COLLECTION: contextRetention =', contextRetentionValue);
+                console.log('FALLBACK COLLECTION: escalateOnNoMatch =', escalateValue);
+                console.log('FALLBACK COLLECTION: rejectLowConfidence =', rejectValue);
+                console.log('ANTI-FAKE-SAVE: Using ACTUAL slider value, not hardcoded 30');
+                
                 const payload = {
                     aiAgentLogic: {
                         ...cleanExistingData,
                         thresholds,
                         knowledgeSourcePriorities, // Now guaranteed to be our reordered array
                         memorySettings: {
-                            memoryMode: "conversational",
-                            contextRetention: 30
+                            memoryMode: memoryModeValue,
+                            contextRetention: contextRetentionValue
                         },
                         fallbackBehavior: {
-                            escalateOnNoMatch: true,
-                            rejectLowConfidence: true
+                            escalateOnNoMatch: escalateValue,
+                            rejectLowConfidence: rejectValue
                         },
                         lastUpdated: new Date().toISOString(),
                         version: 1,
