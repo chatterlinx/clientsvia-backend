@@ -6507,6 +6507,68 @@
                     console.log('⚠️ No aiAgentLogic.thresholds found, using default values');
                 }
                 
+                // 🎯 [NEW] - Load Memory & Fallback Options from aiAgentLogic
+                if (data.aiAgentLogic?.memorySettings) {
+                    console.log('🧠 Loading Memory Settings from aiAgentLogic:', data.aiAgentLogic.memorySettings);
+                    
+                    // Load memory mode
+                    if (data.aiAgentLogic.memorySettings.memoryMode) {
+                        const memorySelect = document.getElementById('clientsvia-memoryModeSelect');
+                        if (memorySelect) {
+                            memorySelect.value = data.aiAgentLogic.memorySettings.memoryMode;
+                            console.log(`✅ Set memory mode to ${data.aiAgentLogic.memorySettings.memoryMode}`);
+                        }
+                    }
+                    
+                    // Load context retention
+                    if (data.aiAgentLogic.memorySettings.contextRetention) {
+                        const contextSlider = document.getElementById('clientsvia-contextRetentionSlider');
+                        const contextDisplay = document.getElementById('clientsvia-contextRetentionValue');
+                        if (contextSlider) {
+                            contextSlider.value = data.aiAgentLogic.memorySettings.contextRetention;
+                            console.log(`✅ Set context retention to ${data.aiAgentLogic.memorySettings.contextRetention} minutes`);
+                            if (contextDisplay) {
+                                contextDisplay.textContent = `${data.aiAgentLogic.memorySettings.contextRetention} minutes`;
+                            }
+                        }
+                    }
+                } else {
+                    console.log('⚠️ No aiAgentLogic.memorySettings found, using default values');
+                }
+                
+                if (data.aiAgentLogic?.fallbackBehavior) {
+                    console.log('🚫 Loading Fallback Behavior from aiAgentLogic:', data.aiAgentLogic.fallbackBehavior);
+                    
+                    // Load escalate on no match
+                    if (data.aiAgentLogic.fallbackBehavior.escalateOnNoMatch !== undefined) {
+                        const escalateToggle = document.getElementById('clientsvia-escalateNoMatchToggle');
+                        if (escalateToggle) {
+                            escalateToggle.checked = data.aiAgentLogic.fallbackBehavior.escalateOnNoMatch;
+                            console.log(`✅ Set escalate on no match to ${data.aiAgentLogic.fallbackBehavior.escalateOnNoMatch}`);
+                        }
+                    }
+                    
+                    // Load reject low confidence
+                    if (data.aiAgentLogic.fallbackBehavior.rejectLowConfidence !== undefined) {
+                        const rejectToggle = document.getElementById('clientsvia-rejectLowConfidenceToggle');
+                        if (rejectToggle) {
+                            rejectToggle.checked = data.aiAgentLogic.fallbackBehavior.rejectLowConfidence;
+                            console.log(`✅ Set reject low confidence to ${data.aiAgentLogic.fallbackBehavior.rejectLowConfidence}`);
+                        }
+                    }
+                    
+                    // Load fallback message
+                    if (data.aiAgentLogic.fallbackBehavior.message) {
+                        const fallbackMessage = document.getElementById('clientsvia-fallbackMessageInput');
+                        if (fallbackMessage) {
+                            fallbackMessage.value = data.aiAgentLogic.fallbackBehavior.message;
+                            console.log(`✅ Set fallback message (${data.aiAgentLogic.fallbackBehavior.message.length} characters)`);
+                        }
+                    }
+                } else {
+                    console.log('⚠️ No aiAgentLogic.fallbackBehavior found, using default values');
+                }
+                
                 // Populate trade categories
                 const tradeSelector = document.getElementById('agent-trade-categories');
                 const selectedTrades = data.company?.tradeTypes || data.company?.tradeCategories || [];
