@@ -22,6 +22,22 @@ const { getRandomPersonalityResponse, getPersonalityResponse, fetchCompanyRespon
 
 const router = express.Router();
 
+// 🚨 GLOBAL CHECKPOINT: Log ALL requests to ANY Twilio endpoint
+router.use((req, res, next) => {
+  console.log('🔍 TWILIO ENDPOINT HIT:', {
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    url: req.url,
+    fullUrl: req.originalUrl,
+    ip: req.ip || req.connection.remoteAddress,
+    userAgent: req.headers['user-agent'],
+    contentType: req.headers['content-type'],
+    bodyKeys: Object.keys(req.body || {}),
+    hasCallSid: !!(req.body && req.body.CallSid)
+  });
+  next();
+});
+
 // Helper function to check if transfer is enabled
 function isTransferEnabled(company) {
   return company?.aiAgentLogic?.callTransferConfig?.dialOutEnabled === true;
@@ -197,6 +213,17 @@ async function getCompanyByPhoneNumber(phoneNumber) {
 
 router.post('/voice', async (req, res) => {
   const callStartTime = Date.now();
+  
+  // 🚨 CRITICAL CHECKPOINT: Log EVERYTHING at webhook entry
+  console.log('='.repeat(80));
+  console.log(`🚨 WEBHOOK HIT: /api/twilio/voice at ${new Date().toISOString()}`);
+  console.log(`🚨 FULL REQUEST BODY:`, JSON.stringify(req.body, null, 2));
+  console.log(`🚨 HEADERS:`, JSON.stringify(req.headers, null, 2));
+  console.log(`🚨 URL:`, req.url);
+  console.log(`🚨 METHOD:`, req.method);
+  console.log(`🚨 IP:`, req.ip || req.connection.remoteAddress);
+  console.log('='.repeat(80));
+  
   console.log(`[CALL START] [CALL] New call initiated at: ${new Date().toISOString()}`);
   console.log(`[CALL DEBUG] From: ${req.body.From} → To: ${req.body.To} | CallSid: ${req.body.CallSid}`);
   
@@ -794,6 +821,16 @@ router.post('/voice/:companyID', async (req, res) => {
   const callStartTime = Date.now();
   const { companyID } = req.params;
   
+  // 🚨 CRITICAL CHECKPOINT: Log EVERYTHING at company-specific webhook entry
+  console.log('='.repeat(80));
+  console.log(`🚨 COMPANY WEBHOOK HIT: /api/twilio/voice/${companyID} at ${new Date().toISOString()}`);
+  console.log(`🚨 FULL REQUEST BODY:`, JSON.stringify(req.body, null, 2));
+  console.log(`🚨 HEADERS:`, JSON.stringify(req.headers, null, 2));
+  console.log(`🚨 URL:`, req.url);
+  console.log(`🚨 METHOD:`, req.method);
+  console.log(`🚨 IP:`, req.ip || req.connection.remoteAddress);
+  console.log('='.repeat(80));
+  
   console.log(`[AI AGENT VOICE] [CALL] New call for company ${companyID} at: ${new Date().toISOString()}`);
   console.log(`[AI AGENT DEBUG] From: ${req.body.From} → CallSid: ${req.body.CallSid}`);
   
@@ -971,6 +1008,69 @@ router.post('/ai-agent-partial/:companyID', async (req, res) => {
     console.error('[ERROR] AI Agent Partial error:', error);
     res.json({ success: false });
   }
+});
+
+// 🚨 WEBHOOK CONNECTIVITY TEST ENDPOINT
+router.all('/webhook-test', (req, res) => {
+  const timestamp = new Date().toISOString();
+  
+  console.log('🧪 WEBHOOK TEST HIT:', {
+    timestamp,
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    body: req.body,
+    query: req.query,
+    ip: req.ip || req.connection.remoteAddress
+  });
+  
+  // Return both JSON and TwiML for testing
+  if (req.headers['accept'] && req.headers['accept'].includes('application/json')) {
+    res.json({
+      success: true,
+      message: 'Webhook connectivity test successful',
+      timestamp,
+      receivedData: {
+        method: req.method,
+        headers: req.headers,
+        body: req.body,
+        query: req.query
+      }
+    });
+  } else {
+    // Return TwiML for voice webhook testing
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.say('Webhook test successful! Your Twilio configuration is working correctly.');
+    twiml.hangup();
+    
+    res.type('text/xml');
+    res.send(twiml.toString());
+  }
+});
+
+// 🚨 CATCH-ALL ENDPOINT to log any unmatched Twilio requests
+router.all('*', (req, res) => {
+  console.log('❌ UNMATCHED TWILIO REQUEST:', {
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    url: req.url,
+    fullUrl: req.originalUrl,
+    headers: req.headers,
+    body: req.body,
+    query: req.query,
+    ip: req.ip || req.connection.remoteAddress
+  });
+  
+  res.status(404).json({
+    error: 'Twilio endpoint not found',
+    availableEndpoints: [
+      '/api/twilio/voice',
+      '/api/twilio/voice/:companyID',
+      '/api/twilio/handle-speech',
+      '/api/twilio/webhook-test'
+    ],
+    requestedUrl: req.originalUrl
+  });
 });
 
 module.exports = router;

@@ -243,6 +243,21 @@ function registerRoutes(routes) {
     --- END SMOKE TEST ---
     */
 
+    // 🚨 GLOBAL REQUEST LOGGER for Twilio debugging
+    app.use('/api/twilio', (req, res, next) => {
+        console.log('🌐 GLOBAL TWILIO REQUEST INTERCEPTED:', {
+            timestamp: new Date().toISOString(),
+            method: req.method,
+            originalUrl: req.originalUrl,
+            ip: req.ip || req.connection.remoteAddress,
+            userAgent: req.headers['user-agent'],
+            twilioSignature: req.headers['x-twilio-signature'],
+            hasBody: !!req.body,
+            bodySize: JSON.stringify(req.body || {}).length
+        });
+        next();
+    });
+    
     // This line will now correctly handle all /api/twilio requests
     app.use('/api/twilio', routes.twilioRoutes);
     
