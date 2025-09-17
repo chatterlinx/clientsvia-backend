@@ -42,9 +42,9 @@ function getTransferNumber(company) {
     return company.twilioConfig.fallbackNumber;
   }
   
-  // Final fallback
-  console.log('[AI AGENT] Using default fallback number');
-  return '+18005551234';
+  // No fallback number - transfer should be explicitly configured
+  console.log('[AI AGENT] No transfer number configured - transfer disabled');
+  return null;
 }
 
 // Helper function to get the configured transfer message
@@ -58,11 +58,19 @@ function getTransferMessage(company) {
 // Helper function to handle transfer logic with enabled check
 function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I cannot assist further at this time. Please try calling back later.") {
   if (isTransferEnabled(company)) {
-    const transferMessage = getTransferMessage(company);
     const transferNumber = getTransferNumber(company);
-    console.log('[AI AGENT] Transfer enabled, transferring to:', transferNumber);
-    twiml.say(transferMessage);
-    twiml.dial(transferNumber);
+    
+    // Only transfer if we have a valid number configured
+    if (transferNumber) {
+      const transferMessage = getTransferMessage(company);
+      console.log('[AI AGENT] Transfer enabled, transferring to:', transferNumber);
+      twiml.say(transferMessage);
+      twiml.dial(transferNumber);
+    } else {
+      console.log('[AI AGENT] Transfer enabled but no number configured, providing fallback message');
+      twiml.say("I'd like to connect you with someone who can help, but our transfer system isn't configured right now. Please try calling back later or visit our website.");
+      twiml.hangup();
+    }
   } else {
     console.log('[AI AGENT] Transfer disabled, providing fallback message');
     twiml.say(fallbackMessage);
