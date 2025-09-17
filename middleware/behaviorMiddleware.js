@@ -74,7 +74,21 @@ const behaviorMiddleware = async (req, res, next) => {
  * Handle escalation to human service advisor
  */
 function handleEscalation(res, behaviorResult, companyProfile) {
-  const transferNumber = companyProfile.serviceAdvisorNumber || companyProfile.mainPhone || '+18885551234';
+  const transferNumber = companyProfile.serviceAdvisorNumber || companyProfile.mainPhone;
+  
+  // Only transfer if we have a valid number configured
+  if (!transferNumber) {
+    return res.send({
+      actions: [
+        { 
+          say: { 
+            text: "I'd like to connect you with someone who can help, but our transfer system isn't configured right now. Please try calling back later or visit our website for assistance." 
+          } 
+        },
+        { hangup: {} }
+      ]
+    });
+  }
   
   return res.send({
     actions: [
@@ -186,7 +200,21 @@ function handleAfterHours(res, behaviorResult, companyProfile) {
  * Handle escalation due to excessive silence
  */
 function handleSilenceEscalation(res, behaviorResult, companyProfile) {
-  const transferNumber = companyProfile.serviceAdvisorNumber || companyProfile.mainPhone || '+18885551234';
+  const transferNumber = companyProfile.serviceAdvisorNumber || companyProfile.mainPhone;
+  
+  // Only transfer if we have a valid number configured
+  if (!transferNumber) {
+    return res.send({
+      actions: [
+        { 
+          say: { 
+            text: "I'm having trouble hearing you. Please try calling back later or visit our website for assistance." 
+          } 
+        },
+        { hangup: {} }
+      ]
+    });
+  }
   
   return res.send({
     actions: [

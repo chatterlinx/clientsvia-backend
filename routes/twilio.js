@@ -845,21 +845,11 @@ router.post('/voice/:companyID', async (req, res) => {
       twiml.hangup();
       
     } else {
-      // Fall back to existing voice flow
-      console.log(`[AI AGENT LOGIC] Not enabled, using legacy flow for company ${companyID}`);
+      // AI Agent Logic not enabled - provide simple greeting and hang up
+      console.log(`[AI AGENT LOGIC] Not enabled for company ${companyID}, providing basic greeting`);
       
-      // Redirect to existing voice handler with company phone number
-      const companyPhone = company.twilioConfig?.phoneNumber || 
-                          (company.twilioConfig?.phoneNumbers && company.twilioConfig.phoneNumbers[0]?.phoneNumber);
-      
-      if (companyPhone) {
-        // Simulate call to existing endpoint with company phone
-        req.body.To = companyPhone;
-        return router.post('/voice')(req, res);
-      } else {
-        twiml.say("I'm sorry, this service is not properly configured. Please try again later.");
-        twiml.hangup();
-      }
+      twiml.say(`Hello! Thank you for calling ${company.businessName || company.companyName}. Our AI assistant is currently being configured. Please try calling back later or visit our website for assistance.`);
+      twiml.hangup();
     }
     
     res.type('text/xml');
