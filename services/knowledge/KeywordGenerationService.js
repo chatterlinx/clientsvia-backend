@@ -388,47 +388,9 @@ class KeywordGenerationService {
    * 📖 INITIALIZATION METHODS
    */
   initializeTradeDictionaries() {
-    return {
-      hvac: {
-        terms: [
-          'heating', 'cooling', 'furnace', 'ac', 'air conditioning', 'thermostat',
-          'ductwork', 'vents', 'filter', 'compressor', 'condenser', 'evaporator',
-          'refrigerant', 'freon', 'heat pump', 'boiler', 'radiator', 'hvac'
-        ],
-        contextual: {
-          'hot': ['cooling', 'ac', 'temperature'],
-          'cold': ['heating', 'furnace', 'temperature'],
-          'noise': ['compressor', 'fan', 'motor'],
-          'smell': ['filter', 'gas', 'burning']
-        }
-      },
-      plumbing: {
-        terms: [
-          'pipes', 'leak', 'water', 'drain', 'faucet', 'toilet', 'sink',
-          'shower', 'bathtub', 'sewer', 'clog', 'pressure', 'hot water',
-          'water heater', 'valve', 'fitting', 'gasket', 'plumbing'
-        ],
-        contextual: {
-          'water': ['pressure', 'temperature', 'quality'],
-          'noise': ['pipes', 'pressure', 'hammer'],
-          'slow': ['drain', 'clog', 'blockage'],
-          'smell': ['sewer', 'gas', 'drain']
-        }
-      },
-      electrical: {
-        terms: [
-          'wiring', 'outlet', 'breaker', 'voltage', 'circuit', 'switch',
-          'light', 'fixture', 'panel', 'fuse', 'ground', 'neutral',
-          'electrical', 'power', 'electricity', 'amp', 'wire'
-        ],
-        contextual: {
-          'power': ['outage', 'breaker', 'electrical'],
-          'light': ['fixture', 'bulb', 'switch'],
-          'hot': ['overload', 'breaker', 'electrical'],
-          'spark': ['electrical', 'dangerous', 'emergency']
-        }
-      }
-    };
+    // 🚨 REMOVED: Hardcoded trade dictionaries - All trade-specific terms must come from company configuration
+    // Trade keywords are now loaded from company.aiAgentLogic.keywordConfiguration.tradeSpecificKeywords per multi-tenant requirements
+    return {}; // Empty - trade dictionaries must be configured per company
   }
 
   initializeIntentPatterns() {

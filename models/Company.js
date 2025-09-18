@@ -444,34 +444,8 @@ const companySchema = new mongoose.Schema({
         }]
     },
     
-    // 📚 Knowledge Q&A Source Controls - Module 2
-    agentKnowledgeSettings: {
-        // Source priority order (1=highest priority, 4=lowest)
-        sourcePriority: {
-            companyQnA: { type: Number, default: 1, min: 1, max: 4 },
-            tradeQnA: { type: Number, default: 2, min: 1, max: 4 },
-            vectorSearch: { type: Number, default: 3, min: 1, max: 4 },
-            llmFallback: { type: Number, default: 4, min: 1, max: 4 }
-        },
-        // Confidence thresholds per source (0-1)
-        confidenceThresholds: {
-            companyQnA: { type: Number, default: 0.8, min: 0, max: 1 },
-            tradeQnA: { type: Number, default: 0.75, min: 0, max: 1 },
-            vectorSearch: { type: Number, default: 0.7, min: 0, max: 1 },
-            llmFallback: { type: Number, default: 0.6, min: 0, max: 1 }
-        },
-        // Memory and context settings
-        memoryMode: { type: String, enum: ['short', 'conversational', 'persistent'], default: 'conversational' },
-        contextRetentionMinutes: { type: Number, default: 30, min: 5, max: 120 },
-        // Fallback behavior
-        rejectLowConfidence: { type: Boolean, default: true },
-        escalateOnNoMatch: { type: Boolean, default: true },
-        fallbackMessage: { 
-            type: String, 
-            default: "I want to make sure I give you accurate information. Let me connect you with a specialist who can help.",
-            trim: true 
-        }
-    },
+    // 📚 REMOVED: Legacy hardcoded knowledge settings - All settings now come from aiAgentLogic UI configuration
+    // This ensures true multi-tenant isolation where each company configures their own priorities and thresholds
     
     // 🎯 Phase 1: Agent Priority Configuration (Database Model Only)
     agentPriorityConfig: {

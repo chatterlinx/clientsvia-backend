@@ -452,13 +452,18 @@ class KnowledgeRouter {
             return this.getDefaultFallbackResponse();
         }
         
-        // Get configurable keywords (with defaults if not configured)
+        // Get configurable keywords (MUST be configured per company - no hardcoded defaults)
         const keywordConfig = company.aiAgentLogic?.keywordConfiguration || {};
-        const serviceKeywords = keywordConfig.serviceKeywords || ['service', 'repair', 'fix', 'broken', 'problem', 'issue', 'help'];
-        const bookingKeywords = keywordConfig.bookingKeywords || ['appointment', 'schedule', 'book', 'visit', 'come out', 'when can you'];
-        const emergencyKeywords = keywordConfig.emergencyKeywords || ['emergency', 'urgent', 'asap', 'right now', 'immediately'];
-        const hoursKeywords = keywordConfig.hoursKeywords || ['hours', 'open', 'closed', 'when do you', 'what time'];
+        const serviceKeywords = keywordConfig.serviceKeywords || [];
+        const bookingKeywords = keywordConfig.bookingKeywords || [];
+        const emergencyKeywords = keywordConfig.emergencyKeywords || [];
+        const hoursKeywords = keywordConfig.hoursKeywords || [];
         const tradeSpecificKeywords = keywordConfig.tradeSpecificKeywords || [];
+        
+        // 🚨 MULTI-TENANT COMPLIANCE: All keywords must be configured per company
+        if (!keywordConfig.serviceKeywords || keywordConfig.serviceKeywords.length === 0) {
+            console.warn(`⚠️ Company ${companyID} has no service keywords configured. Please configure keywords in AI Agent Logic → Keywords tab.`);
+        }
         
         // Combine service keywords with trade-specific keywords
         const allServiceKeywords = [...serviceKeywords, ...tradeSpecificKeywords];

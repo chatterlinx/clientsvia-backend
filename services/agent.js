@@ -1476,17 +1476,9 @@ function extractKeyTopicsFromRambling(question, conversationHistory = []) {
     .map(entry => entry.text.toLowerCase())
     .join(' ') + ' ' + text;
   
-  // Core service keywords - what the customer actually needs help with
-  const serviceKeywords = {
-    'hvac_issues': ['thermostat', 'temperature', 'heating', 'cooling', 'ac', 'air conditioning', 'furnace', 'heat pump', 'duct', 'filter', 'hvac'],
-    'electrical_issues': ['electrical', 'power', 'outlet', 'switch', 'breaker', 'wiring', 'lights', 'electric'],
-    'plumbing_issues': ['plumbing', 'water', 'pipe', 'leak', 'drain', 'toilet', 'faucet', 'shower', 'sink'],
-    'appliance_issues': ['appliance', 'refrigerator', 'washer', 'dryer', 'dishwasher', 'oven', 'stove'],
-    'urgency_indicators': ['emergency', 'urgent', 'asap', 'right now', 'immediate', 'broken', 'not working', 'help'],
-    'problem_descriptors': ['blank', 'dead', 'broken', 'not working', 'malfunctioning', 'weird', 'strange', 'noise', 'leak'],
-    'scheduling_intent': ['schedule', 'appointment', 'service', 'come out', 'visit', 'when', 'available'],
-    'pricing_intent': ['cost', 'price', 'charge', 'fee', 'how much', 'expensive', 'cheap', 'bill']
-  };
+  // 🚨 REMOVED: Hardcoded keywords - All keywords must come from company-specific configuration
+  // Keywords are now loaded from company.aiAgentLogic.keywordConfiguration per multi-tenant requirements
+  const serviceKeywords = {}; // Empty - keywords must be configured per company
   
   const extractedTopics = [];
   

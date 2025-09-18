@@ -38,37 +38,15 @@ function generateKeywords(question, answer, categoryName) {
     
     const text = `${question} ${answer} ${categoryName}`.toLowerCase();
     
-    // PRIORITY 1: Core technical terms (high weight for AI matching)
-    const technicalTerms = text.match(/\b(?:hvac|plumbing|electrical|repair|maintenance|installation|service|emergency|commercial|residential|industrial)\b/g) || [];
+    // 🚨 REMOVED: Hardcoded keyword patterns - All keywords must come from company-specific configuration
+    // Keyword generation is now handled by company.aiAgentLogic.keywordConfiguration per multi-tenant requirements
     
-    // PRIORITY 2: Specific equipment (exact match importance)
-    const equipment = text.match(/\b(?:furnace|boiler|water\s*heater|ac|air\s*conditioner|pipe|drain|circuit|breaker|outlet|switch|pump|valve|thermostat|duct|filter|unit|system)\b/g) || [];
+    // Extract basic keywords from text without hardcoded patterns
+    const words = text.split(/\s+/).filter(word => word.length > 2);
+    let allKeywords = [...new Set(words)]; // Remove duplicates
     
-    // PRIORITY 3: Service actions (what customer needs)
-    const actions = text.match(/\b(?:install|repair|replace|maintain|clean|inspect|diagnose|fix|upgrade|service|troubleshoot|check)\b/g) || [];
-    
-    // PRIORITY 4: Problem indicators (urgent matching)
-    const problems = text.match(/\b(?:broken|not\s*working|leaking|clogged|blocked|frozen|overheating|noisy|blank|dead|tripped)\b/g) || [];
-    
-    // PRIORITY 5: Location context
-    const locations = text.match(/\b(?:basement|attic|kitchen|bathroom|garage|office|warehouse|retail|home|business)\b/g) || [];
-    
-    // Combine with priority weighting (most important first)
-    let allKeywords = [
-        ...technicalTerms,
-        ...equipment, 
-        ...actions,
-        ...problems,
-        ...locations
-    ];
-    
-    // Add category-specific high-value keywords
-    const categoryKeywords = {
-        'hvac residential': ['heating', 'cooling', 'temperature', 'climate'],
-        'plumbing': ['water', 'leak', 'drain', 'pipe'],
-        'electrical': ['power', 'wiring', 'electric'],
-        'general': ['service', 'repair']
-    };
+    // 🚨 MULTI-TENANT COMPLIANCE: No hardcoded category keywords
+    const categoryKeywords = {}; // Empty - must be configured per company
     
     const categoryKey = categoryName.toLowerCase().replace(/[*]/g, '');
     Object.keys(categoryKeywords).forEach(key => {

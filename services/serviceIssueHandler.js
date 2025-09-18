@@ -5,44 +5,9 @@
 
 class ServiceIssueHandler {
   constructor() {
-    this.serviceIssuePatterns = {
-      // AC/Cooling Issues
-      ac_not_working: {
-        keywords: [
-          'ac stopped working', 'ac not working', 'air conditioner stopped', 
-          'ac broke', 'ac broken', 'ac quit working', 'ac died',
-          'air conditioning not working', 'air conditioner not working'
-        ],
-        intent: 'category_service_issue',
-        urgency: 'high',
-        category: 'cooling',
-        bookingFlow: true
-      },
-      
-      // Heating Issues  
-      heating_not_working: {
-        keywords: [
-          'heat not working', 'heater stopped', 'furnace not working',
-          'no heat', 'heater broke', 'furnace died', 'heating stopped'
-        ],
-        intent: 'category_service_issue', 
-        urgency: 'high',
-        category: 'heating',
-        bookingFlow: true
-      },
-      
-      // General HVAC Issues
-      hvac_malfunction: {
-        keywords: [
-          'hvac not working', 'system down', 'unit not working',
-          'thermostat not working', 'system stopped'
-        ],
-        intent: 'category_service_issue',
-        urgency: 'medium',
-        category: 'general',
-        bookingFlow: true
-      }
-    };
+    // 🚨 REMOVED: Hardcoded service issue patterns - All patterns must come from company-specific configuration
+    // Service issue detection is now handled by company.aiAgentLogic.keywordConfiguration per multi-tenant requirements
+    this.serviceIssuePatterns = {}; // Empty - patterns must be configured per company
   }
 
   /**
