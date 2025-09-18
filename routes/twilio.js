@@ -860,10 +860,14 @@ router.post('/voice/:companyID', async (req, res) => {
       // Apply placeholder replacement
       const finalGreeting = greeting.replace('{companyName}', company.businessName || company.companyName);
       
+      console.log('🎯 CHECKPOINT 6: Adding AI greeting to TwiML');
+      console.log(`🗣️ Greeting text: "${finalGreeting}"`);
+      
       twiml.say({
         voice: company.aiAgentLogic.agentPersonality?.voice?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
       }, escapeTwiML(finalGreeting));
       
+      console.log('🎯 CHECKPOINT 7: Setting up speech gathering');
       // Set up gather for AI Agent Logic flow
       const gather = twiml.gather({
         input: 'speech',
@@ -875,22 +879,30 @@ router.post('/voice/:companyID', async (req, res) => {
         partialResultCallbackMethod: 'POST'
       });
       
+      console.log('🎯 CHECKPOINT 8: Adding empty gather.say()');
       gather.say('');
       
+      console.log('🎯 CHECKPOINT 9: Adding fallback message');
       // Fallback if no input - just hang up, don't transfer
       twiml.say("Thank you for calling. Please try again later or visit our website.");
       twiml.hangup();
       
     } else {
       // AI Agent Logic not enabled - provide simple greeting and hang up
-      console.log(`[AI AGENT LOGIC] Not enabled for company ${companyID}, providing basic greeting`);
+      console.log(`🎯 CHECKPOINT 6: AI Agent Logic not enabled for company ${companyID}, providing basic greeting`);
       
       twiml.say(`Hello! Thank you for calling ${company.businessName || company.companyName}. Our AI assistant is currently being configured. Please try calling back later or visit our website for assistance.`);
       twiml.hangup();
     }
     
+    const twimlString = twiml.toString();
+    console.log('📤 CHECKPOINT 10: Sending final TwiML response');
+    console.log('📋 COMPLETE TwiML CONTENT:');
+    console.log(twimlString);
+    console.log('🚨 CRITICAL: If a "woman takes over" after this TwiML, it\'s NOT our code!');
+    
     res.type('text/xml');
-    res.send(twiml.toString());
+    res.send(twimlString);
     
   } catch (error) {
     console.error(`[ERROR] AI Agent Voice error for company ${companyID}:`, error);
@@ -904,54 +916,78 @@ router.post('/voice/:companyID', async (req, res) => {
 
 // AI Agent Logic response handler
 router.post('/ai-agent-respond/:companyID', async (req, res) => {
+  const callSid = req.body.CallSid || 'UNKNOWN';
+  const fromNumber = req.body.From || 'UNKNOWN';
+  const speechResult = req.body.SpeechResult || '';
+  
+  console.log('🎯 CHECKPOINT 11: AI Agent Response Handler Called');
+  console.log(`📞 Call Details: SID=${callSid}, From=${fromNumber}`);
+  console.log(`🗣️ User Speech: "${speechResult}"`);
+  console.log('📋 Full request body:', JSON.stringify(req.body, null, 2));
+  
   try {
     const { companyID } = req.params;
-    const { SpeechResult, CallSid, From } = req.body;
     
-    console.log(`[AI AGENT RESPOND] Company: ${companyID}, CallSid: ${CallSid}, Speech: "${SpeechResult}"`);
+    console.log('🎯 CHECKPOINT 12: Processing AI Agent Response');
+    console.log(`🏢 Company ID: ${companyID}`);
     
     // Import AI Agent Runtime
     const { processCallTurn } = require('../services/aiAgentRuntime');
     
+    console.log('🎯 CHECKPOINT 13: Initializing call state');
     // Get or initialize call state
     let callState = req.session?.callState || {
-      callId: CallSid,
-      from: From,
+      callId: callSid,
+      from: fromNumber,
       consecutiveSilences: 0,
       failedAttempts: 0,
       startTime: new Date()
     };
     
+    console.log('🎯 CHECKPOINT 14: Calling AI Agent Runtime processCallTurn');
     // Process the call turn through AI Agent Runtime
     const result = await processCallTurn(
       companyID,
-      CallSid,
-      SpeechResult || '',
+      callSid,
+      speechResult,
       callState
     );
+    
+    console.log('🎯 CHECKPOINT 15: AI Agent Runtime response received');
+    console.log('🤖 AI Response:', JSON.stringify(result, null, 2));
     
     // Update call state
     req.session = req.session || {};
     req.session.callState = result.callState;
     
+    console.log('🎯 CHECKPOINT 16: Creating TwiML response');
     const twiml = new twilio.twiml.VoiceResponse();
     
     // Handle different response types
     if (result.shouldHangup) {
+      console.log('🎯 CHECKPOINT 17: AI decided to hang up');
+      console.log(`🗣️ Final message: "${result.text}"`);
       twiml.say(escapeTwiML(result.text));
       twiml.hangup();
     } else if (result.shouldTransfer) {
+      console.log('🎯 CHECKPOINT 18: AI decided to transfer call');
+      console.log(`🗣️ Transfer message: "${result.text}"`);
       twiml.say(escapeTwiML(result.text));
       
       // Get company transfer number and check if transfer is enabled
       const company = await Company.findById(companyID);
+      console.log('🎯 CHECKPOINT 19: Calling handleTransfer function');
       handleTransfer(twiml, company, "I apologize, but I cannot transfer you at this time. Please try calling back later or visiting our website for assistance.");
     } else {
+      console.log('🎯 CHECKPOINT 20: AI continuing conversation');
+      console.log(`🗣️ AI Response: "${result.text}"`);
+      
       // Continue conversation
       twiml.say({
         voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
       }, escapeTwiML(result.text));
       
+      console.log('🎯 CHECKPOINT 21: Setting up next speech gathering');
       // Set up next gather
       const gather = twiml.gather({
         input: 'speech',
@@ -968,26 +1004,36 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       twiml.hangup();
     }
     
+    const twimlString = twiml.toString();
+    console.log('📤 CHECKPOINT 22: Sending TwiML response to Twilio');
+    console.log('📋 TwiML Content:', twimlString);
+    
     res.type('text/xml');
-    res.send(twiml.toString());
+    res.send(twimlString);
+    
+    console.log('✅ CHECKPOINT 23: Response sent successfully');
     
   } catch (error) {
-    console.error('[ERROR] AI Agent Respond error:', error);
+    console.error('❌ CHECKPOINT ERROR: AI Agent Respond error:', error);
+    console.error('❌ Error stack:', error.stack);
+    
     const twiml = new twilio.twiml.VoiceResponse();
     
     // Try to get the company and check if transfer is enabled
     try {
-      const { companyID } = req.params; // Get companyID from request params
+      const { companyID } = req.params;
       const company = await Company.findById(companyID);
       
+      console.log('🎯 CHECKPOINT ERROR RECOVERY: Attempting graceful error handling');
       twiml.say("I'm sorry, I'm having trouble processing your request.");
       handleTransfer(twiml, company, "Please try calling back later or visit our website for assistance.");
     } catch (companyError) {
-      console.error('[ERROR] Could not load company for transfer:', companyError);
+      console.error('❌ CHECKPOINT DOUBLE ERROR: Could not load company for transfer:', companyError);
       twiml.say("I'm sorry, I'm having trouble processing your request. Please try calling back later.");
       twiml.hangup();
     }
     
+    console.log('📤 CHECKPOINT ERROR RESPONSE: Sending error TwiML');
     res.type('text/xml');
     res.send(twiml.toString());
   }

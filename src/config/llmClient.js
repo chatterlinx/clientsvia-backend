@@ -174,12 +174,4 @@ class LLMClient {
     }
 }
 
-module.exports = {
-  answer: async (modelConfig, companyID, prompt) => {
-    return await LLMClient.answer(modelConfig, companyID, prompt);
-  },
-  testConnection: async () => {
-    return await LLMClient.testConnection();
-  },
-  LLMClient
-};
+module.exports = LLMClient;
