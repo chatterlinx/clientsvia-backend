@@ -222,7 +222,7 @@ router.post('/:id/personality', async (req, res) => {
  * @desc    Get company agent personality response categories
  * @access  Private (per company)
  */
-router.get('/:id/personality/responses', async (req, res) => {
+router.get('/:id/personality/responses', authenticateJWT, async (req, res) => {
   try {
     const company = await Company.findById(req.params.id).lean();
     
@@ -230,38 +230,22 @@ router.get('/:id/personality/responses', async (req, res) => {
       return res.status(404).json({ error: 'Company not found' });
     }
     
-    // Get custom responses or return an empty array if none exist
-    let responses = [];
-    
-    if (company.agentPersonalitySettings && company.agentPersonalitySettings.responses) {
-      responses = company.agentPersonalitySettings.responses;
-    }
-    
-    // Get default responses for any categories that don't have custom ones
-    const defaultCategories = Object.keys(defaultResponses).map(key => ({
-      key,
-      label: key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1'),
-      description: '',
-      defaultMessage: Array.isArray(defaultResponses[key]) ? defaultResponses[key][0] : '',
-      customMessage: null,
-      useCustom: false
-    }));
-    
-    // Merge custom responses with defaults
-    const responseCategories = [];
-    defaultCategories.forEach(defCat => {
-      const existingResponse = responses.find(r => r.key === defCat.key);
-      if (existingResponse) {
-        responseCategories.push(existingResponse);
-      } else {
-        responseCategories.push(defCat);
+    // CRITICAL FIX: Return the actual saved response categories from aiAgentLogic
+    const responseData = {
+      success: true,
+      agentPersonalitySettings: {
+        responseCategories: company.aiAgentLogic?.responseCategories || {},
+        ...company.agentPersonalitySettings
       }
-    });
+    };
     
-    console.log(`✅ Personality responses loaded for ${company.companyName}: ${responseCategories.length} categories`);
-    res.json(responseCategories);
+    console.log(`✅ Personality responses loaded for ${company.companyName}`);
+    console.log(`🔍 Response categories found:`, Object.keys(responseData.agentPersonalitySettings.responseCategories));
+    
+    res.json(responseData);
   } catch (error) {
     console.error('❌ Error fetching personality responses:', error);
+    console.error('❌ Full error details:', error.stack);
     res.status(500).json({ error: 'Failed to fetch personality responses' });
   }
 });
@@ -329,7 +313,7 @@ router.put('/:id/personality/responses', async (req, res) => {
  * @desc    Save company agent personality and response categories (new system)
  * @access  Private (per company)
  */
-router.post('/:id/personality-responses', async (req, res) => {
+router.post('/:id/personality-responses', authenticateJWT, async (req, res) => {
   try {
     const { agentPersonality, responseCategories } = req.body;
     
@@ -406,7 +390,7 @@ router.post('/:id/personality-responses', async (req, res) => {
  * @desc    Get company agent personality response categories (alternative endpoint)
  * @access  Private (per company)
  */
-router.get('/:id/personality-responses', async (req, res) => {
+router.get('/:id/personality-responses', authenticateJWT, async (req, res) => {
   try {
     const company = await Company.findById(req.params.id).lean();
     
@@ -414,38 +398,22 @@ router.get('/:id/personality-responses', async (req, res) => {
       return res.status(404).json({ error: 'Company not found' });
     }
     
-    // Get custom responses or return an empty array if none exist
-    let responses = [];
-    
-    if (company.agentPersonalitySettings && company.agentPersonalitySettings.responses) {
-      responses = company.agentPersonalitySettings.responses;
-    }
-    
-    // Get default responses for any categories that don't have custom ones
-    const defaultCategories = Object.keys(defaultResponses).map(key => ({
-      key,
-      label: key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1'),
-      description: '',
-      defaultMessage: Array.isArray(defaultResponses[key]) ? defaultResponses[key][0] : '',
-      customMessage: null,
-      useCustom: false
-    }));
-    
-    // Merge custom responses with defaults
-    const responseCategories = [];
-    defaultCategories.forEach(defCat => {
-      const existingResponse = responses.find(r => r.key === defCat.key);
-      if (existingResponse) {
-        responseCategories.push(existingResponse);
-      } else {
-        responseCategories.push(defCat);
+    // CRITICAL FIX: Return the actual saved response categories from aiAgentLogic
+    const responseData = {
+      success: true,
+      agentPersonalitySettings: {
+        responseCategories: company.aiAgentLogic?.responseCategories || {},
+        ...company.agentPersonalitySettings
       }
-    });
+    };
     
-    console.log(`✅ Personality responses loaded for ${company.companyName}: ${responseCategories.length} categories`);
-    res.json(responseCategories);
+    console.log(`✅ Personality responses loaded for ${company.companyName}`);
+    console.log(`🔍 Response categories found:`, Object.keys(responseData.agentPersonalitySettings.responseCategories));
+    
+    res.json(responseData);
   } catch (error) {
     console.error('❌ Error fetching personality responses:', error);
+    console.error('❌ Full error details:', error.stack);
     res.status(500).json({ error: 'Failed to fetch personality responses' });
   }
 });
