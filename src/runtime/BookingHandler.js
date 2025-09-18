@@ -10,7 +10,7 @@
 
 const Company = require('../../models/Company');
 const Booking = require('../../models/Booking');
-const llmClient = require('../config/llmClient');
+// LLMClient removed - using pure in-house system
 
 class BookingHandler {
   /**

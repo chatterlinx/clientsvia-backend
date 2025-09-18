@@ -809,9 +809,9 @@ const companySchema = new mongoose.Schema({
         // 📞 Call Transfer & Escalation Configuration
         callTransferConfig: {
             dialOutEnabled: { type: Boolean, default: false },
-            dialOutNumber: { 
-                type: String, 
-                trim: true, 
+            dialOutNumber: {
+                type: String,
+                trim: true,
                 default: null,
                 validate: {
                     validator: function(v) {
@@ -821,10 +821,34 @@ const companySchema = new mongoose.Schema({
                     message: 'Please enter a valid phone number (e.g., +1234567890)'
                 }
             },
-            transferMessage: { 
-                type: String, 
-                trim: true, 
-                default: 'Let me connect you with someone who can better assist you.' 
+            transferMessage: {
+                type: String,
+                trim: true,
+                default: 'Let me connect you with someone who can better assist you.'
+            }
+        },
+
+        // 🔑 Configurable Keywords for Intent Detection (Multi-Tenant)
+        keywordConfiguration: {
+            serviceKeywords: {
+                type: [String],
+                default: ['service', 'repair', 'fix', 'broken', 'problem', 'issue', 'help']
+            },
+            bookingKeywords: {
+                type: [String], 
+                default: ['appointment', 'schedule', 'book', 'visit', 'come out', 'when can you']
+            },
+            emergencyKeywords: {
+                type: [String],
+                default: ['emergency', 'urgent', 'asap', 'right now', 'immediately']
+            },
+            hoursKeywords: {
+                type: [String],
+                default: ['hours', 'open', 'closed', 'when do you', 'what time']
+            },
+            tradeSpecificKeywords: {
+                type: [String],
+                default: [] // Will be populated based on selected trade categories
             }
         },
         

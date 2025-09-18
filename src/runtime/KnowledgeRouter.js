@@ -436,21 +436,37 @@ class KnowledgeRouter {
 
     /**
      * In-house fallback system - no external LLMs
-     * Provides intelligent responses based on keyword matching and templates
+     * Provides intelligent responses based on configurable keyword matching per company
      */
     async inHouseFallback(companyID, text, cfg) {
         console.log(`🏠 In-house fallback for company ${companyID}: "${text}"`);
         
         const normalizedText = text.toLowerCase().trim();
         
-        // Service-related keywords
-        const serviceKeywords = ['service', 'repair', 'fix', 'broken', 'problem', 'issue', 'help', 'hvac', 'plumbing', 'electrical'];
-        const bookingKeywords = ['appointment', 'schedule', 'book', 'visit', 'come out', 'when can you'];
-        const emergencyKeywords = ['emergency', 'urgent', 'asap', 'right now', 'immediately'];
-        const hoursKeywords = ['hours', 'open', 'closed', 'when do you', 'what time'];
+        // Load company-specific configurable keywords from database
+        const Company = require('../../models/Company');
+        const company = await Company.findById(companyID);
         
-        // Check for service requests
-        if (serviceKeywords.some(keyword => normalizedText.includes(keyword))) {
+        if (!company) {
+            console.log(`❌ Company ${companyID} not found for keyword configuration`);
+            return this.getDefaultFallbackResponse();
+        }
+        
+        // Get configurable keywords (with defaults if not configured)
+        const keywordConfig = company.aiAgentLogic?.keywordConfiguration || {};
+        const serviceKeywords = keywordConfig.serviceKeywords || ['service', 'repair', 'fix', 'broken', 'problem', 'issue', 'help'];
+        const bookingKeywords = keywordConfig.bookingKeywords || ['appointment', 'schedule', 'book', 'visit', 'come out', 'when can you'];
+        const emergencyKeywords = keywordConfig.emergencyKeywords || ['emergency', 'urgent', 'asap', 'right now', 'immediately'];
+        const hoursKeywords = keywordConfig.hoursKeywords || ['hours', 'open', 'closed', 'when do you', 'what time'];
+        const tradeSpecificKeywords = keywordConfig.tradeSpecificKeywords || [];
+        
+        // Combine service keywords with trade-specific keywords
+        const allServiceKeywords = [...serviceKeywords, ...tradeSpecificKeywords];
+        
+        console.log(`🔑 Using company keywords - Service: ${allServiceKeywords.length}, Booking: ${bookingKeywords.length}, Emergency: ${emergencyKeywords.length}, Hours: ${hoursKeywords.length}`);
+        
+        // Check for service requests (including trade-specific keywords)
+        if (allServiceKeywords.some(keyword => normalizedText.includes(keyword))) {
             return {
                 text: "I can help you with service requests. What specific issue are you experiencing? I can connect you with our service team or help schedule an appointment.",
                 source: 'inHouseFallback',
@@ -494,6 +510,13 @@ class KnowledgeRouter {
         }
         
         // Default fallback response
+        return this.getDefaultFallbackResponse();
+    }
+
+    /**
+     * Default fallback response when no specific intent is detected
+     */
+    getDefaultFallbackResponse() {
         return {
             text: "I'm here to help you with your service needs. Could you tell me more about what you're looking for? I can assist with scheduling, service requests, or connect you with the right team member.",
             source: 'inHouseFallback',

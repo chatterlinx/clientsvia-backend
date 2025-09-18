@@ -10,7 +10,7 @@
  * - Response decoration based on company settings
  */
 
-const llmClient = require('../config/llmClient');
+// LLMClient removed - using pure in-house system
 
 class BehaviorEngine {
   /**
