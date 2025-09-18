@@ -8523,25 +8523,31 @@
                 }
             };
 
-            try {
-                // CRITICAL FIX: Add authentication token
-                const authToken = getUniversalAuthToken();
-                const headers = {
-                    'Content-Type': 'application/json'
-                };
-                
-                if (authToken) {
-                    headers['Authorization'] = `Bearer ${authToken}`;
-                }
-                
-                const response = await fetch(`/api/company/${companyId}/personality-responses`, {
-                    method: 'POST',
-                    headers: headers,
-                    credentials: 'include',
-                    body: JSON.stringify({ 
-                        responseCategories 
-                    })
-                });
+                try {
+                    // CRITICAL DEBUG: Log what we're trying to save
+                    console.log('🔍 SAVING GREETING DEBUG:');
+                    console.log('🔍 Greeting element exists:', !!document.getElementById('response-greeting'));
+                    console.log('🔍 Greeting value:', document.getElementById('response-greeting')?.value);
+                    console.log('🔍 Full responseCategories:', responseCategories);
+                    
+                    // CRITICAL FIX: Add authentication token
+                    const authToken = getUniversalAuthToken();
+                    const headers = {
+                        'Content-Type': 'application/json'
+                    };
+                    
+                    if (authToken) {
+                        headers['Authorization'] = `Bearer ${authToken}`;
+                    }
+                    
+                    const response = await fetch(`/api/company/${companyId}/personality-responses`, {
+                        method: 'POST',
+                        headers: headers,
+                        credentials: 'include',
+                        body: JSON.stringify({ 
+                            responseCategories 
+                        })
+                    });
 
                 if (response.ok) {
                     console.log('✅ Response templates saved successfully');
