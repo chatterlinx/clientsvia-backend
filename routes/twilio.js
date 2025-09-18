@@ -439,7 +439,10 @@ router.post('/handle-speech', async (req, res) => {
       }
       if (repeats > (company.aiSettings?.maxRepeats ?? 3)) {
         const personality = company.aiSettings?.personality || 'friendly';
-        const msg = company.aiSettings?.repeatEscalationMessage || await getPersonalityResponse(company._id.toString(), 'transferToRep', personality);
+        // Use configurable response instead of legacy personality response [[memory:8276820]]
+        const msg = company.aiSettings?.repeatEscalationMessage || 
+          company.aiAgentLogic?.responseCategories?.core?.['transfer-response'] ||
+          "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
         const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
         twiml.hangup();
         await redisClient.del(repeatKey);
@@ -468,7 +471,9 @@ router.post('/handle-speech', async (req, res) => {
       } else if (confidence < threshold * 0.6) {
         retryMsg = "I'm having trouble hearing you clearly. Could you please repeat that for me?";
       } else {
-        retryMsg = await getPersonalityResponse(company._id.toString(), 'cantUnderstand', personality);
+        // Use configurable response instead of legacy personality response [[memory:8276820]]
+        retryMsg = company.aiAgentLogic?.responseCategories?.core?.['cant-understand-response'] ||
+          "I want to make sure I understand what you need help with. Could you tell me a bit more about what's going on?";
       }
       
       console.log(`[RETRY MESSAGE] Using message: "${retryMsg}" for speech: "${speechText}" (confidence: ${confidence})`);
@@ -687,7 +692,9 @@ router.post('/handle-speech', async (req, res) => {
       console.error(`[AI ERROR] [ERROR] AI processing failed: ${err.message}`);
       console.error(`[AI Processing Error for CallSid: ${callSid}]`, err.message, err.stack);
       const personality = company.aiSettings?.personality || 'friendly';
-      const fallback = await getPersonalityResponse(company._id.toString(), 'connectionTrouble', personality);
+      // Use configurable response instead of legacy personality response [[memory:8276820]]
+      const fallback = company.aiAgentLogic?.responseCategories?.core?.['technical-difficulty-response'] ||
+        "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
       answerObj = { text: fallback, escalate: false };
     }
 
