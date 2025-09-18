@@ -113,7 +113,7 @@ class KnowledgeRouter {
             }
             
             // In-house fallback system - no external LLMs
-            if (src === "inHouseFallback" || src === "llmFallback") {
+            if (src === "inHouseFallback") {
                 console.log('🏠 Using in-house fallback system');
                 const hit = await trySource(
                     "inHouseFallback",

@@ -68,10 +68,7 @@ class AIConfigLoader {
                 
                 // Confidence Thresholds
                 thresholds: {
-                    companyKB: 0.80,
-                    tradeQA: 0.75,
-                    vector: 0.70,
-                    llmFallback: 0.60,
+                    // 🚨 REMOVED: All hardcoded thresholds - must come from aiAgentLogic UI configuration
                     ...aiLogic.thresholds
                 },
                 

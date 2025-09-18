@@ -11244,7 +11244,7 @@ Key Metrics:
                 
                 // COLLECT KNOWLEDGE SOURCE PRIORITIES
                 const container = document.getElementById('clientsvia-source-priority-container');
-                let knowledgeSourcePriorities = ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback']; // Default order
+                let knowledgeSourcePriorities = ['companyQnA', 'tradeQnA', 'vectorSearch', 'inHouseFallback']; // 🚨 FIXED: Removed LLM, added in-house fallback
                 if (container) {
                     const items = container.querySelectorAll('.clientsvia-source-item');
                     knowledgeSourcePriorities = [];

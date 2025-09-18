@@ -814,19 +814,8 @@ const companySchema = new mongoose.Schema({
                     min: { type: Number, default: 0.70, min: 0, max: 1 },
                     weight: { type: Number, default: 0.20, min: 0, max: 1 }
                 },
-                recencyHalfLifeDays: { type: Number, default: 90, min: 1, max: 365 },
-                llmFallback: {
-                    enabled: { type: Boolean, default: true },
-                    allowlistIntents: { 
-                        type: [String], 
-                        default: ['general_question', 'small_talk', 'greeting', 'closing'] 
-                    },
-                    timeoutMs: { type: Number, default: 1800, min: 1000, max: 10000 },
-                    restrictedTopics: { 
-                        type: [String], 
-                        default: ['pricing', 'quote', 'estimate', 'legal', 'warranty_claims'] 
-                    }
-                }
+                recencyHalfLifeDays: { type: Number, default: 90, min: 1, max: 365 }
+                // 🚨 REMOVED: llmFallback configuration violates "no external LLM" business rule
             },
             
             // ========================================

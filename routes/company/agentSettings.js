@@ -152,7 +152,7 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     const testAiAgentLogic = {
       ...existingPlain,
       thresholds: aiAgentLogic.thresholds,
-      knowledgeSourcePriorities: aiAgentLogic.knowledgeSourcePriorities || existingPlain.knowledgeSourcePriorities || ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'],
+      knowledgeSourcePriorities: aiAgentLogic.knowledgeSourcePriorities || existingPlain.knowledgeSourcePriorities || ['companyQnA', 'tradeQnA', 'vectorSearch', 'inHouseFallback'], // 🚨 FIXED: Removed LLM, added in-house fallback
       memorySettings: aiAgentLogic.memorySettings || existingPlain.memorySettings || { memoryMode: 'conversational', contextRetention: 30 },
       fallbackBehavior: aiAgentLogic.fallbackBehavior || existingPlain.fallbackBehavior || { escalateOnNoMatch: true, rejectLowConfidence: true },
       lastUpdated: new Date()
