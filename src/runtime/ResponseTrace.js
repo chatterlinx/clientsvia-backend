@@ -324,13 +324,21 @@ class ResponseTraceLogger {
       debug: trace.debug || {}
     };
 
-    // Handle behaviors field specially
+    // Handle behaviors field specially - CRITICAL FIX for validation error
     if (trace.behaviors) {
       if (typeof trace.behaviors === 'string') {
         try {
-          sanitizedTrace.behaviors = JSON.parse(trace.behaviors);
+          // CRITICAL: Check if it's already a stringified array
+          const parsed = JSON.parse(trace.behaviors);
+          if (Array.isArray(parsed)) {
+            sanitizedTrace.behaviors = parsed;
+          } else {
+            console.warn('⚠️ Parsed behaviors is not an array, resetting');
+            sanitizedTrace.behaviors = [];
+          }
         } catch (error) {
           console.error('❌ Failed to parse behaviors string:', error);
+          console.error('❌ Behaviors string value:', trace.behaviors.substring(0, 200));
           sanitizedTrace.behaviors = [];
         }
       } else if (Array.isArray(trace.behaviors)) {

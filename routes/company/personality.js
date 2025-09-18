@@ -477,4 +477,36 @@ router.put('/:id/personality-responses', async (req, res) => {
   }
 });
 
+/**
+ * @route   GET /api/company/:id/debug-greeting
+ * @desc    Debug endpoint to check if greeting was saved
+ * @access  Private (per company)
+ */
+router.get('/:id/debug-greeting', authenticateJWT, async (req, res) => {
+  try {
+    const company = await Company.findById(req.params.id).lean();
+    
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    
+    const debugInfo = {
+      companyName: company.companyName,
+      hasAiAgentLogic: !!company.aiAgentLogic,
+      hasResponseCategories: !!company.aiAgentLogic?.responseCategories,
+      hasCoreResponses: !!company.aiAgentLogic?.responseCategories?.core,
+      greetingResponse: company.aiAgentLogic?.responseCategories?.core?.['greeting-response'] || 'NOT FOUND',
+      backupGreeting: company.agentPersonalitySettings?.responseCategories?.core?.['greeting-response'] || 'NOT FOUND',
+      fullResponseCategories: company.aiAgentLogic?.responseCategories || {}
+    };
+    
+    console.log(`🔍 DEBUG GREETING for ${company.companyName}:`, debugInfo);
+    
+    res.json(debugInfo);
+  } catch (error) {
+    console.error('❌ Error debugging greeting:', error);
+    res.status(500).json({ error: 'Failed to debug greeting' });
+  }
+});
+
 module.exports = router;
