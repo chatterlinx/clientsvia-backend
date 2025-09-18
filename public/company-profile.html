@@ -8406,11 +8406,20 @@
             };
 
             try {
+                // CRITICAL FIX: Add authentication token
+                const authToken = getUniversalAuthToken();
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
                 const response = await fetch(`/api/company/${companyId}/personality`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: headers,
+                    credentials: 'include',
                     body: JSON.stringify({ 
                         personalitySettings,
                         callTransferConfig 
@@ -8439,7 +8448,20 @@
             if (!companyId) return;
 
             try {
-                const response = await fetch(`/api/company/${companyId}/personality`);
+                // CRITICAL FIX: Add authentication token
+                const authToken = getUniversalAuthToken();
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
+                const response = await fetch(`/api/company/${companyId}/personality`, {
+                    headers: headers,
+                    credentials: 'include'
+                });
                 if (response.ok) {
                     const data = await response.json();
                     if (data.personalitySettings) {
@@ -8502,11 +8524,20 @@
             };
 
             try {
+                // CRITICAL FIX: Add authentication token
+                const authToken = getUniversalAuthToken();
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
                 const response = await fetch(`/api/company/${companyId}/personality-responses`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: headers,
+                    credentials: 'include',
                     body: JSON.stringify({ 
                         responseCategories 
                     })
@@ -8535,7 +8566,20 @@
             if (!companyId) return;
 
             try {
-                const response = await fetch(`/api/company/${companyId}/personality-responses`);
+                // CRITICAL FIX: Add authentication token
+                const authToken = getUniversalAuthToken();
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
+                const response = await fetch(`/api/company/${companyId}/personality-responses`, {
+                    headers: headers,
+                    credentials: 'include'
+                });
                 if (response.ok) {
                     const data = await response.json();
                     if (data.agentPersonalitySettings?.responseCategories) {
