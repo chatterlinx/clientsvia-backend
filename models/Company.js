@@ -109,7 +109,7 @@ const aiSettingsSchema = new mongoose.Schema({
     sentimentAnalysis: { type: Boolean, default: false },
     dataLogging: { type: Boolean, default: true },
     proactiveOutreach: { type: Boolean, default: false },
-    llmFallbackEnabled: { type: Boolean, default: true }, // Enable LLM by default for intelligent responses
+    inHouseFallbackEnabled: { type: Boolean, default: true }, // Enable in-house fallback system
     customEscalationMessage: {
         type: String,
         default: 'I understand you have a question I haven\'t been able to answer directly. Let me connect you with one of our specialists who can provide you with the exact information you need.',
@@ -502,12 +502,12 @@ const companySchema = new mongoose.Schema({
         version: { type: Number, default: 1 },
         lastUpdated: { type: Date, default: Date.now },
         
-        // 🎯 CRITICAL: Knowledge Source Thresholds (was missing - causing save failures!)
+        // 🎯 IN-HOUSE ONLY: Knowledge Source Thresholds
         thresholds: {
             companyQnA: { type: Number, min: 0, max: 1, default: 0.8 },
             tradeQnA: { type: Number, min: 0, max: 1, default: 0.75 },
-            vectorSearch: { type: Number, min: 0, max: 1, default: 0.7 },
-            llmFallback: { type: Number, min: 0, max: 1, default: 0.6 }
+            templates: { type: Number, min: 0, max: 1, default: 0.7 },
+            inHouseFallback: { type: Number, min: 0, max: 1, default: 0.5 }
         },
         
         // Memory & Intelligence Settings
@@ -523,10 +523,10 @@ const companySchema = new mongoose.Schema({
             message: { type: String, default: 'I want to make sure I give you accurate information. Let me connect you with a specialist who can help.' }
         },
         
-        // Knowledge Source Priority Order
+        // Knowledge Source Priority Order - IN-HOUSE ONLY
         knowledgeSourcePriorities: {
             type: [String],
-            default: ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback']
+            default: ['companyQnA', 'tradeQnA', 'templates', 'inHouseFallback']
         },
         
         // Answer Priority Flow configuration

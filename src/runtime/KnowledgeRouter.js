@@ -5,12 +5,12 @@
  */
 
 const aiLoader = require('../config/aiLoader');
-const LLMClient = require('../config/llmClient');
 const { getDB } = require('../../db');
 
 class KnowledgeRouter {
     constructor() {
-        this.llmClient = new LLMClient();
+        // Pure in-house system - no external LLMs
+        console.log('🏠 Initializing in-house knowledge router');
     }
 
     /**
@@ -112,11 +112,13 @@ class KnowledgeRouter {
                 if (hit) return { result: hit, trace };
             }
             
-            if (src === "llmFallback") {
+            // In-house fallback system - no external LLMs
+            if (src === "inHouseFallback" || src === "llmFallback") {
+                console.log('🏠 Using in-house fallback system');
                 const hit = await trySource(
-                    "llmFallback",
-                    () => this.llmClient.answer(cfg.modelConfig, companyID, text, context),
-                    cfg.thresholds.llmFallback
+                    "inHouseFallback",
+                    () => this.inHouseFallback(companyID, text, cfg),
+                    cfg.thresholds.inHouseFallback || 0.5
                 );
                 if (hit) return { result: hit, trace };
             }
@@ -428,6 +430,75 @@ class KnowledgeRouter {
             source: 'vector',
             score: 0,
             matches: 0,
+            keywords: []
+        };
+    }
+
+    /**
+     * In-house fallback system - no external LLMs
+     * Provides intelligent responses based on keyword matching and templates
+     */
+    async inHouseFallback(companyID, text, cfg) {
+        console.log(`🏠 In-house fallback for company ${companyID}: "${text}"`);
+        
+        const normalizedText = text.toLowerCase().trim();
+        
+        // Service-related keywords
+        const serviceKeywords = ['service', 'repair', 'fix', 'broken', 'problem', 'issue', 'help', 'hvac', 'plumbing', 'electrical'];
+        const bookingKeywords = ['appointment', 'schedule', 'book', 'visit', 'come out', 'when can you'];
+        const emergencyKeywords = ['emergency', 'urgent', 'asap', 'right now', 'immediately'];
+        const hoursKeywords = ['hours', 'open', 'closed', 'when do you', 'what time'];
+        
+        // Check for service requests
+        if (serviceKeywords.some(keyword => normalizedText.includes(keyword))) {
+            return {
+                text: "I can help you with service requests. What specific issue are you experiencing? I can connect you with our service team or help schedule an appointment.",
+                source: 'inHouseFallback',
+                score: 0.8,
+                intent: 'service',
+                keywords: serviceKeywords.filter(k => normalizedText.includes(k))
+            };
+        }
+        
+        // Check for booking requests
+        if (bookingKeywords.some(keyword => normalizedText.includes(keyword))) {
+            return {
+                text: "I'd be happy to help you schedule an appointment. Let me connect you with our scheduling team to find the best time for your service.",
+                source: 'inHouseFallback',
+                score: 0.8,
+                intent: 'booking',
+                keywords: bookingKeywords.filter(k => normalizedText.includes(k))
+            };
+        }
+        
+        // Check for emergency requests
+        if (emergencyKeywords.some(keyword => normalizedText.includes(keyword))) {
+            return {
+                text: "I understand this is urgent. Let me connect you immediately with our emergency service team who can assist you right away.",
+                source: 'inHouseFallback',
+                score: 0.9,
+                intent: 'emergency',
+                keywords: emergencyKeywords.filter(k => normalizedText.includes(k))
+            };
+        }
+        
+        // Check for hours inquiry
+        if (hoursKeywords.some(keyword => normalizedText.includes(keyword))) {
+            return {
+                text: "Our business hours are Monday through Friday, 8 AM to 6 PM, and Saturday 9 AM to 4 PM. For emergency services, we're available 24/7.",
+                source: 'inHouseFallback',
+                score: 0.8,
+                intent: 'hours',
+                keywords: hoursKeywords.filter(k => normalizedText.includes(k))
+            };
+        }
+        
+        // Default fallback response
+        return {
+            text: "I'm here to help you with your service needs. Could you tell me more about what you're looking for? I can assist with scheduling, service requests, or connect you with the right team member.",
+            source: 'inHouseFallback',
+            score: 0.6,
+            intent: 'general',
             keywords: []
         };
     }
