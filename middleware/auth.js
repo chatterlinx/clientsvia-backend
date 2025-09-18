@@ -90,7 +90,19 @@ async function authenticateJWT(req, res, next) {
     console.log('✅ AUTH CHECKPOINT: Authentication successful, user attached to request');
     next();
   } catch (error) {
-    return res.status(401).json({ message: 'Invalid token' });
+    console.error('❌ JWT Authentication failed:', error.message);
+    console.error('❌ JWT Error details:', {
+      name: error.name,
+      message: error.message,
+      hasToken: !!token,
+      tokenLength: token ? token.length : 0,
+      hasJWTSecret: !!process.env.JWT_SECRET
+    });
+    return res.status(401).json({ 
+      message: 'Invalid token',
+      error: error.message,
+      code: error.name 
+    });
   }
 }
 
