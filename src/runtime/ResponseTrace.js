@@ -332,7 +332,30 @@ class ResponseTraceLogger {
       debug: trace.debug || {}
     };
 
-    // Behaviors are now properly handled in the initial sanitization above
+    // CRITICAL HOTFIX: Handle stringified behaviors array [[memory:8912579]]
+    if (sanitizedTrace.behaviors && typeof sanitizedTrace.behaviors === 'string') {
+      console.error('🚨 CRITICAL: behaviors field is a string in validateTrace, attempting to fix');
+      try {
+        // Try to parse the stringified array
+        const parsed = JSON.parse(sanitizedTrace.behaviors);
+        if (Array.isArray(parsed)) {
+          sanitizedTrace.behaviors = parsed;
+          console.log('✅ Successfully fixed stringified behaviors array');
+        } else {
+          console.error('❌ Parsed behaviors is not an array, resetting to empty');
+          sanitizedTrace.behaviors = [];
+        }
+      } catch (error) {
+        console.error('❌ Failed to parse stringified behaviors, resetting to empty array');
+        sanitizedTrace.behaviors = [];
+      }
+    }
+    
+    // Ensure behaviors is always an array
+    if (!Array.isArray(sanitizedTrace.behaviors)) {
+      console.warn('⚠️ behaviors is not an array after all fixes, forcing to empty array');
+      sanitizedTrace.behaviors = [];
+    }
 
     return sanitizedTrace;
   }
