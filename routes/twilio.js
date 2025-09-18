@@ -72,7 +72,7 @@ function getTransferMessage(company) {
 }
 
 // Helper function to handle transfer logic with enabled check
-function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I cannot assist further at this time. Please try calling back later.") {
+function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I cannot assist further at this time. Please try calling back later.", companyID = null) {
   if (isTransferEnabled(company)) {
     const transferNumber = getTransferNumber(company);
     
@@ -88,8 +88,22 @@ function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I ca
       twiml.hangup();
     }
   } else {
-    console.log('[AI AGENT] Transfer disabled, providing fallback message');
+    console.log('[AI AGENT] Transfer disabled, providing fallback message and continuing conversation');
     twiml.say(fallbackMessage);
+    
+    // Continue conversation instead of hanging up [[memory:8276820]]
+    const gather = twiml.gather({
+      input: 'speech',
+      speechTimeout: 'auto',
+      speechModel: 'phone_call',
+      action: `/api/twilio/ai-agent-respond/${companyID || 'unknown'}`,
+      method: 'POST'
+    });
+    
+    gather.say('');
+    
+    // Only hang up as final fallback
+    twiml.say("Thank you for calling. Please try again later.");
     twiml.hangup();
   }
 }
@@ -977,7 +991,7 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       // Get company transfer number and check if transfer is enabled
       const company = await Company.findById(companyID);
       console.log('🎯 CHECKPOINT 19: Calling handleTransfer function');
-      handleTransfer(twiml, company, "I apologize, but I cannot transfer you at this time. Please try calling back later or visiting our website for assistance.");
+      handleTransfer(twiml, company, "I apologize, but I cannot transfer you at this time. Please try calling back later or visiting our website for assistance.", companyID);
     } else {
       console.log('🎯 CHECKPOINT 20: AI continuing conversation');
       console.log(`🗣️ AI Response: "${result.text}"`);
@@ -1031,7 +1045,7 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
         "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
       
       twiml.say(errorResponse);
-      handleTransfer(twiml, company, "Our team will be happy to assist you.");
+      handleTransfer(twiml, company, "Our team will be happy to assist you.", companyID);
     } catch (companyError) {
       console.error('❌ CHECKPOINT DOUBLE ERROR: Could not load company for transfer:', companyError);
       twiml.say("I'm sorry, I'm having trouble processing your request. Please try calling back later.");
