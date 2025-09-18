@@ -62,6 +62,7 @@ class AIConfigLoader {
             const config = {
                 companyID,
                 companyName: company.companyName || company.name,
+                businessName: company.businessName || company.companyName || company.name,
                 
                 // Answer Priority Flow
                 answerPriority: this.getAnswerPriority(aiLogic),

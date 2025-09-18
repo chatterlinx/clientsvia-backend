@@ -110,13 +110,19 @@ class AIAgentRuntime {
         greeting = `Configuration error for ${config.businessName || config.companyName || 'this company'} - greeting not configured in Agent Personality tab`;
       }
       
-      // Apply company name placeholder if available
+      // Apply placeholder replacements [[memory:8276820]]
       if (config.businessName || config.companyName) {
         const companyName = config.businessName || config.companyName;
         greeting = greeting.replace(/\{companyname\}/gi, companyName);
         greeting = greeting.replace(/\{companyName\}/gi, companyName);
         greeting = greeting.replace(/\{\{companyName\}\}/gi, companyName);
       }
+      
+      // Handle caller name placeholder - will be filled during actual call processing
+      // For now, remove the placeholder since we don't have caller info at greeting time
+      greeting = greeting.replace(/\{\{callerName\}\}/gi, '');
+      greeting = greeting.replace(/\{callerName\}/gi, '');
+      greeting = greeting.replace(/\{callername\}/gi, '');
 
       console.log(`[AI AGENT INIT] Generated greeting: "${greeting}"`);
 
