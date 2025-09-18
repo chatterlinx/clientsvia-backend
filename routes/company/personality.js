@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const Company = require('../../models/Company');
+const { authenticateJWT } = require('../../middleware/auth');
 
 console.log('✅ Agent Personality routes loading...');
 
