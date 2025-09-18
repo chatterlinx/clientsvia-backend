@@ -103,10 +103,11 @@ class AIAgentRuntime {
         greeting = config.agentSetup.agentGreeting;
       }
       
-      // CRITICAL: If no greeting found, this is a configuration error
+      // CRITICAL: If no greeting found, this is a configuration error - FORCE admin to configure
       if (!greeting) {
         console.error(`❌ CRITICAL: No greeting configured for company ${companyID} - check aiAgentLogic.responseCategories.core['greeting-response']`);
-        greeting = "Hello! Thank you for calling. Please hold while we resolve a configuration issue.";
+        console.error(`❌ CRITICAL: Company must configure greeting in Agent Personality tab - no hardcoded fallback allowed`);
+        greeting = `Configuration error for ${config.businessName || config.companyName || 'this company'} - greeting not configured in Agent Personality tab`;
       }
       
       // Apply company name placeholder if available

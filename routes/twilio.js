@@ -853,9 +853,9 @@ router.post('/voice/:companyID', async (req, res) => {
     if (company.aiAgentLogic?.enabled) {
       console.log(`[AI AGENT LOGIC] Enabled for company ${companyID}`);
       
-      // Use new AI Agent Logic greeting
+      // Use new AI Agent Logic greeting - NO hardcoded fallbacks allowed
       const greeting = company.aiAgentLogic.responseCategories?.greeting?.template || 
-        `Hello! Thank you for calling ${company.businessName || company.companyName}. Please hold while we resolve a configuration issue.`;
+        `Configuration error for ${company.businessName || company.companyName} - greeting not configured in Agent Personality tab`;
       
       // Apply placeholder replacement
       const finalGreeting = greeting.replace('{companyName}', company.businessName || company.companyName);
