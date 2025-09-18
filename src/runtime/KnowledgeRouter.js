@@ -19,12 +19,14 @@ class KnowledgeRouter {
      * @param {string} params.companyID - Company identifier
      * @param {string} params.text - User input text
      * @param {Object} params.context - Additional context (optional)
+     * @param {Object} params.config - Company configuration (optional, will load if not provided)
      * @returns {Object} Routing result with trace
      */
-    async route({ companyID, text, context = {} }) {
+    async route({ companyID, text, context = {}, config = null }) {
         console.log(`🧠 Knowledge routing for company ${companyID}: "${text}"`);
         
-        const cfg = await aiLoader.get(companyID);
+        // Use provided config or load it (avoid circular dependency)
+        const cfg = config || await require('../config/aiLoader').get(companyID);
         const trace = [];
 
         const trySource = async (source, fn, threshold) => {
@@ -128,9 +130,7 @@ class KnowledgeRouter {
         console.log(`❌ No source selected for company ${companyID}, using configurable default response`);
         
         // Get configurable no-match response from company settings
-        const aiLoader = require('../config/aiLoader');
-        const config = await aiLoader.get(companyID);
-        const noMatchResponse = config?.responseCategories?.core?.['no-match-response'] || 
+        const noMatchResponse = cfg?.responseCategories?.core?.['no-match-response'] || 
             "I understand you're looking for information. Let me connect you with someone who can help you better.";
         
         const defaultResponse = {

@@ -321,7 +321,8 @@ class AIAgentRuntime {
       const knowledgeResult = await routeKnowledge({
         companyID,
         text: userText,
-        context: callState
+        context: callState,
+        config: config
       });
       
       const knowledgeTime = Date.now() - knowledgeStart;
