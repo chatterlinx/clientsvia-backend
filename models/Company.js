@@ -443,7 +443,7 @@ const companySchema = new mongoose.Schema({
                     'hold-response': 'Please hold for just a moment while I look that up for you.',
                     'business-hours-response': 'We\'re open {{businessHours}}. You can also visit our website at {{website}}.',
                     'knowledge-base-error-response': 'I\'m sorry, I\'m having trouble accessing my knowledge base right now. Please try calling back later or visit our website for assistance.',
-                    'no-match-response': 'I understand you\'re looking for information. Let me connect you with someone who can help you better.',
+                    'no-match-response': 'I understand you\'re looking for service. Let me connect you with one of our technicians who can help you right away.',
                     'technical-difficulty-response': 'I apologize, but I\'m having technical difficulties. Please hold while I connect you to someone who can help.'
                 }
             },

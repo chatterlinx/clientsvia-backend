@@ -215,12 +215,20 @@ class ResponseTraceLogger {
       trace.behaviors = [];
     }
 
-    // Create a clean behavior object
+    // Create a clean behavior object with sanitized result
+    const sanitizedResult = result ? {
+      text: result.text || '',
+      shouldEscalate: result.shouldEscalate || false,
+      shouldHangup: result.shouldHangup || false,
+      confidence: result.confidence || 0,
+      source: result.source || 'unknown'
+    } : null;
+    
     const behaviorStep = {
       type: behaviorType,
       applied: Boolean(applied),
       config: config || null,
-      result: result || null
+      result: sanitizedResult
     };
 
     trace.behaviors.push(behaviorStep);
