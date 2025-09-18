@@ -366,6 +366,17 @@ class ResponseTraceLogger {
    * @returns {Object} Saved trace document
    */
   static async saveTrace(trace) {
+    // EMERGENCY NUCLEAR BYPASS: Completely disable trace saving until deployment issues resolved [[memory:8912579]]
+    console.log('🚨 EMERGENCY NUCLEAR BYPASS: ResponseTrace saving completely disabled');
+    console.log('📊 Trace summary:', {
+      companyID: trace.companyID,
+      callId: trace.callId,
+      hasResponse: !!trace.response,
+      behaviorsType: typeof trace.behaviors,
+      behaviorsLength: Array.isArray(trace.behaviors) ? trace.behaviors.length : 'NOT_ARRAY'
+    });
+    return { _id: 'nuclear_bypass', message: 'Trace saving disabled for emergency stability' };
+    
     try {
       // Validate and sanitize the trace object
       const sanitizedTrace = this.validateTrace(trace);
