@@ -1025,8 +1025,13 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       const company = await Company.findById(companyID);
       
       console.log('🎯 CHECKPOINT ERROR RECOVERY: Attempting graceful error handling');
-      twiml.say("I'm sorry, I'm having trouble processing your request.");
-      handleTransfer(twiml, company, "Please try calling back later or visit our website for assistance.");
+      
+      // Use configurable error response [[memory:8276820]]
+      const errorResponse = company?.aiAgentLogic?.responseCategories?.core?.['technical-difficulty-response'] || 
+        "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
+      
+      twiml.say(errorResponse);
+      handleTransfer(twiml, company, "Our team will be happy to assist you.");
     } catch (companyError) {
       console.error('❌ CHECKPOINT DOUBLE ERROR: Could not load company for transfer:', companyError);
       twiml.say("I'm sorry, I'm having trouble processing your request. Please try calling back later.");

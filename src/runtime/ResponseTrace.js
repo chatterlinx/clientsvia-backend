@@ -325,37 +325,14 @@ class ResponseTraceLogger {
       input: trace.input || {},
       knowledgeTrace: Array.isArray(trace.knowledgeTrace) ? trace.knowledgeTrace : [],
       response: trace.response || {},
-      behaviors: [],
+      behaviors: Array.isArray(trace.behaviors) ? trace.behaviors : [],
       bookingTrace: trace.bookingTrace || null,
       metrics: trace.metrics || { cacheHit: false },
       context: trace.context || {},
       debug: trace.debug || {}
     };
 
-    // Handle behaviors field specially - CRITICAL FIX for validation error
-    if (trace.behaviors) {
-      if (typeof trace.behaviors === 'string') {
-        try {
-          // CRITICAL: Check if it's already a stringified array
-          const parsed = JSON.parse(trace.behaviors);
-          if (Array.isArray(parsed)) {
-            sanitizedTrace.behaviors = parsed;
-          } else {
-            console.warn('⚠️ Parsed behaviors is not an array, resetting');
-            sanitizedTrace.behaviors = [];
-          }
-        } catch (error) {
-          console.error('❌ Failed to parse behaviors string:', error);
-          console.error('❌ Behaviors string value:', trace.behaviors.substring(0, 200));
-          sanitizedTrace.behaviors = [];
-        }
-      } else if (Array.isArray(trace.behaviors)) {
-        sanitizedTrace.behaviors = trace.behaviors;
-      } else {
-        console.warn('⚠️ behaviors field is not array or string, setting to empty array');
-        sanitizedTrace.behaviors = [];
-      }
-    }
+    // Behaviors are now properly handled in the initial sanitization above
 
     return sanitizedTrace;
   }
