@@ -2,14 +2,20 @@
  * 🎯 BLUEPRINT COMPLIANCE: AI Configuration Loader
  * Loads all AI agent configurations by companyID with Redis cache
  * Part of the production-ready AI Agent Logic system
+ * 
+ * 🚀 ENTERPRISE OPTIMIZATION: Mongoose + Redis for sub-50ms performance
+ * ⚡ PERFORMANCE TARGET: Sub-50ms response times for AI agent routing
+ * 🌐 COFFEE SHOP FRIENDLY: Graceful fallback to in-memory cache
  */
 
 const Company = require('../../models/Company');
+const { redisClient } = require('../../clients');
 
 class AIConfigLoader {
     constructor() {
-        this.cache = new Map(); // In-memory cache for coffee shop mode (Redis would be ideal)
-        this.cacheTimeout = 60000; // 60 seconds cache
+        this.fallbackCache = new Map(); // In-memory fallback for coffee shop mode
+        this.cacheTimeout = 300; // 5 minutes in Redis (seconds)
+        this.fallbackTimeout = 60000; // 60 seconds for fallback cache (ms)
     }
 
     /**
@@ -20,16 +26,29 @@ class AIConfigLoader {
     async get(companyID) {
         const cacheKey = `ai_config_${companyID}`;
         
-        // Check cache first
-        if (this.cache.has(cacheKey)) {
-            const cached = this.cache.get(cacheKey);
-            if (Date.now() - cached.timestamp < this.cacheTimeout) {
-                console.log(`🚀 AI Config cache hit for company: ${companyID}`);
+        // 🚀 STEP 1: Try Redis cache first (enterprise optimization)
+        try {
+            if (redisClient) {
+                const cachedConfig = await redisClient.get(cacheKey);
+                if (cachedConfig) {
+                    console.log(`⚡ Redis cache hit for company: ${companyID}`);
+                    return JSON.parse(cachedConfig);
+                }
+            }
+        } catch (redisError) {
+            console.warn(`⚠️ Redis cache read failed for ${companyID}:`, redisError.message);
+        }
+        
+        // 🌐 STEP 2: Fallback to in-memory cache (coffee shop mode)
+        if (this.fallbackCache.has(cacheKey)) {
+            const cached = this.fallbackCache.get(cacheKey);
+            if (Date.now() - cached.timestamp < this.fallbackTimeout) {
+                console.log(`🚀 Fallback cache hit for company: ${companyID}`);
                 return cached.data;
             }
         }
 
-        console.log(`🔍 Loading AI configuration for company: ${companyID}`);
+        console.log(`🔍 Loading AI configuration from MongoDB for company: ${companyID}`);
         
         try {
             const company = await Company.findById(companyID);
@@ -127,11 +146,8 @@ class AIConfigLoader {
                 lastUpdated: aiLogic.lastUpdated || new Date()
             };
 
-            // Cache the configuration
-            this.cache.set(cacheKey, {
-                data: config,
-                timestamp: Date.now()
-            });
+            // 🚀 STEP 3: Cache the configuration (Redis + fallback)
+            await this.cacheConfiguration(cacheKey, config);
 
             console.log(`✅ AI configuration loaded and cached for company: ${companyID}`);
             return config;
@@ -161,20 +177,69 @@ class AIConfigLoader {
     }
 
     /**
-     * Invalidate cache for a specific company
+     * 💾 Cache configuration in Redis + fallback
+     * @param {string} cacheKey - Cache key
+     * @param {Object} config - Configuration to cache
+     */
+    async cacheConfiguration(cacheKey, config) {
+        // 🚀 Primary: Store in Redis (enterprise optimization)
+        try {
+            if (redisClient) {
+                await redisClient.setEx(cacheKey, this.cacheTimeout, JSON.stringify(config));
+                console.log(`⚡ Configuration cached in Redis: ${cacheKey}`);
+            }
+        } catch (redisError) {
+            console.warn(`⚠️ Redis cache write failed for ${cacheKey}:`, redisError.message);
+        }
+        
+        // 🌐 Fallback: Store in memory (coffee shop mode)
+        this.fallbackCache.set(cacheKey, {
+            data: config,
+            timestamp: Date.now()
+        });
+    }
+
+    /**
+     * Invalidate cache for a specific company (Redis + fallback)
      * @param {string} companyID - The company identifier
      */
-    invalidate(companyID) {
+    async invalidate(companyID) {
         const cacheKey = `ai_config_${companyID}`;
-        this.cache.delete(cacheKey);
+        
+        // Clear from Redis
+        try {
+            if (redisClient) {
+                await redisClient.del(cacheKey);
+                console.log(`⚡ Redis cache invalidated for company: ${companyID}`);
+            }
+        } catch (redisError) {
+            console.warn(`⚠️ Redis cache invalidation failed for ${companyID}:`, redisError.message);
+        }
+        
+        // Clear from fallback cache
+        this.fallbackCache.delete(cacheKey);
         console.log(`🗑️ Cache invalidated for company: ${companyID}`);
     }
 
     /**
-     * Clear all cache
+     * Clear all cache (Redis + fallback)
      */
-    clearCache() {
-        this.cache.clear();
+    async clearCache() {
+        // Clear Redis cache
+        try {
+            if (redisClient) {
+                const keys = await redisClient.keys('ai_config_*');
+                if (keys.length > 0) {
+                    await redisClient.del(keys);
+                    console.log(`⚡ Redis cache cleared: ${keys.length} AI configs`);
+                }
+            }
+        } catch (redisError) {
+            console.warn(`⚠️ Redis cache clear failed:`, redisError.message);
+        }
+        
+        // Clear fallback cache
+        this.fallbackCache.clear();
         console.log('🗑️ All AI configuration cache cleared');
     }
 }

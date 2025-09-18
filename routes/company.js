@@ -390,9 +390,17 @@ router.patch('/company/:id', async (req, res) => {
             console.log('📝 [NOTES DEBUG] Notes after save:', updatedCompany.notes.length, 'notes saved');
         }
 
+        // 🚀 ENTERPRISE OPTIMIZATION: Clear both company and AI config caches
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
         console.log(`DELETED from cache: ${cacheKey}`);
+        
+        // Clear AI Agent Logic cache when aiAgentLogic is updated (includes keywords)
+        if (req.body.aiAgentLogic) {
+            const aiLoader = require('../src/config/aiLoader');
+            await aiLoader.invalidate(companyId);
+            console.log(`⚡ AI Agent Logic cache invalidated for company: ${companyId}`);
+        }
 
         res.json(updatedCompany);
     } catch (error) {
