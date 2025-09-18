@@ -475,19 +475,27 @@ class AIAgentRuntime {
       
       const behaviorTime = Date.now() - behaviorStart;
       
-      // Add behavior applications to trace
+      // Add behavior applications to trace with sanitized result [[memory:8912579]]
+      const sanitizedBehaviorResult = {
+        text: behaviorResult.text || '',
+        shouldEscalate: behaviorResult.shouldEscalate || false,
+        shouldHangup: behaviorResult.shouldHangup || false,
+        confidence: behaviorResult.confidence || 0,
+        source: behaviorResult.source || 'behavior_engine'
+      };
+      
       ResponseTraceLogger.addBehaviorStep(
         trace, 'silence_policy', 
         behaviorResult.shouldHangup || behaviorResult.metadata?.appliedBehaviors?.includes('silence_policy'),
         config.behaviorControls?.silencePolicy,
-        behaviorResult
+        sanitizedBehaviorResult
       );
       
       if (behaviorResult.metadata?.appliedBehaviors?.includes('emotion_acknowledgment')) {
         ResponseTraceLogger.addBehaviorStep(
           trace, 'emotion_acknowledgment', true,
           config.behaviorControls?.emotionAcknowledgment,
-          behaviorResult
+          sanitizedBehaviorResult
         );
       }
       
