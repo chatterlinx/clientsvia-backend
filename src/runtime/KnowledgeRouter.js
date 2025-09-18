@@ -124,12 +124,18 @@ class KnowledgeRouter {
             }
         }
 
-        // If no source was selected, return a default response
-        console.log(`❌ No source selected for company ${companyID}, using default response`);
+        // If no source was selected, return a configurable default response [[memory:8276820]]
+        console.log(`❌ No source selected for company ${companyID}, using configurable default response`);
+        
+        // Get configurable no-match response from company settings
+        const aiLoader = require('../config/aiLoader');
+        const config = await aiLoader.get(companyID);
+        const noMatchResponse = config?.responseCategories?.core?.['no-match-response'] || 
+            "I understand you're looking for information. Let me connect you with someone who can help you better.";
         
         const defaultResponse = {
-            text: "I understand you're looking for information. Let me connect you with someone who can help you better.",
-            source: "default",
+            text: noMatchResponse,
+            source: "configurable_default",
             score: 0.1,
             confidence: 0.1
         };

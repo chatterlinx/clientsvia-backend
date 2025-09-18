@@ -219,7 +219,7 @@ class AIAgentRuntime {
       }
       
     } catch (error) {
-      console.error('Error in AI Agent Runtime:', error);
+      console.error('❌ CRITICAL ERROR in AI Agent Runtime:', error);
       
       if (trace) {
         ResponseTraceLogger.setDebug(trace, {
@@ -229,8 +229,9 @@ class AIAgentRuntime {
         await ResponseTraceLogger.saveTrace(trace);
       }
       
-      // Fallback to existing system
-      return await this.fallbackToLegacySystem(companyID, userText, company);
+      // Re-throw the error - let the in-house fallback system handle it [[memory:8276820]]
+      // The in-house fallback (0.5 threshold) should always respond, no need for legacy fallback
+      throw error;
     }
   }
 
@@ -341,14 +342,11 @@ class AIAgentRuntime {
       return finalResponse;
       
     } catch (error) {
-      console.error('Error in knowledge routing, falling back to legacy system:', error);
+      console.error('❌ CRITICAL ERROR in knowledge routing:', error);
       
-      // Fallback to existing agent system
-      const legacyResponse = await this.fallbackToLegacySystem(companyID, userText, company);
-      
-      ResponseTraceLogger.setResponse(trace, legacyResponse, 'legacy_fallback');
-      
-      return await this.applyBehaviorAndFinalize(config, callState, legacyResponse, trace);
+      // Re-throw the error - let the in-house fallback system handle it [[memory:8276820]]
+      // The in-house fallback (0.5 threshold) should always respond, no need for legacy fallback
+      throw error;
     }
   }
 
@@ -560,76 +558,10 @@ class AIAgentRuntime {
   }
 
   /**
-   * Fallback to legacy system when new system fails
+   * REMOVED: Legacy fallback system eliminated [[memory:8276820]]
+   * The in-house fallback system (0.5 threshold) should always respond.
+   * If there are errors, they should be handled by proper error handling, not fallback messages.
    */
-  static async fallbackToLegacySystem(companyID, userText, company) {
-    try {
-      console.log('Falling back to legacy agent system');
-      
-      // Try cached answer first
-      const cachedAnswer = await findCachedAnswer(companyID, userText);
-      if (cachedAnswer) {
-        return {
-          text: cachedAnswer,
-          confidence: 0.8,
-          source: 'cached_legacy'
-        };
-      }
-      
-      // Use existing agent service
-      if (company) {
-        const legacyResponse = await answerQuestion(userText, company);
-        return {
-          text: legacyResponse.answer || legacyResponse,
-          confidence: legacyResponse.confidence || 0.7,
-          source: 'legacy_agent'
-        };
-      }
-      
-      // Check if transfer is enabled for fallback scenarios
-      const transferEnabled = await isTransferEnabled(companyID);
-      
-      if (transferEnabled) {
-        return {
-          text: "I'm sorry, I'm having trouble accessing my knowledge base right now. Let me transfer you to someone who can help.",
-          confidence: 0.5,
-          shouldTransfer: true,
-          source: 'fallback_message'
-        };
-      } else {
-        return {
-          text: "I'm sorry, I'm having trouble accessing my knowledge base right now. Please try calling back later or visit our website for assistance.",
-          confidence: 0.5,
-          shouldTransfer: false,
-          shouldHangup: true,
-          source: 'fallback_message_no_transfer'
-        };
-      }
-      
-    } catch (error) {
-      console.error('Error in legacy fallback:', error);
-      
-      // Check if transfer is enabled for error scenarios
-      const transferEnabled = await isTransferEnabled(companyID);
-      
-      if (transferEnabled) {
-        return {
-          text: "I apologize, but I'm experiencing technical difficulties. Please hold while I transfer you to a team member.",
-          confidence: 0.3,
-          shouldTransfer: true,
-          source: 'error_fallback'
-        };
-      } else {
-        return {
-          text: "I apologize, but I'm experiencing technical difficulties. Please try calling back later or visit our website for assistance.",
-          confidence: 0.3,
-          shouldTransfer: false,
-          shouldHangup: true,
-          source: 'error_fallback_no_transfer'
-        };
-      }
-    }
-  }
 
   /**
    * Get call statistics for a company
