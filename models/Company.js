@@ -290,85 +290,11 @@ const companySchema = new mongoose.Schema({
         default: [],
         index: true
     },
-    agentIntelligenceSettings: {
-        useLLM: { type: Boolean, default: true },
-        llmModel: { 
-            type: String, 
-            default: 'gemini-pro',
-            enum: ['gemini-pro', 'openai-gpt4', 'claude-3']
-        },
-        
-        // 🚀 ENHANCED LLM SELECTION CONTROLS
-        allowedLLMModels: { 
-            type: [String], 
-            default: ['gemini-pro'],
-            validate: {
-                validator: function(v) {
-                    const validModels = ['gemini-pro', 'openai-gpt4', 'claude-3'];
-                    return v.every(model => validModels.includes(model));
-                },
-                message: 'Invalid LLM model in allowedLLMModels'
-            }
-        },
-        primaryLLM: { 
-            type: String, 
-            default: 'gemini-pro',
-            enum: ['gemini-pro', 'openai-gpt4', 'claude-3']
-        },
-        fallbackLLM: { 
-            type: String, 
-            default: 'gemini-pro',
-            enum: ['gemini-pro', 'openai-gpt4', 'claude-3']
-        },
-        
-        // 📚 SELF-LEARNING CONTROLS
-        autoLearningEnabled: { type: Boolean, default: true },
-        learningApprovalMode: { 
-            type: String, 
-            enum: ['manual', 'auto-high-confidence', 'disabled'], 
-            default: 'manual' 
-        },
-        learningConfidenceThreshold: { 
-            type: Number, 
-            min: 0, 
-            max: 1, 
-            default: 0.85 
-        },
-        maxPendingQnAs: { 
-            type: Number, 
-            min: 10, 
-            max: 500, 
-            default: 100 
-        },
-        
-        memoryMode: { 
-            type: String, 
-            enum: ['short', 'conversational', 'persistent'], 
-            default: 'conversational' 
-        },
-        fallbackThreshold: { 
-            type: Number, 
-            min: 0, 
-            max: 1, 
-            default: 0.5 
-        },
-        escalationMode: { 
-            type: String, 
-            enum: ['ask', 'auto'], 
-            default: 'ask' 
-        },
-        rePromptAfterTurns: { 
-            type: Number, 
-            min: 1, 
-            max: 10, 
-            default: 3 
-        },
-        maxPromptsPerCall: { 
-            type: Number, 
-            min: 1, 
-            max: 10, 
-            default: 2 
-        },
+    // 🚨 REMOVED: All LLM settings violate "no external LLM" business rule
+    // All AI intelligence is now handled by aiAgentLogic configuration from UI
+    
+    // 🚨 REMOVED: All intelligence settings now come from aiAgentLogic UI configuration
+    // This ensures true multi-tenant isolation and no hardcoded behavior
         
         // Enhanced enterprise features
         firstPromptSoft: { type: Boolean, default: true },

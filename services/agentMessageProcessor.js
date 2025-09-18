@@ -110,35 +110,10 @@ class AgentMessageProcessor {
                 throw new Error(`Company ${companyId} not found`);
             }
 
-            // Merge settings with defaults - RESPECTING ALL UI CONTROLS
+            // 🚨 REMOVED: All hardcoded settings - Configuration must come from aiAgentLogic UI only
+            // This ensures true multi-tenant isolation and no hidden behavior
             const settings = {
-                // Core AI Configuration
-                tradeCategories: company.agentIntelligenceSettings?.tradeCategories || [],
-                useLLM: company.agentIntelligenceSettings?.useLLM !== false, // Default true
-                primaryLLM: company.agentIntelligenceSettings?.primaryLLM || 'gemini-pro',
-                fallbackLLM: company.agentIntelligenceSettings?.fallbackLLM || 'gemini-pro',
-                allowedLLMs: company.agentIntelligenceSettings?.allowedLLMs || ['gemini-pro'],
-                memoryMode: company.agentIntelligenceSettings?.memoryMode || 'conversation',
-
-                // Intelligence Thresholds
-                fallbackThreshold: company.agentIntelligenceSettings?.fallbackThreshold || 0.5,
-                escalationMode: company.agentIntelligenceSettings?.escalationMode || 'ask',
-                rePromptAfterTurns: company.agentIntelligenceSettings?.rePromptAfterTurns || 2,
-                maxPromptsPerCall: company.agentIntelligenceSettings?.maxPromptsPerCall || 3,
-
-                // Advanced Features
-                semanticSearchEnabled: company.agentIntelligenceSettings?.semanticSearchEnabled || false,
-                confidenceScoring: company.agentIntelligenceSettings?.confidenceScoring || true,
-                autoLearningQueue: company.agentIntelligenceSettings?.autoLearningQueue || false,
-
-                // Legacy settings for compatibility
-                fuzzyMatchThreshold: company.aiSettings?.fuzzyMatchThreshold || 0.15,
-                llmFallbackEnabled: company.aiSettings?.llmFallbackEnabled !== false,
-                customEscalationMessage: company.aiSettings?.customEscalationMessage,
-
-                // Company-specific data
-                mainAgentScript: company.agentSetup?.mainAgentScript || '',
-                categoryQAs: company.agentSetup?.categoryQAs || '',
+                // Company-specific data (only non-configurable basics)
                 companyName: company.companyName || 'Service Company',
                 placeholders: company.agentSetup?.placeholders || [],
                 bookingFlow: company.bookingFlow || []

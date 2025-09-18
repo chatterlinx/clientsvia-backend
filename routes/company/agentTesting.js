@@ -219,21 +219,14 @@ async function testPersonalityResponse(companyId, category, trace) {
 async function testKnowledgeSources(companyId, message, company, trace) {
   const knowledgeSettings = company.agentKnowledgeSettings;
   
-  // Default priority if no company settings
-  const defaultPriority = {
-    companyQnA: 1,
-    tradeQnA: 2,
-    vectorSearch: 3,
-    llmFallback: 4
-  };
+  // 🚨 MULTI-TENANT COMPLIANCE: No hardcoded defaults - must be configured per company
+  if (!knowledgeSettings?.sourcePriority) {
+    console.warn(`⚠️ Company ${companyId} has no knowledge source priority configured. Please configure in AI Agent Logic tab.`);
+    return { source: 'none', confidence: 0, answer: 'Configuration required' };
+  }
   
-  const priority = knowledgeSettings?.sourcePriority || defaultPriority;
-  const confidenceThresholds = knowledgeSettings?.confidenceThresholds || {
-    companyQnA: 0.8,
-    tradeQnA: 0.7,
-    vectorSearch: 0.6,
-    llmFallback: 0.5
-  };
+  const priority = knowledgeSettings.sourcePriority;
+  const confidenceThresholds = knowledgeSettings.confidenceThresholds;
   
   // Sort sources by priority
   const sortedSources = Object.entries(priority)

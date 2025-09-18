@@ -172,8 +172,9 @@ class AIConfigLoader {
                 .map(item => item.id);
         }
         
-        // Default priority order per Blueprint
-        return ["companyKB", "tradeQA", "templates", "learning", "llmFallback"];
+        // 🚨 MULTI-TENANT COMPLIANCE: No hardcoded defaults - must be configured per company
+        console.warn(`⚠️ Company ${companyID} has no priority flow configured. Please configure in AI Agent Logic tab.`);
+        return []; // Empty - must be configured per company
     }
 
     /**

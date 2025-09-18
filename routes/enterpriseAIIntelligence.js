@@ -337,25 +337,8 @@ function getEnterpriseDefaults() {
             synonymGroups: ['repair,fix,broken', 'install,setup,new', 'emergency,urgent,asap', 'appointment,booking,schedule'],
             tradeCategoryWeights: {}
         },
-        providerRouter: {
-            primaryProvider: 'anthropic-claude',
-            fallbackChain: {
-                fallback1: 'google-gemini',
-                fallback2: 'openai-gpt4'
-            },
-            circuitBreaker: {
-                errorThreshold: 5,
-                timeoutSeconds: 30,
-                enabled: true
-            }
-        },
-        costControls: {
-            dailyLLMBudget: 50,
-            maxTokensPerCall: 1000,
-            emergencyOverrideEnabled: false,
-            currentDayUsage: 0,
-            lastResetDate: new Date()
-        },
+        // 🚨 REMOVED: LLM provider configurations violate no-LLM business rule
+        // 🚨 REMOVED: LLM cost controls violate no-LLM business rule
         memoryManagement: {
             sessionTTLMinutes: 30,
             profileMemoryEnabled: false,

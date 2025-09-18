@@ -7,18 +7,8 @@ const AISettingsSchema = new mongoose.Schema({
     required: true,
     index: true 
   },
-  answerPriority: {
-    type: [String],
-    default: ["companyKB", "tradeQA", "templates", "learning", "llmFallback"],
-    enum: ["companyKB", "tradeQA", "templates", "learning", "vector", "llmFallback"]
-  },
-  thresholds: {
-    companyKB: { type: Number, default: 0.80, min: 0, max: 1 },
-    tradeQA: { type: Number, default: 0.75, min: 0, max: 1 },
-    vector: { type: Number, default: 0.70, min: 0, max: 1 },
-    templates: { type: Number, default: 0.60, min: 0, max: 1 },
-    llmFallback: { type: Number, default: 0.60, min: 0, max: 1 }
-  },
+  // 🚨 REMOVED: Hardcoded priorities and thresholds violate multi-tenant principles
+  // All configuration must come from company-specific aiAgentLogic UI settings
   memory: {
     mode: { type: String, default: "conversational", enum: ["none", "conversational", "persistent"] },
     retentionMinutes: { type: Number, default: 30, min: 5, max: 1440 }
@@ -29,11 +19,7 @@ const AISettingsSchema = new mongoose.Schema({
   },
   rePromptAfterTurns: { type: Number, default: 3, min: 1, max: 10 },
   maxPromptsPerCall: { type: Number, default: 2, min: 1, max: 5 },
-  modelConfig: {
-    primary: { type: String, default: "gemini-pro" },
-    fallback: { type: String, default: "gpt-4o-mini" },
-    allowed: { type: [String], default: ["gemini-pro", "gpt-4o-mini", "claude-3-haiku"] }
-  },
+  // 🚨 REMOVED: Hardcoded LLM model configurations violate no-LLM business rule
   tradeCategories: { 
     type: [String], 
     default: ["HVAC Residential", "Plumbing Residential"] 
