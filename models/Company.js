@@ -295,23 +295,6 @@ const companySchema = new mongoose.Schema({
     
     // 🚨 REMOVED: All intelligence settings now come from aiAgentLogic UI configuration
     // This ensures true multi-tenant isolation and no hardcoded behavior
-        
-        // Enhanced enterprise features
-        firstPromptSoft: { type: Boolean, default: true },
-        semanticSearchEnabled: { type: Boolean, default: true },
-        confidenceScoring: { type: Boolean, default: true },
-        autoLearningQueue: { type: Boolean, default: true },
-        contextRetention: { type: Boolean, default: true },
-        intelligentRouting: { type: Boolean, default: true },
-        sentimentAnalysis: { type: Boolean, default: false },
-        realTimeOptimization: { type: Boolean, default: true },
-        
-        // 🧠 AI Intelligence Features from Frontend
-        contextualMemory: { type: Boolean, default: true },
-        dynamicReasoning: { type: Boolean, default: true },
-        smartEscalation: { type: Boolean, default: true },
-        contextRetentionMinutes: { type: Number, min: 5, max: 120, default: 30 }
-    },
     
     // 🧠 REMOVED DUPLICATE - This was overwritten by the complete definition below at line 538
     
