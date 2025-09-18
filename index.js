@@ -244,19 +244,38 @@ function registerRoutes(routes) {
     */
 
     // 🚨 GLOBAL REQUEST LOGGER for Twilio debugging
-    app.use('/api/twilio', (req, res, next) => {
-        console.log('🌐 GLOBAL TWILIO REQUEST INTERCEPTED:', {
+app.use('/api/twilio', (req, res, next) => {
+    console.log('🌐 GLOBAL TWILIO REQUEST INTERCEPTED:', {
+        timestamp: new Date().toISOString(),
+        method: req.method,
+        originalUrl: req.originalUrl,
+        ip: req.ip || req.connection.remoteAddress,
+        userAgent: req.headers['user-agent'],
+        twilioSignature: req.headers['x-twilio-signature'],
+        hasBody: !!req.body,
+        bodySize: JSON.stringify(req.body || {}).length
+    });
+    next();
+});
+
+// 🚨 EMERGENCY: Log ALL incoming requests to catch hidden transfers
+app.use((req, res, next) => {
+    // Only log non-static requests to avoid spam
+    if (!req.url.startsWith('/css/') && !req.url.startsWith('/js/') && !req.url.startsWith('/favicon')) {
+        console.log('🚨 EMERGENCY REQUEST LOG:', {
             timestamp: new Date().toISOString(),
             method: req.method,
+            url: req.url,
             originalUrl: req.originalUrl,
             ip: req.ip || req.connection.remoteAddress,
             userAgent: req.headers['user-agent'],
-            twilioSignature: req.headers['x-twilio-signature'],
-            hasBody: !!req.body,
-            bodySize: JSON.stringify(req.body || {}).length
+            referer: req.headers['referer'],
+            isTwilio: req.headers['user-agent']?.includes('TwilioProxy') || req.headers['x-twilio-signature'],
+            hasCallSid: !!(req.body && req.body.CallSid)
         });
-        next();
-    });
+    }
+    next();
+});
     
     // This line will now correctly handle all /api/twilio requests
     app.use('/api/twilio', routes.twilioRoutes);
