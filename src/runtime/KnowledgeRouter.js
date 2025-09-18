@@ -129,9 +129,10 @@ class KnowledgeRouter {
         // If no source was selected, return a configurable default response [[memory:8276820]]
         console.log(`❌ No source selected for company ${companyID}, using configurable default response`);
         
-        // Get configurable no-match response from company settings
+        // Get configurable no-match response from company settings [[memory:8276820]]
         const noMatchResponse = cfg?.responseCategories?.core?.['no-match-response'] || 
-            "I understand you're looking for information. Let me connect you with someone who can help you better.";
+            cfg?.aiAgentLogic?.responseCategories?.core?.['no-match-response'] ||
+            "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
         
         const defaultResponse = {
             text: noMatchResponse,
