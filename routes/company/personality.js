@@ -148,13 +148,28 @@ router.post('/:id/personality', async (req, res) => {
         company.agentPersonalitySettings = {};
       }
       
-      Object.assign(company.agentPersonalitySettings, {
+      const personalityConfig = {
         voiceTone: personalitySettings.voiceTone || 'friendly',
         speechPace: personalitySettings.speechPace || 'normal',
         bargeInMode: personalitySettings.bargeIn !== undefined ? Boolean(personalitySettings.bargeIn) : true,
         acknowledgeEmotion: personalitySettings.acknowledgeEmotion !== undefined ? Boolean(personalitySettings.acknowledgeEmotion) : true,
         useEmojis: personalitySettings.useEmojis !== undefined ? Boolean(personalitySettings.useEmojis) : false
-      });
+      };
+      
+      // Save to agentPersonalitySettings
+      Object.assign(company.agentPersonalitySettings, personalityConfig);
+      
+      // CRITICAL: Also save to aiAgentLogic.agentPersonality for AI agent to use
+      if (!company.aiAgentLogic) {
+        company.aiAgentLogic = {
+          enabled: true,
+          version: 1,
+          lastUpdated: new Date()
+        };
+      }
+      
+      company.aiAgentLogic.agentPersonality = personalityConfig;
+      company.aiAgentLogic.lastUpdated = new Date();
     }
     
     // Update call transfer configuration
@@ -176,6 +191,16 @@ router.post('/:id/personality', async (req, res) => {
     // Save changes
     console.log('🔧 About to save company with aiAgentLogic:', JSON.stringify(company.aiAgentLogic, null, 2));
     await company.save();
+    
+    // CRITICAL: Clear Redis cache so AI agent picks up new personality settings immediately
+    const { redisClient } = require('../../clients');
+    try {
+      await redisClient.del(`company:${req.params.id}`);
+      await redisClient.del(`ai_config_${req.params.id}`);
+      console.log(`🗑️ CACHE CLEARED: company:${req.params.id} and ai_config_${req.params.id} - Fresh personality settings will be loaded`);
+    } catch (cacheError) {
+      console.warn(`⚠️ Cache clear failed:`, cacheError.message);
+    }
     
     console.log(`✅ Personality and transfer settings saved for ${company.companyName}`);
     console.log(`📞 Transfer enabled: ${company.aiAgentLogic?.callTransferConfig?.dialOutEnabled}, Number: ${company.aiAgentLogic?.callTransferConfig?.dialOutNumber}`);
@@ -331,13 +356,37 @@ router.post('/:id/personality-responses', async (req, res) => {
       Object.assign(company.agentPersonalitySettings, agentPersonality);
     }
     
-    // Update response categories
+    // Update response categories in aiAgentLogic (where AI agent expects them)
     if (responseCategories) {
+      // Initialize aiAgentLogic if it doesn't exist
+      if (!company.aiAgentLogic) {
+        company.aiAgentLogic = {
+          enabled: true,
+          version: 1,
+          lastUpdated: new Date()
+        };
+      }
+      
+      // Save to aiAgentLogic.responseCategories for AI agent to use
+      company.aiAgentLogic.responseCategories = responseCategories;
+      company.aiAgentLogic.lastUpdated = new Date();
+      
+      // Also save to agentPersonalitySettings for backward compatibility
       company.agentPersonalitySettings.responseCategories = responseCategories;
     }
     
     // Save changes
     await company.save();
+    
+    // CRITICAL: Clear Redis cache so AI agent picks up new response templates immediately
+    const { redisClient } = require('../../clients');
+    try {
+      await redisClient.del(`company:${req.params.id}`);
+      await redisClient.del(`ai_config_${req.params.id}`);
+      console.log(`🗑️ CACHE CLEARED: company:${req.params.id} and ai_config_${req.params.id} - Fresh response templates will be loaded`);
+    } catch (cacheError) {
+      console.warn(`⚠️ Cache clear failed:`, cacheError.message);
+    }
     
     console.log(`✅ Advanced personality settings saved for ${company.companyName}`);
     

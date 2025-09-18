@@ -8472,6 +8472,112 @@
             }
         }
 
+        // Save Response Templates - CRITICAL MISSING FUNCTION
+        async function saveResponseTemplates() {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) return;
+
+            // Collect all response templates
+            const responseCategories = {
+                core: {
+                    'greeting-response': document.getElementById('response-greeting')?.value || '',
+                    'farewell-response': document.getElementById('response-farewell')?.value || '',
+                    'transfer-response': document.getElementById('response-transfer')?.value || '',
+                    'service-unavailable-response': document.getElementById('response-service-unavailable')?.value || '',
+                    'hold-response': document.getElementById('response-hold')?.value || '',
+                    'business-hours-response': document.getElementById('response-business-hours')?.value || ''
+                },
+                advanced: {
+                    'emergency-response': document.getElementById('response-emergency')?.value || '',
+                    'after-hours-response': document.getElementById('response-after-hours')?.value || '',
+                    'appointment-confirmation': document.getElementById('response-appointment-confirmation')?.value || '',
+                    'scheduling-conflict': document.getElementById('response-scheduling-conflict')?.value || ''
+                },
+                emotional: {
+                    'frustrated-customer': document.getElementById('response-frustrated-customer')?.value || '',
+                    'appreciative-response': document.getElementById('response-appreciative')?.value || '',
+                    'problem-resolution': document.getElementById('response-problem-resolution')?.value || '',
+                    'quality-assurance': document.getElementById('response-quality-assurance')?.value || ''
+                }
+            };
+
+            try {
+                const response = await fetch(`/api/company/${companyId}/personality-responses`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        responseCategories 
+                    })
+                });
+
+                if (response.ok) {
+                    console.log('✅ Response templates saved successfully');
+                    // Show success message
+                    const successMsg = document.createElement('div');
+                    successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+                    successMsg.textContent = 'Response templates saved successfully!';
+                    document.body.appendChild(successMsg);
+                    setTimeout(() => successMsg.remove(), 3000);
+                } else {
+                    throw new Error(`HTTP ${response.status}: Failed to save response templates`);
+                }
+            } catch (error) {
+                console.error('❌ Failed to save response templates:', error);
+                alert(`❌ Failed to save response templates: ${error.message}`);
+            }
+        }
+
+        // Load Response Templates
+        async function loadResponseTemplates() {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) return;
+
+            try {
+                const response = await fetch(`/api/company/${companyId}/personality-responses`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.agentPersonalitySettings?.responseCategories) {
+                        const categories = data.agentPersonalitySettings.responseCategories;
+                        
+                        // Load core responses
+                        if (categories.core) {
+                            Object.entries(categories.core).forEach(([key, value]) => {
+                                const elementId = `response-${key.replace('-response', '')}`;
+                                const element = document.getElementById(elementId);
+                                if (element) element.value = value;
+                            });
+                        }
+                        
+                        // Load advanced responses
+                        if (categories.advanced) {
+                            Object.entries(categories.advanced).forEach(([key, value]) => {
+                                const elementId = `response-${key.replace('-response', '')}`;
+                                const element = document.getElementById(elementId);
+                                if (element) element.value = value;
+                            });
+                        }
+                        
+                        // Load emotional responses
+                        if (categories.emotional) {
+                            Object.entries(categories.emotional).forEach(([key, value]) => {
+                                const elementId = `response-${key.replace('-response', '')}`;
+                                const element = document.getElementById(elementId);
+                                if (element) element.value = value;
+                            });
+                        }
+                        
+                        console.log('✅ Response templates loaded successfully');
+                    }
+                } else {
+                    console.warn('⚠️ Response templates not found - using defaults');
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to load response templates:', error.message);
+            }
+        }
+
         // ========================================= 
         // PRODUCTION-GRADE A/B TESTING FUNCTIONS
         // =========================================
@@ -12627,6 +12733,7 @@ Key Metrics:
                         loadAgentSettings();
                         loadAgentPersonalitySettings(); // Module 1: Load personality settings
                         loadClientsviaAgentPersonalitySettings(); // ClientsVia: Load personality settings for tab interface
+                        loadResponseTemplates(); // CRITICAL: Load response templates for AI agent
                         initKnowledgeSources(); // Module 2: Initialize knowledge source controls
                         loadKnowledgeSettings(); // Module 2: Load knowledge settings
                         loadAgentAnalytics();
