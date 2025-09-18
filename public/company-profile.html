@@ -1957,12 +1957,12 @@
                                                         </div>
                                                         
                                                         <!-- LLM Fallback -->
-                                                        <div id="clientsvia-source-llmFallback" data-source="llmFallback" class="clientsvia-source-item flex items-center p-3 bg-white border border-gray-300 rounded-lg hover:bg-blue-50 transition duration-150">
+                                                        <div id="clientsvia-source-inHouseFallback" data-source="inHouseFallback" class="clientsvia-source-item flex items-center p-3 bg-white border border-gray-300 rounded-lg hover:bg-blue-50 transition duration-150">
                                                             <div class="priority-controls mr-3 flex flex-col space-y-1">
-                                                                <button onclick="movePriorityUp('llmFallback')" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-orange-600 hover:bg-orange-100 rounded text-xs transition-colors" title="Move up">
+                                                                <button onclick="movePriorityUp('inHouseFallback')" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-orange-600 hover:bg-orange-100 rounded text-xs transition-colors" title="Move up">
                                                                     <i class="fas fa-chevron-up"></i>
                                                                 </button>
-                                                                <button onclick="movePriorityDown('llmFallback')" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-orange-600 hover:bg-orange-100 rounded text-xs transition-colors" title="Move down">
+                                                                <button onclick="movePriorityDown('inHouseFallback')" class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-orange-600 hover:bg-orange-100 rounded text-xs transition-colors" title="Move down">
                                                                     <i class="fas fa-chevron-down"></i>
                                                                 </button>
                                                             </div>
@@ -1981,7 +1981,7 @@
                                                                     <label class="flex items-center space-x-3 text-sm">
                                                                         <span class="text-gray-700 font-medium">Confidence:</span>
                                                                         <input type="number" 
-                                                                            id="clientsvia-threshold-llmFallback" 
+                                                                            id="clientsvia-threshold-inHouseFallback" 
                                                                             class="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-amber-500 focus:border-amber-500" 
                                                                             min="0" max="1" step="0.01" value="0.60"
                                                                             placeholder="0.60">
@@ -10872,7 +10872,7 @@ Key Metrics:
             // Legacy drag-and-drop removed - priority controlled in Answer Priority Flow tab
             
             // 🎯 SIMPLIFIED: Text input event handling (replacing complex slider logic)
-            const thresholds = ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'];
+            const thresholds = ['companyQnA', 'tradeQnA', 'vectorSearch', 'inHouseFallback'];
             thresholds.forEach(source => {
                 const input = document.getElementById(`clientsvia-threshold-${source}`);
                 
@@ -11389,7 +11389,7 @@ Key Metrics:
                 
                 // Collect all threshold values
                 const thresholds = {};
-                ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'].forEach(source => {
+                ['companyQnA', 'tradeQnA', 'vectorSearch', 'inHouseFallback'].forEach(source => {
                     const input = document.getElementById(`clientsvia-threshold-${source}`);
                     if (input) {
                         thresholds[source] = parseFloat(input.value) || 0.7;
@@ -11650,7 +11650,7 @@ Key Metrics:
                 console.log('🔍 CHECKPOINT 3: Collecting threshold values');
                 
                 // Collect threshold values
-                ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'].forEach(source => {
+                ['companyQnA', 'tradeQnA', 'vectorSearch', 'inHouseFallback'].forEach(source => {
                     const slider = document.getElementById(`clientsvia-threshold-${source}`);
                     if (slider) {
                         settings.thresholds[source] = parseFloat(slider.value);
@@ -12003,7 +12003,7 @@ Key Metrics:
             console.log('🗑️ Discarding knowledge source changes...');
             
             // Reset all form elements to their original values
-            ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'].forEach(source => {
+            ['companyQnA', 'tradeQnA', 'vectorSearch', 'inHouseFallback'].forEach(source => {
                 const slider = document.getElementById(`clientsvia-threshold-${source}`);
                 const display = document.getElementById(`clientsvia-threshold-value-${source}`);
                 if (slider && slider.dataset.originalValue) {
@@ -12083,7 +12083,7 @@ Key Metrics:
             console.log('🔄 Initializing threshold sync displays...');
             
             // Sync all threshold displays with current slider values
-            ['companyQnA', 'tradeQnA', 'vectorSearch', 'llmFallback'].forEach(source => {
+            ['companyQnA', 'tradeQnA', 'vectorSearch', 'inHouseFallback'].forEach(source => {
                 const slider = document.getElementById(`clientsvia-threshold-${source}`);
                 if (slider) {
                     const value = parseFloat(slider.value).toFixed(2);
@@ -12112,7 +12112,7 @@ Key Metrics:
                     // No individual tab for vector search, only in priority section
                     break;
                     
-                case 'llmFallback':
+                case 'inHouseFallback':
                     // No individual tab for LLM fallback, only in priority section
                     break;
             }
@@ -12284,7 +12284,7 @@ Key Metrics:
                     companyQnA: parseFloat(document.getElementById('clientsvia-threshold-companyQnA').value),
                     tradeQnA: parseFloat(document.getElementById('clientsvia-threshold-tradeQnA').value),
                     vectorSearch: parseFloat(document.getElementById('clientsvia-threshold-vectorSearch').value),
-                    llmFallback: parseFloat(document.getElementById('clientsvia-threshold-llmFallback').value)
+                    inHouseFallback: parseFloat(document.getElementById('clientsvia-threshold-inHouseFallback').value)
                 };
                 
                 console.log('🔍 CHECKPOINT 3: Collected thresholds:', thresholds);
@@ -12345,7 +12345,7 @@ Key Metrics:
                     companyQnA: parseFloat(document.getElementById('clientsvia-threshold-companyQnA').value),
                     tradeQnA: parseFloat(document.getElementById('clientsvia-threshold-tradeQnA').value),
                     vectorSearch: parseFloat(document.getElementById('clientsvia-threshold-vectorSearch').value), // 🔧 [FIXED] - Use actual user value
-                    llmFallback: parseFloat(document.getElementById('clientsvia-threshold-llmFallback').value) // 🔧 [FIXED] - Use actual user value
+                    inHouseFallback: parseFloat(document.getElementById('clientsvia-threshold-inHouseFallback').value) // 🔧 [FIXED] - Use actual user value
                 };
                 
                 // Answer priority flow (blueprint format) - using new comprehensive data
@@ -12583,7 +12583,7 @@ Key Metrics:
                         'companyQnA': 'clientsvia-threshold-companyQnA', // 🔧 [FIXED] - Correct field name
                         'tradeQnA': 'clientsvia-threshold-tradeQnA',     // 🔧 [FIXED] - Correct field name
                         'vectorSearch': 'clientsvia-threshold-vectorSearch', // 🔧 [FIXED] - Correct field name
-                        'llmFallback': 'clientsvia-threshold-llmFallback'    // 🔧 [FIXED] - Correct field name
+                        'inHouseFallback': 'clientsvia-threshold-inHouseFallback'    // 🔧 [FIXED] - Correct field name
                     };
                     
                     Object.entries(config.thresholds).forEach(([key, value]) => {
