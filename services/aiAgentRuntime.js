@@ -95,10 +95,10 @@ class AIAgentRuntime {
       let greeting = null; // CRITICAL: No hardcoded fallback - force loading from aiAgentLogic
       
       // Check if company has AI Agent Logic greeting configured
-      if (config.aiAgentLogic?.responseCategories?.core?.['greeting-response']) {
-        greeting = config.aiAgentLogic.responseCategories.core['greeting-response'];
-      } else if (config.aiAgentLogic?.responseCategories?.greeting?.template) {
-        greeting = config.aiAgentLogic.responseCategories.greeting.template;
+      if (config.responseCategories?.core?.['greeting-response']) {
+        greeting = config.responseCategories.core['greeting-response'];
+      } else if (config.responseCategories?.greeting?.template) {
+        greeting = config.responseCategories.greeting.template;
       } else if (config.agentSetup?.agentGreeting) {
         greeting = config.agentSetup.agentGreeting;
       }
