@@ -28,8 +28,9 @@ function verifyToken(req, res, next) {
 
 // Enhanced JWT Authentication with User lookup
 async function authenticateJWT(req, res, next) {
+  const token = getTokenFromRequest(req);
+  
   try {
-    const token = getTokenFromRequest(req);
     
     if (!token) {
       return res.status(401).json({ message: 'Access token required' });
