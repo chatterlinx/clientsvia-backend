@@ -489,7 +489,7 @@ class IntentRoutingService {
             'information_request': "I can help you with that information. Let me look that up for you.",
             'transfer_request': "Of course, I can connect you with one of our team members. Please hold for just a moment.",
             'after_hours': "Thank you for calling! We're currently closed, but I can help you schedule a callback or handle emergency service requests.",
-            'fallback': "Thank you for calling! How can I help you today?"
+            'fallback': "I'm here to help you. What can I assist you with?"
         };
         
         return responses[intent.intentId] || responses['fallback'];

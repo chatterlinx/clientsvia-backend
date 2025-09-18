@@ -309,7 +309,7 @@ router.post('/voice', async (req, res) => {
         }
       } else {
         // Fallback to Say if no voice or greeting
-        const fallbackGreeting = initResult.greeting || "Hello! Thank you for calling. How can I help you today?";
+        const fallbackGreeting = initResult.greeting || "Configuration error - no greeting configured";
         gather.say(escapeTwiML(fallbackGreeting));
       }
       
@@ -318,7 +318,7 @@ router.post('/voice', async (req, res) => {
       console.log(`[FALLBACK] Using legacy system for call`);
       
       // Fallback to simple greeting if AI Agent Logic fails
-      const fallbackGreeting = "Hello! Thank you for calling. How can I help you today?";
+      const fallbackGreeting = "Configuration error - no AI Agent Logic found";
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
@@ -855,7 +855,7 @@ router.post('/voice/:companyID', async (req, res) => {
       
       // Use new AI Agent Logic greeting
       const greeting = company.aiAgentLogic.responseCategories?.greeting?.template || 
-        `Hello! Thank you for calling ${company.businessName || company.companyName}. I'm your AI assistant. How can I help you today?`;
+        `Hello! Thank you for calling ${company.businessName || company.companyName}. Please hold while we resolve a configuration issue.`;
       
       // Apply placeholder replacement
       const finalGreeting = greeting.replace('{companyName}', company.businessName || company.companyName);

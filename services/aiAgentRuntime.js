@@ -80,7 +80,7 @@ class AIAgentRuntime {
       if (!config) {
         console.log(`[AI AGENT INIT] No AI config found for company ${companyID}, using default greeting`);
         return {
-          greeting: "Hello! Thank you for calling. How can I help you today?",
+          greeting: "Hello! Thank you for calling. How can I help you today?", // REMOVED: This should never be reached - all companies must have aiAgentLogic
           callState: {
             callId,
             from,
@@ -91,8 +91,8 @@ class AIAgentRuntime {
         };
       }
 
-      // Generate personalized greeting from AI Agent Logic
-      let greeting = "Hello! Thank you for calling. How can I help you today?";
+      // Generate personalized greeting from AI Agent Logic - MUST come from database
+      let greeting = null; // CRITICAL: No hardcoded fallback - force loading from aiAgentLogic
       
       // Check if company has AI Agent Logic greeting configured
       if (config.aiAgentLogic?.responseCategories?.core?.['greeting-response']) {
@@ -101,6 +101,12 @@ class AIAgentRuntime {
         greeting = config.aiAgentLogic.responseCategories.greeting.template;
       } else if (config.agentSetup?.agentGreeting) {
         greeting = config.agentSetup.agentGreeting;
+      }
+      
+      // CRITICAL: If no greeting found, this is a configuration error
+      if (!greeting) {
+        console.error(`❌ CRITICAL: No greeting configured for company ${companyID} - check aiAgentLogic.responseCategories.core['greeting-response']`);
+        greeting = "Hello! Thank you for calling. Please hold while we resolve a configuration issue.";
       }
       
       // Apply company name placeholder if available
@@ -138,7 +144,7 @@ class AIAgentRuntime {
       
       // Fallback to basic greeting
       return {
-        greeting: "Hello! Thank you for calling. How can I help you today?",
+        greeting: greeting || "Configuration error - no greeting found",
         callState: {
           callId,
           from,

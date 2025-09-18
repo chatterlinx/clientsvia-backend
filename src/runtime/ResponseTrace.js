@@ -362,6 +362,26 @@ class ResponseTraceLogger {
       // Validate and sanitize the trace object
       const sanitizedTrace = this.validateTrace(trace);
       
+      // CRITICAL FIX: Double-check behaviors field before saving
+      let finalBehaviors = [];
+      if (sanitizedTrace.behaviors) {
+        if (typeof sanitizedTrace.behaviors === 'string') {
+          console.error('🚨 CRITICAL: behaviors is still a string after validation!');
+          console.error('🚨 String value:', sanitizedTrace.behaviors.substring(0, 200));
+          try {
+            finalBehaviors = JSON.parse(sanitizedTrace.behaviors);
+          } catch (error) {
+            console.error('❌ Failed to parse behaviors in saveTrace:', error);
+            finalBehaviors = [];
+          }
+        } else if (Array.isArray(sanitizedTrace.behaviors)) {
+          finalBehaviors = sanitizedTrace.behaviors;
+        } else {
+          console.warn('⚠️ behaviors is not array or string in saveTrace, using empty array');
+          finalBehaviors = [];
+        }
+      }
+      
       const traceDoc = new ResponseTrace({
         companyID: sanitizedTrace.companyID,
         callId: sanitizedTrace.callId,
@@ -369,7 +389,7 @@ class ResponseTraceLogger {
         input: sanitizedTrace.input,
         knowledgeTrace: sanitizedTrace.knowledgeTrace,
         response: sanitizedTrace.response,
-        behaviors: sanitizedTrace.behaviors,
+        behaviors: finalBehaviors, // Use the validated behaviors
         bookingTrace: sanitizedTrace.bookingTrace,
         metrics: sanitizedTrace.metrics,
         context: sanitizedTrace.context,
