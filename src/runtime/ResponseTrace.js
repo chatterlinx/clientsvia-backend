@@ -366,15 +366,6 @@ class ResponseTraceLogger {
    * @returns {Object} Saved trace document
    */
   static async saveTrace(trace) {
-    // EMERGENCY BYPASS: Temporarily disable trace saving to prevent validation errors [[memory:8912579]]
-    console.log('⚠️ EMERGENCY BYPASS: ResponseTrace saving disabled to prevent validation errors');
-    console.log('📊 Trace data would have been saved:', {
-      companyID: trace.companyID,
-      callId: trace.callId,
-      behaviorsCount: Array.isArray(trace.behaviors) ? trace.behaviors.length : 'NOT_ARRAY'
-    });
-    return { _id: 'bypassed', message: 'Trace saving temporarily disabled' };
-    
     try {
       // Validate and sanitize the trace object
       const sanitizedTrace = this.validateTrace(trace);
