@@ -1670,6 +1670,14 @@
                                                 Priority #2
                                             </span>
                                         </button>
+                                        <button id="knowledge-subtab-keywords" 
+                                                class="knowledge-subtab-btn whitespace-nowrap py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                                                onclick="switchKnowledgeSubTab('keywords')">
+                                            <i class="fas fa-key mr-2"></i>Keywords
+                                            <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                                Fallback
+                                            </span>
+                                        </button>
                                     </nav>
                                 </div>
                             </div>
@@ -2269,6 +2277,189 @@
                                                 </div>
                                                 
                                                 <!-- Trade Q&A Statistics Section Removed for Cleaner UI -->
+                                            </div>
+                                            
+                                            <!-- ========================================= -->
+                                            <!-- 🔑 KEYWORDS SUB-TAB CONTENT -->
+                                            <!-- Configurable Keywords for Intent Detection -->
+                                            <!-- ========================================= -->
+                                            <div id="knowledge-subtab-keywords-content" class="knowledge-subtab-content hidden">
+                                                <div class="mb-8">
+                                                    <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-6 mb-6">
+                                                        <div class="flex items-center justify-between mb-4">
+                                                            <div class="flex items-center">
+                                                                <i class="fas fa-key mr-3 text-purple-600 text-xl"></i>
+                                                                <div>
+                                                                    <h3 class="text-lg font-semibold text-gray-800">Configurable Keywords</h3>
+                                                                    <p class="text-sm text-gray-600">Configure keywords for intelligent intent detection and fallback responses</p>
+                                                                </div>
+                                                            </div>
+                                                            <div class="flex items-center space-x-3">
+                                                                <span class="px-3 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
+                                                                    <i class="fas fa-shield-alt mr-1"></i>Fallback System
+                                                                </span>
+                                                                <div class="text-sm font-mono bg-purple-100 text-purple-800 px-3 py-1 rounded">
+                                                                    Confidence: <span id="keywords-threshold-display">0.50</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div class="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                                                            <div class="flex items-center justify-between">
+                                                                <div class="flex items-center space-x-2">
+                                                                    <i class="fas fa-info-circle text-purple-600"></i>
+                                                                    <span class="text-sm font-medium text-purple-800">How Keywords Work</span>
+                                                                </div>
+                                                            </div>
+                                                            <p class="text-xs text-purple-600 mt-2">
+                                                                Keywords activate when Company Q&A and Trade Q&A don't find matches. They provide intelligent fallback responses based on user intent detection.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- ========================================= -->
+                                                    <!-- 🎯 KEYWORD CONFIGURATION INTERFACE -->
+                                                    <!-- Multi-tenant keyword management -->
+                                                    <!-- ========================================= -->
+                                                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                                                        <!-- Keywords Manager Header -->
+                                                        <div class="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-6 py-4">
+                                                            <div class="flex items-center justify-between">
+                                                                <div class="flex items-center">
+                                                                    <i class="fas fa-cogs mr-3 text-gray-600"></i>
+                                                                    <h4 class="text-lg font-semibold text-gray-800">Keyword Configuration</h4>
+                                                                </div>
+                                                                <div class="flex items-center space-x-3">
+                                                                    <button id="reset-keywords-btn" 
+                                                                            class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center">
+                                                                        <i class="fas fa-undo mr-2"></i>Reset to Defaults
+                                                                    </button>
+                                                                    <button id="save-keywords-btn" 
+                                                                            class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center">
+                                                                        <i class="fas fa-save mr-2"></i>Save Keywords
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <!-- Keywords Configuration Grid -->
+                                                        <div class="p-6">
+                                                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                                                
+                                                                <!-- Service Keywords -->
+                                                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                                                    <div class="flex items-center mb-3">
+                                                                        <i class="fas fa-wrench text-blue-600 mr-2"></i>
+                                                                        <h5 class="font-semibold text-blue-800">Service Keywords</h5>
+                                                                        <span class="ml-2 text-xs text-blue-600">(Detects service requests)</span>
+                                                                    </div>
+                                                                    <textarea id="service-keywords" 
+                                                                              class="w-full h-24 p-3 border border-blue-300 rounded-lg resize-none text-sm"
+                                                                              placeholder="service, repair, fix, broken, problem, issue, help"
+                                                                              data-keyword-type="serviceKeywords"></textarea>
+                                                                    <p class="text-xs text-blue-600 mt-2">
+                                                                        <i class="fas fa-lightbulb mr-1"></i>
+                                                                        Separate keywords with commas. These detect when users need service help.
+                                                                    </p>
+                                                                </div>
+                                                                
+                                                                <!-- Booking Keywords -->
+                                                                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                                                    <div class="flex items-center mb-3">
+                                                                        <i class="fas fa-calendar-alt text-green-600 mr-2"></i>
+                                                                        <h5 class="font-semibold text-green-800">Booking Keywords</h5>
+                                                                        <span class="ml-2 text-xs text-green-600">(Detects appointment requests)</span>
+                                                                    </div>
+                                                                    <textarea id="booking-keywords" 
+                                                                              class="w-full h-24 p-3 border border-green-300 rounded-lg resize-none text-sm"
+                                                                              placeholder="appointment, schedule, book, visit, come out, when can you"
+                                                                              data-keyword-type="bookingKeywords"></textarea>
+                                                                    <p class="text-xs text-green-600 mt-2">
+                                                                        <i class="fas fa-lightbulb mr-1"></i>
+                                                                        Keywords that indicate users want to schedule appointments.
+                                                                    </p>
+                                                                </div>
+                                                                
+                                                                <!-- Emergency Keywords -->
+                                                                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                                                                    <div class="flex items-center mb-3">
+                                                                        <i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>
+                                                                        <h5 class="font-semibold text-red-800">Emergency Keywords</h5>
+                                                                        <span class="ml-2 text-xs text-red-600">(Detects urgent situations)</span>
+                                                                    </div>
+                                                                    <textarea id="emergency-keywords" 
+                                                                              class="w-full h-24 p-3 border border-red-300 rounded-lg resize-none text-sm"
+                                                                              placeholder="emergency, urgent, asap, right now, immediately"
+                                                                              data-keyword-type="emergencyKeywords"></textarea>
+                                                                    <p class="text-xs text-red-600 mt-2">
+                                                                        <i class="fas fa-lightbulb mr-1"></i>
+                                                                        High-priority keywords that trigger immediate assistance.
+                                                                    </p>
+                                                                </div>
+                                                                
+                                                                <!-- Hours Keywords -->
+                                                                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                                                    <div class="flex items-center mb-3">
+                                                                        <i class="fas fa-clock text-yellow-600 mr-2"></i>
+                                                                        <h5 class="font-semibold text-yellow-800">Hours Keywords</h5>
+                                                                        <span class="ml-2 text-xs text-yellow-600">(Detects hours inquiries)</span>
+                                                                    </div>
+                                                                    <textarea id="hours-keywords" 
+                                                                              class="w-full h-24 p-3 border border-yellow-300 rounded-lg resize-none text-sm"
+                                                                              placeholder="hours, open, closed, when do you, what time"
+                                                                              data-keyword-type="hoursKeywords"></textarea>
+                                                                    <p class="text-xs text-yellow-600 mt-2">
+                                                                        <i class="fas fa-lightbulb mr-1"></i>
+                                                                        Keywords that indicate users want to know business hours.
+                                                                    </p>
+                                                                </div>
+                                                                
+                                                            </div>
+                                                            
+                                                            <!-- Trade-Specific Keywords -->
+                                                            <div class="mt-6">
+                                                                <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                                                                    <div class="flex items-center mb-3">
+                                                                        <i class="fas fa-tools text-orange-600 mr-2"></i>
+                                                                        <h5 class="font-semibold text-orange-800">Trade-Specific Keywords</h5>
+                                                                        <span class="ml-2 text-xs text-orange-600">(Auto-populated from selected trade categories)</span>
+                                                                    </div>
+                                                                    <textarea id="trade-specific-keywords" 
+                                                                              class="w-full h-24 p-3 border border-orange-300 rounded-lg resize-none text-sm"
+                                                                              placeholder="HVAC, plumbing, electrical, heating, cooling, pipes, wiring"
+                                                                              data-keyword-type="tradeSpecificKeywords"></textarea>
+                                                                    <p class="text-xs text-orange-600 mt-2">
+                                                                        <i class="fas fa-info-circle mr-1"></i>
+                                                                        These are automatically populated based on your selected trade categories, but you can customize them.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            <!-- Keywords Testing Section -->
+                                                            <div class="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                                                <div class="flex items-center mb-3">
+                                                                    <i class="fas fa-vial text-gray-600 mr-2"></i>
+                                                                    <h5 class="font-semibold text-gray-800">Test Keywords</h5>
+                                                                </div>
+                                                                <div class="flex space-x-3">
+                                                                    <input type="text" id="keyword-test-input" 
+                                                                           class="flex-1 p-3 border border-gray-300 rounded-lg text-sm"
+                                                                           placeholder="Type a test phrase to see which keywords match...">
+                                                                    <button id="test-keywords-btn" 
+                                                                            class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center">
+                                                                        <i class="fas fa-search mr-2"></i>Test
+                                                                    </button>
+                                                                </div>
+                                                                <div id="keyword-test-results" class="mt-3 hidden">
+                                                                    <div class="bg-white border border-gray-300 rounded-lg p-3">
+                                                                        <div class="text-sm font-medium text-gray-700 mb-2">Matched Keywords:</div>
+                                                                        <div id="keyword-matches" class="text-sm text-gray-600"></div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -9001,9 +9192,14 @@ Key Metrics:
                     initializeCompanyQnATab();
                 } else if (tabName === 'trade-qna') {
                     initializeTradeQnATab();
+                } else if (tabName === 'keywords') {
+                    initializeKeywordsTab();
                 }
                 
-                showNotification('Tab Switched', `Switched to ${tabName === 'company-qna' ? 'Company Q&A' : 'Trade Q&A'} management`, 'info');
+                const tabDisplayName = tabName === 'company-qna' ? 'Company Q&A' : 
+                                     tabName === 'trade-qna' ? 'Trade Q&A' : 
+                                     tabName === 'keywords' ? 'Keywords Configuration' : tabName;
+                showNotification('Tab Switched', `Switched to ${tabDisplayName} management`, 'info');
             }
         }
         
@@ -12487,6 +12683,278 @@ Key Metrics:
                 transferToggle.addEventListener('change', toggleTransferConfiguration);
             }
         });
+
+        // ========================================= 
+        // 🔑 KEYWORDS CONFIGURATION FUNCTIONS
+        // ========================================= 
+
+        /**
+         * ✅ PRODUCTION: Initialize Keywords tab
+         */
+        function initializeKeywordsTab() {
+            console.log('🔑 Initializing Keywords Configuration tab...');
+            
+            // Load current keywords from company data
+            loadKeywordsConfiguration();
+            
+            // Setup event listeners
+            setupKeywordsEventListeners();
+        }
+
+        /**
+         * 📥 Load Keywords Configuration from Database
+         */
+        async function loadKeywordsConfiguration() {
+            try {
+                const companyId = getCurrentCompanyId();
+                if (!companyId) {
+                    console.error('❌ No company ID found for keywords loading');
+                    return;
+                }
+
+                console.log('📥 Loading keywords configuration for company:', companyId);
+                
+                const response = await fetch(`/api/company/${companyId}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const company = await response.json();
+                const keywordConfig = company.aiAgentLogic?.keywordConfiguration || {};
+                
+                console.log('✅ Keywords configuration loaded:', keywordConfig);
+                
+                // Populate the form fields with current keywords
+                populateKeywordFields(keywordConfig);
+                
+            } catch (error) {
+                console.error('❌ Failed to load keywords configuration:', error);
+                showNotification('Failed to load keywords configuration: ' + error.message, 'error');
+            }
+        }
+
+        /**
+         * 📝 Populate Keyword Form Fields
+         */
+        function populateKeywordFields(keywordConfig) {
+            const fields = {
+                'service-keywords': keywordConfig.serviceKeywords || ['service', 'repair', 'fix', 'broken', 'problem', 'issue', 'help'],
+                'booking-keywords': keywordConfig.bookingKeywords || ['appointment', 'schedule', 'book', 'visit', 'come out', 'when can you'],
+                'emergency-keywords': keywordConfig.emergencyKeywords || ['emergency', 'urgent', 'asap', 'right now', 'immediately'],
+                'hours-keywords': keywordConfig.hoursKeywords || ['hours', 'open', 'closed', 'when do you', 'what time'],
+                'trade-specific-keywords': keywordConfig.tradeSpecificKeywords || []
+            };
+
+            Object.entries(fields).forEach(([fieldId, keywords]) => {
+                const field = document.getElementById(fieldId);
+                if (field) {
+                    field.value = keywords.join(', ');
+                }
+            });
+        }
+
+        /**
+         * 🎛️ Setup Keywords Event Listeners
+         */
+        function setupKeywordsEventListeners() {
+            // Save Keywords button
+            const saveBtn = document.getElementById('save-keywords-btn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', saveKeywordsConfiguration);
+            }
+
+            // Reset Keywords button
+            const resetBtn = document.getElementById('reset-keywords-btn');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', resetKeywordsToDefaults);
+            }
+
+            // Test Keywords button
+            const testBtn = document.getElementById('test-keywords-btn');
+            if (testBtn) {
+                testBtn.addEventListener('click', testKeywords);
+            }
+
+            // Test input Enter key
+            const testInput = document.getElementById('keyword-test-input');
+            if (testInput) {
+                testInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        testKeywords();
+                    }
+                });
+            }
+        }
+
+        /**
+         * 💾 Save Keywords Configuration
+         */
+        async function saveKeywordsConfiguration() {
+            try {
+                const companyId = getCurrentCompanyId();
+                if (!companyId) {
+                    throw new Error('Company ID not found');
+                }
+
+                console.log('💾 Saving keywords configuration for company:', companyId);
+
+                // Collect keywords from form fields
+                const keywordConfiguration = {
+                    serviceKeywords: parseKeywords('service-keywords'),
+                    bookingKeywords: parseKeywords('booking-keywords'),
+                    emergencyKeywords: parseKeywords('emergency-keywords'),
+                    hoursKeywords: parseKeywords('hours-keywords'),
+                    tradeSpecificKeywords: parseKeywords('trade-specific-keywords')
+                };
+
+                console.log('🔑 Keywords to save:', keywordConfiguration);
+
+                // Update button state
+                const saveBtn = document.getElementById('save-keywords-btn');
+                if (saveBtn) {
+                    saveBtn.disabled = true;
+                    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+                }
+
+                // Save to database
+                const response = await fetch(`/api/company/${companyId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('authToken') || sessionStorage.getItem('authToken')}`
+                    },
+                    body: JSON.stringify({
+                        aiAgentLogic: {
+                            keywordConfiguration: keywordConfiguration
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server error (${response.status}): ${errorText}`);
+                }
+
+                const result = await response.json();
+                console.log('✅ Keywords configuration saved successfully:', result);
+
+                showNotification('Keywords configuration saved successfully!', 'success');
+
+            } catch (error) {
+                console.error('❌ Failed to save keywords configuration:', error);
+                showNotification('Failed to save keywords: ' + error.message, 'error');
+            } finally {
+                // Restore button state
+                const saveBtn = document.getElementById('save-keywords-btn');
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Keywords';
+                }
+            }
+        }
+
+        /**
+         * 🔄 Reset Keywords to Defaults
+         */
+        function resetKeywordsToDefaults() {
+            if (confirm('Are you sure you want to reset all keywords to default values? This will overwrite your current configuration.')) {
+                const defaults = {
+                    serviceKeywords: ['service', 'repair', 'fix', 'broken', 'problem', 'issue', 'help'],
+                    bookingKeywords: ['appointment', 'schedule', 'book', 'visit', 'come out', 'when can you'],
+                    emergencyKeywords: ['emergency', 'urgent', 'asap', 'right now', 'immediately'],
+                    hoursKeywords: ['hours', 'open', 'closed', 'when do you', 'what time'],
+                    tradeSpecificKeywords: []
+                };
+
+                populateKeywordFields(defaults);
+                showNotification('Keywords reset to defaults. Click "Save Keywords" to apply changes.', 'info');
+            }
+        }
+
+        /**
+         * 🧪 Test Keywords Function
+         */
+        function testKeywords() {
+            const testInput = document.getElementById('keyword-test-input');
+            const resultsDiv = document.getElementById('keyword-test-results');
+            const matchesDiv = document.getElementById('keyword-matches');
+
+            if (!testInput || !resultsDiv || !matchesDiv) {
+                console.error('❌ Test elements not found');
+                return;
+            }
+
+            const testText = testInput.value.toLowerCase().trim();
+            if (!testText) {
+                showNotification('Please enter text to test', 'warning');
+                return;
+            }
+
+            // Get current keywords from form
+            const keywords = {
+                service: parseKeywords('service-keywords'),
+                booking: parseKeywords('booking-keywords'),
+                emergency: parseKeywords('emergency-keywords'),
+                hours: parseKeywords('hours-keywords'),
+                tradeSpecific: parseKeywords('trade-specific-keywords')
+            };
+
+            // Test for matches
+            const matches = [];
+            Object.entries(keywords).forEach(([category, keywordList]) => {
+                const matchedKeywords = keywordList.filter(keyword => 
+                    testText.includes(keyword.toLowerCase())
+                );
+                if (matchedKeywords.length > 0) {
+                    matches.push({
+                        category: category,
+                        keywords: matchedKeywords
+                    });
+                }
+            });
+
+            // Display results
+            if (matches.length > 0) {
+                const matchHtml = matches.map(match => `
+                    <div class="mb-2">
+                        <span class="font-medium text-${getCategoryColor(match.category)}-700 capitalize">${match.category}:</span>
+                        <span class="ml-2">${match.keywords.join(', ')}</span>
+                    </div>
+                `).join('');
+                matchesDiv.innerHTML = matchHtml;
+                resultsDiv.classList.remove('hidden');
+            } else {
+                matchesDiv.innerHTML = '<div class="text-gray-500">No keyword matches found</div>';
+                resultsDiv.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * 🎨 Get Category Color for UI
+         */
+        function getCategoryColor(category) {
+            const colors = {
+                service: 'blue',
+                booking: 'green',
+                emergency: 'red',
+                hours: 'yellow',
+                tradeSpecific: 'orange'
+            };
+            return colors[category] || 'gray';
+        }
+
+        /**
+         * 📝 Parse Keywords from Textarea
+         */
+        function parseKeywords(fieldId) {
+            const field = document.getElementById(fieldId);
+            if (!field) return [];
+            
+            return field.value
+                .split(',')
+                .map(keyword => keyword.trim())
+                .filter(keyword => keyword.length > 0);
+        }
     </script>
     
     <!-- ========================================= -->
