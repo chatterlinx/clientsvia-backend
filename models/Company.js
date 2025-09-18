@@ -443,9 +443,14 @@ const companySchema = new mongoose.Schema({
                     'hold-response': 'Please hold for just a moment while I look that up for you.',
                     'business-hours-response': 'We\'re open {{businessHours}}. You can also visit our website at {{website}}.',
                     'knowledge-base-error-response': 'I\'m sorry, I\'m having trouble accessing my knowledge base right now. Please try calling back later or visit our website for assistance.',
-                    'no-match-response': 'I understand you\'re looking for service. Let me connect you with one of our technicians who can help you right away.',
-                    'technical-difficulty-response': 'I apologize, but I\'m having technical difficulties. Please hold while I connect you to someone who can help.',
-                    'cant-understand-response': 'I want to make sure I understand what you need help with. Could you tell me a bit more about what\'s going on?'
+                        'no-match-response': 'I understand you\'re looking for service. Let me connect you with one of our technicians who can help you right away.',
+                        'technical-difficulty-response': 'I apologize, but I\'m having technical difficulties. Please hold while I connect you to someone who can help.',
+                        'cant-understand-response': 'I want to make sure I understand what you need help with. Could you tell me a bit more about what\'s going on?',
+                        'transfer-unavailable-response': 'I understand you\'re looking for service. Let me connect you with one of our technicians who can help you right away.',
+                        'frustrated-caller-response': 'I understand your frustration, and I want to make sure you get the help you need. Let me connect you with one of our experienced technicians.',
+                        'gratitude-response': 'You\'re very welcome! I\'m happy to help. What else can I do for you today?',
+                        'urgency-response': 'I understand this is urgent. Let me get you connected with our emergency team right away. What\'s the situation?',
+                        'connection-trouble-response': 'It sounds like the line is breaking up. Can you still hear me clearly?'
                 }
             },
             advanced: {

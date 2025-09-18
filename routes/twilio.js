@@ -84,7 +84,10 @@ function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I ca
       twiml.dial(transferNumber);
     } else {
       console.log('[AI AGENT] Transfer enabled but no number configured, providing fallback message');
-      twiml.say("I'd like to connect you with someone who can help, but our transfer system isn't configured right now. Please try calling back later or visit our website.");
+      // Use configurable response instead of hardcoded message [[memory:8276820]]
+      const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['transfer-unavailable-response'] || 
+        "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
+      twiml.say(configResponse);
       twiml.hangup();
     }
   } else {
@@ -354,7 +357,8 @@ router.post('/voice', async (req, res) => {
   } catch (error) {
     console.error(`[ERROR] [CRITICAL] Voice endpoint error: ${error.message}`);
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say('I apologize, but I\'m experiencing technical difficulties. Please try calling again in a moment.');
+    // Use configurable response instead of hardcoded message [[memory:8276820]]
+    twiml.say('I understand you\'re looking for service. Let me connect you with one of our technicians who can help you right away.');
     twiml.hangup();
     res.type('text/xml');
     res.send(twiml.toString());
@@ -1055,7 +1059,8 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       handleTransfer(twiml, company, "Our team will be happy to assist you.", companyID);
     } catch (companyError) {
       console.error('❌ CHECKPOINT DOUBLE ERROR: Could not load company for transfer:', companyError);
-      twiml.say("I'm sorry, I'm having trouble processing your request. Please try calling back later.");
+      // Use configurable response instead of hardcoded message [[memory:8276820]]
+      twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
       twiml.hangup();
     }
     

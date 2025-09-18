@@ -458,7 +458,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   }
 
   // STEP 5: Check personality responses for common scenarios
-  const personalityResponse = await checkPersonalityScenarios(companyId, enhancedQuestion.toLowerCase(), conversationHistory);
+  const personalityResponse = await checkPersonalityScenarios(companyId, enhancedQuestion.toLowerCase(), conversationHistory, company);
   if (personalityResponse) {
     console.log(`[Agent] Using personality response: ${personalityResponse.category}`);
     responseMethod = 'script';
@@ -701,8 +701,11 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   fullPrompt += `\n\nRespond in 1-2 sentences maximum to: ${promptQuestion} - Be direct, actionable, and move the call forward.`;
 
   if (!llmFallbackEnabled) {
-    const personality = company?.aiSettings?.personality || 'friendly';
-    const message = applyPlaceholders((customEscalationMessage || await getPersonalityResponse(companyId, 'transferToRep', personality)).trim(), placeholders);
+    // Use configurable response instead of legacy personality system [[memory:8276820]]
+    const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['transfer-response'] || 
+      customEscalationMessage || 
+      "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
+    const message = applyPlaceholders(configResponse.trim(), placeholders);
     try {
       const { logEscalationEvent } = require('../utils/escalationLogger');
       await logEscalationEvent(originalCallSid, companyId, question);
@@ -742,8 +745,11 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   // Check if the response seems to be a debug message
   if (finalResponse && finalResponse.includes('reading this from') && finalResponse.includes('LLM Message')) {
     console.log(`[LLM] DEBUG: Detected debug message from LLM, replacing with escalation message`);
-    const personality = company?.aiSettings?.personality || 'friendly';
-    const message = applyPlaceholders((customEscalationMessage || await getPersonalityResponse(companyId, 'transferToRep', personality)).trim(), placeholders);
+    // Use configurable response instead of legacy personality system [[memory:8276820]]
+    const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['transfer-response'] || 
+      customEscalationMessage || 
+      "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
+    const message = applyPlaceholders(configResponse.trim(), placeholders);
     return { text: message, escalate: true };
   }
 
@@ -1034,59 +1040,71 @@ function checkSpecificProtocols(protocols, question, conversationHistory, placeh
 }
 
 // Check for specific personality scenarios based on customer input and conversation context
-async function checkPersonalityScenarios(companyId, question, conversationHistory) {
+async function checkPersonalityScenarios(companyId, question, conversationHistory, company) {
   const qLower = question.toLowerCase().trim();
   
   // Handle customer frustration and repetition complaints (PRIORITY 1)
   if (qLower.includes('repeating') || qLower.includes('same thing') || qLower.includes('over and over')) {
-    const response = await getPersonalityResponse(companyId, 'frustratedCaller', 'empathetic');
+    // Use configurable response instead of legacy personality system [[memory:8276820]]
+    const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['frustrated-caller-response'] || 
+      "I understand your frustration, and I want to make sure you get the help you need. Let me connect you with one of our experienced technicians.";
     return {
       category: 'repetitionComplaint',
-      text: response || `I apologize for the confusion. Let me connect you directly with one of our specialists who can give you the specific information you need right away.`
+      text: configResponse
     };
   }
   
   if (qLower.includes('not helping') || qLower.includes('frustrat') || qLower.includes('annoyed')) {
-    const response = await getPersonalityResponse(companyId, 'frustratedCaller', 'empathetic');
+    // Use configurable response instead of legacy personality system [[memory:8276820]]
+    const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['frustrated-caller-response'] || 
+      "I understand your frustration, and I want to make sure you get the help you need. Let me connect you with one of our experienced technicians.";
     return {
       category: 'customerFrustration', 
-      text: response || `I understand your frustration, and I want to make sure you get the help you need. Let me transfer you to one of our experienced technicians.`
+      text: configResponse
     };
   }
   
   // Handle appreciation
   if (qLower.includes('thank you') && !qLower.includes('no')) {
-    const response = await getPersonalityResponse(companyId, 'complimentResponse', 'friendly');
+    // Use configurable response instead of legacy personality system [[memory:8276820]]
+    const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['gratitude-response'] || 
+      "You're very welcome! I'm happy to help. What else can I do for you today?";
     return {
       category: 'gratitude',
-      text: response || `You're very welcome! I'm happy to help. What else can I do for you today?`
+      text: configResponse
     };
   }
   
   // Handle urgent situations  
   if (qLower.includes('asap') || qLower.includes('urgent') || qLower.includes('emergency')) {
-    const response = await getPersonalityResponse(companyId, 'empathyResponse', 'professional');
+    // Use configurable response instead of legacy personality system [[memory:8276820]]
+    const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['urgency-response'] || 
+      "I understand this is urgent. Let me get you connected with our emergency team right away. What's the situation?";
     return {
       category: 'urgency',
-      text: response || `I understand this is urgent. Let me get you connected with our emergency team right away. What's the situation?`
+      text: configResponse
     };
   }
   
   // Handle connection issues
   if (qLower.includes('can you hear') || qLower.includes('connection') || qLower.includes('breaking up')) {
-    const response = await getPersonalityResponse(companyId, 'connectionTrouble', 'professional');
+    // Use configurable response instead of legacy personality system [[memory:8276820]]
+    const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['connection-trouble-response'] || 
+      "It sounds like the line is breaking up. Can you still hear me clearly?";
     return {
       category: 'connection',
-      text: response || `It sounds like the line is breaking up. Can you still hear me clearly?`
+      text: configResponse
     };
   }
   
   // Handle confusion/unclear requests
   if (qLower.includes('confused') || qLower.includes('not sure') || qLower.includes('unclear')) {
-    const response = await getPersonalityResponse(companyId, 'cantUnderstand', 'helpful');
+    // Use configurable response instead of legacy personality system [[memory:8276820]]
+    const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['cant-understand-response'] || 
+      "I want to make sure I understand what you need help with. Could you tell me a bit more about what's going on?";
     return {
       category: 'confusion',
-      text: response || `I want to make sure I understand what you need help with. Could you tell me a bit more about what's going on?`
+      text: configResponse
     };
   }
   
