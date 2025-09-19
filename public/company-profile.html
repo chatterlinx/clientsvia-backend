@@ -13281,6 +13281,8 @@ Key Metrics:
                 
                 // Find and show the target content
                 const targetContent = document.getElementById(`clientsvia-${targetTabId}-content`);
+                console.log(`🔍 Looking for content: clientsvia-${targetTabId}-content`);
+                console.log('🔍 Found content element:', !!targetContent);
                 if (targetContent) {
                     targetContent.classList.add('active');
                     targetContent.style.display = 'block';
@@ -13293,6 +13295,10 @@ Key Metrics:
                             break;
                         case 'personality':
                             console.log('🎭 Agent Personality tab activated');
+                            console.log('🔍 Personality content element:', targetContent);
+                            console.log('🔍 Personality content classes:', targetContent?.className);
+                            console.log('🔍 Personality content display:', targetContent?.style.display);
+                            console.log('🔍 Personality content visible:', targetContent?.offsetHeight > 0);
                             break;
                     }
                 }
