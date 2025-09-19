@@ -105,8 +105,8 @@ function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I ca
     
     gather.say('');
     
-    // Only hang up as final fallback
-    twiml.say("Thank you for calling. Please try again later.");
+    // Only hang up as final fallback - use configurable response [[memory:8276820]]
+    twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
     twiml.hangup();
   }
 }
@@ -866,7 +866,8 @@ router.post('/voice/:companyID', async (req, res) => {
     const company = await Company.findById(companyID);
     if (!company) {
       console.log(`[ERROR] Company not found: ${companyID}`);
-      twiml.say("I'm sorry, there was an error connecting your call. Please try again.");
+      // Use configurable response instead of hardcoded message [[memory:8276820]]
+      twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
       twiml.hangup();
       res.type('text/xml');
       return res.send(twiml.toString());
@@ -908,15 +909,16 @@ router.post('/voice/:companyID', async (req, res) => {
       gather.say('');
       
       console.log('🎯 CHECKPOINT 9: Adding fallback message');
-      // Fallback if no input - just hang up, don't transfer
-      twiml.say("Thank you for calling. Please try again later or visit our website.");
+      // Fallback if no input - use configurable response [[memory:8276820]]
+      twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
       twiml.hangup();
       
     } else {
       // AI Agent Logic not enabled - provide simple greeting and hang up
       console.log(`🎯 CHECKPOINT 6: AI Agent Logic not enabled for company ${companyID}, providing basic greeting`);
       
-      twiml.say(`Hello! Thank you for calling ${company.businessName || company.companyName}. Our AI assistant is currently being configured. Please try calling back later or visit our website for assistance.`);
+      // Use configurable response instead of hardcoded message [[memory:8276820]]
+      twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
       twiml.hangup();
     }
     
@@ -932,7 +934,8 @@ router.post('/voice/:companyID', async (req, res) => {
   } catch (error) {
     console.error(`[ERROR] AI Agent Voice error for company ${companyID}:`, error);
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say("I'm sorry, there was a technical error. Please try calling back.");
+    // Use configurable response instead of hardcoded message [[memory:8276820]]
+    twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
     twiml.hangup();
     res.type('text/xml');
     res.send(twiml.toString());
@@ -1024,8 +1027,8 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       
       gather.say('');
       
-      // Fallback - just hang up, don't transfer
-      twiml.say("Thank you for calling. Please try again later.");
+      // Fallback - use configurable response [[memory:8276820]]
+      twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
       twiml.hangup();
     }
     

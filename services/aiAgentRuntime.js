@@ -80,7 +80,7 @@ class AIAgentRuntime {
       if (!config) {
         console.log(`[AI AGENT INIT] No AI config found for company ${companyID}, using default greeting`);
         return {
-          greeting: "Hello! Thank you for calling. How can I help you today?", // REMOVED: This should never be reached - all companies must have aiAgentLogic
+          greeting: "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.", // EMERGENCY: This should never be reached - all companies must have aiAgentLogic
           callState: {
             callId,
             from,

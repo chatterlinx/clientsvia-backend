@@ -104,7 +104,7 @@ class BookingHandler {
       console.error('Error processing booking step:', error);
       return {
         state,
-        response: "I'm sorry, there was an error processing your request. Let me transfer you to someone who can help.",
+        response: "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.",
         isComplete: false,
         error: error.message
       };
@@ -514,7 +514,7 @@ class BookingHandler {
       console.error('Error finalizing booking:', error);
       return {
         state,
-        response: "I'm sorry, there was an error saving your booking. Let me transfer you to someone who can help complete this for you.",
+        response: "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.",
         isComplete: false,
         error: error.message
       };
