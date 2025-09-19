@@ -78,15 +78,18 @@ class AIAgentRuntime {
       // Load AI configuration
       const config = await aiLoader.get(companyID);
       if (!config) {
-        console.log(`[AI AGENT INIT] No AI config found for company ${companyID}, using default greeting`);
+        console.error(`❌ CRITICAL: No AI config found for company ${companyID} - this company MUST have aiAgentLogic configured`);
+        console.error(`❌ CRITICAL: Each company must have their own AI Agent Logic configuration - no global fallbacks allowed [[memory:8276820]]`);
+        
+        // Force configuration error - no hardcoded fallbacks allowed [[memory:8276820]]
         return {
-          greeting: "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.", // EMERGENCY: This should never be reached - all companies must have aiAgentLogic
+          greeting: `Configuration error: Company ${companyID} must configure AI Agent Logic in the platform. No global fallbacks allowed.`,
           callState: {
             callId,
             from,
             to,
             startTime: new Date(),
-            stage: 'greeting'
+            stage: 'configuration_error'
           }
         };
       }

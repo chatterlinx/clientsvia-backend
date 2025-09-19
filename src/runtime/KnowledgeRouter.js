@@ -126,13 +126,14 @@ class KnowledgeRouter {
             }
         }
 
-        // If no source was selected, return a configurable default response [[memory:8276820]]
-        console.log(`❌ No source selected for company ${companyID}, using configurable default response`);
+        // If no source was selected, FORCE company-specific configuration [[memory:8276820]]
+        console.error(`❌ CRITICAL: No knowledge source selected for company ${companyID} - company MUST configure fallback responses`);
+        console.error(`❌ CRITICAL: Each company must have their own fallback responses - no global fallbacks allowed [[memory:8276820]]`);
         
-        // Get configurable no-match response from company settings [[memory:8276820]]
+        // Get configurable no-match response from company settings - NO hardcoded fallback [[memory:8276820]]
         const noMatchResponse = cfg?.responseCategories?.core?.['no-match-response'] || 
             cfg?.aiAgentLogic?.responseCategories?.core?.['no-match-response'] ||
-            "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
+            `Configuration error: Company ${companyID} must configure fallback responses in AI Agent Logic. Each company must have their own fallback protocol.`;
         
         const defaultResponse = {
             text: noMatchResponse,

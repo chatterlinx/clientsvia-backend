@@ -704,7 +704,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     // Use configurable response instead of legacy personality system [[memory:8276820]]
     const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['transfer-response'] || 
       customEscalationMessage || 
-      "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
+      `Configuration error: Company ${companyId} must configure agent responses in AI Agent Logic. Each company must have their own protocol.`;
     const message = applyPlaceholders(configResponse.trim(), placeholders);
     try {
       const { logEscalationEvent } = require('../utils/escalationLogger');
@@ -748,7 +748,7 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
     // Use configurable response instead of legacy personality system [[memory:8276820]]
     const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['transfer-response'] || 
       customEscalationMessage || 
-      "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
+      `Configuration error: Company ${companyId} must configure agent responses in AI Agent Logic. Each company must have their own protocol.`;
     const message = applyPlaceholders(configResponse.trim(), placeholders);
     return { text: message, escalate: true };
   }

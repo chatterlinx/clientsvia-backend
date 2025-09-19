@@ -189,6 +189,7 @@ function registerRoutes(routes) {
     app.use('/api', routes.companyRoutes);
     app.use('/api/debug', require('./routes/debug-qna')); // Temporary debug route
     app.use('/api/debug', require('./routes/debug-logs')); // Debug logging route
+    app.use('/api/debug', require('./routes/debug-company-config')); // Company AI Agent Logic configuration debug route
     app.use('/api/seed', require('./routes/seed-production-qna')); // Temporary seed route
     app.use('/api/alerts', routes.alertRoutes);
     app.use('/api/integrations', routes.integrationsRoutes);

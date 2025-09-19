@@ -86,7 +86,7 @@ function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I ca
       console.log('[AI AGENT] Transfer enabled but no number configured, providing fallback message');
       // Use configurable response instead of hardcoded message [[memory:8276820]]
       const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['transfer-unavailable-response'] || 
-        "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
+        `Configuration error: Company ${company?._id || 'unknown'} must configure transfer-unavailable-response in AI Agent Logic. Each company must have their own protocol.`;
       twiml.say(configResponse);
       twiml.hangup();
     }
@@ -106,7 +106,9 @@ function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I ca
     gather.say('');
     
     // Only hang up as final fallback - use configurable response [[memory:8276820]]
-    twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
+    const finalFallback = company?.aiAgentLogic?.responseCategories?.core?.['final-fallback-response'] || 
+      `Configuration error: Company must configure final-fallback-response in AI Agent Logic. Each company must have their own protocol.`;
+    twiml.say(finalFallback);
     twiml.hangup();
   }
 }
@@ -446,7 +448,7 @@ router.post('/handle-speech', async (req, res) => {
         // Use configurable response instead of legacy personality response [[memory:8276820]]
         const msg = company.aiSettings?.repeatEscalationMessage || 
           company.aiAgentLogic?.responseCategories?.core?.['transfer-response'] ||
-          "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
+          `Configuration error: Company ${company._id} must configure transfer-response in AI Agent Logic. Each company must have their own protocol.`;
         const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
         twiml.hangup();
         await redisClient.del(repeatKey);
@@ -698,7 +700,7 @@ router.post('/handle-speech', async (req, res) => {
       const personality = company.aiSettings?.personality || 'friendly';
       // Use configurable response instead of legacy personality response [[memory:8276820]]
       const fallback = company.aiAgentLogic?.responseCategories?.core?.['technical-difficulty-response'] ||
-        "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
+        `Configuration error: Company ${company._id} must configure technical-difficulty-response in AI Agent Logic. Each company must have their own protocol.`;
       answerObj = { text: fallback, escalate: false };
     }
 
@@ -867,7 +869,8 @@ router.post('/voice/:companyID', async (req, res) => {
     if (!company) {
       console.log(`[ERROR] Company not found: ${companyID}`);
       // Use configurable response instead of hardcoded message [[memory:8276820]]
-      twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
+      const companyNotFoundResponse = `Configuration error: Company ${companyID} not found. Each company must be properly configured in the platform.`;
+      twiml.say(companyNotFoundResponse);
       twiml.hangup();
       res.type('text/xml');
       return res.send(twiml.toString());
@@ -910,7 +913,9 @@ router.post('/voice/:companyID', async (req, res) => {
       
       console.log('🎯 CHECKPOINT 9: Adding fallback message');
       // Fallback if no input - use configurable response [[memory:8276820]]
-      twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
+      const noInputFallback = company?.aiAgentLogic?.responseCategories?.core?.['no-input-fallback-response'] ||
+        `Configuration error: Company ${companyID} must configure no-input-fallback-response in AI Agent Logic. Each company must have their own protocol.`;
+      twiml.say(noInputFallback);
       twiml.hangup();
       
     } else {
@@ -918,7 +923,9 @@ router.post('/voice/:companyID', async (req, res) => {
       console.log(`🎯 CHECKPOINT 6: AI Agent Logic not enabled for company ${companyID}, providing basic greeting`);
       
       // Use configurable response instead of hardcoded message [[memory:8276820]]
-      twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
+      const aiNotEnabledResponse = company?.aiAgentLogic?.responseCategories?.core?.['ai-not-enabled-response'] ||
+        `Configuration error: Company ${companyID} must enable and configure AI Agent Logic. Each company must have their own AI configuration.`;
+      twiml.say(aiNotEnabledResponse);
       twiml.hangup();
     }
     
@@ -935,7 +942,8 @@ router.post('/voice/:companyID', async (req, res) => {
     console.error(`[ERROR] AI Agent Voice error for company ${companyID}:`, error);
     const twiml = new twilio.twiml.VoiceResponse();
     // Use configurable response instead of hardcoded message [[memory:8276820]]
-    twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
+    const voiceErrorResponse = `Configuration error: Company ${companyID} must configure voice error responses in AI Agent Logic. Each company must have their own protocol.`;
+    twiml.say(voiceErrorResponse);
     twiml.hangup();
     res.type('text/xml');
     res.send(twiml.toString());
@@ -1028,7 +1036,10 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       gather.say('');
       
       // Fallback - use configurable response [[memory:8276820]]
-      twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
+      const company = await Company.findById(companyID);
+      const fallbackResponse = company?.aiAgentLogic?.responseCategories?.core?.['conversation-fallback-response'] || 
+        `Configuration error: Company ${companyID} must configure conversation-fallback-response in AI Agent Logic. Each company must have their own protocol.`;
+      twiml.say(fallbackResponse);
       twiml.hangup();
     }
     
@@ -1056,14 +1067,15 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       
       // Use configurable error response [[memory:8276820]]
       const errorResponse = company?.aiAgentLogic?.responseCategories?.core?.['technical-difficulty-response'] || 
-        "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.";
+        `Configuration error: Company ${companyID} must configure technical-difficulty-response in AI Agent Logic. Each company must have their own protocol.`;
       
       twiml.say(errorResponse);
       handleTransfer(twiml, company, "Our team will be happy to assist you.", companyID);
     } catch (companyError) {
       console.error('❌ CHECKPOINT DOUBLE ERROR: Could not load company for transfer:', companyError);
       // Use configurable response instead of hardcoded message [[memory:8276820]]
-      twiml.say("I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.");
+      const doubleErrorResponse = `Configuration error: Company ${req.params.companyID} must configure error responses in AI Agent Logic. Each company must have their own protocol.`;
+      twiml.say(doubleErrorResponse);
       twiml.hangup();
     }
     

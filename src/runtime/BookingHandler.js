@@ -104,7 +104,7 @@ class BookingHandler {
       console.error('Error processing booking step:', error);
       return {
         state,
-        response: "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.",
+        response: `Configuration error: Company must configure booking responses in AI Agent Logic. Each company must have their own protocol.`,
         isComplete: false,
         error: error.message
       };
@@ -514,7 +514,7 @@ class BookingHandler {
       console.error('Error finalizing booking:', error);
       return {
         state,
-        response: "I understand you're looking for service. Let me connect you with one of our technicians who can help you right away.",
+        response: `Configuration error: Company must configure booking responses in AI Agent Logic. Each company must have their own protocol.`,
         isComplete: false,
         error: error.message
       };
