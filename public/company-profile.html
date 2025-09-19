@@ -66,7 +66,6 @@
         .status-active { @apply bg-green-100 text-green-800; }
         .status-inactive { @apply bg-red-100 text-red-800; }
 
-
         .contact-block-view { @apply mt-3 pt-3 border-t border-gray-200; }
         .contact-block-view .detail-item:last-child { padding-bottom: 0; }
         .scheduling-rule-daily-hours-header { @apply grid grid-cols-4 gap-x-3 mb-1 px-2 text-xs font-medium text-gray-500; }
@@ -2667,44 +2666,9 @@
                                             </div>
                                         </div>
 
-
                                     </div>
 
-                                    <!-- Flow Configuration Panel -->
-                                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-6">
-                                        <h5 class="text-lg font-semibold text-gray-800 mb-4">
-                                            <i class="fas fa-cog mr-2 text-gray-600"></i>Flow Configuration
-                                        </h5>
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">Flow Name</label>
-                                                <input type="text" value="Customer Service Flow" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">Flow Status</label>
-                                                <select class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
-                                                    <option value="active">Active</option>
-                                                    <option value="draft">Draft</option>
-                                                    <option value="testing">Testing</option>
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">Default Response Tone</label>
-                                                <select class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
-                                                    <option value="professional">Professional & Helpful</option>
-                                                    <option value="friendly">Friendly & Casual</option>
-                                                    <option value="formal">Formal & Business</option>
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">Escalation Threshold</label>
-                                                <select class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
-                                                    <option value="low">Low (Easy escalation)</option>
-                                                    <option value="medium" selected>Medium (Balanced)</option>
-                                                    <option value="high">High (AI tries harder)</option>
-                                                </select>
-                                            </div>
-                                        </div>
+                                    
 
                                         <div class="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
                                             <div class="text-sm text-gray-600">
@@ -2860,33 +2824,13 @@
                                 </div>
                                         </div>
 
-
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 <!-- A/B Testing Main Content -->
                                                 <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
-                                                    <i class="fas fa-flask mr-2 text-green-600"></i>A/B Testing Framework
-                                                    <span class="ml-2 text-sm text-gray-600">(Conversation Optimization)</span>
-                                                </h4>
-
-                                                <!-- ========================================= -->
-                                                <!-- PRODUCTION-GRADE A/B TESTING DASHBOARD  -->
-                                                <!-- ========================================= -->
-
-                                                <!-- Live Stats Overview -->
-                                                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                                                    <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
-                                                        <div class="flex items-center justify-between">
-                                                            <div>
-                                                                <p class="text-sm font-medium text-gray-600">Active Tests</p>
-                                                                <p class="text-2xl font-bold text-green-600" id="active-tests-count">0</p>
-                                                            </div>
-                                                            <div class="bg-green-100 p-2 rounded-lg">
-                                                                <i class="fas fa-flask text-green-600"></i>
-                                                            </div>
-                                                        </div>
+                                                    
                                                         <div class="mt-2 text-xs text-gray-500">
                                                             <i class="fas fa-info-circle mr-1"></i>Ready to start testing
                                                         </div>
@@ -2970,22 +2914,7 @@
                                                 <div class="bg-white border border-gray-200 rounded-lg mb-6">
                                                     <div class="border-b border-gray-200 px-6 py-4">
                                                         <h5 class="text-lg font-semibold text-gray-800 flex items-center">
-                                                            <i class="fas fa-flask text-blue-600 mr-2"></i>Active Tests
-                                                            <span class="ml-2 bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-0.5 rounded-full" id="active-tests-badge">0 Running</span>
-                                                        </h5>
-                                                    </div>
-
-                                                    <div id="active-tests-container" class="p-6">
-                                                        <!-- Zero State: No Active Tests -->
-                                                        <div class="text-center py-12">
-                                                            <div class="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                                <i class="fas fa-flask text-2xl text-blue-500"></i>
-                                                            </div>
-                                                            <h6 class="text-lg font-semibold text-gray-800 mb-2">No Active Tests</h6>
-                                                            <p class="text-gray-600 mb-6 max-w-md mx-auto">Start optimizing your AI agent's performance by creating your first A/B test. Test different approaches to improve customer satisfaction and conversion rates.</p>
-                                                            <button onclick="createNewTest()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
-                                                                <i class="fas fa-plus mr-2"></i>Create Your First Test
-                                                            </button>
+                                                            <i class="fas fa-flask text-blue-600 mr-2"></i>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -3154,7 +3083,6 @@
                                                 </div>
                                             </div>
                                         </div>
-
 
                                                         </div>
                                                     </div>
@@ -3789,7 +3717,6 @@
                                                 </div>
                                             </div>
 
-
                             <!-- ========================================= -->
                             <!-- 🚀 ENTERPRISE BOOKING FLOW SCHEMA        -->
                             <!-- Production-Ready: Validation, Idempotency -->
@@ -3841,31 +3768,7 @@
                                         <div class="space-y-4">
                                             <div class="bg-gray-50 rounded-lg p-4">
                                                 <h4 class="text-sm font-medium text-gray-900 mb-3 flex items-center">
-                                                    <i class="fas fa-cog mr-2 text-blue-600"></i>Flow Configuration
-                                                </h4>
-
-                                                <div class="grid grid-cols-2 gap-3 mb-4">
-                                                    <div>
-                                                        <label class="block text-xs font-medium text-gray-700 mb-1">Trade Category*</label>
-                                                        <select id="booking-trade-category" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                                            <option value="">Select Trade...</option>
-                                                            <option value="HVAC">HVAC</option>
-                                                            <option value="Plumbing">Plumbing</option>
-                                                            <option value="Electrical">Electrical</option>
-                                                            <option value="General Repair">General Repair</option>
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label class="block text-xs font-medium text-gray-700 mb-1">Service Type*</label>
-                                                        <select id="booking-service-type" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                                            <option value="">Select Service...</option>
-                                                            <option value="Emergency">Emergency</option>
-                                                            <option value="Repair">Repair</option>
-                                                            <option value="Maintenance">Maintenance</option>
-                                                            <option value="Installation">Installation</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
+                                                    
 
                                                 <div class="grid grid-cols-2 gap-3 mb-4">
                                                     <div>
@@ -4457,7 +4360,6 @@
                                     </div>
                                 </div>
                             </div>
-
 
                             <!-- ========================================= -->
                             <!-- SELF-LEARNING KNOWLEDGE BASE             -->
@@ -5826,7 +5728,6 @@
                 option.style.display = (genderMatch && categoryMatch) ? 'block' : 'none';
             });
 
-
         }
 
         // Handle voice selection change
@@ -5837,7 +5738,6 @@
                 console.error('❌ Voice selector not found in handleVoiceChange');
                 return;
             }
-
 
             // Safeguard: if selector value is 'undefined', try to fix it
             if (selector.value === 'undefined') {
@@ -5873,7 +5773,6 @@
             }
 
             if (selectedVoice) {
-
 
                 // Show the preview section
                 previewSection.classList.remove('hidden');
@@ -5944,7 +5843,6 @@
                 apiSourceDescription.textContent = 'Using your own ElevenLabs API account';
                 toggleLabel.textContent = 'Use ClientsVia API';
 
-
             } else {
                 // Switch to global API mode
                 apiKeyInput.disabled = true;
@@ -5955,7 +5853,6 @@
                 subscriptionInfo.classList.add('hidden');
                 apiSourceDescription.textContent = 'Using ClientsVia global API (default for all companies)';
                 toggleLabel.textContent = 'Use Own API';
-
 
             }
 
@@ -6228,7 +6125,6 @@
                     audioElement.src = audioData;
                     audioElement.play();
 
-
                     showNotification(`🔊 Playing sample of ${voiceName}`, 'success');
                 } else {
                     throw new Error(result.message || 'Failed to generate sample');
@@ -6307,7 +6203,6 @@
             // Auto-load voices when page loads
             setTimeout(() => {
                 if (document.getElementById('voice-selector')) {
-
 
                     // Reset any stuck button states first
                     resetButtonStates();
@@ -6798,7 +6693,6 @@
                 safeSetChecked('agent-autoLearningQueue', settings.autoLearningQueue !== false);
                 console.log('ℹ️ CHECKPOINT: Advanced features processing complete (warnings above are normal for current structure)');
 
-
             } catch (error) {
                 console.error('❌ Failed to load agent settings:', error);
                 alert('Failed to load agent settings. Please refresh the page.');
@@ -6851,7 +6745,6 @@
                     autoLearningQueue: safeGetChecked('agent-autoLearningQueue', true)
                 };
 
-
                 const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -6865,7 +6758,6 @@
                     const savedIndicator = document.getElementById('agent-settings-saved');
                     savedIndicator.classList.remove('hidden');
                     setTimeout(() => savedIndicator.classList.add('hidden'), 3000);
-
 
                     // Reload settings to verify they were saved
 
@@ -6932,7 +6824,6 @@
             // Clear trade category selection
             const tradeSelector = document.getElementById('agent-trade-categories');
             Array.from(tradeSelector.options).forEach(option => option.selected = false);
-
 
         }        // Load agent analytics
         async function loadAgentAnalytics() {
@@ -7108,7 +6999,6 @@
                     if (emotionElement) emotionElement.checked = data.acknowledgeEmotion ?? true;
                     if (emojiElement) emojiElement.checked = data.useEmojis ?? false;
 
-
                 } else if (response.status === 404) {
                     console.log('⚠️ Personality settings endpoint not implemented yet - using defaults');
                 } else {
@@ -7144,7 +7034,6 @@
                     const savedIndicator = document.getElementById('personality-settings-saved');
                     savedIndicator.classList.remove('hidden');
                     setTimeout(() => savedIndicator.classList.add('hidden'), 3000);
-
 
                     alert('✅ Personality settings saved successfully!');
                 } else {
@@ -7194,7 +7083,6 @@
             if (emotionElement) emotionElement.checked = true;
             if (emojiElement) emojiElement.checked = false;
 
-
         }
 
         // 📚 KNOWLEDGE Q&A SOURCE CONTROLS FUNCTIONS - Module 2
@@ -7236,7 +7124,6 @@
 
             // 🗑️ REMOVED: Old click-based priority switching with prompts
             // Now using clean arrow buttons for priority control
-
 
         }
 
@@ -7340,7 +7227,6 @@
                         }
                     }
 
-
                 }
             } catch (error) {
                 console.error('❌ Failed to load knowledge settings:', error);
@@ -7390,7 +7276,6 @@
                     const savedIndicator = document.getElementById('knowledge-settings-saved');
                     savedIndicator.classList.remove('hidden');
                     setTimeout(() => savedIndicator.classList.add('hidden'), 3000);
-
 
                     alert('✅ Knowledge settings saved successfully!');
                 } else {
@@ -7450,7 +7335,6 @@
                     "I want to make sure I give you accurate information. Let me connect you with a specialist who can help.";
             }
 
-
         }
 
         // 🧠 AGENT CLIENTSVIA INTELLIGENCE FUNCTIONS
@@ -7494,7 +7378,6 @@
                     if (pipelineQuotedEl) pipelineQuotedEl.textContent = stats.pipeline.quoted || 0;
                     if (pipelineCustomerEl) pipelineCustomerEl.textContent = stats.pipeline.customer || 0;
                     if (pipelineInactiveEl) pipelineInactiveEl.textContent = stats.pipeline.inactive || 0;
-
 
                 } else {
                     console.warn('⚠️ Failed to load CRM dashboard stats');
@@ -8190,7 +8073,6 @@
                 callOutcomeFilter.addEventListener('change', () => loadCallHistory(1));
             }
 
-
         }
 
         // Debounce function for search
@@ -8239,7 +8121,6 @@
             document.getElementById('clientsvia-bargeInToggle').checked = true;
             document.getElementById('clientsvia-emotionToggle').checked = true;
             document.getElementById('clientsvia-emojiToggle').checked = false;
-
 
         }
 
@@ -8933,7 +8814,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
         // Refresh test data from live API
         function refreshTestData() {
 
-
             // Fetch live data from API
             fetch(`/api/agent/companies/${companyId}/ab-tests/stats`, {
                 method: 'GET',
@@ -8955,7 +8835,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 if (bestImprovementEl) bestImprovementEl.textContent = data.bestImprovement || '--';
                 if (confidenceLevelEl) confidenceLevelEl.textContent = data.averageConfidence || '--';
 
-
             })
             .catch(error => {
                 console.error('❌ Failed to refresh test data:', error);
@@ -8966,10 +8845,8 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
         // Auto-refresh data every 30 seconds when A/B Testing tab is active
         let abTestingRefreshInterval;
 
-
             }, 30000); // Refresh every 30 seconds
         }
-
 
         }
 
@@ -8979,7 +8856,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
 
         // ✅ PRODUCTION: Create new personalization rule
 
-
         // ✅ PRODUCTION: Import customer data for personalization
         function importCustomerData() {
             console.log('📥 Opening Customer Data Import...');
@@ -8987,7 +8863,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
         }
 
         // ✅ PRODUCTION: Export personalization report
-
 
         // ✅ PRODUCTION: Filter personalization rules
          else {
@@ -9015,7 +8890,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 if (responseAccuracyEl) responseAccuracyEl.textContent = data.responseAccuracy || '--';
                 if (resolutionTimeEl) resolutionTimeEl.textContent = data.averageResolutionTime || '--';
 
-
             })
             .catch(error => {
                 console.error('❌ Failed to refresh personalization data:', error);
@@ -9024,7 +8898,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
         }
 
         // ✅ PRODUCTION: Setup personalization engine
-
 
         // =========================================
         // KNOWLEDGE SOURCES SUB-TAB FUNCTIONS
@@ -10487,7 +10360,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
 
                     const targetTab = button.id.replace('clientsvia-tab-', '');
 
-
                     // Remove active class from all tabs and contents
                     tabButtons.forEach(btn => {
                         btn.classList.remove('active', 'border-blue-500', 'border-indigo-500', 'text-blue-600', 'text-indigo-600', 'bg-indigo-50');
@@ -10520,7 +10392,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                         targetContent.style.display = 'block';
                         targetContent.style.visibility = 'visible';
                         targetContent.style.opacity = '1';
-
 
                     } else {
                         console.error(`❌ Content not found for tab: ${targetTab}`);
@@ -11004,7 +10875,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 saveButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
             }
         }
-
 
         // ✅ PRODUCTION: Update unsaved changes UI
         function updateUnsavedChangesUI() {
@@ -11914,7 +11784,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
 
                 const result = await response.json();
 
-
                 // Show success state
                 if (savedIndicator) {
                     savedIndicator.classList.remove('hidden');
@@ -12229,14 +12098,19 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
 
         // Initialize ClientsVia Intelligence
         function initClientsViaIntelligence() {
-            initClientsViaTabs();
-            // initClientsViaPriorityFlow(); // REMOVED: Legacy priority flow function
-            initClientsViaKnowledgeSources();
+            console.log('🚀 initClientsViaIntelligence called successfully!');
+            try {
+                initClientsViaTabs();
+                // initClientsViaPriorityFlow(); // REMOVED: Legacy priority flow function
+                initClientsViaKnowledgeSources();
 
-            // Load existing configuration
-            loadClientsViaConfiguration();
+                // Load existing configuration
+                loadClientsViaConfiguration();
+                console.log('✅ initClientsViaIntelligence completed successfully!');
+            } catch (error) {
+                console.error('❌ Error in initClientsViaIntelligence:', error);
+            }
         }
-
 
         // Load ClientsVia configuration from backend
         async function loadClientsViaConfiguration() {
@@ -12251,7 +12125,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
 
                 if (response.ok) {
                     const config = await response.json();
-
 
                     // Apply configuration to UI (handle both old and new data formats)
                     if (config.company && config.company.aiAgentLogic) {
@@ -12312,7 +12185,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                     }
                 }
 
-
             } catch (error) {
                 console.error('❌ Error applying configuration to UI:', error);
             }
@@ -12359,7 +12231,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
         /**
          * Initialize Flow Designer
          */
-
 
         /**
          * Load A/B Testing data
@@ -12820,7 +12691,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
 
         // 🧪 A/B TESTING FRAMEWORK FUNCTIONS
 
-
             try {
                 const response = await fetch(`/api/ai-agent-logic/test/ab-testing/${companyId}/create`, {
                     method: 'POST',
@@ -12859,7 +12729,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
             }
         }
 
-
                 const data = await response.json();
 
                 if (data.success) {
@@ -12893,7 +12762,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
             }
         }
 
-
             container.innerHTML = tests.map(test => `
                 <div class="bg-white p-4 rounded-lg border">
                     <div class="flex justify-between items-center">
@@ -12915,7 +12783,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 showNotification('Failed to refresh personalization engine', 'error');
             }
         }
-
 
                     ]
                 };
@@ -12982,7 +12849,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
         }
 
         // 🎨 CONVERSATION FLOW DESIGNER FUNCTIONS - REMOVED PLACEHOLDER OVERRIDE
-
 
         // Enhanced save function to include all enterprise features
         async function saveEnterpriseIntelligenceSettings() {
@@ -13082,7 +12948,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
             window.fixEmergencyLLMFloating = function() {
                 try {
 
-
                     // Find all Emergency LLM elements
                     const emergencyElements = document.querySelectorAll('[data-priority-type="emergency-llm"]');
                     const properContainer = document.getElementById('clientsvia-priority-flow-container');
@@ -13124,7 +12989,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                             element.remove();
                         }
                     });
-
 
                     showNotification('Emergency LLM floating elements cleared', 'success');
                 } catch (error) {
@@ -13181,7 +13045,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 if (avgResponseTimeEl) avgResponseTimeEl.textContent = metrics.avgResponseTime + 's';
                 if (totalCallsEl) totalCallsEl.textContent = metrics.totalCalls;
                 if (successRateEl) successRateEl.textContent = metrics.successRate + '%';
-
 
             } catch (error) {
                 console.error('❌ Failed to fetch real-time metrics:', error);
@@ -13295,7 +13158,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
          */
         ;
 
-
                 showNotification('Personalization data updated', 'success');
 
             } catch (error) {
@@ -13362,7 +13224,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                     }
                 }
 
-
             } catch (error) {
                 console.error('❌ Error switching ClientsVia tab:', error);
                 showNotification(`Failed to switch to ${targetTabId} tab`, 'error');
@@ -13396,7 +13257,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                     }
                 });
 
-
                 // Set default active tab (priority)
                 switchClientsviaTab('priority');
 
@@ -13424,7 +13284,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
         // 🚀 CRITICAL FIX: Setup change listeners for AI Agent Logic form fields
         function setupAIAgentLogicChangeListeners() {
 
-
             // List of all AI Agent Logic form field IDs
             const aiAgentFieldIds = [
                 'agent-useLLM',
@@ -13448,7 +13307,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 if (element) {
                     element.addEventListener('change', function(event) {
 
-
                         // Trigger main form change detection
                         if (window.companyProfileManager && typeof window.companyProfileManager.handleFormChange === 'function') {
                             window.companyProfileManager.handleFormChange(event);
@@ -13470,7 +13328,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 if (checkbox) {
                     checkbox.addEventListener('change', function(event) {
 
-
                         // Trigger main form change detection
                         if (window.companyProfileManager && typeof window.companyProfileManager.handleFormChange === 'function') {
                             window.companyProfileManager.handleFormChange(event);
@@ -13485,7 +13342,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 }
             });
 
-
         }
 
         // Main initialization when page loads
@@ -13498,7 +13354,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
 
             if (companyId) {
 
-
                 // Set global company ID - CRITICAL: This allows JS to pick it up
                 window.companyId = companyId;
 
@@ -13506,12 +13361,16 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 const waitForManager = () => {
                     if (window.companyProfileManager && window.companyProfileManager.initialized) {
 
-
                         // 🚀 CRITICAL FIX: Set up change listeners for AI Agent Logic form fields - DISABLED (using dedicated save button instead)
                         console.log('⚠️ AI Agent Logic change listeners disabled - using dedicated save button');
 
                         // Initialize ClientsVia Intelligence after company data loads
-                        initClientsViaIntelligence();
+                        console.log('🔍 About to call initClientsViaIntelligence...');
+                        if (typeof initClientsViaIntelligence === 'function') {
+                            initClientsViaIntelligence();
+                        } else {
+                            console.error('❌ initClientsViaIntelligence is not a function:', typeof initClientsViaIntelligence);
+                        }
 
                         // 🎯 Initialize ClientsVia AI Agent Logic tab navigation
                         initializeClientsviaTabListeners();
@@ -13526,8 +13385,12 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                     console.log('📡 Calling proven fetchCompanyData pattern...');
                     fetchCompanyData()
                         .then(() => {
-
-                            initClientsViaIntelligence();
+                            console.log('🔍 fetchCompanyData success - About to call initClientsViaIntelligence...');
+                            if (typeof initClientsViaIntelligence === 'function') {
+                                initClientsViaIntelligence();
+                            } else {
+                                console.error('❌ initClientsViaIntelligence is not a function:', typeof initClientsViaIntelligence);
+                            }
 
                             // 🎯 Initialize ClientsVia AI Agent Logic tab navigation
                             initializeClientsviaTabListeners();
@@ -13786,7 +13649,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 tableBody.appendChild(row);
             });
 
-
         }
 
         // Get available placeholders for variable insertion
@@ -13917,7 +13779,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 }
             });
 
-
         }
 
         // Show all placeholders in a modal/dropdown
@@ -14018,7 +13879,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                     });
 
                     const result = await response.json();
-
 
                     if (result.success) {
                         let audioUrl;
@@ -14210,7 +14070,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 }
             });
 
-
         }
 
         // Attach event listeners to all response textareas
@@ -14232,7 +14091,6 @@ Response Tone Test,Active,8.7%,87.3%,3 days`;
                 updateVariableInsertionButtons(); // Finally update the buttons
             }, 1200);
         });
-
 
         // REMOVED: Intelligence & Memory functions - functionality integrated into unified system
 
