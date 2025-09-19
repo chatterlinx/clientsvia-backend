@@ -185,6 +185,62 @@ router.get('/me', authenticateJWT, async (req, res) => {
 });
 
 /**
+ * POST /api/auth/refresh - Refresh JWT token
+ */
+router.post('/refresh', authenticateJWT, async (req, res) => {
+    try {
+        const user = req.user;
+        
+        // Generate new JWT token
+        const newToken = jwt.sign(
+            { 
+                userId: user._id, 
+                email: user.email, 
+                role: user.role 
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+        
+        // Set new token as cookie
+        res.cookie('authToken', newToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+        
+        res.json({ 
+            success: true, 
+            token: newToken,
+            message: 'Token refreshed successfully'
+        });
+        
+    } catch (error) {
+        console.error('Token refresh error:', error);
+        res.status(401).json({ 
+            success: false, 
+            message: 'Token refresh failed' 
+        });
+    }
+});
+
+/**
+ * GET /api/auth/verify - Verify JWT token
+ */
+router.get('/verify', authenticateJWT, (req, res) => {
+    res.json({ 
+        success: true, 
+        user: {
+            id: req.user._id,
+            email: req.user.email,
+            role: req.user.role
+        },
+        message: 'Token is valid'
+    });
+});
+
+/**
  * POST /api/auth/logout - Logout user (client-side token removal)
  */
 router.post('/logout', async (req, res) => {
@@ -301,7 +357,7 @@ router.get('/google/callback', requireGoogleOAuth,
                     role: user.role 
                 },
                 process.env.JWT_SECRET,
-                { expiresIn: '24h' }
+                { expiresIn: '7d' }
             );
             console.log('🔍 OAUTH CHECKPOINT 6: JWT token generated');
             
@@ -318,7 +374,7 @@ router.get('/google/callback', requireGoogleOAuth,
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'strict',
-                maxAge: 24 * 60 * 60 * 1000 // 24 hours
+                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
             });
             console.log('🔍 OAUTH CHECKPOINT 7: Cookie set, redirecting...');
             

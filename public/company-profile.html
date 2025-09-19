@@ -5034,6 +5034,75 @@
                    getCookieValue('token') || 
                    getCookieValue('authToken') || '';
         }
+
+        // Auto-refresh token mechanism to prevent expiration
+        function startTokenRefresh() {
+            // Refresh token every 6 days (before 7-day expiration)
+            const refreshInterval = 6 * 24 * 60 * 60 * 1000; // 6 days in milliseconds
+            
+            setInterval(async () => {
+                try {
+                    const currentToken = getUniversalAuthToken();
+                    if (!currentToken) return;
+
+                    console.log('🔄 Auto-refreshing authentication token...');
+                    
+                    const response = await fetch('/api/auth/refresh', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${currentToken}`
+                        },
+                        credentials: 'include'
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.token) {
+                            localStorage.setItem('adminToken', data.token);
+                            console.log('✅ Token refreshed successfully');
+                        }
+                    } else {
+                        console.warn('⚠️ Token refresh failed, user may need to re-login');
+                    }
+                } catch (error) {
+                    console.error('❌ Token refresh error:', error);
+                }
+            }, refreshInterval);
+        }
+
+        // Check token validity and refresh if needed
+        async function checkTokenValidity() {
+            try {
+                const token = getUniversalAuthToken();
+                if (!token) {
+                    console.log('🔍 No token found, redirecting to login');
+                    window.location.href = '/login.html';
+                    return false;
+                }
+
+                // Test token with a simple API call
+                const response = await fetch('/api/auth/verify', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    console.log('🔍 Token expired, redirecting to login');
+                    localStorage.removeItem('adminToken');
+                    localStorage.removeItem('adminUser');
+                    window.location.href = '/login.html';
+                    return false;
+                }
+
+                return true;
+            } catch (error) {
+                console.error('❌ Token validation error:', error);
+                return false;
+            }
+        }
         
         // Get auth token source for debugging
         function getAuthTokenSource() {
@@ -13360,8 +13429,16 @@ Key Metrics:
         }
 
         // Main initialization when page loads
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             console.log('🚀 Company Profile page DOMContentLoaded - Starting initialization...');
+            
+            // Check token validity first
+            const isValidToken = await checkTokenValidity();
+            if (!isValidToken) return; // Will redirect to login if invalid
+
+            // Start automatic token refresh
+            startTokenRefresh();
+            console.log('🔄 Token auto-refresh system started');
             
             // Get company ID from URL - CRITICAL: This must happen first
             const urlParams = new URLSearchParams(window.location.search);

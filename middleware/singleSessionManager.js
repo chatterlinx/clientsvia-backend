@@ -102,7 +102,7 @@ class EnterpriseSingleSessionManager {
                 securityLevel: sessionData.securityLevel,
                 iat: Math.floor(Date.now() / 1000)
             }, process.env.JWT_SECRET, { 
-                expiresIn: '4h' // Extended for development
+                expiresIn: '7d' // Extended for production stability
             });
 
             // Step 9: Log security event
@@ -348,7 +348,7 @@ class EnterpriseSingleSessionManager {
                 deviceFingerprint: decoded.deviceFingerprint,
                 iat: Math.floor(Date.now() / 1000)
             }, process.env.JWT_SECRET, { 
-                expiresIn: '4h' // Extended for development - 4 hours
+                expiresIn: '7d' // Extended for production stability - 7 days
             });
 
             // Update session activity
