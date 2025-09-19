@@ -129,8 +129,9 @@
         /* Ensure tab content containers don't overflow */
         .clientsvia-tab-content {
             position: relative;
-            overflow: hidden;
+            overflow: visible;
             width: 100%;
+            min-height: 200px;
         }
         
         /* 🔧 TAB CONTAINER STRUCTURE FIX */
@@ -2685,7 +2686,7 @@
                                     
                                     
                                         <!-- TAB 3: Agent Personality -->
-                                        <div id="clientsvia-personality-content" class="clientsvia-tab-content" data-config-section="agent-personality">
+                                        <div id="clientsvia-personality-content" class="clientsvia-tab-content" data-config-section="agent-personality" style="min-height: 400px; overflow: visible;">
                                             <div class="mb-6">
                                                 <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                                                     <i class="fas fa-theater-masks mr-2 text-pink-600"></i>Agent Personality Configuration
