@@ -7960,9 +7960,13 @@
                     // Load call transfer settings
                     if (data.callTransferConfig) {
                         const transferConfig = data.callTransferConfig;
-                        document.getElementById('clientsvia-dialOutEnabled').checked = transferConfig.dialOutEnabled || false;
-                        document.getElementById('clientsvia-dialOutNumber').value = transferConfig.dialOutNumber || '';
-                        document.getElementById('clientsvia-transferMessage').value = transferConfig.transferMessage || 'Let me connect you with someone who can better assist you.';
+                        const dialOutEnabledEl = document.getElementById('clientsvia-dialOutEnabled');
+                        const dialOutNumberEl = document.getElementById('clientsvia-dialOutNumber');
+                        const transferMessageEl = document.getElementById('clientsvia-transferMessage');
+                        
+                        if (dialOutEnabledEl) dialOutEnabledEl.checked = transferConfig.dialOutEnabled || false;
+                        if (dialOutNumberEl) dialOutNumberEl.value = transferConfig.dialOutNumber || '';
+                        if (transferMessageEl) transferMessageEl.value = transferConfig.transferMessage || 'Let me connect you with someone who can better assist you.';
                         
                         // Update UI visibility and status
                         toggleTransferConfiguration();
@@ -12272,21 +12276,29 @@ Key Metrics:
 
         // Toggle transfer configuration UI visibility
         function toggleTransferConfiguration() {
-            const enabled = document.getElementById('clientsvia-dialOutEnabled').checked;
+            const enabledEl = document.getElementById('clientsvia-dialOutEnabled');
             const numberSection = document.getElementById('clientsvia-transferNumberSection');
             const messageSection = document.getElementById('clientsvia-transferMessageSection');
             const statusElement = document.getElementById('clientsvia-transferStatus');
             
+            if (!enabledEl) return; // Exit if element doesn't exist
+            
+            const enabled = enabledEl.checked;
+            
             if (enabled) {
-                numberSection.classList.remove('hidden');
-                messageSection.classList.remove('hidden');
-                statusElement.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Transfer Enabled';
-                statusElement.className = 'text-sm text-green-600';
+                if (numberSection) numberSection.classList.remove('hidden');
+                if (messageSection) messageSection.classList.remove('hidden');
+                if (statusElement) {
+                    statusElement.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Transfer Enabled';
+                    statusElement.className = 'text-sm text-green-600';
+                }
             } else {
-                numberSection.classList.add('hidden');
-                messageSection.classList.add('hidden');
-                statusElement.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Transfer Disabled';
-                statusElement.className = 'text-sm text-red-600';
+                if (numberSection) numberSection.classList.add('hidden');
+                if (messageSection) messageSection.classList.add('hidden');
+                if (statusElement) {
+                    statusElement.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Transfer Disabled';
+                    statusElement.className = 'text-sm text-red-600';
+                }
             }
         }
 
