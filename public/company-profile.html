@@ -7857,6 +7857,25 @@
                             // EMERGENCY: Inject test content to verify container works
                             if (personalityContent.offsetHeight === 0) {
                                 console.log('🚨 EMERGENCY: Injecting test content to verify container');
+                                
+                                // CRITICAL: Check and fix parent containers
+                                let parent = personalityContent.parentElement;
+                                let level = 0;
+                                while (parent && level < 5) {
+                                    console.log(`🔍 PARENT ${level}:`, parent.tagName, parent.className, 'display:', window.getComputedStyle(parent).display, 'height:', parent.offsetHeight);
+                                    
+                                    // Force parent to be visible
+                                    if (parent.style) {
+                                        parent.style.display = 'block';
+                                        parent.style.visibility = 'visible';
+                                        parent.style.height = 'auto';
+                                        parent.style.minHeight = '400px';
+                                    }
+                                    
+                                    parent = parent.parentElement;
+                                    level++;
+                                }
+                                
                                 personalityContent.innerHTML = `
                                     <div style="padding: 20px; background: #f0f0f0; border: 2px solid red; min-height: 200px;">
                                         <h3 style="color: red; font-size: 18px; margin-bottom: 10px;">🚨 EMERGENCY TEST CONTENT</h3>
@@ -7897,6 +7916,19 @@
                                     </div>
                                 `;
                                 console.log('🔧 EMERGENCY CONTENT INJECTED - New offset height:', personalityContent.offsetHeight);
+                                
+                                // Final check: If still zero height, force position absolute
+                                if (personalityContent.offsetHeight === 0) {
+                                    console.log('🚨 CRITICAL: Even emergency content has zero height - forcing position absolute');
+                                    personalityContent.style.position = 'absolute';
+                                    personalityContent.style.top = '100px';
+                                    personalityContent.style.left = '20px';
+                                    personalityContent.style.width = '800px';
+                                    personalityContent.style.zIndex = '9999';
+                                    personalityContent.style.backgroundColor = 'white';
+                                    personalityContent.style.border = '3px solid red';
+                                    console.log('🔧 ABSOLUTE POSITIONING APPLIED - Final height:', personalityContent.offsetHeight);
+                                }
                             }
                         }
                     } else {
