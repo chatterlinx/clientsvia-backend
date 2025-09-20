@@ -7770,12 +7770,18 @@
 
         // Load ClientsVia agent personality settings
         async function loadClientsviaAgentPersonalitySettings() {
+            console.log('🎭 loadClientsviaAgentPersonalitySettings() called');
             const companyId = getCurrentCompanyId();
-            if (!companyId) return;
+            if (!companyId) {
+                console.error('❌ No company ID found');
+                return;
+            }
+            console.log('🏢 Company ID:', companyId);
 
             try {
                 // CRITICAL FIX: Add authentication token
                 const authToken = getUniversalAuthToken();
+                console.log('🔑 Auth token available:', !!authToken);
                 const headers = {
                     'Content-Type': 'application/json'
                 };
@@ -7784,19 +7790,46 @@
                     headers['Authorization'] = `Bearer ${authToken}`;
                 }
                 
+                console.log('📡 Fetching personality settings from:', `/api/company/${companyId}/personality`);
                 const response = await fetch(`/api/company/${companyId}/personality`, {
                     headers: headers,
                     credentials: 'include'
                 });
+                
+                console.log('📥 Response status:', response.status, response.statusText);
+                
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('📊 Personality data received:', data);
+                    
                     if (data.personalitySettings) {
                         const settings = data.personalitySettings;
-                        document.getElementById('clientsvia-voiceToneSelect').value = settings.voiceTone || 'friendly';
-                        document.getElementById('clientsvia-speechPaceSelect').value = settings.speechPace || 'normal';
-                        document.getElementById('clientsvia-bargeInToggle').checked = settings.bargeIn !== false;
-                        document.getElementById('clientsvia-emotionToggle').checked = settings.acknowledgeEmotion !== false;
-                        document.getElementById('clientsvia-emojiToggle').checked = settings.useEmojis || false;
+                        console.log('🎛️ Applying personality settings:', settings);
+                        
+                        // Check if elements exist before setting values
+                        const voiceToneEl = document.getElementById('clientsvia-voiceToneSelect');
+                        const speechPaceEl = document.getElementById('clientsvia-speechPaceSelect');
+                        const bargeInEl = document.getElementById('clientsvia-bargeInToggle');
+                        const emotionEl = document.getElementById('clientsvia-emotionToggle');
+                        const emojiEl = document.getElementById('clientsvia-emojiToggle');
+                        
+                        console.log('🔍 Elements found:', {
+                            voiceTone: !!voiceToneEl,
+                            speechPace: !!speechPaceEl,
+                            bargeIn: !!bargeInEl,
+                            emotion: !!emotionEl,
+                            emoji: !!emojiEl
+                        });
+                        
+                        if (voiceToneEl) voiceToneEl.value = settings.voiceTone || 'friendly';
+                        if (speechPaceEl) speechPaceEl.value = settings.speechPace || 'normal';
+                        if (bargeInEl) bargeInEl.checked = settings.bargeIn !== false;
+                        if (emotionEl) emotionEl.checked = settings.acknowledgeEmotion !== false;
+                        if (emojiEl) emojiEl.checked = settings.useEmojis || false;
+                        
+                        console.log('✅ Personality settings applied successfully');
+                    } else {
+                        console.warn('⚠️ No personalitySettings in response data');
                     }
 
                     // Load call transfer settings
@@ -10157,7 +10190,14 @@ Key Metrics:
                             break;
                         case 'personality':
                             console.log('🎭 Agent Personality tab activated');
-                            loadAgentPersonalitySettings();
+                            console.log('🔍 About to call loadClientsviaAgentPersonalitySettings()');
+                            // Load ClientsVia personality settings for the tab interface
+                            try {
+                                loadClientsviaAgentPersonalitySettings();
+                                console.log('✅ loadClientsviaAgentPersonalitySettings() called successfully');
+                            } catch (error) {
+                                console.error('❌ Error calling loadClientsviaAgentPersonalitySettings():', error);
+                            }
                             break;
                     }
                     
