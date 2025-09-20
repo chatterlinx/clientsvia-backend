@@ -7853,6 +7853,51 @@
                             personalityContent.style.overflow = 'visible';
                             
                             console.log('🔧 AFTER FORCE - Offset height:', personalityContent.offsetHeight);
+                            
+                            // EMERGENCY: Inject test content to verify container works
+                            if (personalityContent.offsetHeight === 0) {
+                                console.log('🚨 EMERGENCY: Injecting test content to verify container');
+                                personalityContent.innerHTML = `
+                                    <div style="padding: 20px; background: #f0f0f0; border: 2px solid red; min-height: 200px;">
+                                        <h3 style="color: red; font-size: 18px; margin-bottom: 10px;">🚨 EMERGENCY TEST CONTENT</h3>
+                                        <p style="color: black; margin-bottom: 10px;">If you can see this, the container works but the original content is broken.</p>
+                                        <div style="background: white; padding: 10px; border: 1px solid #ccc;">
+                                            <label style="display: block; margin-bottom: 5px;">Voice Tone:</label>
+                                            <select id="clientsvia-voiceToneSelect" style="width: 200px; padding: 5px;">
+                                                <option value="friendly">Friendly</option>
+                                                <option value="professional">Professional</option>
+                                                <option value="playful">Playful</option>
+                                            </select>
+                                        </div>
+                                        <div style="background: white; padding: 10px; border: 1px solid #ccc; margin-top: 10px;">
+                                            <label style="display: block; margin-bottom: 5px;">Speech Pace:</label>
+                                            <select id="clientsvia-speechPaceSelect" style="width: 200px; padding: 5px;">
+                                                <option value="slow">Slow</option>
+                                                <option value="normal">Normal</option>
+                                                <option value="fast">Fast</option>
+                                            </select>
+                                        </div>
+                                        <div style="background: white; padding: 10px; border: 1px solid #ccc; margin-top: 10px;">
+                                            <label style="display: flex; align-items: center;">
+                                                <input type="checkbox" id="clientsvia-bargeInToggle" style="margin-right: 10px;">
+                                                Allow Barge-in
+                                            </label>
+                                            <label style="display: flex; align-items: center; margin-top: 5px;">
+                                                <input type="checkbox" id="clientsvia-emotionToggle" style="margin-right: 10px;">
+                                                Acknowledge Emotion
+                                            </label>
+                                            <label style="display: flex; align-items: center; margin-top: 5px;">
+                                                <input type="checkbox" id="clientsvia-emojiToggle" style="margin-right: 10px;">
+                                                Use Emojis
+                                            </label>
+                                        </div>
+                                        <button onclick="saveClientsviaAgentPersonalitySettings()" style="background: #dc2626; color: white; padding: 10px 20px; border: none; border-radius: 5px; margin-top: 15px; cursor: pointer;">
+                                            Save Personality Settings
+                                        </button>
+                                    </div>
+                                `;
+                                console.log('🔧 EMERGENCY CONTENT INJECTED - New offset height:', personalityContent.offsetHeight);
+                            }
                         }
                     } else {
                         console.warn('⚠️ No personalitySettings in response data');
