@@ -7828,6 +7828,32 @@
                         if (emojiEl) emojiEl.checked = settings.useEmojis || false;
                         
                         console.log('✅ Personality settings applied successfully');
+                        
+                        // CRITICAL: Check if the personality content div has the active class
+                        const personalityContent = document.getElementById('clientsvia-personality-content');
+                        if (personalityContent) {
+                            console.log('🔍 Personality content element classes:', personalityContent.className);
+                            console.log('🔍 Has active class:', personalityContent.classList.contains('active'));
+                            console.log('🔍 Computed display:', window.getComputedStyle(personalityContent).display);
+                            console.log('🔍 Computed visibility:', window.getComputedStyle(personalityContent).visibility);
+                            console.log('🔍 Computed height:', window.getComputedStyle(personalityContent).height);
+                            console.log('🔍 Offset height:', personalityContent.offsetHeight);
+                            
+                            // FORCE the content to be visible
+                            if (!personalityContent.classList.contains('active')) {
+                                console.log('🔧 FORCING personality content to be active');
+                                personalityContent.classList.add('active');
+                            }
+                            
+                            // Force override any CSS that might be hiding it
+                            personalityContent.style.display = 'block';
+                            personalityContent.style.visibility = 'visible';
+                            personalityContent.style.opacity = '1';
+                            personalityContent.style.height = 'auto';
+                            personalityContent.style.overflow = 'visible';
+                            
+                            console.log('🔧 AFTER FORCE - Offset height:', personalityContent.offsetHeight);
+                        }
                     } else {
                         console.warn('⚠️ No personalitySettings in response data');
                     }
