@@ -68,7 +68,7 @@
 
         
 
-        
+
         .contact-block-view { @apply mt-3 pt-3 border-t border-gray-200; }
         .contact-block-view .detail-item:last-child { padding-bottom: 0; }
         .scheduling-rule-daily-hours-header { @apply grid grid-cols-4 gap-x-3 mb-1 px-2 text-xs font-medium text-gray-500; }
@@ -2686,7 +2686,7 @@
                                     
                                     
                                         <!-- TAB 3: Agent Personality -->
-                                        <div id="clientsvia-personality-content" class="clientsvia-tab-content" data-config-section="agent-personality" style="min-height: 400px; overflow: visible;">
+                                        <div id="clientsvia-personality-content" class="clientsvia-tab-content" data-config-section="agent-personality">
                                             <div class="mb-6">
                                                 <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                                                     <i class="fas fa-theater-masks mr-2 text-pink-600"></i>Agent Personality Configuration
@@ -7828,64 +7828,6 @@
                         if (emojiEl) emojiEl.checked = settings.useEmojis || false;
                         
                         console.log('✅ Personality settings applied successfully');
-                        
-                        // CRITICAL: Check if the personality content div has the active class
-                        const personalityContent = document.getElementById('clientsvia-personality-content');
-                        if (personalityContent) {
-                            console.log('🔍 Personality content element classes:', personalityContent.className);
-                            console.log('🔍 Has active class:', personalityContent.classList.contains('active'));
-                            console.log('🔍 Computed display:', window.getComputedStyle(personalityContent).display);
-                            console.log('🔍 Computed visibility:', window.getComputedStyle(personalityContent).visibility);
-                            console.log('🔍 Computed height:', window.getComputedStyle(personalityContent).height);
-                            console.log('🔍 Offset height:', personalityContent.offsetHeight);
-                            
-                            // FORCE the content to be visible
-                            if (!personalityContent.classList.contains('active')) {
-                                console.log('🔧 FORCING personality content to be active');
-                                personalityContent.classList.add('active');
-                            }
-                            
-                            // Force override any CSS that might be hiding it
-                            personalityContent.style.display = 'block';
-                            personalityContent.style.visibility = 'visible';
-                            personalityContent.style.opacity = '1';
-                            personalityContent.style.height = 'auto';
-                            personalityContent.style.overflow = 'visible';
-                            
-                            console.log('🔧 AFTER FORCE - Offset height:', personalityContent.offsetHeight);
-                            
-                            // CRITICAL: Check and fix parent containers that might be hiding content
-                            if (personalityContent.offsetHeight === 0) {
-                                console.log('🚨 CRITICAL: Personality content still has zero height - checking parents');
-                                
-                                // Force parent containers to be visible
-                                let parent = personalityContent.parentElement;
-                                let level = 0;
-                                while (parent && level < 5) {
-                                    const computedStyle = window.getComputedStyle(parent);
-                                    console.log(`🔍 PARENT ${level}:`, parent.tagName, parent.className, 
-                                               'display:', computedStyle.display, 
-                                               'visibility:', computedStyle.visibility,
-                                               'height:', parent.offsetHeight,
-                                               'overflow:', computedStyle.overflow);
-                                    
-                                    // Force parent to be visible
-                                    if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
-                                        parent.style.setProperty('display', 'block', 'important');
-                                        parent.style.setProperty('visibility', 'visible', 'important');
-                                        parent.style.setProperty('opacity', '1', 'important');
-                                        console.log(`🔧 FIXED PARENT ${level}: Forced display and visibility`);
-                                    }
-                                    
-                                    parent = parent.parentElement;
-                                    level++;
-                                }
-                                
-                                console.log('🔧 After parent fixes - Offset height:', personalityContent.offsetHeight);
-                            }
-                            
-                            console.log('✅ Personality content setup complete');
-                        }
                     } else {
                         console.warn('⚠️ No personalitySettings in response data');
                     }
@@ -12222,15 +12164,15 @@ Key Metrics:
                 if (numberSection) numberSection.classList.remove('hidden');
                 if (messageSection) messageSection.classList.remove('hidden');
                 if (statusElement) {
-                    statusElement.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Transfer Enabled';
-                    statusElement.className = 'text-sm text-green-600';
+                statusElement.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Transfer Enabled';
+                statusElement.className = 'text-sm text-green-600';
                 }
             } else {
                 if (numberSection) numberSection.classList.add('hidden');
                 if (messageSection) messageSection.classList.add('hidden');
                 if (statusElement) {
-                    statusElement.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Transfer Disabled';
-                    statusElement.className = 'text-sm text-red-600';
+                statusElement.innerHTML = '<i class="fas fa-times-circle mr-1"></i>Transfer Disabled';
+                statusElement.className = 'text-sm text-red-600';
                 }
             }
         }
