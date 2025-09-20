@@ -7854,7 +7854,36 @@
                             
                             console.log('🔧 AFTER FORCE - Offset height:', personalityContent.offsetHeight);
                             
-                            // The personality content should now be visible with the proper form
+                            // CRITICAL: Check and fix parent containers that might be hiding content
+                            if (personalityContent.offsetHeight === 0) {
+                                console.log('🚨 CRITICAL: Personality content still has zero height - checking parents');
+                                
+                                // Force parent containers to be visible
+                                let parent = personalityContent.parentElement;
+                                let level = 0;
+                                while (parent && level < 5) {
+                                    const computedStyle = window.getComputedStyle(parent);
+                                    console.log(`🔍 PARENT ${level}:`, parent.tagName, parent.className, 
+                                               'display:', computedStyle.display, 
+                                               'visibility:', computedStyle.visibility,
+                                               'height:', parent.offsetHeight,
+                                               'overflow:', computedStyle.overflow);
+                                    
+                                    // Force parent to be visible
+                                    if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
+                                        parent.style.setProperty('display', 'block', 'important');
+                                        parent.style.setProperty('visibility', 'visible', 'important');
+                                        parent.style.setProperty('opacity', '1', 'important');
+                                        console.log(`🔧 FIXED PARENT ${level}: Forced display and visibility`);
+                                    }
+                                    
+                                    parent = parent.parentElement;
+                                    level++;
+                                }
+                                
+                                console.log('🔧 After parent fixes - Offset height:', personalityContent.offsetHeight);
+                            }
+                            
                             console.log('✅ Personality content setup complete');
                         }
                     } else {
