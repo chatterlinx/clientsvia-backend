@@ -7864,12 +7864,19 @@
                                 while (parent && level < 5) {
                                     console.log(`🔍 PARENT ${level}:`, parent.tagName, parent.className, 'display:', window.getComputedStyle(parent).display, 'height:', parent.offsetHeight);
                                     
-                                    // Force parent to be visible
+                                    // Force parent to be visible with !important overrides
                                     if (parent.style) {
-                                        parent.style.display = 'block';
-                                        parent.style.visibility = 'visible';
-                                        parent.style.height = 'auto';
-                                        parent.style.minHeight = '400px';
+                                        parent.style.setProperty('display', 'block', 'important');
+                                        parent.style.setProperty('visibility', 'visible', 'important');
+                                        parent.style.setProperty('height', 'auto', 'important');
+                                        parent.style.setProperty('min-height', '400px', 'important');
+                                        parent.style.setProperty('opacity', '1', 'important');
+                                        
+                                        // Remove any classes that might hide it
+                                        if (parent.classList.contains('hidden')) {
+                                            parent.classList.remove('hidden');
+                                            console.log(`🔧 Removed 'hidden' class from parent ${level}`);
+                                        }
                                     }
                                     
                                     parent = parent.parentElement;
@@ -7920,14 +7927,29 @@
                                 // Final check: If still zero height, force position absolute
                                 if (personalityContent.offsetHeight === 0) {
                                     console.log('🚨 CRITICAL: Even emergency content has zero height - forcing position absolute');
-                                    personalityContent.style.position = 'absolute';
-                                    personalityContent.style.top = '100px';
-                                    personalityContent.style.left = '20px';
-                                    personalityContent.style.width = '800px';
-                                    personalityContent.style.zIndex = '9999';
-                                    personalityContent.style.backgroundColor = 'white';
-                                    personalityContent.style.border = '3px solid red';
+                                    
+                                    // Use setProperty with !important to override any CSS
+                                    personalityContent.style.setProperty('position', 'fixed', 'important');
+                                    personalityContent.style.setProperty('top', '100px', 'important');
+                                    personalityContent.style.setProperty('left', '20px', 'important');
+                                    personalityContent.style.setProperty('width', '800px', 'important');
+                                    personalityContent.style.setProperty('height', '600px', 'important');
+                                    personalityContent.style.setProperty('z-index', '99999', 'important');
+                                    personalityContent.style.setProperty('background-color', 'white', 'important');
+                                    personalityContent.style.setProperty('border', '5px solid red', 'important');
+                                    personalityContent.style.setProperty('display', 'block', 'important');
+                                    personalityContent.style.setProperty('visibility', 'visible', 'important');
+                                    personalityContent.style.setProperty('opacity', '1', 'important');
+                                    personalityContent.style.setProperty('overflow', 'auto', 'important');
+                                    personalityContent.style.setProperty('padding', '20px', 'important');
+                                    
+                                    // Remove any hiding classes
+                                    personalityContent.classList.remove('hidden');
+                                    personalityContent.removeAttribute('hidden');
+                                    
                                     console.log('🔧 ABSOLUTE POSITIONING APPLIED - Final height:', personalityContent.offsetHeight);
+                                    console.log('🔧 Final computed display:', window.getComputedStyle(personalityContent).display);
+                                    console.log('🔧 Final computed visibility:', window.getComputedStyle(personalityContent).visibility);
                                 }
                             }
                         }
