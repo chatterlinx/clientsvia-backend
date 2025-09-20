@@ -72,6 +72,7 @@ async function loadAllRoutes() {
         routes.agentSettingsRoutes = await loadRouteWithTimeout('./routes/agentSettings', 'agentSettingsRoutes');
         routes.companyAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/agentSettings', 'companyAgentSettingsRoutes');
         routes.companyPersonalityRoutes = await loadRouteWithTimeout('./routes/company/personality', 'companyPersonalityRoutes');
+    routes.aiAgentPersonalityRoutes = await loadRouteWithTimeout('./routes/aiAgentPersonality', 'aiAgentPersonalityRoutes');
         // Knowledge Management Routes
         routes.newKnowledgeRoutes = await loadRouteWithTimeout('./routes/knowledge/companyKnowledge', 'newKnowledgeRoutes');
         
@@ -203,6 +204,7 @@ function registerRoutes(routes) {
     app.use('/api/backup', routes.backupRoutes); // BACKUP: Automated backup monitoring and management
     app.use('/api/company', routes.companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
     app.use('/api/company', routes.companyPersonalityRoutes); // MODULE 1: Agent Personality Settings
+    app.use('/api/ai-agent', routes.aiAgentPersonalityRoutes); // WORLD-CLASS AI AGENT PERSONALITY SYSTEM
     app.use('/api/company', routes.companyKnowledgeRoutes); // MODULE 2: Knowledge Q&A Source Controls
     app.use('/api/knowledge', routes.newKnowledgeRoutes); // NEW: Company Q&A Knowledge Base Management
     app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console

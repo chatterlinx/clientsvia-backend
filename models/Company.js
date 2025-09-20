@@ -720,6 +720,163 @@ const companySchema = new mongoose.Schema({
             }
         },
 
+        // 🎭 WORLD-CLASS AI AGENT PERSONALITY SYSTEM
+        // Comprehensive human-like personality configuration per companyId
+        personalitySystem: {
+            // Core Personality & Voice
+            corePersonality: {
+                voiceTone: { 
+                    type: String, 
+                    enum: ['friendly', 'professional', 'authoritative', 'empathetic'], 
+                    default: 'friendly' 
+                },
+                speechPace: { 
+                    type: String, 
+                    enum: ['slow', 'normal', 'fast'], 
+                    default: 'normal' 
+                },
+                formalityLevel: { 
+                    type: String, 
+                    enum: ['casual', 'business', 'formal'], 
+                    default: 'business' 
+                },
+                empathyLevel: { 
+                    type: Number, 
+                    min: 1, 
+                    max: 5, 
+                    default: 4 
+                },
+                technicalDepth: { 
+                    type: String, 
+                    enum: ['simple', 'moderate', 'detailed'], 
+                    default: 'moderate' 
+                },
+                useCustomerName: { type: Boolean, default: true }
+            },
+
+            // Emotional Intelligence & Empathy
+            emotionalIntelligence: {
+                frustratedResponse: { 
+                    type: String, 
+                    default: 'I understand this is frustrating. Let me help you right away.' 
+                },
+                urgentResponse: { 
+                    type: String, 
+                    default: 'I can hear this is urgent. Let me get you immediate assistance.' 
+                },
+                confusedResponse: { 
+                    type: String, 
+                    default: 'No worries, let me explain this more clearly.' 
+                },
+                acknowledgeEmotion: { type: Boolean, default: true },
+                mirrorTone: { type: Boolean, default: true },
+                offerReassurance: { type: Boolean, default: true },
+                reassurancePhrase: { 
+                    type: String, 
+                    default: 'We\'ll definitely get this sorted out for you.' 
+                }
+            },
+
+            // Advanced Conversation Patterns
+            conversationPatterns: {
+                openingPhrases: { 
+                    type: [String], 
+                    default: [
+                        'How can I help you today?',
+                        'What\'s going on with your system?',
+                        'Tell me what\'s happening.',
+                        'What brings you to us today?'
+                    ] 
+                },
+                clarifyingQuestions: { 
+                    type: [String], 
+                    default: [
+                        'Can you tell me more about that?',
+                        'When did this first start happening?',
+                        'What exactly are you experiencing?'
+                    ] 
+                },
+                closingPhrases: { 
+                    type: [String], 
+                    default: [
+                        'Is there anything else I can help you with?',
+                        'Does that take care of everything?',
+                        'Perfect, you\'re all set!'
+                    ] 
+                },
+                useFillerPhrases: { type: Boolean, default: true },
+                acknowledgeWaiting: { type: Boolean, default: true },
+                summarizeUnderstanding: { type: Boolean, default: true },
+                responseDelay: { 
+                    type: String, 
+                    enum: ['none', 'short', 'natural', 'thoughtful'], 
+                    default: 'natural' 
+                }
+            },
+
+            // Context Memory & Continuity
+            contextMemory: {
+                memorySpan: { 
+                    type: String, 
+                    enum: ['current', 'session', 'week', 'month', 'permanent'], 
+                    default: 'week' 
+                },
+                rememberName: { type: Boolean, default: true },
+                rememberIssues: { type: Boolean, default: true },
+                rememberPreferences: { type: Boolean, default: true },
+                referToPrevious: { type: Boolean, default: true },
+                followUpReminders: { type: Boolean, default: true },
+                returningGreeting: { 
+                    type: String, 
+                    default: 'Good to hear from you again! How did that repair work out?' 
+                },
+                contextTransitions: { 
+                    type: [String], 
+                    default: [
+                        'Last time we spoke about...',
+                        'Following up on our previous conversation...'
+                    ] 
+                }
+            },
+
+            // Proactive Intelligence & Assistance
+            proactiveIntelligence: {
+                anticipateNeeds: { type: Boolean, default: true },
+                preventiveAdvice: { type: Boolean, default: true },
+                seasonalReminders: { type: Boolean, default: true },
+                proactivePhrases: { 
+                    type: [String], 
+                    default: [
+                        'While I have you, you might also want to consider...',
+                        'Since we\'re talking about that, have you thought about...',
+                        'This would be a great time to also check...'
+                    ] 
+                },
+                admitUncertainty: { type: Boolean, default: true },
+                escalateGracefully: { type: Boolean, default: true },
+                uncertaintyPhrases: { 
+                    type: [String], 
+                    default: [
+                        'I want to make sure I give you the right information. Let me connect you with a specialist.'
+                    ] 
+                },
+                escalationPhrases: { 
+                    type: [String], 
+                    default: [
+                        'This sounds like something our expert technician should handle directly.'
+                    ] 
+                }
+            },
+
+            // System Configuration
+            systemConfig: {
+                enabled: { type: Boolean, default: true },
+                version: { type: String, default: '1.0.0' },
+                lastUpdated: { type: Date, default: Date.now },
+                updatedBy: { type: String, default: 'system' }
+            }
+        },
+
         // 🔑 Configurable Keywords for Intent Detection (Multi-Tenant)
         keywordConfiguration: {
             serviceKeywords: {
