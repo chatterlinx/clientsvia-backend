@@ -1990,14 +1990,20 @@ This would be a great time to also check..."></textarea>
                                 <!-- JavaScript for New AI Agent Management System -->
                                 <script>
                                 document.addEventListener('DOMContentLoaded', function() {
-                                    // New AI Agent Tab System
+                                    // New AI Agent Tab System - Fixed
                                     const newTabButtons = document.querySelectorAll('.new-ai-tab-btn');
                                     const newTabContents = document.querySelectorAll('.new-ai-tab-content');
                                     
+                                    console.log('🎯 NEW AI TABS FOUND:', newTabButtons.length, 'buttons,', newTabContents.length, 'contents');
+                                    
                                     // Tab switching functionality
                                     newTabButtons.forEach(button => {
-                                        button.addEventListener('click', function() {
+                                        button.addEventListener('click', function(e) {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            
                                             const targetTab = this.id.replace('new-tab-', '');
+                                            console.log('🎯 Tab clicked:', targetTab);
                                             
                                             // Remove active class from all buttons
                                             newTabButtons.forEach(btn => {
