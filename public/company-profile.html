@@ -222,6 +222,20 @@
             overflow: visible !important;
         }
         
+        /* 🚨 CRITICAL FIX: Force AI Agent Logic container to be visible when sub-tabs are active */
+        #ai-agent-logic-content {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+        
+        /* Ensure parent containers of AI Agent Logic are always visible */
+        #ai-agent-logic-content.tab-content-item {
+            display: block !important;
+        }
+        
         /* Container stability */
         #clientsvia-tab-content {
             min-height: 500px;
