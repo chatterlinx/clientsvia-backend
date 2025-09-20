@@ -13355,6 +13355,34 @@ Key Metrics:
                             console.log('🔍 Test content computed visibility:', targetContent ? getComputedStyle(targetContent).visibility : 'null');
                             console.log('🔍 Test content computed height:', targetContent ? getComputedStyle(targetContent).height : 'null');
                             
+                            // FORCE VISIBILITY - Emergency fix
+                            if (targetContent) {
+                                console.log('🚨 FORCING TEST CONTENT VISIBILITY');
+                                targetContent.style.display = 'block !important';
+                                targetContent.style.visibility = 'visible !important';
+                                targetContent.style.opacity = '1 !important';
+                                targetContent.style.height = 'auto !important';
+                                targetContent.style.minHeight = '400px !important';
+                                targetContent.style.overflow = 'visible !important';
+                                targetContent.style.position = 'relative !important';
+                                targetContent.style.zIndex = '1 !important';
+                                
+                                // Force parent containers too
+                                let parent = targetContent.parentElement;
+                                let level = 0;
+                                while (parent && level < 3) {
+                                    parent.style.display = 'block !important';
+                                    parent.style.visibility = 'visible !important';
+                                    parent.style.height = 'auto !important';
+                                    parent.style.overflow = 'visible !important';
+                                    parent = parent.parentElement;
+                                    level++;
+                                }
+                                
+                                console.log('🔍 After forcing - offsetHeight:', targetContent.offsetHeight);
+                                console.log('🔍 After forcing - scrollHeight:', targetContent.scrollHeight);
+                            }
+                            
                             // Update debug info in real-time
                             setTimeout(() => {
                                 const debugInfo = document.getElementById('test-debug-info');
