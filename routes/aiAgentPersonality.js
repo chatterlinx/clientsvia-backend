@@ -5,7 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const Company = require('../models/Company');
-const { requireAuth } = require('../middleware/auth');
+const { authenticateJWT } = require('../middleware/auth');
 
 // Redis client for caching
 let redisClient;
@@ -17,7 +17,7 @@ try {
 
 // 🎭 GET /api/ai-agent/personality/:companyId
 // Retrieve comprehensive personality configuration for a company
-router.get('/personality/:companyId', requireAuth, async (req, res) => {
+router.get('/personality/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         
@@ -162,7 +162,7 @@ router.get('/personality/:companyId', requireAuth, async (req, res) => {
 
 // 🎭 PUT /api/ai-agent/personality/:companyId
 // Save comprehensive personality configuration for a company
-router.put('/personality/:companyId', requireAuth, async (req, res) => {
+router.put('/personality/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         const personalityConfig = req.body;
@@ -322,7 +322,7 @@ router.put('/personality/:companyId', requireAuth, async (req, res) => {
 
 // 🎭 POST /api/ai-agent/personality/:companyId/reset
 // Reset personality configuration to defaults
-router.post('/personality/:companyId/reset', requireAuth, async (req, res) => {
+router.post('/personality/:companyId/reset', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         
