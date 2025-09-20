@@ -13206,6 +13206,21 @@ Key Metrics:
                             console.log('🔍 Personality content classes:', targetContent?.className);
                             console.log('🔍 Personality content display:', targetContent?.style.display);
                             console.log('🔍 Personality content visible:', targetContent?.offsetHeight > 0);
+                            console.log('🔍 Personality content offsetHeight:', targetContent?.offsetHeight);
+                            console.log('🔍 Personality content scrollHeight:', targetContent?.scrollHeight);
+                            console.log('🔍 Personality content innerHTML length:', targetContent?.innerHTML?.length);
+                            console.log('🔍 Personality content computed display:', targetContent ? getComputedStyle(targetContent).display : 'null');
+                            console.log('🔍 Personality content computed visibility:', targetContent ? getComputedStyle(targetContent).visibility : 'null');
+                            console.log('🔍 Personality content computed height:', targetContent ? getComputedStyle(targetContent).height : 'null');
+                            
+                            // Check if content has any children
+                            if (targetContent) {
+                                console.log('🔍 Personality content children count:', targetContent.children.length);
+                                if (targetContent.children.length > 0) {
+                                    console.log('🔍 First child:', targetContent.children[0]);
+                                    console.log('🔍 First child offsetHeight:', targetContent.children[0].offsetHeight);
+                                }
+                            }
                             break;
                     }
                 }
