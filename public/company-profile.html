@@ -17988,6 +17988,622 @@ Key Metrics:
     // ============================================================================
     // END KNOWLEDGE MANAGEMENT SYSTEM
     // ============================================================================
+
+    // ============================================================================
+    // UNIFIED AI AGENT ORCHESTRATION SYSTEM - PHASE 3.3
+    // 📋 DESCRIPTION: Central coordination system for all AI Agent Logic tabs
+    // 🎯 PURPOSE: Seamless integration between Knowledge Priorities, Knowledge Management, and Agent Personality
+    // 🔧 FEATURES: 
+    //     - Unified tab switching with state management
+    //     - Cross-tab data synchronization
+    //     - Centralized authentication and company management
+    //     - Real-time status coordination across all systems
+    //     - Performance monitoring and optimization
+    // 📝 FUTURE EXPANSION: 
+    //     - Cross-tab analytics and insights
+    //     - Unified search across all knowledge sources
+    //     - Real-time collaboration features
+    //     - Advanced workflow automation
+    //     - Performance optimization recommendations
+    // ⚠️  CRITICAL NOTES:
+    //     - Coordinates between KnowledgeSourcePrioritiesManager and KnowledgeManagementSystem
+    //     - Manages global state for companyId, authentication, and active tab
+    //     - Ensures data consistency across all AI agent configurations
+    //     - Handles cross-tab communication and event coordination
+    // ============================================================================
+
+    class UnifiedAIAgentOrchestrator {
+        constructor() {
+            this.companyId = null;
+            this.currentActiveTab = 'knowledge'; // Default to Knowledge Source Priorities
+            this.authToken = null;
+            this.globalState = {
+                knowledgePriorities: null,
+                knowledgeManagement: null,
+                agentPersonality: null,
+                lastSyncTime: null,
+                performanceMetrics: {}
+            };
+            this.managers = {
+                priorities: null,
+                knowledge: null,
+                personality: null
+            };
+            this.init();
+        }
+
+        /**
+         * 🚀 UNIFIED SYSTEM INITIALIZATION
+         * 📋 Coordinates initialization of all AI Agent Logic systems
+         * ⚠️  CRITICAL: Must initialize in correct order to prevent conflicts
+         * 🔧 Sets up global event listeners and cross-tab communication
+         */
+        async init() {
+            console.log('🎯 Initializing Unified AI Agent Orchestration System...');
+            
+            // Get global company ID and auth token
+            this.companyId = this.getCompanyId();
+            this.authToken = this.getAuthToken();
+            
+            if (!this.companyId) {
+                console.error('❌ Company ID not found - AI Agent Logic disabled');
+                this.showGlobalError('Company ID required for AI Agent Logic');
+                return;
+            }
+
+            console.log(`✅ Company ID: ${this.companyId}`);
+            console.log(`🔐 Auth Token: ${this.authToken ? 'Available' : 'Missing'}`);
+
+            // Initialize global event listeners
+            this.initGlobalEventListeners();
+            
+            // Initialize cross-tab communication
+            this.initCrossTabCommunication();
+            
+            // Set up performance monitoring
+            this.initPerformanceMonitoring();
+            
+            // Wait for managers to be available, then register them
+            this.waitForManagers();
+            
+            console.log('🎉 Unified AI Agent Orchestration System initialized successfully!');
+        }
+
+        /**
+         * 🔍 COMPANY ID RETRIEVAL WITH FALLBACK
+         * 📋 Gets company ID from multiple sources with priority order
+         * ⚠️  CRITICAL: Must work across all possible ClientsVia configurations
+         */
+        getCompanyId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('companyId') || 
+                   window.companyId || 
+                   document.querySelector('[data-company-id]')?.getAttribute('data-company-id') ||
+                   localStorage.getItem('currentCompanyId') ||
+                   sessionStorage.getItem('companyId');
+        }
+
+        /**
+         * 🔐 UNIFIED AUTHENTICATION TOKEN MANAGEMENT
+         * 📋 Centralized token retrieval for all AI Agent systems
+         * ⚠️  CRITICAL: Ensures consistent authentication across all tabs
+         */
+        getAuthToken() {
+            return localStorage.getItem('adminToken') ||  // PRIMARY: ClientsVia login system
+                   localStorage.getItem('authToken') || 
+                   sessionStorage.getItem('authToken') ||
+                   localStorage.getItem('token') || 
+                   sessionStorage.getItem('token') ||
+                   this.getCookieValue('token') || 
+                   this.getCookieValue('authToken') || '';
+        }
+
+        getCookieValue(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return '';
+        }
+
+        /**
+         * 🎛️ GLOBAL EVENT LISTENERS SETUP
+         * 📋 Sets up unified tab switching and cross-system communication
+         * ⚠️  CRITICAL: Coordinates between all three main tabs
+         */
+        initGlobalEventListeners() {
+            // Main AI Agent Logic tab switching
+            document.getElementById('new-tab-knowledge')?.addEventListener('click', (e) => {
+                this.switchToTab('knowledge', e);
+            });
+
+            document.getElementById('new-tab-knowledge-mgmt')?.addEventListener('click', (e) => {
+                this.switchToTab('knowledge-mgmt', e);
+            });
+
+            document.getElementById('new-tab-personality')?.addEventListener('click', (e) => {
+                this.switchToTab('personality', e);
+            });
+
+            document.getElementById('new-tab-analytics')?.addEventListener('click', (e) => {
+                this.switchToTab('analytics', e);
+            });
+
+            // Global keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey || e.metaKey) {
+                    switch(e.key) {
+                        case '1':
+                            e.preventDefault();
+                            this.switchToTab('knowledge');
+                            break;
+                        case '2':
+                            e.preventDefault();
+                            this.switchToTab('knowledge-mgmt');
+                            break;
+                        case '3':
+                            e.preventDefault();
+                            this.switchToTab('personality');
+                            break;
+                        case '4':
+                            e.preventDefault();
+                            this.switchToTab('analytics');
+                            break;
+                        case 's':
+                            e.preventDefault();
+                            this.saveAllSystems();
+                            break;
+                        case 't':
+                            e.preventDefault();
+                            this.runGlobalTest();
+                            break;
+                    }
+                }
+            });
+
+            // Window visibility change handler
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    this.refreshAllSystems();
+                }
+            });
+        }
+
+        /**
+         * 🔄 UNIFIED TAB SWITCHING SYSTEM
+         * 📋 Coordinates tab switching across all AI Agent Logic systems
+         * ⚠️  CRITICAL: Maintains state and triggers appropriate manager methods
+         */
+        async switchToTab(tabName, event = null) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            console.log(`🔄 Switching to tab: ${tabName}`);
+            this.currentActiveTab = tabName;
+
+            // Update global tab UI
+            this.updateGlobalTabUI(tabName);
+
+            // Trigger appropriate manager
+            switch(tabName) {
+                case 'knowledge':
+                    if (this.managers.priorities) {
+                        await this.managers.priorities.switchToKnowledgeTab();
+                    }
+                    break;
+                case 'knowledge-mgmt':
+                    if (this.managers.knowledge) {
+                        await this.managers.knowledge.switchToKnowledgeManagementTab();
+                    }
+                    break;
+                case 'personality':
+                    // Will be implemented when personality tab is built
+                    this.showInfoMessage('Agent Personality tab will be activated in the next phase.');
+                    break;
+                case 'analytics':
+                    // Will be implemented when analytics tab is built
+                    this.showInfoMessage('Performance Analytics tab will be activated in the next phase.');
+                    break;
+            }
+
+            // Update global state
+            this.updateGlobalState();
+            
+            // Track tab usage
+            this.trackTabUsage(tabName);
+        }
+
+        /**
+         * 🎨 GLOBAL TAB UI COORDINATION
+         * 📋 Updates visual state of all main tabs consistently
+         * ⚠️  CRITICAL: Ensures only one tab appears active at a time
+         */
+        updateGlobalTabUI(activeTabName) {
+            // Reset all tab buttons
+            document.querySelectorAll('.new-ai-tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('border-transparent', 'text-gray-500');
+                btn.classList.remove('border-blue-500', 'text-blue-600', 'border-green-500', 'text-green-600', 'border-purple-500', 'text-purple-600', 'border-orange-500', 'text-orange-600');
+            });
+
+            // Reset all tab content
+            document.querySelectorAll('.new-ai-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Activate selected tab
+            const tabMapping = {
+                'knowledge': { btn: 'new-tab-knowledge', content: 'new-knowledge-content', color: 'blue' },
+                'knowledge-mgmt': { btn: 'new-tab-knowledge-mgmt', content: 'new-knowledge-mgmt-content', color: 'green' },
+                'personality': { btn: 'new-tab-personality', content: 'new-personality-content', color: 'purple' },
+                'analytics': { btn: 'new-tab-analytics', content: 'new-analytics-content', color: 'orange' }
+            };
+
+            const mapping = tabMapping[activeTabName];
+            if (mapping) {
+                const btn = document.getElementById(mapping.btn);
+                const content = document.getElementById(mapping.content);
+
+                if (btn) {
+                    btn.classList.add('active', `border-${mapping.color}-500`, `text-${mapping.color}-600`);
+                    btn.classList.remove('border-transparent', 'text-gray-500');
+                }
+
+                if (content) {
+                    content.classList.add('active');
+                }
+            }
+        }
+
+        /**
+         * 🔗 CROSS-TAB COMMUNICATION SYSTEM
+         * 📋 Enables data sharing and synchronization between tabs
+         * ⚠️  CRITICAL: Prevents data conflicts and ensures consistency
+         */
+        initCrossTabCommunication() {
+            // Custom event system for cross-tab communication
+            window.addEventListener('aiAgentDataUpdate', (event) => {
+                this.handleCrossTabDataUpdate(event.detail);
+            });
+
+            // Periodic sync check
+            setInterval(() => {
+                this.syncGlobalState();
+            }, 30000); // Sync every 30 seconds
+        }
+
+        handleCrossTabDataUpdate(data) {
+            console.log('🔄 Cross-tab data update received:', data);
+            
+            switch(data.source) {
+                case 'priorities':
+                    this.globalState.knowledgePriorities = data.payload;
+                    break;
+                case 'knowledge':
+                    this.globalState.knowledgeManagement = data.payload;
+                    break;
+                case 'personality':
+                    this.globalState.agentPersonality = data.payload;
+                    break;
+            }
+
+            this.globalState.lastSyncTime = new Date();
+            this.notifyAllManagers('dataSync', data);
+        }
+
+        /**
+         * 📊 PERFORMANCE MONITORING SYSTEM
+         * 📋 Tracks performance metrics across all AI Agent systems
+         * ⚠️  CRITICAL: Ensures sub-50ms response time targets
+         */
+        initPerformanceMonitoring() {
+            this.globalState.performanceMetrics = {
+                tabSwitchTimes: {},
+                apiResponseTimes: {},
+                renderTimes: {},
+                errorCounts: {},
+                lastOptimized: new Date()
+            };
+
+            // Performance observer for tab switching
+            if ('PerformanceObserver' in window) {
+                const observer = new PerformanceObserver((list) => {
+                    list.getEntries().forEach((entry) => {
+                        if (entry.name.includes('aiAgent')) {
+                            this.recordPerformanceMetric(entry);
+                        }
+                    });
+                });
+                observer.observe({ entryTypes: ['measure'] });
+            }
+        }
+
+        recordPerformanceMetric(entry) {
+            const category = entry.name.split('-')[1] || 'general';
+            if (!this.globalState.performanceMetrics[category]) {
+                this.globalState.performanceMetrics[category] = [];
+            }
+            this.globalState.performanceMetrics[category].push({
+                duration: entry.duration,
+                timestamp: entry.startTime
+            });
+
+            // Alert if performance degrades
+            if (entry.duration > 50) {
+                console.warn(`⚠️ Performance warning: ${entry.name} took ${entry.duration.toFixed(2)}ms`);
+            }
+        }
+
+        /**
+         * 🎯 MANAGER REGISTRATION SYSTEM
+         * 📋 Waits for and registers individual system managers
+         * ⚠️  CRITICAL: Ensures proper initialization order
+         */
+        waitForManagers() {
+            const checkManagers = () => {
+                // Check for Knowledge Source Priorities Manager
+                if (window.knowledgePrioritiesManager && !this.managers.priorities) {
+                    this.managers.priorities = window.knowledgePrioritiesManager;
+                    console.log('✅ Knowledge Priorities Manager registered');
+                }
+
+                // Check for Knowledge Management System
+                if (window.knowledgeManager && !this.managers.knowledge) {
+                    this.managers.knowledge = window.knowledgeManager;
+                    console.log('✅ Knowledge Management System registered');
+                }
+
+                // Check again if not all managers are registered
+                if (!this.managers.priorities || !this.managers.knowledge) {
+                    setTimeout(checkManagers, 100);
+                } else {
+                    this.onAllManagersReady();
+                }
+            };
+
+            checkManagers();
+        }
+
+        onAllManagersReady() {
+            console.log('🎉 All AI Agent managers are ready and registered!');
+            
+            // Perform initial data sync
+            this.syncGlobalState();
+            
+            // Show ready notification
+            this.showSuccessMessage('AI Agent Logic System fully initialized and ready!');
+        }
+
+        /**
+         * 💾 UNIFIED SAVE SYSTEM
+         * 📋 Saves all AI Agent configurations simultaneously
+         * ⚠️  CRITICAL: Ensures data consistency across all systems
+         */
+        async saveAllSystems() {
+            console.log('💾 Saving all AI Agent systems...');
+            const startTime = performance.now();
+
+            try {
+                const savePromises = [];
+
+                // Save Knowledge Priorities
+                if (this.managers.priorities && this.managers.priorities.savePriorities) {
+                    savePromises.push(this.managers.priorities.savePriorities());
+                }
+
+                // Save Knowledge Management (fallback configuration)
+                if (this.managers.knowledge && this.managers.knowledge.saveFallbackConfiguration) {
+                    savePromises.push(this.managers.knowledge.saveFallbackConfiguration());
+                }
+
+                // Wait for all saves to complete
+                await Promise.all(savePromises);
+
+                const duration = performance.now() - startTime;
+                console.log(`✅ All systems saved successfully in ${duration.toFixed(2)}ms`);
+                
+                this.showSuccessMessage(`All AI Agent configurations saved successfully! (${duration.toFixed(0)}ms)`);
+                this.recordPerformanceMetric({ name: 'aiAgent-saveAll', duration, startTime });
+
+            } catch (error) {
+                console.error('❌ Error saving AI Agent systems:', error);
+                this.showErrorMessage('Failed to save some AI Agent configurations. Please try again.');
+            }
+        }
+
+        /**
+         * 🧪 UNIFIED TESTING SYSTEM
+         * 📋 Runs comprehensive tests across all AI Agent systems
+         * ⚠️  CRITICAL: Validates entire knowledge flow and priority routing
+         */
+        async runGlobalTest() {
+            console.log('🧪 Running global AI Agent test...');
+            const startTime = performance.now();
+
+            try {
+                const testQuery = 'My AC is not working and I need emergency service';
+                const testResults = {
+                    priorities: null,
+                    knowledge: null,
+                    overall: null
+                };
+
+                // Test Knowledge Priorities
+                if (this.managers.priorities && this.managers.priorities.runTestWithQuery) {
+                    testResults.priorities = await this.managers.priorities.runTestWithQuery(testQuery);
+                }
+
+                // Test Knowledge Management
+                if (this.managers.knowledge && this.managers.knowledge.runKnowledgeTestWithQuery) {
+                    testResults.knowledge = await this.managers.knowledge.runKnowledgeTestWithQuery(testQuery);
+                }
+
+                const duration = performance.now() - startTime;
+                console.log(`✅ Global test completed in ${duration.toFixed(2)}ms`);
+                
+                this.showGlobalTestResults(testResults, duration);
+                this.recordPerformanceMetric({ name: 'aiAgent-globalTest', duration, startTime });
+
+            } catch (error) {
+                console.error('❌ Error running global test:', error);
+                this.showErrorMessage('Global test failed. Please check individual systems.');
+            }
+        }
+
+        showGlobalTestResults(results, duration) {
+            const resultsDiv = document.createElement('div');
+            resultsDiv.className = 'fixed top-4 right-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md z-50 shadow-lg';
+            resultsDiv.innerHTML = `
+                <div class="flex items-center justify-between mb-3">
+                    <h5 class="font-medium text-blue-800">🧪 Global AI Agent Test Results</h5>
+                    <button onclick="this.parentElement.parentElement.remove()" class="text-blue-600 hover:text-blue-800">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="text-sm text-blue-700 space-y-2">
+                    <div><strong>Test Duration:</strong> ${duration.toFixed(2)}ms</div>
+                    <div><strong>Priority System:</strong> ${results.priorities ? '✅ Passed' : '❌ Failed'}</div>
+                    <div><strong>Knowledge System:</strong> ${results.knowledge ? '✅ Passed' : '❌ Failed'}</div>
+                    <div><strong>Overall Status:</strong> ${results.priorities && results.knowledge ? '🎉 All Systems Operational' : '⚠️ Some Issues Detected'}</div>
+                </div>
+            `;
+            document.body.appendChild(resultsDiv);
+
+            setTimeout(() => {
+                resultsDiv.remove();
+            }, 8000);
+        }
+
+        /**
+         * 🔄 GLOBAL STATE SYNCHRONIZATION
+         * 📋 Keeps all systems synchronized with latest data
+         * ⚠️  CRITICAL: Prevents data inconsistencies
+         */
+        async syncGlobalState() {
+            console.log('🔄 Syncing global AI Agent state...');
+            
+            try {
+                // Refresh data in all managers
+                if (this.managers.priorities && this.managers.priorities.loadPriorities) {
+                    await this.managers.priorities.loadPriorities();
+                }
+
+                if (this.managers.knowledge && this.managers.knowledge.loadKnowledgeData) {
+                    await this.managers.knowledge.loadKnowledgeData();
+                }
+
+                this.globalState.lastSyncTime = new Date();
+                console.log('✅ Global state synchronized successfully');
+
+            } catch (error) {
+                console.error('❌ Error syncing global state:', error);
+            }
+        }
+
+        async refreshAllSystems() {
+            console.log('🔄 Refreshing all AI Agent systems...');
+            await this.syncGlobalState();
+        }
+
+        notifyAllManagers(eventType, data) {
+            Object.values(this.managers).forEach(manager => {
+                if (manager && manager.handleGlobalEvent) {
+                    manager.handleGlobalEvent(eventType, data);
+                }
+            });
+        }
+
+        updateGlobalState() {
+            this.globalState.currentTab = this.currentActiveTab;
+            this.globalState.lastActivity = new Date();
+        }
+
+        trackTabUsage(tabName) {
+            if (!this.globalState.performanceMetrics.tabUsage) {
+                this.globalState.performanceMetrics.tabUsage = {};
+            }
+            
+            if (!this.globalState.performanceMetrics.tabUsage[tabName]) {
+                this.globalState.performanceMetrics.tabUsage[tabName] = 0;
+            }
+            
+            this.globalState.performanceMetrics.tabUsage[tabName]++;
+        }
+
+        // Unified notification system
+        showSuccessMessage(message) {
+            this.showNotification(message, 'success');
+        }
+
+        showErrorMessage(message) {
+            this.showNotification(message, 'error');
+        }
+
+        showInfoMessage(message) {
+            this.showNotification(message, 'info');
+        }
+
+        showGlobalError(message) {
+            this.showNotification(message, 'error', 10000);
+        }
+
+        showNotification(message, type = 'info', duration = 4000) {
+            const colors = {
+                success: 'bg-green-100 border-green-400 text-green-700',
+                error: 'bg-red-100 border-red-400 text-red-700',
+                info: 'bg-blue-100 border-blue-400 text-blue-700'
+            };
+
+            const icons = {
+                success: 'fas fa-check',
+                error: 'fas fa-times',
+                info: 'fas fa-info'
+            };
+
+            const notificationDiv = document.createElement('div');
+            notificationDiv.className = `fixed top-4 right-4 ${colors[type]} px-4 py-3 rounded border z-50 shadow-lg max-w-md`;
+            notificationDiv.innerHTML = `
+                <div class="flex items-center">
+                    <i class="${icons[type]} mr-2"></i>
+                    <span>${message}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" class="ml-3 text-current hover:opacity-75">
+                        <i class="fas fa-times text-sm"></i>
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(notificationDiv);
+
+            setTimeout(() => {
+                if (notificationDiv.parentElement) {
+                    notificationDiv.remove();
+                }
+            }, duration);
+        }
+    }
+
+    // ============================================================================
+    // UNIFIED SYSTEM INITIALIZATION
+    // ============================================================================
+
+    let unifiedOrchestrator;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize the Unified AI Agent Orchestration System
+        setTimeout(() => {
+            unifiedOrchestrator = new UnifiedAIAgentOrchestrator();
+            
+            // Make it globally available
+            window.unifiedOrchestrator = unifiedOrchestrator;
+            
+            console.log('🎉 Unified AI Agent Orchestration System is now active!');
+        }, 800); // Initialize after individual managers
+    });
+
+    // ============================================================================
+    // END UNIFIED AI AGENT ORCHESTRATION SYSTEM
+    // ============================================================================
     </script>
 
     <!-- Modern implementation handles all initialization -->
