@@ -7554,7 +7554,7 @@ This would be a great time to also check..."></textarea>
             try {
                 console.log('🚀 CHECKPOINT 4: Entering try block');
                 console.log('⏰ Agent Settings load timestamp:', new Date().toISOString());
-                console.log('🔍 LOAD FIX: Using correct endpoint - /api/company/company/' + companyId);
+                console.log('🔍 LOAD FIX: Using correct endpoint - /api/company/' + companyId);
                 
                 // 🔧 CACHE BUSTING: Add timestamp to force fresh data load
                 const cacheBuster = Date.now();
@@ -7579,7 +7579,7 @@ This would be a great time to also check..."></textarea>
                     console.log('⚠️ CHECKPOINT 7: No auth token - proceeding without Authorization header');
                 }
                 
-                const apiUrl = `/api/company/company/${companyId}?_cb=${cacheBuster}`;
+                const apiUrl = `/api/company/${companyId}?_cb=${cacheBuster}`;
                 console.log('🚀 CHECKPOINT 8: Making fetch request to:', apiUrl);
                 console.log('🚀 CHECKPOINT 8b: Request headers:', headers);
                 
