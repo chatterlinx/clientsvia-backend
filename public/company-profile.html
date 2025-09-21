@@ -16301,16 +16301,19 @@ Key Metrics:
 
                     if (response.ok) {
                         const data = await response.json();
+                        console.log('DEBUG: Loaded priorities data:', JSON.stringify(data.data, null, 2));
                         this.priorities = data.data;
                         this.renderPriorityFlow();
                         this.updateGlobalSettings();
                         this.updateStatus('Active', 'green');
+                        console.log('✅ Priorities loaded successfully');
                     } else if (response.status === 401) {
                         console.error('Authentication failed - please log in again');
                         this.updateStatus('Auth Required', 'red');
                         this.showErrorMessage('Authentication required. Please log in again.');
                     } else {
-                        console.error('Failed to load priorities:', response.statusText);
+                        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                        console.error('Failed to load priorities:', response.statusText, errorData);
                         this.updateStatus('Error', 'red');
                     }
                 } catch (error) {
@@ -16526,6 +16529,8 @@ Key Metrics:
                         }
                     };
 
+                    console.log('DEBUG: Data being sent to API:', JSON.stringify(updatedPriorities, null, 2));
+
                     const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities`, {
                         method: 'PUT',
                         headers: {
@@ -16541,7 +16546,9 @@ Key Metrics:
                         this.showSuccessMessage('Priorities saved successfully!');
                         this.clearModifiedState();
                     } else {
-                        throw new Error(`Failed to save: ${response.statusText}`);
+                        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                        console.error('API Error Response:', errorData);
+                        throw new Error(`Failed to save (${response.status}): ${errorData.message || response.statusText}`);
                     }
                 } catch (error) {
                     console.error('Error saving priorities:', error);
