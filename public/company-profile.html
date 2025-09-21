@@ -2312,27 +2312,68 @@
                                                                 <form id="trade-qna-form" class="space-y-4">
                                                                     <input type="hidden" id="trade-qna-id" name="id">
                                                                     
-                                                                    <!-- Trade Category and Difficulty Row -->
-                                                                    <div class="grid grid-cols-2 gap-4">
-                                                                        <div>
-                                                                            <label for="trade-category" class="block text-sm font-medium text-gray-700 mb-1">Trade Category *</label>
-                                                                            <select id="trade-category" name="tradeCategory" required
-                                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
-                                                                                <option value="">Select Category</option>
-                                                                                <option value="hvac">HVAC</option>
-                                                                                <option value="plumbing">Plumbing</option>
-                                                                                <option value="electrical">Electrical</option>
-                                                                                <option value="general">General Contracting</option>
-                                                                            </select>
+                                                                    <!-- 🌐 DUAL-LAYER TRADE SYSTEM: Global/Company Selection -->
+                                                                    <div class="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-4 mb-4">
+                                                                        <div class="flex items-center justify-between mb-3">
+                                                                            <h4 class="text-sm font-semibold text-gray-800">🌐 Knowledge Layer Selection</h4>
+                                                                            <div class="flex items-center space-x-2">
+                                                                                <span class="text-xs text-gray-600">Company-Specific</span>
+                                                                                <label class="relative inline-flex items-center cursor-pointer">
+                                                                                    <input type="checkbox" id="trade-is-global" name="isGlobal" class="sr-only peer">
+                                                                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                                                </label>
+                                                                                <span class="text-xs text-gray-600">Global Shared</span>
+                                                                            </div>
                                                                         </div>
+                                                                        <div id="trade-layer-description" class="text-sm text-gray-600">
+                                                                            <span id="company-layer-desc">📍 <strong>Company-Specific:</strong> Custom answers for your business (e.g., "What brands do YOU carry?")</span>
+                                                                            <span id="global-layer-desc" class="hidden">🌐 <strong>Global Shared:</strong> Universal answers shared across all companies (e.g., "How often should I change my air filter?")</span>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <!-- Trade Categories Multi-Select -->
+                                                                    <div>
+                                                                        <label for="trade-categories-select" class="block text-sm font-medium text-gray-700 mb-1">Trade Categories *</label>
+                                                                        <div class="relative">
+                                                                            <select id="trade-categories-select" name="tradeCategories" multiple required
+                                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 min-h-[100px]">
+                                                                                <option value="hvac">🌡️ HVAC (Heating, Ventilation, Air Conditioning)</option>
+                                                                                <option value="plumbing">🔧 Plumbing (Water, Pipes, Fixtures)</option>
+                                                                                <option value="electrical">⚡ Electrical (Wiring, Panels, Lighting)</option>
+                                                                                <option value="general">🏗️ General Contracting (Construction, Renovation)</option>
+                                                                                <option value="roofing">🏠 Roofing (Repairs, Installation, Maintenance)</option>
+                                                                                <option value="flooring">🏢 Flooring (Installation, Repair, Refinishing)</option>
+                                                                                <option value="painting">🎨 Painting (Interior, Exterior, Commercial)</option>
+                                                                                <option value="landscaping">🌿 Landscaping (Design, Maintenance, Installation)</option>
+                                                                            </select>
+                                                                            <p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple categories</p>
+                                                                        </div>
+                                                                        
+                                                                        <!-- Selected Categories Display -->
+                                                                        <div id="selected-categories-display" class="mt-2 flex flex-wrap gap-2">
+                                                                            <!-- Selected categories will appear here as badges -->
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <!-- Difficulty and Priority Row -->
+                                                                    <div class="grid grid-cols-2 gap-4">
                                                                         <div>
                                                                             <label for="trade-difficulty" class="block text-sm font-medium text-gray-700 mb-1">Difficulty Level</label>
                                                                             <select id="trade-difficulty" name="difficulty"
                                                                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
-                                                                                <option value="basic">Basic</option>
-                                                                                <option value="intermediate">Intermediate</option>
-                                                                                <option value="advanced">Advanced</option>
-                                                                                <option value="expert">Expert</option>
+                                                                                <option value="basic">📚 Basic (General Knowledge)</option>
+                                                                                <option value="intermediate">🔧 Intermediate (Technical Skills)</option>
+                                                                                <option value="advanced">⚙️ Advanced (Expert Knowledge)</option>
+                                                                                <option value="expert">🎓 Expert (Specialized Expertise)</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label for="trade-priority" class="block text-sm font-medium text-gray-700 mb-1">Priority Level</label>
+                                                                            <select id="trade-priority" name="priority"
+                                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                                                                                <option value="1">🔥 High Priority (Emergency/Critical)</option>
+                                                                                <option value="2" selected>⭐ Normal Priority (Standard Service)</option>
+                                                                                <option value="3">📋 Low Priority (General Info)</option>
                                                                             </select>
                                                                         </div>
                                                                     </div>
@@ -7510,7 +7551,21 @@ This would be a great time to also check..."></textarea>
             // 🔧 CACHE BUSTING: Add timestamp to force fresh data load
             const cacheBuster = Date.now();
             console.log('🔧 CACHE BUSTER: Using timestamp', cacheBuster, 'to force fresh data');
-            const response = await fetch(`/api/company/${companyId}?_cb=${cacheBuster}`);
+            // Get auth token for API call
+            const authToken = localStorage.getItem('adminToken') || 
+                             localStorage.getItem('authToken') || 
+                             sessionStorage.getItem('authToken') || 
+                             localStorage.getItem('token') || 
+                             sessionStorage.getItem('token');
+                             
+            const headers = {};
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+            
+            const response = await fetch(`/api/company/company/${companyId}?_cb=${cacheBuster}`, {
+                headers: headers
+            });
                 const data = await response.json();
                 
                 console.log('📥 Received agent settings data:', data);
@@ -18190,23 +18245,59 @@ Key Metrics:
             const title = document.getElementById('trade-qna-modal-title');
             const form = document.getElementById('trade-qna-form');
             
-            // Set modal title and mode
-            title.textContent = mode === 'add' ? 'Add Trade Q&A' : 'Edit Trade Q&A';
+            // Set modal title and mode with layer indication
+            const layerType = qnaData?.isGlobal ? '🌐 Global' : '🏢 Company';
+            title.textContent = mode === 'add' ? 'Add Trade Q&A' : `Edit ${layerType} Trade Q&A`;
             
             // Reset form
             form.reset();
             
+            // Reset multi-select and badges
+            const tradeCategoriesSelect = document.getElementById('trade-categories-select');
+            if (tradeCategoriesSelect) {
+                Array.from(tradeCategoriesSelect.options).forEach(option => option.selected = false);
+            }
+            
             // Populate form if editing
             if (mode === 'edit' && qnaData) {
                 document.getElementById('trade-qna-id').value = qnaData.id || '';
-                document.getElementById('trade-category').value = qnaData.tradeCategory || '';
+                
+                // 🌐 DUAL-LAYER: Set global/company toggle
+                const isGlobalToggle = document.getElementById('trade-is-global');
+                isGlobalToggle.checked = qnaData.isGlobal || false;
+                
+                // Trigger toggle change to update UI
+                isGlobalToggle.dispatchEvent(new Event('change'));
+                
+                // Set trade categories (handle both single and multiple)
+                const categories = Array.isArray(qnaData.tradeCategories) ? 
+                    qnaData.tradeCategories : 
+                    (qnaData.tradeCategory ? [qnaData.tradeCategory] : []);
+                
+                categories.forEach(category => {
+                    const option = tradeCategoriesSelect.querySelector(`option[value="${category}"]`);
+                    if (option) option.selected = true;
+                });
+                
+                // Update visual badges
+                setTimeout(() => updateSelectedCategoriesDisplay(), 100);
+                
                 document.getElementById('trade-difficulty').value = qnaData.difficulty || 'basic';
+                document.getElementById('trade-priority').value = qnaData.priority || 2;
                 document.getElementById('trade-question').value = qnaData.question || '';
                 document.getElementById('trade-answer').value = qnaData.answer || '';
                 document.getElementById('trade-keywords').value = qnaData.keywords?.join(', ') || '';
             } else {
                 // Set defaults for new Trade Q&A
                 document.getElementById('trade-difficulty').value = 'basic';
+                document.getElementById('trade-priority').value = 2;
+                document.getElementById('trade-is-global').checked = false;
+                
+                // Trigger toggle change to show company description
+                document.getElementById('trade-is-global').dispatchEvent(new Event('change'));
+                
+                // Update empty badges display
+                setTimeout(() => updateSelectedCategoriesDisplay(), 100);
             }
             
             // Show modal
@@ -18214,7 +18305,7 @@ Key Metrics:
             
             // Focus on first input
             setTimeout(() => {
-                document.getElementById('trade-category').focus();
+                document.getElementById('trade-categories-select').focus();
             }, 100);
         }
 
@@ -18228,35 +18319,67 @@ Key Metrics:
                 const form = document.getElementById('trade-qna-form');
                 const formData = new FormData(form);
                 
+                // Get selected trade categories
+                const tradeCategoriesSelect = document.getElementById('trade-categories-select');
+                const selectedCategories = Array.from(tradeCategoriesSelect.selectedOptions).map(option => option.value);
+                
                 // Validate required fields
-                const tradeCategory = formData.get('tradeCategory')?.trim();
                 const question = formData.get('question')?.trim();
                 const answer = formData.get('answer')?.trim();
                 
-                if (!tradeCategory || !question || !answer) {
-                    this.showErrorMessage('Please fill in all required fields');
+                if (selectedCategories.length === 0 || !question || !answer) {
+                    this.showErrorMessage('Please fill in all required fields and select at least one trade category');
                     return;
                 }
 
-                // Prepare Trade Q&A data
+                // Check if this is global or company-specific
+                const isGlobal = document.getElementById('trade-is-global').checked;
+
+                // Prepare Trade Q&A data with dual-layer support
                 const qnaData = {
-                    tradeCategory: tradeCategory,
+                    tradeCategories: selectedCategories, // Multiple categories support
                     difficulty: formData.get('difficulty') || 'basic',
+                    priority: parseInt(formData.get('priority')) || 2,
                     question: question,
                     answer: answer,
                     keywords: formData.get('keywords') ? 
-                        formData.get('keywords').split(',').map(k => k.trim()).filter(k => k) : []
+                        formData.get('keywords').split(',').map(k => k.trim()).filter(k => k) : [],
+                    
+                    // 🌐 DUAL-LAYER SYSTEM: Global vs Company-Specific
+                    isGlobal: isGlobal,
+                    source: isGlobal ? 'global' : 'company',
+                    
+                    // Enhanced metadata
+                    confidence: isGlobal ? 0.75 : 0.85, // Company-specific gets higher confidence
+                    status: 'active'
                 };
+
+                console.log('🎯 DUAL-LAYER: Saving Trade Q&A:', {
+                    isGlobal: isGlobal,
+                    categories: selectedCategories,
+                    source: qnaData.source,
+                    confidence: qnaData.confidence
+                });
 
                 const qnaId = formData.get('id');
                 const isEdit = qnaId && qnaId.trim() !== '';
 
-                // Call appropriate API
-                const url = isEdit ? 
-                    `/api/company/${this.companyId}/knowledge-management/trade-qna/${qnaId}` :
-                    `/api/company/${this.companyId}/knowledge-management/trade-qna`;
+                // Determine API endpoint based on global/company layer
+                let url, method;
                 
-                const method = isEdit ? 'PUT' : 'POST';
+                if (isGlobal) {
+                    // 🌐 GLOBAL TRADE Q&A: Use enterprise trade categories API
+                    url = isEdit ? 
+                        `/api/enterprise-trade-categories/qnas/${qnaId}` :
+                        `/api/enterprise-trade-categories/qnas`;
+                    method = isEdit ? 'PUT' : 'POST';
+                } else {
+                    // 🏢 COMPANY-SPECIFIC TRADE Q&A: Use knowledge management API
+                    url = isEdit ? 
+                        `/api/company/${this.companyId}/knowledge-management/trade-qna/${qnaId}` :
+                        `/api/company/${this.companyId}/knowledge-management/trade-qna`;
+                    method = isEdit ? 'PUT' : 'POST';
+                }
 
                 const response = await fetch(url, {
                     method: method,
@@ -18268,7 +18391,8 @@ Key Metrics:
                 });
 
                 if (response.ok) {
-                    this.showSuccessMessage(`Trade Q&A ${isEdit ? 'updated' : 'added'} successfully!`);
+                    const layerType = isGlobal ? 'Global' : 'Company-Specific';
+                    this.showSuccessMessage(`${layerType} Trade Q&A ${isEdit ? 'updated' : 'added'} successfully! 🎉`);
                     this.closeTradeQnAModal();
                     await this.loadKnowledgeData(); // Refresh data
                 } else {
@@ -18277,7 +18401,7 @@ Key Metrics:
                 }
 
             } catch (error) {
-                console.error('Error saving Trade Q&A:', error);
+                console.error('❌ Error saving Trade Q&A:', error);
                 this.showErrorMessage(`Failed to save Trade Q&A: ${error.message}`);
             }
         }
@@ -18666,6 +18790,68 @@ Key Metrics:
             const keywords = knowledgeManager.generateKeywords(combinedText, 'technical');
             document.getElementById('trade-keywords').value = keywords.join(', ');
         });
+
+        // 🌐 DUAL-LAYER TRADE SYSTEM: Dynamic UI Controls
+        document.getElementById('trade-is-global')?.addEventListener('change', (e) => {
+            const isGlobal = e.target.checked;
+            const companyDesc = document.getElementById('company-layer-desc');
+            const globalDesc = document.getElementById('global-layer-desc');
+            
+            if (isGlobal) {
+                companyDesc.classList.add('hidden');
+                globalDesc.classList.remove('hidden');
+            } else {
+                companyDesc.classList.remove('hidden');
+                globalDesc.classList.add('hidden');
+            }
+        });
+
+        // 🎯 TRADE CATEGORIES: Multi-Select with Visual Badges
+        document.getElementById('trade-categories-select')?.addEventListener('change', (e) => {
+            updateSelectedCategoriesDisplay();
+        });
+
+        function updateSelectedCategoriesDisplay() {
+            const select = document.getElementById('trade-categories-select');
+            const display = document.getElementById('selected-categories-display');
+            
+            if (!select || !display) return;
+            
+            // Clear existing badges
+            display.innerHTML = '';
+            
+            // Get selected options
+            const selectedOptions = Array.from(select.selectedOptions);
+            
+            selectedOptions.forEach(option => {
+                const badge = document.createElement('span');
+                badge.className = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200';
+                badge.innerHTML = `
+                    ${option.textContent}
+                    <button type="button" class="ml-2 text-green-600 hover:text-green-800" onclick="removeTradeCategory('${option.value}')">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                `;
+                display.appendChild(badge);
+            });
+            
+            // Show helpful message if none selected
+            if (selectedOptions.length === 0) {
+                display.innerHTML = '<span class="text-sm text-gray-500 italic">No trade categories selected</span>';
+            }
+        }
+
+        // Remove trade category function
+        window.removeTradeCategory = function(categoryValue) {
+            const select = document.getElementById('trade-categories-select');
+            if (select) {
+                const option = select.querySelector(`option[value="${categoryValue}"]`);
+                if (option) {
+                    option.selected = false;
+                    updateSelectedCategoriesDisplay();
+                }
+            }
+        };
 
         // Template Modal Events
         document.getElementById('close-template-modal')?.addEventListener('click', () => {
