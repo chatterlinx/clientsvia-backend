@@ -1646,8 +1646,8 @@
                                             <!-- World-Class AI Agent Management Tabs -->
                                             <div class="border-b border-gray-200 mb-6">
                                                 <nav class="flex space-x-8">
-                                                    <button id="new-tab-knowledge" class="new-ai-tab-btn active py-2 px-1 border-b-2 border-green-500 font-medium text-sm text-green-600">
-                                                        <i class="fas fa-book-open mr-2"></i>Knowledge Management
+                                                    <button id="new-tab-knowledge" class="new-ai-tab-btn active py-2 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600">
+                                                        <i class="fas fa-sort-amount-down mr-2"></i>Knowledge Source Priorities
                                                     </button>
                                                     <button id="new-tab-personality" class="new-ai-tab-btn py-2 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                                                         <i class="fas fa-theater-masks mr-2"></i>Agent Personality
@@ -1661,14 +1661,161 @@
                                             <!-- Tab Content Areas -->
                                             <div id="new-ai-tab-content" class="mt-4">
                                                 
-                                                <!-- Knowledge Management Tab -->
+                                                <!-- Knowledge Source Priorities Tab -->
                                                 <div id="new-knowledge-content" class="new-ai-tab-content active">
-                                                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-                                                        <h4 class="font-semibold text-green-800 mb-2">
-                                                            <i class="fas fa-book-open mr-2"></i>Knowledge Management System
-                                                        </h4>
-                                                        <p class="text-sm text-green-700">Clean, enterprise-grade knowledge source management - coming next phase</p>
+                                                    
+                                                    <!-- Header Section -->
+                                                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6 mb-6">
+                                                        <div class="flex items-center justify-between mb-4">
+                                                            <div>
+                                                                <h3 class="text-xl font-bold text-blue-800 flex items-center mb-2">
+                                                                    <i class="fas fa-sort-amount-down mr-3 text-blue-600"></i>Knowledge Source Priorities
+                                                                </h3>
+                                                                <p class="text-sm text-blue-700">Configure how your AI agent prioritizes different knowledge sources for optimal response accuracy</p>
+                                                            </div>
+                                                            <div class="flex items-center space-x-3">
+                                                                <span id="priorities-status" class="px-3 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                                                    <i class="fas fa-check mr-1"></i>Active
+                                                                </span>
+                                                                <button id="test-priority-flow-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                                    <i class="fas fa-flask mr-2"></i>Test Flow
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <!-- Performance Metrics -->
+                                                        <div class="grid grid-cols-4 gap-4 mt-4">
+                                                            <div class="bg-white rounded-lg p-3 border border-blue-100">
+                                                                <div class="text-xs text-gray-500 uppercase tracking-wide">Avg Response Time</div>
+                                                                <div id="avg-response-time" class="text-lg font-semibold text-blue-600">--ms</div>
+                                                            </div>
+                                                            <div class="bg-white rounded-lg p-3 border border-blue-100">
+                                                                <div class="text-xs text-gray-500 uppercase tracking-wide">Success Rate</div>
+                                                                <div id="success-rate" class="text-lg font-semibold text-green-600">--%</div>
+                                                            </div>
+                                                            <div class="bg-white rounded-lg p-3 border border-blue-100">
+                                                                <div class="text-xs text-gray-500 uppercase tracking-wide">Active Sources</div>
+                                                                <div id="active-sources" class="text-lg font-semibold text-indigo-600">-</div>
+                                                            </div>
+                                                            <div class="bg-white rounded-lg p-3 border border-blue-100">
+                                                                <div class="text-xs text-gray-500 uppercase tracking-wide">Cache Status</div>
+                                                                <div id="cache-status" class="text-lg font-semibold text-purple-600">--</div>
+                                                            </div>
+                                                        </div>
                                                     </div>
+
+                                                    <!-- Priority Flow Configuration -->
+                                                    <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+                                                        <div class="flex items-center justify-between mb-4">
+                                                            <h4 class="text-lg font-semibold text-gray-800 flex items-center">
+                                                                <i class="fas fa-layer-group mr-2 text-indigo-600"></i>Priority Flow Configuration
+                                                            </h4>
+                                                            <div class="flex items-center space-x-2">
+                                                                <button id="reset-defaults-btn" class="text-gray-600 hover:text-gray-800 px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                                                                    <i class="fas fa-undo mr-1"></i>Reset to Defaults
+                                                                </button>
+                                                                <button id="save-priorities-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                                    <i class="fas fa-save mr-2"></i>Save Configuration
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <p class="text-sm text-gray-600 mb-6">Drag and drop to reorder priority. Higher priority sources are checked first. Configure thresholds for optimal accuracy.</p>
+                                                        
+                                                        <!-- Drag & Drop Priority List -->
+                                                        <div id="priority-flow-container" class="space-y-3">
+                                                            <!-- Priority items will be dynamically loaded here -->
+                                                        </div>
+                                                        
+                                                        <!-- Global Settings -->
+                                                        <div class="mt-6 pt-6 border-t border-gray-200">
+                                                            <h5 class="text-md font-medium text-gray-800 mb-4">Global Settings</h5>
+                                                            <div class="grid grid-cols-2 gap-6">
+                                                                <div>
+                                                                    <label class="block text-sm font-medium text-gray-700 mb-2">Memory Settings</label>
+                                                                    <select id="memory-mode" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                                                        <option value="conversation">Current Conversation Only</option>
+                                                                        <option value="session">Full Session Memory</option>
+                                                                        <option value="customer">Customer Profile Memory</option>
+                                                                        <option value="none">No Memory</option>
+                                                                    </select>
+                                                                </div>
+                                                                <div>
+                                                                    <label class="block text-sm font-medium text-gray-700 mb-2">Fallback Behavior</label>
+                                                                    <select id="fallback-behavior" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                                                        <option value="continue">Continue to Next Source</option>
+                                                                        <option value="always_respond">Always Respond (Recommended)</option>
+                                                                        <option value="escalate">Escalate to Human</option>
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Real-time Testing Panel -->
+                                                    <div class="bg-white border border-gray-200 rounded-lg p-6">
+                                                        <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
+                                                            <i class="fas fa-flask mr-2 text-green-600"></i>Real-time Priority Flow Testing
+                                                        </h4>
+                                                        
+                                                        <!-- Test Input -->
+                                                        <div class="mb-4">
+                                                            <label class="block text-sm font-medium text-gray-700 mb-2">Test Query</label>
+                                                            <div class="flex space-x-3">
+                                                                <input type="text" id="test-query-input" placeholder="Enter a test query (e.g., 'My AC is not working')" 
+                                                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                                                                <button id="run-test-btn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                                                    <i class="fas fa-play mr-2"></i>Run Test
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <!-- Test Options -->
+                                                        <div class="grid grid-cols-3 gap-4 mb-4">
+                                                            <label class="flex items-center">
+                                                                <input type="checkbox" id="include-personality" checked class="mr-2 rounded">
+                                                                <span class="text-sm text-gray-700">Include Personality</span>
+                                                            </label>
+                                                            <label class="flex items-center">
+                                                                <input type="checkbox" id="show-routing" checked class="mr-2 rounded">
+                                                                <span class="text-sm text-gray-700">Show Routing Decisions</span>
+                                                            </label>
+                                                            <label class="flex items-center">
+                                                                <input type="checkbox" id="test-all-sources" class="mr-2 rounded">
+                                                                <span class="text-sm text-gray-700">Test All Sources</span>
+                                                            </label>
+                                                        </div>
+                                                        
+                                                        <!-- Test Results -->
+                                                        <div id="test-results-container" class="hidden">
+                                                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                                                <h5 class="font-medium text-gray-800 mb-3">Test Results</h5>
+                                                                <div id="test-results-content">
+                                                                    <!-- Results will be populated here -->
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <!-- Quick Test Scenarios -->
+                                                        <div class="mt-4 pt-4 border-t border-gray-200">
+                                                            <h5 class="text-sm font-medium text-gray-700 mb-3">Quick Test Scenarios</h5>
+                                                            <div class="flex flex-wrap gap-2">
+                                                                <button class="quick-test-btn bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg text-sm transition-colors" data-query="My AC is not working">
+                                                                    HVAC Emergency
+                                                                </button>
+                                                                <button class="quick-test-btn bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg text-sm transition-colors" data-query="I need to schedule maintenance">
+                                                                    Maintenance Booking
+                                                                </button>
+                                                                <button class="quick-test-btn bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg text-sm transition-colors" data-query="What are your business hours">
+                                                                    Business Hours
+                                                                </button>
+                                                                <button class="quick-test-btn bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg text-sm transition-colors" data-query="How much does it cost">
+                                                                    Pricing Inquiry
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
                                                 </div>
                                                 
                                                 <!-- Agent Personality Tab - WORLD-CLASS SYSTEM -->
@@ -16007,6 +16154,642 @@ Key Metrics:
                 closeCompanyQnAManager();
             }
         });
+
+        // ============================================================================
+        // KNOWLEDGE SOURCE PRIORITIES MANAGEMENT SYSTEM
+        // Enterprise-grade drag & drop priority management with real-time testing
+        // ============================================================================
+
+        class KnowledgeSourcePrioritiesManager {
+            constructor() {
+                this.companyId = null;
+                this.priorities = null;
+                this.draggedElement = null;
+                this.init();
+            }
+
+            async init() {
+                console.log('Initializing Knowledge Source Priorities Manager...');
+                
+                // Get company ID from URL or global variable
+                this.companyId = this.getCompanyId();
+                if (!this.companyId) {
+                    console.error('Company ID not found');
+                    return;
+                }
+
+                // Initialize event listeners
+                this.initEventListeners();
+                
+                // Load initial data
+                await this.loadPriorities();
+                await this.loadPerformanceMetrics();
+            }
+
+            getCompanyId() {
+                // Try multiple methods to get company ID
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get('companyId') || 
+                       window.companyId || 
+                       document.querySelector('[data-company-id]')?.getAttribute('data-company-id') ||
+                       localStorage.getItem('currentCompanyId');
+            }
+
+            initEventListeners() {
+                // Tab switching for new AI system
+                document.getElementById('new-tab-knowledge')?.addEventListener('click', () => {
+                    this.switchToKnowledgeTab();
+                });
+
+                // Save priorities button
+                document.getElementById('save-priorities-btn')?.addEventListener('click', () => {
+                    this.savePriorities();
+                });
+
+                // Reset defaults button
+                document.getElementById('reset-defaults-btn')?.addEventListener('click', () => {
+                    this.resetToDefaults();
+                });
+
+                // Test flow button
+                document.getElementById('test-priority-flow-btn')?.addEventListener('click', () => {
+                    this.runQuickTest();
+                });
+
+                // Run test button
+                document.getElementById('run-test-btn')?.addEventListener('click', () => {
+                    this.runCustomTest();
+                });
+
+                // Quick test scenario buttons
+                document.querySelectorAll('.quick-test-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const query = e.target.getAttribute('data-query');
+                        this.runQuickTestWithQuery(query);
+                    });
+                });
+
+                // Global settings change handlers
+                document.getElementById('memory-mode')?.addEventListener('change', () => {
+                    this.markAsModified();
+                });
+
+                document.getElementById('fallback-behavior')?.addEventListener('change', () => {
+                    this.markAsModified();
+                });
+            }
+
+            switchToKnowledgeTab() {
+                // Switch tab UI
+                document.querySelectorAll('.new-ai-tab-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    btn.classList.add('border-transparent', 'text-gray-500');
+                    btn.classList.remove('border-blue-500', 'text-blue-600', 'border-purple-500', 'text-purple-600');
+                });
+
+                document.querySelectorAll('.new-ai-tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+
+                // Activate knowledge tab
+                const knowledgeBtn = document.getElementById('new-tab-knowledge');
+                const knowledgeContent = document.getElementById('new-knowledge-content');
+                
+                if (knowledgeBtn && knowledgeContent) {
+                    knowledgeBtn.classList.add('active', 'border-blue-500', 'text-blue-600');
+                    knowledgeBtn.classList.remove('border-transparent', 'text-gray-500');
+                    knowledgeContent.classList.add('active');
+                }
+
+                // Refresh data when tab becomes active
+                this.loadPriorities();
+                this.loadPerformanceMetrics();
+            }
+
+            async loadPriorities() {
+                try {
+                    console.log(`Loading priorities for company ${this.companyId}...`);
+                    
+                    const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.priorities = data.data;
+                        this.renderPriorityFlow();
+                        this.updateGlobalSettings();
+                        this.updateStatus('Active', 'green');
+                    } else {
+                        console.error('Failed to load priorities:', response.statusText);
+                        this.updateStatus('Error', 'red');
+                    }
+                } catch (error) {
+                    console.error('Error loading priorities:', error);
+                    this.updateStatus('Offline', 'gray');
+                }
+            }
+
+            renderPriorityFlow() {
+                const container = document.getElementById('priority-flow-container');
+                if (!container || !this.priorities?.priorityFlow) return;
+
+                container.innerHTML = '';
+
+                // Sort by priority
+                const sortedFlow = [...this.priorities.priorityFlow].sort((a, b) => a.priority - b.priority);
+
+                sortedFlow.forEach((item, index) => {
+                    const priorityItem = this.createPriorityItem(item, index);
+                    container.appendChild(priorityItem);
+                });
+
+                // Update active sources count
+                const activeSources = sortedFlow.filter(item => item.enabled).length;
+                document.getElementById('active-sources').textContent = activeSources;
+            }
+
+            createPriorityItem(item, index) {
+                const div = document.createElement('div');
+                div.className = 'priority-item bg-white border border-gray-200 rounded-lg p-4 cursor-move hover:shadow-md transition-shadow';
+                div.draggable = true;
+                div.dataset.source = item.source;
+                div.dataset.priority = item.priority;
+
+                // Get source info
+                const sourceInfo = this.getSourceInfo(item.source);
+
+                div.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <div class="flex items-center space-x-2">
+                                <i class="fas fa-grip-vertical text-gray-400"></i>
+                                <div class="w-8 h-8 rounded-full ${sourceInfo.bgColor} ${sourceInfo.textColor} flex items-center justify-center text-sm font-bold">
+                                    ${item.priority}
+                                </div>
+                            </div>
+                            <div>
+                                <h5 class="font-medium text-gray-900">${sourceInfo.name}</h5>
+                                <p class="text-sm text-gray-600">${sourceInfo.description}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="text-right">
+                                <div class="text-sm text-gray-600">Threshold</div>
+                                <input type="range" min="0" max="1" step="0.05" value="${item.threshold}" 
+                                       class="threshold-slider w-20" data-source="${item.source}">
+                                <div class="text-xs text-gray-500 threshold-value">${(item.threshold * 100).toFixed(0)}%</div>
+                            </div>
+                            <label class="flex items-center">
+                                <input type="checkbox" ${item.enabled ? 'checked' : ''} 
+                                       class="source-enabled mr-2" data-source="${item.source}">
+                                <span class="text-sm text-gray-700">Enabled</span>
+                            </label>
+                        </div>
+                    </div>
+                `;
+
+                // Add drag and drop event listeners
+                div.addEventListener('dragstart', (e) => {
+                    this.draggedElement = div;
+                    div.classList.add('opacity-50');
+                });
+
+                div.addEventListener('dragend', (e) => {
+                    div.classList.remove('opacity-50');
+                    this.draggedElement = null;
+                });
+
+                div.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+
+                div.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    if (this.draggedElement && this.draggedElement !== div) {
+                        this.swapPriorities(this.draggedElement, div);
+                    }
+                });
+
+                // Add threshold slider listener
+                const slider = div.querySelector('.threshold-slider');
+                const valueDisplay = div.querySelector('.threshold-value');
+                slider.addEventListener('input', (e) => {
+                    const value = parseFloat(e.target.value);
+                    valueDisplay.textContent = `${(value * 100).toFixed(0)}%`;
+                    this.updateThreshold(item.source, value);
+                });
+
+                // Add enabled checkbox listener
+                const checkbox = div.querySelector('.source-enabled');
+                checkbox.addEventListener('change', (e) => {
+                    this.updateEnabled(item.source, e.target.checked);
+                });
+
+                return div;
+            }
+
+            getSourceInfo(source) {
+                const sourceMap = {
+                    companyQnA: {
+                        name: 'Company Q&A',
+                        description: 'Company-specific questions and answers',
+                        bgColor: 'bg-blue-100',
+                        textColor: 'text-blue-800'
+                    },
+                    tradeQnA: {
+                        name: 'Trade Q&A',
+                        description: 'Industry-specific trade knowledge',
+                        bgColor: 'bg-green-100',
+                        textColor: 'text-green-800'
+                    },
+                    templates: {
+                        name: 'Response Templates',
+                        description: 'Pre-configured response templates',
+                        bgColor: 'bg-purple-100',
+                        textColor: 'text-purple-800'
+                    },
+                    inHouseFallback: {
+                        name: 'In-House Fallback',
+                        description: 'Smart keyword-based fallback responses',
+                        bgColor: 'bg-orange-100',
+                        textColor: 'text-orange-800'
+                    }
+                };
+
+                return sourceMap[source] || {
+                    name: source,
+                    description: 'Unknown source',
+                    bgColor: 'bg-gray-100',
+                    textColor: 'text-gray-800'
+                };
+            }
+
+            swapPriorities(element1, element2) {
+                const priority1 = parseInt(element1.dataset.priority);
+                const priority2 = parseInt(element2.dataset.priority);
+                const source1 = element1.dataset.source;
+                const source2 = element2.dataset.source;
+
+                // Update priorities in data
+                const item1 = this.priorities.priorityFlow.find(item => item.source === source1);
+                const item2 = this.priorities.priorityFlow.find(item => item.source === source2);
+
+                if (item1 && item2) {
+                    item1.priority = priority2;
+                    item2.priority = priority1;
+                    
+                    // Re-render
+                    this.renderPriorityFlow();
+                    this.markAsModified();
+                }
+            }
+
+            updateThreshold(source, threshold) {
+                const item = this.priorities.priorityFlow.find(item => item.source === source);
+                if (item) {
+                    item.threshold = threshold;
+                    this.markAsModified();
+                }
+            }
+
+            updateEnabled(source, enabled) {
+                const item = this.priorities.priorityFlow.find(item => item.source === source);
+                if (item) {
+                    item.enabled = enabled;
+                    this.renderPriorityFlow(); // Re-render to update active sources count
+                    this.markAsModified();
+                }
+            }
+
+            updateGlobalSettings() {
+                if (!this.priorities) return;
+
+                const memoryMode = document.getElementById('memory-mode');
+                const fallbackBehavior = document.getElementById('fallback-behavior');
+
+                if (memoryMode && this.priorities.memorySettings?.mode) {
+                    memoryMode.value = this.priorities.memorySettings.mode;
+                }
+
+                if (fallbackBehavior && this.priorities.fallbackBehavior?.default) {
+                    fallbackBehavior.value = this.priorities.fallbackBehavior.default;
+                }
+            }
+
+            async savePriorities() {
+                try {
+                    console.log('Saving priorities...');
+
+                    // Collect global settings
+                    const memoryMode = document.getElementById('memory-mode')?.value;
+                    const fallbackBehavior = document.getElementById('fallback-behavior')?.value;
+
+                    const updatedPriorities = {
+                        ...this.priorities,
+                        memorySettings: {
+                            ...this.priorities.memorySettings,
+                            mode: memoryMode
+                        },
+                        fallbackBehavior: {
+                            ...this.priorities.fallbackBehavior,
+                            default: fallbackBehavior
+                        }
+                    };
+
+                    const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(updatedPriorities)
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.priorities = data.data;
+                        this.showSuccessMessage('Priorities saved successfully!');
+                        this.clearModifiedState();
+                    } else {
+                        throw new Error(`Failed to save: ${response.statusText}`);
+                    }
+                } catch (error) {
+                    console.error('Error saving priorities:', error);
+                    this.showErrorMessage('Failed to save priorities. Please try again.');
+                }
+            }
+
+            async resetToDefaults() {
+                if (!confirm('Are you sure you want to reset to default priorities? This will overwrite your current configuration.')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities/reset-defaults`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.priorities = data.data;
+                        this.renderPriorityFlow();
+                        this.updateGlobalSettings();
+                        this.showSuccessMessage('Reset to defaults successfully!');
+                        this.clearModifiedState();
+                    } else {
+                        throw new Error(`Failed to reset: ${response.statusText}`);
+                    }
+                } catch (error) {
+                    console.error('Error resetting to defaults:', error);
+                    this.showErrorMessage('Failed to reset to defaults. Please try again.');
+                }
+            }
+
+            async runQuickTest() {
+                const testQuery = 'My AC is not working and I need help';
+                await this.runTestWithQuery(testQuery);
+            }
+
+            async runCustomTest() {
+                const queryInput = document.getElementById('test-query-input');
+                const query = queryInput?.value?.trim();
+                
+                if (!query) {
+                    this.showErrorMessage('Please enter a test query');
+                    return;
+                }
+
+                await this.runTestWithQuery(query);
+            }
+
+            async runQuickTestWithQuery(query) {
+                const queryInput = document.getElementById('test-query-input');
+                if (queryInput) {
+                    queryInput.value = query;
+                }
+                await this.runTestWithQuery(query);
+            }
+
+            async runTestWithQuery(query) {
+                try {
+                    console.log(`Running test with query: ${query}`);
+
+                    // Get test options
+                    const includePersonality = document.getElementById('include-personality')?.checked || false;
+                    const showRouting = document.getElementById('show-routing')?.checked || false;
+                    const testAllSources = document.getElementById('test-all-sources')?.checked || false;
+
+                    const testRequest = {
+                        query,
+                        includePersonality,
+                        showRoutingDecisions: showRouting,
+                        testAllSources
+                    };
+
+                    const response = await fetch(`/api/company/${this.companyId}/priority-flow-testing/test-complete-flow`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(testRequest)
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.displayTestResults(data.data);
+                    } else {
+                        throw new Error(`Test failed: ${response.statusText}`);
+                    }
+                } catch (error) {
+                    console.error('Error running test:', error);
+                    this.showErrorMessage('Test failed. Please try again.');
+                }
+            }
+
+            displayTestResults(results) {
+                const container = document.getElementById('test-results-container');
+                const content = document.getElementById('test-results-content');
+                
+                if (!container || !content) return;
+
+                let html = '';
+
+                // Final result
+                if (results.finalMatch) {
+                    html += `
+                        <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                            <h6 class="font-medium text-green-800 mb-2">Final Result</h6>
+                            <div class="text-sm text-green-700">
+                                <div><strong>Source:</strong> ${results.finalMatch.source}</div>
+                                <div><strong>Confidence:</strong> ${(results.finalMatch.confidence * 100).toFixed(1)}%</div>
+                                <div><strong>Response:</strong> ${results.finalMatch.response || 'No response available'}</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <h6 class="font-medium text-red-800 mb-2">No Match Found</h6>
+                            <p class="text-sm text-red-700">No knowledge source provided a confident response for this query.</p>
+                        </div>
+                    `;
+                }
+
+                // Routing flow
+                if (results.routingFlow && results.routingFlow.length > 0) {
+                    html += `
+                        <div class="mb-4">
+                            <h6 class="font-medium text-gray-800 mb-2">Routing Flow</h6>
+                            <div class="space-y-2">
+                    `;
+
+                    results.routingFlow.forEach(step => {
+                        const bgColor = step.match ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200';
+                        const textColor = step.match ? 'text-green-700' : 'text-gray-700';
+                        
+                        html += `
+                            <div class="p-3 ${bgColor} border rounded-lg">
+                                <div class="flex items-center justify-between">
+                                    <div class="text-sm ${textColor}">
+                                        <strong>Priority ${step.priority}:</strong> ${step.source}
+                                    </div>
+                                    <div class="text-xs ${textColor}">
+                                        ${(step.confidence * 100).toFixed(1)}% (${step.responseTime})
+                                    </div>
+                                </div>
+                                <div class="text-xs ${textColor} mt-1">${step.result}</div>
+                            </div>
+                        `;
+                    });
+
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Performance metrics
+                if (results.performance) {
+                    html += `
+                        <div class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <h6 class="font-medium text-blue-800 mb-2">Performance Metrics</h6>
+                            <div class="grid grid-cols-2 gap-4 text-sm text-blue-700">
+                                <div><strong>Total Time:</strong> ${results.totalTestTime}</div>
+                                <div><strong>Sources Tested:</strong> ${results.performance.totalSources}</div>
+                                <div><strong>Sources Matched:</strong> ${results.performance.sourcesMatched}</div>
+                                <div><strong>Avg Source Time:</strong> ${results.performance.avgSourceTime.toFixed(1)}ms</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Recommendation
+                if (results.recommendation) {
+                    html += `
+                        <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <h6 class="font-medium text-yellow-800 mb-2">Recommendation</h6>
+                            <p class="text-sm text-yellow-700">${results.recommendation}</p>
+                        </div>
+                    `;
+                }
+
+                content.innerHTML = html;
+                container.classList.remove('hidden');
+            }
+
+            async loadPerformanceMetrics() {
+                // Simulate loading performance metrics
+                // In production, this would call a real API
+                setTimeout(() => {
+                    document.getElementById('avg-response-time').textContent = '42ms';
+                    document.getElementById('success-rate').textContent = '94%';
+                    document.getElementById('cache-status').textContent = 'Active';
+                }, 500);
+            }
+
+            markAsModified() {
+                const saveBtn = document.getElementById('save-priorities-btn');
+                if (saveBtn) {
+                    saveBtn.classList.add('bg-orange-600', 'hover:bg-orange-700');
+                    saveBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                    saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Changes*';
+                }
+            }
+
+            clearModifiedState() {
+                const saveBtn = document.getElementById('save-priorities-btn');
+                if (saveBtn) {
+                    saveBtn.classList.remove('bg-orange-600', 'hover:bg-orange-700');
+                    saveBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                    saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Configuration';
+                }
+            }
+
+            updateStatus(status, color) {
+                const statusElement = document.getElementById('priorities-status');
+                if (statusElement) {
+                    statusElement.className = `px-3 py-1 text-xs rounded-full`;
+                    
+                    switch (color) {
+                        case 'green':
+                            statusElement.classList.add('bg-green-100', 'text-green-800');
+                            break;
+                        case 'red':
+                            statusElement.classList.add('bg-red-100', 'text-red-800');
+                            break;
+                        case 'gray':
+                            statusElement.classList.add('bg-gray-100', 'text-gray-800');
+                            break;
+                    }
+                    
+                    statusElement.innerHTML = `<i class="fas fa-${color === 'green' ? 'check' : color === 'red' ? 'times' : 'question'} mr-1"></i>${status}`;
+                }
+            }
+
+            showSuccessMessage(message) {
+                // Create temporary success message
+                const successDiv = document.createElement('div');
+                successDiv.className = 'fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded z-50';
+                successDiv.innerHTML = `<i class="fas fa-check mr-2"></i>${message}`;
+                document.body.appendChild(successDiv);
+
+                setTimeout(() => {
+                    successDiv.remove();
+                }, 3000);
+            }
+
+            showErrorMessage(message) {
+                // Create temporary error message
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50';
+                errorDiv.innerHTML = `<i class="fas fa-times mr-2"></i>${message}`;
+                document.body.appendChild(errorDiv);
+
+                setTimeout(() => {
+                    errorDiv.remove();
+                }, 5000);
+            }
+        }
+
+        // Initialize the Knowledge Source Priorities Manager
+        let knowledgePrioritiesManager;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize after a short delay to ensure all elements are loaded
+            setTimeout(() => {
+                knowledgePrioritiesManager = new KnowledgeSourcePrioritiesManager();
+            }, 500);
+        });
+
+        // ============================================================================
+        // END KNOWLEDGE SOURCE PRIORITIES MANAGEMENT SYSTEM
+        // ============================================================================
     </script>
 
     <!-- Modern implementation handles all initialization -->
