@@ -17110,9 +17110,739 @@ Key Metrics:
             }, 500);
         });
 
-        // ============================================================================
-        // END KNOWLEDGE SOURCE PRIORITIES MANAGEMENT SYSTEM
-        // ============================================================================
+    // ============================================================================
+    // END KNOWLEDGE SOURCE PRIORITIES MANAGEMENT SYSTEM
+    // ============================================================================
+
+    // ============================================================================
+    // KNOWLEDGE MANAGEMENT SYSTEM
+    // Enterprise-grade knowledge base management with Company Q&A, Trade Q&A, Templates, and Fallback
+    // ============================================================================
+
+    class KnowledgeManagementSystem {
+        constructor() {
+            this.companyId = null;
+            this.knowledgeData = null;
+            this.currentKnowledgeTab = 'company';
+            this.init();
+        }
+
+        async init() {
+            console.log('Initializing Knowledge Management System...');
+            
+            // Get company ID from URL or global variable
+            this.companyId = this.getCompanyId();
+            if (!this.companyId) {
+                console.error('Company ID not found');
+                return;
+            }
+
+            // Initialize event listeners
+            this.initEventListeners();
+            
+            // Load initial data
+            await this.loadKnowledgeData();
+        }
+
+        getCompanyId() {
+            // Try multiple methods to get company ID
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('companyId') || 
+                   window.companyId || 
+                   document.querySelector('[data-company-id]')?.getAttribute('data-company-id') ||
+                   localStorage.getItem('currentCompanyId');
+        }
+
+        getAuthToken() {
+            // Try multiple token storage locations for maximum compatibility
+            return localStorage.getItem('adminToken') ||  // PRIMARY: Used by login system
+                   localStorage.getItem('authToken') || 
+                   sessionStorage.getItem('authToken') ||
+                   localStorage.getItem('token') || 
+                   sessionStorage.getItem('token') ||
+                   this.getCookieValue('token') || 
+                   this.getCookieValue('authToken') || '';
+        }
+
+        getCookieValue(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return '';
+        }
+
+        initEventListeners() {
+            // Main Knowledge Management tab switching
+            document.getElementById('new-tab-knowledge-mgmt')?.addEventListener('click', () => {
+                this.switchToKnowledgeManagementTab();
+            });
+
+            // Knowledge source sub-tabs
+            document.getElementById('km-tab-company')?.addEventListener('click', () => {
+                this.switchKnowledgeTab('company');
+            });
+
+            document.getElementById('km-tab-trade')?.addEventListener('click', () => {
+                this.switchKnowledgeTab('trade');
+            });
+
+            document.getElementById('km-tab-templates')?.addEventListener('click', () => {
+                this.switchKnowledgeTab('templates');
+            });
+
+            document.getElementById('km-tab-fallback')?.addEventListener('click', () => {
+                this.switchKnowledgeTab('fallback');
+            });
+
+            // Add buttons
+            document.getElementById('add-company-qna-btn')?.addEventListener('click', () => {
+                this.showAddCompanyQnAModal();
+            });
+
+            document.getElementById('add-trade-qna-btn')?.addEventListener('click', () => {
+                this.showAddTradeQnAModal();
+            });
+
+            document.getElementById('add-template-btn')?.addEventListener('click', () => {
+                this.showAddTemplateModal();
+            });
+
+            // Save buttons
+            document.getElementById('save-fallback-btn')?.addEventListener('click', () => {
+                this.saveFallbackConfiguration();
+            });
+
+            // Test knowledge
+            document.getElementById('test-knowledge-btn')?.addEventListener('click', () => {
+                this.runQuickKnowledgeTest();
+            });
+
+            document.getElementById('run-knowledge-test-btn')?.addEventListener('click', () => {
+                this.runCustomKnowledgeTest();
+            });
+
+            // Search and filter handlers
+            document.getElementById('company-qna-search')?.addEventListener('input', () => {
+                this.filterCompanyQnA();
+            });
+
+            document.getElementById('company-qna-category')?.addEventListener('change', () => {
+                this.filterCompanyQnA();
+            });
+
+            document.getElementById('company-qna-status')?.addEventListener('change', () => {
+                this.filterCompanyQnA();
+            });
+
+            // Trade category selection
+            document.getElementById('trade-category-select')?.addEventListener('change', () => {
+                this.loadTradeQnAForCategory();
+            });
+
+            // Template type selection
+            document.querySelectorAll('[data-template-type]').forEach(card => {
+                card.addEventListener('click', (e) => {
+                    const templateType = e.currentTarget.getAttribute('data-template-type');
+                    this.filterTemplatesByType(templateType);
+                });
+            });
+        }
+
+        switchToKnowledgeManagementTab() {
+            // Switch main tab UI
+            document.querySelectorAll('.new-ai-tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('border-transparent', 'text-gray-500');
+                btn.classList.remove('border-blue-500', 'text-blue-600', 'border-green-500', 'text-green-600', 'border-purple-500', 'text-purple-600');
+            });
+
+            document.querySelectorAll('.new-ai-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Activate knowledge management tab
+            const knowledgeMgmtBtn = document.getElementById('new-tab-knowledge-mgmt');
+            const knowledgeMgmtContent = document.getElementById('new-knowledge-mgmt-content');
+            
+            if (knowledgeMgmtBtn && knowledgeMgmtContent) {
+                knowledgeMgmtBtn.classList.add('active', 'border-green-500', 'text-green-600');
+                knowledgeMgmtBtn.classList.remove('border-transparent', 'text-gray-500');
+                knowledgeMgmtContent.classList.add('active');
+            }
+
+            // Refresh data when tab becomes active
+            this.loadKnowledgeData();
+        }
+
+        switchKnowledgeTab(tabName) {
+            // Update current tab
+            this.currentKnowledgeTab = tabName;
+
+            // Switch knowledge sub-tab UI
+            document.querySelectorAll('.km-tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('border-transparent', 'text-gray-500');
+                btn.classList.remove('border-blue-500', 'text-blue-600', 'border-green-500', 'text-green-600', 'border-purple-500', 'text-purple-600', 'border-orange-500', 'text-orange-600');
+            });
+
+            document.querySelectorAll('.km-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Activate selected tab
+            const tabBtn = document.getElementById(`km-tab-${tabName}`);
+            const tabContent = document.getElementById(`km-${tabName}-content`);
+            
+            if (tabBtn && tabContent) {
+                tabBtn.classList.add('active');
+                tabContent.classList.add('active');
+
+                // Set appropriate color based on tab
+                switch(tabName) {
+                    case 'company':
+                        tabBtn.classList.add('border-blue-500', 'text-blue-600');
+                        break;
+                    case 'trade':
+                        tabBtn.classList.add('border-green-500', 'text-green-600');
+                        break;
+                    case 'templates':
+                        tabBtn.classList.add('border-purple-500', 'text-purple-600');
+                        break;
+                    case 'fallback':
+                        tabBtn.classList.add('border-orange-500', 'text-orange-600');
+                        break;
+                }
+            }
+
+            // Load tab-specific data
+            this.loadTabData(tabName);
+        }
+
+        async loadKnowledgeData() {
+            try {
+                const token = this.getAuthToken();
+                console.log(`Loading knowledge data for company ${this.companyId}...`);
+                
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Knowledge data loaded successfully:', data.data);
+                    this.knowledgeData = data.data;
+                    this.updateKnowledgeStatistics();
+                    this.loadTabData(this.currentKnowledgeTab);
+                    this.updateStatus('Active', 'green');
+                } else if (response.status === 401) {
+                    console.error('Authentication failed - please log in again');
+                    this.updateStatus('Auth Required', 'red');
+                    this.showErrorMessage('Authentication required. Please log in again.');
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                    console.error('Failed to load knowledge data:', response.statusText, errorData);
+                    this.updateStatus('Error', 'red');
+                }
+            } catch (error) {
+                console.error('Error loading knowledge data:', error);
+                this.updateStatus('Offline', 'gray');
+            }
+        }
+
+        updateKnowledgeStatistics() {
+            if (!this.knowledgeData) return;
+
+            const companyQnACount = this.knowledgeData.companyQnA?.length || 0;
+            const tradeQnACount = this.knowledgeData.tradeQnA?.length || 0;
+            const templatesCount = this.knowledgeData.templates?.length || 0;
+            const totalCount = companyQnACount + tradeQnACount + templatesCount;
+
+            document.getElementById('company-qna-count').textContent = companyQnACount;
+            document.getElementById('trade-qna-count').textContent = tradeQnACount;
+            document.getElementById('templates-count').textContent = templatesCount;
+            document.getElementById('total-entries-count').textContent = totalCount;
+        }
+
+        loadTabData(tabName) {
+            switch(tabName) {
+                case 'company':
+                    this.renderCompanyQnA();
+                    break;
+                case 'trade':
+                    this.renderTradeQnA();
+                    break;
+                case 'templates':
+                    this.renderTemplates();
+                    break;
+                case 'fallback':
+                    this.renderFallbackConfiguration();
+                    break;
+            }
+        }
+
+        renderCompanyQnA() {
+            const container = document.getElementById('company-qna-list');
+            const emptyState = document.getElementById('company-qna-empty');
+            
+            if (!container || !this.knowledgeData?.companyQnA) return;
+
+            const companyQnA = this.knowledgeData.companyQnA;
+
+            if (companyQnA.length === 0) {
+                container.innerHTML = '';
+                emptyState?.classList.remove('hidden');
+                return;
+            }
+
+            emptyState?.classList.add('hidden');
+            container.innerHTML = '';
+
+            companyQnA.forEach(qna => {
+                const qnaItem = this.createCompanyQnAItem(qna);
+                container.appendChild(qnaItem);
+            });
+        }
+
+        createCompanyQnAItem(qna) {
+            const div = document.createElement('div');
+            div.className = 'bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow';
+            div.dataset.qnaId = qna.id;
+
+            const statusColor = qna.status === 'active' ? 'green' : qna.status === 'draft' ? 'yellow' : 'gray';
+            const categoryColor = this.getCategoryColor(qna.category);
+
+            div.innerHTML = `
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex-1">
+                        <h5 class="font-medium text-gray-900 mb-1">${qna.question}</h5>
+                        <p class="text-sm text-gray-600 line-clamp-2">${qna.answer}</p>
+                    </div>
+                    <div class="flex items-center space-x-2 ml-4">
+                        <span class="px-2 py-1 bg-${categoryColor}-100 text-${categoryColor}-800 text-xs rounded-full">${qna.category}</span>
+                        <span class="px-2 py-1 bg-${statusColor}-100 text-${statusColor}-800 text-xs rounded-full">${qna.status}</span>
+                        <div class="flex space-x-1">
+                            <button class="text-blue-600 hover:text-blue-800 p-1" onclick="knowledgeManager.editCompanyQnA('${qna.id}')">
+                                <i class="fas fa-edit text-sm"></i>
+                            </button>
+                            <button class="text-red-600 hover:text-red-800 p-1" onclick="knowledgeManager.deleteCompanyQnA('${qna.id}')">
+                                <i class="fas fa-trash text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between text-xs text-gray-500">
+                    <div class="flex items-center space-x-4">
+                        <span><i class="fas fa-tags mr-1"></i>Keywords: ${qna.keywords?.join(', ') || 'None'}</span>
+                        <span><i class="fas fa-chart-bar mr-1"></i>Confidence: ${qna.confidence || 0.8}</span>
+                    </div>
+                    <span><i class="fas fa-clock mr-1"></i>Updated: ${new Date(qna.lastUpdated).toLocaleDateString()}</span>
+                </div>
+            `;
+
+            return div;
+        }
+
+        getCategoryColor(category) {
+            const colorMap = {
+                'general': 'blue',
+                'services': 'green',
+                'pricing': 'purple',
+                'emergency': 'red'
+            };
+            return colorMap[category] || 'gray';
+        }
+
+        renderTradeQnA() {
+            const container = document.getElementById('trade-qna-list');
+            if (!container || !this.knowledgeData?.tradeQnA) return;
+
+            const tradeQnA = this.knowledgeData.tradeQnA;
+            container.innerHTML = '';
+
+            if (tradeQnA.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-tools text-gray-400 text-3xl mb-3"></i>
+                        <h5 class="text-lg font-medium text-gray-600 mb-2">No Trade Q&A Found</h5>
+                        <p class="text-gray-500">Add trade-specific knowledge to help your AI agent with technical questions.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            tradeQnA.forEach(qna => {
+                const qnaItem = this.createTradeQnAItem(qna);
+                container.appendChild(qnaItem);
+            });
+        }
+
+        createTradeQnAItem(qna) {
+            const div = document.createElement('div');
+            div.className = 'bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow';
+            div.dataset.qnaId = qna.id;
+
+            div.innerHTML = `
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex-1">
+                        <div class="flex items-center mb-2">
+                            <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full mr-2">${qna.tradeCategory}</span>
+                            <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">${qna.difficulty}</span>
+                        </div>
+                        <h5 class="font-medium text-gray-900 mb-1">${qna.question}</h5>
+                        <p class="text-sm text-gray-600 line-clamp-2">${qna.answer}</p>
+                    </div>
+                    <div class="flex space-x-1 ml-4">
+                        <button class="text-blue-600 hover:text-blue-800 p-1" onclick="knowledgeManager.editTradeQnA('${qna.id}')">
+                            <i class="fas fa-edit text-sm"></i>
+                        </button>
+                        <button class="text-red-600 hover:text-red-800 p-1" onclick="knowledgeManager.deleteTradeQnA('${qna.id}')">
+                            <i class="fas fa-trash text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-500">
+                    <span><i class="fas fa-tags mr-1"></i>Keywords: ${qna.keywords?.join(', ') || 'None'}</span>
+                    <span class="ml-4"><i class="fas fa-clock mr-1"></i>Updated: ${new Date(qna.lastUpdated).toLocaleDateString()}</span>
+                </div>
+            `;
+
+            return div;
+        }
+
+        renderTemplates() {
+            const container = document.getElementById('templates-list');
+            if (!container || !this.knowledgeData?.templates) return;
+
+            const templates = this.knowledgeData.templates;
+            container.innerHTML = '';
+
+            if (templates.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-file-alt text-gray-400 text-3xl mb-3"></i>
+                        <h5 class="text-lg font-medium text-gray-600 mb-2">No Templates Found</h5>
+                        <p class="text-gray-500">Create response templates to standardize your AI agent's communication.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            templates.forEach(template => {
+                const templateItem = this.createTemplateItem(template);
+                container.appendChild(templateItem);
+            });
+        }
+
+        createTemplateItem(template) {
+            const div = document.createElement('div');
+            div.className = 'bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow';
+            div.dataset.templateId = template.id;
+
+            const typeColor = this.getTemplateTypeColor(template.type);
+
+            div.innerHTML = `
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex-1">
+                        <div class="flex items-center mb-2">
+                            <span class="px-2 py-1 bg-${typeColor}-100 text-${typeColor}-800 text-xs rounded-full mr-2">${template.type}</span>
+                            <span class="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">${template.category}</span>
+                        </div>
+                        <h5 class="font-medium text-gray-900 mb-1">${template.name}</h5>
+                        <p class="text-sm text-gray-600 line-clamp-2">${template.content}</p>
+                    </div>
+                    <div class="flex space-x-1 ml-4">
+                        <button class="text-blue-600 hover:text-blue-800 p-1" onclick="knowledgeManager.editTemplate('${template.id}')">
+                            <i class="fas fa-edit text-sm"></i>
+                        </button>
+                        <button class="text-red-600 hover:text-red-800 p-1" onclick="knowledgeManager.deleteTemplate('${template.id}')">
+                            <i class="fas fa-trash text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-500">
+                    <span><i class="fas fa-eye mr-1"></i>Usage: ${template.usageCount || 0} times</span>
+                    <span class="ml-4"><i class="fas fa-clock mr-1"></i>Updated: ${new Date(template.lastUpdated).toLocaleDateString()}</span>
+                </div>
+            `;
+
+            return div;
+        }
+
+        getTemplateTypeColor(type) {
+            const colorMap = {
+                'greeting': 'green',
+                'closing': 'blue',
+                'escalation': 'red',
+                'information': 'purple'
+            };
+            return colorMap[type] || 'gray';
+        }
+
+        renderFallbackConfiguration() {
+            if (!this.knowledgeData?.inHouseFallback) return;
+
+            const fallback = this.knowledgeData.inHouseFallback;
+
+            // Populate fallback configuration
+            document.getElementById('service-fallback').value = fallback.serviceRequests?.response || '';
+            document.getElementById('service-keywords').value = fallback.serviceRequests?.keywords?.join(', ') || '';
+
+            document.getElementById('booking-fallback').value = fallback.bookingRequests?.response || '';
+            document.getElementById('booking-keywords').value = fallback.bookingRequests?.keywords?.join(', ') || '';
+
+            document.getElementById('emergency-fallback').value = fallback.emergencySituations?.response || '';
+            document.getElementById('emergency-keywords').value = fallback.emergencySituations?.keywords?.join(', ') || '';
+
+            document.getElementById('general-fallback').value = fallback.generalInquiries?.response || '';
+            document.getElementById('general-keywords').value = fallback.generalInquiries?.keywords?.join(', ') || '';
+        }
+
+        // Filter and search functions
+        filterCompanyQnA() {
+            const searchTerm = document.getElementById('company-qna-search')?.value.toLowerCase() || '';
+            const categoryFilter = document.getElementById('company-qna-category')?.value || '';
+            const statusFilter = document.getElementById('company-qna-status')?.value || '';
+
+            const qnaItems = document.querySelectorAll('#company-qna-list > div');
+
+            qnaItems.forEach(item => {
+                const question = item.querySelector('h5').textContent.toLowerCase();
+                const answer = item.querySelector('p').textContent.toLowerCase();
+                const category = item.querySelector('.bg-blue-100, .bg-green-100, .bg-purple-100, .bg-red-100')?.textContent || '';
+                const status = item.querySelector('.bg-green-100:last-child, .bg-yellow-100:last-child, .bg-gray-100:last-child')?.textContent || '';
+
+                const matchesSearch = !searchTerm || question.includes(searchTerm) || answer.includes(searchTerm);
+                const matchesCategory = !categoryFilter || category.includes(categoryFilter);
+                const matchesStatus = !statusFilter || status.includes(statusFilter);
+
+                if (matchesSearch && matchesCategory && matchesStatus) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        // Modal and action functions (placeholders for now)
+        showAddCompanyQnAModal() {
+            this.showInfoMessage('Add Company Q&A modal will be implemented in the next phase.');
+        }
+
+        showAddTradeQnAModal() {
+            this.showInfoMessage('Add Trade Q&A modal will be implemented in the next phase.');
+        }
+
+        showAddTemplateModal() {
+            this.showInfoMessage('Add Template modal will be implemented in the next phase.');
+        }
+
+        editCompanyQnA(qnaId) {
+            this.showInfoMessage(`Edit Company Q&A ${qnaId} will be implemented in the next phase.`);
+        }
+
+        deleteCompanyQnA(qnaId) {
+            if (confirm('Are you sure you want to delete this Q&A entry?')) {
+                this.showInfoMessage(`Delete Company Q&A ${qnaId} will be implemented in the next phase.`);
+            }
+        }
+
+        editTradeQnA(qnaId) {
+            this.showInfoMessage(`Edit Trade Q&A ${qnaId} will be implemented in the next phase.`);
+        }
+
+        deleteTradeQnA(qnaId) {
+            if (confirm('Are you sure you want to delete this Trade Q&A entry?')) {
+                this.showInfoMessage(`Delete Trade Q&A ${qnaId} will be implemented in the next phase.`);
+            }
+        }
+
+        editTemplate(templateId) {
+            this.showInfoMessage(`Edit Template ${templateId} will be implemented in the next phase.`);
+        }
+
+        deleteTemplate(templateId) {
+            if (confirm('Are you sure you want to delete this template?')) {
+                this.showInfoMessage(`Delete Template ${templateId} will be implemented in the next phase.`);
+            }
+        }
+
+        async saveFallbackConfiguration() {
+            try {
+                const fallbackConfig = {
+                    serviceRequests: {
+                        response: document.getElementById('service-fallback')?.value || '',
+                        keywords: document.getElementById('service-keywords')?.value.split(',').map(k => k.trim()).filter(k => k)
+                    },
+                    bookingRequests: {
+                        response: document.getElementById('booking-fallback')?.value || '',
+                        keywords: document.getElementById('booking-keywords')?.value.split(',').map(k => k.trim()).filter(k => k)
+                    },
+                    emergencySituations: {
+                        response: document.getElementById('emergency-fallback')?.value || '',
+                        keywords: document.getElementById('emergency-keywords')?.value.split(',').map(k => k.trim()).filter(k => k)
+                    },
+                    generalInquiries: {
+                        response: document.getElementById('general-fallback')?.value || '',
+                        keywords: document.getElementById('general-keywords')?.value.split(',').map(k => k.trim()).filter(k => k)
+                    }
+                };
+
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/in-house-fallback`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    },
+                    body: JSON.stringify(fallbackConfig)
+                });
+
+                if (response.ok) {
+                    this.showSuccessMessage('Fallback configuration saved successfully!');
+                    await this.loadKnowledgeData(); // Refresh data
+                } else {
+                    throw new Error(`Failed to save: ${response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Error saving fallback configuration:', error);
+                this.showErrorMessage('Failed to save fallback configuration. Please try again.');
+            }
+        }
+
+        async runQuickKnowledgeTest() {
+            const testQuery = 'What are your business hours?';
+            await this.runKnowledgeTestWithQuery(testQuery);
+        }
+
+        async runCustomKnowledgeTest() {
+            const queryInput = document.getElementById('knowledge-test-input');
+            const query = queryInput?.value?.trim();
+            
+            if (!query) {
+                this.showErrorMessage('Please enter a test query');
+                return;
+            }
+
+            await this.runKnowledgeTestWithQuery(query);
+        }
+
+        async runKnowledgeTestWithQuery(query) {
+            try {
+                console.log(`Running knowledge test with query: ${query}`);
+
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/test-ai-agent`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    },
+                    body: JSON.stringify({ query })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    this.displayKnowledgeTestResults(data.data);
+                } else {
+                    throw new Error(`Test failed: ${response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Error running knowledge test:', error);
+                this.showErrorMessage('Knowledge test failed. Please try again.');
+            }
+        }
+
+        displayKnowledgeTestResults(results) {
+            const container = document.getElementById('knowledge-test-results');
+            const content = document.getElementById('knowledge-test-content');
+            
+            if (!container || !content) return;
+
+            let html = `
+                <div class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h6 class="font-medium text-blue-800 mb-2">Test Results</h6>
+                    <div class="text-sm text-blue-700">
+                        <div><strong>Source:</strong> ${results.source || 'Unknown'}</div>
+                        <div><strong>Confidence:</strong> ${results.confidence ? (results.confidence * 100).toFixed(1) + '%' : 'N/A'}</div>
+                        <div><strong>Response:</strong> ${results.response || 'No response available'}</div>
+                    </div>
+                </div>
+            `;
+
+            content.innerHTML = html;
+            container.classList.remove('hidden');
+        }
+
+        updateStatus(status, color) {
+            const statusElement = document.getElementById('knowledge-status');
+            if (statusElement) {
+                statusElement.className = `px-3 py-1 text-xs rounded-full`;
+                
+                switch (color) {
+                    case 'green':
+                        statusElement.classList.add('bg-green-100', 'text-green-800');
+                        break;
+                    case 'red':
+                        statusElement.classList.add('bg-red-100', 'text-red-800');
+                        break;
+                    case 'gray':
+                        statusElement.classList.add('bg-gray-100', 'text-gray-800');
+                        break;
+                }
+                
+                statusElement.innerHTML = `<i class="fas fa-${color === 'green' ? 'check' : color === 'red' ? 'times' : 'question'} mr-1"></i>${status}`;
+            }
+        }
+
+        showSuccessMessage(message) {
+            const successDiv = document.createElement('div');
+            successDiv.className = 'fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded z-50';
+            successDiv.innerHTML = `<i class="fas fa-check mr-2"></i>${message}`;
+            document.body.appendChild(successDiv);
+
+            setTimeout(() => {
+                successDiv.remove();
+            }, 3000);
+        }
+
+        showErrorMessage(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50';
+            errorDiv.innerHTML = `<i class="fas fa-times mr-2"></i>${message}`;
+            document.body.appendChild(errorDiv);
+
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 5000);
+        }
+
+        showInfoMessage(message) {
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'fixed top-4 right-4 bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded z-50';
+            infoDiv.innerHTML = `<i class="fas fa-info mr-2"></i>${message}`;
+            document.body.appendChild(infoDiv);
+
+            setTimeout(() => {
+                infoDiv.remove();
+            }, 4000);
+        }
+    }
+
+    // Initialize the Knowledge Management System
+    let knowledgeManager;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize after a short delay to ensure all elements are loaded
+        setTimeout(() => {
+            knowledgeManager = new KnowledgeManagementSystem();
+        }, 600);
+    });
+
+    // ============================================================================
+    // END KNOWLEDGE MANAGEMENT SYSTEM
+    // ============================================================================
     </script>
 
     <!-- Modern implementation handles all initialization -->
