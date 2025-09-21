@@ -2183,6 +2183,301 @@
                                                     </div>
 
                                                 </div>
+
+                                                <!-- ============================================================================ -->
+                                                <!-- ENTERPRISE CRUD MODALS - PHASE 4.2
+                                                     📋 DESCRIPTION: Professional modal system for Knowledge Management CRUD operations
+                                                     🎯 PURPOSE: Beautiful, user-friendly forms for adding/editing Q&A, Templates, and Fallback
+                                                     🔧 FEATURES: Form validation, auto-keyword generation, category management, real-time preview
+                                                     📝 FUTURE EXPANSION: Bulk operations, import/export, AI-assisted content generation
+                                                     ⚠️  CRITICAL: All operations use Knowledge Management APIs with proper validation
+                                                -->
+                                                <!-- ============================================================================ -->
+
+                                                <!-- Company Q&A Modal -->
+                                                <div id="company-qna-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+                                                    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+                                                        <div class="mt-3">
+                                                            <!-- Modal Header -->
+                                                            <div class="flex items-center justify-between pb-4 border-b border-gray-200">
+                                                                <h3 id="company-qna-modal-title" class="text-lg font-semibold text-gray-900">Add Company Q&A</h3>
+                                                                <button id="close-company-qna-modal" class="text-gray-400 hover:text-gray-600 transition-colors">
+                                                                    <i class="fas fa-times text-xl"></i>
+                                                                </button>
+                                                            </div>
+
+                                                            <!-- Modal Body -->
+                                                            <div class="mt-4">
+                                                                <form id="company-qna-form" class="space-y-4">
+                                                                    <input type="hidden" id="qna-id" name="id">
+                                                                    
+                                                                    <!-- Question Field -->
+                                                                    <div>
+                                                                        <label for="qna-question" class="block text-sm font-medium text-gray-700 mb-1">Question *</label>
+                                                                        <input type="text" id="qna-question" name="question" required
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                                               placeholder="Enter the customer question...">
+                                                                        <p class="text-xs text-gray-500 mt-1">What customers typically ask about this topic</p>
+                                                                    </div>
+
+                                                                    <!-- Answer Field -->
+                                                                    <div>
+                                                                        <label for="qna-answer" class="block text-sm font-medium text-gray-700 mb-1">Answer *</label>
+                                                                        <textarea id="qna-answer" name="answer" required rows="4"
+                                                                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                                                  placeholder="Enter the complete answer..."></textarea>
+                                                                        <p class="text-xs text-gray-500 mt-1">Provide a clear, helpful response</p>
+                                                                    </div>
+
+                                                                    <!-- Category and Status Row -->
+                                                                    <div class="grid grid-cols-2 gap-4">
+                                                                        <div>
+                                                                            <label for="qna-category" class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                                                                            <select id="qna-category" name="category"
+                                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                                                                <option value="general">General</option>
+                                                                                <option value="services">Services</option>
+                                                                                <option value="pricing">Pricing</option>
+                                                                                <option value="emergency">Emergency</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label for="qna-status" class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                                                                            <select id="qna-status" name="status"
+                                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                                                                <option value="active">Active</option>
+                                                                                <option value="draft">Draft</option>
+                                                                                <option value="archived">Archived</option>
+                                                                            </select>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <!-- Keywords Field -->
+                                                                    <div>
+                                                                        <label for="qna-keywords" class="block text-sm font-medium text-gray-700 mb-1">Keywords</label>
+                                                                        <input type="text" id="qna-keywords" name="keywords"
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                                               placeholder="Enter keywords separated by commas...">
+                                                                        <p class="text-xs text-gray-500 mt-1">Keywords help match customer queries (auto-generated from question/answer)</p>
+                                                                    </div>
+
+                                                                    <!-- Confidence Field -->
+                                                                    <div>
+                                                                        <label for="qna-confidence" class="block text-sm font-medium text-gray-700 mb-1">Confidence Level</label>
+                                                                        <div class="flex items-center space-x-3">
+                                                                            <input type="range" id="qna-confidence" name="confidence" min="0.1" max="1" step="0.1" value="0.8"
+                                                                                   class="flex-1">
+                                                                            <span id="qna-confidence-value" class="text-sm font-medium text-gray-600 w-12">0.8</span>
+                                                                        </div>
+                                                                        <p class="text-xs text-gray-500 mt-1">How confident should the AI be to use this answer (0.1 = low, 1.0 = high)</p>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+
+                                                            <!-- Modal Footer -->
+                                                            <div class="flex items-center justify-between pt-4 border-t border-gray-200 mt-6">
+                                                                <button id="generate-keywords-btn" type="button" 
+                                                                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                                    <i class="fas fa-magic mr-2"></i>Auto-Generate Keywords
+                                                                </button>
+                                                                <div class="flex space-x-3">
+                                                                    <button id="cancel-company-qna" type="button" 
+                                                                            class="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors">
+                                                                        Cancel
+                                                                    </button>
+                                                                    <button id="save-company-qna" type="submit" 
+                                                                            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                                                        <i class="fas fa-save mr-2"></i>Save Q&A
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Trade Q&A Modal -->
+                                                <div id="trade-qna-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+                                                    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+                                                        <div class="mt-3">
+                                                            <!-- Modal Header -->
+                                                            <div class="flex items-center justify-between pb-4 border-b border-gray-200">
+                                                                <h3 id="trade-qna-modal-title" class="text-lg font-semibold text-gray-900">Add Trade Q&A</h3>
+                                                                <button id="close-trade-qna-modal" class="text-gray-400 hover:text-gray-600 transition-colors">
+                                                                    <i class="fas fa-times text-xl"></i>
+                                                                </button>
+                                                            </div>
+
+                                                            <!-- Modal Body -->
+                                                            <div class="mt-4">
+                                                                <form id="trade-qna-form" class="space-y-4">
+                                                                    <input type="hidden" id="trade-qna-id" name="id">
+                                                                    
+                                                                    <!-- Trade Category and Difficulty Row -->
+                                                                    <div class="grid grid-cols-2 gap-4">
+                                                                        <div>
+                                                                            <label for="trade-category" class="block text-sm font-medium text-gray-700 mb-1">Trade Category *</label>
+                                                                            <select id="trade-category" name="tradeCategory" required
+                                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                                                                                <option value="">Select Category</option>
+                                                                                <option value="hvac">HVAC</option>
+                                                                                <option value="plumbing">Plumbing</option>
+                                                                                <option value="electrical">Electrical</option>
+                                                                                <option value="general">General Contracting</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label for="trade-difficulty" class="block text-sm font-medium text-gray-700 mb-1">Difficulty Level</label>
+                                                                            <select id="trade-difficulty" name="difficulty"
+                                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                                                                                <option value="basic">Basic</option>
+                                                                                <option value="intermediate">Intermediate</option>
+                                                                                <option value="advanced">Advanced</option>
+                                                                                <option value="expert">Expert</option>
+                                                                            </select>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <!-- Question Field -->
+                                                                    <div>
+                                                                        <label for="trade-question" class="block text-sm font-medium text-gray-700 mb-1">Technical Question *</label>
+                                                                        <input type="text" id="trade-question" name="question" required
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                               placeholder="Enter the technical question...">
+                                                                        <p class="text-xs text-gray-500 mt-1">Industry-specific technical question</p>
+                                                                    </div>
+
+                                                                    <!-- Answer Field -->
+                                                                    <div>
+                                                                        <label for="trade-answer" class="block text-sm font-medium text-gray-700 mb-1">Technical Answer *</label>
+                                                                        <textarea id="trade-answer" name="answer" required rows="4"
+                                                                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                                  placeholder="Enter the detailed technical answer..."></textarea>
+                                                                        <p class="text-xs text-gray-500 mt-1">Provide technical expertise and guidance</p>
+                                                                    </div>
+
+                                                                    <!-- Keywords Field -->
+                                                                    <div>
+                                                                        <label for="trade-keywords" class="block text-sm font-medium text-gray-700 mb-1">Technical Keywords</label>
+                                                                        <input type="text" id="trade-keywords" name="keywords"
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                               placeholder="Enter technical keywords separated by commas...">
+                                                                        <p class="text-xs text-gray-500 mt-1">Technical terms and keywords for matching</p>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+
+                                                            <!-- Modal Footer -->
+                                                            <div class="flex items-center justify-between pt-4 border-t border-gray-200 mt-6">
+                                                                <button id="generate-trade-keywords-btn" type="button" 
+                                                                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                                    <i class="fas fa-magic mr-2"></i>Auto-Generate Keywords
+                                                                </button>
+                                                                <div class="flex space-x-3">
+                                                                    <button id="cancel-trade-qna" type="button" 
+                                                                            class="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors">
+                                                                        Cancel
+                                                                    </button>
+                                                                    <button id="save-trade-qna" type="submit" 
+                                                                            class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                                                        <i class="fas fa-save mr-2"></i>Save Trade Q&A
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Template Modal -->
+                                                <div id="template-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+                                                    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+                                                        <div class="mt-3">
+                                                            <!-- Modal Header -->
+                                                            <div class="flex items-center justify-between pb-4 border-b border-gray-200">
+                                                                <h3 id="template-modal-title" class="text-lg font-semibold text-gray-900">Add Response Template</h3>
+                                                                <button id="close-template-modal" class="text-gray-400 hover:text-gray-600 transition-colors">
+                                                                    <i class="fas fa-times text-xl"></i>
+                                                                </button>
+                                                            </div>
+
+                                                            <!-- Modal Body -->
+                                                            <div class="mt-4">
+                                                                <form id="template-form" class="space-y-4">
+                                                                    <input type="hidden" id="template-id" name="id">
+                                                                    
+                                                                    <!-- Template Name -->
+                                                                    <div>
+                                                                        <label for="template-name" class="block text-sm font-medium text-gray-700 mb-1">Template Name *</label>
+                                                                        <input type="text" id="template-name" name="name" required
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                                                               placeholder="Enter template name...">
+                                                                        <p class="text-xs text-gray-500 mt-1">Descriptive name for this template</p>
+                                                                    </div>
+
+                                                                    <!-- Type and Category Row -->
+                                                                    <div class="grid grid-cols-2 gap-4">
+                                                                        <div>
+                                                                            <label for="template-type" class="block text-sm font-medium text-gray-700 mb-1">Template Type *</label>
+                                                                            <select id="template-type" name="type" required
+                                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                                                                <option value="">Select Type</option>
+                                                                                <option value="greeting">Greeting</option>
+                                                                                <option value="closing">Closing</option>
+                                                                                <option value="escalation">Escalation</option>
+                                                                                <option value="information">Information</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label for="template-category" class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                                                                            <select id="template-category" name="category"
+                                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                                                                <option value="customer-service">Customer Service</option>
+                                                                                <option value="technical">Technical</option>
+                                                                                <option value="emergency">Emergency</option>
+                                                                                <option value="general">General</option>
+                                                                            </select>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <!-- Template Content -->
+                                                                    <div>
+                                                                        <label for="template-content" class="block text-sm font-medium text-gray-700 mb-1">Template Content *</label>
+                                                                        <textarea id="template-content" name="content" required rows="4"
+                                                                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                                                                  placeholder="Enter the template content..."></textarea>
+                                                                        <p class="text-xs text-gray-500 mt-1">The actual text that will be used in responses</p>
+                                                                    </div>
+
+                                                                    <!-- Keywords Field -->
+                                                                    <div>
+                                                                        <label for="template-keywords" class="block text-sm font-medium text-gray-700 mb-1">Trigger Keywords</label>
+                                                                        <input type="text" id="template-keywords" name="keywords"
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                                                               placeholder="Enter keywords that trigger this template...">
+                                                                        <p class="text-xs text-gray-500 mt-1">Keywords that should trigger this template</p>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+
+                                                            <!-- Modal Footer -->
+                                                            <div class="flex items-center justify-between pt-4 border-t border-gray-200 mt-6">
+                                                                <button id="preview-template-btn" type="button" 
+                                                                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                                    <i class="fas fa-eye mr-2"></i>Preview Template
+                                                                </button>
+                                                                <div class="flex space-x-3">
+                                                                    <button id="cancel-template" type="button" 
+                                                                            class="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors">
+                                                                        Cancel
+                                                                    </button>
+                                                                    <button id="save-template" type="submit" 
+                                                                            class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                                                        <i class="fas fa-save mr-2"></i>Save Template
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                                 
                                                 <!-- Agent Personality Tab - WORLD-CLASS SYSTEM -->
                                                 <div id="new-personality-content" class="new-ai-tab-content">
@@ -17766,17 +18061,349 @@ Key Metrics:
             });
         }
 
-        // Modal and action functions (placeholders for now)
+        /**
+         * 🎯 ENTERPRISE CRUD MODAL SYSTEM - PHASE 4.2
+         * 📋 Professional modal management for Knowledge Management operations
+         * ⚠️  CRITICAL: Full CRUD operations with API integration and validation
+         */
+
         showAddCompanyQnAModal() {
-            this.showInfoMessage('Add Company Q&A modal will be implemented in the next phase.');
+            this.openCompanyQnAModal('add');
         }
 
         showAddTradeQnAModal() {
-            this.showInfoMessage('Add Trade Q&A modal will be implemented in the next phase.');
+            this.openTradeQnAModal('add');
         }
 
         showAddTemplateModal() {
-            this.showInfoMessage('Add Template modal will be implemented in the next phase.');
+            this.openTemplateModal('add');
+        }
+
+        /**
+         * 🏢 COMPANY Q&A MODAL MANAGEMENT
+         */
+        openCompanyQnAModal(mode = 'add', qnaData = null) {
+            const modal = document.getElementById('company-qna-modal');
+            const title = document.getElementById('company-qna-modal-title');
+            const form = document.getElementById('company-qna-form');
+            
+            // Set modal title and mode
+            title.textContent = mode === 'add' ? 'Add Company Q&A' : 'Edit Company Q&A';
+            
+            // Reset form
+            form.reset();
+            
+            // Populate form if editing
+            if (mode === 'edit' && qnaData) {
+                document.getElementById('qna-id').value = qnaData.id || '';
+                document.getElementById('qna-question').value = qnaData.question || '';
+                document.getElementById('qna-answer').value = qnaData.answer || '';
+                document.getElementById('qna-category').value = qnaData.category || 'general';
+                document.getElementById('qna-status').value = qnaData.status || 'active';
+                document.getElementById('qna-keywords').value = qnaData.keywords?.join(', ') || '';
+                document.getElementById('qna-confidence').value = qnaData.confidence || 0.8;
+                document.getElementById('qna-confidence-value').textContent = qnaData.confidence || 0.8;
+            } else {
+                // Set defaults for new Q&A
+                document.getElementById('qna-confidence').value = 0.8;
+                document.getElementById('qna-confidence-value').textContent = '0.8';
+            }
+            
+            // Show modal
+            modal.classList.remove('hidden');
+            
+            // Focus on first input
+            setTimeout(() => {
+                document.getElementById('qna-question').focus();
+            }, 100);
+        }
+
+        closeCompanyQnAModal() {
+            const modal = document.getElementById('company-qna-modal');
+            modal.classList.add('hidden');
+        }
+
+        async saveCompanyQnA() {
+            try {
+                const form = document.getElementById('company-qna-form');
+                const formData = new FormData(form);
+                
+                // Validate required fields
+                const question = formData.get('question')?.trim();
+                const answer = formData.get('answer')?.trim();
+                
+                if (!question || !answer) {
+                    this.showErrorMessage('Please fill in all required fields');
+                    return;
+                }
+
+                // Prepare Q&A data
+                const qnaData = {
+                    question: question,
+                    answer: answer,
+                    category: formData.get('category') || 'general',
+                    status: formData.get('status') || 'active',
+                    keywords: formData.get('keywords') ? 
+                        formData.get('keywords').split(',').map(k => k.trim()).filter(k => k) : [],
+                    confidence: parseFloat(formData.get('confidence')) || 0.8
+                };
+
+                const qnaId = formData.get('id');
+                const isEdit = qnaId && qnaId.trim() !== '';
+
+                // Call appropriate API
+                const url = isEdit ? 
+                    `/api/company/${this.companyId}/knowledge-management/company-qna/${qnaId}` :
+                    `/api/company/${this.companyId}/knowledge-management/company-qna`;
+                
+                const method = isEdit ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    },
+                    body: JSON.stringify(qnaData)
+                });
+
+                if (response.ok) {
+                    this.showSuccessMessage(`Company Q&A ${isEdit ? 'updated' : 'added'} successfully!`);
+                    this.closeCompanyQnAModal();
+                    await this.loadKnowledgeData(); // Refresh data
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                    throw new Error(errorData.message || `Failed to ${isEdit ? 'update' : 'add'} Q&A`);
+                }
+
+            } catch (error) {
+                console.error('Error saving Company Q&A:', error);
+                this.showErrorMessage(`Failed to save Company Q&A: ${error.message}`);
+            }
+        }
+
+        /**
+         * 🔧 TRADE Q&A MODAL MANAGEMENT
+         */
+        openTradeQnAModal(mode = 'add', qnaData = null) {
+            const modal = document.getElementById('trade-qna-modal');
+            const title = document.getElementById('trade-qna-modal-title');
+            const form = document.getElementById('trade-qna-form');
+            
+            // Set modal title and mode
+            title.textContent = mode === 'add' ? 'Add Trade Q&A' : 'Edit Trade Q&A';
+            
+            // Reset form
+            form.reset();
+            
+            // Populate form if editing
+            if (mode === 'edit' && qnaData) {
+                document.getElementById('trade-qna-id').value = qnaData.id || '';
+                document.getElementById('trade-category').value = qnaData.tradeCategory || '';
+                document.getElementById('trade-difficulty').value = qnaData.difficulty || 'basic';
+                document.getElementById('trade-question').value = qnaData.question || '';
+                document.getElementById('trade-answer').value = qnaData.answer || '';
+                document.getElementById('trade-keywords').value = qnaData.keywords?.join(', ') || '';
+            } else {
+                // Set defaults for new Trade Q&A
+                document.getElementById('trade-difficulty').value = 'basic';
+            }
+            
+            // Show modal
+            modal.classList.remove('hidden');
+            
+            // Focus on first input
+            setTimeout(() => {
+                document.getElementById('trade-category').focus();
+            }, 100);
+        }
+
+        closeTradeQnAModal() {
+            const modal = document.getElementById('trade-qna-modal');
+            modal.classList.add('hidden');
+        }
+
+        async saveTradeQnA() {
+            try {
+                const form = document.getElementById('trade-qna-form');
+                const formData = new FormData(form);
+                
+                // Validate required fields
+                const tradeCategory = formData.get('tradeCategory')?.trim();
+                const question = formData.get('question')?.trim();
+                const answer = formData.get('answer')?.trim();
+                
+                if (!tradeCategory || !question || !answer) {
+                    this.showErrorMessage('Please fill in all required fields');
+                    return;
+                }
+
+                // Prepare Trade Q&A data
+                const qnaData = {
+                    tradeCategory: tradeCategory,
+                    difficulty: formData.get('difficulty') || 'basic',
+                    question: question,
+                    answer: answer,
+                    keywords: formData.get('keywords') ? 
+                        formData.get('keywords').split(',').map(k => k.trim()).filter(k => k) : []
+                };
+
+                const qnaId = formData.get('id');
+                const isEdit = qnaId && qnaId.trim() !== '';
+
+                // Call appropriate API
+                const url = isEdit ? 
+                    `/api/company/${this.companyId}/knowledge-management/trade-qna/${qnaId}` :
+                    `/api/company/${this.companyId}/knowledge-management/trade-qna`;
+                
+                const method = isEdit ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    },
+                    body: JSON.stringify(qnaData)
+                });
+
+                if (response.ok) {
+                    this.showSuccessMessage(`Trade Q&A ${isEdit ? 'updated' : 'added'} successfully!`);
+                    this.closeTradeQnAModal();
+                    await this.loadKnowledgeData(); // Refresh data
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                    throw new Error(errorData.message || `Failed to ${isEdit ? 'update' : 'add'} Trade Q&A`);
+                }
+
+            } catch (error) {
+                console.error('Error saving Trade Q&A:', error);
+                this.showErrorMessage(`Failed to save Trade Q&A: ${error.message}`);
+            }
+        }
+
+        /**
+         * 📄 TEMPLATE MODAL MANAGEMENT
+         */
+        openTemplateModal(mode = 'add', templateData = null) {
+            const modal = document.getElementById('template-modal');
+            const title = document.getElementById('template-modal-title');
+            const form = document.getElementById('template-form');
+            
+            // Set modal title and mode
+            title.textContent = mode === 'add' ? 'Add Response Template' : 'Edit Response Template';
+            
+            // Reset form
+            form.reset();
+            
+            // Populate form if editing
+            if (mode === 'edit' && templateData) {
+                document.getElementById('template-id').value = templateData.id || '';
+                document.getElementById('template-name').value = templateData.name || '';
+                document.getElementById('template-type').value = templateData.type || '';
+                document.getElementById('template-category').value = templateData.category || 'customer-service';
+                document.getElementById('template-content').value = templateData.content || '';
+                document.getElementById('template-keywords').value = templateData.keywords?.join(', ') || '';
+            } else {
+                // Set defaults for new template
+                document.getElementById('template-category').value = 'customer-service';
+            }
+            
+            // Show modal
+            modal.classList.remove('hidden');
+            
+            // Focus on first input
+            setTimeout(() => {
+                document.getElementById('template-name').focus();
+            }, 100);
+        }
+
+        closeTemplateModal() {
+            const modal = document.getElementById('template-modal');
+            modal.classList.add('hidden');
+        }
+
+        async saveTemplate() {
+            try {
+                const form = document.getElementById('template-form');
+                const formData = new FormData(form);
+                
+                // Validate required fields
+                const name = formData.get('name')?.trim();
+                const type = formData.get('type')?.trim();
+                const content = formData.get('content')?.trim();
+                
+                if (!name || !type || !content) {
+                    this.showErrorMessage('Please fill in all required fields');
+                    return;
+                }
+
+                // Prepare template data
+                const templateData = {
+                    name: name,
+                    type: type,
+                    category: formData.get('category') || 'customer-service',
+                    content: content,
+                    keywords: formData.get('keywords') ? 
+                        formData.get('keywords').split(',').map(k => k.trim()).filter(k => k) : []
+                };
+
+                const templateId = formData.get('id');
+                const isEdit = templateId && templateId.trim() !== '';
+
+                // Call appropriate API
+                const url = isEdit ? 
+                    `/api/company/${this.companyId}/knowledge-management/templates/${templateId}` :
+                    `/api/company/${this.companyId}/knowledge-management/templates`;
+                
+                const method = isEdit ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    },
+                    body: JSON.stringify(templateData)
+                });
+
+                if (response.ok) {
+                    this.showSuccessMessage(`Template ${isEdit ? 'updated' : 'added'} successfully!`);
+                    this.closeTemplateModal();
+                    await this.loadKnowledgeData(); // Refresh data
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                    throw new Error(errorData.message || `Failed to ${isEdit ? 'update' : 'add'} template`);
+                }
+
+            } catch (error) {
+                console.error('Error saving template:', error);
+                this.showErrorMessage(`Failed to save template: ${error.message}`);
+            }
+        }
+
+        /**
+         * 🎯 AUTO-KEYWORD GENERATION
+         */
+        generateKeywords(text, type = 'general') {
+            if (!text || text.trim().length === 0) return [];
+
+            const words = text.toLowerCase()
+                .replace(/[^\w\s]/g, ' ')
+                .split(/\s+/)
+                .filter(word => word.length > 2)
+                .filter(word => !this.isStopWord(word));
+
+            // Get unique words
+            const uniqueWords = [...new Set(words)];
+
+            // Limit to most relevant keywords
+            return uniqueWords.slice(0, 8);
+        }
+
+        isStopWord(word) {
+            const stopWords = ['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'who', 'boy', 'did', 'she', 'use', 'way', 'will', 'with'];
+            return stopWords.includes(word);
         }
 
         editCompanyQnA(qnaId) {
@@ -17982,8 +18609,115 @@ Key Metrics:
         // Initialize after a short delay to ensure all elements are loaded
         setTimeout(() => {
             knowledgeManager = new KnowledgeManagementSystem();
+            
+            // Initialize modal event listeners
+            initializeModalEventListeners();
         }, 600);
     });
+
+    /**
+     * 🎯 MODAL EVENT LISTENERS INITIALIZATION - PHASE 4.2
+     * 📋 Sets up all event listeners for CRUD modals
+     */
+    function initializeModalEventListeners() {
+        // Company Q&A Modal Events
+        document.getElementById('close-company-qna-modal')?.addEventListener('click', () => {
+            knowledgeManager.closeCompanyQnAModal();
+        });
+
+        document.getElementById('cancel-company-qna')?.addEventListener('click', () => {
+            knowledgeManager.closeCompanyQnAModal();
+        });
+
+        document.getElementById('save-company-qna')?.addEventListener('click', () => {
+            knowledgeManager.saveCompanyQnA();
+        });
+
+        document.getElementById('generate-keywords-btn')?.addEventListener('click', () => {
+            const question = document.getElementById('qna-question').value;
+            const answer = document.getElementById('qna-answer').value;
+            const combinedText = `${question} ${answer}`;
+            const keywords = knowledgeManager.generateKeywords(combinedText);
+            document.getElementById('qna-keywords').value = keywords.join(', ');
+        });
+
+        // Confidence slider update
+        document.getElementById('qna-confidence')?.addEventListener('input', (e) => {
+            document.getElementById('qna-confidence-value').textContent = e.target.value;
+        });
+
+        // Trade Q&A Modal Events
+        document.getElementById('close-trade-qna-modal')?.addEventListener('click', () => {
+            knowledgeManager.closeTradeQnAModal();
+        });
+
+        document.getElementById('cancel-trade-qna')?.addEventListener('click', () => {
+            knowledgeManager.closeTradeQnAModal();
+        });
+
+        document.getElementById('save-trade-qna')?.addEventListener('click', () => {
+            knowledgeManager.saveTradeQnA();
+        });
+
+        document.getElementById('generate-trade-keywords-btn')?.addEventListener('click', () => {
+            const question = document.getElementById('trade-question').value;
+            const answer = document.getElementById('trade-answer').value;
+            const combinedText = `${question} ${answer}`;
+            const keywords = knowledgeManager.generateKeywords(combinedText, 'technical');
+            document.getElementById('trade-keywords').value = keywords.join(', ');
+        });
+
+        // Template Modal Events
+        document.getElementById('close-template-modal')?.addEventListener('click', () => {
+            knowledgeManager.closeTemplateModal();
+        });
+
+        document.getElementById('cancel-template')?.addEventListener('click', () => {
+            knowledgeManager.closeTemplateModal();
+        });
+
+        document.getElementById('save-template')?.addEventListener('click', () => {
+            knowledgeManager.saveTemplate();
+        });
+
+        document.getElementById('preview-template-btn')?.addEventListener('click', () => {
+            const content = document.getElementById('template-content').value;
+            if (content) {
+                alert(`Template Preview:\n\n${content}`);
+            } else {
+                alert('Please enter template content to preview.');
+            }
+        });
+
+        // Close modals when clicking outside
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('fixed') && e.target.classList.contains('inset-0')) {
+                // Clicked on modal backdrop
+                if (e.target.id === 'company-qna-modal') {
+                    knowledgeManager.closeCompanyQnAModal();
+                } else if (e.target.id === 'trade-qna-modal') {
+                    knowledgeManager.closeTradeQnAModal();
+                } else if (e.target.id === 'template-modal') {
+                    knowledgeManager.closeTemplateModal();
+                }
+            }
+        });
+
+        // Handle Escape key to close modals
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (!document.getElementById('company-qna-modal').classList.contains('hidden')) {
+                    knowledgeManager.closeCompanyQnAModal();
+                } else if (!document.getElementById('trade-qna-modal').classList.contains('hidden')) {
+                    knowledgeManager.closeTradeQnAModal();
+                } else if (!document.getElementById('template-modal').classList.contains('hidden')) {
+                    knowledgeManager.closeTemplateModal();
+                }
+            }
+        });
+
+        console.log('✅ Modal event listeners initialized successfully');
+    }
 
     // ============================================================================
     // END KNOWLEDGE MANAGEMENT SYSTEM
