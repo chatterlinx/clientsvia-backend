@@ -54,6 +54,8 @@
     "passport-google-oauth20": "^2.0.0",
     "passport-jwt": "^4.0.1",
     "redis": "^5.5.6",
+    "ioredis": "^5.4.1",
+    "joi": "^17.13.3",
     "sentiment": "^5.0.2",
     "stopwords": "^0.0.9",
     "string-similarity": "^4.0.4",
