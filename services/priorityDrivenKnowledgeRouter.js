@@ -155,11 +155,20 @@ class PriorityDrivenKnowledgeRouter {
                         responseTime: sourceTime
                     });
 
+                    // Apply personality to the response before returning
+                    const personalizedResponse = await this.applyPersonality(
+                        companyId, 
+                        sourceResult.response, 
+                        sourceConfig.source
+                    );
+
                     context.finalMatch = {
                         source: sourceConfig.source,
                         confidence: sourceResult.confidence,
-                        response: sourceResult.response,
-                        metadata: sourceResult.metadata
+                        response: personalizedResponse,
+                        originalResponse: sourceResult.response,
+                        metadata: sourceResult.metadata,
+                        personalityApplied: personalizedResponse !== sourceResult.response
                     };
 
                     return this.buildSuccessResponse(context);
@@ -684,6 +693,123 @@ class PriorityDrivenKnowledgeRouter {
 
     generateRoutingId() {
         return `route_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    /**
+     * 🎭 PERSONALITY INTEGRATION - MAKE AI RESPONSES HUMAN
+     * 📋 Applies company personality settings to AI responses
+     * 🎯 PURPOSE: Transform robotic answers into human-like, company-branded responses
+     */
+    async applyPersonality(companyId, originalResponse, sourceType = 'general') {
+        try {
+            // Load personality configuration from cache
+            const personalityConfig = await aiAgentCacheService.get(`company:${companyId}:personality`);
+            
+            if (!personalityConfig || !personalityConfig.isCustomized) {
+                // No custom personality - return original response
+                return originalResponse;
+            }
+
+            let enhancedResponse = originalResponse;
+
+            // Apply core personality traits
+            if (personalityConfig.corePersonality) {
+                const { tone, formality, enthusiasm } = personalityConfig.corePersonality;
+                
+                // Adjust tone based on settings
+                if (tone === 'warm' && !enhancedResponse.includes('!')) {
+                    enhancedResponse = this.addWarmth(enhancedResponse);
+                } else if (tone === 'professional' && enhancedResponse.includes('!')) {
+                    enhancedResponse = this.makeProfessional(enhancedResponse);
+                }
+
+                // Apply formality level
+                if (formality === 'casual') {
+                    enhancedResponse = this.makeCasual(enhancedResponse);
+                } else if (formality === 'formal') {
+                    enhancedResponse = this.makeFormal(enhancedResponse);
+                }
+            }
+
+            // Add conversation patterns
+            if (personalityConfig.conversationPatterns) {
+                const { openingPhrases, closingPhrases } = personalityConfig.conversationPatterns;
+                
+                // Add opening phrase for certain response types
+                if (sourceType === 'company_qna' && openingPhrases && openingPhrases.length > 0) {
+                    const randomOpening = openingPhrases[Math.floor(Math.random() * openingPhrases.length)];
+                    enhancedResponse = `${randomOpening} ${enhancedResponse}`;
+                }
+
+                // Add closing phrase for complete responses
+                if (closingPhrases && closingPhrases.length > 0 && enhancedResponse.length > 50) {
+                    const randomClosing = closingPhrases[Math.floor(Math.random() * closingPhrases.length)];
+                    enhancedResponse = `${enhancedResponse} ${randomClosing}`;
+                }
+            }
+
+            // Apply emotional intelligence
+            if (personalityConfig.emotionalIntelligence?.empathyLevel === 'high') {
+                enhancedResponse = this.addEmpathy(enhancedResponse, sourceType);
+            }
+
+            logger.debug(`🎭 Personality applied to response`, {
+                companyId,
+                sourceType,
+                originalLength: originalResponse.length,
+                enhancedLength: enhancedResponse.length,
+                personalityApplied: true
+            });
+
+            return enhancedResponse;
+
+        } catch (error) {
+            logger.error(`❌ Error applying personality for company ${companyId}:`, error);
+            // Fallback to original response if personality fails
+            return originalResponse;
+        }
+    }
+
+    /**
+     * 🎭 PERSONALITY HELPER METHODS
+     */
+    addWarmth(response) {
+        // Add warmth without being overly casual
+        if (!response.includes('!') && !response.endsWith('?')) {
+            return response.replace(/\.$/, '!');
+        }
+        return response;
+    }
+
+    makeProfessional(response) {
+        // Remove excessive enthusiasm while maintaining helpfulness
+        return response.replace(/!+/g, '.').replace(/\s+/g, ' ').trim();
+    }
+
+    makeCasual(response) {
+        // Make language more conversational
+        return response
+            .replace(/We recommend/g, "We'd suggest")
+            .replace(/Please contact/g, "Feel free to reach out")
+            .replace(/We are pleased/g, "We're happy");
+    }
+
+    makeFormal(response) {
+        // Ensure professional language
+        return response
+            .replace(/We'd/g, "We would")
+            .replace(/can't/g, "cannot")
+            .replace(/won't/g, "will not");
+    }
+
+    addEmpathy(response, sourceType) {
+        // Add empathetic language based on context
+        if (sourceType === 'emergency' || response.toLowerCase().includes('problem')) {
+            return `I understand this can be concerning. ${response}`;
+        } else if (sourceType === 'service_request') {
+            return `I'd be happy to help you with that. ${response}`;
+        }
+        return response;
     }
 
     hashQuery(query) {
