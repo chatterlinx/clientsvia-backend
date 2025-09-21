@@ -32,7 +32,8 @@ const priorityFlowSchema = Joi.object({
     priority: Joi.number().integer().min(1).max(4).required(),
     threshold: Joi.number().min(0).max(1).required(),
     enabled: Joi.boolean().default(true),
-    fallbackBehavior: Joi.string().valid('continue', 'always_respond').default('continue')
+    fallbackBehavior: Joi.string().valid('continue', 'always_respond').default('continue'),
+    _id: Joi.string().optional() // Allow MongoDB ObjectId from frontend
 });
 
 const prioritiesUpdateSchema = Joi.object({
