@@ -41,12 +41,14 @@ const prioritiesUpdateSchema = Joi.object({
     memorySettings: Joi.object({
         useConversationContext: Joi.boolean().default(true),
         contextWindow: Joi.number().integer().min(1).max(10).default(5),
-        personalizeResponses: Joi.boolean().default(true)
+        personalizeResponses: Joi.boolean().default(true),
+        mode: Joi.string().valid('conversation', 'session', 'customer', 'none').default('conversation')
     }),
     fallbackBehavior: Joi.object({
         noMatchFound: Joi.string().valid('use_in_house_fallback', 'escalate_immediately').default('use_in_house_fallback'),
         lowConfidence: Joi.string().valid('escalate_or_fallback', 'use_fallback').default('escalate_or_fallback'),
-        systemError: Joi.string().valid('emergency_fallback', 'escalate_immediately').default('emergency_fallback')
+        systemError: Joi.string().valid('emergency_fallback', 'escalate_immediately').default('emergency_fallback'),
+        default: Joi.string().valid('continue', 'always_respond', 'escalate').default('always_respond')
     })
 });
 
