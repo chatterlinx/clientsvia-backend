@@ -60,6 +60,7 @@
     "stopwords": "^0.0.9",
     "string-similarity": "^4.0.4",
     "twilio": "^5.8.0",
+    "uuid": "^10.0.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {

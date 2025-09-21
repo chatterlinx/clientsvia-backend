@@ -75,6 +75,7 @@ async function loadAllRoutes() {
         // Knowledge Management Routes
         routes.newKnowledgeRoutes = await loadRouteWithTimeout('./routes/knowledge/companyKnowledge', 'newKnowledgeRoutes');
         routes.knowledgeSourcePrioritiesRoutes = await loadRouteWithTimeout('./routes/company/knowledgeSourcePriorities', 'knowledgeSourcePrioritiesRoutes');
+        routes.knowledgeManagementRoutes = await loadRouteWithTimeout('./routes/company/knowledgeManagement', 'knowledgeManagementRoutes');
         
         // Legacy Knowledge Settings (keeping for now as it handles different functionality)
         routes.companyKnowledgeRoutes = await loadRouteWithTimeout('./routes/company/knowledge', 'companyKnowledgeRoutes');
@@ -206,6 +207,7 @@ function registerRoutes(routes) {
     app.use('/api/company', routes.companyPersonalityRoutes); // MODULE 1: Agent Personality Settings
     app.use('/api/company', routes.companyKnowledgeRoutes); // MODULE 2: Knowledge Q&A Source Controls
     app.use('/api/company', routes.knowledgeSourcePrioritiesRoutes); // ENTERPRISE: Knowledge Source Priorities Management
+    app.use('/api/company', routes.knowledgeManagementRoutes); // ENTERPRISE: Knowledge Management System (Company Q&A, Trade Q&A, Templates)
     app.use('/api/knowledge', routes.newKnowledgeRoutes); // NEW: Company Q&A Knowledge Base Management
     app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     app.use('/api/company', routes.enhancedAgentSettingsRoutes); // Enhanced LLM Selector & Agent Settings
