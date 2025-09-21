@@ -1,11 +1,18 @@
 /**
- * 🎯 BLUEPRINT COMPLIANCE: Knowledge Router
- * Implements priority flow + thresholds for AI agent decisions
- * Core component of the production-ready AI Agent Logic system
+ * 🎯 PRIORITY-DRIVEN KNOWLEDGE ROUTER - PHASE 4.1 INTEGRATION
+ * 📋 DESCRIPTION: Enterprise-grade knowledge routing with priority-based decision making
+ * 🎯 PURPOSE: Seamlessly integrate new Priority-Driven Knowledge Router with existing AI Agent Runtime
+ * 🔧 FEATURES: 
+ *     - Backward compatibility with existing aiLoader configuration
+ *     - Priority-based routing through configured knowledge sources
+ *     - Sub-50ms performance with Redis caching
+ *     - Comprehensive logging and analytics
+ * ⚠️  CRITICAL: Maintains existing API while adding new priority-driven capabilities
  */
 
 const aiLoader = require('../config/aiLoader');
 const { getDB } = require('../../db');
+const priorityDrivenRouter = require('../../services/priorityDrivenKnowledgeRouter');
 
 class KnowledgeRouter {
     constructor() {
@@ -14,7 +21,9 @@ class KnowledgeRouter {
     }
 
     /**
-     * Route a user query through the knowledge priority flow
+     * 🎯 PRIORITY-DRIVEN ROUTE METHOD - PHASE 4.1
+     * 📋 Routes queries through new Priority-Driven Knowledge Router
+     * ⚠️  CRITICAL: Maintains backward compatibility while adding new capabilities
      * @param {Object} params - Routing parameters
      * @param {string} params.companyID - Company identifier
      * @param {string} params.text - User input text
@@ -23,7 +32,71 @@ class KnowledgeRouter {
      * @returns {Object} Routing result with trace
      */
     async route({ companyID, text, context = {}, config = null }) {
-        console.log(`🧠 Knowledge routing for company ${companyID}: "${text}"`);
+        console.log(`🎯 PRIORITY-DRIVEN routing for company ${companyID}: "${text}"`);
+        
+        try {
+            // 🚀 NEW: Use Priority-Driven Knowledge Router for enhanced routing
+            const priorityResult = await priorityDrivenRouter.routeQuery(companyID, text, {
+                context,
+                config,
+                legacyCompatibility: true
+            });
+
+            // Transform priority router result to match existing API format
+            if (priorityResult.success && priorityResult.response) {
+                const transformedResult = {
+                    text: priorityResult.response,
+                    source: priorityResult.source,
+                    score: priorityResult.confidence,
+                    confidence: priorityResult.confidence,
+                    metadata: priorityResult.metadata
+                };
+
+                const transformedTrace = this.transformPriorityTrace(priorityResult.metadata?.routingFlow || []);
+
+                console.log(`✅ Priority router success: ${priorityResult.source} (confidence: ${priorityResult.confidence})`);
+                
+                return {
+                    result: transformedResult,
+                    trace: transformedTrace
+                };
+            }
+
+            // If priority router didn't find a match, fall back to legacy system for backward compatibility
+            console.log(`⚠️ Priority router no match, falling back to legacy system`);
+            return await this.legacyRoute({ companyID, text, context, config });
+
+        } catch (error) {
+            console.error(`❌ Error in priority-driven routing, falling back to legacy:`, error);
+            // Fall back to legacy system on error
+            return await this.legacyRoute({ companyID, text, context, config });
+        }
+    }
+
+    /**
+     * 🔄 TRANSFORM PRIORITY TRACE TO LEGACY FORMAT
+     * 📋 Converts new priority routing trace to existing trace format
+     */
+    transformPriorityTrace(routingFlow) {
+        return routingFlow.map(step => ({
+            source: step.source,
+            score: step.confidence || 0,
+            matches: step.match ? 1 : 0,
+            selected: step.match || false,
+            keywords: step.matchedKeywords || [],
+            timestamp: new Date(),
+            priority: step.priority,
+            threshold: step.threshold,
+            responseTime: step.responseTime
+        }));
+    }
+
+    /**
+     * 🔙 LEGACY ROUTE METHOD - BACKWARD COMPATIBILITY
+     * 📋 Original routing logic maintained for fallback compatibility
+     */
+    async legacyRoute({ companyID, text, context = {}, config = null }) {
+        console.log(`🔙 Legacy routing for company ${companyID}: "${text}"`);
         
         // Use provided config or load it (avoid circular dependency)
         const cfg = config || await require('../config/aiLoader').get(companyID);
