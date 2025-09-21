@@ -18531,34 +18531,116 @@ Key Metrics:
         }
 
         editCompanyQnA(qnaId) {
-            this.showInfoMessage(`Edit Company Q&A ${qnaId} will be implemented in the next phase.`);
+            // Find the Q&A data from loaded knowledge
+            const qnaData = this.knowledgeData?.companyQnA?.find(qna => qna.id === qnaId);
+            if (qnaData) {
+                this.openCompanyQnAModal('edit', qnaData);
+            } else {
+                this.showErrorMessage('Q&A not found');
+            }
         }
 
-        deleteCompanyQnA(qnaId) {
-            if (confirm('Are you sure you want to delete this Q&A entry?')) {
-                this.showInfoMessage(`Delete Company Q&A ${qnaId} will be implemented in the next phase.`);
+        async deleteCompanyQnA(qnaId) {
+            if (!confirm('Are you sure you want to delete this Company Q&A? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/company-qna/${qnaId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    }
+                });
+
+                if (response.ok) {
+                    this.showSuccessMessage('Company Q&A deleted successfully!');
+                    await this.loadKnowledgeData(); // Refresh data
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                    throw new Error(errorData.message || 'Failed to delete Q&A');
+                }
+            } catch (error) {
+                console.error('Error deleting Company Q&A:', error);
+                this.showErrorMessage(`Failed to delete Q&A: ${error.message}`);
             }
         }
 
         editTradeQnA(qnaId) {
-            this.showInfoMessage(`Edit Trade Q&A ${qnaId} will be implemented in the next phase.`);
+            // Find the Trade Q&A data from loaded knowledge
+            const qnaData = this.knowledgeData?.tradeQnA?.find(qna => qna.id === qnaId);
+            if (qnaData) {
+                this.openTradeQnAModal('edit', qnaData);
+            } else {
+                this.showErrorMessage('Trade Q&A not found');
+            }
         }
 
-        deleteTradeQnA(qnaId) {
-            if (confirm('Are you sure you want to delete this Trade Q&A entry?')) {
-                this.showInfoMessage(`Delete Trade Q&A ${qnaId} will be implemented in the next phase.`);
+        async deleteTradeQnA(qnaId) {
+            if (!confirm('Are you sure you want to delete this Trade Q&A? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/trade-qna/${qnaId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    }
+                });
+
+                if (response.ok) {
+                    this.showSuccessMessage('Trade Q&A deleted successfully!');
+                    await this.loadKnowledgeData(); // Refresh data
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                    throw new Error(errorData.message || 'Failed to delete Trade Q&A');
+                }
+            } catch (error) {
+                console.error('Error deleting Trade Q&A:', error);
+                this.showErrorMessage(`Failed to delete Trade Q&A: ${error.message}`);
             }
         }
 
         editTemplate(templateId) {
-            this.showInfoMessage(`Edit Template ${templateId} will be implemented in the next phase.`);
-        }
-
-        deleteTemplate(templateId) {
-            if (confirm('Are you sure you want to delete this template?')) {
-                this.showInfoMessage(`Delete Template ${templateId} will be implemented in the next phase.`);
+            // Find the Template data from loaded knowledge
+            const templateData = this.knowledgeData?.templates?.find(template => template.id === templateId);
+            if (templateData) {
+                this.openTemplateModal('edit', templateData);
+            } else {
+                this.showErrorMessage('Template not found');
             }
         }
+
+        async deleteTemplate(templateId) {
+            if (!confirm('Are you sure you want to delete this template? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/templates/${templateId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    }
+                });
+
+                if (response.ok) {
+                    this.showSuccessMessage('Template deleted successfully!');
+                    await this.loadKnowledgeData(); // Refresh data
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                    throw new Error(errorData.message || 'Failed to delete template');
+                }
+            } catch (error) {
+                console.error('Error deleting template:', error);
+                this.showErrorMessage(`Failed to delete template: ${error.message}`);
+            }
+        }
+
+        // Duplicate functions removed - using enhanced versions above
+
+        // All CRUD functions now implemented above
 
         /**
          * 🛡️ SAVE IN-HOUSE FALLBACK CONFIGURATION
