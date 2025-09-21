@@ -16517,8 +16517,10 @@ Key Metrics:
                     const memoryMode = document.getElementById('memory-mode')?.value;
                     const fallbackBehavior = document.getElementById('fallback-behavior')?.value;
 
-                    const updatedPriorities = {
-                        ...this.priorities,
+                    // Clean data - remove fields that should be managed by API
+                    const cleanPriorities = {
+                        enabled: this.priorities.enabled,
+                        priorityFlow: this.priorities.priorityFlow,
                         memorySettings: {
                             ...this.priorities.memorySettings,
                             mode: memoryMode
@@ -16529,7 +16531,7 @@ Key Metrics:
                         }
                     };
 
-                    console.log('DEBUG: Data being sent to API:', JSON.stringify(updatedPriorities, null, 2));
+                    console.log('DEBUG: Clean data being sent to API:', JSON.stringify(cleanPriorities, null, 2));
 
                     const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities`, {
                         method: 'PUT',
@@ -16537,7 +16539,7 @@ Key Metrics:
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${this.getAuthToken()}`
                         },
-                        body: JSON.stringify(updatedPriorities)
+                        body: JSON.stringify(cleanPriorities)
                     });
 
                     if (response.ok) {
