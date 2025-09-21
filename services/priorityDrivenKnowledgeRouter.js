@@ -253,14 +253,27 @@ class PriorityDrivenKnowledgeRouter {
      */
     async queryCompanyQnA(companyId, query, context) {
         try {
-            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.companyQnA');
+            // 🔧 COMPATIBILITY FIX: Check both new and legacy Q&A locations
+            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.companyQnA companyKB');
             
-            if (!company?.aiAgentLogic?.knowledgeManagement?.companyQnA) {
-                return { confidence: 0, response: null, metadata: { source: 'companyQnA', error: 'No company Q&A data' } };
+            let companyQnA = [];
+            
+            // Try new structure first
+            if (company?.aiAgentLogic?.knowledgeManagement?.companyQnA) {
+                companyQnA = company.aiAgentLogic.knowledgeManagement.companyQnA;
+                logger.info(`🔍 Using NEW companyQnA structure: ${companyQnA.length} entries`, { routingId: context.routingId });
+            }
+            // Fallback to legacy structure
+            else if (company?.companyKB) {
+                companyQnA = company.companyKB;
+                logger.info(`🔍 Using LEGACY companyKB structure: ${companyQnA.length} entries`, { routingId: context.routingId });
+            }
+            
+            if (!companyQnA || companyQnA.length === 0) {
+                return { confidence: 0, response: null, metadata: { source: 'companyQnA', error: 'No company Q&A data found' } };
             }
 
-            const companyQnA = company.aiAgentLogic.knowledgeManagement.companyQnA;
-            const activeQnA = companyQnA.filter(qna => qna.status === 'active');
+            const activeQnA = companyQnA.filter(qna => qna.isActive !== false && qna.status !== 'inactive');
 
             let bestMatch = { confidence: 0, response: null, metadata: {} };
 
