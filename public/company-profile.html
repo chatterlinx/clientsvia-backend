@@ -244,6 +244,16 @@
             display: block;
         }
 
+        /* ============================================================================ */
+        /* KNOWLEDGE MANAGEMENT TAB STYLES - PHASE 3.2
+           📋 DESCRIPTION: CSS for Knowledge Management sub-tab navigation and content
+           🎯 PURPOSE: Handle 4-tab navigation within Knowledge Management (Company Q&A, Trade Q&A, Templates, Fallback)
+           🔧 FEATURES: Active state management, smooth transitions, responsive design
+           📝 FUTURE EXPANSION: Add animations, dark mode support, mobile optimizations
+           ⚠️  CRITICAL: .km-tab-btn and .km-tab-content classes control sub-tab visibility
+        */
+        /* ============================================================================ */
+        
         /* Knowledge Management Tab Styles */
         .km-tab-btn {
             transition: all 0.2s ease-in-out;
@@ -1683,6 +1693,16 @@
                                             <!-- Tab Content Areas -->
                                             <div id="new-ai-tab-content" class="mt-4">
                                                 
+                                                <!-- ============================================================================ -->
+                                                <!-- KNOWLEDGE SOURCE PRIORITIES TAB - PHASE 3.1 
+                                                     📋 DESCRIPTION: Drag & drop priority management for AI agent knowledge routing
+                                                     🎯 PURPOSE: Configure how AI agent prioritizes different knowledge sources
+                                                     🔧 FEATURES: Priority reordering, threshold adjustment, real-time testing
+                                                     📝 FUTURE EXPANSION: Add custom knowledge sources, A/B testing, analytics
+                                                     ⚠️  CRITICAL: All settings save to aiAgentLogic.knowledgeSourcePriorities in MongoDB + Redis
+                                                -->
+                                                <!-- ============================================================================ -->
+                                                
                                                 <!-- Knowledge Source Priorities Tab -->
                                                 <div id="new-knowledge-content" class="new-ai-tab-content active">
                                                     
@@ -1840,6 +1860,22 @@
                                                     
                                                 </div>
 
+                                                <!-- ============================================================================ -->
+                                                <!-- KNOWLEDGE MANAGEMENT TAB - PHASE 3.2 
+                                                     📋 DESCRIPTION: Complete knowledge base management system with 4 sub-tabs
+                                                     🎯 PURPOSE: Manage Company Q&A, Trade Q&A, Templates, and In-House Fallback
+                                                     🔧 FEATURES: CRUD operations, search/filter, category management, testing
+                                                     📝 FUTURE EXPANSION: Bulk import/export, AI-assisted Q&A generation, analytics
+                                                     ⚠️  CRITICAL: All data saves to aiAgentLogic.knowledgeManagement in MongoDB + Redis
+                                                     
+                                                     SUB-TABS STRUCTURE:
+                                                     1. Company Q&A: Business-specific questions (categories: general, services, pricing, emergency)
+                                                     2. Trade Q&A: Industry knowledge (HVAC, Plumbing, Electrical, General Contracting)
+                                                     3. Templates: Reusable responses (greetings, closings, escalations, information)
+                                                     4. In-House Fallback: Keyword-based smart responses (service, booking, emergency, general)
+                                                -->
+                                                <!-- ============================================================================ -->
+
                                                 <!-- Knowledge Management Tab -->
                                                 <div id="new-knowledge-mgmt-content" class="new-ai-tab-content">
                                                     
@@ -1902,6 +1938,15 @@
                                                             </nav>
                                                         </div>
 
+                                                        <!-- ========================================== -->
+                                                        <!-- COMPANY Q&A SUB-TAB 
+                                                             📋 Business-specific questions and answers
+                                                             🔧 Features: Search, category filter, status management
+                                                             📝 Categories: general, services, pricing, emergency
+                                                             ⚠️  Status: active, draft, archived
+                                                        -->
+                                                        <!-- ========================================== -->
+                                                        
                                                         <!-- Company Q&A Tab Content -->
                                                         <div id="km-company-content" class="km-tab-content active p-6">
                                                             <div class="flex items-center justify-between mb-4">
@@ -1948,6 +1993,15 @@
                                                             </div>
                                                         </div>
 
+                                                        <!-- ========================================== -->
+                                                        <!-- TRADE Q&A SUB-TAB 
+                                                             📋 Industry-specific technical knowledge
+                                                             🔧 Features: Trade category selection, difficulty levels
+                                                             📝 Categories: HVAC, Plumbing, Electrical, General Contracting
+                                                             ⚠️  Difficulty: basic, intermediate, advanced, expert
+                                                        -->
+                                                        <!-- ========================================== -->
+
                                                         <!-- Trade Q&A Tab Content -->
                                                         <div id="km-trade-content" class="km-tab-content p-6">
                                                             <div class="flex items-center justify-between mb-4">
@@ -1974,6 +2028,15 @@
                                                                 <!-- Trade Q&A items will be dynamically loaded here -->
                                                             </div>
                                                         </div>
+
+                                                        <!-- ========================================== -->
+                                                        <!-- TEMPLATES SUB-TAB 
+                                                             📋 Reusable response templates for standardized communication
+                                                             🔧 Features: Visual template cards, usage tracking, categories
+                                                             📝 Types: greeting, closing, escalation, information
+                                                             ⚠️  Categories: customer service, technical, emergency, general
+                                                        -->
+                                                        <!-- ========================================== -->
 
                                                         <!-- Templates Tab Content -->
                                                         <div id="km-templates-content" class="km-tab-content p-6">
@@ -2008,6 +2071,15 @@
                                                                 <!-- Template items will be dynamically loaded here -->
                                                             </div>
                                                         </div>
+
+                                                        <!-- ========================================== -->
+                                                        <!-- IN-HOUSE FALLBACK SUB-TAB 
+                                                             📋 Smart keyword-based responses for unmatched queries
+                                                             🔧 Features: Keyword management, response categories, real-time save
+                                                             📝 Categories: Service Requests, Booking Requests, Emergency, General
+                                                             ⚠️  CRITICAL: This is the final fallback - always responds (0.5 threshold)
+                                                        -->
+                                                        <!-- ========================================== -->
 
                                                         <!-- In-House Fallback Tab Content -->
                                                         <div id="km-fallback-content" class="km-tab-content p-6">
@@ -2071,6 +2143,15 @@
                                                             </div>
                                                         </div>
                                                     </div>
+
+                                                    <!-- ========================================== -->
+                                                    <!-- KNOWLEDGE BASE TESTING PANEL 
+                                                         📋 Real-time testing of knowledge base responses
+                                                         🔧 Features: Custom query input, instant results, integration with priority flow
+                                                         📝 Tests: Company Q&A, Trade Q&A, Templates, Fallback responses
+                                                         ⚠️  Integration: Works with Knowledge Management APIs for live testing
+                                                    -->
+                                                    <!-- ========================================== -->
 
                                                     <!-- Knowledge Testing Panel -->
                                                     <div class="bg-white border border-gray-200 rounded-lg p-6">
@@ -16440,10 +16521,19 @@ Key Metrics:
             }
         });
 
-        // ============================================================================
-        // KNOWLEDGE SOURCE PRIORITIES MANAGEMENT SYSTEM
-        // Enterprise-grade drag & drop priority management with real-time testing
-        // ============================================================================
+    // ============================================================================
+    // KNOWLEDGE SOURCE PRIORITIES MANAGEMENT SYSTEM - PHASE 3.1
+    // 📋 DESCRIPTION: Enterprise-grade drag & drop priority management with real-time testing
+    // 🎯 PURPOSE: Configure AI agent's knowledge source routing priorities and thresholds
+    // 🔧 FEATURES: Drag & drop reordering, threshold sliders, enable/disable toggles, real-time testing
+    // 📝 FUTURE EXPANSION: A/B testing, analytics dashboard, custom knowledge sources, ML optimization
+    // ⚠️  CRITICAL NOTES:
+    //     - All data saves to Company.aiAgentLogic.knowledgeSourcePriorities (MongoDB + Redis)
+    //     - Priority flow: companyQnA (0.8) → tradeQnA (0.75) → templates (0.7) → inHouseFallback (0.5)
+    //     - Uses JWT authentication with multiple token fallback sources
+    //     - Integrates with /api/company/:companyId/knowledge-source-priorities endpoints
+    //     - Real-time testing via /api/company/:companyId/priority-flow-testing/test-complete-flow
+    // ============================================================================
 
         class KnowledgeSourcePrioritiesManager {
             constructor() {
@@ -16453,8 +16543,14 @@ Key Metrics:
                 this.init();
             }
 
-            async init() {
-                console.log('Initializing Knowledge Source Priorities Manager...');
+        /**
+         * 🚀 INITIALIZATION METHOD
+         * 📋 Sets up the Knowledge Source Priorities Manager
+         * ⚠️  CRITICAL: Must get companyId before proceeding
+         * 🔧 Initializes event listeners and loads initial data
+         */
+        async init() {
+            console.log('Initializing Knowledge Source Priorities Manager...');
                 
                 // Get company ID from URL or global variable
                 this.companyId = this.getCompanyId();
@@ -16480,9 +16576,15 @@ Key Metrics:
                        localStorage.getItem('currentCompanyId');
             }
 
-            getAuthToken() {
-                // Try multiple token storage locations for maximum compatibility
-                // Check adminToken first as it's the primary token used by login system
+        /**
+         * 🔐 AUTHENTICATION TOKEN RETRIEVAL
+         * 📋 Gets JWT token from multiple storage locations for maximum compatibility
+         * ⚠️  CRITICAL: adminToken is PRIMARY - used by ClientsVia login system
+         * 🔧 Fallback order: adminToken → authToken → sessionStorage → localStorage → cookies
+         */
+        getAuthToken() {
+            // Try multiple token storage locations for maximum compatibility
+            // Check adminToken first as it's the primary token used by login system
                 return localStorage.getItem('adminToken') ||  // PRIMARY: Used by login system
                        localStorage.getItem('authToken') || 
                        sessionStorage.getItem('authToken') ||
@@ -16794,9 +16896,15 @@ Key Metrics:
                 }
             }
 
-            async savePriorities() {
-                try {
-                    console.log('Saving priorities...');
+        /**
+         * 💾 SAVE PRIORITIES TO DATABASE
+         * 📋 Saves priority configuration to MongoDB + Redis
+         * ⚠️  CRITICAL: Cleans data before sending - removes metadata fields
+         * 🔧 Updates version, clears cache, and provides user feedback
+         */
+        async savePriorities() {
+            try {
+                console.log('Saving priorities...');
 
                     // Collect global settings
                     const memoryMode = document.getElementById('memory-mode')?.value;
@@ -17115,8 +17223,27 @@ Key Metrics:
     // ============================================================================
 
     // ============================================================================
-    // KNOWLEDGE MANAGEMENT SYSTEM
-    // Enterprise-grade knowledge base management with Company Q&A, Trade Q&A, Templates, and Fallback
+    // KNOWLEDGE MANAGEMENT SYSTEM - PHASE 3.2
+    // 📋 DESCRIPTION: Enterprise-grade knowledge base management with 4 sub-systems
+    // 🎯 PURPOSE: Complete CRUD operations for all AI agent knowledge sources
+    // 🔧 FEATURES: 
+    //     - Company Q&A: Business-specific questions with search/filter/categories
+    //     - Trade Q&A: Industry knowledge with trade categories and difficulty levels
+    //     - Templates: Reusable response patterns with visual type selection
+    //     - In-House Fallback: Smart keyword-based responses for unmatched queries
+    // 📝 FUTURE EXPANSION: 
+    //     - Bulk import/export functionality
+    //     - AI-assisted Q&A generation
+    //     - Analytics and usage tracking
+    //     - Version control and approval workflows
+    //     - Multi-language support
+    // ⚠️  CRITICAL NOTES:
+    //     - All data saves to Company.aiAgentLogic.knowledgeManagement (MongoDB + Redis)
+    //     - Uses JWT authentication with adminToken priority
+    //     - Integrates with /api/company/:companyId/knowledge-management endpoints
+    //     - Real-time testing via /api/company/:companyId/knowledge-management/test-ai-agent
+    //     - Sub-tab navigation uses .km-tab-btn and .km-tab-content classes
+    //     - Search/filter functions work on DOM elements for instant results
     // ============================================================================
 
     class KnowledgeManagementSystem {
@@ -17127,6 +17254,12 @@ Key Metrics:
             this.init();
         }
 
+        /**
+         * 🚀 KNOWLEDGE MANAGEMENT INITIALIZATION
+         * 📋 Sets up the complete Knowledge Management System
+         * ⚠️  CRITICAL: Must get companyId and initialize all 4 sub-tabs
+         * 🔧 Loads Company Q&A, Trade Q&A, Templates, and In-House Fallback
+         */
         async init() {
             console.log('Initializing Knowledge Management System...');
             
@@ -17384,6 +17517,12 @@ Key Metrics:
             }
         }
 
+        /**
+         * 🏢 RENDER COMPANY Q&A LIST
+         * 📋 Dynamically creates Company Q&A items with search/filter support
+         * ⚠️  CRITICAL: Handles empty states and category color coding
+         * 🔧 Creates interactive items with edit/delete buttons
+         */
         renderCompanyQnA() {
             const container = document.getElementById('company-qna-list');
             const emptyState = document.getElementById('company-qna-empty');
@@ -17670,6 +17809,12 @@ Key Metrics:
             }
         }
 
+        /**
+         * 🛡️ SAVE IN-HOUSE FALLBACK CONFIGURATION
+         * 📋 Saves keyword-based fallback responses to database
+         * ⚠️  CRITICAL: This is the final fallback - must always work
+         * 🔧 Parses keywords from comma-separated input, saves to API
+         */
         async saveFallbackConfiguration() {
             try {
                 const fallbackConfig = {
