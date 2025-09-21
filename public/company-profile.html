@@ -16196,12 +16196,22 @@ Key Metrics:
             }
 
             getAuthToken() {
-                // Try multiple methods to get auth token
-                return localStorage.getItem('token') || 
+                // Try multiple token storage locations for maximum compatibility
+                // Check adminToken first as it's the primary token used by login system
+                return localStorage.getItem('adminToken') ||  // PRIMARY: Used by login system
+                       localStorage.getItem('authToken') || 
+                       sessionStorage.getItem('authToken') ||
+                       localStorage.getItem('token') || 
                        sessionStorage.getItem('token') ||
-                       window.authToken ||
-                       document.querySelector('meta[name="auth-token"]')?.getAttribute('content') ||
-                       '';
+                       this.getCookieValue('token') || 
+                       this.getCookieValue('authToken') || '';
+            }
+
+            getCookieValue(name) {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop().split(';').shift();
+                return '';
             }
 
             initEventListeners() {
@@ -16277,13 +16287,15 @@ Key Metrics:
 
             async loadPriorities() {
                 try {
+                    const token = this.getAuthToken();
                     console.log(`Loading priorities for company ${this.companyId}...`);
+                    console.log(`Auth token available: ${token ? 'YES (length: ' + token.length + ')' : 'NO'}`);
                     
                     const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities`, {
                         method: 'GET',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${this.getAuthToken()}`
+                            'Authorization': `Bearer ${token}`
                         }
                     });
 
