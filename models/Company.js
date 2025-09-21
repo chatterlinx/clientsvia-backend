@@ -743,6 +743,462 @@ const companySchema = new mongoose.Schema({
                 default: [] // Will be populated based on selected trade categories
             }
         },
+
+        // 🚀 ENTERPRISE AI AGENT MANAGEMENT SYSTEM - UNIFIED ARCHITECTURE
+        // ================================================================
+        // Complete Knowledge Management + Personality + Priorities System
+        // Multi-tenant, Redis-cached, sub-50ms performance
+        // ================================================================
+        
+        // 🎯 KNOWLEDGE SOURCE PRIORITIES - THE BRAIN
+        knowledgeSourcePriorities: {
+            enabled: { type: Boolean, default: true },
+            version: { type: Number, default: 1 },
+            lastUpdated: { type: Date, default: Date.now },
+            
+            // Priority Flow Configuration
+            priorityFlow: [{
+                source: { 
+                    type: String, 
+                    enum: ['companyQnA', 'tradeQnA', 'templates', 'inHouseFallback'],
+                    required: true 
+                },
+                priority: { type: Number, min: 1, max: 4, required: true },
+                threshold: { type: Number, min: 0, max: 1, required: true },
+                enabled: { type: Boolean, default: true },
+                fallbackBehavior: { 
+                    type: String, 
+                    enum: ['continue', 'always_respond'], 
+                    default: 'continue' 
+                }
+            }],
+            
+            // Default Priority Flow
+            _defaultFlow: {
+                type: [{
+                    source: String,
+                    priority: Number,
+                    threshold: Number,
+                    enabled: Boolean,
+                    fallbackBehavior: String
+                }],
+                default: [
+                    { source: 'companyQnA', priority: 1, threshold: 0.8, enabled: true, fallbackBehavior: 'continue' },
+                    { source: 'tradeQnA', priority: 2, threshold: 0.75, enabled: true, fallbackBehavior: 'continue' },
+                    { source: 'templates', priority: 3, threshold: 0.7, enabled: true, fallbackBehavior: 'continue' },
+                    { source: 'inHouseFallback', priority: 4, threshold: 0.5, enabled: true, fallbackBehavior: 'always_respond' }
+                ]
+            },
+            
+            // Advanced Priority Settings
+            memorySettings: {
+                useConversationContext: { type: Boolean, default: true },
+                contextWindow: { type: Number, min: 1, max: 10, default: 5 },
+                personalizeResponses: { type: Boolean, default: true }
+            },
+            
+            // Fallback Behavior Configuration
+            fallbackBehavior: {
+                noMatchFound: { 
+                    type: String, 
+                    enum: ['use_in_house_fallback', 'escalate_immediately'], 
+                    default: 'use_in_house_fallback' 
+                },
+                lowConfidence: { 
+                    type: String, 
+                    enum: ['escalate_or_fallback', 'use_fallback'], 
+                    default: 'escalate_or_fallback' 
+                },
+                systemError: { 
+                    type: String, 
+                    enum: ['emergency_fallback', 'escalate_immediately'], 
+                    default: 'emergency_fallback' 
+                }
+            },
+            
+            // Performance Metrics
+            performance: {
+                avgResponseTime: { type: Number, default: 0 },
+                successRate: { type: Number, default: 0 },
+                totalQueries: { type: Number, default: 0 },
+                lastOptimized: { type: Date, default: Date.now }
+            }
+        },
+
+        // 📚 KNOWLEDGE MANAGEMENT SYSTEM - THE DATA
+        knowledgeManagement: {
+            version: { type: Number, default: 1 },
+            lastUpdated: { type: Date, default: Date.now },
+            
+            // Company Q&A (Priority #1)
+            companyQnA: [{
+                id: { type: String, required: true },
+                question: { type: String, required: true, trim: true },
+                answer: { type: String, required: true, trim: true },
+                keywords: [{ type: String, trim: true }],
+                confidence: { type: Number, min: 0, max: 1, default: 0.8 },
+                status: { type: String, enum: ['active', 'inactive', 'draft'], default: 'active' },
+                category: { type: String, trim: true, default: 'general' },
+                
+                // Performance Tracking
+                performance: {
+                    responseTime: { type: Number, default: 0 },
+                    accuracy: { type: Number, default: 0 },
+                    usageCount: { type: Number, default: 0 },
+                    lastUsed: { type: Date }
+                },
+                
+                // Metadata
+                createdAt: { type: Date, default: Date.now },
+                updatedAt: { type: Date, default: Date.now },
+                createdBy: { type: String, default: 'admin' }
+            }],
+            
+            // Trade Q&A (Priority #2)
+            tradeQnA: [{
+                id: { type: String, required: true },
+                question: { type: String, required: true, trim: true },
+                answer: { type: String, required: true, trim: true },
+                tradeCategory: { type: String, required: true, trim: true },
+                keywords: [{ type: String, trim: true }],
+                confidence: { type: Number, min: 0, max: 1, default: 0.75 },
+                status: { type: String, enum: ['active', 'inactive', 'draft'], default: 'active' },
+                isGlobal: { type: Boolean, default: false }, // global vs company-specific
+                
+                // Performance Tracking
+                performance: {
+                    responseTime: { type: Number, default: 0 },
+                    accuracy: { type: Number, default: 0 },
+                    usageCount: { type: Number, default: 0 },
+                    lastUsed: { type: Date }
+                },
+                
+                // Metadata
+                createdAt: { type: Date, default: Date.now },
+                updatedAt: { type: Date, default: Date.now },
+                source: { type: String, enum: ['company', 'global', 'imported'], default: 'company' }
+            }],
+            
+            // Templates & Keywords (Priority #3)
+            templates: [{
+                id: { type: String, required: true },
+                name: { type: String, required: true, trim: true },
+                template: { type: String, required: true, trim: true },
+                keywords: [{ type: String, trim: true }],
+                category: { 
+                    type: String, 
+                    enum: ['greeting', 'service', 'booking', 'emergency', 'hours', 'closing'], 
+                    required: true 
+                },
+                confidence: { type: Number, min: 0, max: 1, default: 0.7 },
+                status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+                
+                // Template Variables
+                variables: [{
+                    name: { type: String, required: true },
+                    description: { type: String, default: '' },
+                    required: { type: Boolean, default: false }
+                }],
+                
+                // Performance Tracking
+                performance: {
+                    usageCount: { type: Number, default: 0 },
+                    lastUsed: { type: Date }
+                },
+                
+                // Metadata
+                createdAt: { type: Date, default: Date.now },
+                updatedAt: { type: Date, default: Date.now }
+            }],
+            
+            // In-House Fallback System (Priority #4)
+            inHouseFallback: {
+                enabled: { type: Boolean, default: true },
+                
+                // Intent Detection Keywords
+                serviceKeywords: {
+                    type: [String],
+                    default: ['service', 'repair', 'fix', 'broken', 'problem', 'issue', 'help', 'maintenance']
+                },
+                bookingKeywords: {
+                    type: [String],
+                    default: ['appointment', 'schedule', 'book', 'visit', 'come out', 'when can you', 'available']
+                },
+                emergencyKeywords: {
+                    type: [String],
+                    default: ['emergency', 'urgent', 'asap', 'right now', 'immediately', 'broken down']
+                },
+                hoursKeywords: {
+                    type: [String],
+                    default: ['hours', 'open', 'closed', 'when do you', 'what time', 'available']
+                },
+                
+                // Fallback Responses
+                responses: {
+                    service: {
+                        type: String,
+                        default: 'I understand you need service. Let me connect you with one of our technicians who can help you right away.'
+                    },
+                    booking: {
+                        type: String,
+                        default: 'I\'d be happy to help you schedule an appointment. Let me connect you with our scheduling team.'
+                    },
+                    emergency: {
+                        type: String,
+                        default: 'This sounds urgent. Let me connect you with our emergency team immediately.'
+                    },
+                    hours: {
+                        type: String,
+                        default: 'We\'re available during business hours. Let me connect you with someone who can provide our current schedule.'
+                    },
+                    general: {
+                        type: String,
+                        default: 'I want to make sure you get the best help possible. Let me connect you with a specialist.'
+                    }
+                },
+                
+                // Performance Tracking
+                performance: {
+                    totalFallbacks: { type: Number, default: 0 },
+                    successRate: { type: Number, default: 0 },
+                    avgConfidence: { type: Number, default: 0.5 }
+                }
+            },
+            
+            // Knowledge Management Statistics
+            statistics: {
+                totalEntries: { type: Number, default: 0 },
+                activeEntries: { type: Number, default: 0 },
+                avgConfidence: { type: Number, default: 0 },
+                lastOptimized: { type: Date, default: Date.now }
+            }
+        },
+
+        // 🎭 WORLD-CLASS AI AGENT PERSONALITY SYSTEM - THE STYLE
+        personalitySystem: {
+            version: { type: Number, default: 1 },
+            lastUpdated: { type: Date, default: Date.now },
+            isCustomized: { type: Boolean, default: false },
+            safeZoneProfile: { type: String, default: 'enterprise-professional' },
+            
+            // Core Personality & Voice
+            corePersonality: {
+                voiceTone: { 
+                    type: String, 
+                    enum: ['friendly', 'professional', 'authoritative', 'empathetic'], 
+                    default: 'friendly' 
+                },
+                speechPace: { 
+                    type: String, 
+                    enum: ['slow', 'normal', 'fast'], 
+                    default: 'normal' 
+                },
+                formalityLevel: { 
+                    type: String, 
+                    enum: ['casual', 'business', 'formal'], 
+                    default: 'business' 
+                },
+                empathyLevel: { 
+                    type: Number, 
+                    min: 1, 
+                    max: 5, 
+                    default: 4 
+                },
+                technicalDepth: { 
+                    type: String, 
+                    enum: ['simple', 'moderate', 'detailed'], 
+                    default: 'moderate' 
+                },
+                useCustomerName: { type: Boolean, default: true },
+                confidenceLevel: { 
+                    type: String, 
+                    enum: ['humble', 'balanced', 'confident'], 
+                    default: 'balanced' 
+                }
+            },
+            
+            // Emotional Intelligence & Empathy
+            emotionalIntelligence: {
+                recognizeEmotions: { type: Boolean, default: true },
+                respondToFrustration: { type: Boolean, default: true },
+                showEmpathy: { type: Boolean, default: true },
+                adaptToMood: { type: Boolean, default: true },
+                
+                // Emotional Response Phrases
+                frustrationPhrases: {
+                    type: [String],
+                    default: [
+                        'I understand your frustration',
+                        'I can hear that this is really important to you',
+                        'Let me make sure we get this resolved for you'
+                    ]
+                },
+                empathyPhrases: {
+                    type: [String],
+                    default: [
+                        'I completely understand',
+                        'That must be really inconvenient',
+                        'I can imagine how concerning that would be'
+                    ]
+                },
+                reassurancePhrases: {
+                    type: [String],
+                    default: [
+                        'We\'ll take care of this for you',
+                        'You\'re in good hands',
+                        'We\'ve handled this many times before'
+                    ]
+                }
+            },
+            
+            // Advanced Conversation Patterns
+            conversationPatterns: {
+                // Natural Flow Control
+                openingPhrases: {
+                    type: [String],
+                    default: [
+                        'Thanks for calling! How can I help you today?',
+                        'Good morning! What can I do for you?',
+                        'Hi there! How may I assist you?'
+                    ]
+                },
+                clarifyingQuestions: {
+                    type: [String],
+                    default: [
+                        'Can you tell me a bit more about that?',
+                        'Just to make sure I understand...',
+                        'What specific issue are you experiencing?'
+                    ]
+                },
+                closingPhrases: {
+                    type: [String],
+                    default: [
+                        'Is there anything else I can help you with?',
+                        'Thanks for calling! Have a great day!',
+                        'We appreciate your business!'
+                    ]
+                },
+                
+                // Intelligent Response Patterns
+                fillerPhrases: {
+                    type: [String],
+                    default: [
+                        'Let me check that for you...',
+                        'Give me just a moment...',
+                        'Let me look into that...'
+                    ]
+                },
+                waitAcknowledgments: {
+                    type: [String],
+                    default: [
+                        'I\'m still here with you',
+                        'Just a moment longer...',
+                        'Almost got it...'
+                    ]
+                },
+                understandingConfirmation: {
+                    type: [String],
+                    default: [
+                        'So what I\'m hearing is...',
+                        'Just to confirm...',
+                        'Let me make sure I have this right...'
+                    ]
+                },
+                
+                // Response Timing
+                responseDelay: {
+                    type: String,
+                    enum: ['immediate', 'brief', 'thoughtful'],
+                    default: 'brief'
+                },
+                thinkingTime: { type: Number, min: 0, max: 3, default: 1 } // seconds
+            },
+            
+            // Context Memory & Continuity
+            contextMemory: {
+                memorySpan: {
+                    type: String,
+                    enum: ['current_call', '24_hours', '1_week', '1_month', 'permanent'],
+                    default: 'current_call'
+                },
+                
+                // Customer Preference Memory
+                rememberCustomerName: { type: Boolean, default: true },
+                rememberPreviousIssues: { type: Boolean, default: true },
+                rememberCommunicationStyle: { type: Boolean, default: true },
+                
+                // Conversation Continuity
+                referToPreviousConversations: { type: Boolean, default: false },
+                followUpReminders: { type: Boolean, default: false },
+                returningCustomerGreeting: { type: Boolean, default: false },
+                
+                // Context Transition Phrases
+                contextTransitions: {
+                    type: [String],
+                    default: [
+                        'I see we spoke before about...',
+                        'Following up on our previous conversation...',
+                        'I remember you mentioned...'
+                    ]
+                }
+            },
+            
+            // Proactive Intelligence & Assistance
+            proactiveIntelligence: {
+                anticipateNeeds: { type: Boolean, default: true },
+                offerRelatedHelp: { type: Boolean, default: true },
+                preventiveMaintenance: { type: Boolean, default: false },
+                seasonalReminders: { type: Boolean, default: false },
+                
+                // Proactive Assistance Phrases
+                suggestionPhrases: {
+                    type: [String],
+                    default: [
+                        'While I have you, you might also want to consider...',
+                        'Based on what you\'ve told me, I\'d recommend...',
+                        'Many customers in your situation also ask about...'
+                    ]
+                },
+                
+                // Error Recovery & Uncertainty
+                admitUncertainty: { type: Boolean, default: true },
+                escalateWhenUnsure: { type: Boolean, default: true },
+                uncertaintyPhrases: {
+                    type: [String],
+                    default: [
+                        'I want to make sure I give you accurate information...',
+                        'Let me connect you with someone who specializes in this...',
+                        'I\'d rather have an expert confirm this for you...'
+                    ]
+                },
+                
+                // Graceful Error Recovery
+                errorRecoveryPhrases: {
+                    type: [String],
+                    default: [
+                        'Let me try a different approach...',
+                        'I apologize for the confusion...',
+                        'Let me get you to the right person...'
+                    ]
+                }
+            },
+            
+            // System Configuration
+            systemConfig: {
+                applyToAllResponses: { type: Boolean, default: true },
+                overrideKnowledgeBase: { type: Boolean, default: false },
+                personalityWeight: { type: Number, min: 0, max: 1, default: 0.7 },
+                
+                // Performance Settings
+                maxPersonalityProcessingTime: { type: Number, default: 200 }, // milliseconds
+                fallbackToNeutral: { type: Boolean, default: true },
+                
+                // Integration Settings
+                integrateWithKnowledge: { type: Boolean, default: true },
+                adaptToContext: { type: Boolean, default: true },
+                maintainConsistency: { type: Boolean, default: true }
+            }
+        },
         
         // Legacy fields (keeping for backward compatibility)
         highlevelApiKey: { type: String, trim: true, default: null },
