@@ -786,7 +786,7 @@ class EmbeddedQnAManager {
                 return;
             }
             
-            const response = await fetch(`${this.apiBaseUrl}/api/ai-agent/test-priority-flow/${this.companyId}`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}/priority-flow-testing/test-complete-flow`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -794,7 +794,9 @@ class EmbeddedQnAManager {
                 },
                 body: JSON.stringify({
                     query: testQuery,
-                    includeAllSources: true
+                    testAllSources: true,
+                    showConfidenceScores: true,
+                    showRoutingDecisions: true
                 })
             });
             
@@ -829,12 +831,25 @@ class EmbeddedQnAManager {
      * Show priority flow test results
      */
     showPriorityFlowResults(results) {
-        const resultsHtml = results.sources.map(source => `
-            <div class="mb-4 p-4 border rounded-lg ${source.passed ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}">
+        console.log('🔍 CHECKPOINT: showPriorityFlowResults received:', results);
+        
+        // Handle the API response structure: results.data contains the actual test results
+        const testData = results.data || results;
+        console.log('🔍 CHECKPOINT: testData extracted:', testData);
+        
+        // Check if we have routing flow data
+        if (!testData.routingFlow || !Array.isArray(testData.routingFlow)) {
+            console.warn('⚠️ No routingFlow data found in test results');
+            this.showNotification('❌ Test results missing routing flow data', 'error');
+            return;
+        }
+        
+        const resultsHtml = testData.routingFlow.map(source => `
+            <div class="mb-4 p-4 border rounded-lg ${source.match ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}">
                 <div class="flex items-center justify-between mb-2">
-                    <h5 class="font-semibold">${source.sourceName}</h5>
-                    <span class="px-2 py-1 text-xs rounded ${source.passed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-                        ${source.passed ? '✅ PASSED' : '❌ FAILED'}
+                    <h5 class="font-semibold">${source.source || source.sourceName}</h5>
+                    <span class="px-2 py-1 text-xs rounded ${source.match ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                        ${source.match ? '✅ MATCH' : '❌ NO MATCH'}
                     </span>
                 </div>
                 <div class="text-sm space-y-1">
