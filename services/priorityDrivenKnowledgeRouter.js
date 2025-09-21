@@ -253,27 +253,18 @@ class PriorityDrivenKnowledgeRouter {
      */
     async queryCompanyQnA(companyId, query, context) {
         try {
-            // 🔧 COMPATIBILITY FIX: Check both new and legacy Q&A locations
-            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.companyQnA companyKB');
+            // 🎯 CLEAN ARCHITECTURE: Only use new unified knowledge management structure
+            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.companyQnA');
             
-            let companyQnA = [];
-            
-            // Try new structure first
-            if (company?.aiAgentLogic?.knowledgeManagement?.companyQnA) {
-                companyQnA = company.aiAgentLogic.knowledgeManagement.companyQnA;
-                logger.info(`🔍 Using NEW companyQnA structure: ${companyQnA.length} entries`, { routingId: context.routingId });
-            }
-            // Fallback to legacy structure
-            else if (company?.companyKB) {
-                companyQnA = company.companyKB;
-                logger.info(`🔍 Using LEGACY companyKB structure: ${companyQnA.length} entries`, { routingId: context.routingId });
-            }
-            
-            if (!companyQnA || companyQnA.length === 0) {
-                return { confidence: 0, response: null, metadata: { source: 'companyQnA', error: 'No company Q&A data found' } };
+            if (!company?.aiAgentLogic?.knowledgeManagement?.companyQnA) {
+                logger.info(`🔍 No companyQnA data found for company ${companyId}`, { routingId: context.routingId });
+                return { confidence: 0, response: null, metadata: { source: 'companyQnA', error: 'No company Q&A data - use Knowledge Management tab to add Q&A entries' } };
             }
 
-            const activeQnA = companyQnA.filter(qna => qna.isActive !== false && qna.status !== 'inactive');
+            const companyQnA = company.aiAgentLogic.knowledgeManagement.companyQnA;
+            logger.info(`🔍 Found ${companyQnA.length} companyQnA entries`, { routingId: context.routingId });
+
+            const activeQnA = companyQnA.filter(qna => qna.status === 'active');
 
             let bestMatch = { confidence: 0, response: null, metadata: {} };
 
