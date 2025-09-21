@@ -7541,32 +7541,67 @@ This would be a great time to also check..."></textarea>
 
         // Load current agent settings
         async function loadAgentSettings() {
+            console.log('🚀 CHECKPOINT 1: Starting loadAgentSettings function');
+            
             const companyId = getCurrentCompanyId();
-            if (!companyId) return;
+            console.log('🚀 CHECKPOINT 2: Company ID retrieved:', companyId);
+            
+            if (!companyId) {
+                console.log('❌ CHECKPOINT 3: No company ID found, exiting');
+                return;
+            }
 
             try {
-
+                console.log('🚀 CHECKPOINT 4: Entering try block');
                 console.log('⏰ Agent Settings load timestamp:', new Date().toISOString());
-            console.log('🔍 LOAD FIX: Using correct endpoint - /api/company/company/' + companyId);
-            // 🔧 CACHE BUSTING: Add timestamp to force fresh data load
-            const cacheBuster = Date.now();
-            console.log('🔧 CACHE BUSTER: Using timestamp', cacheBuster, 'to force fresh data');
-            // Get auth token for API call
-            const authToken = localStorage.getItem('adminToken') || 
-                             localStorage.getItem('authToken') || 
-                             sessionStorage.getItem('authToken') || 
-                             localStorage.getItem('token') || 
-                             sessionStorage.getItem('token');
-                             
-            const headers = {};
-            if (authToken) {
-                headers['Authorization'] = `Bearer ${authToken}`;
-            }
-            
-            const response = await fetch(`/api/company/company/${companyId}?_cb=${cacheBuster}`, {
-                headers: headers
-            });
+                console.log('🔍 LOAD FIX: Using correct endpoint - /api/company/company/' + companyId);
+                
+                // 🔧 CACHE BUSTING: Add timestamp to force fresh data load
+                const cacheBuster = Date.now();
+                console.log('🔧 CACHE BUSTER: Using timestamp', cacheBuster, 'to force fresh data');
+                
+                // Get auth token for API call
+                console.log('🚀 CHECKPOINT 5: Getting auth token');
+                const authToken = localStorage.getItem('adminToken') || 
+                                 localStorage.getItem('authToken') || 
+                                 sessionStorage.getItem('authToken') || 
+                                 localStorage.getItem('token') || 
+                                 sessionStorage.getItem('token');
+                                 
+                console.log('🚀 CHECKPOINT 6: Auth token found:', !!authToken);
+                console.log('🔍 Auth token source:', authToken ? 'Found' : 'Not found');
+                
+                const headers = {};
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                    console.log('🚀 CHECKPOINT 7: Authorization header added');
+                } else {
+                    console.log('⚠️ CHECKPOINT 7: No auth token - proceeding without Authorization header');
+                }
+                
+                const apiUrl = `/api/company/company/${companyId}?_cb=${cacheBuster}`;
+                console.log('🚀 CHECKPOINT 8: Making fetch request to:', apiUrl);
+                console.log('🚀 CHECKPOINT 8b: Request headers:', headers);
+                
+                const response = await fetch(apiUrl, {
+                    headers: headers
+                });
+                
+                console.log('🚀 CHECKPOINT 9: Fetch response received');
+                console.log('🔍 Response status:', response.status);
+                console.log('🔍 Response ok:', response.ok);
+                console.log('🔍 Response headers:', Object.fromEntries(response.headers.entries()));
+                
+                if (!response.ok) {
+                    console.error('❌ CHECKPOINT 10: Response not OK');
+                    console.error('❌ Status:', response.status);
+                    console.error('❌ Status Text:', response.statusText);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                console.log('🚀 CHECKPOINT 11: Parsing JSON response');
                 const data = await response.json();
+                console.log('🚀 CHECKPOINT 12: JSON parsed successfully');
                 
                 console.log('📥 Received agent settings data:', data);
                 console.log('🔍 DEBUG: Full aiAgentLogic object:', data.aiAgentLogic);
@@ -7767,8 +7802,32 @@ This would be a great time to also check..."></textarea>
 
                 
             } catch (error) {
-                console.error('❌ Failed to load agent settings:', error);
-                alert('Failed to load agent settings. Please refresh the page.');
+                console.error('❌ CRITICAL ERROR in loadAgentSettings:');
+                console.error('❌ Error type:', error.constructor.name);
+                console.error('❌ Error message:', error.message);
+                console.error('❌ Error stack:', error.stack);
+                console.error('❌ Company ID:', companyId);
+                console.error('❌ Current URL:', window.location.href);
+                console.error('❌ Auth tokens available:', {
+                    adminToken: !!localStorage.getItem('adminToken'),
+                    authToken: !!localStorage.getItem('authToken'),
+                    sessionAuthToken: !!sessionStorage.getItem('authToken'),
+                    token: !!localStorage.getItem('token'),
+                    sessionToken: !!sessionStorage.getItem('token')
+                });
+                
+                // Show detailed error to user (never mask the error!)
+                const errorDetails = `
+AGENT SETTINGS LOAD ERROR:
+- Error: ${error.message}
+- Company ID: ${companyId}
+- Time: ${new Date().toISOString()}
+- Check browser console for full details
+
+This error needs to be fixed - not masked!
+                `.trim();
+                
+                alert(errorDetails);
             }
         }        // Save agent settings
         async function saveAgentSettings() {
