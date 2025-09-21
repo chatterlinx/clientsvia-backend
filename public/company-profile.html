@@ -12050,10 +12050,11 @@ Key Metrics:
             console.log('✅ Tab priority labels updated');
         }
         
-        // 🎯 CRITICAL FIX: Apply saved knowledge source priority order to DOM
+        // 🎯 CRITICAL FIX v2.1: Apply saved knowledge source priority order to DOM
         function applyKnowledgeSourcePriorityOrder(knowledgeSourcePriorities) {
-            console.log('🎯 REORDERING DOM: Applying saved priority order to HTML elements');
+            console.log('🎯 REORDERING DOM v2.1: Applying saved priority order to HTML elements');
             console.log('🔍 KNOWLEDGE SOURCE PRIORITIES OBJECT:', knowledgeSourcePriorities);
+            console.log('🔧 FUNCTION VERSION: applyKnowledgeSourcePriorityOrder v2.1 - FIXED forEach issue');
             
             // 🔧 CHECKPOINT 1: Extract priorityFlow array from the object
             let savedPriorities = [];
