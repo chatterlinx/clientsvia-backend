@@ -12051,9 +12051,22 @@ Key Metrics:
         }
         
         // 🎯 CRITICAL FIX: Apply saved knowledge source priority order to DOM
-        function applyKnowledgeSourcePriorityOrder(savedPriorities) {
+        function applyKnowledgeSourcePriorityOrder(knowledgeSourcePriorities) {
             console.log('🎯 REORDERING DOM: Applying saved priority order to HTML elements');
-            console.log('🔍 SAVED ORDER:', savedPriorities);
+            console.log('🔍 KNOWLEDGE SOURCE PRIORITIES OBJECT:', knowledgeSourcePriorities);
+            
+            // 🔧 CHECKPOINT 1: Extract priorityFlow array from the object
+            let savedPriorities = [];
+            if (knowledgeSourcePriorities && knowledgeSourcePriorities.priorityFlow && Array.isArray(knowledgeSourcePriorities.priorityFlow)) {
+                // Sort by priority number and extract source names
+                savedPriorities = knowledgeSourcePriorities.priorityFlow
+                    .sort((a, b) => a.priority - b.priority)
+                    .map(item => item.source);
+                console.log('✅ CHECKPOINT 1: Extracted priority flow array:', savedPriorities);
+            } else {
+                console.warn('⚠️ CHECKPOINT 1: No valid priorityFlow found, using default order');
+                savedPriorities = ['companyQnA', 'tradeQnA', 'templates', 'inHouseFallback']; // Default order
+            }
             
             const container = document.getElementById('clientsvia-source-priority-container');
             if (!container) {
@@ -12067,6 +12080,9 @@ Key Metrics:
             
             // Create ordered array based on saved priorities
             const reorderedItems = [];
+            
+            // 🔧 CHECKPOINT 2: Verify savedPriorities is an array before forEach
+            console.log('🔍 CHECKPOINT 2: savedPriorities type:', typeof savedPriorities, 'isArray:', Array.isArray(savedPriorities));
             
             // First, add items in the saved priority order
             savedPriorities.forEach(sourceType => {
