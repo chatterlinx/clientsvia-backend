@@ -16195,6 +16195,15 @@ Key Metrics:
                        localStorage.getItem('currentCompanyId');
             }
 
+            getAuthToken() {
+                // Try multiple methods to get auth token
+                return localStorage.getItem('token') || 
+                       sessionStorage.getItem('token') ||
+                       window.authToken ||
+                       document.querySelector('meta[name="auth-token"]')?.getAttribute('content') ||
+                       '';
+            }
+
             initEventListeners() {
                 // Tab switching for new AI system
                 document.getElementById('new-tab-knowledge')?.addEventListener('click', () => {
@@ -16273,7 +16282,8 @@ Key Metrics:
                     const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities`, {
                         method: 'GET',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.getAuthToken()}`
                         }
                     });
 
@@ -16283,6 +16293,10 @@ Key Metrics:
                         this.renderPriorityFlow();
                         this.updateGlobalSettings();
                         this.updateStatus('Active', 'green');
+                    } else if (response.status === 401) {
+                        console.error('Authentication failed - please log in again');
+                        this.updateStatus('Auth Required', 'red');
+                        this.showErrorMessage('Authentication required. Please log in again.');
                     } else {
                         console.error('Failed to load priorities:', response.statusText);
                         this.updateStatus('Error', 'red');
@@ -16503,7 +16517,8 @@ Key Metrics:
                     const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities`, {
                         method: 'PUT',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.getAuthToken()}`
                         },
                         body: JSON.stringify(updatedPriorities)
                     });
@@ -16531,7 +16546,8 @@ Key Metrics:
                     const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities/reset-defaults`, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.getAuthToken()}`
                         }
                     });
 
@@ -16595,7 +16611,8 @@ Key Metrics:
                     const response = await fetch(`/api/company/${this.companyId}/priority-flow-testing/test-complete-flow`, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.getAuthToken()}`
                         },
                         body: JSON.stringify(testRequest)
                     });
