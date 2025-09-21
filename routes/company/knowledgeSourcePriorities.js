@@ -143,10 +143,12 @@ router.put('/:companyId/knowledge-source-priorities', authenticateJWT, async (re
 
     try {
         logger.info(`🎯 PUT priorities request for company ${companyId}`);
+        console.log('🔍 CHECKPOINT 1: Received request body:', JSON.stringify(req.body, null, 2));
 
         // Validate request body
         const { error, value } = prioritiesUpdateSchema.validate(req.body);
         if (error) {
+            console.log('❌ CHECKPOINT 2: Validation failed:', error.details);
             return res.status(400).json({
                 success: false,
                 message: 'Invalid priorities configuration',
@@ -155,15 +157,20 @@ router.put('/:companyId/knowledge-source-priorities', authenticateJWT, async (re
             });
         }
 
+        console.log('✅ CHECKPOINT 2: Validation passed, validated data:', JSON.stringify(value, null, 2));
+
         // Validate priority flow uniqueness and completeness
+        console.log('🔍 CHECKPOINT 3: Validating priority flow...');
         const validationResult = validatePriorityFlow(value.priorityFlow);
         if (!validationResult.valid) {
+            console.log('❌ CHECKPOINT 3: Priority flow validation failed:', validationResult.message);
             return res.status(400).json({
                 success: false,
                 message: validationResult.message,
                 error: 'PRIORITY_FLOW_INVALID'
             });
         }
+        console.log('✅ CHECKPOINT 3: Priority flow validation passed');
 
         // Prepare update data
         const updateData = {
@@ -179,6 +186,7 @@ router.put('/:companyId/knowledge-source-priorities', authenticateJWT, async (re
         };
 
         // Update database
+        console.log('🔍 CHECKPOINT 4: Updating MongoDB with data:', JSON.stringify(updateData, null, 2));
         const company = await Company.findByIdAndUpdate(
             companyId,
             {
@@ -191,20 +199,27 @@ router.put('/:companyId/knowledge-source-priorities', authenticateJWT, async (re
         );
 
         if (!company) {
+            console.log('❌ CHECKPOINT 4: Company not found in MongoDB');
             return res.status(404).json({
                 success: false,
                 message: 'Company not found',
                 error: 'COMPANY_NOT_FOUND'
             });
         }
+        console.log('✅ CHECKPOINT 4: MongoDB update successful');
 
         // Invalidate cache to ensure fresh data
+        console.log('🔍 CHECKPOINT 5: Invalidating Redis cache...');
         await aiAgentCache.invalidateCompany(companyId);
+        console.log('✅ CHECKPOINT 5: Redis cache invalidated');
         
         // Cache the new configuration
+        console.log('🔍 CHECKPOINT 6: Caching new data in Redis...');
         await aiAgentCache.cachePriorities(companyId, updateData);
+        console.log('✅ CHECKPOINT 6: New data cached in Redis');
 
         const responseTime = Date.now() - startTime;
+        console.log('✅ CHECKPOINT 7: Sending success response');
         logger.info(`🎯 PUT priorities success for company ${companyId}`, {
             responseTime,
             version: updateData.version,
