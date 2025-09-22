@@ -18458,7 +18458,7 @@ Key Metrics:
          */
         async loadCurrentTradeSelection() {
             try {
-                const response = await fetch(`/api/company/company/${this.companyId}`, {
+                const response = await fetch(`/api/company/${this.companyId}`, {
                     headers: {
                         'Authorization': `Bearer ${this.getAuthToken()}`
                     }
@@ -18670,6 +18670,49 @@ Key Metrics:
         }
 
         /**
+         * 🎨 Get Category Icon (Visual Enhancement)
+         */
+        getCategoryIcon(categoryName) {
+            const icons = {
+                'HVAC': '🌡️',
+                'HVAC Residential': '🌡️',
+                'Plumbing': '🔧',
+                'Plumbing Residential': '🔧',
+                'Electrical': '⚡',
+                'Electrical Residential': '⚡',
+                'General Contracting': '🏗️',
+                'Roofing': '🏠',
+                'Flooring': '🏢',
+                'Painting': '🎨',
+                'Landscaping': '🌿',
+                'Carpentry': '🔨',
+                'Masonry': '🧱',
+                'Insulation': '🏠',
+                'Windows': '🪟',
+                'Doors': '🚪'
+            };
+            
+            // Try exact match first
+            if (icons[categoryName]) {
+                return icons[categoryName];
+            }
+            
+            // Try partial matches
+            const lowerName = categoryName.toLowerCase();
+            if (lowerName.includes('hvac')) return '🌡️';
+            if (lowerName.includes('plumb')) return '🔧';
+            if (lowerName.includes('electric')) return '⚡';
+            if (lowerName.includes('roof')) return '🏠';
+            if (lowerName.includes('floor')) return '🏢';
+            if (lowerName.includes('paint')) return '🎨';
+            if (lowerName.includes('landscape')) return '🌿';
+            if (lowerName.includes('carpet')) return '🔨';
+            
+            // Default icon
+            return '🔧';
+        }
+
+        /**
          * 💾 Save Trade Categories (Your Brilliant Bulk Inheritance!)
          */
         async saveTradeCategories() {
@@ -18677,6 +18720,11 @@ Key Metrics:
             
             const checkboxes = document.querySelectorAll('.trade-category-checkbox:checked');
             const selectedTrades = Array.from(checkboxes).map(cb => cb.dataset.category);
+            
+            console.log('🔍 DEBUG: Found checkboxes:', checkboxes.length);
+            console.log('🔍 DEBUG: Selected trades:', selectedTrades);
+            console.log('🔍 DEBUG: Company ID:', this.companyId);
+            console.log('🔍 DEBUG: Auth token available:', !!this.getAuthToken());
             
             if (selectedTrades.length === 0) {
                 this.showErrorMessage('Please select at least one trade category.');
@@ -18692,18 +18740,24 @@ Key Metrics:
                 saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Inheriting Knowledge...';
                 
                 console.log('🚀 Saving selected trades:', selectedTrades);
+                console.log('🔍 DEBUG: API URL:', `/api/company/${this.companyId}`);
                 
                 // Save to company document (tradeTypes field)
-                const response = await fetch(`/api/company/company/${this.companyId}`, {
+                const response = await fetch(`/api/company/${this.companyId}`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${this.getAuthToken()}`
                     },
                     body: JSON.stringify({
-                        tradeTypes: selectedTrades
+                        tradeTypes: selectedTrades,
+                        _updateSource: 'trade-category-selection',
+                        _timestamp: new Date().toISOString()
                     })
                 });
+                
+                console.log('🔍 DEBUG: Response status:', response.status);
+                console.log('🔍 DEBUG: Response ok:', response.ok);
                 
                 if (response.ok) {
                     // Calculate inheritance stats
@@ -18720,7 +18774,8 @@ Key Metrics:
                     
                 } else {
                     const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-                    throw new Error(errorData.message || 'Failed to save trade categories');
+                    console.error('🔍 DEBUG: Error response:', errorData);
+                    throw new Error(errorData.message || `Failed to save trade categories (${response.status})`);
                 }
                 
             } catch (error) {
