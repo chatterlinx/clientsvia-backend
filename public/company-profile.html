@@ -18528,13 +18528,26 @@ Key Metrics:
                 
                 console.log('🚀 Saving company-specific Trade Q&A:', qnaData);
                 
-                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/trade-qna`, {
+                // Prepare data for the correct API endpoint
+                const apiData = {
+                    question: qnaData.question,
+                    answer: qnaData.answer,
+                    category: qnaData.difficulty, // Map difficulty to category
+                    companyId: this.companyId,
+                    tradeCategory: qnaData.tradeCategory,
+                    keywords: qnaData.keywords,
+                    priority: qnaData.priority
+                };
+                
+                console.log('🔍 DEBUG: API data being sent:', apiData);
+                
+                const response = await fetch(`/api/enterprise-trade-categories/qna`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${this.getAuthToken()}`
                     },
-                    body: JSON.stringify(qnaData)
+                    body: JSON.stringify(apiData)
                 });
 
                 if (response.ok) {
