@@ -6,6 +6,8 @@ const router = express.Router();
 const { getDB } = require('../db');
 const { ObjectId } = require('mongodb');
 const logger = require('../utils/logger');
+const TradeCategory = require('../models/TradeCategory');
+const aiAgentCache = require('../services/aiAgentCacheService');
 
 // Helper functions for enterprise trade category matching
 function getKeywordsForCategory(categoryName) {
@@ -148,38 +150,78 @@ router.post('/', async (req, res) => {
 
 /**
  * @route   GET /api/enterprise-trade-categories
- * @desc    Get all trade categories for a company
+ * @desc    Get all trade categories with Mongoose + Redis caching
  */
 router.get('/', async (req, res) => {
     try {
         const { companyId = 'global', includeGlobal = 'true' } = req.query;
-        console.log(`🚀 ENTERPRISE TRADE CATEGORIES: Loading for companyId="${companyId}", includeGlobal="${includeGlobal}"`);
+        const startTime = Date.now();
         
-        const db = getDB();
-        const collection = db.collection(COLLECTION_NAME);
+        logger.info(`🚀 TRADE CATEGORIES: Loading for companyId="${companyId}", includeGlobal="${includeGlobal}"`);
         
-        let query = {};
-        if (includeGlobal === 'true') {
-            query = { $or: [{ companyId }, { companyId: 'global' }] };
-        } else {
-            query = { companyId };
+        // 🚀 STEP 1: Try Redis cache first for global categories
+        if (companyId === 'global') {
+            const cachedCategories = await aiAgentCache.getTradeCategories();
+            if (cachedCategories) {
+                const responseTime = Date.now() - startTime;
+                logger.info(`🚀 Cache hit: Trade categories served in ${responseTime}ms`);
+                
+                return res.json({
+                    success: true,
+                    data: cachedCategories,
+                    meta: {
+                        source: 'cache',
+                        responseTime,
+                        count: cachedCategories.length
+                    }
+                });
+            }
         }
         
-        const categories = await collection
-            .find(query)
-            .sort({ name: 1 })
-            .toArray();
+        // 🔍 STEP 2: Cache miss - query via Mongoose
+        let categories;
+        if (includeGlobal === 'true' && companyId !== 'global') {
+            categories = await TradeCategory.findByCompany(companyId, true);
+        } else {
+            categories = await TradeCategory.find({ 
+                companyId, 
+                isActive: true 
+            }).sort({ name: 1 });
+        }
         
-        console.log(`📋 Found ${categories.length} trade categories:`, categories.map(c => c.name));
+        logger.info(`📋 Found ${categories.length} trade categories via Mongoose`);
         
-        // 🔧 PRODUCTION FIX: Enrich categories with Q&A and keyword data
-        const CompanyQnA = require('../models/knowledge/CompanyQnA');
+        // 🚀 STEP 3: Cache global categories for future requests
+        if (companyId === 'global') {
+            await aiAgentCache.cacheTradeCategories(categories, 3600); // 1 hour TTL
+        }
         
-        const enrichedCategories = await Promise.all(categories.map(async (category) => {
-            try {
-                // Get Q&As for this trade category
-                let qnas = [];
-                if (companyId && companyId !== 'global') {
+        const responseTime = Date.now() - startTime;
+        logger.info(`✅ Trade categories served via Mongoose in ${responseTime}ms`);
+        
+        // Return clean response
+        res.json({
+            success: true,
+            data: categories,
+            meta: {
+                source: 'database',
+                responseTime,
+                count: categories.length,
+                cached: companyId === 'global'
+            }
+        });
+        
+    } catch (error) {
+        logger.error('Error retrieving trade categories', { error: error.message });
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+});
+
+/**
+ * @route   POST /api/enterprise-trade-categories/qna
                     // Company-specific Q&As
                     qnas = await CompanyQnA.find({
                         companyId: companyId,

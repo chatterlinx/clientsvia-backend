@@ -595,6 +595,67 @@ class AIAgentCacheService {
     }
 
     /**
+     * 🏷️ TRADE CATEGORIES CACHE OPERATIONS
+     * Lightning-fast access to global and company trade categories
+     */
+    async cacheTradeCategories(categories, ttl = 3600) {
+        try {
+            const cacheKey = 'trade-categories:global';
+            const cacheData = {
+                categories,
+                cachedAt: new Date().toISOString(),
+                ttl
+            };
+
+            await this.redis.setex(cacheKey, ttl, JSON.stringify(cacheData));
+            logger.info(`🏷️ Trade categories cached successfully`, {
+                categoriesCount: categories.length,
+                ttl,
+                cacheKey
+            });
+
+            return true;
+        } catch (error) {
+            logger.error('❌ Failed to cache trade categories:', error);
+            return false;
+        }
+    }
+
+    async getTradeCategories() {
+        try {
+            const cacheKey = 'trade-categories:global';
+            const cached = await this.redis.get(cacheKey);
+            
+            if (cached) {
+                const data = JSON.parse(cached);
+                logger.info(`🚀 Trade categories cache hit`, {
+                    categoriesCount: data.categories.length,
+                    cachedAt: data.cachedAt
+                });
+                return data.categories;
+            }
+
+            logger.info('🔍 Trade categories cache miss');
+            return null;
+        } catch (error) {
+            logger.error('❌ Failed to get trade categories from cache:', error);
+            return null;
+        }
+    }
+
+    async invalidateTradeCategories() {
+        try {
+            const cacheKey = 'trade-categories:global';
+            await this.redis.del(cacheKey);
+            logger.info('🗑️ Trade categories cache invalidated');
+            return true;
+        } catch (error) {
+            logger.error('❌ Failed to invalidate trade categories cache:', error);
+            return false;
+        }
+    }
+
+    /**
      * Get performance metrics
      * @returns {Object} Performance metrics
      */
