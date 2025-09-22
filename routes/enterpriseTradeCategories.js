@@ -383,13 +383,14 @@ router.post('/qna', async (req, res) => {
         
         // Use the CompanyQnA model for company-specific trade Q&As
         const CompanyQnA = require('../models/knowledge/CompanyQnA');
+        const mongoose = require('mongoose');
         
         // Create trade-specific Q&A entry
         const tradeQnA = new CompanyQnA({
             question: question.trim(),
             answer: answer.trim(),
             category: category || 'general',
-            companyId: companyId,
+            companyId: new mongoose.Types.ObjectId(companyId), // Convert to ObjectId
             tradeCategories: tradeCategory ? [tradeCategory] : [],
             status: 'active',
             priority: 'normal',
@@ -409,6 +410,20 @@ router.post('/qna', async (req, res) => {
         });
         
         console.log('💾 Saving trade-specific Q&A to database...');
+        
+        // Add validation debugging
+        const validationError = tradeQnA.validateSync();
+        if (validationError) {
+            console.error('❌ VALIDATION ERROR:', validationError.message);
+            console.error('❌ VALIDATION DETAILS:', validationError.errors);
+            return res.status(400).json({
+                success: false,
+                message: 'Validation error',
+                error: validationError.message,
+                details: validationError.errors
+            });
+        }
+        
         const savedQnA = await tradeQnA.save();
         
         console.log('✅ Trade Q&A saved successfully:', savedQnA._id);
@@ -435,10 +450,33 @@ router.post('/qna', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Failed to create Trade Q&A:', error);
+        console.error('❌ Error stack:', error.stack);
+        console.error('❌ Error name:', error.name);
+        
+        // Handle specific MongoDB/Mongoose errors
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation error',
+                error: error.message,
+                details: error.errors
+            });
+        }
+        
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid data format',
+                error: error.message,
+                field: error.path
+            });
+        }
+        
         res.status(500).json({
             success: false,
             message: 'Failed to create Trade Q&A',
-            error: error.message
+            error: error.message,
+            errorType: error.name
         });
     }
 });
