@@ -18314,9 +18314,97 @@ Key Metrics:
         }
 
         /**
+         * 🏷️ LOAD REAL TRADE CATEGORIES FROM API
+         * Replace mockup dropdown with live data from Mongoose + Redis
+         */
+        async loadTradeCategories() {
+            try {
+                console.log('🏷️ Loading trade categories from API...');
+                
+                const response = await fetch(`/api/enterprise-trade-categories?companyId=global`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('✅ Trade categories loaded:', result);
+                
+                if (result.success && result.data) {
+                    this.populateTradeCategories(result.data);
+                    return result.data;
+                } else {
+                    throw new Error('Invalid response format');
+                }
+                
+            } catch (error) {
+                console.error('❌ Failed to load trade categories:', error);
+                this.showNotification('❌ Failed to load trade categories', 'error');
+                return [];
+            }
+        }
+        
+        /**
+         * 🎯 POPULATE TRADE CATEGORIES DROPDOWN
+         * Replace static options with real data
+         */
+        populateTradeCategories(categories) {
+            const select = document.getElementById('trade-categories-select');
+            if (!select) {
+                console.warn('⚠️ Trade categories select element not found');
+                return;
+            }
+            
+            // Clear existing options
+            select.innerHTML = '';
+            
+            // Add real categories from API
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category._id || category.id;
+                option.textContent = `${this.getCategoryIcon(category.name)} ${category.name}`;
+                option.dataset.categoryName = category.name;
+                option.dataset.totalQnas = category.totalQAs || 0;
+                select.appendChild(option);
+            });
+            
+            console.log(`✅ Populated ${categories.length} trade categories in dropdown`);
+        }
+        
+        /**
+         * 🎨 GET CATEGORY ICON
+         * Return appropriate emoji for category
+         */
+        getCategoryIcon(categoryName) {
+            const icons = {
+                'HVAC': '🌡️',
+                'Plumbing': '🔧', 
+                'Electrical': '⚡',
+                'General': '🏗️',
+                'Roofing': '🏠',
+                'Flooring': '🏢',
+                'Painting': '🎨',
+                'Landscaping': '🌿'
+            };
+            
+            // Find matching icon by checking if category name contains key
+            for (const [key, icon] of Object.entries(icons)) {
+                if (categoryName.toLowerCase().includes(key.toLowerCase())) {
+                    return icon;
+                }
+            }
+            
+            return '🏷️'; // Default icon
+        }
+
+        /**
          * 🔧 TRADE Q&A MODAL MANAGEMENT
          */
-        openTradeQnAModal(mode = 'add', qnaData = null) {
+        async openTradeQnAModal(mode = 'add', qnaData = null) {
             const modal = document.getElementById('trade-qna-modal');
             const title = document.getElementById('trade-qna-modal-title');
             const form = document.getElementById('trade-qna-form');
@@ -18327,6 +18415,9 @@ Key Metrics:
             
             // Reset form
             form.reset();
+            
+            // 🚀 LOAD REAL TRADE CATEGORIES
+            await this.loadTradeCategories();
             
             // Reset multi-select and badges
             const tradeCategoriesSelect = document.getElementById('trade-categories-select');
