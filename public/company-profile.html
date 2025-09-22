@@ -2428,6 +2428,106 @@
                                                     </div>
                                                 </div>
 
+                                                <!-- 🏢 ADD TRADE Q&A MODAL (Beautiful Form for Company-Specific Q&As) -->
+                                                <div id="add-trade-qna-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+                                                    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+                                                        <div class="mt-3">
+                                                            <!-- Modal Header -->
+                                                            <div class="flex items-center justify-between pb-4 border-b border-gray-200">
+                                                                <h3 class="text-lg font-semibold text-gray-900">Add Trade Q&A</h3>
+                                                                <button id="close-add-trade-qna-modal" class="text-gray-400 hover:text-gray-600 transition-colors">
+                                                                    <i class="fas fa-times text-xl"></i>
+                                                                </button>
+                                                            </div>
+
+                                                            <!-- Modal Body -->
+                                                            <div class="mt-4">
+                                                                <form id="add-trade-qna-form" class="space-y-4">
+                                                                    
+                                                                    <!-- Trade Category Selection -->
+                                                                    <div>
+                                                                        <label for="add-trade-category" class="block text-sm font-medium text-gray-700 mb-1">Trade Category *</label>
+                                                                        <select id="add-trade-category" name="tradeCategory" required
+                                                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                                                                            <option value="">Select a trade category...</option>
+                                                                            <!-- Will be populated with company's selected trade categories -->
+                                                                        </select>
+                                                                        <p class="text-xs text-gray-500 mt-1">Choose from your company's selected trade categories</p>
+                                                                    </div>
+
+                                                                    <!-- Question Field -->
+                                                                    <div>
+                                                                        <label for="add-trade-question" class="block text-sm font-medium text-gray-700 mb-1">Question *</label>
+                                                                        <input type="text" id="add-trade-question" name="question" required
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                               placeholder="What is your service call fee?">
+                                                                        <p class="text-xs text-gray-500 mt-1">Enter the customer question</p>
+                                                                    </div>
+
+                                                                    <!-- Answer Field -->
+                                                                    <div>
+                                                                        <label for="add-trade-answer" class="block text-sm font-medium text-gray-700 mb-1">Answer *</label>
+                                                                        <textarea id="add-trade-answer" name="answer" required rows="4"
+                                                                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                                  placeholder="Our service call fee is $89, which covers the diagnostic and is applied toward any repair work."></textarea>
+                                                                        <p class="text-xs text-gray-500 mt-1">Provide a detailed answer</p>
+                                                                    </div>
+
+                                                                    <!-- Difficulty and Priority Row -->
+                                                                    <div class="grid grid-cols-2 gap-4">
+                                                                        <div>
+                                                                            <label for="add-trade-difficulty" class="block text-sm font-medium text-gray-700 mb-1">Difficulty Level</label>
+                                                                            <select id="add-trade-difficulty" name="difficulty"
+                                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                                                                                <option value="basic" selected>📚 Basic (General Knowledge)</option>
+                                                                                <option value="intermediate">🔧 Intermediate (Technical Skills)</option>
+                                                                                <option value="advanced">⚙️ Advanced (Expert Knowledge)</option>
+                                                                                <option value="expert">🎓 Expert (Specialized Expertise)</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label for="add-trade-priority" class="block text-sm font-medium text-gray-700 mb-1">Priority Level</label>
+                                                                            <select id="add-trade-priority" name="priority"
+                                                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                                                                                <option value="1">🔥 High Priority (Emergency/Critical)</option>
+                                                                                <option value="2" selected>⭐ Normal Priority (Standard Service)</option>
+                                                                                <option value="3">📋 Low Priority (General Info)</option>
+                                                                            </select>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <!-- Keywords Field -->
+                                                                    <div>
+                                                                        <label for="add-trade-keywords" class="block text-sm font-medium text-gray-700 mb-1">Keywords</label>
+                                                                        <input type="text" id="add-trade-keywords" name="keywords"
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                               placeholder="service fee, diagnostic, repair cost">
+                                                                        <p class="text-xs text-gray-500 mt-1">Keywords for matching (comma-separated)</p>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+
+                                                            <!-- Modal Footer -->
+                                                            <div class="flex items-center justify-between pt-4 border-t border-gray-200 mt-6">
+                                                                <button id="generate-add-trade-keywords-btn" type="button" 
+                                                                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                                    <i class="fas fa-magic mr-2"></i>Auto-Generate Keywords
+                                                                </button>
+                                                                <div class="flex space-x-3">
+                                                                    <button id="cancel-add-trade-qna" type="button" 
+                                                                            class="bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors">
+                                                                        Cancel
+                                                                    </button>
+                                                                    <button id="save-add-trade-qna" type="submit" 
+                                                                            class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                                                        <i class="fas fa-save mr-2"></i>Save Trade Q&A
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
                                                 <!-- Template Modal -->
                                                 <div id="template-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
                                                     <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
@@ -18088,10 +18188,16 @@ Key Metrics:
                                 <h5 class="text-lg font-medium text-gray-600 mb-2">No Q&As Available Yet</h5>
                                 <p class="text-gray-500 mb-2">Selected categories: ${selectedTrades.join(', ')}</p>
                                 <p class="text-gray-500 mb-4">Add company-specific Q&As for your selected trade categories.</p>
-                                <button onclick="knowledgeManager.showAddTradeQnAModal()" 
-                                        class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
-                                    <i class="fas fa-plus mr-2"></i>Add Company-Specific Q&A
-                                </button>
+                                        <div class="flex space-x-3">
+                                            <button onclick="knowledgeManager.showAddTradeQnAModal()" 
+                                                    class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                                                <i class="fas fa-plus mr-2"></i>Add Trade Q&A
+                                            </button>
+                                            <button onclick="knowledgeManager.openTradeQnAModal()" 
+                                                    class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                                                <i class="fas fa-magic mr-2"></i>Select Trade Categories
+                                            </button>
+                                        </div>
                             </div>
                         `;
                     }
@@ -18140,7 +18246,7 @@ Key Metrics:
                         </div>
                         <button onclick="knowledgeManager.showAddTradeQnAModal()" 
                                 class="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">
-                            <i class="fas fa-plus mr-1"></i>Add Company Q&A
+                            <i class="fas fa-plus mr-1"></i>Add Trade Q&A
                         </button>
                     </div>
                     <div class="space-y-3" id="company-qnas-list"></div>
@@ -18355,36 +18461,73 @@ Key Metrics:
         }
 
         /**
-         * 🏢 Show Add Company-Specific Trade Q&A Modal
-         * 📝 This creates a REAL Q&A entry modal (not the category selection modal)
+         * 🏢 Show Add Company-Specific Trade Q&A Modal (Beautiful Form!)
+         * 📝 Opens the beautiful form you loved for adding company-specific Q&As
          */
-        showAddTradeQnAModal() {
-            // For now, let's create a simple prompt-based system
-            // TODO: Create a proper modal for adding company-specific Trade Q&As
-            const question = prompt('Enter the trade question:');
-            if (!question) return;
+        async showAddTradeQnAModal() {
+            const modal = document.getElementById('add-trade-qna-modal');
+            const form = document.getElementById('add-trade-qna-form');
+            const categorySelect = document.getElementById('add-trade-category');
             
-            const answer = prompt('Enter the answer:');
-            if (!answer) return;
+            // Reset form
+            form.reset();
             
-            const keywords = prompt('Enter keywords (comma-separated):') || '';
+            // Populate trade category dropdown with company's selected categories
+            try {
+                const currentTrades = await this.loadCurrentTradeSelection();
+                categorySelect.innerHTML = '<option value="">Select a trade category...</option>';
+                
+                if (currentTrades.length === 0) {
+                    categorySelect.innerHTML = '<option value="">No trade categories selected - please select categories first</option>';
+                } else {
+                    currentTrades.forEach(trade => {
+                        const option = document.createElement('option');
+                        option.value = trade;
+                        option.textContent = `${this.getCategoryIcon(trade)} ${trade}`;
+                        categorySelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('❌ Error loading trade categories for modal:', error);
+                categorySelect.innerHTML = '<option value="">Error loading categories</option>';
+            }
             
-            // Save the company-specific Trade Q&A
-            this.saveCompanySpecificTradeQnA({
-                question,
-                answer,
-                keywords: keywords.split(',').map(k => k.trim()).filter(k => k),
-                tradeCategory: 'General', // TODO: Get from company's selected categories
-                difficulty: 'basic',
-                priority: 2
-            });
+            // Show modal
+            modal.classList.remove('hidden');
+            
+            // Focus on first input
+            setTimeout(() => {
+                document.getElementById('add-trade-question').focus();
+            }, 100);
         }
 
         /**
-         * 💾 Save Company-Specific Trade Q&A
+         * 💾 Save Company-Specific Trade Q&A (From Beautiful Form!)
          */
-        async saveCompanySpecificTradeQnA(qnaData) {
+        async saveCompanySpecificTradeQnA() {
+            const form = document.getElementById('add-trade-qna-form');
+            const formData = new FormData(form);
+            const saveBtn = document.getElementById('save-add-trade-qna');
+            const originalText = saveBtn.innerHTML;
+            
             try {
+                // Show loading state
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+                
+                // Collect form data
+                const qnaData = {
+                    tradeCategory: formData.get('tradeCategory'),
+                    question: formData.get('question'),
+                    answer: formData.get('answer'),
+                    difficulty: formData.get('difficulty') || 'basic',
+                    priority: parseInt(formData.get('priority')) || 2,
+                    keywords: formData.get('keywords') ? 
+                        formData.get('keywords').split(',').map(k => k.trim()).filter(k => k) : []
+                };
+                
+                console.log('🚀 Saving company-specific Trade Q&A:', qnaData);
+                
                 const response = await fetch(`/api/company/${this.companyId}/knowledge-management/trade-qna`, {
                     method: 'POST',
                     headers: {
@@ -18395,16 +18538,29 @@ Key Metrics:
                 });
 
                 if (response.ok) {
-                    this.showSuccessMessage('Company-specific Trade Q&A added successfully!');
+                    this.showSuccessMessage('Trade Q&A added successfully!');
+                    this.closeAddTradeQnAModal();
                     await this.renderTradeQnA(); // Refresh the Trade Q&A section
                 } else {
                     const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
                     throw new Error(errorData.message || 'Failed to save Trade Q&A');
                 }
             } catch (error) {
-                console.error('❌ Error saving company-specific Trade Q&A:', error);
+                console.error('❌ Error saving Trade Q&A:', error);
                 this.showErrorMessage(`Failed to save Trade Q&A: ${error.message}`);
+            } finally {
+                // Restore button state
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalText;
             }
+        }
+
+        /**
+         * 🚪 Close Add Trade Q&A Modal
+         */
+        closeAddTradeQnAModal() {
+            const modal = document.getElementById('add-trade-qna-modal');
+            modal.classList.add('hidden');
         }
 
         showAddTemplateModal() {
@@ -19543,6 +19699,27 @@ Key Metrics:
 
         document.getElementById('save-trade-categories')?.addEventListener('click', () => {
             knowledgeManager.saveTradeCategories();
+        });
+
+        // Add Trade Q&A Modal Events (Beautiful Form!)
+        document.getElementById('close-add-trade-qna-modal')?.addEventListener('click', () => {
+            knowledgeManager.closeAddTradeQnAModal();
+        });
+
+        document.getElementById('cancel-add-trade-qna')?.addEventListener('click', () => {
+            knowledgeManager.closeAddTradeQnAModal();
+        });
+
+        document.getElementById('save-add-trade-qna')?.addEventListener('click', () => {
+            knowledgeManager.saveCompanySpecificTradeQnA();
+        });
+
+        document.getElementById('generate-add-trade-keywords-btn')?.addEventListener('click', () => {
+            const question = document.getElementById('add-trade-question').value;
+            const answer = document.getElementById('add-trade-answer').value;
+            const combinedText = `${question} ${answer}`;
+            const keywords = knowledgeManager.generateKeywords(combinedText, 'technical');
+            document.getElementById('add-trade-keywords').value = keywords.join(', ');
         });
 
         document.getElementById('generate-trade-keywords-btn')?.addEventListener('click', () => {
