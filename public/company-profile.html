@@ -18021,57 +18021,209 @@ Key Metrics:
             return colorMap[category] || 'gray';
         }
 
-        renderTradeQnA() {
+        /**
+         * 🏆 RENDER DUAL-LAYER TRADE Q&A (Global + Company-Specific)
+         * 🌐 Shows inherited global Q&As from selected trade categories
+         * 🏢 Shows company-specific Q&As for selected trade categories
+         * ⚡ Your brilliant inheritance system in action!
+         */
+        async renderTradeQnA() {
             const container = document.getElementById('trade-qna-list');
-            if (!container || !this.knowledgeData?.tradeQnA) return;
+            if (!container) return;
 
-            const tradeQnA = this.knowledgeData.tradeQnA;
-            container.innerHTML = '';
+            // Show loading state
+            container.innerHTML = `
+                <div class="text-center py-8">
+                    <div class="inline-flex items-center space-x-2 text-gray-500">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Loading inherited Q&As...</span>
+                    </div>
+                </div>
+            `;
 
-            if (tradeQnA.length === 0) {
+            try {
+                // 🚀 LOAD DUAL-LAYER TRADE Q&As (Your brilliant inheritance system!)
+                const response = await fetch(`/api/enterprise-trade-categories/qnas/${this.companyId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to load Trade Q&As: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const tradeQnAs = result.data || [];
+                
+                console.log('🎉 DUAL-LAYER Trade Q&As loaded:', {
+                    total: tradeQnAs.length,
+                    global: result.meta?.global || 0,
+                    companySpecific: result.meta?.companySpecific || 0,
+                    selectedTrades: result.meta?.selectedTrades || []
+                });
+
+                container.innerHTML = '';
+
+                if (tradeQnAs.length === 0) {
+                    // Show different messages based on whether company has selected trade categories
+                    const selectedTrades = result.meta?.selectedTrades || [];
+                    
+                    if (selectedTrades.length === 0) {
+                        container.innerHTML = `
+                            <div class="text-center py-8">
+                                <i class="fas fa-magic text-blue-400 text-3xl mb-3"></i>
+                                <h5 class="text-lg font-medium text-gray-600 mb-2">Select Trade Categories First</h5>
+                                <p class="text-gray-500 mb-4">Choose your trade specializations to inherit professional Q&As instantly.</p>
+                                <button onclick="knowledgeManager.openTradeQnAModal()" 
+                                        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                                    <i class="fas fa-magic mr-2"></i>Select Trade Categories
+                                </button>
+                            </div>
+                        `;
+                    } else {
+                        container.innerHTML = `
+                            <div class="text-center py-8">
+                                <i class="fas fa-tools text-gray-400 text-3xl mb-3"></i>
+                                <h5 class="text-lg font-medium text-gray-600 mb-2">No Q&As Available Yet</h5>
+                                <p class="text-gray-500 mb-2">Selected categories: ${selectedTrades.join(', ')}</p>
+                                <p class="text-gray-500 mb-4">Add company-specific Q&As for your selected trade categories.</p>
+                                <button onclick="knowledgeManager.showAddTradeQnAModal()" 
+                                        class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                                    <i class="fas fa-plus mr-2"></i>Add Company-Specific Q&A
+                                </button>
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+
+                // 🎯 GROUP Q&As BY SOURCE (Global vs Company-Specific)
+                const globalQnAs = tradeQnAs.filter(qna => qna.isGlobal);
+                const companyQnAs = tradeQnAs.filter(qna => !qna.isGlobal);
+
+                // 🌐 RENDER GLOBAL Q&As SECTION (Inherited Knowledge)
+                if (globalQnAs.length > 0) {
+                    const globalSection = document.createElement('div');
+                    globalSection.className = 'mb-8';
+                    globalSection.innerHTML = `
+                        <div class="flex items-center justify-between mb-4 pb-2 border-b border-blue-200">
+                            <div class="flex items-center space-x-2">
+                                <i class="fas fa-globe text-blue-600"></i>
+                                <h4 class="text-sm font-semibold text-blue-800">Inherited Global Knowledge</h4>
+                                <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">${globalQnAs.length} Q&As</span>
+                            </div>
+                            <div class="text-xs text-blue-600">
+                                <i class="fas fa-magic mr-1"></i>Auto-inherited from your selected trade categories
+                            </div>
+                        </div>
+                        <div class="space-y-3" id="global-qnas-list"></div>
+                    `;
+                    container.appendChild(globalSection);
+
+                    const globalList = globalSection.querySelector('#global-qnas-list');
+                    globalQnAs.forEach(qna => {
+                        const qnaItem = this.createTradeQnAItem(qna, true); // true = isGlobal
+                        globalList.appendChild(qnaItem);
+                    });
+                }
+
+                // 🏢 RENDER COMPANY-SPECIFIC Q&As SECTION
+                const companySection = document.createElement('div');
+                companySection.className = 'mb-4';
+                companySection.innerHTML = `
+                    <div class="flex items-center justify-between mb-4 pb-2 border-b border-green-200">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-building text-green-600"></i>
+                            <h4 class="text-sm font-semibold text-green-800">Company-Specific Knowledge</h4>
+                            <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">${companyQnAs.length} Q&As</span>
+                        </div>
+                        <button onclick="knowledgeManager.showAddTradeQnAModal()" 
+                                class="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">
+                            <i class="fas fa-plus mr-1"></i>Add Company Q&A
+                        </button>
+                    </div>
+                    <div class="space-y-3" id="company-qnas-list"></div>
+                `;
+                container.appendChild(companySection);
+
+                const companyList = companySection.querySelector('#company-qnas-list');
+                if (companyQnAs.length === 0) {
+                    companyList.innerHTML = `
+                        <div class="text-center py-6 bg-green-50 rounded-lg border border-green-200">
+                            <i class="fas fa-plus-circle text-green-400 text-2xl mb-2"></i>
+                            <p class="text-sm text-green-700 mb-2">No company-specific Q&As yet</p>
+                            <p class="text-xs text-green-600">Add Q&As specific to your company's services and policies</p>
+                        </div>
+                    `;
+                } else {
+                    companyQnAs.forEach(qna => {
+                        const qnaItem = this.createTradeQnAItem(qna, false); // false = company-specific
+                        companyList.appendChild(qnaItem);
+                    });
+                }
+
+            } catch (error) {
+                console.error('❌ Error loading Trade Q&As:', error);
                 container.innerHTML = `
-                    <div class="text-center py-8">
-                        <i class="fas fa-tools text-gray-400 text-3xl mb-3"></i>
-                        <h5 class="text-lg font-medium text-gray-600 mb-2">No Trade Q&A Found</h5>
-                        <p class="text-gray-500">Add trade-specific knowledge to help your AI agent with technical questions.</p>
+                    <div class="text-center py-8 text-red-600">
+                        <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+                        <div>Failed to load Trade Q&As</div>
+                        <div class="text-sm mt-1">${error.message}</div>
+                        <button onclick="knowledgeManager.renderTradeQnA()" 
+                                class="mt-3 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors">
+                            <i class="fas fa-redo mr-2"></i>Retry
+                        </button>
                     </div>
                 `;
-                return;
             }
-
-            tradeQnA.forEach(qna => {
-                const qnaItem = this.createTradeQnAItem(qna);
-                container.appendChild(qnaItem);
-            });
         }
 
-        createTradeQnAItem(qna) {
+        createTradeQnAItem(qna, isGlobal = false) {
             const div = document.createElement('div');
-            div.className = 'bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow';
-            div.dataset.qnaId = qna.id;
+            const borderColor = isGlobal ? 'border-blue-200' : 'border-green-200';
+            const bgColor = isGlobal ? 'bg-blue-50' : 'bg-white';
+            div.className = `${bgColor} border ${borderColor} rounded-lg p-4 hover:shadow-md transition-shadow`;
+            div.dataset.qnaId = qna.id || qna._id;
 
+            const sourceLabel = isGlobal ? 'Global' : 'Company';
+            const sourceColor = isGlobal ? 'blue' : 'green';
+            const categoryName = qna.tradeCategory || qna.category || 'General';
+            const difficulty = qna.difficulty || 'basic';
+            const lastUpdated = qna.lastUpdated || qna.updatedAt || qna.createdAt || new Date();
+            
             div.innerHTML = `
                 <div class="flex items-start justify-between mb-3">
                     <div class="flex-1">
                         <div class="flex items-center mb-2">
-                            <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full mr-2">${qna.tradeCategory}</span>
-                            <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">${qna.difficulty}</span>
+                            <span class="px-2 py-1 bg-${sourceColor}-100 text-${sourceColor}-800 text-xs rounded-full mr-2">
+                                <i class="fas ${isGlobal ? 'fa-globe' : 'fa-building'} mr-1"></i>${sourceLabel}
+                            </span>
+                            <span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full mr-2">${categoryName}</span>
+                            <span class="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">${difficulty}</span>
                         </div>
                         <h5 class="font-medium text-gray-900 mb-1">${qna.question}</h5>
                         <p class="text-sm text-gray-600 line-clamp-2">${qna.answer}</p>
                     </div>
                     <div class="flex space-x-1 ml-4">
-                        <button class="text-blue-600 hover:text-blue-800 p-1" onclick="knowledgeManager.editTradeQnA('${qna.id}')">
-                            <i class="fas fa-edit text-sm"></i>
-                        </button>
-                        <button class="text-red-600 hover:text-red-800 p-1" onclick="knowledgeManager.deleteTradeQnA('${qna.id}')">
-                            <i class="fas fa-trash text-sm"></i>
-                        </button>
+                        ${isGlobal ? `
+                            <span class="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                                <i class="fas fa-lock mr-1"></i>Read-only
+                            </span>
+                        ` : `
+                            <button class="text-blue-600 hover:text-blue-800 p-1" onclick="knowledgeManager.editTradeQnA('${qna.id || qna._id}')">
+                                <i class="fas fa-edit text-sm"></i>
+                            </button>
+                            <button class="text-red-600 hover:text-red-800 p-1" onclick="knowledgeManager.deleteTradeQnA('${qna.id || qna._id}')">
+                                <i class="fas fa-trash text-sm"></i>
+                            </button>
+                        `}
                     </div>
                 </div>
                 <div class="text-xs text-gray-500">
                     <span><i class="fas fa-tags mr-1"></i>Keywords: ${qna.keywords?.join(', ') || 'None'}</span>
-                    <span class="ml-4"><i class="fas fa-clock mr-1"></i>Updated: ${new Date(qna.lastUpdated).toLocaleDateString()}</span>
+                    <span class="ml-4"><i class="fas fa-clock mr-1"></i>Updated: ${new Date(lastUpdated).toLocaleDateString()}</span>
+                    ${isGlobal ? '<span class="ml-4 text-blue-600"><i class="fas fa-magic mr-1"></i>Auto-inherited</span>' : ''}
                 </div>
             `;
 
@@ -18202,8 +18354,57 @@ Key Metrics:
             this.openCompanyQnAModal('add');
         }
 
+        /**
+         * 🏢 Show Add Company-Specific Trade Q&A Modal
+         * 📝 This creates a REAL Q&A entry modal (not the category selection modal)
+         */
         showAddTradeQnAModal() {
-            this.openTradeQnAModal('add');
+            // For now, let's create a simple prompt-based system
+            // TODO: Create a proper modal for adding company-specific Trade Q&As
+            const question = prompt('Enter the trade question:');
+            if (!question) return;
+            
+            const answer = prompt('Enter the answer:');
+            if (!answer) return;
+            
+            const keywords = prompt('Enter keywords (comma-separated):') || '';
+            
+            // Save the company-specific Trade Q&A
+            this.saveCompanySpecificTradeQnA({
+                question,
+                answer,
+                keywords: keywords.split(',').map(k => k.trim()).filter(k => k),
+                tradeCategory: 'General', // TODO: Get from company's selected categories
+                difficulty: 'basic',
+                priority: 2
+            });
+        }
+
+        /**
+         * 💾 Save Company-Specific Trade Q&A
+         */
+        async saveCompanySpecificTradeQnA(qnaData) {
+            try {
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/trade-qna`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    },
+                    body: JSON.stringify(qnaData)
+                });
+
+                if (response.ok) {
+                    this.showSuccessMessage('Company-specific Trade Q&A added successfully!');
+                    await this.renderTradeQnA(); // Refresh the Trade Q&A section
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                    throw new Error(errorData.message || 'Failed to save Trade Q&A');
+                }
+            } catch (error) {
+                console.error('❌ Error saving company-specific Trade Q&A:', error);
+                this.showErrorMessage(`Failed to save Trade Q&A: ${error.message}`);
+            }
         }
 
         showAddTemplateModal() {
