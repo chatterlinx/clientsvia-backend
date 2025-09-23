@@ -18526,20 +18526,19 @@ Key Metrics:
                         formData.get('keywords').split(',').map(k => k.trim()).filter(k => k) : []
                 };
                 
-                console.log('🚀 Saving company-specific Trade Q&A:', qnaData);
-                
-                // Prepare data for the correct API endpoint
+                // ============================================================================
+                // 🎯 CLEAN ARCHITECTURE: Map form data to correct API format
+                // Purpose: Transform frontend form data to backend API requirements
+                // ============================================================================
                 const apiData = {
                     question: qnaData.question,
                     answer: qnaData.answer,
-                    category: qnaData.difficulty, // Map difficulty to category
+                    category: 'services', // Always use 'services' for trade Q&As (valid enum value)
                     companyId: this.companyId,
                     tradeCategory: qnaData.tradeCategory,
                     keywords: qnaData.keywords,
                     priority: qnaData.priority
                 };
-                
-                console.log('🔍 DEBUG: API data being sent:', apiData);
                 
                 const response = await fetch(`/api/enterprise-trade-categories/qna`, {
                     method: 'POST',
@@ -18556,16 +18555,6 @@ Key Metrics:
                     await this.renderTradeQnA(); // Refresh the Trade Q&A section
                 } else {
                     const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-                    console.error('❌ DETAILED API ERROR RESPONSE:', errorData);
-                    
-                    // Enhanced error message for validation errors
-                    if (errorData.fieldErrors && errorData.fieldErrors.length > 0) {
-                        const fieldErrorsText = errorData.fieldErrors.map(fe => 
-                            `• ${fe.field}: ${fe.message} (got: ${JSON.stringify(fe.value)})`
-                        ).join('\n');
-                        throw new Error(`Validation Errors:\n${fieldErrorsText}`);
-                    }
-                    
                     throw new Error(errorData.error || errorData.message || 'Failed to save Trade Q&A');
                 }
             } catch (error) {
