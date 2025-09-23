@@ -415,12 +415,25 @@ router.post('/qna', async (req, res) => {
         const validationError = tradeQnA.validateSync();
         if (validationError) {
             console.error('❌ VALIDATION ERROR:', validationError.message);
-            console.error('❌ VALIDATION DETAILS:', validationError.errors);
+            console.error('❌ VALIDATION DETAILS:', JSON.stringify(validationError.errors, null, 2));
+            
+            // Log each validation error in detail
+            Object.keys(validationError.errors).forEach(field => {
+                const error = validationError.errors[field];
+                console.error(`❌ Field "${field}": ${error.message} (Kind: ${error.kind}, Value: ${JSON.stringify(error.value)})`);
+            });
+            
             return res.status(400).json({
                 success: false,
                 message: 'Validation error',
                 error: validationError.message,
-                details: validationError.errors
+                details: validationError.errors,
+                fieldErrors: Object.keys(validationError.errors).map(field => ({
+                    field,
+                    message: validationError.errors[field].message,
+                    kind: validationError.errors[field].kind,
+                    value: validationError.errors[field].value
+                }))
             });
         }
         

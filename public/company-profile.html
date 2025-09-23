@@ -18556,7 +18556,17 @@ Key Metrics:
                     await this.renderTradeQnA(); // Refresh the Trade Q&A section
                 } else {
                     const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-                    throw new Error(errorData.message || 'Failed to save Trade Q&A');
+                    console.error('❌ DETAILED API ERROR RESPONSE:', errorData);
+                    
+                    // Enhanced error message for validation errors
+                    if (errorData.fieldErrors && errorData.fieldErrors.length > 0) {
+                        const fieldErrorsText = errorData.fieldErrors.map(fe => 
+                            `• ${fe.field}: ${fe.message} (got: ${JSON.stringify(fe.value)})`
+                        ).join('\n');
+                        throw new Error(`Validation Errors:\n${fieldErrorsText}`);
+                    }
+                    
+                    throw new Error(errorData.error || errorData.message || 'Failed to save Trade Q&A');
                 }
             } catch (error) {
                 console.error('❌ Error saving Trade Q&A:', error);
