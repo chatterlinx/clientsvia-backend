@@ -3438,63 +3438,6 @@ This would be a great time to also check..."></textarea>
                                                     
                                                 </div>
 
-                                                <!-- Right Column: Memory & Fallback Settings -->
-                                                <div class="space-y-5">
-                                                    <h4 class="text-md font-semibold text-gray-700 border-b pb-2">
-                                                        <i class="fas fa-brain mr-2 text-indigo-600"></i>Memory & Fallback Options
-                                                    </h4>
-                                                    
-                                                    <!-- Memory Mode Selection -->
-                                                    <div>
-                                                        <label for="clientsvia-memoryModeSelect" class="form-label">Memory Mode</label>
-                                                        <select id="clientsvia-memoryModeSelect" class="form-select">
-                                                            <option value="short">Short-term (Basic context)</option>
-                                                            <option value="conversational" selected>Conversational (Full dialog history)</option>
-                                                            <option value="session">Session (Persistent memory)</option>
-                                                        </select>
-                                                        <p class="text-xs text-gray-500 mt-1">How agent remembers previous interactions</p>
-                                                    </div>
-                                                    
-                                                    <!-- Context Retention Time -->
-                                                    <div>
-                                                        <label for="clientsvia-contextRetentionSlider" class="form-label">Context Retention Time</label>
-                                                        <div class="flex items-center space-x-3">
-                                                            <input type="range" id="clientsvia-contextRetentionSlider" 
-                                                                class="w-1/2" min="5" max="120" step="5" value="30">
-                                                            <span id="clientsvia-contextRetentionValue" class="text-sm font-mono bg-gray-100 px-2 py-1 rounded">30 minutes</span>
-                                                        </div>
-                                                        <p class="text-xs text-gray-500 mt-1">How long to maintain conversation history</p>
-                                                    </div>
-                                                    
-                                                    <!-- Fallback Behaviors -->
-                                                    <div class="mt-5">
-                                                        <h5 class="text-sm font-medium text-gray-700 mb-3">Fallback Behavior</h5>
-                                                        <div class="space-y-3">
-                                                            <label class="flex items-center p-3 bg-red-50 rounded-lg border border-red-200">
-                                                                <input type="checkbox" id="clientsvia-rejectLowConfidenceToggle" class="form-checkbox" checked>
-                                                                <div class="ml-3">
-                                                                    <span class="text-sm font-medium text-gray-900">Reject Low Confidence Matches</span>
-                                                                    <p class="text-xs text-gray-500">Don't use answers below threshold</p>
-                                                                </div>
-                                                            </label>
-                                                            
-                                                            <label class="flex items-center p-3 bg-orange-50 rounded-lg border border-orange-200">
-                                                                <input type="checkbox" id="clientsvia-escalateNoMatchToggle" class="form-checkbox" checked>
-                                                                <div class="ml-3">
-                                                                    <span class="text-sm font-medium text-gray-900">Escalate On No Match</span>
-                                                                    <p class="text-xs text-gray-500">Connect to human when no good answers</p>
-                                                                </div>
-                                                            </label>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <!-- Fallback Message -->
-                                                    <div class="mt-4">
-                                                        <label for="clientsvia-fallbackMessageInput" class="form-label">Fallback Message</label>
-                                                        <textarea id="clientsvia-fallbackMessageInput" class="form-textarea" rows="3">I want to make sure I give you accurate information. Let me connect you with a specialist who can help.</textarea>
-                                                        <p class="text-xs text-gray-500 mt-1">Message to use when escalating to human</p>
-                                                    </div>
-                                                </div>
                                             </div>
                                             
                                             <!-- ========================================= -->
