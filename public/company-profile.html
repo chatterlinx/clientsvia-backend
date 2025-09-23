@@ -3114,14 +3114,6 @@ This would be a great time to also check..."></textarea>
                             <div class="mb-6">
                                 <div class="border-b border-gray-200">
                                     <nav class="-mb-px flex space-x-8">
-                                        <button id="knowledge-subtab-company-qna" 
-                                                class="knowledge-subtab-btn active whitespace-nowrap py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600"
-                                                onclick="switchKnowledgeSubTab('company-qna')">
-                                            <i class="fas fa-building mr-2"></i>Company Q&A
-                                            <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                Priority #1
-                                            </span>
-                                        </button>
                                     </nav>
                                 </div>
                             </div>
@@ -3130,173 +3122,6 @@ This would be a great time to also check..."></textarea>
                                             <!-- 📚 COMPANY Q&A SUB-TAB CONTENT -->
                                             <!-- Full CRUD interface with real-time testing -->
                                             <!-- ========================================= -->
-                                            <div id="knowledge-subtab-company-qna-content" class="knowledge-subtab-content">
-                                            <div class="mb-8">
-                                                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6 mb-6">
-                                                    <div class="flex items-center justify-between mb-4">
-                                                        <div class="flex items-center">
-                                                            <i class="fas fa-building mr-3 text-blue-600 text-xl"></i>
-                                                            <div>
-                                                                <h3 class="text-lg font-semibold text-gray-800">Company Knowledge Base</h3>
-                                                                <p class="text-sm text-gray-600">Manage your company-specific Q&A with real-time AI agent testing</p>
-                                                            </div>
-                                                        </div>
-                                                        <div class="flex items-center space-x-3">
-                                                            <span class="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-                                                                <i class="fas fa-star mr-1"></i>Priority #1 Source
-                                                            </span>
-                                                            <div class="text-sm font-mono bg-blue-100 text-blue-800 px-3 py-1 rounded">
-                                                                Confidence: <span id="company-qna-threshold-display">0.80</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <!-- Confidence Threshold - Synced with Priority Settings -->
-                                                    <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                                        <div class="flex items-center justify-between">
-                                                            <div class="flex items-center space-x-2">
-                                                                <i class="fas fa-link text-blue-600"></i>
-                                                                <span class="text-sm font-medium text-blue-800">Confidence Threshold</span>
-                                                            </div>
-                                                            <div class="flex items-center space-x-2">
-                                                                <span class="text-sm text-blue-700">Current:</span>
-                                                                <span id="company-qna-sync-threshold-display" class="text-sm font-mono bg-blue-100 px-2 py-1 rounded">0.80</span>
-                                                            </div>
-                                                        </div>
-                                                        <p class="text-xs text-blue-600 mt-2">
-                                                            <i class="fas fa-info-circle mr-1"></i>
-                                                            This setting is controlled in the <strong>Knowledge Source Priority</strong> section above. 
-                                                            All threshold adjustments are unified there for consistent AI routing.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- ========================================= -->
-                                                <!-- 🎯 EMBEDDED COMPANY Q&A MANAGER -->
-                                                <!-- Full enterprise CRUD interface -->
-                                                <!-- ========================================= -->
-                                                <div id="embedded-company-qna-manager" class="bg-white rounded-lg shadow-sm border border-gray-200">
-                                                    <!-- Q&A Manager Header -->
-                                                    <div class="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-6 py-4">
-                                                        <div class="flex items-center justify-between">
-                                                            <div class="flex items-center">
-                                                                <i class="fas fa-database mr-3 text-gray-600"></i>
-                                                                <h4 class="text-lg font-semibold text-gray-800">Company Q&A Management</h4>
-                                                            </div>
-                                                            <div class="flex items-center space-x-3">
-                                                                <button id="add-new-qna-btn" 
-                                                                        class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center">
-                                                                    <i class="fas fa-plus mr-2"></i>Add New Q&A
-                                                                </button>
-                                                                <button id="test-priority-flow-btn" 
-                                                                        class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out flex items-center">
-                                                                    <i class="fas fa-vial mr-2"></i>Test Priority Flow
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <!-- Search and Filters -->
-                                                    <div class="p-6 border-b border-gray-200">
-                                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                            <div>
-                                                                <label class="block text-sm font-medium text-gray-700 mb-2">Search Q&A</label>
-                                                                <div class="relative">
-                                                                    <input type="text" id="qna-search-input" 
-                                                                           class="form-input pl-10" 
-                                                                           placeholder="Search questions or answers...">
-                                                                    <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
-                                                                </div>
-                                                            </div>
-                                                            <div>
-                                                                <label class="block text-sm font-medium text-gray-700 mb-2">Category Filter</label>
-                                                                <select id="qna-category-filter" class="form-select">
-                                                                    <option value="">All Categories</option>
-                                                                    <option value="general">General</option>
-                                                                    <option value="services">Services</option>
-                                                                    <option value="pricing">Pricing</option>
-                                                                    <option value="scheduling">Scheduling</option>
-                                                                    <option value="emergency">Emergency</option>
-                                                                </select>
-                                                            </div>
-                                                            <div>
-                                                                <label class="block text-sm font-medium text-gray-700 mb-2">Status Filter</label>
-                                                                <select id="qna-status-filter" class="form-select">
-                                                                    <option value="">All Status</option>
-                                                                    <option value="active">Active</option>
-                                                                    <option value="draft">Draft</option>
-                                                                    <option value="under_review">Under Review</option>
-                                                                    <option value="archived">Archived</option>
-                                                                </select>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <!-- Q&A List Container -->
-                                                    <div id="qna-list-container" class="p-6">
-                                                        <!-- Loading State -->
-                                                        <div id="qna-loading" class="text-center py-8">
-                                                            <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mb-3"></i>
-                                                            <p class="text-gray-600">Loading Company Q&A entries...</p>
-                                                        </div>
-                                                        
-                                                        <!-- Q&A List will be populated here -->
-                                                        <div id="qna-entries-list" class="space-y-4 hidden">
-                                                            <!-- Dynamic Q&A entries will be inserted here -->
-                                                        </div>
-                                                        
-                                                        <!-- Empty State -->
-                                                        <div id="qna-empty-state" class="text-center py-12 hidden">
-                                                            <i class="fas fa-question-circle text-4xl text-gray-300 mb-4"></i>
-                                                            <h3 class="text-lg font-medium text-gray-900 mb-2">No Q&A Entries Found</h3>
-                                                            <p class="text-gray-500 mb-6">Get started by adding your first company-specific question and answer.</p>
-                                                            <button onclick="showAddQnAModal()" 
-                                                                    class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition duration-150 ease-in-out">
-                                                                <i class="fas fa-plus mr-2"></i>Add Your First Q&A
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <!-- ========================================= -->
-                                            <!-- 🔧 KNOWLEDGE SOURCE CONFIGURATION -->
-                                            <!-- Priority controls and advanced settings -->
-                                            <!-- ========================================= -->
-                                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            </div>
-                                            
-                                            <!-- ========================================= -->
-                                            <!-- 💾 KNOWLEDGE SOURCE SAVE CONTROLS -->
-                                            <!-- Professional save system with unsaved changes detection -->
-                                            <!-- ========================================= -->
-                                            <div class="mt-6 space-y-4">
-                                                
-                                                <!-- SINGLE SAVE BUTTON -->
-                                                <div class="text-center">
-                                                    <button onclick="console.log('BUTTON CLICKED: saveKnowledgeSourceSettings'); saveKnowledgeSourceSettings()" 
-                                                            class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium py-2.5 px-6 rounded-md shadow-sm hover:shadow-md active:shadow-sm transition-all duration-200 ease-in-out">
-                                                        <i class="fas fa-save mr-2 text-sm"></i>
-                                                        Save Changes
-                                                    </button>
-                                                </div>
-                                                
-                                                <!-- Last Saved Information -->
-                                                <div class="text-xs text-gray-500 text-center">
-                                                    <span id="knowledge-sources-last-saved">
-                                                        Last saved: <span id="last-saved-timestamp">Never</span>
-                                                    </span>
-                                                    <span class="mx-2">•</span>
-                                                    <span>
-                                                        Manual save required
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            </div>
-                                            
-                                            <!-- ========================================= -->
-                                            <!-- 🔧 TRADE Q&A SUB-TAB CONTENT -->
-                                            <!-- Enterprise Trade Categories Q&A Management -->
                                             <!-- ========================================= -->
                                         <!-- ========================================= -->
                                         <!-- COMPANY Q&A MANAGER MODAL                -->
@@ -9426,10 +9251,6 @@ Key Metrics:
             if (priorityMap.companyQnA) {
                 const companyPriority = priorityMap.companyQnA;
                 // Update subtab button
-                const companySubtab = document.querySelector('#knowledge-subtab-company-qna span');
-                if (companySubtab) {
-                    companySubtab.textContent = `Priority #${companyPriority}`;
-                }
                 
                 // Update Company Q&A header badge (green badge)
                 const allSpans = document.querySelectorAll('span.bg-green-100');
