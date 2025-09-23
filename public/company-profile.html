@@ -4164,20 +4164,20 @@ This would be a great time to also check..."></textarea>
                                     
                                     <!-- TAB 2: Test Personality (Clean Version) -->
                                     <div id="clientsvia-test-personality-content" class="clientsvia-tab-content" data-config-section="test-personality">
-                                        <div class="mb-6">
+                                            <div class="mb-6">
                                             <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
                                                 <h4 class="text-lg font-semibold text-green-800 flex items-center mb-2">
                                                     <i class="fas fa-vial mr-2 text-green-600"></i>Test Personality Tab
                                                     <span class="ml-2 text-sm bg-green-100 text-green-700 px-2 py-1 rounded">Clean Version</span>
                                                 </h4>
                                                 <p class="text-sm text-green-700">This is a clean version of the Agent Personality content to test if it works in isolation within the main interface.</p>
-                                            </div>
+                                                        </div>
                                             
-                                            <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
+                                                <h4 class="text-lg font-semibold text-gray-800 flex items-center mb-4">
                                                 <i class="fas fa-theater-masks mr-2 text-pink-600"></i>Agent Personality Configuration
                                                 <span class="ml-2 text-sm text-gray-600">(Voice tone, pace & behavior)</span>
-                                            </h4>
-                                            
+                                                </h4>
+                                                
                                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                                 <!-- Left Column: Voice Settings -->
                                                 <div class="space-y-4">
@@ -4186,7 +4186,7 @@ This would be a great time to also check..."></textarea>
                                                     </h5>
                                                     
                                                     <!-- Voice Tone -->
-                                                    <div>
+                                                            <div>
                                                         <label for="test-voiceToneSelect" class="form-label">Voice Tone</label>
                                                         <select id="test-voiceToneSelect" class="form-select">
                                                             <option value="friendly">Friendly - Warm and approachable</option>
@@ -4195,24 +4195,24 @@ This would be a great time to also check..."></textarea>
                                                         </select>
                                                         <p class="text-xs text-gray-500 mt-1">Controls word choice and phrasing style</p>
                                                     </div>
-
+                                                    
                                                     <!-- Speech Pace -->
-                                                    <div>
+                                                            <div>
                                                         <label for="test-speechPaceSelect" class="form-label">Speech Pace</label>
                                                         <select id="test-speechPaceSelect" class="form-select">
                                                             <option value="slow">Slow - Deliberate and clear</option>
                                                             <option value="normal">Normal - Standard pace</option>
                                                             <option value="fast">Fast - Quick and efficient</option>
-                                                        </select>
+                                                            </select>
                                                         <p class="text-xs text-gray-500 mt-1">Adjusts TTS speed for ElevenLabs or Google</p>
                                                     </div>
                                                 </div>
-
+                                                
                                                 <!-- Right Column: Behavior Settings -->
                                                 <div class="space-y-4">
                                                     <h5 class="text-md font-semibold text-gray-700 border-b pb-2">
                                                         <i class="fas fa-user-cog mr-2 text-rose-600"></i>Behavior Controls
-                                                    </h5>
+                                                        </h5>
                                                     
                                                     <!-- Interactive Behaviors -->
                                                     <div class="space-y-3">
@@ -4226,28 +4226,28 @@ This would be a great time to also check..."></textarea>
                                                         
                                                         <label class="flex items-center p-3 bg-green-50 rounded-lg border border-green-200">
                                                             <input type="checkbox" id="test-emotionToggle" class="form-checkbox mr-3">
-                                                            <div>
+                                                                    <div>
                                                                 <span class="font-medium text-gray-800">Acknowledge Emotion</span>
                                                                 <p class="text-xs text-gray-600">Respond to caller's emotional state</p>
-                                                            </div>
+                                                                    </div>
                                                         </label>
                                                         
                                                         <label class="flex items-center p-3 bg-purple-50 rounded-lg border border-purple-200">
                                                             <input type="checkbox" id="test-emojiToggle" class="form-checkbox mr-3">
-                                                            <div>
+                                                                    <div>
                                                                 <span class="font-medium text-gray-800">Use Emojis</span>
                                                                 <p class="text-xs text-gray-600">Include emojis in responses</p>
-                                                            </div>
+                                                                    </div>
                                                         </label>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
+                                                                </div>
+                                                                </div>
+                                                            </div>
+                                                            
                                             <!-- Call Transfer Configuration -->
                                             <div class="mt-8 p-6 bg-gray-50 rounded-lg border">
                                                 <h5 class="text-md font-semibold text-gray-700 mb-4">
                                                     <i class="fas fa-phone-alt mr-2 text-blue-600"></i>Call Transfer Configuration
-                                                </h5>
+                                                    </h5>
                                                 
                                                 <div class="space-y-4">
                                                     <label class="flex items-center">
@@ -4256,19 +4256,19 @@ This would be a great time to also check..."></textarea>
                                                     </label>
                                                     
                                                     <div id="test-transferConfig" class="space-y-4">
-                                                        <div>
+                                                                <div>
                                                             <label for="test-dialOutNumber" class="form-label">Transfer Phone Number</label>
                                                             <input type="tel" id="test-dialOutNumber" class="form-select" placeholder="+1234567890">
-                                                        </div>
-                                                        
-                                                        <div>
+                                                                </div>
+                                                                
+                                                                <div>
                                                             <label for="test-transferMessage" class="form-label">Transfer Message</label>
                                                             <textarea id="test-transferMessage" class="form-select" rows="3" placeholder="Please hold while I transfer you to our technician..."></textarea>
-                                                        </div>
+                                                                </div>
+                                                                </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            
+                                                
                                             <!-- Test Results -->
                                             <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                                                 <h5 class="font-semibold text-blue-800 mb-2">Test Results:</h5>
@@ -4276,18 +4276,18 @@ This would be a great time to also check..."></textarea>
                                                     <div>✅ Content loaded successfully</div>
                                                     <div>✅ All form elements are interactive</div>
                                                     <div>✅ Tab switching works properly</div>
-                                                </div>
-                                            </div>
-                                            
+                                                        </div>
+                                                    </div>
+                                                    
                                             <!-- Save Button -->
                                             <div class="mt-6 flex justify-end">
                                                 <button id="test-savePersonality" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                                                     <i class="fas fa-check mr-2"></i>Test Save (Shows Alert)
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
                                         <!-- TAB 3: Agent Personality -->
                                         <div id="clientsvia-personality-content" class="clientsvia-tab-content" data-config-section="agent-personality">
                                             <div class="mb-6">
@@ -4778,9 +4778,9 @@ This would be a great time to also check..."></textarea>
                                                         <i class="fas fa-theater-masks mr-2"></i>
                                                         <strong>ClientsVia Personality Status:</strong> Voice tone and behavioral settings configured. These apply to all conversation flows.
                                                     </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
 
                             
                             <!-- ========================================= -->
@@ -7665,7 +7665,7 @@ This would be a great time to also check..."></textarea>
             
             const companyId = getCurrentCompanyId();
             console.log('🚀 CHECKPOINT 2: Company ID retrieved:', companyId);
-            
+
             if (!companyId) {
                 console.log('❌ CHECKPOINT 3: No company ID found, exiting');
                 return;
@@ -7676,9 +7676,9 @@ This would be a great time to also check..."></textarea>
                 console.log('⏰ Agent Settings load timestamp:', new Date().toISOString());
                 console.log('🔍 LOAD FIX: Using correct endpoint - /api/company/' + companyId);
                 
-                // 🔧 CACHE BUSTING: Add timestamp to force fresh data load
-                const cacheBuster = Date.now();
-                console.log('🔧 CACHE BUSTER: Using timestamp', cacheBuster, 'to force fresh data');
+            // 🔧 CACHE BUSTING: Add timestamp to force fresh data load
+            const cacheBuster = Date.now();
+            console.log('🔧 CACHE BUSTER: Using timestamp', cacheBuster, 'to force fresh data');
                 
                 // Get auth token for API call
                 console.log('🚀 CHECKPOINT 5: Getting auth token');
@@ -18032,18 +18032,68 @@ Key Metrics:
             }
         }
 
-        updateKnowledgeStatistics() {
-            if (!this.knowledgeData) return;
+        async updateKnowledgeStatistics() {
+            console.log('📊 Updating Knowledge Management statistics...');
+            
+            if (!this.knowledgeData) {
+                console.warn('⚠️ No knowledge data available for statistics');
+                return;
+            }
 
-            const companyQnACount = this.knowledgeData.companyQnA?.length || 0;
-            const tradeQnACount = this.knowledgeData.tradeQnA?.length || 0;
-            const templatesCount = this.knowledgeData.templates?.length || 0;
-            const totalCount = companyQnACount + tradeQnACount + templatesCount;
+            try {
+                // 🏢 COMPANY Q&A COUNT (from knowledgeData)
+                const companyQnACount = this.knowledgeData.companyQnA?.length || 0;
+                
+                // 🔧 TRADE Q&A COUNT (from dual-layer API - your brilliant system!)
+                let tradeQnACount = 0;
+                try {
+                    const tradeResponse = await fetch(`/api/enterprise-trade-categories/qnas/${this.companyId}`, {
+                        headers: { 'Authorization': `Bearer ${this.getAuthToken()}` }
+                    });
+                    if (tradeResponse.ok) {
+                        const tradeData = await tradeResponse.json();
+                        // Count both global and company-specific Q&As
+                        tradeQnACount = (tradeData.globalQnAs?.length || 0) + (tradeData.companyQnAs?.length || 0);
+                        console.log('🔧 Trade Q&A count from dual-layer API:', {
+                            global: tradeData.globalQnAs?.length || 0,
+                            company: tradeData.companyQnAs?.length || 0,
+                            total: tradeQnACount
+                        });
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Could not load Trade Q&A count:', error.message);
+                    tradeQnACount = this.knowledgeData.tradeQnA?.length || 0; // Fallback to old data
+                }
+                
+                // 📝 TEMPLATES COUNT (from knowledgeData)  
+                const templatesCount = this.knowledgeData.templates?.length || 0;
+                
+                // 📊 TOTAL COUNT
+                const totalCount = companyQnACount + tradeQnACount + templatesCount;
+                
+                console.log('📊 Final statistics:', {
+                    companyQnA: companyQnACount,
+                    tradeQnA: tradeQnACount,
+                    templates: templatesCount,
+                    total: totalCount
+                });
 
-            document.getElementById('company-qna-count').textContent = companyQnACount;
-            document.getElementById('trade-qna-count').textContent = tradeQnACount;
-            document.getElementById('templates-count').textContent = templatesCount;
-            document.getElementById('total-entries-count').textContent = totalCount;
+                // 🎯 UPDATE DOM ELEMENTS
+                document.getElementById('company-qna-count').textContent = companyQnACount;
+                document.getElementById('trade-qna-count').textContent = tradeQnACount;
+                document.getElementById('templates-count').textContent = templatesCount;
+                document.getElementById('total-entries-count').textContent = totalCount;
+                
+                console.log('✅ Knowledge Management statistics updated successfully');
+                
+            } catch (error) {
+                console.error('❌ Failed to update statistics:', error);
+                // Show error state
+                document.getElementById('company-qna-count').textContent = '?';
+                document.getElementById('trade-qna-count').textContent = '?';
+                document.getElementById('templates-count').textContent = '?';
+                document.getElementById('total-entries-count').textContent = '?';
+            }
         }
 
         loadTabData(tabName) {
@@ -18619,6 +18669,9 @@ Key Metrics:
                 // Refresh the Trade Q&A display to reflect changes
                 this.renderTradeQnA();
                 
+                // Update statistics to reflect the changes
+                this.updateKnowledgeStatistics();
+                
             } catch (error) {
                 console.error('❌ Failed to unselect trade category:', error);
                 showNotification(`Failed to remove "${categoryName}": ${error.message}`, 'error');
@@ -18819,6 +18872,7 @@ Key Metrics:
                     this.showSuccessMessage(`🌍 Inherited ${categoryName} category! All Q&As now available to your AI agent.`);
                     this.closeAddTradeQnAModal();
                     await this.renderTradeQnA(); // Refresh to show inherited Q&As
+                    await this.updateKnowledgeStatistics(); // Update statistics
                 } else {
                     throw new Error('Failed to inherit global category');
                 }
@@ -18869,6 +18923,7 @@ Key Metrics:
                 this.showSuccessMessage('🏢 Company Q&A added successfully!');
                 this.closeAddTradeQnAModal();
                 await this.renderTradeQnA(); // Refresh the Trade Q&A section
+                await this.updateKnowledgeStatistics(); // Update statistics
             } else {
                 const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
                 throw new Error(errorData.error || errorData.message || 'Failed to save Trade Q&A');
