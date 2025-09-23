@@ -18601,7 +18601,7 @@ Key Metrics:
                 }
                 
                 // Show success message
-                this.showNotification(`✅ Removed "${categoryName}" from your selected categories`, 'success');
+                showNotification(`Removed "${categoryName}" from your selected categories`, 'success');
                 
                 // Refresh the management section and dropdown
                 const [newCurrentTrades, globalCategories] = await Promise.all([
@@ -18621,7 +18621,7 @@ Key Metrics:
                 
             } catch (error) {
                 console.error('❌ Failed to unselect trade category:', error);
-                this.showNotification(`❌ Failed to remove "${categoryName}": ${error.message}`, 'error');
+                showNotification(`Failed to remove "${categoryName}": ${error.message}`, 'error');
             }
         }
 
