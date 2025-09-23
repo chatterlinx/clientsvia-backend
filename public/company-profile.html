@@ -1932,9 +1932,6 @@
                                                                 <button id="km-tab-templates" class="km-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                                                                     <i class="fas fa-file-alt mr-2"></i>Templates
                                                                 </button>
-                                                                <button id="km-tab-fallback" class="km-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
-                                                                    <i class="fas fa-shield-alt mr-2"></i>In-House Fallback
-                                                                </button>
                                                             </nav>
                                                         </div>
 
@@ -2081,70 +2078,6 @@
                                                         -->
                                                         <!-- ========================================== -->
 
-                                                        <!-- In-House Fallback Tab Content -->
-                                                        <div id="km-fallback-content" class="km-tab-content p-6">
-                                                            <div class="mb-4">
-                                                                <h4 class="text-lg font-semibold text-gray-800 mb-2">In-House Fallback Configuration</h4>
-                                                                <p class="text-sm text-gray-600">Configure smart keyword-based responses when no specific Q&A matches are found.</p>
-                                                            </div>
-
-                                                            <!-- Fallback Categories -->
-                                                            <div class="grid grid-cols-2 gap-6">
-                                                                <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                                                                    <h5 class="font-medium text-orange-800 mb-3">Service Requests</h5>
-                                                                    <textarea id="service-fallback" rows="3" placeholder="Default response for service-related queries..." 
-                                                                              class="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"></textarea>
-                                                                    <div class="mt-2">
-                                                                        <label class="text-xs text-orange-700">Keywords (comma-separated):</label>
-                                                                        <input type="text" id="service-keywords" placeholder="repair, fix, service, maintenance" 
-                                                                               class="w-full mt-1 px-2 py-1 text-xs border border-orange-300 rounded focus:ring-1 focus:ring-orange-500">
-                                                                    </div>
-                                                                </div>
-
-                                                                <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                                                                    <h5 class="font-medium text-orange-800 mb-3">Booking Requests</h5>
-                                                                    <textarea id="booking-fallback" rows="3" placeholder="Default response for booking-related queries..." 
-                                                                              class="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"></textarea>
-                                                                    <div class="mt-2">
-                                                                        <label class="text-xs text-orange-700">Keywords (comma-separated):</label>
-                                                                        <input type="text" id="booking-keywords" placeholder="appointment, schedule, book, visit" 
-                                                                               class="w-full mt-1 px-2 py-1 text-xs border border-orange-300 rounded focus:ring-1 focus:ring-orange-500">
-                                                                    </div>
-                                                                </div>
-
-                                                                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                                                                    <h5 class="font-medium text-red-800 mb-3">Emergency Situations</h5>
-                                                                    <textarea id="emergency-fallback" rows="3" placeholder="Default response for emergency queries..." 
-                                                                              class="w-full px-3 py-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"></textarea>
-                                                                    <div class="mt-2">
-                                                                        <label class="text-xs text-red-700">Keywords (comma-separated):</label>
-                                                                        <input type="text" id="emergency-keywords" placeholder="emergency, urgent, help, broken" 
-                                                                               class="w-full mt-1 px-2 py-1 text-xs border border-red-300 rounded focus:ring-1 focus:ring-red-500">
-                                                                    </div>
-                                                                </div>
-
-                                                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                                                    <h5 class="font-medium text-blue-800 mb-3">General Inquiries</h5>
-                                                                    <textarea id="general-fallback" rows="3" placeholder="Default response for general queries..." 
-                                                                              class="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
-                                                                    <div class="mt-2">
-                                                                        <label class="text-xs text-blue-700">Keywords (comma-separated):</label>
-                                                                        <input type="text" id="general-keywords" placeholder="hours, location, contact, info" 
-                                                                               class="w-full mt-1 px-2 py-1 text-xs border border-blue-300 rounded focus:ring-1 focus:ring-blue-500">
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            <!-- Save Fallback Configuration -->
-                                                            <div class="mt-6 text-center">
-                                                                <button id="save-fallback-btn" class="bg-orange-600 hover:bg-orange-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
-                                                                    <i class="fas fa-save mr-2"></i>Save Fallback Configuration
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- ========================================== -->
                                                     <!-- KNOWLEDGE BASE TESTING PANEL 
                                                          📋 Real-time testing of knowledge base responses
                                                          🔧 Features: Custom query input, instant results, integration with priority flow
@@ -15709,9 +15642,6 @@ Key Metrics:
                 this.switchKnowledgeTab('templates');
             });
 
-            document.getElementById('km-tab-fallback')?.addEventListener('click', () => {
-                this.switchKnowledgeTab('fallback');
-            });
 
             // Add buttons
             document.getElementById('add-company-qna-btn')?.addEventListener('click', () => {
@@ -15727,9 +15657,6 @@ Key Metrics:
             });
 
             // Save buttons
-            document.getElementById('save-fallback-btn')?.addEventListener('click', () => {
-                this.saveFallbackConfiguration();
-            });
 
             // Test knowledge
             document.getElementById('test-knowledge-btn')?.addEventListener('click', () => {
@@ -17705,59 +17632,6 @@ Key Metrics:
                     serviceRequests: {
                         response: document.getElementById('service-fallback')?.value || '',
                         keywords: document.getElementById('service-keywords')?.value.split(',').map(k => k.trim()).filter(k => k)
-                    },
-                    bookingRequests: {
-                        response: document.getElementById('booking-fallback')?.value || '',
-                        keywords: document.getElementById('booking-keywords')?.value.split(',').map(k => k.trim()).filter(k => k)
-                    },
-                    emergencySituations: {
-                        response: document.getElementById('emergency-fallback')?.value || '',
-                        keywords: document.getElementById('emergency-keywords')?.value.split(',').map(k => k.trim()).filter(k => k)
-                    },
-                    generalInquiries: {
-                        response: document.getElementById('general-fallback')?.value || '',
-                        keywords: document.getElementById('general-keywords')?.value.split(',').map(k => k.trim()).filter(k => k)
-                    }
-                };
-
-                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/in-house-fallback`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${this.getAuthToken()}`
-                    },
-                    body: JSON.stringify(fallbackConfig)
-                });
-
-                if (response.ok) {
-                    this.showSuccessMessage('Fallback configuration saved successfully!');
-                    await this.loadKnowledgeData(); // Refresh data
-                } else {
-                    throw new Error(`Failed to save: ${response.statusText}`);
-                }
-            } catch (error) {
-                console.error('Error saving fallback configuration:', error);
-                this.showErrorMessage('Failed to save fallback configuration. Please try again.');
-            }
-        }
-
-        async runQuickKnowledgeTest() {
-            const testQuery = 'What are your business hours?';
-            await this.runKnowledgeTestWithQuery(testQuery);
-        }
-
-        async runCustomKnowledgeTest() {
-            const queryInput = document.getElementById('knowledge-test-input');
-            const query = queryInput?.value?.trim();
-            
-            if (!query) {
-                this.showErrorMessage('Please enter a test query');
-                return;
-            }
-
-            await this.runKnowledgeTestWithQuery(query);
-        }
-
         async runKnowledgeTestWithQuery(query) {
             try {
                 console.log(`Running knowledge test with query: ${query}`);
@@ -18459,10 +18333,6 @@ Key Metrics:
                     savePromises.push(this.managers.priorities.savePriorities());
                 }
 
-                // Save Knowledge Management (fallback configuration)
-                if (this.managers.knowledge && this.managers.knowledge.saveFallbackConfiguration) {
-                    savePromises.push(this.managers.knowledge.saveFallbackConfiguration());
-                }
 
                 // Wait for all saves to complete
                 await Promise.all(savePromises);
