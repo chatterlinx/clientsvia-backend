@@ -7380,56 +7380,11 @@ Key Metrics:
             document.body.insertAdjacentHTML('beforeend', setupModalHtml);
         }
 
-        // ========================================= 
-        // KNOWLEDGE SOURCES SUB-TAB FUNCTIONS
-        // =========================================
+        // Legacy knowledge sub-tab functions removed - using modern AI Agent Logic 4-tab system
+        // switchKnowledgeSubTab() function eliminated - functionality moved to new system
         
-        /**
-         * ✅ PRODUCTION: Switch between Knowledge Sources sub-tabs
-         */
-        function switchKnowledgeSubTab(tabName) {
-            console.log(`🔄 Switching to Knowledge sub-tab: ${tabName}`);
-            
-            // Update tab buttons
-            document.querySelectorAll('.knowledge-subtab-btn').forEach(btn => {
-                btn.classList.remove('active', 'border-blue-500', 'text-blue-600');
-                btn.classList.add('border-transparent', 'text-gray-500');
-            });
-            
-            // Hide all sub-tab content
-            document.querySelectorAll('.knowledge-subtab-content').forEach(content => {
-                content.classList.add('hidden');
-            });
-            
-            // Activate selected tab
-            const activeBtn = document.getElementById(`knowledge-subtab-${tabName}`);
-            const activeContent = document.getElementById(`knowledge-subtab-${tabName}-content`);
-            
-            if (activeBtn && activeContent) {
-                activeBtn.classList.add('active', 'border-blue-500', 'text-blue-600');
-                activeBtn.classList.remove('border-transparent', 'text-gray-500');
-                activeContent.classList.remove('hidden');
-                
-                // Initialize content based on tab
-                if (tabName === 'company-qna') {
-                    initializeCompanyQnATab();
-                } else if (tabName === 'trade-qna') {
-                    initializeTradeQnATab();
-                } else if (tabName === 'keywords') {
-                    initializeKeywordsTab();
-                }
-                
-                const tabDisplayName = tabName === 'company-qna' ? 'Company Q&A' : 
-                                     tabName === 'trade-qna' ? 'Trade Q&A' : 
-                                     tabName === 'keywords' ? 'Keywords Configuration' : tabName;
-                showNotification('Tab Switched', `Switched to ${tabDisplayName} management`, 'info');
-            }
-        }
-        
-        /**
-         * ✅ PRODUCTION: Initialize Company Q&A tab
-         */
-        function initializeCompanyQnATab() {
+        // Legacy initializeCompanyQnATab() function removed - using modern AI Agent Logic system
+        function initializeCompanyQnATab_LEGACY_REMOVED() {
             console.log('📚 Initializing Company Q&A tab...');
             
             // Load Company Q&A data if embedded manager exists
@@ -7447,10 +7402,8 @@ Key Metrics:
             }
         }
         
-        /**
-         * ✅ ENTERPRISE: Initialize Trade Q&A tab with sophisticated trade category system
-         */
-        function initializeTradeQnATab() {
+        // Legacy initializeTradeQnATab() function removed - using modern AI Agent Logic system
+        function initializeTradeQnATab_LEGACY_REMOVED() {
             console.log('🔧 Initializing Enterprise Trade Q&A tab...');
             
             // Load global trade categories for selection
@@ -10909,10 +10862,8 @@ Key Metrics:
         // 🔑 KEYWORDS CONFIGURATION FUNCTIONS
         // ========================================= 
 
-        /**
-         * ✅ PRODUCTION: Initialize Keywords tab
-         */
-        function initializeKeywordsTab() {
+        // Legacy initializeKeywordsTab() function removed - using modern AI Agent Logic system
+        function initializeKeywordsTab_LEGACY_REMOVED() {
             console.log('🔑 Initializing Keywords Configuration tab...');
             
             // Load current keywords from company data

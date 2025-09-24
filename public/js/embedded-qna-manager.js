@@ -1547,19 +1547,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Also initialize when knowledge tab within AI Agent Logic is clicked
-    document.addEventListener('click', function(event) {
-        if (event.target && event.target.id === 'clientsvia-tab-knowledge') {
-            console.log('🎯 Knowledge tab clicked within AI Agent Logic...');
-            setTimeout(() => {
-                if (!embeddedQnAManager) {
-                    embeddedQnAManager = new EmbeddedQnAManager();
-                    window.embeddedQnAManager = embeddedQnAManager; // Make globally available
-                }
-                embeddedQnAManager.initialize();
-            }, 300);
-        }
-    });
+    // Legacy tab reference removed - using modern AI Agent Logic system
+    // The old 'clientsvia-tab-knowledge' tab was replaced with new 4-tab system
+    console.log('Modern AI Agent Logic system active - legacy tab listeners removed');
 });
 
 // Global functions for HTML onclick handlers

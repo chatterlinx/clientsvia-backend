@@ -2630,40 +2630,8 @@ class CompanyProfileManager {
     // ✅ PRODUCTION: Legacy knowledge sub-tabs removed
     // 🗑️ CLEAN SWEEP: setupKnowledgeSubTabs() eliminated - functionality integrated into AI Agent Logic Tab 2
 
-    // ✅ PRODUCTION: Legacy sub-tab switching removed
-    // 🗑️ CLEAN SWEEP: switchKnowledgeSubTab() eliminated - functionality integrated into AI Agent Logic Tab 2
-    switchKnowledgeSubTab(subtabName) {
-        console.log(`🗑️ DEPRECATED: Legacy sub-tab function called: ${subtabName}`);
-        
-        // Update sub-tab buttons
-        document.querySelectorAll('.knowledge-sub-tab').forEach(btn => {
-            btn.classList.remove('border-indigo-500', 'text-indigo-600');
-            btn.classList.add('border-transparent', 'text-gray-500');
-        });
-        
-        // Hide all sub-tab panels
-        document.querySelectorAll('.knowledge-subtab-panel').forEach(panel => {
-            panel.classList.add('hidden');
-        });
-        
-        // Activate target sub-tab button
-        const targetButton = document.querySelector(`[data-subtab="${subtabName}"]`);
-        if (targetButton) {
-            targetButton.classList.add('border-indigo-500', 'text-indigo-600');
-            targetButton.classList.remove('border-transparent', 'text-gray-500');
-        }
-        
-        // Show target sub-tab panel
-        const targetPanel = document.getElementById(`${subtabName}-subtab`);
-        if (targetPanel) {
-            targetPanel.classList.remove('hidden');
-        }
-        
-        // Initialize specific sub-tab content
-        if (subtabName === 'company-qna' && !this.companyQnAManager) {
-            this.initializeCompanyQnAManager();
-        }
-    }
+    // Legacy sub-tab system completely removed - using modern AI Agent Logic 4-tab system
+    // Old switchKnowledgeSubTab() function eliminated - functionality moved to new system
 
     /**
      * Initialize Company Q&A Manager
