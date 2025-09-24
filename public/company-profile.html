@@ -158,13 +158,7 @@
             z-index: auto;
         }
         
-        /* Intelligence section container fix */
-        .intelligence-section-container {
-            position: relative;
-            overflow: visible;
-            contain: layout;
-            width: 100%;
-        }
+        /* Legacy intelligence section container removed - using modern implementation */
         
         /* 🔧 CRITICAL: Remove separation between tab nav and content */
         #clientsvia-tab-content {
@@ -3066,45 +3060,8 @@ This would be a great time to also check..."></textarea>
                                     console.log('🚀 NEW AI AGENT MANAGEMENT SYSTEM: Initialized successfully');
                                 });
                                 </script>
-                                
-                                <div class="p-6 intelligence-section-container">
-                                    <!-- Tab Navigation - Fixed Responsive Design -->
-                                    <div class="border-b border-gray-200 overflow-x-auto overflow-y-hidden" style="scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9;">
-                                        <div class="flex space-x-0 min-w-max">
-<!-- REMOVED: Answer Priority Flow tab - Legacy feature not needed for simple, effective platform -->
-                                            <button id="clientsvia-tab-knowledge" class="clientsvia-tab-btn active flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50 whitespace-nowrap transition-all duration-200">
-                                                <i class="fas fa-book-open mr-2"></i>Knowledge Sources
-                                            </button>
-                                        </div>
-                                    </div>
                                     
-                                    <!-- Tab Content Container -->
-                                    <div id="clientsvia-tab-content" class="mt-0">
-                                        
-                                        <!-- ========================================= -->
-                                        <!-- ANSWER PRIORITY FLOW CONFIGURATION       -->
-                                        <!-- Blueprint: KnowledgeRouter.js integration -->
-                                        <!-- Purpose: Define search order & thresholds -->
-                                        <!-- Data: answerPriority array + thresholds   -->
-                                        <!-- ========================================= -->
-                                        <!-- REMOVED: Answer Priority Flow content - Legacy feature not needed -->
-                                        <!-- Knowledge Sources is now the default active tab -->
-                                        <!-- REMOVED: Answer Priority Flow content - Legacy feature cleaned up for simple, effective platform -->
-                                        
-                                        <!-- ========================================= -->
-                                        <!-- KNOWLEDGE SOURCE CONTROLS                -->
-                                        <!-- Blueprint: Company KB + Trade QA config  -->
-                                        <!-- Purpose: Configure search thresholds     -->
-                                        <!-- Data: kb_company + kb_trade collections  -->
-                                        <!-- ========================================= -->
-                                        <!-- ========================================= -->
-                                        <!-- 🚀 PRODUCTION: TAB 2 - ENTERPRISE KNOWLEDGE SOURCES -->
-                                        <!-- ✅ INTEGRATED: Full Company Q&A Manager embedded -->
-                                        <!-- ⚡ PERFORMANCE: Redis caching + Mongoose optimization -->
-                                        <!-- 🛡️ SECURITY: Multi-tenant isolation by companyId -->
-                                        <!-- 📊 ANALYTICS: Real-time testing + performance metrics -->
-                                        <!-- ========================================= -->
-                                        <div id="clientsvia-knowledge-content" class="clientsvia-tab-content" data-config-section="knowledge-sources">
+                                    <!-- 🗑️ LEGACY SECTION REMOVED: Old Knowledge Sources tab conflicts with modern implementation -->
                             
                             
                                                              <!-- ========================================= -->
@@ -8944,9 +8901,8 @@ Key Metrics:
             
             // Force initial state - make sure knowledge tab is active by default
             setTimeout(() => {
-                const knowledgeTab = document.getElementById('clientsvia-tab-knowledge');
-                const knowledgeContent = document.getElementById('clientsvia-knowledge-content');
-                if (knowledgeTab && knowledgeContent) {
+                // Legacy tab references removed - using modern implementation
+                console.log('🚀 Using modern AI Agent Logic implementation');
                     // Clear all active states first
                     tabButtons.forEach(btn => {
                         btn.classList.remove('active', 'border-blue-500', 'border-indigo-500', 'text-blue-600', 'text-indigo-600', 'bg-indigo-50');
@@ -9016,10 +8972,8 @@ Key Metrics:
                             targetTab = 'knowledge';
                             break;
                         case 'knowledge':
-                            console.log('📚 Knowledge Sources tab activated - simplified interface loaded');
-                            // Legacy sub-tabs removed - using simplified interface
-                            // Initialize Knowledge Source calibration system
-                            initClientsViaKnowledgeSources();
+                            console.log('📚 Modern Knowledge Sources - using new implementation');
+                            // Legacy initialization removed - modern system handles this
                             break;
                     }
                     
@@ -9030,8 +8984,8 @@ Key Metrics:
         
         // REMOVED: Priority flow drag & drop functions - Legacy feature cleaned up
         
-        // ✅ PRODUCTION: Initialize Knowledge Source Priority Calibration System
-        function initClientsViaKnowledgeSources() {
+        // 🗑️ LEGACY FUNCTION REMOVED: initClientsViaKnowledgeSources() - conflicts with modern implementation
+        function initClientsViaKnowledgeSources_LEGACY_REMOVED() {
             // 🔧 [FIXED] - Initialization Guard (Micro-Surgery #2)
             if (window.knowledgeSourcesInitialized) {
                 console.log('🛡️ Knowledge Sources already initialized, skipping...');
@@ -10718,8 +10672,8 @@ Key Metrics:
         // Initialize ClientsVia Intelligence
         function initClientsViaIntelligence() {
             initClientsViaTabs();
-            // initClientsViaPriorityFlow(); // REMOVED: Legacy priority flow function
-            initClientsViaKnowledgeSources();
+            // Legacy initialization functions removed - using modern implementation
+            console.log('🚀 Modern AI Agent Logic system active');
             
             // Load existing configuration
             loadClientsViaConfiguration();
@@ -12046,7 +12000,7 @@ Key Metrics:
                 // Add click listeners to all tab buttons
                 const tabButtons = [
                     { id: 'clientsvia-tab-priority', target: 'priority' },
-                    { id: 'clientsvia-tab-knowledge', target: 'knowledge' },
+                    // Legacy tab removed - using modern implementation
                     { id: 'clientsvia-tab-flow-designer', target: 'flow-designer' },
                     { id: 'clientsvia-tab-ab-testing', target: 'ab-testing' },
                     { id: 'clientsvia-tab-personalization', target: 'personalization' }
