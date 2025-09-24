@@ -4,7 +4,7 @@
 // AI Priority #1 knowledge source is company-specific Q&As
 const mongoose = require('mongoose');
 const { ObjectId } = mongoose.Schema.Types;
-const { defaultResponses } = require('../utils/personalityResponses_enhanced');
+// Legacy personality system removed - using modern AI Agent Logic responseCategories
 
 // --- Sub-schema for Address ---
 const addressSchema = new mongoose.Schema({
@@ -332,7 +332,7 @@ const companySchema = new mongoose.Schema({
     },
     
     enterpriseAgent: { type: mongoose.Schema.Types.Mixed, default: {} }, // Enterprise AI Agent Settings - using Mixed for flexibility
-    personalityResponses: { type: personalityResponsesSchema, default: () => defaultResponses },
+    personalityResponses: { type: personalityResponsesSchema, default: () => ({}) }, // Legacy field - using aiAgentLogic.responseCategories instead
     learningSettings: { type: learningSettingsSchema, default: () => ({}) },
     
     // 🎭 Agent Personality Configuration - Module 1

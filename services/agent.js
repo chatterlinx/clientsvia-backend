@@ -7,7 +7,7 @@ const { google } = require('googleapis');
 const { VertexAI } = require('@google-cloud/vertexai');
 const { stripMarkdown } = require('../utils/textUtils');
 const { findCachedAnswer } = require('../utils/aiAgent');
-const { getRandomPersonalityResponse, getPersonalityResponse } = require('../utils/personalityResponses_enhanced');
+// Legacy personality system removed - using modern AI Agent Logic responseCategories
 const { applyPlaceholders } = require('../utils/placeholders');
 
 // Import Service Issue Handler for booking flow

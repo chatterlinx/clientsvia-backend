@@ -9,7 +9,7 @@ const { normalizePhoneNumber } = require('../utils/phone');
 const { redisClient } = require('../clients');
 const { apiLimiter } = require('../middleware/rateLimit'); // Rate limiting
 const { authenticateJWT, requireRole } = require('../middleware/auth'); // Authentication
-const { defaultResponses, clearCompanyResponsesCache, initializeStandardPersonalityResponses, ensurePersonalityResponsesExist } = require('../utils/personalityResponses_enhanced');
+// Legacy personality system removed - using modern AI Agent Logic responseCategories
 
 // Google OAuth2 Client Setup
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -268,7 +268,8 @@ router.delete('/company/:id', async (req, res) => {
         
         // Clear any personality responses cache for this company
         try {
-            await clearCompanyResponsesCache(companyId);
+            // Legacy personality cache removed - using modern AI Agent Logic system
+            console.log('Modern AI Agent Logic system - no legacy cache to clear');
             console.log(`[API DELETE /api/company/:id] Cleared personality responses cache for company: ${companyId}`);
         } catch (personalityCacheError) {
             console.warn(`[API DELETE /api/company/:id] Failed to clear personality responses cache:`, personalityCacheError.message);

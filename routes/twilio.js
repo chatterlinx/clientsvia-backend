@@ -18,7 +18,7 @@ const { synthesizeSpeech } = require('../services/elevenLabsService');
 const { redisClient } = require('../clients');
 const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils/phone');
 const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
-const { getRandomPersonalityResponse, getPersonalityResponse, fetchCompanyResponses } = require('../utils/personalityResponses_enhanced');
+// Legacy personality system removed - using modern AI Agent Logic responseCategories
 
 const router = express.Router();
 
@@ -222,9 +222,8 @@ async function getCompanyByPhoneNumber(phoneNumber) {
   if (company) {
     loadCompanyQAs(company);
     if (company._id) {
-      fetchCompanyResponses(company._id.toString()).catch((e) =>
-        console.error('Error loading personality responses:', e)
-      );
+      // Legacy personality system removed - using modern AI Agent Logic responseCategories
+      console.log('🚀 Modern AI Agent Logic system active for company:', company._id.toString());
     }
   }
   return company;
@@ -257,7 +256,8 @@ router.post('/voice', async (req, res) => {
 
     if (!company) {
       console.log(`[ERROR] [ERROR] No company found for phone number: ${calledNumber}`);
-      const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
+      // Legacy personality system removed - using configuration error message
+      const msg = 'Configuration error: Company must configure AI Agent Logic responses';
       twiml.say(escapeTwiML(msg));
       twiml.hangup();
       res.type('text/xml');
@@ -385,7 +385,8 @@ router.post('/handle-speech', async (req, res) => {
 
     if (!speechText) {
       console.log(`[SPEECH ERROR] [ERROR] Empty speech result received from Twilio`);
-      const msg = await getRandomPersonalityResponse(null, 'cantUnderstand');
+      // Legacy personality system removed - using configuration error message
+      const msg = 'Configuration error: Company must configure AI Agent Logic responses';
       const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
       twiml.hangup();
       res.type('text/xml');
@@ -422,7 +423,8 @@ router.post('/handle-speech', async (req, res) => {
     let company = await getCompanyByPhoneNumber(calledNumber);
     if (!company) {
       console.log(`[COMPANY ERROR] [ERROR] No company found for phone: ${calledNumber} during speech processing`);
-      const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
+      // Legacy personality system removed - using configuration error message
+      const msg = 'Configuration error: Company must configure AI Agent Logic responses';
       const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
       twiml.hangup();
       res.type('text/xml');
@@ -771,7 +773,8 @@ router.post('/handle-speech', async (req, res) => {
     console.error(`[SPEECH ERROR] [ERROR] Speech processing failed: ${err.message}`);
     console.error('[POST /api/twilio/handle-speech] Error:', err.message, err.stack);
     const twiml = new twilio.twiml.VoiceResponse();
-    const msg = await getRandomPersonalityResponse(null, 'connectionTrouble');
+    // Legacy personality system removed - using configuration error message
+    const msg = 'Configuration error: Company must configure AI Agent Logic responses';
     const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
     twiml.hangup();
     res.type('text/xml');

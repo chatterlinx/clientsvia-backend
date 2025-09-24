@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const Company = require('../../models/Company');
-const { getPersonalityResponse } = require('../../utils/personalityResponses_enhanced');
+// Legacy personality system removed - using modern AI Agent Logic responseCategories
 
 console.log('🧪 Agent Testing routes loading...');
 
@@ -186,7 +186,8 @@ function analyzeMessageIntent(message) {
  */
 async function testPersonalityResponse(companyId, category, trace) {
   try {
-    const response = await getPersonalityResponse(companyId, category);
+    // Legacy personality system removed - using modern AI Agent Logic responseCategories
+    const response = 'Modern AI Agent Logic system active - legacy testing removed';
     
     trace.push({
       step: trace.length + 1,
