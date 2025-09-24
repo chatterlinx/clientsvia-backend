@@ -295,8 +295,8 @@ class InHouseIntelligenceEngine {
         const useEmojis = personality.useEmojis || false;
         const companyName = company.companyName || 'our company';
 
-        // Generic acknowledgment with personality
-        const baseResponse = this.getPersonalityResponse(voiceTone, companyName);
+        // Use modern AI Agent Logic personality system
+        const baseResponse = await this.getModernPersonalityResponse(company, voiceTone, companyName);
         const finalResponse = useEmojis ? `${baseResponse} 😊` : baseResponse;
 
         return {
@@ -363,14 +363,34 @@ class InHouseIntelligenceEngine {
         return `${rest.join(', ').toLowerCase()}, and ${last.toLowerCase()}`;
     }
 
-    getPersonalityResponse(voiceTone, companyName) {
-        const responses = {
-            friendly: `Thanks for calling ${companyName}! I'm here to help you with whatever you need.`,
-            professional: `Thank you for contacting ${companyName}. How can I assist you today?`,
-            playful: `Hey there! You've reached ${companyName} and we're excited to help you out!`
-        };
-
-        return responses[voiceTone] || responses.professional;
+    /**
+     * Modern AI Agent Logic personality response system
+     * Uses company-specific configuration from aiAgentLogic.responseCategories
+     */
+    async getModernPersonalityResponse(company, voiceTone, companyName) {
+        try {
+            // Check if company has modern AI Agent Logic personality configuration
+            if (company.aiAgentLogic?.responseCategories?.core?.['greeting-response']) {
+                let response = company.aiAgentLogic.responseCategories.core['greeting-response'];
+                // Apply company name placeholder
+                response = response.replace(/\{companyname\}/gi, companyName);
+                response = response.replace(/\{companyName\}/gi, companyName);
+                response = response.replace(/\{\{companyName\}\}/gi, companyName);
+                return response;
+            }
+            
+            // Fallback to legacy hardcoded responses if no modern config
+            const responses = {
+                friendly: `Thanks for calling ${companyName}! I'm here to help you with whatever you need.`,
+                professional: `Thank you for contacting ${companyName}. How can I assist you today?`,
+                playful: `Hey there! You've reached ${companyName} and we're excited to help you out!`
+            };
+            
+            return responses[voiceTone] || responses.professional;
+        } catch (error) {
+            console.error('Error getting modern personality response:', error);
+            return `Thank you for contacting ${companyName}. How can I assist you today?`;
+        }
     }
 
     generateFallback(query) {
