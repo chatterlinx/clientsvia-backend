@@ -94,7 +94,7 @@ class AgentMessageProcessor {
                 aiSettings: 1,
                 agentSetup: 1,
                 tradeCategories: 1,
-                personalityResponses: 1,
+                aiAgentLogic: 1, // Modern AI Agent Logic system
                 bookingFlow: 1,
                 companyName: 1
             });

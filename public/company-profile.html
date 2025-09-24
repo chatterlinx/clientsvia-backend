@@ -760,9 +760,7 @@
                             <button class="tab-button tab-button-inactive" id="tab-ai-voice" data-tab="ai-voice">
                                 <i class="fas fa-microphone-alt mr-1"></i>AI Voice Settings
                             </button>
-                            <button class="tab-button tab-button-inactive" id="tab-personality-responses" data-tab="personality-responses">
-                                <i class="fas fa-comment-dots mr-1"></i>Agent Personality Responses
-                            </button>
+                            <!-- Legacy personality responses tab removed - using modern AI Agent Logic system -->
                             <!-- ✅ PRODUCTION: Knowledge Sources integrated into AI Agent Logic Tab 2 -->
                             <button class="tab-button tab-button-inactive" id="tab-ai-agent-logic" data-tab="ai-agent-logic">
                                 <i class="fas fa-brain mr-1"></i>AI Agent Logic
@@ -1370,10 +1368,8 @@
                     </div>
                     <!-- ===== TAB SECTION END: AI VOICE ===== -->
 
-                    <!-- ===== TAB SECTION START: PERSONALITY RESPONSES ===== -->
-                    <div id="personality-responses-content" class="tab-content-item hidden">
-                        <section class="profile-section bg-transparent shadow-none p-0">
-                            <h2 class="profile-section-title"><i class="fas fa-comment-dots mr-2 text-indigo-600"></i>Agent Personality Responses</h2>
+                    <!-- Legacy personality responses tab content removed - using modern AI Agent Logic system -->
+                    <!-- Legacy personality responses content removed -->
                             <div class="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 rounded-r-lg">
                                 <div class="flex">
                                     <div class="flex-shrink-0">
@@ -1589,7 +1585,7 @@
                             </div>
                         </div>
                     </div>
-                    <!-- ===== TAB SECTION END: PERSONALITY RESPONSES ===== -->
+                    <!-- Legacy personality responses section completely removed -->
 
                     <!-- ✅ PRODUCTION: Knowledge Sources tab REMOVED - Now integrated into AI Agent Logic Tab 2 -->
                     <!-- 🗑️ CLEAN SWEEP: Legacy standalone Knowledge Sources implementation eliminated -->
@@ -6561,8 +6557,8 @@ This error needs to be fixed - not masked!
             }
         }
 
-        // Save Response Templates - CRITICAL MISSING FUNCTION
-        async function saveResponseTemplates() {
+        // Legacy saveResponseTemplates function removed - using modern AI Agent Logic system
+        async function saveResponseTemplates_LEGACY_REMOVED() {
             const companyId = getCurrentCompanyId();
             if (!companyId) return;
 
@@ -6634,7 +6630,7 @@ This error needs to be fixed - not masked!
         }
 
         // Load Response Templates
-        async function loadResponseTemplates() {
+        async function loadResponseTemplates_LEGACY_REMOVED() {
             const companyId = getCurrentCompanyId();
             if (!companyId) return;
 

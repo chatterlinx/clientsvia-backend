@@ -184,12 +184,7 @@ const contactRecipientSchema = new mongoose.Schema({ contact: { type: String, tr
 const phoneRecipientSchema = new mongoose.Schema({ phoneNumber: { type: String, trim: true } }, { _id: false });
 const namedPhoneRecipientSchema = new mongoose.Schema({ name: { type: String, trim: true }, phoneNumber: { type: String, trim: true } }, { _id: false });
 
-// Dynamic personality responses schema that allows custom categories
-const personalityResponsesSchema = new mongoose.Schema({}, { 
-    _id: false, 
-    strict: false,  // Allow dynamic fields
-    minimize: false // Don't remove empty objects
-});
+// Legacy personality responses schema removed - using aiAgentLogic.responseCategories instead
 
 const agentSetupSchema = new mongoose.Schema({
     agentMode: { type: String, default: 'full', trim: true },
@@ -332,26 +327,10 @@ const companySchema = new mongoose.Schema({
     },
     
     enterpriseAgent: { type: mongoose.Schema.Types.Mixed, default: {} }, // Enterprise AI Agent Settings - using Mixed for flexibility
-    personalityResponses: { type: personalityResponsesSchema, default: () => ({}) }, // Legacy field - using aiAgentLogic.responseCategories instead
+    // Legacy personalityResponses field removed - using aiAgentLogic.responseCategories instead
     learningSettings: { type: learningSettingsSchema, default: () => ({}) },
     
-    // 🎭 Agent Personality Configuration - Module 1
-    agentPersonalitySettings: {
-        voiceTone: { type: String, enum: ['friendly', 'professional', 'playful'], default: 'friendly' },
-        speechPace: { type: String, enum: ['slow', 'normal', 'fast'], default: 'normal' },
-        bargeInMode: { type: Boolean, default: true },
-        acknowledgeEmotion: { type: Boolean, default: true },
-        useEmojis: { type: Boolean, default: false },
-        // Response categories for customizable agent messages
-        responses: [{
-            key: { type: String, required: true },
-            label: { type: String, required: true },
-            description: { type: String, default: '' },
-            defaultMessage: { type: String, required: true },
-            customMessage: { type: String, default: null },
-            useCustom: { type: Boolean, default: false }
-        }]
-    },
+    // Legacy agentPersonalitySettings removed - using aiAgentLogic.personalitySystem instead
     
     // 📚 REMOVED: Legacy hardcoded knowledge settings - All settings now come from aiAgentLogic UI configuration
     // This ensures true multi-tenant isolation where each company configures their own priorities and thresholds

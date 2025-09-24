@@ -77,7 +77,7 @@ router.post('/companies/:id/agent-test', async (req, res) => {
       timestamp: new Date().toISOString(),
       data: { 
         companyName: company.companyName,
-        hasPersonalitySettings: !!company.agentPersonalitySettings,
+        hasAiAgentLogic: !!company.aiAgentLogic,
         hasKnowledgeSettings: !!company.agentKnowledgeSettings
       }
     });

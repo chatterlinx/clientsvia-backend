@@ -71,7 +71,7 @@ async function loadAllRoutes() {
         routes.uploadRoutes = await loadRouteWithTimeout('./routes/upload', 'uploadRoutes');
         routes.agentSettingsRoutes = await loadRouteWithTimeout('./routes/agentSettings', 'agentSettingsRoutes');
         routes.companyAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/agentSettings', 'companyAgentSettingsRoutes');
-        routes.companyPersonalityRoutes = await loadRouteWithTimeout('./routes/company/personality', 'companyPersonalityRoutes');
+        // Legacy personality routes removed - using modern AI Agent Logic system
         // Knowledge Management Routes
         routes.newKnowledgeRoutes = await loadRouteWithTimeout('./routes/knowledge/companyKnowledge', 'newKnowledgeRoutes');
         routes.knowledgeSourcePrioritiesRoutes = await loadRouteWithTimeout('./routes/company/knowledgeSourcePriorities', 'knowledgeSourcePrioritiesRoutes');
@@ -205,7 +205,7 @@ function registerRoutes(routes) {
     app.use('/api/admin', routes.adminRoutes); // ADMIN: Authentication-protected endpoints (companies, alerts, suggestions)
     app.use('/api/backup', routes.backupRoutes); // BACKUP: Automated backup monitoring and management
     app.use('/api/company', routes.companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
-    app.use('/api/company', routes.companyPersonalityRoutes); // MODULE 1: Agent Personality Settings
+    // Legacy personality routes removed - using modern AI Agent Logic system
     app.use('/api/company', routes.companyKnowledgeRoutes); // MODULE 2: Knowledge Q&A Source Controls
     app.use('/api/company', routes.knowledgeSourcePrioritiesRoutes); // ENTERPRISE: Knowledge Source Priorities Management
     app.use('/api/company', routes.knowledgeManagementRoutes); // ENTERPRISE: Knowledge Management System (Company Q&A, Trade Q&A, Templates)
