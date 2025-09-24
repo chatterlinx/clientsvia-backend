@@ -1231,9 +1231,7 @@ router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
     }
 });
 
-// Include personality routes
-const personalityRoutes = require('./company/personality');
-router.use('/', personalityRoutes);
+// Legacy personality routes removed - using modern AI Agent Logic system
 
 // Include knowledge routes
 const knowledgeRoutes = require('./company/knowledge');
