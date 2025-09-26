@@ -194,10 +194,7 @@ function registerRoutes(routes) {
     // --- API Routes ---
     app.use('/api', routes.companyRoutes);
     app.use('/api', routes.v2VoiceRoutes); // V2 Voice Settings API
-    app.use('/api/debug', require('./routes/debug-qna')); // Temporary debug route
-    app.use('/api/debug', require('./routes/debug-logs')); // Debug logging route
-    app.use('/api/debug', require('./routes/debug-company-config')); // Company AI Agent Logic configuration debug route
-    app.use('/api/seed', require('./routes/seed-production-qna')); // Temporary seed route
+    // V2: All legacy debug and seed routes deleted - no longer needed in V2 system
     app.use('/api/alerts', routes.alertRoutes);
     app.use('/api/integrations', routes.integrationsRoutes);
     app.use('/api/tts', routes.ttsRoutes);
