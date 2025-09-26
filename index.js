@@ -90,7 +90,7 @@ async function loadAllRoutes() {
         // REMOVED: knowledgeAutoPopulationRoutes - Replaced by comprehensive Company Q&A Management system
         // V2: Legacy AI agent routes deleted - using modern v2profile-aiagentlogic system
         // V2: Legacy agentPerformance route deleted - using modern AI Agent Logic analytics
-        routes.intentRoutingRoutes = await loadRouteWithTimeout('./routes/intentRouting', 'intentRoutingRoutes');
+        // V2: Legacy intentRouting route deleted - using modern AI Agent Logic intent classification
         routes.bookingScriptsRoutes = await loadRouteWithTimeout('./routes/bookingScripts', 'bookingScriptsRoutes');
         routes.bookingHandlerRoutes = await loadRouteWithTimeout('./routes/bookingHandler', 'bookingHandlerRoutes');
         // REMOVED: Legacy AI Intelligence routes - replaced by AI Agent Logic system
@@ -228,7 +228,7 @@ function registerRoutes(routes) {
     // REMOVED: knowledge-auto-population routes - Replaced by comprehensive Company Q&A Management system
     // V2: Legacy AI agent route mounting removed - using modern v2profile-aiagentlogic system
     // V2: Legacy agentPerformance route deleted - using modern AI Agent Logic analytics
-    app.use('/api/agent', routes.intentRoutingRoutes); // Intent Routing & Flow Control routes
+    // V2: Legacy intentRouting route deleted - using modern AI Agent Logic intent classification
     app.use('/api/booking-scripts', routes.bookingScriptsRoutes); // Booking Scripts Configuration
     app.use('/api/monitoring', routes.monitoringRoutes); // Agent Monitoring System
     app.use('/api/notes', routes.notesRoutes); // GOLD STANDARD: Enterprise Notes Management
