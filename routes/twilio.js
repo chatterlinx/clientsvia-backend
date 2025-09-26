@@ -296,8 +296,8 @@ router.post('/voice', async (req, res) => {
         partialResultCallback: `https://${req.get('host')}/api/twilio/ai-agent-partial/${company._id}`
       });
 
-      // Use AI Agent Logic greeting with TTS
-      const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
+      // Use AI Agent Logic greeting with TTS (V2 Voice Settings)
+      const elevenLabsVoice = company.aiAgentLogic?.voiceSettings?.voiceId;
       if (elevenLabsVoice && initResult.greeting) {
         try {
           console.log(`[TTS START] [TTS] Starting AI Agent Logic greeting TTS synthesis...`);
