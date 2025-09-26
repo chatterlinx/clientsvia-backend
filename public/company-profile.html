@@ -11962,31 +11962,9 @@ Key Metrics:
             // Get company data (this should be loaded from the CompanyProfileManager)
             const companyData = window.companyProfileManager?.companyData;
             
+            // V2: No legacy placeholders - use modern aiAgentLogic system
             const defaultPlaceholders = [
-                {
-                    placeholder: '{companyname}',
-                    value: companyData?.companyName || 'atlas air',
-                    description: 'The name of your company',
-                    type: 'system'
-                },
-                {
-                    placeholder: '{businessphone}',
-                    value: companyData?.primaryContact?.phoneNumber || '+12395652202',
-                    description: 'Main business phone number',
-                    type: 'system'
-                },
-                {
-                    placeholder: '{businessemail}',
-                    value: companyData?.primaryContact?.email || 'mypenguinair@gmail.com',
-                    description: 'Main business email address',
-                    type: 'system'
-                },
-                {
-                    placeholder: '{businesshours}',
-                    value: companyData?.businessHours || 'm-f 9-5',
-                    description: 'Standard business operating hours',
-                    type: 'system'
-                },
+                // V2 system uses direct database values, no hardcoded placeholders,
                 {
                     placeholder: '{callername}',
                     value: 'John Doe',
@@ -12100,30 +12078,7 @@ Key Metrics:
             const companyData = window.companyProfileManager?.companyData;
             
             return [
-                {
-                    placeholder: '{companyname}',
-                    display: 'Company Name',
-                    value: companyData?.companyName || 'atlas air',
-                    description: 'The name of your company'
-                },
-                {
-                    placeholder: '{businessphone}',
-                    display: 'Business Phone',
-                    value: companyData?.primaryContact?.phoneNumber || '+12395652202',
-                    description: 'Main business phone number'
-                },
-                {
-                    placeholder: '{businessemail}',
-                    display: 'Business Email',
-                    value: companyData?.primaryContact?.email || 'mypenguinair@gmail.com',
-                    description: 'Main business email address'
-                },
-                {
-                    placeholder: '{businesshours}',
-                    display: 'Business Hours',
-                    value: companyData?.businessHours || 'm-f 9-5',
-                    description: 'Standard business operating hours'
-                },
+                // V2: Legacy placeholders removed - modern aiAgentLogic handles company data directly
                 {
                     placeholder: '{website}',
                     display: 'Website',
@@ -12421,15 +12376,10 @@ Key Metrics:
                 originalDiv.innerHTML = `<strong>${textareaId.replace('response-', '').replace('-', ' ')}:</strong><br>${template || 'Empty response...'}`;
                 
                 // Show personalized version with sample data
+                // V2: Simplified preview - no legacy placeholder replacement
                 const personalizedText = template
-                    .replace(/\{\{callerName\}\}/g, 'John Smith')
-                    .replace(/\{companyname\}/g, 'ClientsVia Solutions')
-                    .replace(/\{\{companyName\}\}/g, 'ClientsVia Solutions')
-                    .replace(/\{businessphone\}/g, '+1-234-567-8900')
-                    .replace(/\{businessemail\}/g, 'info@clientsvia.com')
-                    .replace(/\{businesshours\}/g, 'Monday-Friday 9AM-5PM')
-                    .replace(/\{\{businessHours\}\}/g, 'Monday-Friday 9AM-5PM')
-                    .replace(/\{\{website\}\}/g, 'www.clientsvia.com')
+                    .replace(/\{callername\}/g, 'John Smith')
+                    .replace(/\{companyName\}/g, 'Your Company Name')
                     .replace(/\{\{departmentName\}\}/g, 'Technical Support')
                     .replace(/\{\{serviceType\}\}/g, 'our service')
                     .replace(/\{\{phoneNumber\}\}/g, 'your number')
@@ -12470,51 +12420,7 @@ Key Metrics:
             // Update all variable insertion buttons
             updateVariableInsertionButtons();
             
-            // Also standardize all textarea content to use single-brace format
-            const responseTextareas = document.querySelectorAll('textarea[id^="response-"]');
-            responseTextareas.forEach(textarea => {
-                if (textarea.value) {
-                    textarea.value = textarea.value
-                        .replace(/\{\{callerName\}\}/g, '{callername}')
-                        .replace(/\{\{companyName\}\}/g, '{companyname}')
-                        .replace(/\{\{currentTime\}\}/g, '{currenttime}')
-                        .replace(/\{\{businessHours\}\}/g, '{businesshours}')
-                        .replace(/\{\{website\}\}/g, '{website}')
-                        .replace(/\{\{departmentName\}\}/g, '{departmentname}')
-                        .replace(/\{\{specialistName\}\}/g, '{specialistname}')
-                        .replace(/\{\{serviceType\}\}/g, '{servicetype}')
-                        .replace(/\{\{alternativeService\}\}/g, '{alternativeservice}')
-                        .replace(/\{\{estimatedTime\}\}/g, '{estimatedtime}')
-                        .replace(/\{\{phoneNumber\}\}/g, '{phonenumber}')
-                        .replace(/\{\{preferredTime\}\}/g, '{preferredtime}')
-                        .replace(/\{\{ticketNumber\}\}/g, '{ticketnumber}')
-                        .replace(/\{\{managerName\}\}/g, '{managername}')
-                        .replace(/\{\{issueType\}\}/g, '{issuetype}')
-                        .replace(/\{\{requestType\}\}/g, '{requesttype}')
-                        .replace(/\{\{serviceProvided\}\}/g, '{serviceprovided}');
-                }
-                
-                if (textarea.placeholder) {
-                    textarea.placeholder = textarea.placeholder
-                        .replace(/\{\{callerName\}\}/g, '{callername}')
-                        .replace(/\{\{companyName\}\}/g, '{companyname}')
-                        .replace(/\{\{currentTime\}\}/g, '{currenttime}')
-                        .replace(/\{\{businessHours\}\}/g, '{businesshours}')
-                        .replace(/\{\{website\}\}/g, '{website}')
-                        .replace(/\{\{departmentName\}\}/g, '{departmentname}')
-                        .replace(/\{\{specialistName\}\}/g, '{specialistname}')
-                        .replace(/\{\{serviceType\}\}/g, '{servicetype}')
-                        .replace(/\{\{alternativeService\}\}/g, '{alternativeservice}')
-                        .replace(/\{\{estimatedTime\}\}/g, '{estimatedtime}')
-                        .replace(/\{\{phoneNumber\}\}/g, '{phonenumber}')
-                        .replace(/\{\{preferredTime\}\}/g, '{preferredtime}')
-                        .replace(/\{\{ticketNumber\}\}/g, '{ticketnumber}')
-                        .replace(/\{\{managerName\}\}/g, '{managername}')
-                        .replace(/\{\{issueType\}\}/g, '{issuetype}')
-                        .replace(/\{\{requestType\}\}/g, '{requesttype}')
-                        .replace(/\{\{serviceProvided\}\}/g, '{serviceprovided}');
-                }
-            });
+            // V2: No legacy placeholder conversion needed - modern aiAgentLogic system handles this
             
 
         }
