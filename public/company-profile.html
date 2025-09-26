@@ -8653,6 +8653,8 @@ Key Metrics:
             setTimeout(() => {
                 // Legacy tab references removed - using modern implementation
                 console.log('🚀 Using modern AI Agent Logic implementation');
+                
+                if (knowledgeTab && knowledgeContent) {
                     // Clear all active states first
                     tabButtons.forEach(btn => {
                         btn.classList.remove('active', 'border-blue-500', 'border-indigo-500', 'text-blue-600', 'text-indigo-600', 'bg-indigo-50');
@@ -11652,7 +11654,10 @@ Key Metrics:
                     
                     // Load specific content when switching to tabs
                     switch (targetTabId) {
-                }
+                        default:
+                            console.log(`🔄 Switched to ${targetTabId} tab`);
+                            break;
+                    }
                 
 
                 
@@ -13216,7 +13221,8 @@ Key Metrics:
             }
 
             // Check for duplicate field names
-            // V2: Legacy booking flow validation removed
+            // V2: Legacy booking flow validation removed - simplified check
+            if (false) { // Disabled legacy validation
                 alert('Field name already exists');
                 return;
             }
