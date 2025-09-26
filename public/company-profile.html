@@ -13170,7 +13170,8 @@ Key Metrics:
         // Production-ready booking configuration
         // ========================================
         
-        let enterpriseBookingFlow = {
+        // V2: Legacy booking flow system removed - use Calendar Settings
+        let enterpriseBookingFlow_DELETED = {
             companyID: window.currentCompanyID || '',
             tradeCategory: '',
             serviceType: '',
@@ -13218,7 +13219,7 @@ Key Metrics:
             }
 
             // Check for duplicate field names
-            if (enterpriseBookingFlow.flowSteps.some(step => step.field === fieldName)) {
+            // V2: Legacy booking flow validation removed
                 alert('Field name already exists');
                 return;
             }
@@ -13231,8 +13232,8 @@ Key Metrics:
                 validation: fieldValidation
             };
 
-            enterpriseBookingFlow.flowSteps.push(newStep);
-            updateBookingFlowTable();
+            // V2: Legacy booking flow step addition removed
+            // V2: Legacy booking flow call removed
             updateBookingSchemaPreview();
 
             // Clear form
@@ -13242,9 +13243,10 @@ Key Metrics:
             document.getElementById('new-field-validation').value = 'none';
         }
 
-        function updateBookingFlowTable() {
-            const tbody = document.getElementById('enterprise-booking-flow-body');
-            tbody.innerHTML = '';
+        // V2: Legacy booking flow removed - use modern Calendar Settings
+        function updateBookingFlowTable_DELETED() {
+            // V2: DOM element 'enterprise-booking-flow-body' no longer exists
+            return;
 
             enterpriseBookingFlow.flowSteps.forEach((step, index) => {
                 const isSystemDefault = ['customerName', 'phoneNumber', 'serviceAddress'].includes(step.field);
@@ -13287,7 +13289,7 @@ Key Metrics:
                 step.step = index + 1;
             });
 
-            updateBookingFlowTable();
+            // V2: Legacy booking flow call removed
             updateBookingSchemaPreview();
         }
 
@@ -13318,7 +13320,8 @@ Key Metrics:
             preview.textContent = JSON.stringify(schema, null, 2);
         }
 
-        function loadBookingFlowTemplate() {
+        // V2: Legacy booking flow functions removed - use Calendar Settings
+        function loadBookingFlowTemplate_DELETED() {
             const tradeCategory = document.getElementById('booking-trade-category').value;
             const serviceType = document.getElementById('booking-service-type').value;
 
@@ -13363,14 +13366,14 @@ Key Metrics:
                     });
                 });
 
-                updateBookingFlowTable();
+                // V2: Legacy booking flow call removed
                 updateBookingSchemaPreview();
             } else {
                 alert('No template available for this combination');
             }
         }
 
-        function validateBookingFlow() {
+        function validateBookingFlow_DELETED() {
             const errors = [];
             
             if (!document.getElementById('booking-trade-category').value) {
@@ -13399,7 +13402,7 @@ Key Metrics:
             return true;
         }
 
-        function resetBookingFlow() {
+        function resetBookingFlow_DELETED() {
             if (confirm('Reset to default booking flow? This will remove all custom fields.')) {
                 enterpriseBookingFlow.flowSteps = [
                     {
@@ -13425,7 +13428,7 @@ Key Metrics:
                     }
                 ];
 
-                updateBookingFlowTable();
+                // V2: Legacy booking flow call removed
                 updateBookingSchemaPreview();
             }
         }
@@ -13445,7 +13448,7 @@ Key Metrics:
             });
         }
 
-        async function saveEnterpriseBookingFlow() {
+        async function saveEnterpriseBookingFlow_DELETED() {
             if (!validateBookingFlow()) {
                 return;
             }
@@ -13513,7 +13516,7 @@ Key Metrics:
             });
 
             // Initialize the display
-            updateBookingFlowTable();
+            // V2: Legacy booking flow call removed
             updateBookingSchemaPreview();
         });
 
