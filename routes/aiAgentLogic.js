@@ -769,22 +769,22 @@ router.get('/response-categories/:companyId', authenticateSingleSession, async (
         // Default response templates if none exist
         const defaultTemplates = {
             core: {
-                'greeting-response': 'Hi {{callerName}}! Thanks for calling {{companyName}}. How can I help you today?',
-                'farewell-response': 'Thanks for calling {{companyName}}! Have a great day!',
-                'transfer-response': 'Let me connect you with {{departmentName}} who can better assist you.',
-                'service-unavailable-response': 'I\'m sorry, {{serviceType}} isn\'t available right now. Can I help with something else?',
+                'greeting-response': 'Hi! Thanks for calling {companyname}. How can I help you today?',
+                'farewell-response': 'Thanks for calling {companyname}! Have a great day!',
+                'transfer-response': 'Let me connect you with {departmentname} who can better assist you.',
+                'service-unavailable-response': 'I\'m sorry, {servicetype} isn\'t available right now. Can I help with something else?',
                 'hold-response': 'Please hold for just a moment while I look that up for you.',
-                'business-hours-response': 'We\'re open {{businessHours}}. You can also visit our website at {{website}}.'
+                'business-hours-response': 'We\'re open {businesshours}. You can also visit our website at {website}.'
             },
             advanced: {
                 'emergency-response': 'This sounds like an emergency. Let me connect you with our emergency team immediately.',
                 'after-hours-response': 'Thanks for calling! We\'re currently closed but will get back to you first thing in the morning.',
-                'appointment-confirmation': 'Perfect! I\'ve scheduled your appointment for {{appointmentTime}} on {{appointmentDate}}.',
-                'scheduling-conflict': 'That time slot isn\'t available. How about {{alternativeTime}} or {{alternativeTime2}}?'
+                'appointment-confirmation': 'Perfect! I\'ve scheduled your appointment for {appointmenttime} on {appointmentdate}.',
+                'scheduling-conflict': 'That time slot isn\'t available. How about {alternativetime} or {alternativetime2}?'
             },
             emotional: {
                 'frustrated-customer': 'I completely understand your frustration, and I\'m here to help make this right for you.',
-                'appreciative-response': 'Thank you so much for your patience and for choosing {{companyName}}. We truly appreciate your business!',
+                'appreciative-response': 'Thank you so much for your patience and for choosing {companyname}. We truly appreciate your business!',
                 'problem-resolution': 'Don\'t worry, we\'ve handled this exact situation many times before. I\'ll make sure we get this resolved for you quickly.',
                 'quality-assurance': 'You can count on us to deliver the highest quality service. We stand behind all our work with a 100% satisfaction guarantee.'
             }

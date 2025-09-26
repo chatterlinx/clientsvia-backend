@@ -23,8 +23,7 @@ const { checkCustomKB } = require('../middleware/checkCustomKB');
 // Import ClientsVia Intelligence Engine (replaces old inHouse engine)
 const ClientsViaIntelligenceEngine = require('./clientsViaIntelligenceEngine');
 
-// Import Template Intelligence Engine
-const TemplateIntelligenceEngine = require('./templateIntelligenceEngine');
+// Legacy Template Intelligence Engine removed - using modern AI Agent Logic system
 
 // In-memory cache for parsed Category Q&A by company ID
 const categoryQACache = new Map();
@@ -405,13 +404,9 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   // 🎨 STEP 3: TEMPLATE INTELLIGENCE ENGINE (Answer Priority Flow Tier 3)
   console.log(`[Template Intelligence] Processing with Template Intelligence Engine...`);
   
-  const templateEngine = new TemplateIntelligenceEngine();
-  const templateResult = await templateEngine.processQuery(question, companyId, {
-    conversationHistory,
-    callSid: originalCallSid,
-    callerName: context?.callerName,
-    departmentName: context?.departmentName
-  });
+  // Legacy template engine removed - using modern AI Agent Logic system
+  // Legacy template engine call removed
+  const templateResult = null;
   
   if (templateResult && templateResult.confidence >= 0.65) {
     console.log(`[Template Intelligence] Generated ${templateResult.category} response: ${(templateResult.confidence * 100).toFixed(1)}%`);
