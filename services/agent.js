@@ -159,7 +159,7 @@ async function callModel(company, prompt) {
 }
 
 const { ObjectId } = require('mongodb');
-const agentPerformanceTracker = require('./agentPerformanceTracker');
+// V2: Legacy agentPerformanceTracker removed - using modern AI Agent Logic analytics
 
 async function answerQuestion(companyId, question, responseLength = 'concise', conversationHistory = [], mainAgentScriptParam = '', personality = 'friendly', companySpecialties = '', categoryQAs = '', originalCallSid = null) {
   const startTime = Date.now();
@@ -778,20 +778,8 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
 async function trackPerformance(companyId, callSid, question, responseText, responseMethod, confidence, debugInfo, startTime) {
   const responseTime = Date.now() - startTime;
   
-  try {
-    await agentPerformanceTracker.trackAgentResponse({
-      companyId,
-      callSid: callSid || 'test-call',
-      question,
-      responseMethod,
-      responseTime,
-      responseText,
-      confidence,
-      debugInfo
-    });
-  } catch (error) {
-    console.error('[Performance] Error tracking response:', error.message);
-  }
+  // V2: Legacy performance tracking removed - using modern AI Agent Logic analytics
+  console.log(`[Performance] Response tracked: ${responseMethod} (${responseTime}ms, confidence: ${confidence})`);
 }
 
 // Generate intelligent responses by analyzing Q&A data contextually
