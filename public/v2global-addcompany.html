@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V2 Global Add Company - Enterprise Company Creation</title>
+    <script>
+        // Suppress Tailwind CDN warning in production
+        if (typeof console !== 'undefined' && console.warn) {
+            const originalWarn = console.warn;
+            console.warn = function(...args) {
+                if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) {
+                    return; // Suppress Tailwind CDN warning
+                }
+                originalWarn.apply(console, args);
+            };
+        }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .nav-link.active-tab {
+            border-bottom-width: 2px;
+            border-color: #4F46E5;
+            color: #4F46E5;
+            font-weight: 600;
+            background-color: #EEF2FF;
+        }
+        .nav-link {
+            @apply px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900;
+        }
+        .form-input {
+            @apply mt-1 block w-full px-4 py-3 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out;
+        }
+        .form-input:focus {
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        .form-label {
+            @apply block text-sm font-semibold text-gray-700 mb-2;
+        }
+        .form-section {
+            @apply bg-gray-50 p-6 rounded-lg border border-gray-200;
+        }
+        .form-section-title {
+            @apply text-lg font-bold text-gray-800 border-b border-gray-300 pb-3 mb-6 flex items-center;
+        }
+        .v2-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .success-animation {
+            animation: successPulse 0.6s ease-in-out;
+        }
+        @keyframes successPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .error-shake {
+            animation: errorShake 0.5s ease-in-out;
+        }
+        @keyframes errorShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="app" class="flex flex-col min-h-screen">
+        <!-- V2 Global Header -->
+        <header class="bg-white shadow-md sticky top-0 z-50">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex-shrink-0 flex items-center">
+                        <a href="/index.html" class="text-2xl font-bold text-indigo-600 flex items-center">
+                           <i class="fas fa-globe-americas mr-2"></i>
+                           <span>V2 Global</span>
+                           <span class="v2-badge text-white text-xs px-2 py-1 rounded-full ml-2">ENTERPRISE</span>
+                        </a>
+                    </div>
+                    <nav class="hidden md:flex space-x-4 items-center">
+                        <a href="/index.html" class="nav-link" id="nav-home">
+                            <i class="fas fa-home mr-1"></i>Dashboard
+                        </a>
+                        <a href="/v2global-directory.html" class="nav-link" id="nav-directory">
+                            <i class="fas fa-building mr-1"></i>Directory
+                        </a>
+                        <a href="/v2global-addcompany.html" class="nav-link active-tab" id="nav-add-company">
+                            <i class="fas fa-plus mr-1"></i>Add Company
+                        </a>
+                        <a href="/enterprise-trade-categories.html" class="nav-link" id="nav-trade-categories">
+                            <i class="fas fa-tags mr-1"></i>Trade Categories
+                        </a>
+                        <button onclick="logout()" class="nav-link text-red-600 hover:text-red-800" id="nav-logout">
+                            <i class="fas fa-sign-out-alt mr-1"></i>Logout
+                        </button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <!-- V2 Global Add Company Content -->
+        <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Page Header -->
+            <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg mb-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-800 flex items-center">
+                            <i class="fas fa-plus-circle mr-3 text-indigo-600"></i>
+                            V2 Global Add Company
+                        </h1>
+                        <p class="text-gray-600 mt-2">Create a new company account with enterprise AI Agent Logic defaults. Streamlined creation with intelligent automation.</p>
+                    </div>
+                    <div class="hidden md:block">
+                        <div class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4 rounded-lg">
+                            <div class="text-sm font-medium">Enterprise Features</div>
+                            <div class="text-xs opacity-90">Auto AI Setup • Smart Defaults • Instant Activation</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Company Form -->
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <form id="v2-add-company-form" class="p-6 md:p-8">
+                    <!-- Company Information Section -->
+                    <div class="form-section mb-8">
+                        <h2 class="form-section-title">
+                            <i class="fas fa-building mr-3 text-indigo-600"></i>
+                            Company Information
+                        </h2>
+                        <p class="text-gray-600 mb-6">Essential information to create the company account. Additional details can be configured later in the company profile.</p>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Company Name -->
+                            <div class="md:col-span-2">
+                                <label for="companyName" class="form-label">
+                                    Company Name <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" 
+                                       name="companyName" 
+                                       id="companyName" 
+                                       class="form-input" 
+                                       required 
+                                       placeholder="Enter the complete company name"
+                                       maxlength="100">
+                                <p class="text-sm text-gray-500 mt-1">This will be used throughout the platform and in AI agent responses</p>
+                            </div>
+                            
+                            <!-- Primary Phone Number -->
+                            <div>
+                                <label for="companyPhone" class="form-label">
+                                    Primary Phone Number <span class="text-red-500">*</span>
+                                </label>
+                                <input type="tel" 
+                                       name="companyPhone" 
+                                       id="companyPhone" 
+                                       class="form-input" 
+                                       required 
+                                       placeholder="+1 (555) 123-4567">
+                                <p class="text-sm text-gray-500 mt-1">Main phone number for AI agent functionality</p>
+                            </div>
+                            
+                            <!-- Business Email (Optional) -->
+                            <div>
+                                <label for="businessEmail" class="form-label">
+                                    Business Email <span class="text-gray-400">(Optional)</span>
+                                </label>
+                                <input type="email" 
+                                       name="businessEmail" 
+                                       id="businessEmail" 
+                                       class="form-input" 
+                                       placeholder="contact@company.com">
+                                <p class="text-sm text-gray-500 mt-1">Primary contact email address</p>
+                            </div>
+                            
+                            <!-- Company Address -->
+                            <div class="md:col-span-2">
+                                <label for="companyAddress" class="form-label">
+                                    Company Address <span class="text-red-500">*</span>
+                                </label>
+                                <textarea name="companyAddress" 
+                                          id="companyAddress" 
+                                          rows="3" 
+                                          class="form-input" 
+                                          required 
+                                          placeholder="Enter complete address including street, city, state, and zip code"
+                                          maxlength="500"></textarea>
+                                <p class="text-sm text-gray-500 mt-1">Full business address for customer service and legal purposes</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Optional Information Section -->
+                    <div class="form-section mb-8">
+                        <h2 class="form-section-title">
+                            <i class="fas fa-cog mr-3 text-indigo-600"></i>
+                            Optional Configuration
+                        </h2>
+                        <p class="text-gray-600 mb-6">Additional information to enhance the company profile. These can be configured later if needed.</p>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Business Website -->
+                            <div>
+                                <label for="businessWebsite" class="form-label">
+                                    Business Website <span class="text-gray-400">(Optional)</span>
+                                </label>
+                                <input type="url" 
+                                       name="businessWebsite" 
+                                       id="businessWebsite" 
+                                       class="form-input" 
+                                       placeholder="https://www.company.com">
+                                <p class="text-sm text-gray-500 mt-1">Company website URL</p>
+                            </div>
+                            
+                            <!-- Service Area -->
+                            <div>
+                                <label for="serviceArea" class="form-label">
+                                    Service Area <span class="text-gray-400">(Optional)</span>
+                                </label>
+                                <input type="text" 
+                                       name="serviceArea" 
+                                       id="serviceArea" 
+                                       class="form-input" 
+                                       placeholder="e.g., Miami-Dade County, Nationwide, Local Area">
+                                <p class="text-sm text-gray-500 mt-1">Geographic area where services are provided</p>
+                            </div>
+                            
+                            <!-- Description -->
+                            <div class="md:col-span-2">
+                                <label for="description" class="form-label">
+                                    Company Description <span class="text-gray-400">(Optional)</span>
+                                </label>
+                                <textarea name="description" 
+                                          id="description" 
+                                          rows="3" 
+                                          class="form-input" 
+                                          placeholder="Brief description of the company and services provided"
+                                          maxlength="500"></textarea>
+                                <p class="text-sm text-gray-500 mt-1">Brief overview of the company for AI agent context</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Enterprise Features Preview -->
+                    <div class="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-lg border border-indigo-200 mb-8">
+                        <h3 class="text-lg font-semibold text-indigo-800 mb-3 flex items-center">
+                            <i class="fas fa-magic mr-2"></i>
+                            V2 Enterprise Features Included
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div class="flex items-center text-indigo-700">
+                                <i class="fas fa-check-circle mr-2 text-green-500"></i>
+                                AI Agent Logic with intelligent defaults
+                            </div>
+                            <div class="flex items-center text-indigo-700">
+                                <i class="fas fa-check-circle mr-2 text-green-500"></i>
+                                ElevenLabs voice integration ready
+                            </div>
+                            <div class="flex items-center text-indigo-700">
+                                <i class="fas fa-check-circle mr-2 text-green-500"></i>
+                                Knowledge management system
+                            </div>
+                            <div class="flex items-center text-indigo-700">
+                                <i class="fas fa-check-circle mr-2 text-green-500"></i>
+                                Analytics and performance tracking
+                            </div>
+                            <div class="flex items-center text-indigo-700">
+                                <i class="fas fa-check-circle mr-2 text-green-500"></i>
+                                Personality system configuration
+                            </div>
+                            <div class="flex items-center text-indigo-700">
+                                <i class="fas fa-check-circle mr-2 text-green-500"></i>
+                                Call transfer and escalation setup
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="flex flex-col sm:flex-row justify-end gap-4 pt-6 border-t border-gray-200">
+                        <a href="/v2global-directory.html" 
+                           class="w-full sm:w-auto bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-3 px-6 rounded-lg transition duration-150 ease-in-out text-center">
+                            <i class="fas fa-arrow-left mr-2"></i>Back to Directory
+                        </a>
+                        <button type="submit" 
+                                id="submit-button"
+                                class="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center">
+                            <i class="fas fa-plus mr-2"></i>Create Company Account
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white border-t border-gray-200 mt-auto">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-gray-500 text-sm">
+                <div class="flex items-center justify-center space-x-2">
+                    <span>© 2025 ClientsVia V2 Global Platform</span>
+                    <span class="v2-badge text-white text-xs px-2 py-1 rounded-full">ENTERPRISE</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="success-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                    <i class="fas fa-check text-green-600 text-xl"></i>
+                </div>
+                <h3 class="text-lg leading-6 font-medium text-gray-900" id="success-title">Company Created Successfully!</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500" id="success-message">
+                        The company account has been created with enterprise AI Agent Logic defaults.
+                    </p>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="success-close" class="px-4 py-2 bg-indigo-600 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                        Continue to Directory
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // V2 Global Add Company Manager - Enterprise Architecture
+        class V2GlobalAddCompanyManager {
+            constructor() {
+                this.form = document.getElementById('v2-add-company-form');
+                this.submitButton = document.getElementById('submit-button');
+                this.init();
+            }
+            
+            init() {
+                console.log('V2 GLOBAL ADD COMPANY: Initializing enterprise company creation system...');
+                
+                // Check authentication
+                if (!this.checkAuthentication()) return;
+                
+                this.setupEventListeners();
+                this.setupValidation();
+            }
+            
+            checkAuthentication() {
+                const token = localStorage.getItem('adminToken');
+                if (!token) {
+                    console.log('V2 GLOBAL ADD COMPANY: No authentication token - redirecting to login');
+                    window.location.href = '/login.html';
+                    return false;
+                }
+                return true;
+            }
+            
+            setupEventListeners() {
+                if (this.form) {
+                    this.form.addEventListener('submit', (e) => this.handleSubmit(e));
+                }
+                
+                // Phone number formatting
+                const phoneInput = document.getElementById('companyPhone');
+                if (phoneInput) {
+                    phoneInput.addEventListener('input', this.formatPhoneNumber);
+                }
+                
+                // Real-time validation
+                const requiredFields = ['companyName', 'companyPhone', 'companyAddress'];
+                requiredFields.forEach(fieldId => {
+                    const field = document.getElementById(fieldId);
+                    if (field) {
+                        field.addEventListener('blur', () => this.validateField(field));
+                        field.addEventListener('input', () => this.clearFieldError(field));
+                    }
+                });
+                
+                // Success modal close
+                const successClose = document.getElementById('success-close');
+                if (successClose) {
+                    successClose.addEventListener('click', () => {
+                        this.hideSuccessModal();
+                        window.location.href = '/v2global-directory.html';
+                    });
+                }
+            }
+            
+            setupValidation() {
+                // Add visual feedback for required fields
+                const requiredFields = document.querySelectorAll('input[required], textarea[required]');
+                requiredFields.forEach(field => {
+                    field.addEventListener('invalid', (e) => {
+                        e.preventDefault();
+                        this.showFieldError(field, 'This field is required');
+                    });
+                });
+            }
+            
+            formatPhoneNumber(e) {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length >= 1) {
+                    if (value.length <= 3) {
+                        value = `(${value}`;
+                    } else if (value.length <= 6) {
+                        value = `(${value.slice(0, 3)}) ${value.slice(3)}`;
+                    } else {
+                        value = `(${value.slice(0, 3)}) ${value.slice(3, 6)}-${value.slice(6, 10)}`;
+                    }
+                }
+                e.target.value = value;
+            }
+            
+            async handleSubmit(e) {
+                e.preventDefault();
+                
+                console.log('V2 GLOBAL ADD COMPANY: Form submission initiated');
+                
+                // Clear previous errors
+                this.clearAllErrors();
+                
+                // Validate form
+                if (!this.validateForm()) {
+                    this.showError('Please correct the errors above and try again.');
+                    return;
+                }
+                
+                // Prepare form data
+                const formData = new FormData(this.form);
+                const companyData = {
+                    companyName: formData.get('companyName')?.trim(),
+                    companyPhone: formData.get('companyPhone')?.trim(),
+                    companyAddress: formData.get('companyAddress')?.trim(),
+                    businessEmail: formData.get('businessEmail')?.trim() || null,
+                    businessWebsite: formData.get('businessWebsite')?.trim() || null,
+                    serviceArea: formData.get('serviceArea')?.trim() || null,
+                    description: formData.get('description')?.trim() || null
+                };
+                
+                console.log('V2 GLOBAL ADD COMPANY: Company data prepared:', companyData);
+                
+                // Show loading state
+                this.setLoadingState(true);
+                
+                try {
+                    const response = await this.apiCall('/api/v2global/addcompany/companies', {
+                        method: 'POST',
+                        body: JSON.stringify(companyData)
+                    });
+                    
+                    if (response.success) {
+                        console.log('V2 GLOBAL ADD COMPANY: Company created successfully:', response.data);
+                        this.showSuccess(response.data, response.message);
+                    } else {
+                        throw new Error(response.error || 'Failed to create company');
+                    }
+                    
+                } catch (error) {
+                    console.error('V2 GLOBAL ADD COMPANY: Error creating company:', error);
+                    this.handleError(error);
+                } finally {
+                    this.setLoadingState(false);
+                }
+            }
+            
+            validateForm() {
+                let isValid = true;
+                
+                // Company Name validation
+                const companyName = document.getElementById('companyName');
+                if (!companyName.value.trim()) {
+                    this.showFieldError(companyName, 'Company name is required');
+                    isValid = false;
+                } else if (companyName.value.trim().length < 2) {
+                    this.showFieldError(companyName, 'Company name must be at least 2 characters long');
+                    isValid = false;
+                } else if (companyName.value.trim().length > 100) {
+                    this.showFieldError(companyName, 'Company name cannot exceed 100 characters');
+                    isValid = false;
+                }
+                
+                // Phone validation
+                const companyPhone = document.getElementById('companyPhone');
+                const phoneRegex = /^\(\d{3}\) \d{3}-\d{4}$/;
+                if (!companyPhone.value.trim()) {
+                    this.showFieldError(companyPhone, 'Phone number is required');
+                    isValid = false;
+                } else if (!phoneRegex.test(companyPhone.value)) {
+                    this.showFieldError(companyPhone, 'Please enter a valid phone number: (555) 123-4567');
+                    isValid = false;
+                }
+                
+                // Address validation
+                const companyAddress = document.getElementById('companyAddress');
+                if (!companyAddress.value.trim()) {
+                    this.showFieldError(companyAddress, 'Company address is required');
+                    isValid = false;
+                } else if (companyAddress.value.trim().length < 10) {
+                    this.showFieldError(companyAddress, 'Please enter a complete address including street, city, state, and zip');
+                    isValid = false;
+                } else if (companyAddress.value.trim().length > 500) {
+                    this.showFieldError(companyAddress, 'Address cannot exceed 500 characters');
+                    isValid = false;
+                }
+                
+                // Email validation (if provided)
+                const businessEmail = document.getElementById('businessEmail');
+                if (businessEmail.value.trim()) {
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!emailRegex.test(businessEmail.value)) {
+                        this.showFieldError(businessEmail, 'Please enter a valid email address');
+                        isValid = false;
+                    }
+                }
+                
+                // Website validation (if provided)
+                const businessWebsite = document.getElementById('businessWebsite');
+                if (businessWebsite.value.trim()) {
+                    try {
+                        new URL(businessWebsite.value);
+                    } catch {
+                        this.showFieldError(businessWebsite, 'Please enter a valid website URL (e.g., https://www.company.com)');
+                        isValid = false;
+                    }
+                }
+                
+                return isValid;
+            }
+            
+            validateField(field) {
+                // Individual field validation for real-time feedback
+                this.clearFieldError(field);
+                
+                if (field.hasAttribute('required') && !field.value.trim()) {
+                    this.showFieldError(field, 'This field is required');
+                    return false;
+                }
+                
+                return true;
+            }
+            
+            showFieldError(field, message) {
+                this.clearFieldError(field);
+                
+                field.classList.add('border-red-500', 'error-shake');
+                
+                const errorElement = document.createElement('p');
+                errorElement.className = 'text-red-500 text-sm mt-1 field-error';
+                errorElement.textContent = message;
+                
+                field.parentNode.appendChild(errorElement);
+                
+                // Remove shake animation after it completes
+                setTimeout(() => {
+                    field.classList.remove('error-shake');
+                }, 500);
+            }
+            
+            clearFieldError(field) {
+                field.classList.remove('border-red-500');
+                const errorElement = field.parentNode.querySelector('.field-error');
+                if (errorElement) {
+                    errorElement.remove();
+                }
+            }
+            
+            clearAllErrors() {
+                const errorElements = document.querySelectorAll('.field-error, .form-error');
+                errorElements.forEach(el => el.remove());
+                
+                const errorFields = document.querySelectorAll('.border-red-500');
+                errorFields.forEach(field => field.classList.remove('border-red-500'));
+            }
+            
+            showError(message) {
+                const errorElement = document.createElement('div');
+                errorElement.className = 'form-error bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4';
+                errorElement.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <span>${message}</span>
+                    </div>
+                `;
+                
+                this.form.insertBefore(errorElement, this.form.firstChild);
+                
+                // Scroll to error
+                errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            
+            showSuccess(companyData, message) {
+                const modal = document.getElementById('success-modal');
+                const title = document.getElementById('success-title');
+                const messageEl = document.getElementById('success-message');
+                
+                if (title) title.textContent = `${companyData.companyName} Created Successfully!`;
+                if (messageEl) messageEl.textContent = message || 'The company account has been created with enterprise AI Agent Logic defaults.';
+                
+                if (modal) {
+                    modal.classList.remove('hidden');
+                    modal.classList.add('success-animation');
+                }
+            }
+            
+            hideSuccessModal() {
+                const modal = document.getElementById('success-modal');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('success-animation');
+                }
+            }
+            
+            handleError(error) {
+                if (error.details && Array.isArray(error.details)) {
+                    // Show validation errors
+                    error.details.forEach(detail => {
+                        this.showError(detail);
+                    });
+                } else {
+                    this.showError(error.message || 'An unexpected error occurred. Please try again.');
+                }
+            }
+            
+            setLoadingState(loading) {
+                if (this.submitButton) {
+                    this.submitButton.disabled = loading;
+                    if (loading) {
+                        this.submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating Company Account...';
+                        this.submitButton.classList.add('opacity-75');
+                    } else {
+                        this.submitButton.innerHTML = '<i class="fas fa-plus mr-2"></i>Create Company Account';
+                        this.submitButton.classList.remove('opacity-75');
+                    }
+                }
+            }
+            
+            async apiCall(url, options = {}) {
+                const token = localStorage.getItem('adminToken');
+                const defaultOptions = {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    credentials: 'include'
+                };
+                
+                const response = await fetch(url, { ...defaultOptions, ...options });
+                
+                if (response.status === 401) {
+                    console.log('V2 GLOBAL ADD COMPANY: Authentication failed - redirecting to login');
+                    localStorage.removeItem('adminToken');
+                    localStorage.removeItem('adminUser');
+                    window.location.href = '/login.html';
+                    throw new Error('Authentication failed');
+                }
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw data;
+                }
+                
+                return data;
+            }
+        }
+        
+        // Global logout function
+        function logout() {
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('adminUser');
+            window.location.href = '/login.html';
+        }
+        
+        // Initialize V2 Global Add Company on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            window.v2GlobalAddCompany = new V2GlobalAddCompanyManager();
+        });
+    </script>
+</body>
+</html>

@@ -101,6 +101,7 @@ async function loadAllRoutes() {
         routes.adminRoutes = await loadRouteWithTimeout('./routes/admin', 'adminRoutes');
         routes.v2GlobalAdminRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-admin', 'v2GlobalAdminRoutes');
         routes.v2GlobalDirectoryRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-directory', 'v2GlobalDirectoryRoutes');
+        routes.v2GlobalAddCompanyRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-addcompany', 'v2GlobalAddCompanyRoutes');
         routes.authRoutes = await loadRouteWithTimeout('./routes/auth', 'authRoutes');
         routes.backupRoutes = await loadRouteWithTimeout('./routes/backup', 'backupRoutes');
         // REMOVED: Legacy CRM Management routes - will build V2 version in future
@@ -208,6 +209,7 @@ function registerRoutes(routes) {
     app.use('/api/admin', routes.adminRoutes);
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
     app.use('/api/v2global/directory', routes.v2GlobalDirectoryRoutes); // V2 Global Company Directory
+    app.use('/api/v2global/addcompany', routes.v2GlobalAddCompanyRoutes); // V2 Global Add Company
     app.use('/api/backup', routes.backupRoutes); // BACKUP: Automated backup monitoring and management
     app.use('/api/company', routes.companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
     // Legacy personality routes removed - using modern AI Agent Logic system
