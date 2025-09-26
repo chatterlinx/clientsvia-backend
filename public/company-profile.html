@@ -10364,7 +10364,7 @@ Key Metrics:
                             'trade-categories': 'tradeQA', 
                             'template-intelligence': 'templates',
                             'learning-queue': 'learning',
-                            'emergency-llm': 'llmFallback'
+                            // 'emergency-llm': 'llmFallback' - Legacy mapping removed
                         };
                         return typeMapping[item.id] || item.id;
                     });
@@ -11507,67 +11507,7 @@ Key Metrics:
 
         // Initialize enterprise features after loading
         document.addEventListener('DOMContentLoaded', function() {
-            // 🔧 HOTFIX: Fix Emergency LLM floating issue
-            window.fixEmergencyLLMFloating = function() {
-                try {
-
-                    
-                    // Find all Emergency LLM elements
-                    const emergencyElements = document.querySelectorAll('[data-priority-type="emergency-llm"]');
-                    const properContainer = document.getElementById('clientsvia-priority-flow-container');
-                    
-                    emergencyElements.forEach((element, index) => {
-                        // Reset all positioning styles
-                        element.style.position = '';
-                        element.style.top = '';
-                        element.style.left = '';
-                        element.style.right = '';
-                        element.style.bottom = '';
-                        element.style.transform = '';
-                        element.style.zIndex = '';
-                        element.style.opacity = '1';
-                        
-                        // If element is not in proper container, remove it (likely a duplicate/floating clone)
-                        if (properContainer && !properContainer.contains(element)) {
-                            console.log('🧹 Removing floating Emergency LLM element:', element);
-                            element.remove();
-                        }
-                        
-                        // If there are multiple elements, keep only the first one
-                        if (index > 0) {
-                            console.log('🧹 Removing duplicate Emergency LLM element:', element);
-                            element.remove();
-                        }
-                    });
-                    
-                    // Reset any stuck drag states
-                    if (window.clientsViaDraggedElement) {
-                        window.clientsViaDraggedElement = null;
-                    }
-                    
-                    // Clear any elements that might be floating with position styles
-                    const floatingElements = document.querySelectorAll('[style*="position: fixed"], [style*="position: absolute"]');
-                    floatingElements.forEach(element => {
-                        if (element.innerHTML && element.innerHTML.includes('Emergency LLM Fallback')) {
-                            console.log('🧹 Removing styled floating Emergency LLM element:', element);
-                            element.remove();
-                        }
-                    });
-                    
-
-                    showNotification('Emergency LLM floating elements cleared', 'success');
-                } catch (error) {
-                    console.error('❌ Error fixing Emergency LLM floating:', error);
-                    showNotification('Error fixing floating elements: ' + error.message, 'error');
-                }
-            };
-            
-            // Run fix immediately
-            fixEmergencyLLMFloating();
-            
-            // Run fix again after a short delay to catch any late-loading elements
-            setTimeout(fixEmergencyLLMFloating, 500);
-            setTimeout(fixEmergencyLLMFloating, 1000);
+            // Legacy Emergency LLM floating code removed - no longer needed with V2 system
             
             // Initialize enterprise features after delay
             setTimeout(() => {
