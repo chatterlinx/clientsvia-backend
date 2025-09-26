@@ -96,7 +96,7 @@ async function loadAllRoutes() {
         // REMOVED: Legacy AI Intelligence routes - replaced by AI Agent Logic system
         // V2: Legacy monitoring route deleted - using modern AI Agent Logic monitoring system
         routes.notesRoutes = await loadRouteWithTimeout('./routes/notes', 'notesRoutes');
-        routes.agentProcessorRoutes = await loadRouteWithTimeout('./routes/agentProcessor', 'agentProcessorRoutes');
+        // V2: Legacy agentProcessor route deleted - using modern AI Agent Logic processing system
         routes.adminRoutes = await loadRouteWithTimeout('./routes/admin', 'adminRoutes');
         routes.v2GlobalAdminRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-admin', 'v2GlobalAdminRoutes');
         routes.v2GlobalDirectoryRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-directory', 'v2GlobalDirectoryRoutes');
@@ -238,7 +238,7 @@ function registerRoutes(routes) {
     app.use('/api/enterprise-trade-categories', routes.enterpriseTradeCategories); // ENTERPRISE: Trade Categories Management
 
     // Mount agent processor routes
-    app.use('/api/agent', routes.agentProcessorRoutes); // NEW: Central agent processing API
+    // V2: Legacy agentProcessor route deleted - using modern AI Agent Logic processing system
 
     /*
     --- TWILIO SMOKE TEST ROUTE (COMMENTED OUT) ---
