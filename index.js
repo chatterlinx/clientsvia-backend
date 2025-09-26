@@ -70,7 +70,7 @@ async function loadAllRoutes() {
         routes.aiRoutes = await loadRouteWithTimeout('./routes/ai', 'aiRoutes');
         routes.elevenLabsRoutes = await loadRouteWithTimeout('./routes/elevenLabs', 'elevenLabsRoutes');
         routes.uploadRoutes = await loadRouteWithTimeout('./routes/upload', 'uploadRoutes');
-        routes.agentSettingsRoutes = await loadRouteWithTimeout('./routes/agentSettings', 'agentSettingsRoutes');
+        // V2: Legacy agentSettings route removed - using company/agentSettings V2 route
         routes.companyAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/agentSettings', 'companyAgentSettingsRoutes');
         // Legacy personality routes removed - using modern AI Agent Logic system
         // Knowledge Management Routes
@@ -201,7 +201,7 @@ function registerRoutes(routes) {
     app.use('/api/ai', routes.aiRoutes);
     app.use('/api/elevenlabs', routes.elevenLabsRoutes);
     app.use('/api/upload', routes.uploadRoutes);
-    app.use('/api/agent', routes.agentSettingsRoutes); // ENTERPRISE: AI Agent Settings Management
+    // V2: Legacy /api/agent route removed - using /api/company/:companyId/agent-settings V2 route
     app.use('/api/auth', routes.authRoutes); // AUTH: User authentication and JWT token management
     app.use('/api/admin', routes.adminRoutes);
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
