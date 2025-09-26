@@ -1182,6 +1182,83 @@ const companySchema = new mongoose.Schema({
                 maintainConsistency: { type: Boolean, default: true }
             }
         },
+
+        // 🎤 V2 VOICE SETTINGS - ELEVENLABS INTEGRATION
+        // Migrated from legacy aiSettings.elevenLabs to aiAgentLogic.voiceSettings
+        voiceSettings: {
+            // API Configuration
+            apiSource: { 
+                type: String, 
+                enum: ['clientsvia', 'own'], 
+                default: 'clientsvia' 
+            },
+            apiKey: { 
+                type: String, 
+                trim: true, 
+                default: null // Only used when apiSource = 'own'
+            },
+            voiceId: { 
+                type: String, 
+                trim: true, 
+                default: null 
+            },
+            
+            // Voice Quality Controls
+            stability: { 
+                type: Number, 
+                min: 0, 
+                max: 1, 
+                default: 0.5 
+            },
+            similarityBoost: { 
+                type: Number, 
+                min: 0, 
+                max: 1, 
+                default: 0.7 
+            },
+            styleExaggeration: { 
+                type: Number, 
+                min: 0, 
+                max: 1, 
+                default: 0.0 
+            },
+            
+            // Performance & Output
+            speakerBoost: { 
+                type: Boolean, 
+                default: true 
+            },
+            aiModel: { 
+                type: String, 
+                enum: ['eleven_turbo_v2_5', 'eleven_multilingual_v2', 'eleven_monolingual_v1'], 
+                default: 'eleven_turbo_v2_5' 
+            },
+            outputFormat: { 
+                type: String, 
+                enum: ['mp3_44100_128', 'mp3_22050_32', 'pcm_16000', 'pcm_22050', 'pcm_24000'], 
+                default: 'mp3_44100_128' 
+            },
+            streamingLatency: { 
+                type: Number, 
+                min: 0, 
+                max: 4, 
+                default: 0 // 0 = best quality, higher = lower latency
+            },
+            
+            // Enterprise Features
+            enabled: { 
+                type: Boolean, 
+                default: true 
+            },
+            lastUpdated: { 
+                type: Date, 
+                default: Date.now 
+            },
+            version: { 
+                type: String, 
+                default: '2.0' 
+            }
+        },
         
         // Legacy fields (keeping for backward compatibility)
         highlevelApiKey: { type: String, trim: true, default: null },

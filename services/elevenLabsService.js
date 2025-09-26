@@ -5,19 +5,38 @@ const path = require('path');
 const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 
 function getElevenLabsApiKey(company) {
-  // Check if company has toggled to use their own API key
+  // V2 VOICE SETTINGS: Check new aiAgentLogic.voiceSettings path first
+  const v2VoiceSettings = company?.aiAgentLogic?.voiceSettings;
+  if (v2VoiceSettings) {
+    const useOwnApi = v2VoiceSettings.apiSource === 'own';
+    const companyKey = v2VoiceSettings.apiKey;
+    
+    if (useOwnApi && companyKey && companyKey.trim()) {
+      console.log(`🔑 V2: Company ${company._id || 'unknown'} using own ElevenLabs API`);
+      return companyKey.trim();
+    }
+    
+    // V2 system defaults to ClientsVia global API when apiSource = 'clientsvia'
+    if (v2VoiceSettings.apiSource === 'clientsvia' || !useOwnApi) {
+      if (process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_API_KEY.trim()) {
+        console.log(`🏢 V2: Using ClientsVia global ElevenLabs API for company ${company?._id || 'global'}`);
+        return process.env.ELEVENLABS_API_KEY.trim();
+      }
+    }
+  }
+  
+  // LEGACY FALLBACK: Check old aiSettings.elevenLabs path for backward compatibility
   const useOwnApi = company?.aiSettings?.elevenLabs?.useOwnApiKey;
   const companyKey = company?.aiSettings?.elevenLabs?.apiKey;
   
   if (useOwnApi && companyKey && companyKey.trim()) {
-    // Company has opted to use their own API key
-    console.log(`🔑 Company ${company._id || 'unknown'} using own ElevenLabs API`);
+    console.log(`🔑 LEGACY: Company ${company._id || 'unknown'} using own ElevenLabs API`);
     return companyKey.trim();
   }
   
   // Default: Use ClientsVia global API key
   if (process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_API_KEY.trim()) {
-    console.log(`🏢 Using ClientsVia global ElevenLabs API for company ${company?._id || 'global'}`);
+    console.log(`🏢 LEGACY: Using ClientsVia global ElevenLabs API for company ${company?._id || 'global'}`);
     return process.env.ELEVENLABS_API_KEY.trim();
   }
   

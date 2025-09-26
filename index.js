@@ -62,6 +62,7 @@ async function loadAllRoutes() {
     
     try {
         routes.companyRoutes = await loadRouteWithTimeout('./routes/company', 'companyRoutes');
+        routes.v2VoiceRoutes = await loadRouteWithTimeout('./routes/company/v2profile-voice', 'v2VoiceRoutes');
         routes.alertRoutes = await loadRouteWithTimeout('./routes/alerts', 'alertRoutes');
         routes.integrationsRoutes = await loadRouteWithTimeout('./routes/integrations', 'integrationsRoutes');
         routes.ttsRoutes = await loadRouteWithTimeout('./routes/tts', 'ttsRoutes');
@@ -190,6 +191,7 @@ function registerRoutes(routes) {
     
     // --- API Routes ---
     app.use('/api', routes.companyRoutes);
+    app.use('/api', routes.v2VoiceRoutes); // V2 Voice Settings API
     app.use('/api/debug', require('./routes/debug-qna')); // Temporary debug route
     app.use('/api/debug', require('./routes/debug-logs')); // Debug logging route
     app.use('/api/debug', require('./routes/debug-company-config')); // Company AI Agent Logic configuration debug route
