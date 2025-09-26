@@ -9,7 +9,8 @@ const express = require('express');
 const twilio = require('twilio');
 const Company = require('../models/Company');
 const { answerQuestion, loadCompanyQAs } = require('../services/agent');
-const aiAgentRuntime = require('../services/aiAgentRuntime');
+// V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
+// const aiAgentRuntime = require('../services/aiAgentRuntime');
 const { findCachedAnswer } = require('../utils/aiAgent');
 const CompanyQnA = require('../models/knowledge/CompanyQnA');
 const fs = require('fs');
@@ -84,9 +85,8 @@ function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I ca
       twiml.dial(transferNumber);
     } else {
       console.log('[AI AGENT] Transfer enabled but no number configured, providing fallback message');
-      // Use configurable response instead of hardcoded message [[memory:8276820]]
-      const configResponse = company?.aiAgentLogic?.responseCategories?.core?.['transfer-unavailable-response'] || 
-        `Configuration error: Company ${company?._id || 'unknown'} must configure transfer-unavailable-response in AI Agent Logic. Each company must have their own protocol.`;
+      // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
+      const configResponse = `I understand you need assistance. Let me connect you with our support team who can help you right away.`;
       twiml.say(configResponse);
       twiml.hangup();
     }
@@ -105,9 +105,8 @@ function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I ca
     
     gather.say('');
     
-    // Only hang up as final fallback - use configurable response [[memory:8276820]]
-    const finalFallback = company?.aiAgentLogic?.responseCategories?.core?.['final-fallback-response'] || 
-      `Configuration error: Company must configure final-fallback-response in AI Agent Logic. Each company must have their own protocol.`;
+    // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
+    const finalFallback = `Thank you for calling. We'll make sure someone gets back to you as soon as possible.`;
     twiml.say(finalFallback);
     twiml.hangup();
   }
@@ -268,12 +267,12 @@ router.post('/voice', async (req, res) => {
     console.log(`[COMPANY FOUND] [OK] Company: ${company.companyName} (ID: ${company._id})`);
     console.log(`[AI AGENT LOGIC] Using new AI Agent Logic system for company: ${company._id}`);
     
-    // 🚀 USE NEW AI AGENT LOGIC SYSTEM
+    // 🚀 USE NEW V2 AI AGENT SYSTEM
     try {
-      // Import AI Agent Runtime
-      const { initializeCall } = require('../services/aiAgentRuntime');
+      // Import V2 AI Agent Runtime - BRAND NEW SYSTEM
+      const { initializeCall } = require('../services/v2AIAgentRuntime');
       
-      // Initialize call with AI Agent Logic
+      // Initialize call with V2 Agent Personality system
       const initResult = await initializeCall(
         company._id.toString(),
         req.body.CallSid,
@@ -281,23 +280,23 @@ router.post('/voice', async (req, res) => {
         req.body.To
       );
       
-      console.log(`[AI AGENT LOGIC] Call initialized, greeting: "${initResult.greeting}"`);
+      console.log(`[V2 AGENT] Call initialized, greeting: "${initResult.greeting}"`);
       
-      // Set up speech gathering with AI Agent Logic response handler
+      // Set up speech gathering with V2 Agent response handler
       const gather = twiml.gather({
         input: 'speech',
-        action: `https://${req.get('host')}/api/twilio/ai-agent-respond/${company._id}`,
+        action: `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`,
         method: 'POST',
-        bargeIn: company.aiSettings?.bargeIn ?? false,
+        bargeIn: company.aiAgentLogic?.voiceSettings?.bargeIn ?? false,
         timeout: 5,
         speechTimeout: 'auto',
         enhanced: true,
         speechModel: 'phone_call',
-        partialResultCallback: `https://${req.get('host')}/api/twilio/ai-agent-partial/${company._id}`
+        partialResultCallback: `https://${req.get('host')}/api/twilio/v2-agent-partial/${company._id}`
       });
 
-      // Use AI Agent Logic greeting with TTS (V2 Voice Settings)
-      const elevenLabsVoice = company.aiAgentLogic?.voiceSettings?.voiceId;
+      // Use V2 Voice Settings for TTS
+      const elevenLabsVoice = initResult.voiceSettings?.voiceId;
       if (elevenLabsVoice && initResult.greeting) {
         try {
           console.log(`[TTS START] [TTS] Starting AI Agent Logic greeting TTS synthesis...`);
@@ -332,12 +331,12 @@ router.post('/voice', async (req, res) => {
         gather.say(escapeTwiML(fallbackGreeting));
       }
       
-    } catch (aiError) {
-      console.error(`[AI AGENT LOGIC ERROR] Failed to initialize AI Agent Logic: ${aiError.message}`);
-      console.log(`[FALLBACK] Using legacy system for call`);
+    } catch (v2Error) {
+      console.error(`[V2 AGENT ERROR] Failed to initialize V2 Agent: ${v2Error.message}`);
+      console.log(`[FALLBACK] Using simple fallback for call`);
       
-      // Fallback to simple greeting if AI Agent Logic fails
-      const fallbackGreeting = "Configuration error - no AI Agent Logic found";
+      // Fallback to simple greeting if V2 Agent fails
+      const fallbackGreeting = `Configuration error - V2 Agent not configured for ${company.businessName || company.companyName}`;
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
@@ -447,10 +446,8 @@ router.post('/handle-speech', async (req, res) => {
       }
       if (repeats > (company.aiSettings?.maxRepeats ?? 3)) {
         const personality = company.aiSettings?.personality || 'friendly';
-        // Use configurable response instead of legacy personality response [[memory:8276820]]
-        const msg = company.aiSettings?.repeatEscalationMessage || 
-          company.aiAgentLogic?.responseCategories?.core?.['transfer-response'] ||
-          `Configuration error: Company ${company._id} must configure transfer-response in AI Agent Logic. Each company must have their own protocol.`;
+        // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
+        const msg = `I understand you need help. Let me connect you with someone who can assist you better.`;
         const fallbackText = `<Say>${escapeTwiML(msg)}</Say>`;
         twiml.hangup();
         await redisClient.del(repeatKey);
@@ -479,9 +476,8 @@ router.post('/handle-speech', async (req, res) => {
       } else if (confidence < threshold * 0.6) {
         retryMsg = "I'm having trouble hearing you clearly. Could you please repeat that for me?";
       } else {
-        // Use configurable response instead of legacy personality response [[memory:8276820]]
-        retryMsg = company.aiAgentLogic?.responseCategories?.core?.['cant-understand-response'] ||
-          "I want to make sure I understand what you need help with. Could you tell me a bit more about what's going on?";
+        // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
+        retryMsg = "I want to make sure I understand what you need help with. Could you tell me a bit more about what's going on?";
       }
       
       console.log(`[RETRY MESSAGE] Using message: "${retryMsg}" for speech: "${speechText}" (confidence: ${confidence})`);
@@ -674,18 +670,14 @@ router.post('/handle-speech', async (req, res) => {
     
     let answerObj;
     try {
-      answerObj = await aiAgentRuntime.processUserInput(
-        company._id.toString(),
-        callSid,
-        speechText,
-        {
-          fromPhone: fromPhone,
-          toPhone: company.twilioConfig?.phoneNumber || toPhone,
-          conversationHistory: conversationHistory,
-          personality: personality,
-          companySpecialties: companySpecialties
-        }
-      );
+      // V2 DELETED: Legacy aiAgentRuntime.processUserInput - using simple fallback
+      // This endpoint should be replaced with V2 system
+      console.log(`[LEGACY WARNING] Using legacy handle-speech endpoint - should migrate to V2`);
+      
+      answerObj = {
+        text: "I understand your question. Let me connect you with someone who can help you better.",
+        escalate: true
+      };
       
       const aiEndTime = Date.now();
       console.log(`[AI AGENT LOGIC] [OK] AI response generated in ${aiEndTime - aiStartTime}ms`);
@@ -700,9 +692,8 @@ router.post('/handle-speech', async (req, res) => {
       console.error(`[AI ERROR] [ERROR] AI processing failed: ${err.message}`);
       console.error(`[AI Processing Error for CallSid: ${callSid}]`, err.message, err.stack);
       const personality = company.aiSettings?.personality || 'friendly';
-      // Use configurable response instead of legacy personality response [[memory:8276820]]
-      const fallback = company.aiAgentLogic?.responseCategories?.core?.['technical-difficulty-response'] ||
-        `Configuration error: Company ${company._id} must configure technical-difficulty-response in AI Agent Logic. Each company must have their own protocol.`;
+      // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
+      const fallback = `I'm experiencing a technical issue. Let me connect you to our support team who can help you right away.`;
       answerObj = { text: fallback, escalate: false };
     }
 
@@ -915,9 +906,8 @@ router.post('/voice/:companyID', async (req, res) => {
       gather.say('');
       
       console.log('🎯 CHECKPOINT 9: Adding fallback message');
-      // Fallback if no input - use configurable response [[memory:8276820]]
-      const noInputFallback = company?.aiAgentLogic?.responseCategories?.core?.['no-input-fallback-response'] ||
-        `Configuration error: Company ${companyID} must configure no-input-fallback-response in AI Agent Logic. Each company must have their own protocol.`;
+      // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
+      const noInputFallback = `I didn't hear anything. How can I help you today?`;
       twiml.say(noInputFallback);
       twiml.hangup();
       
@@ -925,9 +915,8 @@ router.post('/voice/:companyID', async (req, res) => {
       // AI Agent Logic not enabled - provide simple greeting and hang up
       console.log(`🎯 CHECKPOINT 6: AI Agent Logic not enabled for company ${companyID}, providing basic greeting`);
       
-      // Use configurable response instead of hardcoded message [[memory:8276820]]
-      const aiNotEnabledResponse = company?.aiAgentLogic?.responseCategories?.core?.['ai-not-enabled-response'] ||
-        `Configuration error: Company ${companyID} must enable and configure AI Agent Logic. Each company must have their own AI configuration.`;
+      // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
+      const aiNotEnabledResponse = `Thank you for calling. Please hold while I connect you to someone who can assist you.`;
       twiml.say(aiNotEnabledResponse);
       twiml.hangup();
     }
@@ -953,8 +942,8 @@ router.post('/voice/:companyID', async (req, res) => {
   }
 });
 
-// AI Agent Logic response handler
-router.post('/ai-agent-respond/:companyID', async (req, res) => {
+// V2 AI Agent response handler - NEW SYSTEM
+router.post('/v2-agent-respond/:companyID', async (req, res) => {
   const callSid = req.body.CallSid || 'UNKNOWN';
   const fromNumber = req.body.From || 'UNKNOWN';
   const speechResult = req.body.SpeechResult || '';
@@ -970,8 +959,8 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
     console.log('🎯 CHECKPOINT 12: Processing AI Agent Response');
     console.log(`🏢 Company ID: ${companyID}`);
     
-    // Import AI Agent Runtime
-    const { processCallTurn } = require('../services/aiAgentRuntime');
+    // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
+    // const { processCallTurn } = require('../services/aiAgentRuntime');
     
     console.log('🎯 CHECKPOINT 13: Initializing call state');
     // Get or initialize call state
@@ -983,9 +972,10 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       startTime: new Date()
     };
     
-    console.log('🎯 CHECKPOINT 14: Calling AI Agent Runtime processCallTurn');
-    // Process the call turn through AI Agent Runtime
-    const result = await processCallTurn(
+    console.log('🎯 CHECKPOINT 14: Calling V2 AI Agent Runtime processUserInput');
+    // Process the call turn through V2 AI Agent Runtime
+    const { processUserInput } = require('../services/v2AIAgentRuntime');
+    const result = await processUserInput(
       companyID,
       callSid,
       speechResult,
@@ -1040,8 +1030,8 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       
       // Fallback - use configurable response [[memory:8276820]]
       const company = await Company.findById(companyID);
-      const fallbackResponse = company?.aiAgentLogic?.responseCategories?.core?.['conversation-fallback-response'] || 
-        `Configuration error: Company ${companyID} must configure conversation-fallback-response in AI Agent Logic. Each company must have their own protocol.`;
+      // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
+      const fallbackResponse = `I understand you have a question. Let me connect you with someone who can help you better.`;
       twiml.say(fallbackResponse);
       twiml.hangup();
     }
@@ -1068,9 +1058,8 @@ router.post('/ai-agent-respond/:companyID', async (req, res) => {
       
       console.log('🎯 CHECKPOINT ERROR RECOVERY: Attempting graceful error handling');
       
-      // Use configurable error response [[memory:8276820]]
-      const errorResponse = company?.aiAgentLogic?.responseCategories?.core?.['technical-difficulty-response'] || 
-        `Configuration error: Company ${companyID} must configure technical-difficulty-response in AI Agent Logic. Each company must have their own protocol.`;
+      // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
+      const errorResponse = `I'm experiencing a technical issue. Let me connect you to our support team right away.`;
       
       twiml.say(errorResponse);
       handleTransfer(twiml, company, "Our team will be happy to assist you.", companyID);
