@@ -91,7 +91,7 @@ async function loadAllRoutes() {
         // V2: Legacy AI agent routes deleted - using modern v2profile-aiagentlogic system
         // V2: Legacy agentPerformance route deleted - using modern AI Agent Logic analytics
         // V2: Legacy intentRouting route deleted - using modern AI Agent Logic intent classification
-        routes.bookingScriptsRoutes = await loadRouteWithTimeout('./routes/bookingScripts', 'bookingScriptsRoutes');
+        // V2: Legacy bookingScripts route deleted - using modern AI Agent Logic booking flow
         routes.bookingHandlerRoutes = await loadRouteWithTimeout('./routes/bookingHandler', 'bookingHandlerRoutes');
         // REMOVED: Legacy AI Intelligence routes - replaced by AI Agent Logic system
         routes.monitoringRoutes = await loadRouteWithTimeout('./routes/monitoring', 'monitoringRoutes');
@@ -229,7 +229,7 @@ function registerRoutes(routes) {
     // V2: Legacy AI agent route mounting removed - using modern v2profile-aiagentlogic system
     // V2: Legacy agentPerformance route deleted - using modern AI Agent Logic analytics
     // V2: Legacy intentRouting route deleted - using modern AI Agent Logic intent classification
-    app.use('/api/booking-scripts', routes.bookingScriptsRoutes); // Booking Scripts Configuration
+    // V2: Legacy bookingScripts route deleted - using modern AI Agent Logic booking flow
     app.use('/api/monitoring', routes.monitoringRoutes); // Agent Monitoring System
     app.use('/api/notes', routes.notesRoutes); // GOLD STANDARD: Enterprise Notes Management
     app.use('/api/booking-handler', routes.bookingHandlerRoutes); // Booking Handler API for testing and integration
