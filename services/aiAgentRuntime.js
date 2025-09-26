@@ -14,7 +14,8 @@
 const { route: routeIntent } = require('../src/runtime/IntentRouter');
 const { route: routeKnowledge } = require('../src/runtime/KnowledgeRouter');
 const { apply: applyBehavior, updateCallState } = require('../src/runtime/BehaviorEngine');
-const { start: startBooking, next: nextBooking } = require('../src/runtime/BookingHandler');
+// V2 DELETED: Legacy BookingHandler - depends on deleted Booking model
+// const { start: startBooking, next: nextBooking } = require('../src/runtime/BookingHandler');
 const { ResponseTraceLogger } = require('../src/runtime/ResponseTrace');
 const aiLoader = require('../src/config/aiLoader');
 const Company = require('../models/Company');
@@ -246,11 +247,18 @@ class AIAgentRuntime {
       let bookingState = callState.bookingState;
       
       if (!bookingState) {
-        // Start new booking flow
-        bookingState = await startBooking(companyID, {
-          userText,
-          intent: 'booking'
-        });
+        // V2 DELETED: Legacy booking flow disabled - depends on deleted Booking model
+        // bookingState = await startBooking(companyID, {
+        //   userText,
+        //   intent: 'booking'
+        // });
+        
+        // V2: Return simple booking message instead
+        return {
+          text: "I'd be happy to help you schedule an appointment. Please call us directly or visit our website to book your service.",
+          shouldContinue: true,
+          controlFlags: { tone: 'helpful' }
+        };
         
         callState.bookingState = bookingState;
         callState.intent = 'booking';
@@ -267,11 +275,18 @@ class AIAgentRuntime {
         
         return finalResponse;
       } else {
-        // Continue existing booking flow
-        const bookingResult = await nextBooking(bookingState, userText, {
-          callState,
-          companyID
-        });
+        // V2 DELETED: Legacy booking continuation disabled - depends on deleted Booking model
+        // const bookingResult = await nextBooking(bookingState, userText, {
+        //   callState,
+        //   companyID
+        // });
+        
+        // V2: Return simple booking message instead
+        return {
+          text: "I'd be happy to help you schedule an appointment. Please call us directly or visit our website to book your service.",
+          shouldContinue: true,
+          controlFlags: { tone: 'helpful' }
+        };
         
         callState.bookingState = bookingResult.state;
         
@@ -627,8 +642,8 @@ class AIAgentRuntime {
       // Test Behavior Engine (basic test)
       results.behaviorEngine = true; // BehaviorEngine is available
       
-      // Test Booking Handler (basic test)
-      results.bookingHandler = true; // BookingHandler is available
+      // V2 DELETED: Legacy BookingHandler test disabled
+      results.bookingHandler = false; // BookingHandler disabled - V2 uses calendar system
       
       // Test Response Trace
       const recentTraces = await ResponseTraceLogger.getRecentTraces(companyID, 1);
