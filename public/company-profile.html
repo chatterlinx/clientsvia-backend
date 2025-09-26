@@ -11959,7 +11959,10 @@ Key Metrics:
         };
 
         // Populate the Response Placeholders table with company data
-        function populateResponsePlaceholdersTable() {
+        function populateResponsePlaceholdersTable_DELETED() {
+            console.log('🚫 LEGACY FUNCTION DISABLED: populateResponsePlaceholdersTable - V2 uses aiAgentLogic system');
+            return;
+            
             const tableBody = document.getElementById('placeholders-table-body');
             if (!tableBody) return;
             
@@ -11967,7 +11970,7 @@ Key Metrics:
             const companyData = window.companyProfileManager?.companyData;
             
             // V2: No legacy placeholders - use modern aiAgentLogic system
-            const defaultPlaceholders = [
+            const defaultPlaceholders_DELETED = [
                 // V2 system uses direct database values, no hardcoded placeholders,
                 {
                     placeholder: '{callername}',
@@ -12077,11 +12080,14 @@ Key Metrics:
 
         }
 
-        // Get available placeholders for variable insertion
-        function getAvailablePlaceholders() {
+        // V2 DELETED: Legacy placeholder system - V2 uses direct aiAgentLogic data
+        function getAvailablePlaceholders_DELETED() {
+            console.log('🚫 LEGACY FUNCTION DISABLED: getAvailablePlaceholders - V2 uses aiAgentLogic system');
+            return [];
+            
             const companyData = window.companyProfileManager?.companyData;
             
-            return [
+            return_DELETED = [
                 // V2: Legacy placeholders removed - modern aiAgentLogic handles company data directly
                 {
                     placeholder: '{website}',
@@ -12152,9 +12158,12 @@ Key Metrics:
             ];
         }
 
-        // Update variable insertion buttons in Response Categories
-        function updateVariableInsertionButtons() {
-            const placeholders = getAvailablePlaceholders();
+        // V2 DELETED: Legacy variable insertion buttons - V2 uses aiAgentLogic system
+        function updateVariableInsertionButtons_DELETED() {
+            console.log('🚫 LEGACY FUNCTION DISABLED: updateVariableInsertionButtons - V2 uses aiAgentLogic system');
+            return;
+            
+            const placeholders = getAvailablePlaceholders_DELETED();
             const buttonContainers = document.querySelectorAll('[data-response-variables]');
             
             buttonContainers.forEach(container => {
@@ -12421,8 +12430,8 @@ Key Metrics:
                 }
             });
             
-            // Update all variable insertion buttons
-            updateVariableInsertionButtons();
+            // V2 DELETED: Legacy variable insertion buttons disabled
+            // updateVariableInsertionButtons_DELETED();
             
             // V2: No legacy placeholder conversion needed - modern aiAgentLogic system handles this
             
@@ -12441,11 +12450,11 @@ Key Metrics:
                 console.log(`🎭 Live preview listeners attached to ${responseTextareas.length} response textareas`);
             }, 1000); // Delay to ensure all elements are loaded
 
-            // Initialize Response Categories with dynamic placeholders
+            // V2 DELETED: Legacy placeholder initialization - V2 uses aiAgentLogic system
             setTimeout(() => {
-                populateResponsePlaceholdersTable(); // Populate table first
+                // populateResponsePlaceholdersTable_DELETED(); // V2: Disabled legacy function
                 initializeResponseCategories(); // Then convert existing elements
-                updateVariableInsertionButtons(); // Finally update the buttons
+                // updateVariableInsertionButtons_DELETED(); // V2: Disabled legacy function
             }, 1200);
         });
 
