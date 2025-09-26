@@ -306,10 +306,10 @@ router.post('/voice', async (req, res) => {
           const buffer = await synthesizeSpeech({
             text: initResult.greeting,
             voiceId: elevenLabsVoice,
-            stability: company.aiSettings.elevenLabs?.stability,
-            similarity_boost: company.aiSettings.elevenLabs?.similarityBoost,
-            style: company.aiSettings.elevenLabs?.style,
-            model_id: company.aiSettings.elevenLabs?.modelId,
+            stability: company.aiAgentLogic?.voiceSettings?.stability,
+            similarity_boost: company.aiAgentLogic?.voiceSettings?.similarityBoost,
+            style: company.aiAgentLogic?.voiceSettings?.styleExaggeration,
+            model_id: company.aiAgentLogic?.voiceSettings?.aiModel,
             company
           });
           
@@ -486,17 +486,17 @@ router.post('/handle-speech', async (req, res) => {
       
       console.log(`[RETRY MESSAGE] Using message: "${retryMsg}" for speech: "${speechText}" (confidence: ${confidence})`);
       
-      const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
+      const elevenLabsVoice = company.aiAgentLogic?.voiceSettings?.voiceId;
 
       if (elevenLabsVoice) {
         try {
           const buffer = await synthesizeSpeech({
             text: retryMsg,
             voiceId: elevenLabsVoice,
-            stability: company.aiSettings.elevenLabs?.stability,
-            similarity_boost: company.aiSettings.elevenLabs?.similarityBoost,
-            style: company.aiSettings.elevenLabs?.style,
-            model_id: company.aiSettings.elevenLabs?.modelId,
+            stability: company.aiAgentLogic?.voiceSettings?.stability,
+            similarity_boost: company.aiAgentLogic?.voiceSettings?.similarityBoost,
+            style: company.aiAgentLogic?.voiceSettings?.styleExaggeration,
+            model_id: company.aiAgentLogic?.voiceSettings?.aiModel,
             company
           });
           
@@ -604,17 +604,17 @@ router.post('/handle-speech', async (req, res) => {
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
       });
 
-      const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
+      const elevenLabsVoice = company.aiAgentLogic?.voiceSettings?.voiceId;
       
       if (elevenLabsVoice) {
         try {
           const buffer = await synthesizeSpeech({
             text: cachedAnswer,
             voiceId: elevenLabsVoice,
-            stability: company.aiSettings.elevenLabs?.stability,
-            similarity_boost: company.aiSettings.elevenLabs?.similarityBoost,
-            style: company.aiSettings.elevenLabs?.style,
-            model_id: company.aiSettings.elevenLabs?.modelId,
+            stability: company.aiAgentLogic?.voiceSettings?.stability,
+            similarity_boost: company.aiAgentLogic?.voiceSettings?.similarityBoost,
+            style: company.aiAgentLogic?.voiceSettings?.styleExaggeration,
+            model_id: company.aiAgentLogic?.voiceSettings?.aiModel,
             company
           });
           
@@ -720,7 +720,7 @@ router.post('/handle-speech', async (req, res) => {
     });
 
     const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
-    const elevenLabsVoice = company.aiSettings?.elevenLabs?.voiceId;
+    const elevenLabsVoice = company.aiAgentLogic?.voiceSettings?.voiceId;
     // TTS without artificial timeouts - let it complete naturally
     if (elevenLabsVoice) {
       try {
