@@ -10624,7 +10624,7 @@ Key Metrics:
                         loadAgentSettings();
                         loadAgentPersonalitySettings(); // Module 1: Load personality settings
                         loadClientsviaAgentPersonalitySettings(); // ClientsVia: Load personality settings for tab interface
-                        loadResponseTemplates(); // CRITICAL: Load response templates for AI agent
+                        // loadResponseTemplates_LEGACY_REMOVED(); // V2 DELETED: Legacy response templates - V2 uses aiAgentLogic
                         initKnowledgeSources(); // Module 2: Initialize knowledge source controls
                         loadKnowledgeSettings(); // Module 2: Load knowledge settings
                         loadAgentAnalytics();
@@ -11347,8 +11347,8 @@ Key Metrics:
                 initializeEnterpriseFeatures();
                 console.log('🚀 Enterprise AI features initialized');
                 
-                // Final cleanup after initialization
-                fixEmergencyLLMFloating();
+                // V2 DELETED: Legacy LLM floating cleanup - V2 uses aiAgentLogic system
+                // fixEmergencyLLMFloating();
             }, 1500);
         });
 
@@ -13205,7 +13205,7 @@ Key Metrics:
 
             // V2: Legacy booking flow step addition removed
             // V2: Legacy booking flow call removed
-            updateBookingSchemaPreview();
+            // updateBookingSchemaPreview_DELETED(); // V2 DELETED: Legacy booking schema
 
             // Clear form
             document.getElementById('new-field-name').value = '';
@@ -13261,13 +13261,16 @@ Key Metrics:
             });
 
             // V2: Legacy booking flow call removed
-            updateBookingSchemaPreview();
+            // updateBookingSchemaPreview_DELETED(); // V2 DELETED: Legacy booking schema
         }
 
-        function updateBookingSchemaPreview() {
+        function updateBookingSchemaPreview_DELETED() {
+            console.log('🚫 LEGACY FUNCTION DISABLED: updateBookingSchemaPreview - V2 uses calendar system');
+            return;
+            
             const preview = document.getElementById('booking-schema-preview');
             const schema = {
-                companyID: enterpriseBookingFlow.companyID || '{{companyID}}',
+                companyID: enterpriseBookingFlow_DELETED.companyID || '{{companyID}}',
                 tradeCategory: document.getElementById('booking-trade-category').value || 'HVAC',
                 serviceType: document.getElementById('booking-service-type').value || 'Emergency',
                 sessionTTL: parseInt(document.getElementById('booking-session-ttl').value) || 24,
@@ -13338,7 +13341,7 @@ Key Metrics:
                 });
 
                 // V2: Legacy booking flow call removed
-                updateBookingSchemaPreview();
+                // updateBookingSchemaPreview_DELETED(); // V2 DELETED: Legacy booking schema
             } else {
                 alert('No template available for this combination');
             }
@@ -13400,7 +13403,7 @@ Key Metrics:
                 ];
 
                 // V2: Legacy booking flow call removed
-                updateBookingSchemaPreview();
+                // updateBookingSchemaPreview_DELETED(); // V2 DELETED: Legacy booking schema
             }
         }
 
@@ -13475,20 +13478,20 @@ Key Metrics:
             ['booking-trade-category', 'booking-service-type', 'booking-session-ttl', 'booking-priority'].forEach(id => {
                 const element = document.getElementById(id);
                 if (element) {
-                    element.addEventListener('change', updateBookingSchemaPreview);
+                    // element.addEventListener('change', updateBookingSchemaPreview_DELETED); // V2 DELETED
                 }
             });
 
             ['booking-auto-resume', 'booking-idempotency', 'booking-validation', 'booking-audit-log'].forEach(id => {
                 const element = document.getElementById(id);
                 if (element) {
-                    element.addEventListener('change', updateBookingSchemaPreview);
+                    // element.addEventListener('change', updateBookingSchemaPreview_DELETED); // V2 DELETED
                 }
             });
 
             // Initialize the display
             // V2: Legacy booking flow call removed
-            updateBookingSchemaPreview();
+            // updateBookingSchemaPreview_DELETED(); // V2 DELETED: Legacy booking schema
         });
 
         // ========================================= 
