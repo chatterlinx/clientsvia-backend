@@ -8654,6 +8654,9 @@ Key Metrics:
                 // Legacy tab references removed - using modern implementation
                 console.log('🚀 Using modern AI Agent Logic implementation');
                 
+                const knowledgeTab = document.querySelector('[data-tab="knowledge-mgmt"]');
+                const knowledgeContent = document.getElementById('knowledge-mgmt');
+                
                 if (knowledgeTab && knowledgeContent) {
                     // Clear all active states first
                     tabButtons.forEach(btn => {
@@ -11658,8 +11661,7 @@ Key Metrics:
                             console.log(`🔄 Switched to ${targetTabId} tab`);
                             break;
                     }
-                
-
+                }
                 
             } catch (error) {
                 console.error('❌ Error switching ClientsVia tab:', error);
