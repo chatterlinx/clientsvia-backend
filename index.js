@@ -89,7 +89,7 @@ async function loadAllRoutes() {
         routes.aiAgentAnalyticsRoutes = await loadRouteWithTimeout('./routes/aiAgentAnalytics', 'aiAgentAnalyticsRoutes');
         // REMOVED: knowledgeAutoPopulationRoutes - Replaced by comprehensive Company Q&A Management system
         // V2: Legacy AI agent routes deleted - using modern v2profile-aiagentlogic system
-        routes.agentPerformanceRoutes = await loadRouteWithTimeout('./routes/agentPerformance', 'agentPerformanceRoutes');
+        // V2: Legacy agentPerformance route deleted - using modern AI Agent Logic analytics
         routes.intentRoutingRoutes = await loadRouteWithTimeout('./routes/intentRouting', 'intentRoutingRoutes');
         routes.bookingScriptsRoutes = await loadRouteWithTimeout('./routes/bookingScripts', 'bookingScriptsRoutes');
         routes.bookingHandlerRoutes = await loadRouteWithTimeout('./routes/bookingHandler', 'bookingHandlerRoutes');
@@ -227,7 +227,7 @@ function registerRoutes(routes) {
     app.use('/api/ai-agent-analytics', routes.aiAgentAnalyticsRoutes);
     // REMOVED: knowledge-auto-population routes - Replaced by comprehensive Company Q&A Management system
     // V2: Legacy AI agent route mounting removed - using modern v2profile-aiagentlogic system
-    app.use('/api/agent', routes.agentPerformanceRoutes);
+    // V2: Legacy agentPerformance route deleted - using modern AI Agent Logic analytics
     app.use('/api/agent', routes.intentRoutingRoutes); // Intent Routing & Flow Control routes
     app.use('/api/booking-scripts', routes.bookingScriptsRoutes); // Booking Scripts Configuration
     app.use('/api/monitoring', routes.monitoringRoutes); // Agent Monitoring System
