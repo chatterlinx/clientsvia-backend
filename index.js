@@ -30,7 +30,8 @@ console.log('[INIT] ✅ Clients loaded');
 // Import database connection logic
 console.log('[INIT] Loading database modules...');
 const { connectDB } = require('./db');
-const AgentPromptService = require('./services/agentPromptsService');
+// V2 DELETED: Legacy AgentPromptService - depends on deleted AgentPrompt model
+// const AgentPromptService = require('./services/agentPromptsService');
 const BackupMonitoringService = require('./services/backupMonitoringService');
 console.log('[INIT] ✅ Database modules loaded');
 
@@ -426,16 +427,9 @@ async function startServer() {
         await connectDB();
         console.log(`[Server] ✅ Step 2 COMPLETE: Database connected in ${Date.now() - dbStart}ms`);
         
-        console.log('[Server] Step 3/6: Loading agent prompts...');
-        const promptStart = Date.now();
-        
-        // Add timeout to prevent hanging
-        const promptTimeout = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('AgentPromptService.loadAll() timed out after 30 seconds')), 30000)
-        );
-        
-        await Promise.race([AgentPromptService.loadAll(), promptTimeout]);
-        console.log(`[Server] ✅ Step 3 COMPLETE: Agent prompts loaded in ${Date.now() - promptStart}ms`);
+        // V2 DELETED: Legacy agent prompts loading - V2 uses aiAgentLogic system
+        console.log('[Server] Step 3/6: Skipping legacy agent prompts (V2 uses aiAgentLogic)...');
+        console.log(`[Server] ✅ Step 3 COMPLETE: Legacy agent prompts skipped - V2 system active`);
         
         console.log('[Server] Step 4/6: Initializing backup monitoring...');
         const backupStart = Date.now();
