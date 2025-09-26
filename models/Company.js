@@ -96,6 +96,9 @@ const elevenLabsSettingsSchema = new mongoose.Schema({
     modelId: { type: String, trim: true, default: null }
 }, { _id: false });
 
+// REMOVED: Legacy aiSettingsSchema - replaced by aiAgentLogic system
+// All AI configuration now handled through aiAgentLogic field with 100% in-house system
+/*
 const aiSettingsSchema = new mongoose.Schema({
     language: { type: String, default: 'en', trim: true }, // Primary language for agent conversations
     model: { type: String, default: 'gemini-1.5-pro', trim: true },
@@ -173,6 +176,7 @@ const aiSettingsSchema = new mongoose.Schema({
         targetEscalationRate: { type: Number, default: 0.12 }
     }
 }, { _id: false });
+*/
 
 // --- Sub-schema for Agent Setup ---
 const daysOfWeekForOperatingHours = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -275,7 +279,7 @@ const companySchema = new mongoose.Schema({
     twilioConfig: { type: twilioConfigSchema, default: () => ({}) },
     smsSettings: { type: smsSettingsSchema, default: () => ({}) },
     integrations: { type: integrationsSchema, default: () => ({}) }, 
-    aiSettings: { type: aiSettingsSchema, default: () => ({}) },
+    // REMOVED: Legacy aiSettings field - replaced by aiAgentLogic system
     agentSetup: { type: agentSetupSchema, default: () => ({}) },
     aiAgentSetup: { type: mongoose.Schema.Types.Mixed, default: null }, // New AI Agent Setup data
     

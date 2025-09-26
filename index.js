@@ -93,7 +93,7 @@ async function loadAllRoutes() {
         routes.intentRoutingRoutes = await loadRouteWithTimeout('./routes/intentRouting', 'intentRoutingRoutes');
         routes.bookingScriptsRoutes = await loadRouteWithTimeout('./routes/bookingScripts', 'bookingScriptsRoutes');
         routes.bookingHandlerRoutes = await loadRouteWithTimeout('./routes/bookingHandler', 'bookingHandlerRoutes');
-        routes.aiIntelligenceRoutes = await loadRouteWithTimeout('./routes/aiIntelligence', 'aiIntelligenceRoutes');
+        // REMOVED: Legacy AI Intelligence routes - replaced by AI Agent Logic system
         routes.monitoringRoutes = await loadRouteWithTimeout('./routes/monitoring', 'monitoringRoutes');
         routes.notesRoutes = await loadRouteWithTimeout('./routes/notes', 'notesRoutes');
         routes.agentProcessorRoutes = await loadRouteWithTimeout('./routes/agentProcessor', 'agentProcessorRoutes');
@@ -229,7 +229,7 @@ function registerRoutes(routes) {
     app.use('/api/monitoring', routes.monitoringRoutes); // Agent Monitoring System
     app.use('/api/notes', routes.notesRoutes); // GOLD STANDARD: Enterprise Notes Management
     app.use('/api/booking-handler', routes.bookingHandlerRoutes); // Booking Handler API for testing and integration
-    app.use('/api/ai-intelligence', routes.aiIntelligenceRoutes); // AI Intelligence Engine routes
+    // REMOVED: Legacy AI Intelligence routes - replaced by AI Agent Logic system
     app.use('/api/enterprise-ai', routes.enterpriseAIIntelligenceRoutes); // ENTERPRISE: AI Intelligence Control Center
     app.use('/api/enterprise-trade-categories', routes.enterpriseTradeCategories); // ENTERPRISE: Trade Categories Management
 

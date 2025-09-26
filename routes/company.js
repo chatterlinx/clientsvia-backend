@@ -1047,73 +1047,8 @@ router.get('/:companyId/voice-settings', async (req, res) => {
     }
 });
 
-// --- AI Settings Endpoint ---
-router.post('/companies/:companyId/ai-settings', async (req, res) => {
-    try {
-        const { companyId } = req.params;
-        const { language, ...otherSettings } = req.body;
-
-        console.log(`[API POST /api/companies/${companyId}/ai-settings] Updating AI settings:`, { language, ...otherSettings });
-
-        if (!ObjectId.isValid(companyId)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid company ID'
-            });
-        }
-
-        // Validate language code
-        const supportedLanguages = [
-            'en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko', 
-            'ar', 'hi', 'nl', 'sv', 'da', 'no', 'fi', 'pl', 'tr', 'cs'
-        ];
-
-        if (language && !supportedLanguages.includes(language)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Unsupported language code'
-            });
-        }
-
-        // Build update object
-        const updateData = {};
-        if (language) updateData['aiSettings.language'] = language;
-        
-        // Add other AI settings
-        Object.keys(otherSettings).forEach(key => {
-            updateData[`aiSettings.${key}`] = otherSettings[key];
-        });
-
-        const result = await Company.findByIdAndUpdate(
-            companyId,
-            { $set: updateData },
-            { new: true, runValidators: true }
-        );
-
-        if (!result) {
-            return res.status(404).json({
-                success: false,
-                message: 'Company not found'
-            });
-        }
-
-        console.log(`✅ AI settings updated for company ${companyId}:`, updateData);
-
-        res.json({
-            success: true,
-            message: 'AI settings updated successfully',
-            aiSettings: result.aiSettings
-        });
-
-    } catch (error) {
-        console.error('❌ Error updating AI settings:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update AI settings',
-            error: error.message
-        });
-    }
-});
+// REMOVED: Legacy AI Settings endpoint - replaced by AI Agent Logic system
+// All AI configuration now handled through /api/company/:companyId (PATCH) with aiAgentLogic field
 
 // =============================================
 // AGENT PRIORITY CONFIGURATION ENDPOINTS
