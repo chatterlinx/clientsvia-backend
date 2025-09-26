@@ -64,7 +64,8 @@ async function loadAllRoutes() {
     try {
         routes.companyRoutes = await loadRouteWithTimeout('./routes/company', 'companyRoutes');
         routes.v2VoiceRoutes = await loadRouteWithTimeout('./routes/company/v2profile-voice', 'v2VoiceRoutes');
-        routes.alertRoutes = await loadRouteWithTimeout('./routes/alerts', 'alertRoutes');
+        // V2 DELETED: Legacy alerts route - depends on deleted Alert model
+        // routes.alertRoutes = await loadRouteWithTimeout('./routes/alerts', 'alertRoutes');
         routes.integrationsRoutes = await loadRouteWithTimeout('./routes/integrations', 'integrationsRoutes');
         routes.ttsRoutes = await loadRouteWithTimeout('./routes/tts', 'ttsRoutes');
         routes.twilioRoutes = await loadRouteWithTimeout('./routes/twilio', 'twilioRoutes');
@@ -197,7 +198,8 @@ function registerRoutes(routes) {
     app.use('/api', routes.companyRoutes);
     app.use('/api', routes.v2VoiceRoutes); // V2 Voice Settings API
     // V2: All legacy debug and seed routes deleted - no longer needed in V2 system
-    app.use('/api/alerts', routes.alertRoutes);
+    // V2 DELETED: Legacy alerts route mounting - depends on deleted Alert model
+    // app.use('/api/alerts', routes.alertRoutes);
     app.use('/api/integrations', routes.integrationsRoutes);
     app.use('/api/tts', routes.ttsRoutes);
     app.use('/api/ai', routes.aiRoutes);
