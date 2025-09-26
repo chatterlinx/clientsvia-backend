@@ -25,18 +25,9 @@ function getElevenLabsApiKey(company) {
     }
   }
   
-  // LEGACY FALLBACK: Check old aiSettings.elevenLabs path for backward compatibility
-  const useOwnApi = company?.aiSettings?.elevenLabs?.useOwnApiKey;
-  const companyKey = company?.aiSettings?.elevenLabs?.apiKey;
-  
-  if (useOwnApi && companyKey && companyKey.trim()) {
-    console.log(`🔑 LEGACY: Company ${company._id || 'unknown'} using own ElevenLabs API`);
-    return companyKey.trim();
-  }
-  
-  // Default: Use ClientsVia global API key
+  // V2 ONLY: No legacy support - use ClientsVia global API as fallback
   if (process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_API_KEY.trim()) {
-    console.log(`🏢 LEGACY: Using ClientsVia global ElevenLabs API for company ${company?._id || 'global'}`);
+    console.log(`🏢 V2: Using ClientsVia global ElevenLabs API for company ${company?._id || 'global'}`);
     return process.env.ELEVENLABS_API_KEY.trim();
   }
   

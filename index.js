@@ -101,10 +101,10 @@ async function loadAllRoutes() {
         routes.adminRoutes = await loadRouteWithTimeout('./routes/admin', 'adminRoutes');
         routes.authRoutes = await loadRouteWithTimeout('./routes/auth', 'authRoutes');
         routes.backupRoutes = await loadRouteWithTimeout('./routes/backup', 'backupRoutes');
-        routes.crmManagementRoutes = await loadRouteWithTimeout('./routes/crmManagement', 'crmManagementRoutes');
+        // REMOVED: Legacy CRM Management routes - will build V2 version in future
         
         // Load AI Agent Logic routes for enterprise features
-        routes.aiAgentLogicRoutes = await loadRouteWithTimeout('./routes/aiAgentLogic', 'aiAgentLogicRoutes');
+        routes.v2AIAgentLogicRoutes = await loadRouteWithTimeout('./routes/company/v2profile-aiagentlogic', 'v2AIAgentLogicRoutes');
         
         // Load Enterprise AI Intelligence routes
         routes.enterpriseAIIntelligenceRoutes = await loadRouteWithTimeout('./routes/enterpriseAIIntelligence', 'enterpriseAIIntelligenceRoutes');
@@ -289,12 +289,11 @@ app.use((req, res, next) => {
     // This line will now correctly handle all /api/twilio requests
     app.use('/api/twilio', routes.twilioRoutes);
     
-    // CRM Management System for Enterprise Contact Management
-    app.use('/api/crm', routes.crmManagementRoutes);
+    // REMOVED: Legacy CRM Management routes - will build V2 version in future
     
     // AI Agent Logic routes for enterprise features (Analytics, A/B Testing, etc.)
-    app.use('/api/ai-agent-logic', routes.aiAgentLogicRoutes);
-    app.use('/api', routes.aiAgentLogicRoutes); // Also mount for direct API access
+    app.use('/api/ai-agent-logic', routes.v2AIAgentLogicRoutes);
+    app.use('/api', routes.v2AIAgentLogicRoutes); // V2 AI Agent Logic - Also mount for direct API access
     
     console.log('[INIT] ✅ All API routes registered successfully');
 }

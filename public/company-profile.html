@@ -763,9 +763,7 @@
                             <button class="tab-button tab-button-inactive" id="tab-ai-agent-logic" data-tab="ai-agent-logic">
                                 <i class="fas fa-brain mr-1"></i>AI Agent Logic
                             </button>
-                            <button class="tab-button tab-button-inactive" id="tab-crm" data-tab="crm">
-                                <i class="fas fa-users mr-1"></i>CRM & Contacts
-                            </button>
+                            <!-- REMOVED: Legacy CRM & Contacts tab - will build V2 version in future -->
 
                         </nav>
                     </div>
@@ -5556,55 +5554,13 @@ This error needs to be fixed - not masked!
 
         // 🎭 CLIENTSVIA PERSONALITY SETTINGS FUNCTIONS - Tab Interface
 
-        // 🏢 CRM MANAGEMENT FUNCTIONS
+        // REMOVED: Legacy CRM Management Functions - will build V2 version in future
         
-        // Load CRM dashboard statistics
-        async function loadCRMDashboard() {
-            const companyId = getCurrentCompanyId();
-            if (!companyId) return;
-            
-            try {
-                const response = await fetch(`/api/crm/dashboard-stats?companyId=${companyId}`);
-                if (response.ok) {
-                    const stats = await response.json();
-                    
-                    // Update dashboard stats
-                    const totalContactsEl = document.getElementById('total-contacts');
-                    const totalCallsEl = document.getElementById('total-calls');
-                    const activeCustomersEl = document.getElementById('active-customers');
-                    const newLeadsEl = document.getElementById('new-leads');
-                    const totalRevenueEl = document.getElementById('total-revenue');
-                    
-                    if (totalContactsEl) totalContactsEl.textContent = stats.totalContacts || 0;
-                    if (totalCallsEl) totalCallsEl.textContent = stats.totalCalls || 0;
-                    if (activeCustomersEl) activeCustomersEl.textContent = stats.contactsByStatus?.customer?.count || 0;
-                    if (newLeadsEl) newLeadsEl.textContent = stats.contactsByStatus?.new_lead?.count || 0;
-                    if (totalRevenueEl) totalRevenueEl.textContent = `$${(stats.totalRevenue || 0).toLocaleString()}`;
-                    
-                    // Update pipeline stats
-                    const pipelineNewEl = document.getElementById('pipeline-new');
-                    const pipelineContactedEl = document.getElementById('pipeline-contacted');
-                    const pipelineQuotedEl = document.getElementById('pipeline-quoted');
-                    const pipelineCustomerEl = document.getElementById('pipeline-customer');
-                    const pipelineInactiveEl = document.getElementById('pipeline-inactive');
-                    
-                    if (pipelineNewEl) pipelineNewEl.textContent = stats.pipeline.new_lead || 0;
-                    if (pipelineContactedEl) pipelineContactedEl.textContent = stats.pipeline.contacted || 0;
-                    if (pipelineQuotedEl) pipelineQuotedEl.textContent = stats.pipeline.quoted || 0;
-                    if (pipelineCustomerEl) pipelineCustomerEl.textContent = stats.pipeline.customer || 0;
-                    if (pipelineInactiveEl) pipelineInactiveEl.textContent = stats.pipeline.inactive || 0;
-                    
-
-                } else {
-                    console.warn('⚠️ Failed to load CRM dashboard stats');
-                }
-            } catch (error) {
-                console.error('❌ CRM dashboard error:', error);
-            }
-        }
+        // REMOVED: All CRM functions (loadContacts, renderContactsTable, viewContactDetails, etc.)
+        // Will build V2 CRM system in future with proper architecture
         
-        // Load contacts with pagination and filters
-        async function loadContacts(page = 1) {
+        // Preview ClientsVia personality voice
+        async function previewClientsviaPersonality() {
             const companyId = getCurrentCompanyId();
             if (!companyId) return;
             
