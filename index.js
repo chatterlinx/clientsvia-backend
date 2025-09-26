@@ -92,7 +92,7 @@ async function loadAllRoutes() {
         // V2: Legacy agentPerformance route deleted - using modern AI Agent Logic analytics
         // V2: Legacy intentRouting route deleted - using modern AI Agent Logic intent classification
         // V2: Legacy bookingScripts route deleted - using modern AI Agent Logic booking flow
-        routes.bookingHandlerRoutes = await loadRouteWithTimeout('./routes/bookingHandler', 'bookingHandlerRoutes');
+        // V2: Legacy bookingHandler route deleted - using modern AI Agent Logic booking system
         // REMOVED: Legacy AI Intelligence routes - replaced by AI Agent Logic system
         routes.monitoringRoutes = await loadRouteWithTimeout('./routes/monitoring', 'monitoringRoutes');
         routes.notesRoutes = await loadRouteWithTimeout('./routes/notes', 'notesRoutes');
@@ -232,7 +232,7 @@ function registerRoutes(routes) {
     // V2: Legacy bookingScripts route deleted - using modern AI Agent Logic booking flow
     app.use('/api/monitoring', routes.monitoringRoutes); // Agent Monitoring System
     app.use('/api/notes', routes.notesRoutes); // GOLD STANDARD: Enterprise Notes Management
-    app.use('/api/booking-handler', routes.bookingHandlerRoutes); // Booking Handler API for testing and integration
+    // V2: Legacy bookingHandler route deleted - using modern AI Agent Logic booking system
     // REMOVED: Legacy AI Intelligence routes - replaced by AI Agent Logic system
     // REMOVED: Legacy Enterprise AI Intelligence routes - archived to prevent external LLM dependencies
     app.use('/api/enterprise-trade-categories', routes.enterpriseTradeCategories); // ENTERPRISE: Trade Categories Management
