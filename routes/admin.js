@@ -8,6 +8,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Company = require('../models/Company');
 const { authenticateJWT } = require('../middleware/auth');
+const redis = require('redis');
 
 /**
  * 🚨 EMERGENCY: Fix User-Company Association
@@ -134,6 +135,66 @@ router.get('/check-user-company/:userId', authenticateJWT, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to check user-company association',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * 🚨 EMERGENCY: Clear Company Cache
+ * Clears Redis cache for a specific company to force reload of fresh data
+ */
+router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        console.log('🚨 EMERGENCY: Clearing company cache');
+        console.log('🔍 Target company ID:', companyId);
+        
+        const client = redis.createClient({
+            url: process.env.REDIS_URL || 'redis://localhost:6379'
+        });
+
+        await client.connect();
+        console.log('✅ Connected to Redis');
+
+        // Clear all possible cache keys for this company
+        const keysToDelete = [
+            `ai_config_${companyId}`,
+            `company:${companyId}`,
+            `company:${companyId}:personality`,
+            `company:${companyId}:config`,
+            `company:${companyId}:ai`,
+            `priorities:${companyId}`,
+            `knowledge:${companyId}`
+        ];
+
+        let deletedCount = 0;
+        const results = [];
+        
+        for (const key of keysToDelete) {
+            const result = await client.del(key);
+            if (result) deletedCount++;
+            results.push({ key, deleted: !!result });
+            console.log(`🗑️ Cache key: ${key} (${result ? 'deleted' : 'not found'})`);
+        }
+
+        await client.disconnect();
+        console.log(`✅ Cache cleared: ${deletedCount} keys deleted`);
+
+        res.json({
+            success: true,
+            companyId,
+            deletedCount,
+            results,
+            message: `Cleared ${deletedCount} cache keys for company ${companyId}`
+        });
+
+    } catch (error) {
+        console.error('❌ Cache clear failed:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to clear company cache',
             details: error.message
         });
     }
