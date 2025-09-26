@@ -99,7 +99,7 @@ function handleTransfer(twiml, company, fallbackMessage = "I apologize, but I ca
       input: 'speech',
       speechTimeout: 'auto',
       speechModel: 'phone_call',
-      action: `/api/twilio/ai-agent-respond/${companyID || 'unknown'}`,
+      action: `/api/twilio/v2-agent-respond/${companyID || 'unknown'}`,
       method: 'POST'
     });
     
@@ -896,7 +896,7 @@ router.post('/voice/:companyID', async (req, res) => {
         input: 'speech',
         speechTimeout: 'auto',
         speechModel: 'phone_call',
-        action: `/api/twilio/ai-agent-respond/${companyID}`,
+        action: `/api/twilio/v2-agent-respond/${companyID}`,
         method: 'POST',
         partialResultCallback: `/api/twilio/ai-agent-partial/${companyID}`,
         partialResultCallbackMethod: 'POST'
@@ -1022,7 +1022,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         input: 'speech',
         speechTimeout: 'auto',
         speechModel: 'phone_call',
-        action: `/api/twilio/ai-agent-respond/${companyID}`,
+        action: `/api/twilio/v2-agent-respond/${companyID}`,
         method: 'POST'
       });
       

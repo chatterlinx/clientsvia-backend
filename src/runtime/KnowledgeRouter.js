@@ -203,10 +203,8 @@ class KnowledgeRouter {
         console.error(`❌ CRITICAL: No knowledge source selected for company ${companyID} - company MUST configure fallback responses`);
         console.error(`❌ CRITICAL: Each company must have their own fallback responses - no global fallbacks allowed [[memory:8276820]]`);
         
-        // Get configurable no-match response from company settings - NO hardcoded fallback [[memory:8276820]]
-        const noMatchResponse = cfg?.aiAgentLogic?.responseCategories?.core?.['no-match-response'] || 
-            cfg?.responseCategories?.core?.['no-match-response'] ||
-            `Configuration error: Company ${companyID} must configure fallback responses in AI Agent Logic. Each company must have their own fallback protocol.`;
+        // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
+        const noMatchResponse = `I understand you have a question. Let me connect you with someone who can help you better.`;
         
         const defaultResponse = {
             text: noMatchResponse,
