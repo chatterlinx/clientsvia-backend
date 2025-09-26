@@ -15,7 +15,7 @@ const backendFiles = [
   'services/knowledge/CompanyKnowledgeService.js', 
   'services/knowledge/KeywordGenerationService.js',
   'routes/knowledge/companyKnowledge.js',
-  'routes/aiAgentLogic.js',
+  'routes/company/v2profile-aiagentlogic.js',
   'AI_ROUTING_REFERENCE.js'
 ];
 

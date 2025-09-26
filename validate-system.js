@@ -15,7 +15,7 @@ const criticalFiles = [
   'services/knowledge/CompanyKnowledgeService.js',
   'services/knowledge/KeywordGenerationService.js',
   'routes/knowledge/companyKnowledge.js',
-  'routes/aiAgentLogic.js',
+  'routes/company/v2profile-aiagentlogic.js',
   'public/js/components/CompanyQnAManager.js',
   'public/css/knowledge-management.css',
   'AI_ROUTING_REFERENCE.js'

@@ -227,7 +227,7 @@ try {
 app.use("/api/uploads", uploadRoutes);
 
 // RESTORED - Full AI Agent Logic routes (issue was in Twilio routes, not here)
-const aiAgentLogicRoutes = require('./routes/aiAgentLogic');
+const aiAgentLogicRoutes = require('./routes/company/v2profile-aiagentlogic');
 
 app.use('/api/ai-agent-logic', aiAgentLogicRoutes); // ClientsVia Intelligence Platform
 app.use('/api', aiAgentLogicRoutes); // Also mount for direct API access (includes /api/tradeqa)

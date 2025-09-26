@@ -36,12 +36,12 @@
 
 const express = require('express');
 const router = express.Router();
-const { authenticateJWT, authenticateSingleSession } = require('../middleware/auth'); // Use both auth types
-const ClientsViaIntelligenceEngine = require('../services/clientsViaIntelligenceEngine');
-const Company = require('../models/Company');
+const { authenticateJWT, authenticateSingleSession } = require('../../middleware/auth'); // Use both auth types
+const ClientsViaIntelligenceEngine = require('../../services/clientsViaIntelligenceEngine');
+const Company = require('../../models/Company');
 
 // 🚀 NEW: Import knowledge services for AI agent integration
-const CompanyKnowledgeService = require('../services/knowledge/CompanyKnowledgeService');
+const CompanyKnowledgeService = require('../../services/knowledge/CompanyKnowledgeService');
 
 // Initialize intelligence engine
 const intelligenceEngine = new ClientsViaIntelligenceEngine();
