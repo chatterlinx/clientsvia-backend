@@ -19,6 +19,25 @@ class AIConfigLoader {
     }
 
     /**
+     * Clear cache for a company (kills hahaha ghosts!)
+     * @param {string} companyID - The company identifier
+     */
+    async clearCache(companyID) {
+        const cacheKey = `ai_config_${companyID}`;
+        
+        try {
+            if (redisClient) {
+                await redisClient.del(cacheKey);
+                console.log(`💥 CACHE CLEARED for company: ${companyID}`);
+            }
+            this.fallbackCache.delete(cacheKey);
+            console.log(`💥 FALLBACK CACHE CLEARED for company: ${companyID}`);
+        } catch (error) {
+            console.warn(`⚠️ Cache clear failed for ${companyID}:`, error.message);
+        }
+    }
+
+    /**
      * Get complete AI configuration for a company
      * @param {string} companyID - The company identifier
      * @returns {Object} Complete AI configuration

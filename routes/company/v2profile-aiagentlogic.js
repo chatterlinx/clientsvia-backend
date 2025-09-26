@@ -2413,6 +2413,83 @@ router.get('/test/flow-designer/:companyId/flows', async (req, res) => {
 // ⚠️ END OF TEST ENDPOINTS ⚠️
 
 /**
+ * @route   POST /api/company/:companyId/clear-cache
+ * @desc    Clear ALL caches for a company (kills haha ghosts!)
+ * @access  Private
+ */
+router.post('/:companyId/clear-cache', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        if (!ObjectId.isValid(companyId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid company ID format'
+            });
+        }
+
+        console.log(`💥 KILLING ALL CACHE GHOSTS for company: ${companyId}`);
+
+        // Clear ALL possible cache keys for this company
+        const cacheKeys = [
+            `company:${companyId}`,
+            `ai_config_${companyId}`,
+            `ai:priorities:${companyId}`,
+            `ai:knowledge:${companyId}`,
+            `ai:personality:${companyId}`,
+            `ai:combined:${companyId}`,
+            `ai:live:${companyId}`,
+            `voice:company:${companyId}`,
+            `audio:ai:${companyId}`,
+            `contextual_memory:${companyId}:*`
+        ];
+        
+        let clearedCount = 0;
+        
+        if (redisClient) {
+            for (const key of cacheKeys) {
+                try {
+                    if (key.includes('*')) {
+                        // Handle wildcard keys
+                        const keys = await redisClient.keys(key);
+                        for (const wildcardKey of keys) {
+                            await redisClient.del(wildcardKey);
+                            clearedCount++;
+                        }
+                    } else {
+                        const result = await redisClient.del(key);
+                        clearedCount += result;
+                    }
+                } catch (error) {
+                    console.warn(`⚠️ Could not clear ${key}:`, error.message);
+                }
+            }
+        }
+
+        // Also clear aiLoader fallback cache
+        const aiLoader = require('../../src/config/aiLoader');
+        await aiLoader.clearCache(companyId);
+
+        console.log(`💥 CACHE OBLITERATED! Cleared ${clearedCount} cache entries for company ${companyId}`);
+
+        res.json({
+            success: true,
+            message: `Cache cleared successfully for company ${companyId}`,
+            clearedKeys: clearedCount,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('❌ Error clearing cache:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to clear cache',
+            error: error.message
+        });
+    }
+});
+
+/**
  * OLD ROUTES BELOW - THESE HAVE AUTHENTICATION REQUIREMENTS
  * Only used if someone tries to access the authenticated endpoints
  */
