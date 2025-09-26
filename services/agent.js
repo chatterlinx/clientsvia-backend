@@ -14,8 +14,7 @@ const { applyPlaceholders } = require('../utils/placeholders');
 const ServiceIssueHandler = require('./serviceIssueHandler');
 const serviceIssueHandler = new ServiceIssueHandler();
 
-// 🧠 Import AI Intelligence Engine
-const aiIntelligenceEngine = require('./aiIntelligenceEngine');
+// V2: Legacy AI Intelligence Engine removed - using modern ClientsVia Intelligence
 
 // Import the custom KB checker
 const { checkCustomKB } = require('../middleware/checkCustomKB');
@@ -276,10 +275,10 @@ async function answerQuestion(companyId, question, responseLength = 'concise', c
   
   // Get contextual memory for personalization
   const callerId = originalCallSid || 'anonymous';
-  const contextualMemory = await aiIntelligenceEngine.getContextualMemory(callerId, companyId, company);
+  // V2: Legacy contextual memory removed - using modern AI Agent Logic
   
   // Check for semantic knowledge match
-  const semanticResult = await aiIntelligenceEngine.processSemanticKnowledge(question, companyId, company);
+  // V2: Legacy semantic knowledge removed - using modern AI Agent Logic
   
   if (semanticResult && semanticResult.confidence >= (company?.aiSettings?.semanticKnowledge?.confidenceThreshold || 0.87)) {
     console.log(`[AI Intelligence] High-confidence semantic match found: ${(semanticResult.confidence * 100).toFixed(1)}%`);
