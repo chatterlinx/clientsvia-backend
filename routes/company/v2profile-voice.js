@@ -25,13 +25,9 @@ const express = require('express');
 const router = express.Router();
 const { ObjectId } = require('mongodb');
 const Company = require('../../models/Company');
-const { getRedisClient } = require('../../db');
+const { redisClient } = require('../../clients');
 
-// Get Redis client
-let redisClient;
-(async () => {
-    redisClient = await getRedisClient();
-})();
+// Redis client imported above
 
 /**
  * @route   GET /api/company/:companyId/v2-voice-settings
