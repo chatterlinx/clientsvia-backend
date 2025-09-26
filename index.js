@@ -106,8 +106,7 @@ async function loadAllRoutes() {
         // Load AI Agent Logic routes for enterprise features
         routes.v2AIAgentLogicRoutes = await loadRouteWithTimeout('./routes/company/v2profile-aiagentlogic', 'v2AIAgentLogicRoutes');
         
-        // Load Enterprise AI Intelligence routes
-        routes.enterpriseAIIntelligenceRoutes = await loadRouteWithTimeout('./routes/enterpriseAIIntelligence', 'enterpriseAIIntelligenceRoutes');
+        // REMOVED: Legacy Enterprise AI Intelligence routes - archived to prevent external LLM dependencies
         
         // Load Enterprise Trade Categories routes
         routes.enterpriseTradeCategories = await loadRouteWithTimeout('./routes/enterpriseTradeCategories', 'enterpriseTradeCategories');
@@ -232,7 +231,7 @@ function registerRoutes(routes) {
     app.use('/api/notes', routes.notesRoutes); // GOLD STANDARD: Enterprise Notes Management
     app.use('/api/booking-handler', routes.bookingHandlerRoutes); // Booking Handler API for testing and integration
     // REMOVED: Legacy AI Intelligence routes - replaced by AI Agent Logic system
-    app.use('/api/enterprise-ai', routes.enterpriseAIIntelligenceRoutes); // ENTERPRISE: AI Intelligence Control Center
+    // REMOVED: Legacy Enterprise AI Intelligence routes - archived to prevent external LLM dependencies
     app.use('/api/enterprise-trade-categories', routes.enterpriseTradeCategories); // ENTERPRISE: Trade Categories Management
 
     // Mount agent processor routes
