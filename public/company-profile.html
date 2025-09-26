@@ -12492,7 +12492,8 @@ Key Metrics:
         /**
          * Load enterprise AI Intelligence settings on page load
          */
-        async function loadEnterpriseAISettings() {
+        // V2: Legacy Enterprise AI functions removed - use modern aiAgentLogic system
+        async function loadEnterpriseAISettings_DELETED() {
             const companyId = getCurrentCompanyId();
             if (!companyId) return;
 
@@ -12528,7 +12529,7 @@ Key Metrics:
         /**
          * Load enterprise AI defaults from backend
          */
-        async function loadEnterpriseAIDefaults() {
+        async function loadEnterpriseAIDefaults_DELETED() {
             try {
                 const response = await fetch('/api/enterprise-ai/enterprise-ai-defaults');
                 const data = await response.json();
@@ -12547,7 +12548,7 @@ Key Metrics:
         /**
          * Populate enterprise AI controls with settings data
          */
-        function populateEnterpriseAIControls(settings) {
+        function populateEnterpriseAIControls_DELETED(settings) {
             try {
                 console.log('[Enterprise AI] Populating controls with:', settings);
 
@@ -12682,7 +12683,7 @@ Key Metrics:
         /**
          * Save enterprise AI Intelligence settings
          */
-        async function saveEnterpriseAI() {
+        async function saveEnterpriseAI_DELETED() {
             const companyId = getCurrentCompanyId();
             if (!companyId) {
                 console.error('[Enterprise AI] No company ID found');
@@ -12691,7 +12692,7 @@ Key Metrics:
 
             try {
                 // Show saving state
-                const button = document.querySelector('[onclick="saveEnterpriseAI()"]');
+                // V2: Legacy Enterprise AI button removed
                 const originalText = button.innerHTML;
                 button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Deploying...';
                 button.disabled = true;
@@ -12742,7 +12743,7 @@ Key Metrics:
             } catch (error) {
                 console.error('[Enterprise AI] Error saving settings:', error);
                 
-                const button = document.querySelector('[onclick="saveEnterpriseAI()"]');
+                // V2: Legacy Enterprise AI button removed
                 button.innerHTML = '<i class="fas fa-times mr-2"></i>Error - Try Again';
                 button.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
                 button.classList.add('bg-red-600', 'hover:bg-red-700');
@@ -12753,7 +12754,7 @@ Key Metrics:
         /**
          * Collect all enterprise AI settings from the form
          */
-        function collectEnterpriseAISettings() {
+        function collectEnterpriseAISettings_DELETED() {
             return {
                 compositeConfidence: {
                     knowledgeWeights: {
@@ -12832,7 +12833,7 @@ Key Metrics:
         /**
          * Reset enterprise AI to defaults
          */
-        async function resetEnterpriseAI() {
+        async function resetEnterpriseAI_DELETED() {
             if (!confirm('Reset all Enterprise AI settings to production defaults? This cannot be undone.')) {
                 return;
             }
@@ -12849,7 +12850,7 @@ Key Metrics:
 
                 if (data.success) {
                     // Reload the settings
-                    await loadEnterpriseAISettings();
+                    // V2: Legacy Enterprise AI reload removed
                     console.log('[Enterprise AI] Reset to defaults successfully');
                     
                     // Show notification
@@ -12973,16 +12974,10 @@ Key Metrics:
 
         // Add enterprise AI initialization to the existing page load
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize slider listeners for enterprise AI
-            initializeEnterpriseAIListeners();
-            
-            // Load enterprise AI settings
-            setTimeout(() => {
-                loadEnterpriseAISettings();
-            }, 1000); // Delay to ensure company ID is loaded
+            // V2: Legacy Enterprise AI initialization removed - use modern aiAgentLogic system
         });
 
-        function initializeEnterpriseAIListeners() {
+        function initializeEnterpriseAIListeners_DELETED() {
             // Knowledge weight sliders
             ['kb-company-weight', 'kb-clientsvia-weight', 'llm-fallback-weight', 'composite-threshold'].forEach(id => {
                 const slider = document.getElementById(id);
