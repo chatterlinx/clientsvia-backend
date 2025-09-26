@@ -48,6 +48,9 @@ router.post('/kill-haha-ghost/:companyId', async (req, res) => {
                     'clarification-request': `I want to make sure I understand correctly. Could you please clarify that for me?`,
                     'escalation-message': `Let me connect you to a team member who can assist you further.`,
                     'repeat-escalation-message': `I'm having trouble understanding. Let me connect you to a team member.`,
+                    'conversation-fallback-response': `I understand you have a question. Let me connect you with someone who can help you better.`,
+                    'no-match-response': `I apologize, but I don't have information about that specific topic. Let me transfer you to someone who can assist you.`,
+                    'error-response': `I'm experiencing a technical issue. Please hold while I connect you to our support team.`,
                     'no-match-found': `I don't have specific information about that, but let me connect you with someone who can help.`,
                     'system-error': `I'm experiencing a technical issue. Let me connect you to a team member right away.`,
                     'booking-confirmation': `Great! I've got all your information. Let me connect you to schedule your appointment.`
