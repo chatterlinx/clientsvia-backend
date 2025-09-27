@@ -1749,7 +1749,7 @@
                                                         <div class="grid grid-cols-4 gap-4 mt-4">
                                                             <div class="bg-white rounded-lg p-3 border border-green-100">
                                                                 <div class="text-xs text-gray-500 uppercase tracking-wide">Company Q&A</div>
-                                                                <div id="company-qna-count" class="text-lg font-semibold text-green-600">--</div>
+                                                                <div id="km-company-qna-count" class="text-lg font-semibold text-green-600">--</div>
                                                             </div>
                                                             <div class="bg-white rounded-lg p-3 border border-green-100">
                                                                 <div class="text-xs text-gray-500 uppercase tracking-wide">Trade Q&A</div>
@@ -14666,8 +14666,11 @@ Key Metrics:
                 });
 
                 // 🎯 UPDATE DOM ELEMENTS
-                document.getElementById('company-qna-count').textContent = companyQnACount;
-                document.getElementById('trade-qna-count').textContent = tradeQnACount;
+                const kmCompanyCountEl = document.getElementById('km-company-qna-count');
+                const kmTradeCountEl = document.getElementById('trade-qna-count');
+                
+                if (kmCompanyCountEl) kmCompanyCountEl.textContent = companyQnACount;
+                if (kmTradeCountEl) kmTradeCountEl.textContent = tradeQnACount;
                 document.getElementById('templates-count').textContent = templatesCount;
                 document.getElementById('total-entries-count').textContent = totalCount;
                 
@@ -14676,8 +14679,11 @@ Key Metrics:
             } catch (error) {
                 console.error('❌ Failed to update statistics:', error);
                 // Show error state
-                document.getElementById('company-qna-count').textContent = '?';
-                document.getElementById('trade-qna-count').textContent = '?';
+                const kmCompanyCountEl = document.getElementById('km-company-qna-count');
+                const kmTradeCountEl = document.getElementById('trade-qna-count');
+                
+                if (kmCompanyCountEl) kmCompanyCountEl.textContent = '?';
+                if (kmTradeCountEl) kmTradeCountEl.textContent = '?';
                 document.getElementById('templates-count').textContent = '?';
                 document.getElementById('total-entries-count').textContent = '?';
             }
@@ -14872,8 +14878,17 @@ Key Metrics:
                 });
 
                 // Update performance metrics
-                if (globalCountEl) globalCountEl.textContent = globalQnAs.length;
-                if (companyCountEl) companyCountEl.textContent = companyQnAs.length;
+                console.log('🔍 DEBUG: Updating counts - Global:', globalQnAs.length, 'Company:', companyQnAs.length);
+                console.log('🔍 DEBUG: globalCountEl found:', !!globalCountEl, 'companyCountEl found:', !!companyCountEl);
+                
+                if (globalCountEl) {
+                    globalCountEl.textContent = globalQnAs.length;
+                    console.log('✅ Updated global count to:', globalQnAs.length);
+                }
+                if (companyCountEl) {
+                    companyCountEl.textContent = companyQnAs.length;
+                    console.log('✅ Updated company count to:', companyQnAs.length);
+                }
 
                 // 🌍 RENDER GLOBAL Q&As SECTION
                 if (globalQnAs.length === 0) {
