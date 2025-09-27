@@ -431,12 +431,17 @@
             try {
                 console.log('🏗️ V2 GLOBAL TRADE CATEGORIES: Creating category:', { name, description });
                 
+                const authToken = getAuthToken();
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
                 const response = await fetch('/api/v2global/trade-categories/categories', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${getAuthToken()}`
-                    },
+                    headers: headers,
                     body: JSON.stringify({
                         name,
                         description
@@ -485,12 +490,17 @@
                 
                 const method = qnaId ? 'PUT' : 'POST';
                 
+                const authToken = getAuthToken();
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
                 const response = await fetch(url, {
                     method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${getAuthToken()}`
-                    },
+                    headers: headers,
                     body: JSON.stringify({
                         question,
                         answer,
