@@ -983,7 +983,6 @@ router.post('/categories/:categoryId/generate-top-qnas', async (req, res) => {
             priority: "normal"
         }
     ];
-}
 
 /**
  * 🧹 V2 NUCLEAR CLEAN - DROP AND REBUILD COLLECTION
