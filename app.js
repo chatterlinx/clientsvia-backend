@@ -189,6 +189,15 @@ const companyKnowledgeRoutes = require('./routes/knowledge/companyKnowledge');
 app.use('/api/knowledge', companyKnowledgeRoutes);
 console.log('✅ Company Knowledge Base routes registered at /api/knowledge - AI Agent Priority #1 source active');
 
+// 🚀 V2 KNOWLEDGE MANAGEMENT ROUTES - Enterprise Multi-Tenant Platform
+try {
+    const v2KnowledgeManagementRoutes = require('./routes/company/v2knowledgeManagement');
+    app.use('/api/company', v2KnowledgeManagementRoutes);
+    console.log('✅ V2 Knowledge Management routes registered at /api/company - Trade Q&A system active');
+} catch (error) {
+    console.error('❌ Failed to load V2 Knowledge Management routes:', error);
+}
+
 // Enterprise Analytics and Reporting
 app.use('/api/enterprise-analytics', enterpriseAnalyticsRoutes);
 

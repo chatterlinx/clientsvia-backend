@@ -526,6 +526,257 @@ router.delete('/:companyId/knowledge-management/company-qna/:id', authenticateJW
 });
 
 /**
+ * 📚 POST /api/company/:companyId/knowledge-management/trade-qna
+ * Create new Trade Q&A entry
+ */
+router.post('/:companyId/knowledge-management/trade-qna', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+
+    try {
+        logger.info(`📚 POST trade Q&A request for company ${companyId}`);
+
+        // Validate request body
+        const { error, value } = companyQnASchema.validate(req.body);
+        if (error) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid Trade Q&A data',
+                error: 'VALIDATION_ERROR',
+                details: error.details
+            });
+        }
+
+        // Generate auto-keywords if not provided
+        if (value.keywords.length === 0) {
+            value.keywords = generateKeywords(value.question + ' ' + value.answer);
+        }
+
+        // Create new Trade Q&A entry
+        const newQnA = {
+            id: uuidv4(),
+            ...value,
+            performance: {
+                responseTime: 0,
+                accuracy: 0,
+                usageCount: 0
+            },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            createdBy: 'admin'
+        };
+
+        // Add to company's trade Q&A knowledge management
+        const company = await Company.findByIdAndUpdate(
+            companyId,
+            {
+                $push: { 'aiAgentLogic.knowledgeManagement.tradeQnA': newQnA },
+                $set: { 
+                    'aiAgentLogic.knowledgeManagement.lastUpdated': new Date(),
+                    updatedAt: new Date()
+                }
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found',
+                error: 'COMPANY_NOT_FOUND'
+            });
+        }
+
+        // Invalidate cache
+        await aiAgentCache.invalidateCompany(companyId);
+
+        const responseTime = Date.now() - startTime;
+        logger.info(`📚 Trade Q&A created successfully for company ${companyId} in ${responseTime}ms`);
+
+        res.status(201).json({
+            success: true,
+            message: 'Trade Q&A created successfully',
+            data: newQnA,
+            meta: {
+                responseTime,
+                companyId,
+                totalTradeQnAs: company.aiAgentLogic?.knowledgeManagement?.tradeQnA?.length || 0
+            }
+        });
+
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        logger.error(`📚 Error creating trade Q&A for company ${companyId}:`, error);
+        
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create Trade Q&A',
+            error: 'INTERNAL_SERVER_ERROR',
+            meta: { responseTime }
+        });
+    }
+});
+
+/**
+ * 📚 PUT /api/company/:companyId/knowledge-management/trade-qna/:id
+ * Update existing Trade Q&A entry
+ */
+router.put('/:companyId/knowledge-management/trade-qna/:id', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId, id } = req.params;
+
+    try {
+        logger.info(`📚 PUT trade Q&A request for company ${companyId}, ID: ${id}`);
+
+        // Validate request body
+        const { error, value } = companyQnASchema.validate(req.body);
+        if (error) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid Trade Q&A data',
+                error: 'VALIDATION_ERROR',
+                details: error.details
+            });
+        }
+
+        // Generate auto-keywords if not provided
+        if (value.keywords.length === 0) {
+            value.keywords = generateKeywords(value.question + ' ' + value.answer);
+        }
+
+        // Update the Trade Q&A entry
+        const updateData = {
+            ...value,
+            updatedAt: new Date()
+        };
+
+        const company = await Company.findOneAndUpdate(
+            { 
+                _id: companyId,
+                'aiAgentLogic.knowledgeManagement.tradeQnA.id': id
+            },
+            {
+                $set: {
+                    'aiAgentLogic.knowledgeManagement.tradeQnA.$': {
+                        id,
+                        ...updateData,
+                        performance: {
+                            responseTime: 0,
+                            accuracy: 0,
+                            usageCount: 0
+                        },
+                        createdBy: 'admin'
+                    },
+                    'aiAgentLogic.knowledgeManagement.lastUpdated': new Date(),
+                    updatedAt: new Date()
+                }
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company or Trade Q&A not found',
+                error: 'NOT_FOUND'
+            });
+        }
+
+        // Invalidate cache
+        await aiAgentCache.invalidateCompany(companyId);
+
+        const responseTime = Date.now() - startTime;
+        logger.info(`📚 Trade Q&A updated successfully for company ${companyId} in ${responseTime}ms`);
+
+        const updatedQnA = company.aiAgentLogic?.knowledgeManagement?.tradeQnA?.find(q => q.id === id);
+
+        res.json({
+            success: true,
+            message: 'Trade Q&A updated successfully',
+            data: updatedQnA,
+            meta: {
+                responseTime,
+                companyId,
+                totalTradeQnAs: company.aiAgentLogic?.knowledgeManagement?.tradeQnA?.length || 0
+            }
+        });
+
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        logger.error(`📚 Error updating trade Q&A for company ${companyId}:`, error);
+        
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update Trade Q&A',
+            error: 'INTERNAL_SERVER_ERROR',
+            meta: { responseTime }
+        });
+    }
+});
+
+/**
+ * 📚 DELETE /api/company/:companyId/knowledge-management/trade-qna/:id
+ * Delete Trade Q&A entry
+ */
+router.delete('/:companyId/knowledge-management/trade-qna/:id', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId, id } = req.params;
+
+    try {
+        logger.info(`📚 DELETE trade Q&A request for company ${companyId}, ID: ${id}`);
+
+        // Remove the Trade Q&A entry
+        const company = await Company.findByIdAndUpdate(
+            companyId,
+            {
+                $pull: { 'aiAgentLogic.knowledgeManagement.tradeQnA': { id } },
+                $set: { 
+                    'aiAgentLogic.knowledgeManagement.lastUpdated': new Date(),
+                    updatedAt: new Date()
+                }
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found',
+                error: 'COMPANY_NOT_FOUND'
+            });
+        }
+
+        // Invalidate cache
+        await aiAgentCache.invalidateCompany(companyId);
+
+        const responseTime = Date.now() - startTime;
+        logger.info(`📚 Trade Q&A deleted successfully for company ${companyId} in ${responseTime}ms`);
+
+        res.json({
+            success: true,
+            message: 'Trade Q&A deleted successfully',
+            meta: {
+                responseTime,
+                companyId,
+                deletedId: id,
+                totalTradeQnAs: company.aiAgentLogic?.knowledgeManagement?.tradeQnA?.length || 0
+            }
+        });
+
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        logger.error(`📚 Error deleting trade Q&A for company ${companyId}:`, error);
+        
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete Trade Q&A',
+            error: 'INTERNAL_SERVER_ERROR',
+            meta: { responseTime }
+        });
+    }
+});
+
+/**
  * 📚 POST /api/company/:companyId/knowledge-management/test-ai-agent
  * Test AI agent with current knowledge base
  */
