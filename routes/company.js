@@ -1168,9 +1168,7 @@ router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
 
 // Legacy personality routes removed - using modern AI Agent Logic system
 
-// Include knowledge routes
-const knowledgeRoutes = require('./company/knowledge');
-router.use('/', knowledgeRoutes);
+// 🚀 V2 SYSTEM: Legacy knowledge routes DELETED - using V2 Knowledge Management system only
 
 // Include agent settings routes
 const agentSettingsRoutes = require('./company/agentSettings');
