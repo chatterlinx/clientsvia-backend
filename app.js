@@ -274,25 +274,9 @@ try {
     console.error('❌ Failed to load V2 Global Add Company routes:', error);
 }
 
-// Development routes
-if (process.env.NODE_ENV !== 'production') {
-    // Serve selfCheckLogger service
-    app.get('/services/selfCheckLogger.js', (req, res) => {
-        res.sendFile(path.join(__dirname, 'services', 'selfCheckLogger.js'));
-    });
-    
-    // Serve advanced AI engine
-    app.get('/services/advancedAIEngine.js', (req, res) => {
-        res.sendFile(path.join(__dirname, 'services', 'advancedAIEngine.js'));
-    });
-    
-    // Serve booking flow engine
-    app.get('/services/bookingFlowEngine.js', (req, res) => {
-        res.sendFile(path.join(__dirname, 'services', 'bookingFlowEngine.js'));
-    });
-    
-    console.log('🧪 Development test routes enabled');
-}
+// 🚀 V2 PURE SYSTEM: All legacy development routes ELIMINATED
+// Legacy services deleted: calendarService, actionService, serviceIssueHandler, selfCheckLogger, agentMessageProcessor
+// Using V2 AI Agent Runtime only - no legacy contamination
 
 app.get('/healthz', (req, res) => res.json({ ok: true }));
 
