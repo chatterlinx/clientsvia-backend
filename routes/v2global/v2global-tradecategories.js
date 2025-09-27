@@ -783,11 +783,13 @@ router.post('/categories/:categoryId/generate-top-qnas', async (req, res) => {
 });
 
 // 🎯 INDUSTRY-SPECIFIC Q&A GENERATOR
-function generateIndustryQnAs(categoryName, description) {
-    const categoryLower = categoryName.toLowerCase();
-    
-    // Dental Office Q&As
-    if (categoryLower.includes('dental')) {
+        function generateIndustryQnAs(categoryName, description) {
+            const categoryLower = categoryName.toLowerCase();
+            
+            // 🎯 UNIVERSAL Q&A GENERATOR - Always returns 15 Q&As for ANY category
+            
+            // Dental Office Q&As
+            if (categoryLower.includes('dental')) {
         return [
             {
                 question: "Do you take my insurance?",
@@ -1074,23 +1076,23 @@ function generateIndustryQnAs(categoryName, description) {
         ];
     }
     
-    // Generic service business Q&As (fallback)
+    // 🎯 UNIVERSAL 15 Q&As - Works for ANY service business category
     return [
         {
             question: "What are your service hours?",
-            answer: "We're available Monday through Friday 8 AM to 6 PM, with emergency service available 24/7. What type of service do you need? I can check our availability.",
+            answer: `We're available Monday through Friday 8 AM to 6 PM, with emergency service available 24/7. What type of ${categoryName.toLowerCase()} service do you need? I can check our availability.`,
             keywords: ["hours", "service", "emergency", "availability", "schedule"],
             priority: "high"
         },
         {
             question: "Do you offer free estimates?",
-            answer: "Yes, we provide free estimates for all services. We can usually schedule an estimate within 24 hours. What project are you looking to get quoted?",
+            answer: `Yes, we provide free estimates for all ${categoryName.toLowerCase()} services. We can usually schedule an estimate within 24 hours. What project are you looking to get quoted?`,
             keywords: ["estimate", "free", "quote", "project", "schedule"],
             priority: "high"
         },
         {
             question: "Are you licensed and insured?",
-            answer: "Absolutely! We're fully licensed, bonded, and insured for your protection. All our technicians are certified professionals. Would you like to schedule a service call?",
+            answer: `Absolutely! We're fully licensed, bonded, and insured for your protection. All our ${categoryName.toLowerCase()} technicians are certified professionals. Would you like to schedule a service call?`,
             keywords: ["licensed", "insured", "bonded", "certified", "professional"],
             priority: "normal"
         },
@@ -1102,8 +1104,68 @@ function generateIndustryQnAs(categoryName, description) {
         },
         {
             question: "Do you guarantee your work?",
-            answer: "Yes, all our work comes with a satisfaction guarantee and warranty on parts and labor. We stand behind our quality. What service are you interested in?",
+            answer: `Yes, all our ${categoryName.toLowerCase()} work comes with a satisfaction guarantee and warranty on parts and labor. We stand behind our quality. What service are you interested in?`,
             keywords: ["guarantee", "warranty", "satisfaction", "quality", "service"],
+            priority: "normal"
+        },
+        {
+            question: "What areas do you service?",
+            answer: "We service the entire metro area and surrounding communities. We can usually reach you within 30-45 minutes. What's your location? I'll confirm we service your area.",
+            keywords: ["areas", "service area", "metro", "location", "coverage"],
+            priority: "high"
+        },
+        {
+            question: "Do you offer emergency services?",
+            answer: `Yes, we provide 24/7 emergency ${categoryName.toLowerCase()} services. Emergency rates may apply after hours, but we'll get your issue resolved quickly. What's your emergency?`,
+            keywords: ["emergency", "24/7", "after hours", "urgent", "immediate"],
+            priority: "high"
+        },
+        {
+            question: "How much do your services cost?",
+            answer: "Our pricing varies by service type and complexity. We provide upfront pricing before any work begins - no surprises. Would you like me to schedule a free estimate?",
+            keywords: ["cost", "pricing", "upfront", "estimate", "transparent"],
+            priority: "high"
+        },
+        {
+            question: "Do you offer financing options?",
+            answer: "Yes, we offer flexible financing options for larger projects, including 0% interest plans with approved credit. We work with you to find affordable solutions. Interested in learning more?",
+            keywords: ["financing", "payment plans", "0% interest", "credit", "affordable"],
+            priority: "normal"
+        },
+        {
+            question: "Are your technicians background checked?",
+            answer: "Absolutely! All our technicians undergo thorough background checks and drug testing. They're also uniformed and carry company ID for your security and peace of mind.",
+            keywords: ["background check", "drug testing", "security", "uniformed", "safety"],
+            priority: "normal"
+        },
+        {
+            question: "Do you clean up after the work is done?",
+            answer: "Yes, we always clean up our work area and leave your property as clean as we found it. Professional cleanup is part of our standard service. We respect your home.",
+            keywords: ["cleanup", "clean", "professional", "respect", "tidy"],
+            priority: "normal"
+        },
+        {
+            question: "Can you work around my schedule?",
+            answer: "We offer flexible scheduling including evenings and weekends when possible. We understand you have a busy life and work to accommodate your needs. What times work best for you?",
+            keywords: ["flexible", "schedule", "evenings", "weekends", "accommodate"],
+            priority: "normal"
+        },
+        {
+            question: "Do you provide warranties on your work?",
+            answer: `All our ${categoryName.toLowerCase()} work comes with comprehensive warranties - typically 1-5 years depending on the service. We also warranty all parts and materials. You're fully protected.`,
+            keywords: ["warranty", "comprehensive", "parts", "materials", "protected"],
+            priority: "normal"
+        },
+        {
+            question: "What makes you different from other companies?",
+            answer: `We combine years of ${categoryName.toLowerCase()} experience with modern technology and old-fashioned customer service. Our customers choose us for reliability, quality, and fair pricing. Ready to experience the difference?`,
+            keywords: ["different", "experience", "technology", "customer service", "reliability"],
+            priority: "normal"
+        },
+        {
+            question: "Can I get references from past customers?",
+            answer: "Absolutely! We're proud of our work and happy to provide references from recent customers in your area. You can also check our online reviews. Would you like me to send some references?",
+            keywords: ["references", "past customers", "reviews", "testimonials", "reputation"],
             priority: "normal"
         }
     ];
