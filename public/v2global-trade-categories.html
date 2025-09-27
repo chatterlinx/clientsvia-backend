@@ -649,7 +649,12 @@
                     closeQnAModal();
                     loadTradeCategories();
                 } else {
-                    throw new Error(result.error || 'Failed to save Q&A');
+                    // Handle validation errors with details
+                    if (result.details && Array.isArray(result.details)) {
+                        throw new Error(result.details.join(', '));
+                    } else {
+                        throw new Error(result.error || 'Failed to save Q&A');
+                    }
                 }
             } catch (error) {
                 // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error saving Q&A:', error);

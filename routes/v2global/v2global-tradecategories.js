@@ -444,16 +444,16 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
         
         if (!question || question.trim().length === 0) {
             validationErrors.push('Question is required and cannot be empty');
-        } else if (question.trim().length < 5) {
-            validationErrors.push('Question must be at least 5 characters long');
+        } else if (question.trim().length < 3) {
+            validationErrors.push('Question must be at least 3 characters long');
         } else if (question.trim().length > 500) {
             validationErrors.push('Question cannot exceed 500 characters');
         }
 
         if (!answer || answer.trim().length === 0) {
             validationErrors.push('Answer is required and cannot be empty');
-        } else if (answer.trim().length < 5) {
-            validationErrors.push('Answer must be at least 5 characters long');
+        } else if (answer.trim().length < 3) {
+            validationErrors.push('Answer must be at least 3 characters long');
         } else if (answer.trim().length > 2000) {
             validationErrors.push('Answer cannot exceed 2000 characters');
         }
