@@ -827,19 +827,28 @@
             }
 
             try {
-                console.log('🤖 V2 AUTO-GENERATE: Admin confirmed generation for category:', currentGenerateCategoryId);
+                // Store categoryId BEFORE closing modal or any async operations
+                const categoryId = currentGenerateCategoryId;
                 
-                // Close modal first
+                console.log('🤖 V2 AUTO-GENERATE: Admin confirmed generation for category:', categoryId);
+                
+                if (!categoryId) {
+                    throw new Error('No category ID available for generation');
+                }
+                
+                // Close modal after capturing the ID
                 closeGenerateQnAsModal();
                 
                 // Show loading state
                 showSuccess('Generating 15 professional Q&As... This may take a moment.');
+                
+                console.log('🎯 V2 AUTO-GENERATE: Using category ID:', categoryId);
 
-                const response = await fetch(`/api/v2global/trade-categories/categories/${currentGenerateCategoryId}/generate-top-qnas`, {
+                const response = await fetch(`/api/v2global/trade-categories/categories/${categoryId}/generate-top-qnas`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${this.getAuthToken ? this.getAuthToken() : ''}`
+                        'Authorization': `Bearer ${getAuthToken ? getAuthToken() : ''}`
                     }
                 });
 
