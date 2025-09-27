@@ -15282,6 +15282,16 @@ Key Metrics:
                 saveBtn.disabled = true;
                 saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
                 
+                // 🔍 DEBUG: Log the selected category for troubleshooting
+                console.log('🔍 DEBUG: Selected category value:', selectedCategory);
+                console.log('🔍 DEBUG: Category type:', typeof selectedCategory);
+                console.log('🔍 DEBUG: Category length:', selectedCategory?.length);
+                
+                // Validate category selection
+                if (!selectedCategory || selectedCategory.trim() === '') {
+                    throw new Error('Please select a trade category');
+                }
+                
                 // ============================================================================
                 // 🚀 SMART ROUTING: Detect if this is company Q&A or global inheritance
                 // ============================================================================
@@ -15294,7 +15304,9 @@ Key Metrics:
                     const companyCategoryName = selectedCategory.replace('company:', '');
                     await this.createCompanyQnA(formData, companyCategoryName);
                 } else {
-                    throw new Error('Invalid category selection');
+                    // 🔧 FALLBACK: If no prefix, treat as company category (for backward compatibility)
+                    console.log('⚠️ No prefix found, treating as company category:', selectedCategory);
+                    await this.createCompanyQnA(formData, selectedCategory);
                 }
                 
             } catch (error) {
