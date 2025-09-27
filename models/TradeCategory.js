@@ -124,12 +124,11 @@ const TradeCategorySchema = new mongoose.Schema({
     collection: 'enterpriseTradeCategories'
 });
 
-// Compound indexes for performance
-// TEMPORARY: Disabled unique constraint for debugging
-// TradeCategorySchema.index({ companyId: 1, name: 1 }, { unique: true });
-TradeCategorySchema.index({ companyId: 1, name: 1 }); // Non-unique for debugging
-TradeCategorySchema.index({ companyId: 1, isActive: 1 });
-TradeCategorySchema.index({ 'qnas.keywords': 1 });
+// V2 OPTIMIZED INDEXES - Enterprise Performance
+TradeCategorySchema.index({ companyId: 1, name: 1 }, { unique: true, name: 'v2_company_name_unique' });
+TradeCategorySchema.index({ companyId: 1, isActive: 1 }, { name: 'v2_company_active' });
+TradeCategorySchema.index({ 'qnas.keywords': 1 }, { name: 'v2_qna_keywords' });
+TradeCategorySchema.index({ createdAt: 1 }, { name: 'v2_created_date' });
 
 // Pre-save middleware to update calculated fields
 TradeCategorySchema.pre('save', function(next) {

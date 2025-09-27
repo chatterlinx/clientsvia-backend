@@ -317,9 +317,9 @@ router.post('/categories', async (req, res) => {
             } : null
         });
         
-        // TEMPORARY: Disable duplicate check for debugging
+        // V2 DUPLICATE CHECK: Properly validate unique categories
         if (existingCategory) {
-            logger.warn(`🚨 V2 DUPLICATE CHECK: Found existing category but allowing creation for debugging`, {
+            logger.warn(`🚨 V2 DUPLICATE CHECK: Found existing category`, {
                 existingCategory: {
                     _id: existingCategory._id,
                     name: existingCategory.name,
@@ -327,7 +327,7 @@ router.post('/categories', async (req, res) => {
                     isActive: existingCategory.isActive
                 }
             });
-            // validationErrors.push('A trade category with this name already exists');
+            validationErrors.push('A trade category with this name already exists');
         }
 
         if (validationErrors.length > 0) {
@@ -566,6 +566,80 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
             error: 'Failed to add Q&A to trade category',
             details: error.message,
             source: 'v2-global-tradecategories'
+        });
+    }
+});
+
+/**
+ * 🧹 V2 NUCLEAR CLEAN - DROP AND REBUILD COLLECTION
+ * Clean slate approach for bulletproof V2 architecture
+ */
+router.post('/debug/nuclear-clean', async (req, res) => {
+    try {
+        const startTime = Date.now();
+        
+        logger.warn('🧹 V2 NUCLEAR CLEAN: Starting complete collection rebuild...');
+        
+        // Get direct database connection
+        const db = require('../../db').getDB();
+        const collectionName = 'enterpriseTradeCategories';
+        
+        // Step 1: Drop the entire collection
+        try {
+            await db.collection(collectionName).drop();
+            logger.info('✅ V2 NUCLEAR CLEAN: Collection dropped successfully');
+        } catch (error) {
+            if (error.codeName === 'NamespaceNotFound') {
+                logger.info('✅ V2 NUCLEAR CLEAN: Collection already clean (not found)');
+            } else {
+                throw error;
+            }
+        }
+        
+        // Step 2: Recreate collection with V2 indexes
+        const collection = db.collection(collectionName);
+        
+        // Create optimized V2 indexes
+        await collection.createIndex({ companyId: 1, name: 1 }, { unique: true, name: 'v2_company_name_unique' });
+        await collection.createIndex({ companyId: 1, isActive: 1 }, { name: 'v2_company_active' });
+        await collection.createIndex({ 'qnas.keywords': 1 }, { name: 'v2_qna_keywords' });
+        await collection.createIndex({ createdAt: 1 }, { name: 'v2_created_date' });
+        
+        logger.info('✅ V2 NUCLEAR CLEAN: V2 indexes created successfully');
+        
+        // Step 3: Verify clean state
+        const count = await collection.countDocuments();
+        const indexes = await collection.indexes();
+        
+        const responseTime = Date.now() - startTime;
+        
+        logger.info(`🚀 V2 NUCLEAR CLEAN: Complete! Clean slate ready in ${responseTime}ms`);
+        
+        res.json({
+            success: true,
+            message: 'V2 Nuclear Clean completed successfully',
+            details: {
+                collectionDropped: true,
+                indexesCreated: indexes.length,
+                documentCount: count,
+                responseTime: `${responseTime}ms`
+            },
+            indexes: indexes.map(idx => ({ name: idx.name, key: idx.key })),
+            nextSteps: [
+                'Collection is now completely clean',
+                'V2 optimized indexes are in place',
+                'Ready for fresh category creation',
+                'Zero legacy conflicts guaranteed'
+            ]
+        });
+        
+    } catch (error) {
+        logger.error('❌ V2 NUCLEAR CLEAN: Failed', error);
+        res.status(500).json({
+            success: false,
+            error: 'Nuclear clean failed',
+            details: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 });
