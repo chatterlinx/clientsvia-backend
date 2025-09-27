@@ -193,6 +193,68 @@
         </div>
     </div>
 
+    <!-- Generate Q&As Confirmation Modal -->
+    <div id="generate-qnas-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">
+                        <i class="fas fa-magic text-purple-600 mr-2"></i>Generate Top 15 Q&As
+                    </h3>
+                    <button onclick="closeGenerateQnAsModal()" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="mb-6">
+                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                        <h4 class="font-medium text-purple-900 mb-2">What will be generated:</h4>
+                        <ul class="text-sm text-purple-800 space-y-1">
+                            <li>• 15 industry-specific Q&As for <span id="generate-category-name" class="font-medium"></span></li>
+                            <li>• Conversion-focused answers that lead to bookings</li>
+                            <li>• Professional, human-like conversational flow</li>
+                            <li>• Relevant keywords for AI agent matching</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+                            <span class="font-medium text-blue-900">Current Status:</span>
+                        </div>
+                        <p class="text-sm text-blue-800">
+                            This category currently has <span id="current-qna-count" class="font-medium">0</span> Q&As.
+                            <span id="duplicate-warning" class="block mt-1 text-blue-700">
+                                Duplicate questions will be automatically skipped.
+                            </span>
+                        </p>
+                    </div>
+                    
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-edit text-amber-600 mr-2"></i>
+                            <span class="font-medium text-amber-900">After Generation:</span>
+                        </div>
+                        <p class="text-sm text-amber-800">
+                            You can edit, delete, or modify any generated Q&As to match your specific business needs.
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button onclick="closeGenerateQnAsModal()" 
+                            class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button onclick="confirmGenerateQnAs()" 
+                            class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-md">
+                        <i class="fas fa-magic mr-2"></i>Generate 15 Q&As
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Q&A Modal -->
     <div id="qna-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
@@ -361,6 +423,10 @@
                                     class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md text-sm">
                                 <i class="fas fa-plus mr-1"></i>Add Q&A
                             </button>
+                        <button onclick="showGenerateQnAsModal('${category._id}', '${category.name.replace(/'/g, "\\'")}', ${(category.qnas || []).length})" 
+                                class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-md text-sm">
+                            <i class="fas fa-magic mr-1"></i>Generate Top 15 Q&As
+                        </button>
                             <button onclick="regenerateCategoryKeywords('${category._id}')" 
                                     class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-md text-sm">
                                 <i class="fas fa-magic mr-1"></i>Regenerate
@@ -732,6 +798,77 @@
             } catch (error) {
                 console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error regenerating keywords:', error);
                 showError(`Failed to regenerate keywords: ${error.message}`);
+            }
+        }
+
+        // 🤖 GENERATE TOP 15 Q&As - ADMIN CONTROLLED
+        let currentGenerateCategoryId = null;
+
+        function showGenerateQnAsModal(categoryId, categoryName, currentQnACount) {
+            currentGenerateCategoryId = categoryId;
+            
+            // Update modal content
+            document.getElementById('generate-category-name').textContent = categoryName;
+            document.getElementById('current-qna-count').textContent = currentQnACount;
+            
+            // Show modal
+            document.getElementById('generate-qnas-modal').classList.remove('hidden');
+        }
+
+        function closeGenerateQnAsModal() {
+            document.getElementById('generate-qnas-modal').classList.add('hidden');
+            currentGenerateCategoryId = null;
+        }
+
+        async function confirmGenerateQnAs() {
+            if (!currentGenerateCategoryId) {
+                showError('No category selected for Q&A generation');
+                return;
+            }
+
+            try {
+                console.log('🤖 V2 AUTO-GENERATE: Admin confirmed generation for category:', currentGenerateCategoryId);
+                
+                // Close modal first
+                closeGenerateQnAsModal();
+                
+                // Show loading state
+                showSuccess('Generating 15 professional Q&As... This may take a moment.');
+
+                const response = await fetch(`/api/v2global/trade-categories/categories/${currentGenerateCategoryId}/generate-top-qnas`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.getAuthToken ? this.getAuthToken() : ''}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('✅ V2 AUTO-GENERATE: Q&As generated successfully:', result.data);
+                    
+                    // Show detailed success message
+                    const message = `Generated ${result.data.generatedQnAs} new Q&As for "${result.data.categoryName}"! ` +
+                                  `Total Q&As: ${result.data.totalQnAs}` +
+                                  (result.data.skippedDuplicates > 0 ? ` (${result.data.skippedDuplicates} duplicates skipped)` : '');
+                    
+                    showSuccess(message);
+                    
+                    // Reload categories to show new Q&As
+                    await loadTradeCategories();
+                } else {
+                    throw new Error(result.error || 'Failed to generate Q&As');
+                }
+
+            } catch (error) {
+                console.error('❌ V2 AUTO-GENERATE: Error generating Q&As:', error);
+                showError(`Failed to generate Q&As: ${error.message}`);
             }
         }
 
