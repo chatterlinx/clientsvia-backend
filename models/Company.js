@@ -1183,6 +1183,105 @@ const companySchema = new mongoose.Schema({
             }
         },
 
+        // 🧠 UNIFIED AI AGENT BRAIN - PHASE 1 INTEGRATION
+        // Consolidates personality, instant responses, and templates into one cohesive system
+        agentBrain: {
+            version: { type: Number, default: 1 },
+            lastUpdated: { type: Date, default: Date.now },
+            
+            // 👤 Core Identity (enhanced from personalitySystem)
+            identity: {
+                companyName: { type: String, trim: true, default: '' },
+                role: { type: String, trim: true, default: 'customer service representative' }, // "HVAC receptionist", "Plumbing specialist"
+                businessType: { type: String, trim: true, default: '' }, // "HVAC", "Plumbing", "Electrical"
+                
+                // Core personality settings (mirrors personalitySystem.corePersonality)
+                corePersonality: {
+                    voiceTone: { 
+                        type: String, 
+                        enum: ['friendly', 'professional', 'authoritative', 'empathetic'], 
+                        default: 'friendly' 
+                    },
+                    speechPace: { 
+                        type: String, 
+                        enum: ['slow', 'normal', 'fast'], 
+                        default: 'normal' 
+                    },
+                    formalityLevel: { 
+                        type: String, 
+                        enum: ['casual', 'business', 'formal'], 
+                        default: 'business' 
+                    },
+                    empathyLevel: { 
+                        type: Number, 
+                        min: 1, 
+                        max: 5, 
+                        default: 4 
+                    },
+                    technicalDepth: { 
+                        type: String, 
+                        enum: ['simple', 'moderate', 'detailed'], 
+                        default: 'moderate' 
+                    }
+                },
+                
+                // Conversation settings
+                conversationSettings: {
+                    useCustomerName: { type: Boolean, default: true },
+                    acknowledgeEmotion: { type: Boolean, default: true },
+                    mirrorTone: { type: Boolean, default: false },
+                    offerReassurance: { type: Boolean, default: true }
+                }
+            },
+            
+            // ⚡ Instant Responses (0ms response time)
+            instantResponses: [{
+                id: { type: String, required: true },
+                trigger: [{ type: String, trim: true }], // keywords that trigger this response
+                response: { type: String, required: true, trim: true },
+                category: { 
+                    type: String, 
+                    enum: ['greeting', 'emergency', 'common'], 
+                    default: 'common' 
+                },
+                priority: { type: Number, min: 1, max: 10, default: 5 },
+                enabled: { type: Boolean, default: true },
+                createdAt: { type: Date, default: Date.now },
+                updatedAt: { type: Date, default: Date.now }
+            }],
+            
+            // 📋 Response Templates (100ms response time) - migrated from knowledgeManagement.templates
+            responseTemplates: [{
+                id: { type: String, required: true },
+                name: { type: String, required: true, trim: true },
+                template: { type: String, required: true, trim: true },
+                category: { 
+                    type: String, 
+                    enum: ['service', 'pricing', 'transfer', 'closing', 'greeting', 'emergency'], 
+                    required: true 
+                },
+                keywords: [{ type: String, trim: true }],
+                confidence: { type: Number, min: 0, max: 1, default: 0.7 },
+                enabled: { type: Boolean, default: true },
+                variables: [{
+                    name: { type: String, required: true, trim: true },
+                    description: { type: String, trim: true, default: '' },
+                    required: { type: Boolean, default: false }
+                }],
+                createdAt: { type: Date, default: Date.now },
+                updatedAt: { type: Date, default: Date.now }
+            }],
+            
+            // 🎯 Performance Metrics
+            performance: {
+                instantResponsesUsed: { type: Number, default: 0 },
+                templatesUsed: { type: Number, default: 0 },
+                avgResponseTime: { type: Number, default: 0 },
+                successRate: { type: Number, default: 0 },
+                lastOptimized: { type: Date, default: Date.now }
+            }
+        },
+
         // 🎤 V2 VOICE SETTINGS - ELEVENLABS INTEGRATION
         // Migrated from legacy aiSettings.elevenLabs to aiAgentLogic.voiceSettings
         voiceSettings: {
