@@ -5323,44 +5323,92 @@ This error needs to be fixed - not masked!
             // No separate legacy API calls needed - everything is unified in the main company data
         }
 
-        // Save agent personality settings
+        // Save unified AI agent configuration (personality + instant responses + templates)
         async function saveAgentPersonalitySettings() {
             const companyId = getCurrentCompanyId();
             if (!companyId) return;
 
-            // 🎭 V2 AGENT PERSONALITY: Collect data from actual UI elements (with new- prefix)
-            const personalityData = {
-                corePersonality: {
-                    voiceTone: document.getElementById('new-voiceTone')?.value || 'friendly',
-                    speechPace: document.getElementById('new-speechPace')?.value || 'normal',
-                    formalityLevel: document.getElementById('new-formalityLevel')?.value || 'casual',
-                    empathyLevel: parseInt(document.getElementById('new-empathyLevel')?.value) || 4,
-                    technicalDepth: document.getElementById('new-technicalDepth')?.value || 'simple'
+            // 🧠 UNIFIED AI AGENT BRAIN: Collect all data for unified system
+            const unifiedAgentData = {
+                // 🎭 Agent Personality (existing structure preserved)
+                agentPersonality: {
+                    corePersonality: {
+                        voiceTone: document.getElementById('new-voiceTone')?.value || 'friendly',
+                        speechPace: document.getElementById('new-speechPace')?.value || 'normal',
+                        formalityLevel: document.getElementById('new-formalityLevel')?.value || 'casual',
+                        empathyLevel: parseInt(document.getElementById('new-empathyLevel')?.value) || 4,
+                        technicalDepth: document.getElementById('new-technicalDepth')?.value || 'simple'
+                    },
+                    conversationSettings: {
+                        useCustomerName: document.getElementById('new-useCustomerName')?.checked ?? true,
+                        acknowledgeEmotion: document.getElementById('new-acknowledgeEmotion')?.checked ?? true,
+                        mirrorTone: document.getElementById('new-mirrorTone')?.checked ?? false,
+                        offerReassurance: document.getElementById('new-offerReassurance')?.checked ?? true
+                    },
+                    emotionalIntelligence: {
+                        frustratedResponse: document.getElementById('new-frustratedResponse')?.value || '',
+                        urgentResponse: document.getElementById('new-urgentResponse')?.value || '',
+                        confusedResponse: document.getElementById('new-confusedResponse')?.value || '',
+                        reassurancePhrase: document.getElementById('new-reassurancePhrase')?.value || ''
+                    },
+                    responseStyle: {
+                        conciseness: 'balanced',
+                        enthusiasm: 'moderate',
+                        patience: 'high'
+                    }
                 },
-                conversationSettings: {
-                    useCustomerName: document.getElementById('new-useCustomerName')?.checked ?? true,
-                    acknowledgeEmotion: document.getElementById('new-acknowledgeEmotion')?.checked ?? true,
-                    mirrorTone: document.getElementById('new-mirrorTone')?.checked ?? false,
-                    offerReassurance: document.getElementById('new-offerReassurance')?.checked ?? true
-                },
-                emotionalIntelligence: {
-                    frustratedResponse: document.getElementById('new-frustratedResponse')?.value || '',
-                    urgentResponse: document.getElementById('new-urgentResponse')?.value || '',
-                    confusedResponse: document.getElementById('new-confusedResponse')?.value || '',
-                    reassurancePhrase: document.getElementById('new-reassurancePhrase')?.value || ''
-                },
-                responseStyle: {
-                    conciseness: 'balanced',
-                    enthusiasm: 'moderate',
-                    patience: 'high'
+                
+                // 🧠 Agent Brain (new unified structure)
+                agentBrain: {
+                    version: 1,
+                    lastUpdated: new Date().toISOString(),
+                    
+                    // 👤 Core Identity
+                    identity: {
+                        companyName: window.currentCompanyData?.companyName || '',
+                        role: 'customer service representative', // Can be enhanced later
+                        businessType: '', // Can be enhanced later
+                        corePersonality: {
+                            voiceTone: document.getElementById('new-voiceTone')?.value || 'friendly',
+                            speechPace: document.getElementById('new-speechPace')?.value || 'normal',
+                            formalityLevel: document.getElementById('new-formalityLevel')?.value || 'casual',
+                            empathyLevel: parseInt(document.getElementById('new-empathyLevel')?.value) || 4,
+                            technicalDepth: document.getElementById('new-technicalDepth')?.value || 'simple'
+                        },
+                        conversationSettings: {
+                            useCustomerName: document.getElementById('new-useCustomerName')?.checked ?? true,
+                            acknowledgeEmotion: document.getElementById('new-acknowledgeEmotion')?.checked ?? true,
+                            mirrorTone: document.getElementById('new-mirrorTone')?.checked ?? false,
+                            offerReassurance: document.getElementById('new-offerReassurance')?.checked ?? true
+                        }
+                    },
+                    
+                    // ⚡ Instant Responses (will be populated from UI when implemented)
+                    instantResponses: window.currentInstantResponses || [],
+                    
+                    // 📋 Response Templates (will be populated from UI when implemented)
+                    responseTemplates: window.currentResponseTemplates || [],
+                    
+                    // 🎯 Performance Metrics
+                    performance: {
+                        instantResponsesUsed: 0,
+                        templatesUsed: 0,
+                        avgResponseTime: 0,
+                        successRate: 0,
+                        lastOptimized: new Date().toISOString()
+                    }
                 }
             };
 
             try {
-                const response = await fetch(`/api/company/${companyId}/personality`, {
+                // 🚀 V2 UNIFIED: Save to new unified agent brain endpoint
+                const response = await fetch(`/api/company/${companyId}/agent-brain`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(personalityData)
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify(unifiedAgentData)
                 });
 
                 if (response.ok) {

@@ -2626,6 +2626,178 @@ router.put('/company/:companyId/personality', authenticateJWT, async (req, res) 
 });
 
 /**
+ * 🧠 UNIFIED AI AGENT BRAIN ENDPOINTS - PHASE 1
+ * Handles the new unified system that combines personality, instant responses, and templates
+ */
+
+/**
+ * 🧠 GET /api/company/:companyId/agent-brain
+ * Returns unified AI agent brain configuration
+ */
+router.get('/company/:companyId/agent-brain', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        console.log('🧠 UNIFIED BRAIN: Loading agent brain configuration for company:', companyId);
+        
+        // Find the company
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'Company not found' 
+            });
+        }
+
+        // Get unified agent brain configuration
+        const agentBrain = company.aiAgentLogic?.agentBrain || {
+            version: 1,
+            lastUpdated: new Date(),
+            identity: {
+                companyName: company.companyName || '',
+                role: 'customer service representative',
+                businessType: '',
+                corePersonality: {
+                    voiceTone: 'friendly',
+                    speechPace: 'normal',
+                    formalityLevel: 'business',
+                    empathyLevel: 4,
+                    technicalDepth: 'moderate'
+                },
+                conversationSettings: {
+                    useCustomerName: true,
+                    acknowledgeEmotion: true,
+                    mirrorTone: false,
+                    offerReassurance: true
+                }
+            },
+            instantResponses: [],
+            responseTemplates: [],
+            performance: {
+                instantResponsesUsed: 0,
+                templatesUsed: 0,
+                avgResponseTime: 0,
+                successRate: 0,
+                lastOptimized: new Date()
+            }
+        };
+
+        // Also include existing personality data for backward compatibility
+        const personalityData = company.aiAgentLogic?.agentPersonality || company.aiAgentLogic?.personalitySystem || {};
+
+        console.log('✅ UNIFIED BRAIN: Agent brain configuration loaded successfully');
+
+        res.json({
+            success: true,
+            data: {
+                agentBrain,
+                agentPersonality: personalityData // For backward compatibility
+            },
+            meta: {
+                companyId,
+                source: 'unified-agent-brain',
+                lastUpdated: agentBrain.lastUpdated
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ UNIFIED BRAIN: Error loading agent brain configuration:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to load agent brain configuration',
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * 🧠 PUT /api/company/:companyId/agent-brain
+ * Updates unified AI agent brain configuration
+ */
+router.put('/company/:companyId/agent-brain', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { agentPersonality, agentBrain } = req.body;
+        
+        console.log('🧠 UNIFIED BRAIN: Updating agent brain configuration for company:', companyId);
+        console.log('Updates:', { hasPersonality: !!agentPersonality, hasAgentBrain: !!agentBrain });
+        
+        // Find the company
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'Company not found' 
+            });
+        }
+
+        // Initialize aiAgentLogic if it doesn't exist
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+
+        // Update agent personality (existing structure)
+        if (agentPersonality) {
+            company.aiAgentLogic.agentPersonality = {
+                ...company.aiAgentLogic.agentPersonality,
+                ...agentPersonality
+            };
+        }
+
+        // Update unified agent brain (new structure)
+        if (agentBrain) {
+            company.aiAgentLogic.agentBrain = {
+                ...company.aiAgentLogic.agentBrain,
+                ...agentBrain,
+                lastUpdated: new Date()
+            };
+        }
+
+        // Update metadata
+        company.aiAgentLogic.lastUpdated = new Date();
+        company.aiAgentLogic.version = (company.aiAgentLogic.version || 0) + 1;
+
+        // Save to database
+        await company.save();
+
+        // Clear Redis cache for this company
+        if (redisClient) {
+            try {
+                await redisClient.del(`company:${companyId}`);
+                await redisClient.del(`ai:agent-brain:${companyId}`);
+                console.log(`✅ [REDIS] Agent brain cache cleared for company ${companyId}`);
+            } catch (redisError) {
+                console.error('❌ [REDIS] Error clearing agent brain cache:', redisError);
+            }
+        }
+
+        console.log('✅ UNIFIED BRAIN: Agent brain configuration updated successfully');
+        
+        res.json({
+            success: true,
+            message: 'Agent brain configuration updated successfully',
+            data: {
+                agentBrain: company.aiAgentLogic.agentBrain,
+                agentPersonality: company.aiAgentLogic.agentPersonality
+            },
+            meta: {
+                companyId,
+                version: company.aiAgentLogic.version,
+                lastUpdated: company.aiAgentLogic.lastUpdated
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ UNIFIED BRAIN: Error updating agent brain configuration:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to update agent brain configuration',
+            details: error.message 
+        });
+    }
+});
+
+/**
  * OLD ROUTES BELOW - THESE HAVE AUTHENTICATION REQUIREMENTS
  * Only used if someone tries to access the authenticated endpoints
  */
