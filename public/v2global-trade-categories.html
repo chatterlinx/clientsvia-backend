@@ -193,27 +193,6 @@
             </div>
         </div>
 
-        <!-- Search Section -->
-        <div class="bg-white rounded-lg shadow mb-8">
-            <div class="p-6">
-                <div class="flex items-center space-x-4">
-                    <div class="flex-1">
-                        <div class="relative">
-                            <input type="text" id="search-input" placeholder="Search Q&As by keywords, questions, or answers..." 
-                                   class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
-                        </div>
-                    </div>
-                    <button onclick="performSearch()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium">
-                        <i class="fas fa-search mr-2"></i>Search
-                    </button>
-                    <button onclick="clearSearch()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div id="search-results" class="mt-4 hidden"></div>
-            </div>
-        </div>
 
         <!-- Categories List -->
         <div class="space-y-6" id="categories-container">
@@ -356,12 +335,6 @@
             // Q&A form
             document.getElementById('qna-form').addEventListener('submit', handleSaveQnA);
             
-            // Search input
-            document.getElementById('search-input').addEventListener('keyup', function(e) {
-                if (e.key === 'Enter') {
-                    performSearch();
-                }
-            });
 
             // Real-time keyword preview
             document.getElementById('qna-question').addEventListener('input', updateKeywordPreview);
@@ -923,16 +896,14 @@
             showError('Bulk keyword regeneration functionality coming soon in V2 system');
         }
 
-        // Search functionality (placeholder - would need V2 API endpoint)
+        // Search functionality REMOVED - was causing issues
         async function performSearch() {
-            const query = document.getElementById('search-input').value.trim();
-            if (!query) {
-                showError('Please enter a search query');
-                return;
-            }
+            showError('Search functionality has been removed - use Browse All Categories instead');
+        }
 
-            const searchResults = document.getElementById('search-results');
-            const searchInput = document.getElementById('search-input');
+        function clearSearch() {
+            // Search functionality removed
+        }
             
             try {
                 // Show loading state
@@ -1075,11 +1046,6 @@
             }
         }
 
-        // Clear search
-        function clearSearch() {
-            document.getElementById('search-input').value = '';
-            document.getElementById('search-results').classList.add('hidden');
-        }
 
         // Update keyword preview in modal
         function updateKeywordPreview() {
