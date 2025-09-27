@@ -1202,23 +1202,75 @@ async function simulateAIAgentTest(companyId, query, knowledge, options) {
 function calculateMatchConfidence(query, content, keywords = []) {
     let confidence = 0;
     
-    // Direct text matching
+    // Enhanced query processing - remove common words
+    const commonWords = ['how', 'what', 'when', 'where', 'why', 'do', 'does', 'is', 'are', 'can', 'will', 'the', 'a', 'an', 'and', 'or', 'but'];
+    const queryWords = query.split(/\s+/).filter(word => word.length > 2 && !commonWords.includes(word));
+    const contentWords = content.split(/\s+/).filter(word => word.length > 2);
+    
+    // 1. Direct phrase matching (highest confidence)
     if (content.includes(query)) {
-        confidence += 0.8;
-    } else {
-        // Word-by-word matching
-        const queryWords = query.split(/\s+/);
-        const contentWords = content.split(/\s+/);
-        const matches = queryWords.filter(word => contentWords.includes(word));
-        confidence += (matches.length / queryWords.length) * 0.6;
+        confidence += 0.9;
     }
     
-    // Keyword matching
-    if (keywords.length > 0) {
-        const keywordMatches = keywords.filter(keyword => 
+    // 2. Semantic word matching (improved algorithm)
+    if (queryWords.length > 0) {
+        const exactMatches = queryWords.filter(word => contentWords.includes(word));
+        const partialMatches = queryWords.filter(word => 
+            contentWords.some(contentWord => 
+                contentWord.includes(word) || word.includes(contentWord)
+            )
+        );
+        
+        const wordMatchScore = (exactMatches.length * 1.0 + partialMatches.length * 0.5) / queryWords.length;
+        confidence += wordMatchScore * 0.7;
+    }
+    
+    // 3. Enhanced keyword matching
+    if (keywords && keywords.length > 0) {
+        let keywordScore = 0;
+        
+        // Direct keyword matches
+        const directMatches = keywords.filter(keyword => 
             query.includes(keyword.toLowerCase()) || keyword.toLowerCase().includes(query)
         );
-        confidence += (keywordMatches.length / keywords.length) * 0.4;
+        keywordScore += directMatches.length * 0.3;
+        
+        // Partial keyword matches
+        const partialMatches = keywords.filter(keyword => {
+            const keywordLower = keyword.toLowerCase();
+            return queryWords.some(word => 
+                keywordLower.includes(word) || word.includes(keywordLower)
+            );
+        });
+        keywordScore += partialMatches.length * 0.2;
+        
+        // Intent-based matching for common service queries
+        const serviceIntents = ['cost', 'price', 'pricing', 'fee', 'charge', 'rate', 'much', 'expensive', 'cheap'];
+        const hasServiceIntent = queryWords.some(word => serviceIntents.includes(word));
+        const hasServiceKeywords = keywords.some(keyword => serviceIntents.includes(keyword.toLowerCase()));
+        
+        if (hasServiceIntent && hasServiceKeywords) {
+            keywordScore += 0.4; // Boost for service pricing queries
+        }
+        
+        confidence += Math.min(keywordScore, 0.6);
+    }
+    
+    // 4. Boost for common business queries
+    const businessBoosts = {
+        'service': ['service', 'repair', 'fix', 'maintenance'],
+        'pricing': ['cost', 'price', 'pricing', 'fee', 'charge', 'rate', 'much'],
+        'booking': ['appointment', 'schedule', 'book', 'visit'],
+        'emergency': ['emergency', 'urgent', 'asap', 'immediate']
+    };
+    
+    for (const [category, boostWords] of Object.entries(businessBoosts)) {
+        if (queryWords.some(word => boostWords.includes(word))) {
+            if (keywords.some(keyword => boostWords.includes(keyword.toLowerCase()))) {
+                confidence += 0.15; // Business context boost
+                break;
+            }
+        }
     }
     
     return Math.min(confidence, 1.0);
