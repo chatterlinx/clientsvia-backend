@@ -5153,12 +5153,32 @@ This error needs to be fixed - not masked!
             const companyId = getCurrentCompanyId();
             if (!companyId) return;
 
+            // 🎭 V2 AGENT PERSONALITY: Collect data from actual UI elements (with new- prefix)
             const personalityData = {
-                voiceTone: document.getElementById('clientsvia-voiceToneSelect')?.value || 'friendly',
-                speechPace: document.getElementById('clientsvia-speechPaceSelect')?.value || 'normal',
-                bargeInMode: document.getElementById('clientsvia-bargeInToggle')?.checked ?? true,
-                acknowledgeEmotion: document.getElementById('clientsvia-emotionToggle')?.checked ?? true,
-                useEmojis: document.getElementById('clientsvia-emojiToggle')?.checked ?? false
+                corePersonality: {
+                    voiceTone: document.getElementById('new-voiceTone')?.value || 'friendly',
+                    speechPace: document.getElementById('new-speechPace')?.value || 'normal',
+                    formalityLevel: document.getElementById('new-formalityLevel')?.value || 'casual',
+                    empathyLevel: parseInt(document.getElementById('new-empathyLevel')?.value) || 4,
+                    technicalDepth: document.getElementById('new-technicalDepth')?.value || 'simple'
+                },
+                conversationSettings: {
+                    useCustomerName: document.getElementById('new-useCustomerName')?.checked ?? true,
+                    acknowledgeEmotion: document.getElementById('new-acknowledgeEmotion')?.checked ?? true,
+                    mirrorTone: document.getElementById('new-mirrorTone')?.checked ?? false,
+                    offerReassurance: document.getElementById('new-offerReassurance')?.checked ?? true
+                },
+                emotionalIntelligence: {
+                    frustratedResponse: document.getElementById('new-frustratedResponse')?.value || '',
+                    urgentResponse: document.getElementById('new-urgentResponse')?.value || '',
+                    confusedResponse: document.getElementById('new-confusedResponse')?.value || '',
+                    reassurancePhrase: document.getElementById('new-reassurancePhrase')?.value || ''
+                },
+                responseStyle: {
+                    conciseness: 'balanced',
+                    enthusiasm: 'moderate',
+                    patience: 'high'
+                }
             };
 
             try {
@@ -5182,6 +5202,84 @@ This error needs to be fixed - not masked!
             } catch (error) {
                 console.error('❌ Failed to save personality settings:', error);
                 alert(`❌ Failed to save personality settings: ${error.message}`);
+            }
+        }
+
+        // 🎭 V2 AGENT PERSONALITY: Load personality settings from backend
+        async function loadAgentPersonalitySettings() {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) return;
+
+            try {
+                console.log('🎭 V2 PERSONALITY: Loading personality settings for company:', companyId);
+                
+                const response = await fetch(`/api/company/${companyId}/personality`, {
+                    method: 'GET',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    }
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    const personality = result.data || {};
+                    
+                    console.log('✅ V2 PERSONALITY: Loaded personality settings:', personality);
+                    
+                    // Populate Core Personality fields
+                    const corePersonality = personality.corePersonality || {};
+                    if (document.getElementById('new-voiceTone')) {
+                        document.getElementById('new-voiceTone').value = corePersonality.voiceTone || 'friendly';
+                    }
+                    if (document.getElementById('new-speechPace')) {
+                        document.getElementById('new-speechPace').value = corePersonality.speechPace || 'normal';
+                    }
+                    if (document.getElementById('new-formalityLevel')) {
+                        document.getElementById('new-formalityLevel').value = corePersonality.formalityLevel || 'casual';
+                    }
+                    if (document.getElementById('new-empathyLevel')) {
+                        document.getElementById('new-empathyLevel').value = corePersonality.empathyLevel || 4;
+                    }
+                    if (document.getElementById('new-technicalDepth')) {
+                        document.getElementById('new-technicalDepth').value = corePersonality.technicalDepth || 'simple';
+                    }
+                    
+                    // Populate Conversation Settings
+                    const conversationSettings = personality.conversationSettings || {};
+                    if (document.getElementById('new-useCustomerName')) {
+                        document.getElementById('new-useCustomerName').checked = conversationSettings.useCustomerName ?? true;
+                    }
+                    if (document.getElementById('new-acknowledgeEmotion')) {
+                        document.getElementById('new-acknowledgeEmotion').checked = conversationSettings.acknowledgeEmotion ?? true;
+                    }
+                    if (document.getElementById('new-mirrorTone')) {
+                        document.getElementById('new-mirrorTone').checked = conversationSettings.mirrorTone ?? false;
+                    }
+                    if (document.getElementById('new-offerReassurance')) {
+                        document.getElementById('new-offerReassurance').checked = conversationSettings.offerReassurance ?? true;
+                    }
+                    
+                    // Populate Emotional Intelligence fields
+                    const emotionalIntelligence = personality.emotionalIntelligence || {};
+                    if (document.getElementById('new-frustratedResponse')) {
+                        document.getElementById('new-frustratedResponse').value = emotionalIntelligence.frustratedResponse || '';
+                    }
+                    if (document.getElementById('new-urgentResponse')) {
+                        document.getElementById('new-urgentResponse').value = emotionalIntelligence.urgentResponse || '';
+                    }
+                    if (document.getElementById('new-confusedResponse')) {
+                        document.getElementById('new-confusedResponse').value = emotionalIntelligence.confusedResponse || '';
+                    }
+                    if (document.getElementById('new-reassurancePhrase')) {
+                        document.getElementById('new-reassurancePhrase').value = emotionalIntelligence.reassurancePhrase || '';
+                    }
+                    
+                } else {
+                    console.warn('⚠️ V2 PERSONALITY: Failed to load personality settings, using defaults');
+                }
+            } catch (error) {
+                console.error('❌ V2 PERSONALITY: Error loading personality settings:', error);
             }
         }
 
@@ -10525,8 +10623,7 @@ Key Metrics:
                     setTimeout(() => {
                         loadAgentTradeCategories(); // Load checkboxes system
                         loadAgentSettings();
-                        // 🔥 LEGACY ELIMINATED: loadAgentPersonalitySettings() - integrated into aiAgentLogic
-                        // 🔥 LEGACY ELIMINATED: loadClientsviaAgentPersonalitySettings() - integrated into aiAgentLogic
+                        loadAgentPersonalitySettings(); // 🎭 V2 AGENT PERSONALITY: Load personality settings
                         // loadResponseTemplates_LEGACY_REMOVED(); // V2 DELETED: Legacy response templates - V2 uses aiAgentLogic
                         // 🔥 LEGACY ELIMINATED: initKnowledgeSources() - integrated into aiAgentLogic
                         // 🔥 LEGACY ELIMINATED: loadKnowledgeSettings() - integrated into aiAgentLogic
