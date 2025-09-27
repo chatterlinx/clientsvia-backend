@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Trade Categories Management | ClientsVia</title>
+    <title>V2 Global Trade Categories (Redirecting...) | ClientsVia</title>
+    <script>
+        // V2 SYSTEM REDIRECT: Automatically redirect to V2 Global Trade Categories
+        console.log('🚀 V2 REDIRECT: Legacy enterprise-trade-categories.html redirecting to V2 system...');
+        window.location.replace('/v2global-trade-categories.html');
+    </script>
     <link href="/css/output.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -13,9 +18,34 @@
         .keyword-tag:hover { transform: scale(1.05); }
         .auto-keyword { background: linear-gradient(45deg, #10b981, #059669); }
         .manual-keyword { background: linear-gradient(45deg, #3b82f6, #1d4ed8); }
+        .redirect-notice { 
+            background: linear-gradient(45deg, #8b5cf6, #7c3aed);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
+    <!-- V2 REDIRECT NOTICE -->
+    <div class="redirect-notice text-white p-6 text-center">
+        <div class="max-w-2xl mx-auto">
+            <i class="fas fa-rocket text-3xl mb-4"></i>
+            <h1 class="text-2xl font-bold mb-2">🚀 Upgrading to V2 System</h1>
+            <p class="text-lg mb-4">Redirecting to the new V2 Global Trade Categories system...</p>
+            <div class="inline-flex items-center space-x-2">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Please wait...</span>
+            </div>
+            <div class="mt-4">
+                <a href="/v2global-trade-categories.html" class="bg-white text-purple-600 px-6 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors">
+                    <i class="fas fa-arrow-right mr-2"></i>Go to V2 System
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- LEGACY CONTENT HIDDEN -->
+    <div style="display: none;">
     <!-- Navigation -->
     <nav class="bg-white shadow-sm border-b border-gray-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -809,5 +839,6 @@
             }, 5000);
         }
     </script>
+    </div> <!-- End legacy content hidden div -->
 </body>
 </html>
