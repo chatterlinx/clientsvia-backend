@@ -2490,6 +2490,142 @@ router.post('/:companyId/clear-cache', async (req, res) => {
 });
 
 /**
+ * 🎭 V2 AGENT PERSONALITY ENDPOINT
+ * GET /api/company/:companyId/personality
+ * Returns V2 Agent Personality settings for the frontend
+ */
+router.get('/company/:companyId/personality', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        console.log('🎭 V2 PERSONALITY: Loading personality settings for company:', companyId);
+        
+        // Find the company
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'Company not found' 
+            });
+        }
+
+        // Get V2 Agent Personality settings
+        const personalitySettings = company.aiAgentLogic?.agentPersonality || {
+            voiceTone: 'professional',
+            speechPace: 'normal',
+            personalityTraits: {
+                friendliness: 'moderate',
+                formality: 'professional',
+                empathy: 'high',
+                patience: 'high'
+            },
+            responseStyle: {
+                conciseness: 'balanced',
+                technicality: 'appropriate',
+                enthusiasm: 'moderate'
+            },
+            customInstructions: '',
+            greetingStyle: 'professional',
+            farewellStyle: 'polite'
+        };
+
+        console.log('✅ V2 PERSONALITY: Personality settings loaded successfully');
+
+        res.json({
+            success: true,
+            data: personalitySettings,
+            meta: {
+                companyId,
+                source: 'v2-agent-personality',
+                lastUpdated: company.aiAgentLogic?.lastUpdated || null
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ V2 PERSONALITY: Error loading personality settings:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to load personality settings',
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * 🎭 V2 AGENT PERSONALITY UPDATE ENDPOINT
+ * PUT /api/company/:companyId/personality
+ * Updates V2 Agent Personality settings
+ */
+router.put('/company/:companyId/personality', authenticateJWT, async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const personalityUpdates = req.body;
+        
+        console.log('🎭 V2 PERSONALITY: Updating personality settings for company:', companyId);
+        console.log('Updates:', personalityUpdates);
+        
+        // Find the company
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'Company not found' 
+            });
+        }
+
+        // Initialize aiAgentLogic if it doesn't exist
+        if (!company.aiAgentLogic) {
+            company.aiAgentLogic = {};
+        }
+
+        // Update personality settings
+        company.aiAgentLogic.agentPersonality = {
+            ...company.aiAgentLogic.agentPersonality,
+            ...personalityUpdates
+        };
+
+        // Update metadata
+        company.aiAgentLogic.lastUpdated = new Date();
+        company.aiAgentLogic.version = (company.aiAgentLogic.version || 0) + 1;
+
+        // Save to database
+        await company.save();
+
+        // Clear Redis cache for this company
+        if (redisClient) {
+            try {
+                await redisClient.del(`company:${companyId}`);
+                await redisClient.del(`ai:personality:${companyId}`);
+                console.log(`✅ [REDIS] Personality cache cleared for company ${companyId}`);
+            } catch (redisError) {
+                console.error('❌ [REDIS] Error clearing personality cache:', redisError);
+            }
+        }
+
+        console.log('✅ V2 PERSONALITY: Personality settings updated successfully');
+        
+        res.json({
+            success: true,
+            message: 'Personality settings updated successfully',
+            data: company.aiAgentLogic.agentPersonality,
+            meta: {
+                companyId,
+                version: company.aiAgentLogic.version,
+                lastUpdated: company.aiAgentLogic.lastUpdated
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ V2 PERSONALITY: Error updating personality settings:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to update personality settings',
+            details: error.message 
+        });
+    }
+});
+
+/**
  * OLD ROUTES BELOW - THESE HAVE AUTHENTICATION REQUIREMENTS
  * Only used if someone tries to access the authenticated endpoints
  */

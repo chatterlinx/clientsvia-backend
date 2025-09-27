@@ -14726,8 +14726,8 @@ Key Metrics:
             `;
 
             try {
-                // 🚀 LOAD DUAL-LAYER TRADE Q&As (Your brilliant inheritance system!)
-                const response = await fetch(`/api/enterprise-trade-categories/qnas/${this.companyId}`, {
+                // 🚀 V2 LOAD DUAL-LAYER TRADE Q&As (V2 inheritance system!)
+                const response = await fetch(`/api/v2global/trade-categories/categories/for-company/${this.companyId}`, {
                     headers: {
                         'Authorization': `Bearer ${this.getAuthToken()}`
                     }
@@ -14738,7 +14738,22 @@ Key Metrics:
                 }
 
                 const result = await response.json();
-                const tradeQnAs = result.data || [];
+                
+                // Extract Q&As from V2 format
+                let tradeQnAs = [];
+                if (result.success && result.data?.categories) {
+                    result.data.categories.forEach(category => {
+                        if (category.isSelected && category.qnas) {
+                            category.qnas.forEach(qna => {
+                                tradeQnAs.push({
+                                    ...qna,
+                                    tradeCategory: category.name,
+                                    isGlobal: true
+                                });
+                            });
+                        }
+                    });
+                }
                 
                 console.log('🎉 DUAL-LAYER Trade Q&As loaded:', {
                     total: tradeQnAs.length,
@@ -15243,26 +15258,40 @@ Key Metrics:
 
         /**
          * ============================================================================
-         * 🌍 LOAD GLOBAL TRADE CATEGORIES: Get all available categories for inheritance
+         * 🌍 V2 LOAD GLOBAL TRADE CATEGORIES: Get all available categories for inheritance
          * ============================================================================
          */
         async loadGlobalTradeCategories() {
             try {
-                const response = await fetch(`/api/enterprise-trade-categories?companyId=global&includeGlobal=true`, {
+                console.log('🚀 V2 TRADE CATEGORIES: Loading global categories from V2 API...');
+                
+                const response = await fetch(`/api/v2global/trade-categories/categories?includeQnAs=true&includeStats=true`, {
                     headers: {
                         'Authorization': `Bearer ${this.getAuthToken()}`
                     }
                 });
                 
-                if (response.ok) {
-                    const result = await response.json();
-                    return result.data || [];
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log(`✅ V2 TRADE CATEGORIES: Loaded ${result.data.length} global categories`);
+                    return result.data.map(category => ({
+                        _id: category._id,
+                        name: category.name,
+                        description: category.description,
+                        qnas: category.qnas || [],
+                        statistics: category.statistics || {}
+                    }));
                 } else {
-                    console.error('Failed to load global trade categories:', response.status);
-                    return [];
+                    throw new Error(result.error || 'Failed to load global categories');
                 }
             } catch (error) {
-                console.error('Error loading global trade categories:', error);
+                console.error('❌ V2 TRADE CATEGORIES: Error loading global categories:', error);
+                console.log('📋 V2 system may need configuration - check v2global-trade-categories.html');
                 return [];
             }
         }
@@ -15724,25 +15753,40 @@ Key Metrics:
         }
 
         /**
-         * 🌐 Load Global Trade Categories (Your Brilliant Knowledge Base!)
+         * 🌐 V2 Load Global Trade Categories (V2 System Integration!)
          */
         async loadGlobalTradeCategories() {
             try {
-                const response = await fetch(`/api/enterprise-trade-categories?companyId=global&includeGlobal=true`, {
+                console.log('🚀 V2 TRADE CATEGORIES: Loading global categories from V2 API...');
+                
+                const response = await fetch(`/api/v2global/trade-categories/categories?includeQnAs=true&includeStats=true`, {
                     headers: {
                         'Authorization': `Bearer ${this.getAuthToken()}`
                     }
                 });
                 
-                if (response.ok) {
-                    const result = await response.json();
-                    return result.data || [];
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log(`✅ V2 TRADE CATEGORIES: Loaded ${result.data.length} global categories`);
+                    return result.data.map(category => ({
+                        _id: category._id,
+                        name: category.name,
+                        description: category.description,
+                        qnas: category.qnas || [],
+                        statistics: category.statistics || {}
+                    }));
                 } else {
-                    throw new Error('Failed to load global trade categories');
+                    throw new Error(result.error || 'Failed to load global categories');
                 }
             } catch (error) {
-                console.error('❌ Error loading global trade categories:', error);
-                throw error;
+                console.error('❌ V2 TRADE CATEGORIES: Error loading global categories:', error);
+                console.log('📋 V2 system may need configuration - check v2global-trade-categories.html');
+                return [];
             }
         }
 
