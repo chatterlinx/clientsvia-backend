@@ -1070,7 +1070,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       gather.say('');
       
       // Fallback - use configurable response [[memory:8276820]]
-      const company = await Company.findById(companyID);
+      // Note: company already loaded above for ElevenLabs integration
       // V2 DELETED: Legacy responseCategories.core - using V2 Agent Personality system
       const fallbackResponse = `I understand you have a question. Let me connect you with someone who can help you better.`;
       twiml.say(fallbackResponse);
