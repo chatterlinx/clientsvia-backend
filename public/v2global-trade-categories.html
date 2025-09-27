@@ -13,6 +13,8 @@
         .keyword-tag:hover { transform: scale(1.05); }
         .auto-keyword { background: linear-gradient(45deg, #10b981, #059669); }
         .manual-keyword { background: linear-gradient(45deg, #3b82f6, #1d4ed8); }
+        .rotate-180 { transform: rotate(180deg); }
+        #browse-chevron { transition: transform 0.2s ease-in-out; }
         .v2-badge { background: linear-gradient(45deg, #8b5cf6, #7c3aed); }
     </style>
 </head>
@@ -108,29 +110,58 @@
                 <p class="text-sm text-gray-500 mt-1">Search existing categories first to avoid duplicates</p>
             </div>
             <div class="p-6">
-                <!-- Quick Search Dropdown -->
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-search text-blue-500 mr-1"></i>Quick Search Existing Categories
-                    </label>
-                    <div class="relative">
-                        <input type="text" id="quick-search" placeholder="Type to search existing categories..." 
-                               class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <div class="absolute inset-y-0 right-0 flex items-center pr-3">
-                            <i class="fas fa-search text-gray-400"></i>
-                        </div>
-                        
-                        <!-- Search Results Dropdown -->
-                        <div id="search-dropdown" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto">
-                            <div id="search-results" class="py-1">
-                                <!-- Results will be populated here -->
-                            </div>
-                        </div>
+        <!-- Quick Search & Browse Dropdown -->
+        <div class="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Search Box -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-search text-blue-500 mr-1"></i>Quick Search Existing Categories
+                </label>
+                <div class="relative">
+                    <input type="text" id="quick-search" placeholder="Type to search existing categories..." 
+                           class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <div class="absolute inset-y-0 right-0 flex items-center pr-3">
+                        <i class="fas fa-search text-gray-400"></i>
                     </div>
-                    <div class="mt-2 text-xs text-gray-500">
-                        <span id="search-status">Start typing to search through existing categories...</span>
+                    
+                    <!-- Search Results Dropdown -->
+                    <div id="search-dropdown" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto">
+                        <div id="search-results" class="py-1">
+                            <!-- Results will be populated here -->
+                        </div>
                     </div>
                 </div>
+                <div class="mt-2 text-xs text-gray-500">
+                    <span id="search-status">Start typing to search through existing categories...</span>
+                </div>
+            </div>
+
+            <!-- Browse All Categories Dropdown -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-list text-purple-500 mr-1"></i>Browse All Categories
+                </label>
+                <div class="relative">
+                    <button type="button" id="browse-dropdown-btn" 
+                            class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 hover:bg-gray-50">
+                        <span id="browse-dropdown-text" class="text-gray-500">Click to see all categories...</span>
+                    </button>
+                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                        <i class="fas fa-chevron-down text-gray-400" id="browse-chevron"></i>
+                    </div>
+                    
+                    <!-- Browse Categories Dropdown -->
+                    <div id="browse-dropdown" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto">
+                        <div id="browse-results" class="py-1">
+                            <!-- All categories will be populated here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2 text-xs text-gray-500">
+                    <span id="browse-status">Browse through all available trade categories</span>
+                </div>
+            </div>
+        </div>
 
                 <!-- Add New Category Form -->
                 <div class="border-t pt-6">
@@ -995,7 +1026,7 @@
             }, 5000);
         }
 
-        // 🔍 QUICK SEARCH FUNCTIONALITY
+        // 🔍 QUICK SEARCH & BROWSE FUNCTIONALITY
         function setupQuickSearch() {
             const quickSearchInput = document.getElementById('quick-search');
             const searchDropdown = document.getElementById('search-dropdown');
@@ -1003,6 +1034,13 @@
             const searchStatus = document.getElementById('search-status');
             const categoryNameInput = document.getElementById('category-name');
             const duplicateWarning = document.getElementById('duplicate-warning');
+            
+            // Browse dropdown elements
+            const browseDropdownBtn = document.getElementById('browse-dropdown-btn');
+            const browseDropdown = document.getElementById('browse-dropdown');
+            const browseResults = document.getElementById('browse-results');
+            const browseChevron = document.getElementById('browse-chevron');
+            const browseStatus = document.getElementById('browse-status');
             
             let searchTimeout;
             
@@ -1032,10 +1070,25 @@
                 }
             });
             
-            // Hide dropdown when clicking outside
+            // Browse dropdown click handler
+            browseDropdownBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (browseDropdown.classList.contains('hidden')) {
+                    showBrowseDropdown();
+                } else {
+                    hideBrowseDropdown();
+                }
+            });
+
+            // Hide dropdowns when clicking outside
             document.addEventListener('click', function(e) {
                 if (!quickSearchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
                     hideSearchDropdown();
+                }
+                if (!browseDropdownBtn.contains(e.target) && !browseDropdown.contains(e.target)) {
+                    hideBrowseDropdown();
                 }
             });
             
@@ -1190,6 +1243,66 @@
         
         function updateSearchStatus(message) {
             document.getElementById('search-status').textContent = message;
+        }
+
+        // 📋 BROWSE DROPDOWN FUNCTIONS
+        function showBrowseDropdown() {
+            populateBrowseDropdown();
+            document.getElementById('browse-dropdown').classList.remove('hidden');
+            document.getElementById('browse-chevron').classList.add('rotate-180');
+        }
+
+        function hideBrowseDropdown() {
+            document.getElementById('browse-dropdown').classList.add('hidden');
+            document.getElementById('browse-chevron').classList.remove('rotate-180');
+        }
+
+        function populateBrowseDropdown() {
+            const browseResults = document.getElementById('browse-results');
+            const browseStatus = document.getElementById('browse-status');
+            
+            if (currentCategories.length === 0) {
+                browseResults.innerHTML = `
+                    <div class="px-4 py-3 text-sm text-gray-500 text-center">
+                        <i class="fas fa-inbox text-gray-400 mr-2"></i>
+                        No trade categories created yet
+                        <div class="mt-1 text-xs text-blue-600">
+                            <i class="fas fa-plus-circle mr-1"></i>
+                            Create your first category below!
+                        </div>
+                    </div>
+                `;
+                browseStatus.textContent = 'No categories available to browse';
+                return;
+            }
+
+            // Sort categories alphabetically for better browsing
+            const sortedCategories = [...currentCategories].sort((a, b) => 
+                a.name.localeCompare(b.name)
+            );
+
+            const resultsHTML = sortedCategories.map(category => `
+                <div class="px-4 py-3 hover:bg-purple-50 cursor-pointer border-b border-gray-100 last:border-b-0" 
+                     onclick="selectExistingCategory('${category._id}', '${category.name.replace(/'/g, "\\'")}')">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <div class="font-medium text-gray-900">${category.name}</div>
+                            ${category.description ? `<div class="text-sm text-gray-500">${category.description}</div>` : ''}
+                        </div>
+                        <div class="flex items-center space-x-2 text-xs text-gray-500">
+                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                ${(category.qnas || []).length} Q&As
+                            </span>
+                            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                                ${category.statistics?.totalKeywords || 0} Keywords
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            browseResults.innerHTML = resultsHTML;
+            browseStatus.textContent = `Showing all ${sortedCategories.length} trade categories`;
         }
     </script>
 </body>
