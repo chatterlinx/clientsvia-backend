@@ -294,18 +294,35 @@ class PriorityDrivenKnowledgeRouter {
     }
 
     /**
-     * 🔧 TRADE Q&A QUERY ENGINE
-     * 📋 Searches industry-specific technical knowledge
+     * 🔧 TRADE Q&A QUERY ENGINE - REDIS CACHED FOR SUB-50MS PERFORMANCE
+     * 📋 Searches industry-specific technical knowledge with enterprise caching
      */
     async queryTradeQnA(companyId, query, context) {
+        const startTime = Date.now();
         try {
-            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.tradeQnA');
+            // 🚀 REDIS CACHE FIRST - Sub-50ms performance target
+            const aiAgentCache = require('./aiAgentCacheService');
+            let knowledge = await aiAgentCache.getKnowledge(companyId);
             
-            if (!company?.aiAgentLogic?.knowledgeManagement?.tradeQnA) {
+            if (!knowledge) {
+                // Cache miss - load from MongoDB and cache
+                const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement');
+                if (!company?.aiAgentLogic?.knowledgeManagement) {
+                    return { confidence: 0, response: null, metadata: { source: 'tradeQnA', error: 'No knowledge data' } };
+                }
+                
+                knowledge = company.aiAgentLogic.knowledgeManagement;
+                await aiAgentCache.cacheKnowledge(companyId, knowledge);
+                console.log(`🔄 Trade Q&A cache miss - loaded from MongoDB (${Date.now() - startTime}ms)`);
+            } else {
+                console.log(`⚡ Trade Q&A cache hit - Redis lookup (${Date.now() - startTime}ms)`);
+            }
+            
+            if (!knowledge?.tradeQnA || knowledge.tradeQnA.length === 0) {
                 return { confidence: 0, response: null, metadata: { source: 'tradeQnA', error: 'No trade Q&A data' } };
             }
 
-            const tradeQnA = company.aiAgentLogic.knowledgeManagement.tradeQnA;
+            const tradeQnA = knowledge.tradeQnA;
             let bestMatch = { confidence: 0, response: null, metadata: {} };
 
             for (const qna of tradeQnA) {
@@ -326,11 +343,18 @@ class PriorityDrivenKnowledgeRouter {
                 }
             }
 
+            // Add performance metrics
+            const responseTime = Date.now() - startTime;
+            bestMatch.metadata.responseTime = responseTime;
+            bestMatch.metadata.cached = knowledge.cachedAt ? true : false;
+            
+            console.log(`🎯 Trade Q&A query completed: ${responseTime}ms (confidence: ${bestMatch.confidence})`);
             return bestMatch;
 
         } catch (error) {
-            logger.error('Error querying trade Q&A', { companyId, error: error.message });
-            return { confidence: 0, response: null, metadata: { source: 'tradeQnA', error: error.message } };
+            const responseTime = Date.now() - startTime;
+            logger.error('Error querying trade Q&A', { companyId, error: error.message, responseTime });
+            return { confidence: 0, response: null, metadata: { source: 'tradeQnA', error: error.message, responseTime } };
         }
     }
 
