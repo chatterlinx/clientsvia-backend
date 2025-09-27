@@ -56,6 +56,7 @@ const tradeQnASchema = Joi.object({
     question: Joi.string().required().min(5).max(500).trim(),
     answer: Joi.string().required().min(10).max(2000).trim(),
     tradeCategory: Joi.string().required().trim(),
+    difficulty: Joi.string().valid('basic', 'intermediate', 'advanced', 'expert').default('basic'), // Frontend sends this
     keywords: Joi.array().items(Joi.string().trim()).default([]),
     category: Joi.string().trim().default('services'), // Frontend sends this
     companyId: Joi.string().trim(), // Frontend sends this (optional)
@@ -63,7 +64,8 @@ const tradeQnASchema = Joi.object({
     confidence: Joi.number().min(0).max(1).default(0.75),
     status: Joi.string().valid('active', 'inactive', 'draft').default('active'),
     isGlobal: Joi.boolean().default(false),
-    source: Joi.string().valid('company', 'global', 'imported').default('company')
+    source: Joi.string().valid('company', 'global', 'imported').default('company'),
+    updatedAt: Joi.string().isoDate().optional() // Frontend sends this
 });
 
 const templateSchema = Joi.object({
