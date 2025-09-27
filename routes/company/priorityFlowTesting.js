@@ -580,30 +580,47 @@ async function executeCompleteFlowTest(companyId, query, config, options) {
 
             // Check if we have a match
             if (result.confidence >= source.threshold) {
-                finalMatch = result;
-                
-                // Apply personality if requested
-                if (options.includePersonality && personality) {
-                    finalMatch.personalityApplied = applyPersonalityToResponse(result.response, personality);
-                    if (options.showPersonalityApplication) {
-                        finalMatch.personalityDetails = getPersonalityApplicationDetails(personality);
+                // Only set finalMatch if we don't have one yet (first match wins)
+                if (!finalMatch) {
+                    finalMatch = result;
+                    
+                    // Apply personality if requested
+                    if (options.includePersonality && personality) {
+                        finalMatch.personalityApplied = applyPersonalityToResponse(result.response, personality);
+                        if (options.showPersonalityApplication) {
+                            finalMatch.personalityDetails = getPersonalityApplicationDetails(personality);
+                        }
                     }
                 }
+                
+                // Mark this result as a match for display
+                result.match = true;
+                result.result = `MATCH - Using ${source.source}`;
                 
                 // Stop here unless testing all sources
                 if (!options.testAllSources) {
                     break;
                 }
+            } else {
+                result.match = false;
+                result.result = 'SKIP - Below threshold';
             }
 
-            // Special handling for inHouseFallback
-            if (source.source === 'inHouseFallback' && source.fallbackBehavior === 'always_respond') {
+            // Special handling for inHouseFallback - always responds as final safety net
+            if (source.source === 'inHouseFallback') {
                 if (!finalMatch) {
+                    // Force fallback to always provide a response
+                    result.confidence = 0.5; // Set minimum confidence
+                    result.match = true;
+                    result.result = 'FALLBACK - Always responds (no other matches found)';
+                    result.response = result.response || 'Thank you for contacting us. Let me connect you with someone who can help you right away.';
+                    
                     finalMatch = result;
                     if (options.includePersonality && personality) {
                         finalMatch.personalityApplied = applyPersonalityToResponse(result.response, personality);
                     }
                 }
+                // Always break after fallback (it's the last resort)
                 break;
             }
         }
@@ -784,30 +801,45 @@ function testTemplates(query, templates, threshold) {
  * @returns {Object} Test result
  */
 function testInHouseFallback(query, fallback, threshold) {
-    if (!fallback || !fallback.enabled) {
-        return {
-            source: 'inHouseFallback',
-            confidence: 0,
-            threshold,
-            match: false,
-            result: 'DISABLED - Fallback not enabled',
-            response: null
-        };
-    }
+    // V2 SYSTEM: In-house fallback is ALWAYS enabled as final safety net
+    // Even if no configuration exists, we provide a default response
 
-    // Test keyword categories
+    // Default responses if no fallback configuration exists
+    const defaultResponses = {
+        service: "Thank you for contacting us about our services. Let me connect you with someone who can help you right away.",
+        booking: "I'd be happy to help you with scheduling. Let me get you connected with our booking team.",
+        emergency: "I understand this is urgent. Let me connect you immediately with someone who can assist you.",
+        hours: "Thanks for asking about our hours. Let me get you the most current information.",
+        general: "Thank you for contacting us. Let me connect you with someone who can help you right away."
+    };
+
+    // Test keyword categories if fallback config exists
     const categories = ['service', 'booking', 'emergency', 'hours'];
     let bestCategory = 'general';
     let maxConfidence = 0.5; // Always above threshold for fallback
 
-    categories.forEach(category => {
-        const keywords = fallback[`${category}Keywords`] || [];
-        const confidence = calculateKeywordMatch(query, keywords);
-        if (confidence > maxConfidence) {
-            maxConfidence = confidence;
-            bestCategory = category;
-        }
-    });
+    if (fallback) {
+        categories.forEach(category => {
+            const keywords = fallback[`${category}Keywords`] || [];
+            if (keywords.length > 0) {
+                const confidence = calculateKeywordMatch(query, keywords);
+                if (confidence > maxConfidence) {
+                    maxConfidence = confidence;
+                    bestCategory = category;
+                }
+            }
+        });
+    }
+
+    // Determine response source
+    let response;
+    if (fallback && fallback.responses && fallback.responses[bestCategory]) {
+        response = fallback.responses[bestCategory];
+    } else if (fallback && fallback.responses && fallback.responses.general) {
+        response = fallback.responses.general;
+    } else {
+        response = defaultResponses[bestCategory];
+    }
 
     return {
         source: 'inHouseFallback',
@@ -815,9 +847,10 @@ function testInHouseFallback(query, fallback, threshold) {
         threshold,
         match: true, // Always matches for fallback
         result: 'FALLBACK - Always responds',
-        response: fallback.responses[bestCategory] || fallback.responses.general,
+        response: response,
         matchedCategory: bestCategory,
-        keywords: fallback[`${bestCategory}Keywords`] || []
+        keywords: fallback ? (fallback[`${bestCategory}Keywords`] || []) : [],
+        usingDefaults: !fallback || !fallback.responses
     };
 }
 
