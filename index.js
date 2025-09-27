@@ -114,8 +114,7 @@ async function loadAllRoutes() {
         
         // REMOVED: Legacy Enterprise AI Intelligence routes - archived to prevent external LLM dependencies
         
-        // Load Enterprise Trade Categories routes
-        routes.enterpriseTradeCategories = await loadRouteWithTimeout('./routes/enterpriseTradeCategories', 'enterpriseTradeCategories');
+        // DELETED: Legacy Enterprise Trade Categories - replaced by V2 Global Trade Categories system
         
         console.log('[INIT] ✅ All routes loaded successfully');
         return routes;
@@ -240,7 +239,7 @@ function registerRoutes(routes) {
     // V2: Legacy bookingHandler route deleted - using modern AI Agent Logic booking system
     // REMOVED: Legacy AI Intelligence routes - replaced by AI Agent Logic system
     // REMOVED: Legacy Enterprise AI Intelligence routes - archived to prevent external LLM dependencies
-    app.use('/api/enterprise-trade-categories', routes.enterpriseTradeCategories); // ENTERPRISE: Trade Categories Management
+    // DELETED: Legacy enterprise trade categories route - replaced by V2 Global Trade Categories
 
     // Mount agent processor routes
     // V2: Legacy agentProcessor route deleted - using modern AI Agent Logic processing system
