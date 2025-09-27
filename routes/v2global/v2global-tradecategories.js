@@ -263,7 +263,7 @@ router.get('/statistics', async (req, res) => {
  * 🏷️ POST CREATE TRADE CATEGORY - V2 Global Trade Categories
  * Create new global trade category with validation
  */
-router.post('/categories', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.post('/categories', async (req, res) => {
     try {
         const startTime = Date.now();
         const { name, description } = req.body;
@@ -428,7 +428,7 @@ router.post('/categories', authenticateJWT, requireRole('admin'), async (req, re
  * 🤖 POST ADD Q&A TO TRADE CATEGORY - V2 Global Trade Categories
  * Add Q&A with auto-generated keywords to global trade category
  */
-router.post('/categories/:categoryId/qna', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.post('/categories/:categoryId/qna', async (req, res) => {
     try {
         const { categoryId } = req.params;
         const { question, answer, manualKeywords = [] } = req.body;
@@ -685,7 +685,7 @@ router.delete('/categories/:categoryId/qna/:qnaId', async (req, res) => {
  * 🤖 AUTO-GENERATE TOP 20 Q&As - V2 Enterprise Feature
  * Generate industry-specific, booking-focused Q&As for trade categories
  */
-router.post('/categories/:categoryId/generate-top-qnas', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.post('/categories/:categoryId/generate-top-qnas', async (req, res) => {
     try {
         const { categoryId } = req.params;
         const startTime = Date.now();
@@ -1644,7 +1644,7 @@ function generateKeywords(question, answer, categoryName) {
  * 🗑️ DELETE TRADE CATEGORY - V2 Global Trade Categories
  * Soft delete or hard delete trade category
  */
-router.delete('/categories/:categoryId', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.delete('/categories/:categoryId', async (req, res) => {
     try {
         const { categoryId } = req.params;
         const { hard = false } = req.query;
@@ -1704,7 +1704,7 @@ router.delete('/categories/:categoryId', authenticateJWT, requireRole('admin'), 
  * 🗑️ DELETE Q&A FROM TRADE CATEGORY - V2 Global Trade Categories
  * Remove specific Q&A from trade category
  */
-router.delete('/categories/:categoryId/qna/:qnaId', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.delete('/categories/:categoryId/qna/:qnaId', async (req, res) => {
     try {
         const { categoryId, qnaId } = req.params;
         const startTime = Date.now();
