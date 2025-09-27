@@ -99,31 +99,66 @@
             </div>
         </div>
 
-        <!-- Add New Category Section -->
+        <!-- Quick Search & Add New Category Section -->
         <div class="bg-white rounded-lg shadow mb-8">
             <div class="px-6 py-4 border-b border-gray-200">
                 <h2 class="text-lg font-medium text-gray-900">
                     <i class="fas fa-plus-circle text-green-600 mr-2"></i>Add New Trade Category
                 </h2>
+                <p class="text-sm text-gray-500 mt-1">Search existing categories first to avoid duplicates</p>
             </div>
             <div class="p-6">
-                <form id="add-category-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Category Name *</label>
-                        <input type="text" id="category-name" placeholder="e.g., HVAC, Plumbing, Electrical" 
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <!-- Quick Search Dropdown -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-search text-blue-500 mr-1"></i>Quick Search Existing Categories
+                    </label>
+                    <div class="relative">
+                        <input type="text" id="quick-search" placeholder="Type to search existing categories..." 
+                               class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <div class="absolute inset-y-0 right-0 flex items-center pr-3">
+                            <i class="fas fa-search text-gray-400"></i>
+                        </div>
+                        
+                        <!-- Search Results Dropdown -->
+                        <div id="search-dropdown" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto">
+                            <div id="search-results" class="py-1">
+                                <!-- Results will be populated here -->
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                        <input type="text" id="category-description" placeholder="Brief description of services" 
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <div class="mt-2 text-xs text-gray-500">
+                        <span id="search-status">Start typing to search through existing categories...</span>
                     </div>
-                    <div class="flex items-end">
-                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition duration-200">
-                            <i class="fas fa-plus mr-2"></i>Create Category
-                        </button>
-                    </div>
-                </form>
+                </div>
+
+                <!-- Add New Category Form -->
+                <div class="border-t pt-6">
+                    <h3 class="text-md font-medium text-gray-900 mb-4">
+                        <i class="fas fa-plus text-green-500 mr-2"></i>Create New Category
+                    </h3>
+                    <form id="add-category-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Category Name *</label>
+                            <input type="text" id="category-name" placeholder="e.g., HVAC, Plumbing, Electrical" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <div id="duplicate-warning" class="hidden mt-1 text-sm text-amber-600">
+                                <i class="fas fa-exclamation-triangle mr-1"></i>
+                                <span>Similar category exists - check search results above</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                            <input type="text" id="category-description" placeholder="Brief description of services" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition duration-200">
+                                <i class="fas fa-plus mr-2"></i>Create Category
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
 
@@ -217,6 +252,7 @@
             console.log('🚀 V2 GLOBAL TRADE CATEGORIES: Initializing...');
             loadTradeCategories();
             setupEventListeners();
+            setupQuickSearch();
         });
 
         function setupEventListeners() {
@@ -309,7 +345,7 @@
             }
 
             container.innerHTML = categories.map(category => `
-                <div class="bg-white rounded-lg shadow fade-in">
+                <div class="bg-white rounded-lg shadow fade-in" data-category-id="${category._id}">
                     <div class="flex justify-between items-center p-6 border-b border-gray-200">
                         <div>
                             <h3 class="text-lg font-medium text-gray-900">${category.name}</h3>
@@ -730,6 +766,203 @@
             setTimeout(() => {
                 toast.remove();
             }, 5000);
+        }
+
+        // 🔍 QUICK SEARCH FUNCTIONALITY
+        function setupQuickSearch() {
+            const quickSearchInput = document.getElementById('quick-search');
+            const searchDropdown = document.getElementById('search-dropdown');
+            const searchResults = document.getElementById('search-results');
+            const searchStatus = document.getElementById('search-status');
+            const categoryNameInput = document.getElementById('category-name');
+            const duplicateWarning = document.getElementById('duplicate-warning');
+            
+            let searchTimeout;
+            
+            // Quick search input handler
+            quickSearchInput.addEventListener('input', function() {
+                const query = this.value.trim();
+                
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    if (query.length >= 1) {
+                        performQuickSearch(query);
+                    } else {
+                        hideSearchDropdown();
+                        updateSearchStatus('Start typing to search through existing categories...');
+                    }
+                }, 300);
+            });
+            
+            // Category name input handler for duplicate detection
+            categoryNameInput.addEventListener('input', function() {
+                const query = this.value.trim();
+                
+                if (query.length >= 2) {
+                    checkForSimilarCategories(query);
+                } else {
+                    duplicateWarning.classList.add('hidden');
+                }
+            });
+            
+            // Hide dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!quickSearchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
+                    hideSearchDropdown();
+                }
+            });
+            
+            // Show dropdown when focusing on search input
+            quickSearchInput.addEventListener('focus', function() {
+                if (this.value.trim().length >= 1) {
+                    performQuickSearch(this.value.trim());
+                }
+            });
+        }
+        
+        function performQuickSearch(query) {
+            const searchResults = document.getElementById('search-results');
+            const searchStatus = document.getElementById('search-status');
+            
+            // Filter current categories
+            const filteredCategories = currentCategories.filter(category => 
+                category.name.toLowerCase().includes(query.toLowerCase()) ||
+                (category.description && category.description.toLowerCase().includes(query.toLowerCase()))
+            );
+            
+            if (filteredCategories.length === 0) {
+                searchResults.innerHTML = `
+                    <div class="px-4 py-3 text-sm text-gray-500 text-center">
+                        <i class="fas fa-search-minus text-gray-400 mr-2"></i>
+                        No categories found matching "${query}"
+                        <div class="mt-1 text-xs text-green-600">
+                            <i class="fas fa-plus-circle mr-1"></i>
+                            This looks like a new category - safe to create!
+                        </div>
+                    </div>
+                `;
+                updateSearchStatus(`No matches found for "${query}" - safe to create new category`);
+            } else {
+                const resultsHTML = filteredCategories.map(category => `
+                    <div class="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0" 
+                         onclick="selectExistingCategory('${category._id}', '${category.name.replace(/'/g, "\\'")}')">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <div class="font-medium text-gray-900">${category.name}</div>
+                                ${category.description ? `<div class="text-sm text-gray-500">${category.description}</div>` : ''}
+                            </div>
+                            <div class="flex items-center space-x-2 text-xs text-gray-500">
+                                <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                    ${(category.qnas || []).length} Q&As
+                                </span>
+                                <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                                    ${category.statistics?.totalKeywords || 0} Keywords
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                searchResults.innerHTML = resultsHTML;
+                updateSearchStatus(`Found ${filteredCategories.length} matching categories`);
+            }
+            
+            showSearchDropdown();
+        }
+        
+        function checkForSimilarCategories(query) {
+            const duplicateWarning = document.getElementById('duplicate-warning');
+            
+            // Check for exact or very similar matches
+            const similarCategories = currentCategories.filter(category => {
+                const categoryName = category.name.toLowerCase();
+                const queryLower = query.toLowerCase();
+                
+                // Exact match or very similar (edit distance)
+                return categoryName === queryLower || 
+                       categoryName.includes(queryLower) || 
+                       queryLower.includes(categoryName) ||
+                       calculateSimilarity(categoryName, queryLower) > 0.7;
+            });
+            
+            if (similarCategories.length > 0) {
+                duplicateWarning.classList.remove('hidden');
+                duplicateWarning.querySelector('span').textContent = 
+                    `Similar category exists: "${similarCategories[0].name}" - check search results above`;
+            } else {
+                duplicateWarning.classList.add('hidden');
+            }
+        }
+        
+        function calculateSimilarity(str1, str2) {
+            const longer = str1.length > str2.length ? str1 : str2;
+            const shorter = str1.length > str2.length ? str2 : str1;
+            
+            if (longer.length === 0) return 1.0;
+            
+            const editDistance = levenshteinDistance(longer, shorter);
+            return (longer.length - editDistance) / longer.length;
+        }
+        
+        function levenshteinDistance(str1, str2) {
+            const matrix = [];
+            
+            for (let i = 0; i <= str2.length; i++) {
+                matrix[i] = [i];
+            }
+            
+            for (let j = 0; j <= str1.length; j++) {
+                matrix[0][j] = j;
+            }
+            
+            for (let i = 1; i <= str2.length; i++) {
+                for (let j = 1; j <= str1.length; j++) {
+                    if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(
+                            matrix[i - 1][j - 1] + 1,
+                            matrix[i][j - 1] + 1,
+                            matrix[i - 1][j] + 1
+                        );
+                    }
+                }
+            }
+            
+            return matrix[str2.length][str1.length];
+        }
+        
+        function selectExistingCategory(categoryId, categoryName) {
+            // Scroll to the existing category in the list
+            const categoryElement = document.querySelector(`[data-category-id="${categoryId}"]`);
+            if (categoryElement) {
+                categoryElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Highlight the category briefly
+                categoryElement.classList.add('ring-2', 'ring-blue-500', 'ring-opacity-50');
+                setTimeout(() => {
+                    categoryElement.classList.remove('ring-2', 'ring-blue-500', 'ring-opacity-50');
+                }, 2000);
+            }
+            
+            // Clear search and hide dropdown
+            document.getElementById('quick-search').value = '';
+            hideSearchDropdown();
+            
+            // Show toast
+            showToast(`Found existing category: ${categoryName}`, 'success');
+        }
+        
+        function showSearchDropdown() {
+            document.getElementById('search-dropdown').classList.remove('hidden');
+        }
+        
+        function hideSearchDropdown() {
+            document.getElementById('search-dropdown').classList.add('hidden');
+        }
+        
+        function updateSearchStatus(message) {
+            document.getElementById('search-status').textContent = message;
         }
     </script>
 </body>
