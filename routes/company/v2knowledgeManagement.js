@@ -57,6 +57,9 @@ const tradeQnASchema = Joi.object({
     answer: Joi.string().required().min(10).max(2000).trim(),
     tradeCategory: Joi.string().required().trim(),
     keywords: Joi.array().items(Joi.string().trim()).default([]),
+    category: Joi.string().trim().default('services'), // Frontend sends this
+    companyId: Joi.string().trim(), // Frontend sends this (optional)
+    priority: Joi.number().min(1).max(5).default(2), // Frontend sends this
     confidence: Joi.number().min(0).max(1).default(0.75),
     status: Joi.string().valid('active', 'inactive', 'draft').default('active'),
     isGlobal: Joi.boolean().default(false),
@@ -537,7 +540,7 @@ router.post('/:companyId/knowledge-management/trade-qna', authenticateJWT, async
         logger.info(`📚 POST trade Q&A request for company ${companyId}`);
 
         // Validate request body
-        const { error, value } = companyQnASchema.validate(req.body);
+        const { error, value } = tradeQnASchema.validate(req.body);
         if (error) {
             return res.status(400).json({
                 success: false,
@@ -629,7 +632,7 @@ router.put('/:companyId/knowledge-management/trade-qna/:id', authenticateJWT, as
         logger.info(`📚 PUT trade Q&A request for company ${companyId}, ID: ${id}`);
 
         // Validate request body
-        const { error, value } = companyQnASchema.validate(req.body);
+        const { error, value } = tradeQnASchema.validate(req.body);
         if (error) {
             return res.status(400).json({
                 success: false,
