@@ -270,7 +270,7 @@ const companySchema = new mongoose.Schema({
     },
     
     address: { type: addressSchema, default: () => ({}) }, // Detailed address object (optional)
-    tradeTypes: { type: [String], default: [] }, 
+    // 🚀 V2 SYSTEM: tradeTypes removed - use tradeCategories only
     timezone: { type: String, default: 'America/New_York', trim: true },
     
     // Profile completion tracking

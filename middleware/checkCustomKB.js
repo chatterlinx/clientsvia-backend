@@ -30,17 +30,17 @@ async function checkCustomKB(transcript, companyID, traceLogger, options = {}) {
   } else {
     console.log(`[checkCustomKB] Searching Q&As in selected trade categories: [${companyTradeCategories.join(', ')}]`);
     
-    // 🚀 V2 SYSTEM: Search through all selected trade categories using V2 Global Trade Categories
+    // 🚀 V2 SYSTEM: Use V2 Global Trade Categories only
     const TradeCategory = require('../models/TradeCategory');
     for (const tradeCategoryName of companyTradeCategories) {
       const trade = await TradeCategory.findOne({ 
         name: { $regex: new RegExp(`^${tradeCategoryName}$`, 'i') },
         companyId: 'global',
-        isActive: { $ne: false }
+        isActive: true
       });
       
       if (trade && trade.qnas && trade.qnas.length > 0) {
-        console.log(`[checkCustomKB] Found ${trade.qnas.length} Q&As in enterprise category: ${tradeCategoryName}`);
+        console.log(`[checkCustomKB] Found ${trade.qnas.length} Q&As in V2 trade category: ${tradeCategoryName}`);
         
         const categoryMatches = trade.qnas.filter(qa => qa.isActive !== false).map(qa => {
           const qaKeywords = extractKeywords(qa.question);

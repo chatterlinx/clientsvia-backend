@@ -1341,7 +1341,7 @@ router.get('/debug/all-categories', authenticateJWT, requireRole('admin'), async
  * 🔍 GET TRADE CATEGORIES FOR COMPANY PROFILE - V2 Integration Point
  * CRITICAL: This endpoint is used by V2 Profile routes for trade Q&A inheritance
  */
-router.get('/categories/for-company/:companyId', async (req, res) => {
+router.get('/categories/for-company/:companyId', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
         const startTime = Date.now();

@@ -240,6 +240,31 @@ try {
     console.log('ℹ️ AI Agent Logic Simple routes not found (optional)');
 }
 
+// 🚀 V2 GLOBAL SYSTEM ROUTES - Enterprise Multi-Tenant Platform
+try {
+    const v2GlobalTradeCategories = require('./routes/v2global/v2global-tradecategories');
+    app.use('/api/v2global/trade-categories', v2GlobalTradeCategories);
+    console.log('✅ V2 Global Trade Categories routes registered at /api/v2global/trade-categories');
+} catch (error) {
+    console.error('❌ Failed to load V2 Global Trade Categories routes:', error);
+}
+
+try {
+    const v2GlobalDirectory = require('./routes/v2global/v2global-directory');
+    app.use('/api/v2global/directory', v2GlobalDirectory);
+    console.log('✅ V2 Global Directory routes registered at /api/v2global/directory');
+} catch (error) {
+    console.error('❌ Failed to load V2 Global Directory routes:', error);
+}
+
+try {
+    const v2GlobalAddCompany = require('./routes/v2global/v2global-addcompany');
+    app.use('/api/v2global/add-company', v2GlobalAddCompany);
+    console.log('✅ V2 Global Add Company routes registered at /api/v2global/add-company');
+} catch (error) {
+    console.error('❌ Failed to load V2 Global Add Company routes:', error);
+}
+
 // Development routes
 if (process.env.NODE_ENV !== 'production') {
     // Serve selfCheckLogger service

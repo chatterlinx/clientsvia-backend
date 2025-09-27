@@ -4349,9 +4349,9 @@ This would be a great time to also check..."></textarea>
                 const company = await companyResponse.json();
                 console.log('🔍 RAW COMPANY DATA:', company);
                 console.log('🔍 company.tradeCategories:', company.tradeCategories);
-                console.log('🔍 company.tradeTypes:', company.tradeTypes);
-                // 🔧 FIX: Use tradeTypes field (where data is actually stored) with fallback to tradeCategories
-                let selectedTrades = company.tradeTypes || company.tradeCategories || [];
+                console.log('🔍 company.tradeCategories:', company.tradeCategories);
+                // 🚀 V2 SYSTEM: Use tradeCategories only (legacy tradeTypes eliminated)
+                let selectedTrades = company.tradeCategories || [];
                 
                 console.log('✅ Company selected trades from DB:', selectedTrades);
                 
@@ -4716,7 +4716,8 @@ This would be a great time to also check..."></textarea>
                 
                 // Populate trade categories
                 const tradeSelector = document.getElementById('agent-trade-categories');
-                const selectedTrades = data.company?.tradeTypes || data.company?.tradeCategories || [];
+                // 🚀 V2 SYSTEM: Pure tradeCategories only
+                const selectedTrades = data.company?.tradeCategories || [];
                 
                 console.log('📋 Trade categories to set:', selectedTrades);
                 
@@ -7426,7 +7427,8 @@ Key Metrics:
                 }
                 
                 const company = await response.json();
-                const selectedTrades = company.tradeTypes || company.tradeCategories || [];
+                // 🚀 V2 SYSTEM: Pure tradeCategories only
+                const selectedTrades = company.tradeCategories || [];
                 
                 console.log('📥 Company trade selection loaded:', selectedTrades);
                 
@@ -7702,7 +7704,8 @@ Key Metrics:
                 }
                 
                 const company = await companyResponse.json();
-                const selectedTrades = company.tradeTypes || company.tradeCategories || [];
+                // 🚀 V2 SYSTEM: Pure tradeCategories only
+                const selectedTrades = company.tradeCategories || [];
                 
                 console.log('🔧 Company selected trades for Q&A filtering:', selectedTrades);
                 
@@ -7930,7 +7933,8 @@ Key Metrics:
                 const response = await fetch(`/api/company/${companyId}`);
                 if (response.ok) {
                     const company = await response.json();
-                    selectedTrades = company.tradeTypes || company.tradeCategories || [];
+                    // 🚀 V2 SYSTEM: Pure tradeCategories only
+                    selectedTrades = company.tradeCategories || [];
                 }
             } catch (error) {
                 console.error('❌ Failed to load company trades for modal:', error);
@@ -15158,7 +15162,8 @@ Key Metrics:
                 }
                 
                 const company = await response.json();
-                const currentTrades = company.tradeTypes || company.tradeCategories || [];
+                // 🚀 V2 SYSTEM: Pure tradeCategories only
+                const currentTrades = company.tradeCategories || [];
                 
                 // Remove the category
                 const updatedTrades = currentTrades.filter(trade => trade !== categoryName);
@@ -15173,7 +15178,7 @@ Key Metrics:
                         'Authorization': `Bearer ${authToken}`
                     },
                     body: JSON.stringify({
-                        tradeTypes: updatedTrades,
+                        tradeCategories: updatedTrades,
                         _updateSource: 'category-management-unselect',
                         _timestamp: new Date().toISOString()
                     })
@@ -15409,7 +15414,7 @@ Key Metrics:
                         'Authorization': `Bearer ${this.getAuthToken()}`
                     },
                     body: JSON.stringify({
-                        $addToSet: { tradeTypes: categoryName },
+                        $addToSet: { tradeCategories: categoryName },
                         _updateSource: 'enhanced-dropdown-inheritance',
                         _timestamp: new Date().toISOString()
                     })
@@ -15746,7 +15751,8 @@ Key Metrics:
                 
                 if (response.ok) {
                     const company = await response.json();
-                    return company.tradeTypes || company.tradeCategories || [];
+                    // 🚀 V2 SYSTEM: Pure tradeCategories only
+                    return company.tradeCategories || [];
                 } else {
                     console.warn('⚠️ Failed to load company trade selection');
                     return [];
@@ -16037,7 +16043,7 @@ Key Metrics:
                 console.log('🚀 Saving selected trades:', selectedTrades);
                 console.log('🔍 DEBUG: API URL:', `/api/company/${this.companyId}`);
                 
-                // Save to company document (tradeTypes field)
+                // 🚀 V2 SYSTEM: Save to company document (tradeCategories field)
                 const response = await fetch(`/api/company/${this.companyId}`, {
                     method: 'PATCH',
                     headers: {
@@ -16045,7 +16051,7 @@ Key Metrics:
                         'Authorization': `Bearer ${this.getAuthToken()}`
                     },
                     body: JSON.stringify({
-                        tradeTypes: selectedTrades,
+                        tradeCategories: selectedTrades,
                         _updateSource: 'trade-category-selection',
                         _timestamp: new Date().toISOString()
                     })
