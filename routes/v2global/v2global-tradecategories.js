@@ -1048,6 +1048,55 @@ router.post('/categories/:categoryId/generate-top-qnas', async (req, res) => {
  * 🧹 V2 NUCLEAR CLEAN - DROP AND REBUILD COLLECTION
  * Clean slate approach for bulletproof V2 architecture
  */
+/**
+ * 🔍 DEBUG: Check for specific category name
+ */
+router.get('/debug/check-category/:name', async (req, res) => {
+    try {
+        const { name } = req.params;
+        
+        // Check for exact matches and similar matches
+        const exactMatch = await TradeCategory.findOne({ 
+            name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+            companyId: 'global'
+        });
+        
+        const similarMatches = await TradeCategory.find({ 
+            name: { $regex: new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+            companyId: 'global'
+        });
+        
+        const allCategories = await TradeCategory.find({ companyId: 'global' }).select('name isActive');
+        
+        res.json({
+            success: true,
+            searchTerm: name,
+            exactMatch: exactMatch ? {
+                _id: exactMatch._id,
+                name: exactMatch.name,
+                isActive: exactMatch.isActive,
+                companyId: exactMatch.companyId
+            } : null,
+            similarMatches: similarMatches.map(cat => ({
+                _id: cat._id,
+                name: cat.name,
+                isActive: cat.isActive
+            })),
+            allCategories: allCategories.map(cat => ({
+                _id: cat._id,
+                name: cat.name,
+                isActive: cat.isActive
+            })),
+            totalCategories: allCategories.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 router.post('/debug/nuclear-clean', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const startTime = Date.now();
