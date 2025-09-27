@@ -34,22 +34,8 @@ router.post('/companies/:id/agent-settings', async (req, res) => {
     }
     const companyId = req.params.id;
 
-    // Validate trade categories exist in enterprise system
-    if (tradeCategories.length > 0) {
-      const db = getDB();
-      const enterpriseCategories = await db.collection('enterpriseTradeCategories')
-        .find({ name: { $in: tradeCategories } })
-        .toArray();
-      
-      const validCategoryNames = enterpriseCategories.map(cat => cat.name);
-      
-      // Filter out invalid categories
-      const filteredCategories = tradeCategories.filter(cat => validCategoryNames.includes(cat));
-      
-      if (filteredCategories.length !== tradeCategories.length) {
-        console.warn(`Some trade categories were invalid for company ${companyId}`);
-      }
-    }
+    // 🚀 V2 SYSTEM: Trade category validation handled by V2 Global Trade Categories system
+    // No legacy validation needed - V2 system ensures data integrity
 
     // Validate and process Answer Priority Flow data
     let validatedPriorityFlow = [];
@@ -276,24 +262,6 @@ router.get('/companies/:id/agent-settings', async (req, res) => {
 
   } catch (err) {
     console.error('❌ Error fetching agent settings:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// 📊 Get Available Trade Categories (Enterprise System)
-router.get('/trade-categories', async (req, res) => {
-  try {
-    const db = getDB();
-    const categories = await db.collection('enterpriseTradeCategories')
-      .find({})
-      .project({ name: 1, description: 1, isActive: 1 })
-      .sort({ name: 1 })
-      .toArray();
-
-    res.json(categories);
-
-  } catch (err) {
-    console.error('❌ Error fetching trade categories:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

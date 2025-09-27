@@ -160,8 +160,8 @@ const TradeCategorySchema = new mongoose.Schema({
     // Enable automatic timestamps
     timestamps: true,
     
-    // Optimize for queries
-    collection: 'enterpriseTradeCategories'
+    // 🚀 V2 SYSTEM: Use proper collection name for V2 Global Trade Categories
+    collection: 'tradecategories'
 });
 
 // V2 OPTIMIZED INDEXES - Enterprise Performance

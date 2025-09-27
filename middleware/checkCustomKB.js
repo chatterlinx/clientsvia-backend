@@ -30,11 +30,12 @@ async function checkCustomKB(transcript, companyID, traceLogger, options = {}) {
   } else {
     console.log(`[checkCustomKB] Searching Q&As in selected trade categories: [${companyTradeCategories.join(', ')}]`);
     
-    // Search through all selected trade categories using enterprise system
-    const db = getDB();
+    // 🚀 V2 SYSTEM: Search through all selected trade categories using V2 Global Trade Categories
+    const TradeCategory = require('../models/TradeCategory');
     for (const tradeCategoryName of companyTradeCategories) {
-      const trade = await db.collection('enterpriseTradeCategories').findOne({ 
+      const trade = await TradeCategory.findOne({ 
         name: { $regex: new RegExp(`^${tradeCategoryName}$`, 'i') },
+        companyId: 'global',
         isActive: { $ne: false }
       });
       
