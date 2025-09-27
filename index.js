@@ -211,7 +211,7 @@ function registerRoutes(routes) {
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
     app.use('/api/v2global/directory', routes.v2GlobalDirectoryRoutes); // V2 Global Company Directory
     app.use('/api/v2global/addcompany', routes.v2GlobalAddCompanyRoutes); // V2 Global Add Company
-    app.use('/api/v2global/tradecategories', routes.v2GlobalTradeCategoriesRoutes); // V2 Global Trade Categories
+    app.use('/api/v2global/trade-categories', routes.v2GlobalTradeCategoriesRoutes); // V2 Global Trade Categories
     app.use('/api/v2global', routes.v2GlobalHahaKillerRoutes); // V2 Global Haha Ghost Killer (Emergency)
     app.use('/api/backup', routes.backupRoutes); // BACKUP: Automated backup monitoring and management
     app.use('/api/company', routes.companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
