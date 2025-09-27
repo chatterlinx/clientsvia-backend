@@ -317,8 +317,17 @@ router.post('/categories', async (req, res) => {
             } : null
         });
         
+        // TEMPORARY: Disable duplicate check for debugging
         if (existingCategory) {
-            validationErrors.push('A trade category with this name already exists');
+            logger.warn(`🚨 V2 DUPLICATE CHECK: Found existing category but allowing creation for debugging`, {
+                existingCategory: {
+                    _id: existingCategory._id,
+                    name: existingCategory.name,
+                    companyId: existingCategory.companyId,
+                    isActive: existingCategory.isActive
+                }
+            });
+            // validationErrors.push('A trade category with this name already exists');
         }
 
         if (validationErrors.length > 0) {
@@ -557,6 +566,47 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
             error: 'Failed to add Q&A to trade category',
             details: error.message,
             source: 'v2-global-tradecategories'
+        });
+    }
+});
+
+/**
+ * 🔍 DEBUG ENDPOINT - RAW DATABASE QUERY
+ * Direct MongoDB query to see what's actually in the database
+ */
+router.get('/debug/raw-query/:name', async (req, res) => {
+    try {
+        const { name } = req.params;
+        const searchName = name.trim();
+        
+        // Direct MongoDB queries
+        const exactMatch = await TradeCategory.findOne({ name: searchName });
+        const caseInsensitiveMatch = await TradeCategory.findOne({ name: { $regex: new RegExp(`^${searchName}$`, 'i') } });
+        const globalActiveMatch = await TradeCategory.findOne({ 
+            name: { $regex: new RegExp(`^${searchName}$`, 'i') },
+            companyId: 'global',
+            isActive: true
+        });
+        
+        // Get all categories for comparison
+        const allCategories = await TradeCategory.find({}).lean();
+        
+        res.json({
+            success: true,
+            searchName,
+            results: {
+                exactMatch: exactMatch ? { _id: exactMatch._id, name: exactMatch.name, companyId: exactMatch.companyId, isActive: exactMatch.isActive } : null,
+                caseInsensitiveMatch: caseInsensitiveMatch ? { _id: caseInsensitiveMatch._id, name: caseInsensitiveMatch.name, companyId: caseInsensitiveMatch.companyId, isActive: caseInsensitiveMatch.isActive } : null,
+                globalActiveMatch: globalActiveMatch ? { _id: globalActiveMatch._id, name: globalActiveMatch.name, companyId: globalActiveMatch.companyId, isActive: globalActiveMatch.isActive } : null
+            },
+            totalCategoriesInDB: allCategories.length,
+            allCategoryNames: allCategories.map(cat => ({ name: cat.name, companyId: cat.companyId, isActive: cat.isActive }))
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            stack: error.stack
         });
     }
 });
