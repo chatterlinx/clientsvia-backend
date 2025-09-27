@@ -8026,8 +8026,8 @@ Key Metrics:
                 companyId: companyId
             };
             
-            // 🚀 V2 SYSTEM: Use company knowledge API
-            fetch('/api/knowledge/company-qna', {
+            // 🚀 V2 SYSTEM: Use company knowledge management API for Trade Q&A
+            fetch(`/api/company/${companyId}/knowledge-management/trade-qna`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -15462,8 +15462,8 @@ Key Metrics:
                 priority: qnaData.priority
             };
             
-            // 🚀 V2 SYSTEM: Use company knowledge API
-            const response = await fetch(`/api/knowledge/company-qna`, {
+            // 🚀 V2 SYSTEM: Use company knowledge management API for Trade Q&A
+            const response = await fetch(`/api/company/${this.companyId}/knowledge-management/trade-qna`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
