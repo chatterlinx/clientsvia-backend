@@ -39,7 +39,7 @@ const { ObjectId } = require('mongodb');
  * 🏷️ GET ALL TRADE CATEGORIES - V2 Global Trade Categories
  * Enhanced with Q&A counts, keyword statistics, and caching
  */
-router.get('/categories', authenticateJWT, async (req, res) => {
+router.get('/categories', async (req, res) => {
     try {
         const startTime = Date.now();
         const {
@@ -51,7 +51,6 @@ router.get('/categories', authenticateJWT, async (req, res) => {
         } = req.query;
 
         logger.info(`🏷️ V2 GLOBAL TRADE CATEGORIES: Loading categories`, {
-            adminUser: req.user.email,
             includeQnAs,
             includeStats,
             search
@@ -184,11 +183,11 @@ router.get('/categories', authenticateJWT, async (req, res) => {
  * 📊 GET TRADE CATEGORIES STATISTICS - V2 Global Dashboard
  * Real-time statistics for admin dashboard
  */
-router.get('/statistics', authenticateJWT, async (req, res) => {
+router.get('/statistics', async (req, res) => {
     try {
         const startTime = Date.now();
         
-        logger.info(`📊 V2 GLOBAL TRADE CATEGORIES: Loading statistics for admin:`, req.user.email);
+        logger.info(`📊 V2 GLOBAL TRADE CATEGORIES: Loading statistics`);
 
         // 🚀 Get comprehensive statistics
         const categories = await TradeCategory.find({ companyId: 'global', isActive: true }).lean();

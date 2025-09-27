@@ -245,10 +245,14 @@
                 console.log('🔄 V2 GLOBAL TRADE CATEGORIES: Loading categories from V2 API...');
                 
                 // V2 API endpoint
+                const authToken = getAuthToken();
+                const headers = {};
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+                
                 const response = await fetch(`/api/v2global/trade-categories/categories?includeQnAs=true&includeStats=true`, {
-                    headers: {
-                        'Authorization': `Bearer ${getAuthToken()}`
-                    }
+                    headers: headers
                 });
                 
                 if (!response.ok) {
