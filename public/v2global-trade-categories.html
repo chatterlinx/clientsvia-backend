@@ -562,7 +562,12 @@
                     document.getElementById('add-category-form').reset();
                     loadTradeCategories();
                 } else {
-                    throw new Error(result.error || 'Failed to create category');
+                    // Handle validation errors with details
+                    if (result.details && Array.isArray(result.details)) {
+                        throw new Error(result.details.join(', '));
+                    } else {
+                        throw new Error(result.error || 'Failed to create category');
+                    }
                 }
             } catch (error) {
                 // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error creating category:', error);
