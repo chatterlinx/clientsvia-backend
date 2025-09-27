@@ -84,16 +84,21 @@ const templateSchema = Joi.object({
 
 const inHouseFallbackSchema = Joi.object({
     enabled: Joi.boolean().default(true),
-    serviceKeywords: Joi.array().items(Joi.string().trim()).default([]),
-    bookingKeywords: Joi.array().items(Joi.string().trim()).default([]),
-    emergencyKeywords: Joi.array().items(Joi.string().trim()).default([]),
-    hoursKeywords: Joi.array().items(Joi.string().trim()).default([]),
-    responses: Joi.object({
-        service: Joi.string().trim().default(''),
-        booking: Joi.string().trim().default(''),
-        emergency: Joi.string().trim().default(''),
-        hours: Joi.string().trim().default(''),
-        general: Joi.string().trim().default('')
+    serviceRequests: Joi.object({
+        response: Joi.string().trim().default(''),
+        keywords: Joi.array().items(Joi.string().trim()).default([])
+    }).default({}),
+    bookingRequests: Joi.object({
+        response: Joi.string().trim().default(''),
+        keywords: Joi.array().items(Joi.string().trim()).default([])
+    }).default({}),
+    emergencySituations: Joi.object({
+        response: Joi.string().trim().default(''),
+        keywords: Joi.array().items(Joi.string().trim()).default([])
+    }).default({}),
+    generalInquiries: Joi.object({
+        response: Joi.string().trim().default(''),
+        keywords: Joi.array().items(Joi.string().trim()).default([])
     }).default({})
 });
 
@@ -885,16 +890,21 @@ function getDefaultKnowledgeManagement() {
         templates: getDefaultTemplates(),
         inHouseFallback: {
             enabled: true,
-            serviceKeywords: ['service', 'repair', 'fix', 'broken', 'problem', 'issue', 'help', 'maintenance'],
-            bookingKeywords: ['appointment', 'schedule', 'book', 'visit', 'come out', 'when can you', 'available'],
-            emergencyKeywords: ['emergency', 'urgent', 'asap', 'right now', 'immediately', 'broken down'],
-            hoursKeywords: ['hours', 'open', 'closed', 'when do you', 'what time', 'available'],
-            responses: {
-                service: 'I understand you need service. Let me connect you with one of our technicians who can help you right away.',
-                booking: 'I\'d be happy to help you schedule an appointment. Let me connect you with our scheduling team.',
-                emergency: 'This sounds urgent. Let me connect you with our emergency team immediately.',
-                hours: 'We\'re available during business hours. Let me connect you with someone who can provide our current schedule.',
-                general: 'I want to make sure you get the best help possible. Let me connect you with a specialist.'
+            serviceRequests: {
+                response: 'I understand you need service. Let me connect you with one of our technicians who can help you right away.',
+                keywords: ['service', 'repair', 'fix', 'broken', 'problem', 'issue', 'help', 'maintenance']
+            },
+            bookingRequests: {
+                response: 'I\'d be happy to help you schedule an appointment. Let me connect you with our scheduling team.',
+                keywords: ['appointment', 'schedule', 'book', 'visit', 'come out', 'when can you', 'available']
+            },
+            emergencySituations: {
+                response: 'This sounds urgent. Let me connect you with our emergency team immediately.',
+                keywords: ['emergency', 'urgent', 'asap', 'right now', 'immediately', 'broken down']
+            },
+            generalInquiries: {
+                response: 'Thank you for calling. Let me connect you with someone who can help you right away.',
+                keywords: ['hours', 'open', 'closed', 'when do you', 'what time', 'available', 'info', 'contact']
             },
             performance: {
                 totalFallbacks: 0,
@@ -1119,23 +1129,31 @@ async function simulateAIAgentTest(companyId, query, knowledge, options) {
             let fallbackMatch = null;
             let maxConfidence = 0;
 
-            // Check each keyword category
-            const categories = ['service', 'booking', 'emergency', 'hours'];
-            categories.forEach(category => {
-                const keywords = fallback[`${category}Keywords`] || [];
-                const confidence = calculateKeywordMatch(queryLower, keywords);
-                if (confidence > maxConfidence) {
-                    maxConfidence = confidence;
-                    fallbackMatch = {
-                        source: 'inHouseFallback',
-                        type: 'In-House Fallback',
-                        category: category,
-                        response: fallback.responses[category] || fallback.responses.general,
-                        confidence: confidence,
-                        threshold: 0.5,
-                        match: confidence >= 0.5,
-                        keywords: keywords
-                    };
+            // Check each keyword category using V2 structure
+            const categoryMappings = {
+                'serviceRequests': 'service',
+                'bookingRequests': 'booking', 
+                'emergencySituations': 'emergency',
+                'generalInquiries': 'general'
+            };
+            
+            Object.keys(categoryMappings).forEach(categoryKey => {
+                const categoryData = fallback[categoryKey];
+                if (categoryData && categoryData.keywords) {
+                    const confidence = calculateKeywordMatch(queryLower, categoryData.keywords);
+                    if (confidence > maxConfidence) {
+                        maxConfidence = confidence;
+                        fallbackMatch = {
+                            source: 'inHouseFallback',
+                            type: 'In-House Fallback',
+                            category: categoryMappings[categoryKey],
+                            response: categoryData.response || 'Thank you for contacting us. Let me connect you with someone who can help you right away.',
+                            confidence: confidence,
+                            threshold: 0.5,
+                            match: confidence >= 0.5,
+                            keywords: categoryData.keywords
+                        };
+                    }
                 }
             });
 

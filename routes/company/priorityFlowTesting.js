@@ -813,30 +813,47 @@ function testInHouseFallback(query, fallback, threshold) {
         general: "Thank you for contacting us. Let me connect you with someone who can help you right away."
     };
 
-    // Test keyword categories if fallback config exists
-    const categories = ['service', 'booking', 'emergency', 'hours'];
+    // Test keyword categories using correct V2 data structure
+    const categoryMappings = {
+        'serviceRequests': 'service',
+        'bookingRequests': 'booking', 
+        'emergencySituations': 'emergency',
+        'generalInquiries': 'general'
+    };
+    
     let bestCategory = 'general';
     let maxConfidence = 0.5; // Always above threshold for fallback
 
     if (fallback) {
-        categories.forEach(category => {
-            const keywords = fallback[`${category}Keywords`] || [];
-            if (keywords.length > 0) {
-                const confidence = calculateKeywordMatch(query, keywords);
+        Object.keys(categoryMappings).forEach(categoryKey => {
+            const categoryData = fallback[categoryKey];
+            if (categoryData && categoryData.keywords && categoryData.keywords.length > 0) {
+                const confidence = calculateKeywordMatch(query, categoryData.keywords);
                 if (confidence > maxConfidence) {
                     maxConfidence = confidence;
-                    bestCategory = category;
+                    bestCategory = categoryMappings[categoryKey];
                 }
             }
         });
     }
 
-    // Determine response source
+    // Determine response source using correct V2 data structure
     let response;
-    if (fallback && fallback.responses && fallback.responses[bestCategory]) {
-        response = fallback.responses[bestCategory];
-    } else if (fallback && fallback.responses && fallback.responses.general) {
-        response = fallback.responses.general;
+    let usedKeywords = [];
+    
+    if (fallback) {
+        // Find the matching category data
+        const categoryKey = Object.keys(categoryMappings).find(key => categoryMappings[key] === bestCategory);
+        if (categoryKey && fallback[categoryKey] && fallback[categoryKey].response) {
+            response = fallback[categoryKey].response;
+            usedKeywords = fallback[categoryKey].keywords || [];
+        } else if (fallback.generalInquiries && fallback.generalInquiries.response) {
+            response = fallback.generalInquiries.response;
+            usedKeywords = fallback.generalInquiries.keywords || [];
+            bestCategory = 'general';
+        } else {
+            response = defaultResponses[bestCategory];
+        }
     } else {
         response = defaultResponses[bestCategory];
     }
@@ -849,8 +866,8 @@ function testInHouseFallback(query, fallback, threshold) {
         result: 'FALLBACK - Always responds',
         response: response,
         matchedCategory: bestCategory,
-        keywords: fallback ? (fallback[`${bestCategory}Keywords`] || []) : [],
-        usingDefaults: !fallback || !fallback.responses
+        keywords: usedKeywords,
+        usingDefaults: !fallback || usedKeywords.length === 0
     };
 }
 
