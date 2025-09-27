@@ -925,7 +925,149 @@
                 showError('Please enter a search query');
                 return;
             }
-            showError('Search functionality coming soon in V2 system');
+
+            const searchResults = document.getElementById('search-results');
+            const searchInput = document.getElementById('search-input');
+            
+            try {
+                // Show loading state
+                searchResults.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mb-2"></i>
+                        <p class="text-gray-500">Searching through Q&As...</p>
+                    </div>
+                `;
+                searchResults.classList.remove('hidden');
+
+                // Search through all categories and their Q&As
+                const matchingResults = [];
+                const queryLower = query.toLowerCase();
+
+                currentCategories.forEach(category => {
+                    // Check category name and description
+                    const categoryMatch = category.name.toLowerCase().includes(queryLower) || 
+                                        (category.description && category.description.toLowerCase().includes(queryLower));
+
+                    if (categoryMatch) {
+                        matchingResults.push({
+                            type: 'category',
+                            category: category,
+                            matchType: 'Category Name/Description'
+                        });
+                    }
+
+                    // Check Q&As within this category
+                    if (category.qnas && category.qnas.length > 0) {
+                        category.qnas.forEach(qna => {
+                            const questionMatch = qna.question.toLowerCase().includes(queryLower);
+                            const answerMatch = qna.answer.toLowerCase().includes(queryLower);
+                            const keywordMatch = qna.keywords && qna.keywords.some(keyword => 
+                                keyword.toLowerCase().includes(queryLower)
+                            );
+
+                            if (questionMatch || answerMatch || keywordMatch) {
+                                let matchType = [];
+                                if (questionMatch) matchType.push('Question');
+                                if (answerMatch) matchType.push('Answer');
+                                if (keywordMatch) matchType.push('Keywords');
+
+                                matchingResults.push({
+                                    type: 'qna',
+                                    category: category,
+                                    qna: qna,
+                                    matchType: matchType.join(', ')
+                                });
+                            }
+                        });
+                    }
+                });
+
+                // Display results
+                if (matchingResults.length === 0) {
+                    searchResults.innerHTML = `
+                        <div class="text-center py-8">
+                            <i class="fas fa-search text-3xl text-gray-400 mb-4"></i>
+                            <h3 class="text-lg font-medium text-gray-900 mb-2">No results found</h3>
+                            <p class="text-gray-500">No Q&As or categories match "${query}"</p>
+                            <button onclick="clearSearch()" class="mt-4 text-blue-600 hover:text-blue-800">
+                                <i class="fas fa-times mr-1"></i>Clear search
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    const resultsHTML = `
+                        <div class="p-4 border-b border-gray-200 bg-blue-50">
+                            <h3 class="font-medium text-blue-900">
+                                <i class="fas fa-search mr-2"></i>Search Results for "${query}"
+                            </h3>
+                            <p class="text-sm text-blue-700 mt-1">Found ${matchingResults.length} matches</p>
+                        </div>
+                        <div class="max-h-96 overflow-y-auto">
+                            ${matchingResults.map(result => {
+                                if (result.type === 'category') {
+                                    return `
+                                        <div class="p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer" 
+                                             onclick="selectExistingCategory('${result.category._id}', '${result.category.name.replace(/'/g, "\\'")}')">
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <h4 class="font-medium text-gray-900">${result.category.name}</h4>
+                                                    <p class="text-sm text-gray-600">${result.category.description || 'No description'}</p>
+                                                    <span class="inline-block mt-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                                        ${result.matchType}
+                                                    </span>
+                                                </div>
+                                                <div class="text-xs text-gray-500">
+                                                    ${(result.category.qnas || []).length} Q&As
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                } else {
+                                    return `
+                                        <div class="p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer" 
+                                             onclick="selectExistingCategory('${result.category._id}', '${result.category.name.replace(/'/g, "\\'")}')">
+                                            <div class="mb-2">
+                                                <span class="text-sm font-medium text-purple-600">${result.category.name}</span>
+                                                <span class="inline-block ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                                    Match: ${result.matchType}
+                                                </span>
+                                            </div>
+                                            <h4 class="font-medium text-gray-900 mb-1">${result.qna.question}</h4>
+                                            <p class="text-sm text-gray-600 line-clamp-2">${result.qna.answer}</p>
+                                            ${result.qna.keywords ? `
+                                                <div class="mt-2 flex flex-wrap gap-1">
+                                                    ${result.qna.keywords.slice(0, 3).map(keyword => `
+                                                        <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">${keyword}</span>
+                                                    `).join('')}
+                                                    ${result.qna.keywords.length > 3 ? `<span class="text-xs text-gray-500">+${result.qna.keywords.length - 3} more</span>` : ''}
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `;
+                                }
+                            }).join('')}
+                        </div>
+                        <div class="p-4 border-t border-gray-200 bg-gray-50">
+                            <button onclick="clearSearch()" class="text-blue-600 hover:text-blue-800 text-sm">
+                                <i class="fas fa-times mr-1"></i>Clear search results
+                            </button>
+                        </div>
+                    `;
+                    searchResults.innerHTML = resultsHTML;
+                }
+
+            } catch (error) {
+                console.error('❌ V2 SEARCH: Error performing search:', error);
+                searchResults.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-exclamation-triangle text-2xl text-red-400 mb-2"></i>
+                        <p class="text-red-600">Search failed: ${error.message}</p>
+                        <button onclick="clearSearch()" class="mt-2 text-blue-600 hover:text-blue-800">
+                            <i class="fas fa-times mr-1"></i>Close
+                        </button>
+                    </div>
+                `;
+            }
         }
 
         // Clear search
