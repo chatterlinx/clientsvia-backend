@@ -75,14 +75,10 @@ async function loadAllRoutes() {
         // V2: Legacy agentSettings route removed - using company/agentSettings V2 route
         routes.companyAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/agentSettings', 'companyAgentSettingsRoutes');
         // Legacy personality routes removed - using modern AI Agent Logic system
-        // Knowledge Management Routes
-        routes.newKnowledgeRoutes = await loadRouteWithTimeout('./routes/knowledge/companyKnowledge', 'newKnowledgeRoutes');
+        // 🚀 V2 PURE SYSTEM: Only V2 Knowledge Management - ALL LEGACY ELIMINATED
+        routes.v2KnowledgeManagementRoutes = await loadRouteWithTimeout('./routes/company/v2knowledgeManagement', 'v2KnowledgeManagementRoutes');
         routes.knowledgeSourcePrioritiesRoutes = await loadRouteWithTimeout('./routes/company/knowledgeSourcePriorities', 'knowledgeSourcePrioritiesRoutes');
-        routes.knowledgeManagementRoutes = await loadRouteWithTimeout('./routes/company/knowledgeManagement', 'knowledgeManagementRoutes');
         routes.priorityFlowTestingRoutes = await loadRouteWithTimeout('./routes/company/priorityFlowTesting', 'priorityFlowTestingRoutes');
-        
-        // Legacy Knowledge Settings (keeping for now as it handles different functionality)
-        routes.companyKnowledgeRoutes = await loadRouteWithTimeout('./routes/company/knowledge', 'companyKnowledgeRoutes');
         routes.agentTestingRoutes = await loadRouteWithTimeout('./routes/company/agentTesting', 'agentTestingRoutes');
         routes.eventHooksRoutes = await loadRouteWithTimeout('./routes/eventHooks', 'eventHooksRoutes');
         routes.transferRouterRoutes = await loadRouteWithTimeout('./routes/transferRouter', 'transferRouterRoutes');
@@ -214,12 +210,11 @@ function registerRoutes(routes) {
     app.use('/api/v2global', routes.v2GlobalHahaKillerRoutes); // V2 Global Haha Ghost Killer (Emergency)
     app.use('/api/backup', routes.backupRoutes); // BACKUP: Automated backup monitoring and management
     app.use('/api/company', routes.companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
-    // Legacy personality routes removed - using modern AI Agent Logic system
-    app.use('/api/company', routes.companyKnowledgeRoutes); // MODULE 2: Knowledge Q&A Source Controls
+    
+    // 🚀 V2 PURE SYSTEM: Only V2 Knowledge Management - ALL LEGACY ELIMINATED
+    app.use('/api/company', routes.v2KnowledgeManagementRoutes); // V2 ENTERPRISE: Pure V2 Knowledge Management System (Company Q&A, Trade Q&A, Templates)
     app.use('/api/company', routes.knowledgeSourcePrioritiesRoutes); // ENTERPRISE: Knowledge Source Priorities Management
-    app.use('/api/company', routes.knowledgeManagementRoutes); // ENTERPRISE: Knowledge Management System (Company Q&A, Trade Q&A, Templates)
     app.use('/api/company', routes.priorityFlowTestingRoutes); // ENTERPRISE: Real-time Priority Flow Testing & Validation
-    app.use('/api/knowledge', routes.newKnowledgeRoutes); // NEW: Company Q&A Knowledge Base Management
     app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     app.use('/api/company', routes.enhancedAgentSettingsRoutes); // Enhanced LLM Selector & Agent Settings
 
