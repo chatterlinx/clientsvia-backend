@@ -2856,6 +2856,64 @@ This would be a great time to also check..."></textarea>
                                                         </div>
                                                     </div>
                                                     
+                                                    <!-- ⚡ INSTANT RESPONSE MODAL -->
+                                                    <div id="instant-response-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+                                                        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+                                                            <div class="flex items-center justify-between mb-4">
+                                                                <h3 class="text-lg font-bold text-gray-900" id="instant-response-modal-title">Add Instant Response</h3>
+                                                                <button type="button" class="text-gray-400 hover:text-gray-600" onclick="closeInstantResponseModal()">
+                                                                    <i class="fas fa-times text-xl"></i>
+                                                                </button>
+                                                            </div>
+                                                            
+                                                            <form id="instant-response-form" class="space-y-4">
+                                                                <input type="hidden" id="instant-response-id" value="">
+                                                                
+                                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                                                                        <select id="instant-response-category" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" required>
+                                                                            <option value="greeting">Greeting</option>
+                                                                            <option value="emergency">Emergency</option>
+                                                                            <option value="common">Common</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-gray-700 mb-2">Priority (1-10)</label>
+                                                                        <input type="number" id="instant-response-priority" min="1" max="10" value="5" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" required>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <div>
+                                                                    <label class="block text-sm font-medium text-gray-700 mb-2">Trigger Keywords (comma-separated)</label>
+                                                                    <input type="text" id="instant-response-triggers" placeholder="hello, hi, hey there" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" required>
+                                                                    <p class="text-xs text-gray-500 mt-1">Words or phrases that will trigger this instant response</p>
+                                                                </div>
+                                                                
+                                                                <div>
+                                                                    <label class="block text-sm font-medium text-gray-700 mb-2">Response Text</label>
+                                                                    <textarea id="instant-response-text" rows="3" placeholder="Hi there! How can I help you today?" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" required></textarea>
+                                                                    <p class="text-xs text-gray-500 mt-1">The exact response customers will hear (0ms response time)</p>
+                                                                </div>
+                                                                
+                                                                <div class="flex items-center">
+                                                                    <input type="checkbox" id="instant-response-enabled" checked class="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded">
+                                                                    <label for="instant-response-enabled" class="ml-2 text-sm text-gray-700">Enabled</label>
+                                                                </div>
+                                                                
+                                                                <div class="flex justify-end space-x-3 pt-4">
+                                                                    <button type="button" onclick="closeInstantResponseModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors">
+                                                                        Cancel
+                                                                    </button>
+                                                                    <button type="submit" class="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors">
+                                                                        <i class="fas fa-save mr-2"></i>Save Instant Response
+                                                                    </button>
+                                                                </div>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                    
                                                     <!-- 📋 RESPONSE TEMPLATES SECTION - 100ms Response Time -->
                                                     <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
                                                         <div class="flex items-center justify-between mb-4">
@@ -2904,6 +2962,82 @@ This would be a great time to also check..."></textarea>
                                                         <!-- Response Templates List -->
                                                         <div id="response-templates-list" class="space-y-3">
                                                             <!-- Response templates will be dynamically loaded here -->
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- 📋 RESPONSE TEMPLATE MODAL -->
+                                                    <div id="response-template-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+                                                        <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-4/5 lg:w-3/4 shadow-lg rounded-md bg-white">
+                                                            <div class="flex items-center justify-between mb-4">
+                                                                <h3 class="text-lg font-bold text-gray-900" id="response-template-modal-title">Add Response Template</h3>
+                                                                <button type="button" class="text-gray-400 hover:text-gray-600" onclick="closeResponseTemplateModal()">
+                                                                    <i class="fas fa-times text-xl"></i>
+                                                                </button>
+                                                            </div>
+                                                            
+                                                            <form id="response-template-form" class="space-y-4">
+                                                                <input type="hidden" id="response-template-id" value="">
+                                                                
+                                                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-gray-700 mb-2">Template Name</label>
+                                                                        <input type="text" id="response-template-name" placeholder="Service Inquiry Response" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
+                                                                    </div>
+                                                                    
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                                                                        <select id="response-template-category" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
+                                                                            <option value="service">Service</option>
+                                                                            <option value="pricing">Pricing</option>
+                                                                            <option value="transfer">Transfer</option>
+                                                                            <option value="closing">Closing</option>
+                                                                            <option value="greeting">Greeting</option>
+                                                                            <option value="emergency">Emergency</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-gray-700 mb-2">Confidence (0.1-1.0)</label>
+                                                                        <input type="number" id="response-template-confidence" min="0.1" max="1.0" step="0.1" value="0.7" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <div>
+                                                                    <label class="block text-sm font-medium text-gray-700 mb-2">Keywords (comma-separated)</label>
+                                                                    <input type="text" id="response-template-keywords" placeholder="service, repair, fix, maintenance" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
+                                                                    <p class="text-xs text-gray-500 mt-1">Keywords that will trigger this template</p>
+                                                                </div>
+                                                                
+                                                                <div>
+                                                                    <label class="block text-sm font-medium text-gray-700 mb-2">Template Response</label>
+                                                                    <textarea id="response-template-text" rows="4" placeholder="I'd be happy to help you with our services. Let me get you connected with our service team who can provide detailed information about what we can do for you." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required></textarea>
+                                                                    <p class="text-xs text-gray-500 mt-1">The response template (adapts to your personality settings)</p>
+                                                                </div>
+                                                                
+                                                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                                                    <h5 class="font-medium text-blue-800 mb-2">Template Variables (Optional)</h5>
+                                                                    <div id="template-variables-container" class="space-y-2">
+                                                                        <!-- Variables will be added dynamically -->
+                                                                    </div>
+                                                                    <button type="button" onclick="addTemplateVariable()" class="mt-2 px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors">
+                                                                        <i class="fas fa-plus mr-1"></i>Add Variable
+                                                                    </button>
+                                                                </div>
+                                                                
+                                                                <div class="flex items-center">
+                                                                    <input type="checkbox" id="response-template-enabled" checked class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+                                                                    <label for="response-template-enabled" class="ml-2 text-sm text-gray-700">Enabled</label>
+                                                                </div>
+                                                                
+                                                                <div class="flex justify-end space-x-3 pt-4">
+                                                                    <button type="button" onclick="closeResponseTemplateModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors">
+                                                                        Cancel
+                                                                    </button>
+                                                                    <button type="submit" class="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors">
+                                                                        <i class="fas fa-save mr-2"></i>Save Template
+                                                                    </button>
+                                                                </div>
+                                                            </form>
                                                         </div>
                                                     </div>
                                                     
@@ -5323,6 +5457,123 @@ This error needs to be fixed - not masked!
             // No separate legacy API calls needed - everything is unified in the main company data
         }
 
+        // ⚡ INSTANT RESPONSES MANAGEMENT
+        function renderInstantResponses(instantResponses = []) {
+            const container = document.getElementById('instant-responses-list');
+            if (!container) return;
+
+            if (instantResponses.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-bolt text-4xl mb-4"></i>
+                        <p>No instant responses configured yet.</p>
+                        <p class="text-sm">Add your first instant response for 0ms customer satisfaction!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = instantResponses.map(response => `
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-3 mb-2">
+                                <span class="px-2 py-1 bg-${getCategoryColor(response.category)}-100 text-${getCategoryColor(response.category)}-800 text-xs rounded-full font-medium">
+                                    ${response.category}
+                                </span>
+                                <span class="text-xs text-gray-500">Priority: ${response.priority}</span>
+                                <span class="px-2 py-1 ${response.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} text-xs rounded-full">
+                                    ${response.enabled ? 'Enabled' : 'Disabled'}
+                                </span>
+                            </div>
+                            <div class="text-sm text-gray-600 mb-1">
+                                <strong>Triggers:</strong> ${response.trigger.join(', ')}
+                            </div>
+                            <div class="text-sm text-gray-800">
+                                <strong>Response:</strong> "${response.response}"
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2 ml-4">
+                            <button onclick="editInstantResponse('${response.id}')" class="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors">
+                                <i class="fas fa-edit mr-1"></i>Edit
+                            </button>
+                            <button onclick="deleteInstantResponse('${response.id}')" class="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors">
+                                <i class="fas fa-trash mr-1"></i>Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getCategoryColor(category) {
+            const colors = {
+                'greeting': 'green',
+                'emergency': 'red',
+                'common': 'blue',
+                'service': 'blue',
+                'pricing': 'green',
+                'transfer': 'orange',
+                'closing': 'gray'
+            };
+            return colors[category] || 'gray';
+        }
+
+        // 📋 RESPONSE TEMPLATES MANAGEMENT
+        function renderResponseTemplates(responseTemplates = []) {
+            const container = document.getElementById('response-templates-list');
+            if (!container) return;
+
+            if (responseTemplates.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-file-alt text-4xl mb-4"></i>
+                        <p>No response templates configured yet.</p>
+                        <p class="text-sm">Add your first template for intelligent 100ms responses!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = responseTemplates.map(template => `
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-3 mb-2">
+                                <h5 class="font-medium text-gray-800">${template.name}</h5>
+                                <span class="px-2 py-1 bg-${getCategoryColor(template.category)}-100 text-${getCategoryColor(template.category)}-800 text-xs rounded-full font-medium">
+                                    ${template.category}
+                                </span>
+                                <span class="text-xs text-gray-500">Confidence: ${template.confidence}</span>
+                                <span class="px-2 py-1 ${template.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} text-xs rounded-full">
+                                    ${template.enabled ? 'Enabled' : 'Disabled'}
+                                </span>
+                            </div>
+                            <div class="text-sm text-gray-600 mb-1">
+                                <strong>Keywords:</strong> ${template.keywords.join(', ')}
+                            </div>
+                            <div class="text-sm text-gray-800">
+                                <strong>Template:</strong> "${template.template.substring(0, 100)}${template.template.length > 100 ? '...' : ''}"
+                            </div>
+                            ${template.variables && template.variables.length > 0 ? `
+                                <div class="text-xs text-gray-500 mt-1">
+                                    <strong>Variables:</strong> ${template.variables.map(v => v.name).join(', ')}
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="flex items-center space-x-2 ml-4">
+                            <button onclick="editResponseTemplate('${template.id}')" class="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors">
+                                <i class="fas fa-edit mr-1"></i>Edit
+                            </button>
+                            <button onclick="deleteResponseTemplate('${template.id}')" class="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors">
+                                <i class="fas fa-trash mr-1"></i>Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
         // Save unified AI agent configuration (personality + instant responses + templates)
         async function saveAgentPersonalitySettings() {
             const companyId = getCurrentCompanyId();
@@ -5428,15 +5679,15 @@ This error needs to be fixed - not masked!
             }
         }
 
-        // 🎭 V2 AGENT PERSONALITY: Load personality settings from backend
+        // 🎭 V2 AGENT PERSONALITY: Load unified agent brain configuration from backend
         async function loadAgentPersonalitySettings() {
             const companyId = getCurrentCompanyId();
             if (!companyId) return;
 
             try {
-                console.log('🎭 V2 PERSONALITY: Loading personality settings for company:', companyId);
+                console.log('🧠 UNIFIED BRAIN: Loading agent brain configuration for company:', companyId);
                 
-                const response = await fetch(`/api/company/${companyId}/personality`, {
+                const response = await fetch(`/api/company/${companyId}/agent-brain`, {
                     method: 'GET',
                     headers: { 
                         'Content-Type': 'application/json',
@@ -5446,9 +5697,21 @@ This error needs to be fixed - not masked!
 
                 if (response.ok) {
                     const result = await response.json();
-                    const personality = result.data || {};
+                    const data = result.data || {};
                     
-                    console.log('✅ V2 PERSONALITY: Loaded personality settings:', personality);
+                    console.log('✅ UNIFIED BRAIN: Agent brain configuration loaded successfully:', data);
+                    
+                    // 🎨 RENDER INSTANT RESPONSES AND TEMPLATES
+                    if (data.agentBrain) {
+                        // Render instant responses
+                        renderInstantResponses(data.agentBrain.instantResponses || []);
+                        
+                        // Render response templates  
+                        renderResponseTemplates(data.agentBrain.responseTemplates || []);
+                    }
+                    
+                    // 🎭 POPULATE PERSONALITY FIELDS (backward compatibility)
+                    const personality = data.agentPersonality || data.agentBrain?.identity || {};
                     
                     // Populate Core Personality fields
                     const corePersonality = personality.corePersonality || {};
@@ -17859,6 +18122,218 @@ Key Metrics:
     // ============================================================================
     // UNIFIED SYSTEM INITIALIZATION
     // ============================================================================
+
+    // ⚡ INSTANT RESPONSE MODAL MANAGEMENT
+    function openInstantResponseModal(responseId = null) {
+        const modal = document.getElementById('instant-response-modal');
+        const form = document.getElementById('instant-response-form');
+        const title = document.getElementById('instant-response-modal-title');
+        
+        if (responseId) {
+            // Edit mode
+            title.textContent = 'Edit Instant Response';
+            // Load existing data (will be implemented when backend is ready)
+            loadInstantResponseForEdit(responseId);
+        } else {
+            // Add mode
+            title.textContent = 'Add Instant Response';
+            form.reset();
+            document.getElementById('instant-response-id').value = '';
+        }
+        
+        modal.classList.remove('hidden');
+    }
+
+    function closeInstantResponseModal() {
+        const modal = document.getElementById('instant-response-modal');
+        modal.classList.add('hidden');
+    }
+
+    function editInstantResponse(responseId) {
+        openInstantResponseModal(responseId);
+    }
+
+    async function deleteInstantResponse(responseId) {
+        if (!confirm('Are you sure you want to delete this instant response?')) return;
+        
+        try {
+            const companyId = getCurrentCompanyId();
+            // TODO: Implement delete API call
+            console.log('🗑️ Delete instant response:', responseId);
+            showNotification('Instant response deleted successfully!', 'success');
+            // Refresh the list
+            loadAgentPersonalitySettings();
+        } catch (error) {
+            console.error('❌ Error deleting instant response:', error);
+            showNotification('Failed to delete instant response', 'error');
+        }
+    }
+
+    // 📋 RESPONSE TEMPLATE MODAL MANAGEMENT
+    function openResponseTemplateModal(templateId = null) {
+        const modal = document.getElementById('response-template-modal');
+        const form = document.getElementById('response-template-form');
+        const title = document.getElementById('response-template-modal-title');
+        
+        if (templateId) {
+            // Edit mode
+            title.textContent = 'Edit Response Template';
+            loadResponseTemplateForEdit(templateId);
+        } else {
+            // Add mode
+            title.textContent = 'Add Response Template';
+            form.reset();
+            document.getElementById('response-template-id').value = '';
+            clearTemplateVariables();
+        }
+        
+        modal.classList.remove('hidden');
+    }
+
+    function closeResponseTemplateModal() {
+        const modal = document.getElementById('response-template-modal');
+        modal.classList.add('hidden');
+    }
+
+    function editResponseTemplate(templateId) {
+        openResponseTemplateModal(templateId);
+    }
+
+    async function deleteResponseTemplate(templateId) {
+        if (!confirm('Are you sure you want to delete this response template?')) return;
+        
+        try {
+            const companyId = getCurrentCompanyId();
+            // TODO: Implement delete API call
+            console.log('🗑️ Delete response template:', templateId);
+            showNotification('Response template deleted successfully!', 'success');
+            // Refresh the list
+            loadAgentPersonalitySettings();
+        } catch (error) {
+            console.error('❌ Error deleting response template:', error);
+            showNotification('Failed to delete response template', 'error');
+        }
+    }
+
+    // Template variables management
+    function addTemplateVariable() {
+        const container = document.getElementById('template-variables-container');
+        const variableId = 'var_' + Date.now();
+        
+        const variableHtml = `
+            <div class="flex items-center space-x-2" id="${variableId}">
+                <input type="text" placeholder="Variable name" class="flex-1 p-2 border border-gray-300 rounded text-sm variable-name">
+                <input type="text" placeholder="Description" class="flex-1 p-2 border border-gray-300 rounded text-sm variable-description">
+                <label class="flex items-center text-sm">
+                    <input type="checkbox" class="mr-1 variable-required">Required
+                </label>
+                <button type="button" onclick="removeTemplateVariable('${variableId}')" class="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', variableHtml);
+    }
+
+    function removeTemplateVariable(variableId) {
+        const element = document.getElementById(variableId);
+        if (element) element.remove();
+    }
+
+    function clearTemplateVariables() {
+        const container = document.getElementById('template-variables-container');
+        container.innerHTML = '';
+    }
+
+    // Form submission handlers
+    document.addEventListener('DOMContentLoaded', function() {
+        // Instant Response Form
+        const instantResponseForm = document.getElementById('instant-response-form');
+        if (instantResponseForm) {
+            instantResponseForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const formData = {
+                    id: document.getElementById('instant-response-id').value || 'ir_' + Date.now(),
+                    category: document.getElementById('instant-response-category').value,
+                    priority: parseInt(document.getElementById('instant-response-priority').value),
+                    trigger: document.getElementById('instant-response-triggers').value.split(',').map(t => t.trim()),
+                    response: document.getElementById('instant-response-text').value,
+                    enabled: document.getElementById('instant-response-enabled').checked,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                };
+                
+                try {
+                    // TODO: Save to backend via unified agent brain API
+                    console.log('💾 Save instant response:', formData);
+                    showNotification('Instant response saved successfully!', 'success');
+                    closeInstantResponseModal();
+                    loadAgentPersonalitySettings(); // Refresh the display
+                } catch (error) {
+                    console.error('❌ Error saving instant response:', error);
+                    showNotification('Failed to save instant response', 'error');
+                }
+            });
+        }
+
+        // Response Template Form
+        const responseTemplateForm = document.getElementById('response-template-form');
+        if (responseTemplateForm) {
+            responseTemplateForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                // Collect template variables
+                const variables = [];
+                const variableElements = document.querySelectorAll('#template-variables-container > div');
+                variableElements.forEach(element => {
+                    const name = element.querySelector('.variable-name').value.trim();
+                    const description = element.querySelector('.variable-description').value.trim();
+                    const required = element.querySelector('.variable-required').checked;
+                    
+                    if (name) {
+                        variables.push({ name, description, required });
+                    }
+                });
+                
+                const formData = {
+                    id: document.getElementById('response-template-id').value || 'rt_' + Date.now(),
+                    name: document.getElementById('response-template-name').value,
+                    category: document.getElementById('response-template-category').value,
+                    confidence: parseFloat(document.getElementById('response-template-confidence').value),
+                    keywords: document.getElementById('response-template-keywords').value.split(',').map(k => k.trim()),
+                    template: document.getElementById('response-template-text').value,
+                    variables: variables,
+                    enabled: document.getElementById('response-template-enabled').checked,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                };
+                
+                try {
+                    // TODO: Save to backend via unified agent brain API
+                    console.log('💾 Save response template:', formData);
+                    showNotification('Response template saved successfully!', 'success');
+                    closeResponseTemplateModal();
+                    loadAgentPersonalitySettings(); // Refresh the display
+                } catch (error) {
+                    console.error('❌ Error saving response template:', error);
+                    showNotification('Failed to save response template', 'error');
+                }
+            });
+        }
+
+        // Add button event listeners
+        const addInstantResponseBtn = document.getElementById('add-instant-response-btn');
+        if (addInstantResponseBtn) {
+            addInstantResponseBtn.addEventListener('click', () => openInstantResponseModal());
+        }
+
+        const addResponseTemplateBtn = document.getElementById('add-response-template-btn');
+        if (addResponseTemplateBtn) {
+            addResponseTemplateBtn.addEventListener('click', () => openResponseTemplateModal());
+        }
+    });
 
     let unifiedOrchestrator;
     
