@@ -16485,6 +16485,27 @@ Key Metrics:
             document.body.insertAdjacentHTML('beforeend', modalHtml);
         }
 
+        generateKeywords(text) {
+            if (!text) return [];
+            
+            // Simple keyword extraction - remove common words and extract meaningful terms
+            const commonWords = new Set([
+                'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+                'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+                'will', 'would', 'could', 'should', 'may', 'might', 'can', 'must', 'shall',
+                'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
+                'this', 'that', 'these', 'those', 'what', 'which', 'who', 'when', 'where', 'why', 'how'
+            ]);
+            
+            return text
+                .toLowerCase()
+                .replace(/[^\w\s]/g, ' ') // Remove punctuation
+                .split(/\s+/) // Split on whitespace
+                .filter(word => word.length > 2 && !commonWords.has(word)) // Filter short words and common words
+                .filter((word, index, arr) => arr.indexOf(word) === index) // Remove duplicates
+                .slice(0, 10); // Limit to 10 keywords
+        }
+
         async saveEditedTradeQnA(qnaId) {
             try {
                 // Get form values
@@ -16507,7 +16528,7 @@ Key Metrics:
                     tradeCategory: category || 'General',
                     difficulty,
                     priority,
-                    keywords: this.extractKeywords(question + ' ' + answer),
+                    keywords: this.generateKeywords(question + ' ' + answer),
                     updatedAt: new Date().toISOString()
                 };
 
