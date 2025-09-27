@@ -290,7 +290,9 @@ router.post('/categories', async (req, res) => {
 
         // Check for duplicate category name (only among active categories)
         const searchName = name.trim();
-        const searchRegex = new RegExp(`^${searchName}$`, 'i');
+        // Escape special regex characters to prevent regex injection
+        const escapedName = searchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const searchRegex = new RegExp(`^${escapedName}$`, 'i');
         
         logger.info(`🔍 V2 DUPLICATE CHECK: Searching for category`, {
             searchName,
@@ -555,6 +557,61 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
             error: 'Failed to add Q&A to trade category',
             details: error.message,
             source: 'v2-global-tradecategories'
+        });
+    }
+});
+
+/**
+ * 🧪 DEBUG ENDPOINT - TEST DUPLICATE CHECK
+ * Test the duplicate check logic directly
+ */
+router.get('/debug/test-duplicate/:name', async (req, res) => {
+    try {
+        const { name } = req.params;
+        const searchName = name.trim();
+        const searchRegex = new RegExp(`^${searchName}$`, 'i');
+        
+        console.log('🧪 TESTING DUPLICATE CHECK:', {
+            originalName: name,
+            searchName,
+            regexString: searchRegex.toString(),
+            regexSource: searchRegex.source,
+            regexFlags: searchRegex.flags
+        });
+        
+        const existingCategory = await TradeCategory.findOne({ 
+            name: { $regex: searchRegex },
+            companyId: 'global',
+            isActive: true
+        });
+        
+        // Also test with a simple string match
+        const simpleMatch = await TradeCategory.findOne({ 
+            name: searchName,
+            companyId: 'global',
+            isActive: true
+        });
+        
+        res.json({
+            success: true,
+            testName: searchName,
+            regexMatch: !!existingCategory,
+            simpleMatch: !!simpleMatch,
+            regexDetails: {
+                pattern: searchRegex.toString(),
+                source: searchRegex.source,
+                flags: searchRegex.flags
+            },
+            foundCategory: existingCategory ? {
+                _id: existingCategory._id,
+                name: existingCategory.name,
+                companyId: existingCategory.companyId
+            } : null
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });
