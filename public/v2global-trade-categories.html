@@ -634,20 +634,82 @@
             openQnAModal(categoryId, qnaId);
         }
 
-        // Delete Q&A (placeholder - would need V2 API endpoint)
+        // Delete Q&A - V2 Implementation
         async function deleteQnA(categoryId, qnaId) {
             if (!confirm('Are you sure you want to delete this Q&A?')) {
                 return;
             }
-            showError('Delete Q&A functionality coming soon in V2 system');
+
+            try {
+                console.log('🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting Q&A:', { categoryId, qnaId });
+
+                const response = await fetch(`/api/v2global/trade-categories/categories/${categoryId}/qna/${qnaId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${this.getAuthToken ? this.getAuthToken() : ''}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('✅ V2 GLOBAL TRADE CATEGORIES: Q&A deleted successfully:', result.data);
+                    showSuccess(`Q&A deleted from "${result.data.categoryName}"`);
+                    
+                    // Reload categories to refresh the UI
+                    await loadTradeCategories();
+                } else {
+                    throw new Error(result.error || 'Failed to delete Q&A');
+                }
+
+            } catch (error) {
+                console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting Q&A:', error);
+                showError(`Failed to delete Q&A: ${error.message}`);
+            }
         }
 
-        // Delete category (placeholder - would need V2 API endpoint)
+        // Delete category - V2 Implementation
         async function deleteCategory(categoryId) {
             if (!confirm('Are you sure you want to delete this entire trade category and all its Q&As?')) {
                 return;
             }
-            showError('Delete category functionality coming soon in V2 system');
+
+            try {
+                console.log('🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting category:', categoryId);
+
+                const response = await fetch(`/api/v2global/trade-categories/categories/${categoryId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${this.getAuthToken ? this.getAuthToken() : ''}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('✅ V2 GLOBAL TRADE CATEGORIES: Category deleted successfully:', result.data);
+                    showSuccess(`Trade category "${result.data.categoryName}" deleted successfully`);
+                    
+                    // Reload categories to refresh the UI
+                    await loadTradeCategories();
+                } else {
+                    throw new Error(result.error || 'Failed to delete category');
+                }
+
+            } catch (error) {
+                console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting category:', error);
+                showError(`Failed to delete category: ${error.message}`);
+            }
         }
 
         // Regenerate keywords (placeholder - would need V2 API endpoint)
