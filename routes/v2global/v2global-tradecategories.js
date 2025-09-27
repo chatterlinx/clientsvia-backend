@@ -289,10 +289,30 @@ router.post('/categories', async (req, res) => {
         }
 
         // Check for duplicate category name (only among active categories)
-        const existingCategory = await TradeCategory.findOne({ 
-            name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
+        const searchName = name.trim();
+        const searchRegex = new RegExp(`^${searchName}$`, 'i');
+        
+        logger.info(`🔍 V2 DUPLICATE CHECK: Searching for category`, {
+            searchName,
+            searchRegex: searchRegex.toString(),
             companyId: 'global',
             isActive: true
+        });
+        
+        const existingCategory = await TradeCategory.findOne({ 
+            name: { $regex: searchRegex },
+            companyId: 'global',
+            isActive: true
+        });
+        
+        logger.info(`🔍 V2 DUPLICATE CHECK: Result`, {
+            found: !!existingCategory,
+            existingCategory: existingCategory ? {
+                _id: existingCategory._id,
+                name: existingCategory.name,
+                companyId: existingCategory.companyId,
+                isActive: existingCategory.isActive
+            } : null
         });
         
         if (existingCategory) {
@@ -535,6 +555,33 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
             error: 'Failed to add Q&A to trade category',
             details: error.message,
             source: 'v2-global-tradecategories'
+        });
+    }
+});
+
+/**
+ * 🧹 DEBUG ENDPOINT - CLEAR REDIS CACHE
+ * Temporary endpoint to clear any cached trade category data
+ */
+router.post('/debug/clear-cache', async (req, res) => {
+    try {
+        const redisClient = require('../../db').redisClient;
+        
+        // Clear all trade category related cache keys
+        const keys = await redisClient.keys('*trade*');
+        if (keys.length > 0) {
+            await redisClient.del(keys);
+        }
+        
+        res.json({
+            success: true,
+            message: `Cleared ${keys.length} cache keys`,
+            clearedKeys: keys
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });
