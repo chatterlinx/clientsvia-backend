@@ -125,7 +125,9 @@ const TradeCategorySchema = new mongoose.Schema({
 });
 
 // Compound indexes for performance
-TradeCategorySchema.index({ companyId: 1, name: 1 }, { unique: true });
+// TEMPORARY: Disabled unique constraint for debugging
+// TradeCategorySchema.index({ companyId: 1, name: 1 }, { unique: true });
+TradeCategorySchema.index({ companyId: 1, name: 1 }); // Non-unique for debugging
 TradeCategorySchema.index({ companyId: 1, isActive: 1 });
 TradeCategorySchema.index({ 'qnas.keywords': 1 });
 
