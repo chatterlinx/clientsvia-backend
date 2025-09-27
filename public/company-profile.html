@@ -2332,7 +2332,7 @@
                                                                     <button id="save-trade-categories" type="button" 
                                                                             class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                                             disabled>
-                                                                        <i class="fas fa-magic mr-2"></i>Inherit Knowledge
+                                                                        <i class="fas fa-check mr-2"></i>Save Selection
                                                                     </button>
                                                                 </div>
                                                             </div>
@@ -14980,14 +14980,17 @@ Key Metrics:
                     </div>
                     <div class="flex space-x-1 ml-4">
                         ${isGlobal ? `
+                            <button class="text-blue-600 hover:text-blue-800 p-1" onclick="knowledgeManager.viewGlobalQnA('${qna.id || qna._id}')" title="View details">
+                                <i class="fas fa-eye text-sm"></i>
+                            </button>
                             <span class="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
-                                <i class="fas fa-lock mr-1"></i>Read-only
+                                <i class="fas fa-globe mr-1"></i>Global
                             </span>
                         ` : `
-                            <button class="text-blue-600 hover:text-blue-800 p-1" onclick="knowledgeManager.editTradeQnA('${qna.id || qna._id}')">
+                            <button class="text-blue-600 hover:text-blue-800 p-1" onclick="knowledgeManager.editTradeQnA('${qna.id || qna._id}')" title="Edit Q&A">
                                 <i class="fas fa-edit text-sm"></i>
                             </button>
-                            <button class="text-red-600 hover:text-red-800 p-1" onclick="knowledgeManager.deleteTradeQnA('${qna.id || qna._id}')">
+                            <button class="text-red-600 hover:text-red-800 p-1" onclick="knowledgeManager.deleteTradeQnA('${qna.id || qna._id}')" title="Delete Q&A">
                                 <i class="fas fa-trash text-sm"></i>
                             </button>
                         `}
@@ -16098,7 +16101,7 @@ Key Metrics:
             try {
                 // Show loading state
                 saveBtn.disabled = true;
-                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Inheriting Knowledge...';
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving Selection...';
                 
                 console.log('🚀 Saving selected trades:', selectedTrades);
                 console.log('🔍 DEBUG: API URL:', `/api/company/${this.companyId}`);
@@ -16407,13 +16410,228 @@ Key Metrics:
         }
 
         editTradeQnA(qnaId) {
+            console.log('✏️ EDIT: Opening Trade Q&A editor for', qnaId);
+            
             // Find the Trade Q&A data from loaded knowledge
             const qnaData = this.knowledgeData?.tradeQnA?.find(qna => qna.id === qnaId);
-            if (qnaData) {
-                this.openTradeQnAModal('edit', qnaData);
-            } else {
+            if (!qnaData) {
                 this.showErrorMessage('Trade Q&A not found');
+                return;
             }
+
+            // Create edit modal HTML
+            const modalHtml = `
+                <div id="edit-trade-qna-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                        <div class="flex items-center justify-between p-6 border-b">
+                            <h3 class="text-lg font-semibold text-gray-900">Edit Trade Q&A</h3>
+                            <button onclick="document.getElementById('edit-trade-qna-modal').remove()" class="text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Trade Category</label>
+                                <input id="edit-qna-category" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500" 
+                                       value="${qnaData.tradeCategory || ''}" placeholder="e.g., HVAC Residential">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Question</label>
+                                <textarea id="edit-qna-question" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500" 
+                                          placeholder="Enter the customer question...">${qnaData.question || ''}</textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Answer</label>
+                                <textarea id="edit-qna-answer" rows="5" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500" 
+                                          placeholder="Enter the AI agent response...">${qnaData.answer || ''}</textarea>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
+                                    <select id="edit-qna-difficulty" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                                        <option value="basic" ${qnaData.difficulty === 'basic' ? 'selected' : ''}>Basic</option>
+                                        <option value="intermediate" ${qnaData.difficulty === 'intermediate' ? 'selected' : ''}>Intermediate</option>
+                                        <option value="advanced" ${qnaData.difficulty === 'advanced' ? 'selected' : ''}>Advanced</option>
+                                        <option value="expert" ${qnaData.difficulty === 'expert' ? 'selected' : ''}>Expert</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Priority</label>
+                                    <select id="edit-qna-priority" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                                        <option value="1" ${qnaData.priority === 1 ? 'selected' : ''}>1 - Highest</option>
+                                        <option value="2" ${qnaData.priority === 2 ? 'selected' : ''}>2 - High</option>
+                                        <option value="3" ${qnaData.priority === 3 ? 'selected' : ''}>3 - Medium</option>
+                                        <option value="4" ${qnaData.priority === 4 ? 'selected' : ''}>4 - Low</option>
+                                        <option value="5" ${qnaData.priority === 5 ? 'selected' : ''}>5 - Lowest</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-end space-x-3 p-6 border-t bg-gray-50">
+                            <button onclick="document.getElementById('edit-trade-qna-modal').remove()" 
+                                    class="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                                Cancel
+                            </button>
+                            <button onclick="knowledgeManager.saveEditedTradeQnA('${qnaId}')" 
+                                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                                <i class="fas fa-save mr-2"></i>Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Add modal to page
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        async saveEditedTradeQnA(qnaId) {
+            try {
+                // Get form values
+                const category = document.getElementById('edit-qna-category').value.trim();
+                const question = document.getElementById('edit-qna-question').value.trim();
+                const answer = document.getElementById('edit-qna-answer').value.trim();
+                const difficulty = document.getElementById('edit-qna-difficulty').value;
+                const priority = parseInt(document.getElementById('edit-qna-priority').value);
+
+                // Validate required fields
+                if (!question || !answer) {
+                    this.showErrorMessage('Question and Answer are required');
+                    return;
+                }
+
+                // Prepare update data
+                const updateData = {
+                    question,
+                    answer,
+                    tradeCategory: category || 'General',
+                    difficulty,
+                    priority,
+                    keywords: this.extractKeywords(question + ' ' + answer),
+                    updatedAt: new Date().toISOString()
+                };
+
+                console.log('💾 Saving edited Trade Q&A:', updateData);
+
+                // Send PUT request to update the Q&A
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/trade-qna/${qnaId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    },
+                    body: JSON.stringify(updateData)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                console.log('✅ Trade Q&A updated successfully:', result);
+
+                // Close modal
+                document.getElementById('edit-trade-qna-modal').remove();
+
+                // Show success message
+                this.showSuccessMessage('Trade Q&A updated successfully!');
+
+                // Refresh the Trade Q&A display
+                await this.renderTradeQnA();
+
+            } catch (error) {
+                console.error('❌ Error updating Trade Q&A:', error);
+                this.showErrorMessage(`Failed to update Trade Q&A: ${error.message}`);
+            }
+        }
+
+        viewGlobalQnA(qnaId) {
+            console.log('👁️ VIEW: Opening Global Q&A viewer for', qnaId);
+            
+            // Find the Global Q&A data from loaded knowledge
+            // Check both global and company data since global Q&As might be in either
+            let qnaData = null;
+            
+            // First check if it's in the global Q&As from the current render
+            const globalContainer = document.getElementById('global-trade-qna-list');
+            if (globalContainer) {
+                const qnaElement = globalContainer.querySelector(`[data-qna-id="${qnaId}"]`);
+                if (qnaElement) {
+                    // Extract data from the DOM element (fallback method)
+                    const question = qnaElement.querySelector('h5').textContent;
+                    const answer = qnaElement.querySelector('p').textContent;
+                    const categorySpan = qnaElement.querySelector('.bg-purple-100');
+                    const category = categorySpan ? categorySpan.textContent : 'General';
+                    
+                    qnaData = {
+                        id: qnaId,
+                        question,
+                        answer,
+                        tradeCategory: category,
+                        isGlobal: true
+                    };
+                }
+            }
+            
+            if (!qnaData) {
+                this.showErrorMessage('Global Q&A not found');
+                return;
+            }
+
+            // Create view modal HTML
+            const modalHtml = `
+                <div id="view-global-qna-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                        <div class="flex items-center justify-between p-6 border-b bg-blue-50">
+                            <div class="flex items-center">
+                                <i class="fas fa-globe text-blue-600 text-xl mr-3"></i>
+                                <h3 class="text-lg font-semibold text-blue-900">Global Trade Q&A</h3>
+                                <span class="ml-3 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">Read-only</span>
+                            </div>
+                            <button onclick="document.getElementById('view-global-qna-modal').remove()" class="text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <div class="flex items-center mb-2">
+                                    <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+                                    <span class="text-sm font-medium text-blue-800">This is a global Q&A inherited from your selected trade categories</span>
+                                </div>
+                                <p class="text-xs text-blue-600">Global Q&As cannot be edited - they're managed centrally for all companies</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Trade Category</label>
+                                <div class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-700">
+                                    ${qnaData.tradeCategory || 'General'}
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Question</label>
+                                <div class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 min-h-[60px]">
+                                    ${qnaData.question || ''}
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Answer</label>
+                                <div class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 min-h-[100px]">
+                                    ${qnaData.answer || ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-end space-x-3 p-6 border-t bg-gray-50">
+                            <button onclick="document.getElementById('view-global-qna-modal').remove()" 
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                                <i class="fas fa-check mr-2"></i>Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Add modal to page
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
         }
 
         async deleteTradeQnA(qnaId) {
