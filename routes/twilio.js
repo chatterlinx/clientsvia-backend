@@ -8,7 +8,8 @@
 const express = require('express');
 const twilio = require('twilio');
 const Company = require('../models/Company');
-const { answerQuestion, loadCompanyQAs } = require('../services/agent');
+// 🚀 V2 SYSTEM: Using V2 AI Agent Runtime instead of legacy agent.js
+const { initializeCall, processUserInput } = require('../services/v2AIAgentRuntime');
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
 // const aiAgentRuntime = require('../services/aiAgentRuntime');
 const { findCachedAnswer } = require('../utils/aiAgent');
@@ -219,7 +220,7 @@ async function getCompanyByPhoneNumber(phoneNumber) {
     }
   }
   if (company) {
-    loadCompanyQAs(company);
+    // 🚀 V2 SYSTEM: Company Q&As loaded automatically by V2 AI Agent Runtime
     if (company._id) {
       // Legacy personality system removed - using modern AI Agent Logic responseCategories
       console.log('🚀 Modern AI Agent Logic system active for company:', company._id.toString());
