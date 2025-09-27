@@ -1726,45 +1726,6 @@
                                                 <!-- Knowledge Management Tab -->
                                                 <div id="new-knowledge-mgmt-content" class="new-ai-tab-content">
                                                     
-                                                    <!-- Header Section -->
-                                                    <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6 mb-6">
-                                                        <div class="flex items-center justify-between mb-4">
-                                                            <div>
-                                                                <h3 class="text-xl font-bold text-green-800 flex items-center mb-2">
-                                                                    <i class="fas fa-database mr-3 text-green-600"></i>Knowledge Management System
-                                                                </h3>
-                                                                <p class="text-sm text-green-700">Manage your AI agent's knowledge base with Company Q&A, Trade Q&A, Templates, and In-House Fallback responses</p>
-                                                            </div>
-                                                            <div class="flex items-center space-x-3">
-                                                                <span id="knowledge-status" class="px-3 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                                                                    <i class="fas fa-check mr-1"></i>Active
-                                                                </span>
-                                                                <button id="test-knowledge-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                                                                    <i class="fas fa-flask mr-2"></i>Test Knowledge
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <!-- Knowledge Statistics -->
-                                                        <div class="grid grid-cols-4 gap-4 mt-4">
-                                                            <div class="bg-white rounded-lg p-3 border border-green-100">
-                                                                <div class="text-xs text-gray-500 uppercase tracking-wide">Company Q&A</div>
-                                                                <div id="km-company-qna-count" class="text-lg font-semibold text-green-600">--</div>
-                                                            </div>
-                                                            <div class="bg-white rounded-lg p-3 border border-green-100">
-                                                                <div class="text-xs text-gray-500 uppercase tracking-wide">Trade Q&A</div>
-                                                                <div id="trade-qna-count" class="text-lg font-semibold text-blue-600">--</div>
-                                                            </div>
-                                                            <div class="bg-white rounded-lg p-3 border border-green-100">
-                                                                <div class="text-xs text-gray-500 uppercase tracking-wide">Templates</div>
-                                                                <div id="templates-count" class="text-lg font-semibold text-purple-600">--</div>
-                                                            </div>
-                                                            <div class="bg-white rounded-lg p-3 border border-green-100">
-                                                                <div class="text-xs text-gray-500 uppercase tracking-wide">Total Entries</div>
-                                                                <div id="total-entries-count" class="text-lg font-semibold text-gray-600">--</div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
 
                                                     <!-- Knowledge Source Tabs -->
                                                     <div class="bg-white border border-gray-200 rounded-lg mb-6">
@@ -14665,27 +14626,13 @@ Key Metrics:
                     total: totalCount
                 });
 
-                // 🎯 UPDATE DOM ELEMENTS
-                const kmCompanyCountEl = document.getElementById('km-company-qna-count');
-                const kmTradeCountEl = document.getElementById('trade-qna-count');
-                
-                if (kmCompanyCountEl) kmCompanyCountEl.textContent = companyQnACount;
-                if (kmTradeCountEl) kmTradeCountEl.textContent = tradeQnACount;
-                document.getElementById('templates-count').textContent = templatesCount;
-                document.getElementById('total-entries-count').textContent = totalCount;
+                // 🎯 SIMPLIFIED: No redundant statistics elements to update
                 
                 console.log('✅ Knowledge Management statistics updated successfully');
                 
             } catch (error) {
                 console.error('❌ Failed to update statistics:', error);
-                // Show error state
-                const kmCompanyCountEl = document.getElementById('km-company-qna-count');
-                const kmTradeCountEl = document.getElementById('trade-qna-count');
-                
-                if (kmCompanyCountEl) kmCompanyCountEl.textContent = '?';
-                if (kmTradeCountEl) kmTradeCountEl.textContent = '?';
-                document.getElementById('templates-count').textContent = '?';
-                document.getElementById('total-entries-count').textContent = '?';
+                // 🎯 SIMPLIFIED: No redundant statistics elements to show error state for
             }
         }
 
