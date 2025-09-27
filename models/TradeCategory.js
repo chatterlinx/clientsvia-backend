@@ -102,7 +102,47 @@ const TradeCategorySchema = new mongoose.Schema({
         index: true
     },
     
-    // Metadata
+    // V2 Audit Trail
+    audit: {
+        createdAt: {
+            type: Date,
+            default: Date.now
+        },
+        createdBy: {
+            type: String,
+            default: 'admin'
+        },
+        updatedAt: {
+            type: Date,
+            default: Date.now
+        },
+        updatedBy: {
+            type: String,
+            default: 'admin'
+        }
+    },
+    
+    // V2 Metadata
+    metadata: {
+        totalQAs: {
+            type: Number,
+            default: 0
+        },
+        totalKeywords: {
+            type: Number,
+            default: 0
+        },
+        lastUpdated: {
+            type: Date,
+            default: Date.now
+        },
+        version: {
+            type: String,
+            default: '2.0.0'
+        }
+    },
+    
+    // Legacy compatibility fields
     createdAt: {
         type: Date,
         default: Date.now,
