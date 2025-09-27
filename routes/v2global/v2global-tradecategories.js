@@ -491,7 +491,9 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
         }
 
         // 🏗️ Create new Q&A entry
+        const qnaId = new ObjectId().toString();
         const newQnA = {
+            id: qnaId, // Required by schema
             _id: new ObjectId(),
             question: question.trim(),
             answer: answer.trim(),
@@ -501,6 +503,8 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
             isActive: true,
             status: 'active',
             priority: 'normal',
+            difficulty: 'basic',
+            confidence: 0.85,
             createdAt: new Date(),
             updatedAt: new Date(),
             createdBy: 'admin'
