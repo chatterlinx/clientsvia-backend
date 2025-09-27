@@ -1240,7 +1240,7 @@ router.post('/categories/:categoryId/generate-top-qnas', authenticateJWT, requir
  * 🧹 V2 NUCLEAR CLEAN - DROP AND REBUILD COLLECTION
  * Clean slate approach for bulletproof V2 architecture
  */
-router.post('/debug/nuclear-clean', async (req, res) => {
+router.post('/debug/nuclear-clean', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const startTime = Date.now();
         
@@ -1314,7 +1314,7 @@ router.post('/debug/nuclear-clean', async (req, res) => {
  * 🔍 DEBUG ENDPOINT - COMPREHENSIVE DATABASE SCAN
  * Find ALL records that might be causing unique constraint violations
  */
-router.get('/debug/comprehensive-scan/:name', async (req, res) => {
+router.get('/debug/comprehensive-scan/:name', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const { name } = req.params;
         const searchName = name.trim();
@@ -1363,7 +1363,7 @@ router.get('/debug/comprehensive-scan/:name', async (req, res) => {
  * 🔍 DEBUG ENDPOINT - RAW DATABASE QUERY
  * Direct MongoDB query to see what's actually in the database
  */
-router.get('/debug/raw-query/:name', async (req, res) => {
+router.get('/debug/raw-query/:name', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const { name } = req.params;
         const searchName = name.trim();
@@ -1404,7 +1404,7 @@ router.get('/debug/raw-query/:name', async (req, res) => {
  * 🧪 DEBUG ENDPOINT - TEST DUPLICATE CHECK
  * Test the duplicate check logic directly
  */
-router.get('/debug/test-duplicate/:name', async (req, res) => {
+router.get('/debug/test-duplicate/:name', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const { name } = req.params;
         const searchName = name.trim();
@@ -1459,7 +1459,7 @@ router.get('/debug/test-duplicate/:name', async (req, res) => {
  * 🧹 DEBUG ENDPOINT - CLEAR REDIS CACHE
  * Temporary endpoint to clear any cached trade category data
  */
-router.post('/debug/clear-cache', async (req, res) => {
+router.post('/debug/clear-cache', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const redisClient = require('../../db').redisClient;
         
@@ -1486,7 +1486,7 @@ router.post('/debug/clear-cache', async (req, res) => {
  * 🔧 DEBUG ENDPOINT - GET ALL CATEGORIES (INCLUDING INACTIVE)
  * Temporary debug endpoint to see all categories in database
  */
-router.get('/debug/all-categories', async (req, res) => {
+router.get('/debug/all-categories', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         // Show ALL categories regardless of companyId to debug the duplicate issue
         const allCategories = await TradeCategory.find({}).lean();
