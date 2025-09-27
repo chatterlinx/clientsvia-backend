@@ -288,10 +288,11 @@ router.post('/categories', async (req, res) => {
             validationErrors.push('Description cannot exceed 200 characters');
         }
 
-        // Check for duplicate category name
+        // Check for duplicate category name (only among active categories)
         const existingCategory = await TradeCategory.findOne({ 
             name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
-            companyId: 'global'
+            companyId: 'global',
+            isActive: true
         });
         
         if (existingCategory) {
@@ -534,6 +535,34 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
             error: 'Failed to add Q&A to trade category',
             details: error.message,
             source: 'v2-global-tradecategories'
+        });
+    }
+});
+
+/**
+ * 🔧 DEBUG ENDPOINT - GET ALL CATEGORIES (INCLUDING INACTIVE)
+ * Temporary debug endpoint to see all categories in database
+ */
+router.get('/debug/all-categories', async (req, res) => {
+    try {
+        const allCategories = await TradeCategory.find({ companyId: 'global' }).lean();
+        
+        res.json({
+            success: true,
+            data: allCategories.map(cat => ({
+                _id: cat._id,
+                name: cat.name,
+                description: cat.description,
+                isActive: cat.isActive,
+                createdAt: cat.audit?.createdAt || cat.createdAt,
+                qnaCount: (cat.qnas || []).length
+            })),
+            total: allCategories.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
     }
 });
