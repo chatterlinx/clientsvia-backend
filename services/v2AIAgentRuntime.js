@@ -30,7 +30,7 @@ class V2AIAgentRuntime {
             if (!company) {
                 console.error(`❌ V2 AGENT: Company ${companyID} not found`);
                 return {
-                    greeting: `Configuration error: Company ${companyID} not found in V2 system`,
+                    greeting: "Configuration error: Company not found in V2 system",
                     callState: { callId, from, to, stage: 'error' }
                 };
             }
@@ -39,7 +39,7 @@ class V2AIAgentRuntime {
             if (!company.aiAgentLogic || !company.aiAgentLogic.enabled) {
                 console.error(`❌ V2 AGENT: Company ${companyID} does not have V2 AI Agent Logic enabled`);
                 return {
-                    greeting: `Configuration error: Company ${company.businessName || company.companyName} must configure V2 Agent Personality`,
+                    greeting: "Configuration error: Company must configure V2 Agent Personality",
                     callState: { callId, from, to, stage: 'configuration_error' }
                 };
             }
@@ -94,55 +94,50 @@ class V2AIAgentRuntime {
             console.log(`✅ V2 GREETING: Using V2 opening phrase: "${greeting}"`);
         }
         
-        // 2. Generate default V2 greeting based on Agent Personality settings
+        // 2. V2 PURE SYSTEM: Pre-configured greetings with NO dynamic insertion
         else {
             const personality = aiLogic.agentPersonality || {};
             const tone = personality.corePersonality?.voiceTone || 'friendly';
-            const companyName = company.businessName || company.companyName;
             
+            // V2 PURE SYSTEM: Static greetings with no company name insertion
+            // Companies should configure their own greetings in Agent Personality settings
             switch (tone) {
                 case 'professional':
-                    greeting = `Thank you for calling ${companyName}. How may I assist you today?`;
+                    greeting = "Thank you for calling. How may I assist you today?";
                     break;
                 case 'authoritative':
-                    greeting = `${companyName} speaking. What can I help you with?`;
+                    greeting = "How can I help you?";
                     break;
                 case 'empathetic':
-                    greeting = `Hi there! Thanks for reaching out to ${companyName}. I'm here to help you with whatever you need.`;
+                    greeting = "Hi there! I'm here to help you with whatever you need.";
                     break;
                 default: // friendly
-                    greeting = `Thanks for calling ${companyName}! How can I help you today?`;
+                    greeting = "Thanks for calling! How can I help you today?";
             }
-            console.log(`✅ V2 GREETING: Generated default greeting with ${tone} tone: "${greeting}"`);
+            console.log(`✅ V2 PURE: Using static greeting with ${tone} tone (no dynamic insertion)`);
         }
 
-        // Apply V2 placeholder replacements
-        greeting = this.applyV2Placeholders(greeting, company);
+        // V2 PURE SYSTEM: No placeholder contamination - greeting is pre-built
+        greeting = this.buildPureResponse(greeting, company);
         
         return greeting;
     }
 
     /**
-     * 🔄 Apply V2 placeholder replacements
-     * @param {string} text - Text with placeholders
-     * @param {Object} company - Company document
-     * @returns {string} Text with placeholders replaced
+     * 🚀 V2 PURE SYSTEM: NO PLACEHOLDERS - Direct string construction only
+     * V2 responses are pre-built and contextual - no legacy placeholder contamination
+     * @param {string} text - Pre-built response text
+     * @param {Object} company - Company document (for context only)
+     * @returns {string} Clean response text
      */
-    static applyV2Placeholders(text, company) {
+    static buildPureResponse(text, company) {
         if (!text) return text;
 
-        const companyName = company.businessName || company.companyName || 'our company';
+        // V2 PURE SYSTEM: No placeholders, no string replacement, no legacy contamination
+        // All responses should be pre-built and contextual from the AI Agent Logic system
+        console.log(`[V2 PURE] ✅ Using pre-built response without placeholder contamination`);
         
-        // V2 placeholder system - clean and simple
-        let result = text;
-        result = result.replace(/\{companyName\}/gi, companyName);
-        result = result.replace(/\{companyname\}/gi, companyName);
-        result = result.replace(/\{businessName\}/gi, companyName);
-        
-        // Remove any unfilled placeholders
-        result = result.replace(/\{[^}]+\}/g, '');
-        
-        return result.trim();
+        return text.trim();
     }
 
     /**
@@ -241,8 +236,8 @@ class V2AIAgentRuntime {
         // Apply personality tone to response
         responseText = this.applyV2PersonalityTone(responseText, personality);
         
-        // Apply placeholders
-        responseText = this.applyV2Placeholders(responseText, company);
+        // V2 PURE SYSTEM: No placeholder contamination - response is pre-built
+        responseText = this.buildPureResponse(responseText, company);
 
         return {
             text: responseText,
@@ -276,9 +271,10 @@ class V2AIAgentRuntime {
             }
         }
         else if (tone === 'empathetic') {
-            // Add empathetic language
+            // V2 PURE SYSTEM: No dynamic string insertion - responses should be pre-built
+            // Empathetic responses should be configured in Agent Personality settings
             if (!response.startsWith('I understand') && !response.startsWith('I hear')) {
-                response = `I understand. ${response}`;
+                response = "I understand. " + response; // Simple concatenation, no template literals
             }
         }
 
