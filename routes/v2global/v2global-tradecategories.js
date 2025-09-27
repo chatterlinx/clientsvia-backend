@@ -571,6 +571,55 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
 });
 
 /**
+ * 🔍 DEBUG ENDPOINT - COMPREHENSIVE DATABASE SCAN
+ * Find ALL records that might be causing unique constraint violations
+ */
+router.get('/debug/comprehensive-scan/:name', async (req, res) => {
+    try {
+        const { name } = req.params;
+        const searchName = name.trim();
+        
+        // Get direct database connection
+        const db = require('../../db').getDB();
+        const collection = db.collection('enterpriseTradeCategories');
+        
+        // Multiple search strategies
+        const searches = {
+            exactName: await collection.findOne({ name: searchName }),
+            caseInsensitiveName: await collection.findOne({ name: { $regex: new RegExp(`^${searchName}$`, 'i') } }),
+            globalExactName: await collection.findOne({ companyId: 'global', name: searchName }),
+            globalCaseInsensitiveName: await collection.findOne({ companyId: 'global', name: { $regex: new RegExp(`^${searchName}$`, 'i') } }),
+            partialNameMatch: await collection.find({ name: { $regex: searchName, $options: 'i' } }).toArray(),
+            allGlobalCategories: await collection.find({ companyId: 'global' }).toArray(),
+            allCategoriesWithName: await collection.find({ name: { $regex: searchName, $options: 'i' } }).toArray(),
+            totalCount: await collection.countDocuments({}),
+            globalCount: await collection.countDocuments({ companyId: 'global' })
+        };
+        
+        res.json({
+            success: true,
+            searchName,
+            searches,
+            summary: {
+                foundExact: !!searches.exactName,
+                foundCaseInsensitive: !!searches.caseInsensitiveName,
+                foundGlobalExact: !!searches.globalExactName,
+                foundGlobalCaseInsensitive: !!searches.globalCaseInsensitiveName,
+                partialMatches: searches.partialNameMatch.length,
+                totalCategories: searches.totalCount,
+                globalCategories: searches.globalCount
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            stack: error.stack
+        });
+    }
+});
+
+/**
  * 🔍 DEBUG ENDPOINT - RAW DATABASE QUERY
  * Direct MongoDB query to see what's actually in the database
  */
