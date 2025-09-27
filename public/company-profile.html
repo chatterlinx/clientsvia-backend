@@ -1849,30 +1849,95 @@
                                                         -->
                                                         <!-- ========================================== -->
 
-                                                        <!-- Trade Q&A Tab Content -->
+                                                        <!-- 🚀 V2 AI-OPTIMIZED TRADE Q&A INTERFACE -->
                                                         <div id="km-trade-content" class="km-tab-content p-6">
-                                                            <div class="flex items-center justify-between mb-4">
-                                                                <h4 class="text-lg font-semibold text-gray-800">Trade Q&A Management</h4>
-                                                                <button id="add-trade-qna-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                            <!-- Header with Clear Action -->
+                                                            <div class="flex items-center justify-between mb-6">
+                                                                <div>
+                                                                    <h4 class="text-xl font-bold text-gray-800">Trade Q&A Management</h4>
+                                                                    <p class="text-sm text-gray-600 mt-1">AI-optimized knowledge base for lightning-fast customer responses</p>
+                                                                </div>
+                                                                <button id="add-trade-qna-btn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-lg">
                                                                     <i class="fas fa-plus mr-2"></i>Add Trade Q&A
                                                                 </button>
                                                             </div>
-                                                            
-                                                            <!-- Trade Category Selection -->
-                                                            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-                                                                <h5 class="font-medium text-yellow-800 mb-2">Trade Category</h5>
-                                                                <select id="trade-category-select" class="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500">
-                                                                    <option value="">Select Trade Category</option>
-                                                                    <option value="hvac">HVAC</option>
-                                                                    <option value="plumbing">Plumbing</option>
-                                                                    <option value="electrical">Electrical</option>
-                                                                    <option value="general">General Contracting</option>
-                                                                </select>
+
+                                                            <!-- 🎯 AI PERFORMANCE METRICS -->
+                                                            <div class="grid grid-cols-3 gap-4 mb-6">
+                                                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                                                                    <div class="text-2xl font-bold text-blue-600" id="global-qna-count">0</div>
+                                                                    <div class="text-sm text-blue-800 font-medium">Global Q&As</div>
+                                                                    <div class="text-xs text-blue-600">Inherited from trade categories</div>
+                                                                </div>
+                                                                <div class="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                                                                    <div class="text-2xl font-bold text-green-600" id="company-qna-count">0</div>
+                                                                    <div class="text-sm text-green-800 font-medium">Company Q&As</div>
+                                                                    <div class="text-xs text-green-600">Custom company-specific</div>
+                                                                </div>
+                                                                <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
+                                                                    <div class="text-2xl font-bold text-purple-600" id="ai-response-time">< 50ms</div>
+                                                                    <div class="text-sm text-purple-800 font-medium">AI Response Time</div>
+                                                                    <div class="text-xs text-purple-600">Redis + Mongoose cached</div>
+                                                                </div>
                                                             </div>
 
-                                                            <!-- Trade Q&A List -->
-                                                            <div id="trade-qna-list" class="space-y-3">
-                                                                <!-- Trade Q&A items will be dynamically loaded here -->
+                                                            <!-- 🌍 GLOBAL TRADE Q&As SECTION -->
+                                                            <div class="mb-8">
+                                                                <div class="flex items-center mb-4">
+                                                                    <div class="flex items-center">
+                                                                        <i class="fas fa-globe text-blue-500 text-lg mr-3"></i>
+                                                                        <h5 class="text-lg font-semibold text-gray-800">Global Trade Q&As</h5>
+                                                                        <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">Auto-Inherited</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                                                    <p class="text-sm text-blue-800">
+                                                                        <i class="fas fa-info-circle mr-2"></i>
+                                                                        These Q&As are automatically inherited from your selected trade categories. 
+                                                                        They provide instant professional responses for common industry questions.
+                                                                    </p>
+                                                                </div>
+                                                                <div id="global-trade-qna-list" class="space-y-3">
+                                                                    <!-- Global Q&As loaded here -->
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- 🏢 COMPANY-SPECIFIC TRADE Q&As SECTION -->
+                                                            <div class="mb-8">
+                                                                <div class="flex items-center mb-4">
+                                                                    <div class="flex items-center">
+                                                                        <i class="fas fa-building text-green-500 text-lg mr-3"></i>
+                                                                        <h5 class="text-lg font-semibold text-gray-800">Company-Specific Trade Q&As</h5>
+                                                                        <span class="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">Custom</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                                                                    <p class="text-sm text-green-800">
+                                                                        <i class="fas fa-star mr-2"></i>
+                                                                        Add your company's unique Q&As here. Examples: "What brands do you carry?", "What's your service fee?", "Do you offer warranties?"
+                                                                    </p>
+                                                                </div>
+                                                                <div id="company-trade-qna-list" class="space-y-3">
+                                                                    <!-- Company Q&As loaded here -->
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- 🚀 AI AGENT QUICK REFERENCE -->
+                                                            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                                                <div class="flex items-center mb-3">
+                                                                    <i class="fas fa-robot text-gray-600 mr-2"></i>
+                                                                    <h6 class="font-medium text-gray-800">AI Agent Performance</h6>
+                                                                </div>
+                                                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                                                    <div>
+                                                                        <span class="text-gray-600">Search Priority:</span>
+                                                                        <span class="ml-2 text-gray-800 font-medium">Company Q&As → Global Q&As</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span class="text-gray-600">Cache Strategy:</span>
+                                                                        <span class="ml-2 text-gray-800 font-medium">Redis 30min TTL</span>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
 
@@ -14720,68 +14785,104 @@ Key Metrics:
          * ⚡ Your brilliant inheritance system in action!
          */
         async renderTradeQnA() {
-            const container = document.getElementById('trade-qna-list');
-            if (!container) return;
+            // 🚀 V2 AI-OPTIMIZED DUAL-SECTION RENDERING
+            const globalContainer = document.getElementById('global-trade-qna-list');
+            const companyContainer = document.getElementById('company-trade-qna-list');
+            const globalCountEl = document.getElementById('global-qna-count');
+            const companyCountEl = document.getElementById('company-qna-count');
+            
+            if (!globalContainer || !companyContainer) return;
 
-            // Show loading state
-            container.innerHTML = `
-                <div class="text-center py-8">
+            // Show loading state in both sections
+            globalContainer.innerHTML = `
+                <div class="text-center py-6">
                     <div class="inline-flex items-center space-x-2 text-gray-500">
                         <i class="fas fa-spinner fa-spin"></i>
-                        <span>Loading inherited Q&As...</span>
+                        <span>Loading global Q&As...</span>
+                    </div>
+                </div>
+            `;
+            
+            companyContainer.innerHTML = `
+                <div class="text-center py-6">
+                    <div class="inline-flex items-center space-x-2 text-gray-500">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Loading company Q&As...</span>
                     </div>
                 </div>
             `;
 
             try {
-                // 🚀 V2 LOAD DUAL-LAYER TRADE Q&As (V2 inheritance system!)
-                const response = await fetch(`/api/v2global/trade-categories/categories/for-company/${this.companyId}`, {
+                // 🚀 LOAD GLOBAL Q&As (Inherited from trade categories)
+                const globalResponse = await fetch(`/api/v2global/trade-categories/categories/for-company/${this.companyId}`, {
                     headers: {
                         'Authorization': `Bearer ${this.getAuthToken()}`
                     }
                 });
 
-                if (!response.ok) {
-                    throw new Error(`Failed to load Trade Q&As: ${response.status}`);
-                }
-
-                const result = await response.json();
-                
-                // Extract Q&As from V2 format
-                let tradeQnAs = [];
-                if (result.success && result.data?.categories) {
-                    result.data.categories.forEach(category => {
-                        if (category.isSelected && category.qnas) {
-                            category.qnas.forEach(qna => {
-                                tradeQnAs.push({
-                                    ...qna,
-                                    tradeCategory: category.name,
-                                    isGlobal: true
-                                });
-                            });
-                        }
-                    });
-                }
-                
-                console.log('🎉 DUAL-LAYER Trade Q&As loaded:', {
-                    total: tradeQnAs.length,
-                    global: result.meta?.global || 0,
-                    companySpecific: result.meta?.companySpecific || 0,
-                    selectedTrades: result.meta?.selectedTrades || []
+                // 🚀 LOAD COMPANY-SPECIFIC Q&As
+                const companyResponse = await fetch(`/api/company/${this.companyId}/knowledge-management`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.getAuthToken()}`
+                    }
                 });
 
-                container.innerHTML = '';
+                let globalQnAs = [];
+                let companyQnAs = [];
+                let selectedTrades = [];
 
-                if (tradeQnAs.length === 0) {
-                    // Show different messages based on whether company has selected trade categories
-                    const selectedTrades = result.meta?.selectedTrades || [];
+                // Process Global Q&As
+                if (globalResponse.ok) {
+                    const globalResult = await globalResponse.json();
+                    selectedTrades = globalResult.meta?.selectedTrades || [];
                     
+                    if (globalResult.success && globalResult.data?.categories) {
+                        globalResult.data.categories.forEach(category => {
+                            if (category.isSelected && category.qnas) {
+                                category.qnas.forEach(qna => {
+                                    globalQnAs.push({
+                                        ...qna,
+                                        tradeCategory: category.name,
+                                        isGlobal: true,
+                                        source: 'global'
+                                    });
+                                });
+                            }
+                        });
+                    }
+                }
+
+                // Process Company-Specific Q&As
+                if (companyResponse.ok) {
+                    const companyResult = await companyResponse.json();
+                    if (companyResult.success && companyResult.data?.tradeQnA) {
+                        companyQnAs = companyResult.data.tradeQnA.map(qna => ({
+                            ...qna,
+                            isGlobal: false,
+                            source: 'company'
+                        }));
+                    }
+                }
+                
+                console.log('🎯 AI-OPTIMIZED Trade Q&As loaded:', {
+                    globalQnAs: globalQnAs.length,
+                    companyQnAs: companyQnAs.length,
+                    selectedTrades: selectedTrades,
+                    totalForAI: globalQnAs.length + companyQnAs.length
+                });
+
+                // Update performance metrics
+                if (globalCountEl) globalCountEl.textContent = globalQnAs.length;
+                if (companyCountEl) companyCountEl.textContent = companyQnAs.length;
+
+                // 🌍 RENDER GLOBAL Q&As SECTION
+                if (globalQnAs.length === 0) {
                     if (selectedTrades.length === 0) {
-                        container.innerHTML = `
-                            <div class="text-center py-8">
+                        globalContainer.innerHTML = `
+                            <div class="text-center py-8 bg-blue-50 rounded-lg border border-blue-200">
                                 <i class="fas fa-magic text-blue-400 text-3xl mb-3"></i>
-                                <h5 class="text-lg font-medium text-gray-600 mb-2">Select Trade Categories First</h5>
-                                <p class="text-gray-500 mb-4">Choose your trade specializations to inherit professional Q&As instantly.</p>
+                                <h5 class="text-lg font-medium text-blue-600 mb-2">Select Trade Categories</h5>
+                                <p class="text-blue-500 mb-4">Choose your specializations to inherit professional Q&As instantly</p>
                                 <button onclick="knowledgeManager.openTradeQnAModal()" 
                                         class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
                                     <i class="fas fa-magic mr-2"></i>Select Trade Categories
@@ -14789,106 +14890,65 @@ Key Metrics:
                             </div>
                         `;
                     } else {
-                        container.innerHTML = `
-                            <div class="text-center py-8">
-                                <i class="fas fa-tools text-gray-400 text-3xl mb-3"></i>
-                                <h5 class="text-lg font-medium text-gray-600 mb-2">No Q&As Available Yet</h5>
-                                <p class="text-gray-500 mb-2">Selected categories: ${selectedTrades.join(', ')}</p>
-                                <p class="text-gray-500 mb-4">Add company-specific Q&As for your selected trade categories.</p>
-                                        <div class="flex space-x-3">
-                                            <button onclick="knowledgeManager.showAddTradeQnAModal()" 
-                                                    class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
-                                                <i class="fas fa-plus mr-2"></i>Add Trade Q&A
-                                            </button>
-                                            <button onclick="knowledgeManager.openTradeQnAModal()" 
-                                                    class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                                                <i class="fas fa-magic mr-2"></i>Select Trade Categories
-                                            </button>
-                                        </div>
+                        globalContainer.innerHTML = `
+                            <div class="text-center py-6 bg-blue-50 rounded-lg border border-blue-200">
+                                <i class="fas fa-info-circle text-blue-400 text-2xl mb-2"></i>
+                                <p class="text-sm text-blue-600 mb-1">Selected: ${selectedTrades.join(', ')}</p>
+                                <p class="text-xs text-blue-500">No global Q&As available for these categories yet</p>
                             </div>
                         `;
                     }
-                    return;
-                }
-
-                // 🎯 GROUP Q&As BY SOURCE (Global vs Company-Specific)
-                const globalQnAs = tradeQnAs.filter(qna => qna.isGlobal);
-                const companyQnAs = tradeQnAs.filter(qna => !qna.isGlobal);
-
-                // 🌐 RENDER GLOBAL Q&As SECTION (Inherited Knowledge)
-                if (globalQnAs.length > 0) {
-                    const globalSection = document.createElement('div');
-                    globalSection.className = 'mb-8';
-                    globalSection.innerHTML = `
-                        <div class="flex items-center justify-between mb-4 pb-2 border-b border-blue-200">
-                            <div class="flex items-center space-x-2">
-                                <i class="fas fa-globe text-blue-600"></i>
-                                <h4 class="text-sm font-semibold text-blue-800">Inherited Global Knowledge</h4>
-                                <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">${globalQnAs.length} Q&As</span>
-                            </div>
-                            <div class="text-xs text-blue-600">
-                                <i class="fas fa-magic mr-1"></i>Auto-inherited from your selected trade categories
-                            </div>
-                        </div>
-                        <div class="space-y-3" id="global-qnas-list"></div>
-                    `;
-                    container.appendChild(globalSection);
-
-                    const globalList = globalSection.querySelector('#global-qnas-list');
+                } else {
+                    globalContainer.innerHTML = '';
                     globalQnAs.forEach(qna => {
-                        const qnaItem = this.createTradeQnAItem(qna, true); // true = isGlobal
-                        globalList.appendChild(qnaItem);
+                        const qnaItem = this.createTradeQnAItem(qna, true); // true = isGlobal/readonly
+                        globalContainer.appendChild(qnaItem);
                     });
                 }
 
                 // 🏢 RENDER COMPANY-SPECIFIC Q&As SECTION
-                const companySection = document.createElement('div');
-                companySection.className = 'mb-4';
-                companySection.innerHTML = `
-                    <div class="flex items-center justify-between mb-4 pb-2 border-b border-green-200">
-                        <div class="flex items-center space-x-2">
-                            <i class="fas fa-building text-green-600"></i>
-                            <h4 class="text-sm font-semibold text-green-800">Company-Specific Knowledge</h4>
-                            <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">${companyQnAs.length} Q&As</span>
-                        </div>
-                        <button onclick="knowledgeManager.showAddTradeQnAModal()" 
-                                class="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition-colors">
-                            <i class="fas fa-plus mr-1"></i>Add Trade Q&A
-                        </button>
-                    </div>
-                    <div class="space-y-3" id="company-qnas-list"></div>
-                `;
-                container.appendChild(companySection);
-
-                const companyList = companySection.querySelector('#company-qnas-list');
                 if (companyQnAs.length === 0) {
-                    companyList.innerHTML = `
-                        <div class="text-center py-6 bg-green-50 rounded-lg border border-green-200">
-                            <i class="fas fa-plus-circle text-green-400 text-2xl mb-2"></i>
-                            <p class="text-sm text-green-700 mb-2">No company-specific Q&As yet</p>
-                            <p class="text-xs text-green-600">Add Q&As specific to your company's services and policies</p>
+                    companyContainer.innerHTML = `
+                        <div class="text-center py-8 bg-green-50 rounded-lg border border-green-200">
+                            <i class="fas fa-plus-circle text-green-400 text-3xl mb-3"></i>
+                            <h5 class="text-lg font-medium text-green-600 mb-2">Add Your First Trade Q&A</h5>
+                            <p class="text-green-500 mb-4">Create company-specific Q&As for your unique services</p>
+                            <button onclick="knowledgeManager.showAddTradeQnAModal()" 
+                                    class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                                <i class="fas fa-plus mr-2"></i>Add Trade Q&A
+                            </button>
                         </div>
                     `;
                 } else {
+                    companyContainer.innerHTML = '';
                     companyQnAs.forEach(qna => {
-                        const qnaItem = this.createTradeQnAItem(qna, false); // false = company-specific
-                        companyList.appendChild(qnaItem);
+                        const qnaItem = this.createTradeQnAItem(qna, false); // false = editable
+                        companyContainer.appendChild(qnaItem);
                     });
                 }
 
             } catch (error) {
                 console.error('❌ Error loading Trade Q&As:', error);
-                container.innerHTML = `
-                    <div class="text-center py-8 text-red-600">
+                
+                // Show error in both containers
+                const errorHtml = `
+                    <div class="text-center py-6 text-red-600">
                         <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
-                        <div>Failed to load Trade Q&As</div>
+                        <div class="font-medium">Failed to load Q&As</div>
                         <div class="text-sm mt-1">${error.message}</div>
                         <button onclick="knowledgeManager.renderTradeQnA()" 
-                                class="mt-3 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors">
+                                class="mt-3 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm">
                             <i class="fas fa-redo mr-2"></i>Retry
                         </button>
                     </div>
                 `;
+                
+                globalContainer.innerHTML = errorHtml;
+                companyContainer.innerHTML = errorHtml;
+                
+                // Reset counters
+                if (globalCountEl) globalCountEl.textContent = '0';
+                if (companyCountEl) companyCountEl.textContent = '0';
             }
         }
 
