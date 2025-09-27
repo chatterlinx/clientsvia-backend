@@ -343,7 +343,7 @@
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 V2 GLOBAL TRADE CATEGORIES: Initializing...');
+            // V2 GLOBAL TRADE CATEGORIES: Initializing...
             loadTradeCategories();
             setupEventListeners();
             setupQuickSearch();
@@ -372,7 +372,7 @@
         // Load trade categories using V2 API
         async function loadTradeCategories() {
             try {
-                console.log('🔄 V2 GLOBAL TRADE CATEGORIES: Loading categories from V2 API...');
+                // console.log('🔄 V2 GLOBAL TRADE CATEGORIES: Loading categories from V2 API...');
                 
                 // V2 API endpoint
                 const authToken = getAuthToken();
@@ -393,14 +393,14 @@
                 
                 if (result.success) {
                     currentCategories = result.data;
-                    console.log(`✅ V2 GLOBAL TRADE CATEGORIES: Loaded ${currentCategories.length} categories`);
+                    // console.log(`✅ V2 GLOBAL TRADE CATEGORIES: Loaded ${currentCategories.length} categories`);
                     renderCategories(currentCategories);
                     updateStats();
                 } else {
                     throw new Error(result.error || 'Failed to load categories');
                 }
             } catch (error) {
-                console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error loading categories:', error);
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error loading categories:', error);
                 showError(`Failed to load trade categories: ${error.message}`);
                 
                 // Show error state
@@ -563,7 +563,7 @@
             }
 
             try {
-                console.log('🏗️ V2 GLOBAL TRADE CATEGORIES: Creating category:', { name, description });
+                // console.log('🏗️ V2 GLOBAL TRADE CATEGORIES: Creating category:', { name, description });
                 
                 const authToken = getAuthToken();
                 const headers = {
@@ -592,7 +592,7 @@
                     throw new Error(result.error || 'Failed to create category');
                 }
             } catch (error) {
-                console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error creating category:', error);
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error creating category:', error);
                 showError(error.message || 'Failed to create category');
             }
         }
@@ -616,7 +616,7 @@
             }
 
             try {
-                console.log('💾 V2 GLOBAL TRADE CATEGORIES: Saving Q&A:', { categoryId, qnaId, isEdit: !!qnaId });
+                // console.log('💾 V2 GLOBAL TRADE CATEGORIES: Saving Q&A:', { categoryId, qnaId, isEdit: !!qnaId });
                 
                 const url = qnaId 
                     ? `/api/v2global/trade-categories/categories/${categoryId}/qna/${qnaId}`
@@ -652,20 +652,20 @@
                     throw new Error(result.error || 'Failed to save Q&A');
                 }
             } catch (error) {
-                console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error saving Q&A:', error);
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error saving Q&A:', error);
                 showError(error.message || 'Failed to save Q&A');
             }
         }
 
         // Open Q&A modal
         function openQnAModal(categoryId, qnaId = null) {
-            console.log('🔄 V2 MODAL: Opening Q&A modal', { categoryId, qnaId, isEdit: !!qnaId });
+            // console.log('🔄 V2 MODAL: Opening Q&A modal', { categoryId, qnaId, isEdit: !!qnaId });
             
             const modal = document.getElementById('qna-modal');
             const title = document.getElementById('modal-title');
             
             if (!modal) {
-                console.error('❌ V2 MODAL: Q&A modal element not found');
+                // console.error('❌ V2 MODAL: Q&A modal element not found');
                 return;
             }
             
@@ -673,17 +673,17 @@
             document.getElementById('modal-qna-id').value = qnaId || '';
             
             if (qnaId) {
-                console.log('✏️ V2 MODAL: Setting up edit mode');
+                // console.log('✏️ V2 MODAL: Setting up edit mode');
                 title.textContent = 'Edit Q&A';
                 loadQnAForEdit(categoryId, qnaId);
             } else {
-                console.log('➕ V2 MODAL: Setting up add mode');
+                // console.log('➕ V2 MODAL: Setting up add mode');
                 title.textContent = 'Add Q&A';
                 document.getElementById('qna-form').reset();
                 document.getElementById('keyword-preview').classList.add('hidden');
             }
             
-            console.log('✅ V2 MODAL: Showing modal');
+            // console.log('✅ V2 MODAL: Showing modal');
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
@@ -699,21 +699,21 @@
 
         // Load Q&A for editing
         function loadQnAForEdit(categoryId, qnaId) {
-            console.log('🔍 V2 EDIT: Loading Q&A for editing', { categoryId, qnaId });
+            // console.log('🔍 V2 EDIT: Loading Q&A for editing', { categoryId, qnaId });
             
             const category = currentCategories.find(c => c._id === categoryId);
             if (!category) {
-                console.error('❌ V2 EDIT: Category not found for ID:', categoryId);
+                // console.error('❌ V2 EDIT: Category not found for ID:', categoryId);
                 return;
             }
             
             const qna = category.qnas.find(q => q._id === qnaId);
             if (!qna) {
-                console.error('❌ V2 EDIT: Q&A not found for ID:', qnaId);
+                // console.error('❌ V2 EDIT: Q&A not found for ID:', qnaId);
                 return;
             }
             
-            console.log('✅ V2 EDIT: Q&A found for editing');
+            // console.log('✅ V2 EDIT: Q&A found for editing');
             
             // Populate form fields
             document.getElementById('qna-question').value = qna.question || '';
@@ -728,7 +728,7 @@
 
         // Edit Q&A
         function editQnA(categoryId, qnaId) {
-            console.log('🚀 V2 EDIT: Edit Q&A clicked', { categoryId, qnaId });
+            // console.log('🚀 V2 EDIT: Edit Q&A clicked', { categoryId, qnaId });
             openQnAModal(categoryId, qnaId);
         }
 
@@ -739,7 +739,7 @@
             }
 
             try {
-                console.log('🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting Q&A:', { categoryId, qnaId });
+                // console.log('🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting Q&A:', { categoryId, qnaId });
 
                 const response = await fetch(`/api/v2global/trade-categories/categories/${categoryId}/qna/${qnaId}`, {
                     method: 'DELETE',
@@ -756,7 +756,7 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    console.log('✅ V2 GLOBAL TRADE CATEGORIES: Q&A deleted successfully:', result.data);
+                    // console.log('✅ V2 GLOBAL TRADE CATEGORIES: Q&A deleted successfully:', result.data);
                     showSuccess(`Q&A deleted from "${result.data.categoryName}"`);
                     
                     // Reload categories to refresh the UI
@@ -766,7 +766,7 @@
                 }
 
             } catch (error) {
-                console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting Q&A:', error);
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting Q&A:', error);
                 showError(`Failed to delete Q&A: ${error.message}`);
             }
         }
@@ -778,7 +778,7 @@
             }
 
             try {
-                console.log('🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting category:', categoryId);
+                // console.log('🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting category:', categoryId);
 
                 const response = await fetch(`/api/v2global/trade-categories/categories/${categoryId}`, {
                     method: 'DELETE',
@@ -795,7 +795,7 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    console.log('✅ V2 GLOBAL TRADE CATEGORIES: Category deleted successfully:', result.data);
+                    // console.log('✅ V2 GLOBAL TRADE CATEGORIES: Category deleted successfully:', result.data);
                     showSuccess(`Trade category "${result.data.categoryName}" deleted successfully`);
                     
                     // Reload categories to refresh the UI
@@ -805,7 +805,7 @@
                 }
 
             } catch (error) {
-                console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting category:', error);
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting category:', error);
                 showError(`Failed to delete category: ${error.message}`);
             }
         }
@@ -817,7 +817,7 @@
             }
 
             try {
-                console.log('🔄 V2 GLOBAL TRADE CATEGORIES: Regenerating keywords for category:', categoryId);
+                // console.log('🔄 V2 GLOBAL TRADE CATEGORIES: Regenerating keywords for category:', categoryId);
                 
                 showSuccess('Keyword regeneration started! This may take a moment...');
                 
@@ -828,7 +828,7 @@
                 showSuccess('Keywords regenerated successfully!');
                 
             } catch (error) {
-                console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error regenerating keywords:', error);
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error regenerating keywords:', error);
                 showError(`Failed to regenerate keywords: ${error.message}`);
             }
         }
@@ -862,7 +862,7 @@
                 // Store categoryId BEFORE closing modal or any async operations
                 const categoryId = currentGenerateCategoryId;
                 
-                console.log('🤖 V2 AUTO-GENERATE: Admin confirmed generation for category:', categoryId);
+                // console.log('🤖 V2 AUTO-GENERATE: Admin confirmed generation for category:', categoryId);
                 
                 if (!categoryId) {
                     throw new Error('No category ID available for generation');
@@ -874,7 +874,7 @@
                 // Show loading state
                 showSuccess('Generating 15 professional Q&As... This may take a moment.');
                 
-                console.log('🎯 V2 AUTO-GENERATE: Using category ID:', categoryId);
+                // console.log('🎯 V2 AUTO-GENERATE: Using category ID:', categoryId);
 
                 const response = await fetch(`/api/v2global/trade-categories/categories/${categoryId}/generate-top-qnas`, {
                     method: 'POST',
@@ -892,7 +892,7 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    console.log('✅ V2 AUTO-GENERATE: Q&As generated successfully:', result.data);
+                    // console.log('✅ V2 AUTO-GENERATE: Q&As generated successfully:', result.data);
                     
                     // Show detailed success message
                     const message = `Generated ${result.data.generatedQnAs} new Q&As for "${result.data.categoryName}"! ` +
@@ -908,7 +908,7 @@
                 }
 
             } catch (error) {
-                console.error('❌ V2 AUTO-GENERATE: Error generating Q&As:', error);
+                // console.error('❌ V2 AUTO-GENERATE: Error generating Q&As:', error);
                 showError(`Failed to generate Q&As: ${error.message}`);
             }
         }
@@ -1057,7 +1057,7 @@
                 }
 
             } catch (error) {
-                console.error('❌ V2 SEARCH: Error performing search:', error);
+                // console.error('❌ V2 SEARCH: Error performing search:', error);
                 searchResults.innerHTML = `
                     <div class="text-center py-8">
                         <i class="fas fa-exclamation-triangle text-2xl text-red-400 mb-2"></i>
@@ -1134,7 +1134,7 @@
             document.getElementById('stats-qnas').textContent = totalQnAs;
             document.getElementById('stats-keywords').textContent = totalKeywords;
             
-            console.log('📊 V2 Stats updated:', { totalCategories, totalQnAs, totalKeywords });
+            // console.log('📊 V2 Stats updated:', { totalCategories, totalQnAs, totalKeywords });
         }
 
         // Helper functions
