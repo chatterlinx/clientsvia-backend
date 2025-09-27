@@ -39,7 +39,7 @@ const { ObjectId } = require('mongodb');
  * 🏷️ GET ALL TRADE CATEGORIES - V2 Global Trade Categories
  * Enhanced with Q&A counts, keyword statistics, and caching
  */
-router.get('/categories', async (req, res) => {
+router.get('/categories', authenticateJWT, async (req, res) => {
     try {
         const startTime = Date.now();
         const {
@@ -183,7 +183,7 @@ router.get('/categories', async (req, res) => {
  * 📊 GET TRADE CATEGORIES STATISTICS - V2 Global Dashboard
  * Real-time statistics for admin dashboard
  */
-router.get('/statistics', async (req, res) => {
+router.get('/statistics', authenticateJWT, async (req, res) => {
     try {
         const startTime = Date.now();
         
@@ -263,7 +263,7 @@ router.get('/statistics', async (req, res) => {
  * 🏷️ POST CREATE TRADE CATEGORY - V2 Global Trade Categories
  * Create new global trade category with validation
  */
-router.post('/categories', async (req, res) => {
+router.post('/categories', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const startTime = Date.now();
         const { name, description } = req.body;
@@ -428,7 +428,7 @@ router.post('/categories', async (req, res) => {
  * 🤖 POST ADD Q&A TO TRADE CATEGORY - V2 Global Trade Categories
  * Add Q&A with auto-generated keywords to global trade category
  */
-router.post('/categories/:categoryId/qna', async (req, res) => {
+router.post('/categories/:categoryId/qna', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const { categoryId } = req.params;
         const { question, answer, manualKeywords = [] } = req.body;
@@ -685,7 +685,7 @@ router.delete('/categories/:categoryId/qna/:qnaId', async (req, res) => {
  * 🤖 AUTO-GENERATE TOP 20 Q&As - V2 Enterprise Feature
  * Generate industry-specific, booking-focused Q&As for trade categories
  */
-router.post('/categories/:categoryId/generate-top-qnas', async (req, res) => {
+router.post('/categories/:categoryId/generate-top-qnas', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
         const { categoryId } = req.params;
         const startTime = Date.now();
@@ -1639,5 +1639,148 @@ function generateKeywords(question, answer, categoryName) {
     
     return keywords;
 }
+
+/**
+ * 🗑️ DELETE TRADE CATEGORY - V2 Global Trade Categories
+ * Soft delete or hard delete trade category
+ */
+router.delete('/categories/:categoryId', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        const { hard = false } = req.query;
+        const startTime = Date.now();
+
+        logger.info(`🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting category ${categoryId}`, { hard });
+
+        const category = await TradeCategory.findOne({ _id: categoryId, companyId: 'global' });
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                error: 'Trade category not found',
+                source: 'v2-global-tradecategories'
+            });
+        }
+
+        if (hard === 'true') {
+            await TradeCategory.findByIdAndDelete(categoryId);
+            logger.info(`✅ V2 GLOBAL TRADE CATEGORIES: Category permanently deleted`, { categoryId, name: category.name });
+        } else {
+            category.isActive = false;
+            category.audit = category.audit || {};
+            category.audit.updatedAt = new Date();
+            category.audit.updatedBy = 'admin';
+            await category.save();
+            logger.info(`✅ V2 GLOBAL TRADE CATEGORIES: Category soft deleted`, { categoryId, name: category.name });
+        }
+
+        // Clear cache
+        try {
+            await redisClient.del('v2-global-trade-categories');
+            await redisClient.del('v2-global-trade-statistics');
+        } catch (cacheError) {
+            logger.warn('Cache clear failed during category deletion', cacheError);
+        }
+
+        const responseTime = Date.now() - startTime;
+        res.json({
+            success: true,
+            message: `Trade category ${hard === 'true' ? 'permanently deleted' : 'deactivated'}`,
+            data: { categoryId, categoryName: category.name, deletionType: hard === 'true' ? 'permanent' : 'soft' },
+            meta: { responseTime, source: 'v2-global-tradecategories' }
+        });
+
+    } catch (error) {
+        logger.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting category', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete trade category',
+            details: error.message,
+            source: 'v2-global-tradecategories'
+        });
+    }
+});
+
+/**
+ * 🗑️ DELETE Q&A FROM TRADE CATEGORY - V2 Global Trade Categories
+ * Remove specific Q&A from trade category
+ */
+router.delete('/categories/:categoryId/qna/:qnaId', authenticateJWT, requireRole('admin'), async (req, res) => {
+    try {
+        const { categoryId, qnaId } = req.params;
+        const startTime = Date.now();
+
+        logger.info(`🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting Q&A ${qnaId} from category ${categoryId}`);
+
+        const category = await TradeCategory.findOne({ _id: categoryId, companyId: 'global' });
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                error: 'Trade category not found',
+                source: 'v2-global-tradecategories'
+            });
+        }
+
+        const qnaIndex = category.qnas.findIndex(qna => qna.id === qnaId || qna._id.toString() === qnaId);
+        if (qnaIndex === -1) {
+            return res.status(404).json({
+                success: false,
+                error: 'Q&A not found in this category',
+                source: 'v2-global-tradecategories'
+            });
+        }
+
+        const removedQnA = category.qnas[qnaIndex];
+        category.qnas.splice(qnaIndex, 1);
+
+        // Update metadata
+        category.metadata = category.metadata || {};
+        category.metadata.totalQAs = category.qnas.length;
+        category.metadata.totalKeywords = category.qnas.reduce((total, qna) => total + (qna.keywords || []).length, 0);
+        category.metadata.lastUpdated = new Date();
+
+        category.audit = category.audit || {};
+        category.audit.updatedAt = new Date();
+        category.audit.updatedBy = 'admin';
+
+        await category.save();
+
+        // Clear cache
+        try {
+            await redisClient.del('v2-global-trade-categories');
+            await redisClient.del('v2-global-trade-statistics');
+        } catch (cacheError) {
+            logger.warn('Cache clear failed during Q&A deletion', cacheError);
+        }
+
+        const responseTime = Date.now() - startTime;
+        logger.info(`✅ V2 GLOBAL TRADE CATEGORIES: Q&A deleted successfully`, {
+            categoryId,
+            qnaId,
+            remainingQnAs: category.qnas.length,
+            responseTime
+        });
+
+        res.json({
+            success: true,
+            data: { 
+                categoryId, 
+                categoryName: category.name, 
+                deletedQnA: { id: removedQnA.id, question: removedQnA.question }, 
+                remainingQnAs: category.qnas.length 
+            },
+            meta: { responseTime, source: 'v2-global-tradecategories' },
+            message: `Q&A removed from "${category.name}"`
+        });
+
+    } catch (error) {
+        logger.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting Q&A', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete Q&A',
+            details: error.message,
+            source: 'v2-global-tradecategories'
+        });
+    }
+});
 
 module.exports = router;
