@@ -39,7 +39,7 @@ const { ObjectId } = require('mongodb');
  * 🏷️ GET ALL TRADE CATEGORIES - V2 Global Trade Categories
  * Enhanced with Q&A counts, keyword statistics, and caching
  */
-router.get('/categories', authenticateJWT, async (req, res) => {
+router.get('/categories', async (req, res) => {
     try {
         const startTime = Date.now();
         const {
@@ -183,7 +183,7 @@ router.get('/categories', authenticateJWT, async (req, res) => {
  * 📊 GET TRADE CATEGORIES STATISTICS - V2 Global Dashboard
  * Real-time statistics for admin dashboard
  */
-router.get('/statistics', authenticateJWT, async (req, res) => {
+router.get('/statistics', async (req, res) => {
     try {
         const startTime = Date.now();
         
@@ -1516,7 +1516,7 @@ router.get('/debug/all-categories', authenticateJWT, requireRole('admin'), async
  * 🔍 GET TRADE CATEGORIES FOR COMPANY PROFILE - V2 Integration Point
  * CRITICAL: This endpoint is used by V2 Profile routes for trade Q&A inheritance
  */
-router.get('/categories/for-company/:companyId', authenticateJWT, async (req, res) => {
+router.get('/categories/for-company/:companyId', async (req, res) => {
     try {
         const { companyId } = req.params;
         const startTime = Date.now();
