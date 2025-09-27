@@ -545,7 +545,8 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
  */
 router.get('/debug/all-categories', async (req, res) => {
     try {
-        const allCategories = await TradeCategory.find({ companyId: 'global' }).lean();
+        // Show ALL categories regardless of companyId to debug the duplicate issue
+        const allCategories = await TradeCategory.find({}).lean();
         
         res.json({
             success: true,
@@ -553,6 +554,7 @@ router.get('/debug/all-categories', async (req, res) => {
                 _id: cat._id,
                 name: cat.name,
                 description: cat.description,
+                companyId: cat.companyId,
                 isActive: cat.isActive,
                 createdAt: cat.audit?.createdAt || cat.createdAt,
                 qnaCount: (cat.qnas || []).length
