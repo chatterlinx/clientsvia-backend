@@ -3523,8 +3523,7 @@ This would be a great time to also check..."></textarea>
 
         // Utility function to show notifications
         function showNotification(message, type = 'info') {
-            console.log('🔔 NOTIFICATION CALLED:', message, 'Type:', type);
-            console.log('🔔 NOTIFICATION STACK:', new Error().stack);
+            console.log('🔔 NOTIFICATION:', message, 'Type:', type);
             
             // Create notification element
             const notification = document.createElement('div');
@@ -4996,6 +4995,10 @@ This error needs to be fixed - not masked!
 
             // Show loading state
             const container = document.getElementById('agent-analytics-container');
+            if (!container) {
+                console.warn('⚠️ Agent analytics container not found - skipping analytics load');
+                return;
+            }
             container.innerHTML = `
                 <div class="text-center py-8">
                     <div class="inline-flex items-center px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
@@ -14591,26 +14594,11 @@ Key Metrics:
                 // 🏢 COMPANY Q&A COUNT (from knowledgeData)
                 const companyQnACount = this.knowledgeData.companyQnA?.length || 0;
                 
-                // 🔧 TRADE Q&A COUNT (from dual-layer API - your brilliant system!)
+                // 🔧 TRADE Q&A COUNT (from loaded knowledge data - no API calls needed)
                 let tradeQnACount = 0;
-                try {
-                    // 🚀 V2 SYSTEM: Use company knowledge API
-                    const tradeResponse = await fetch(`/api/knowledge/company/${this.companyId}/qnas`, {
-                        headers: { 'Authorization': `Bearer ${this.getAuthToken()}` }
-                    });
-                    if (tradeResponse.ok) {
-                        const tradeData = await tradeResponse.json();
-                        // Count both global and company-specific Q&As
-                        tradeQnACount = (tradeData.globalQnAs?.length || 0) + (tradeData.companyQnAs?.length || 0);
-                        console.log('🔧 Trade Q&A count from dual-layer API:', {
-                            global: tradeData.globalQnAs?.length || 0,
-                            company: tradeData.companyQnAs?.length || 0,
-                            total: tradeQnACount
-                        });
-                    }
-                } catch (error) {
-                    console.warn('⚠️ Could not load Trade Q&A count:', error.message);
-                    tradeQnACount = this.knowledgeData.tradeQnA?.length || 0; // Fallback to old data
+                if (this.knowledgeData?.tradeQnA) {
+                    tradeQnACount = this.knowledgeData.tradeQnA.length;
+                    console.log('🔧 Trade Q&A count from loaded data:', tradeQnACount);
                 }
                 
                 // 📝 TEMPLATES COUNT (from knowledgeData)  
