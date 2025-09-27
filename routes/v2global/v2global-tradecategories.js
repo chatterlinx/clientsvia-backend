@@ -1040,7 +1040,7 @@ router.post('/categories/:categoryId/generate-top-qnas', async (req, res) => {
         ];
     }
     
-    // Electrical Q&As
+    // Electrical Q&As - EXPANDED TO 15 FOR FULL COVERAGE
     if (categoryLower.includes('electrical')) {
         return [
             {
@@ -1072,6 +1072,66 @@ router.post('/categories/:categoryId/generate-top-qnas', async (req, res) => {
                 answer: "Panel upgrades typically range from $1,200-3,000 depending on your needs. We offer free estimates and can often complete the work in one day. Interested in a consultation?",
                 keywords: ["panel upgrade", "cost", "estimate", "one day", "consultation"],
                 priority: "high"
+            },
+            {
+                question: "What are your electrical service hours?",
+                answer: "We're available Monday through Friday 8 AM to 6 PM, with 24/7 emergency electrical service. What type of electrical work do you need? I can check our availability.",
+                keywords: ["hours", "service", "emergency", "availability", "electrical work"],
+                priority: "high"
+            },
+            {
+                question: "Do you offer free electrical estimates?",
+                answer: "Yes, we provide free estimates for all electrical services. We can usually schedule an estimate within 24 hours. What electrical project are you looking to get quoted?",
+                keywords: ["estimate", "free", "quote", "electrical project", "schedule"],
+                priority: "high"
+            },
+            {
+                question: "Are your electricians licensed and insured?",
+                answer: "Absolutely! All our electricians are fully licensed, bonded, and insured for your protection. They're certified professionals with years of experience. Would you like to schedule a service call?",
+                keywords: ["licensed", "insured", "bonded", "certified", "electricians"],
+                priority: "normal"
+            },
+            {
+                question: "Can you install smart home devices?",
+                answer: "Yes, we install smart switches, outlets, thermostats, and home automation systems. We'll ensure everything is properly wired and configured. What smart devices interest you?",
+                keywords: ["smart home", "smart switches", "automation", "thermostats", "configuration"],
+                priority: "normal"
+            },
+            {
+                question: "Why do my lights keep flickering?",
+                answer: "Flickering lights can indicate loose connections, overloaded circuits, or faulty wiring - all potential safety hazards. We can diagnose and fix this quickly. When can we take a look?",
+                keywords: ["flickering lights", "loose connections", "overloaded", "faulty wiring", "safety"],
+                priority: "high"
+            },
+            {
+                question: "Do you install whole house generators?",
+                answer: "Yes, we install and service whole house generators including Generac, Kohler, and other major brands. We handle permits and inspections too. Interested in backup power for your home?",
+                keywords: ["generators", "whole house", "generac", "kohler", "backup power"],
+                priority: "normal"
+            },
+            {
+                question: "Can you rewire my old house?",
+                answer: "Absolutely! We specialize in rewiring older homes to modern safety standards. We work efficiently to minimize disruption and handle all permits. Would you like a free assessment?",
+                keywords: ["rewire", "old house", "safety standards", "permits", "assessment"],
+                priority: "normal"
+            },
+            {
+                question: "What's included in an electrical safety inspection?",
+                answer: "We check your panel, wiring, outlets, GFCI protection, and code compliance. You'll get a detailed report with any recommendations. Safety inspections start at $150. Ready to schedule?",
+                keywords: ["safety inspection", "panel", "wiring", "GFCI", "code compliance"],
+                priority: "normal"
+            },
+            {
+                question: "Do you offer financing for electrical work?",
+                answer: "Yes, we offer flexible financing options for larger electrical projects, including 0% interest plans with approved credit. We make electrical upgrades affordable. Want to learn about options?",
+                keywords: ["financing", "electrical projects", "0% interest", "credit", "affordable"],
+                priority: "normal"
+            },
+            {
+                question: "Can you install EV charging stations?",
+                answer: "Yes, we install Level 2 EV charging stations for Tesla, Chevy, Ford, and all electric vehicles. We handle permits and ensure proper electrical capacity. Ready to charge at home?",
+                keywords: ["EV charging", "Level 2", "Tesla", "electric vehicles", "permits"],
+                priority: "normal"
             }
         ];
     }
