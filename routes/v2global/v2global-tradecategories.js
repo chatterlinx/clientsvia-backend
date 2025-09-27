@@ -39,7 +39,7 @@ const { ObjectId } = require('mongodb');
  * 🏷️ GET ALL TRADE CATEGORIES - V2 Global Trade Categories
  * Enhanced with Q&A counts, keyword statistics, and caching
  */
-router.get('/categories', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.get('/categories', authenticateJWT, async (req, res) => {
     try {
         const startTime = Date.now();
         const {
@@ -184,7 +184,7 @@ router.get('/categories', authenticateJWT, requireRole('admin'), async (req, res
  * 📊 GET TRADE CATEGORIES STATISTICS - V2 Global Dashboard
  * Real-time statistics for admin dashboard
  */
-router.get('/statistics', authenticateJWT, requireRole('admin'), async (req, res) => {
+router.get('/statistics', authenticateJWT, async (req, res) => {
     try {
         const startTime = Date.now();
         
