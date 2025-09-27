@@ -575,6 +575,113 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
 });
 
 /**
+ * 🗑️ DELETE TRADE CATEGORY - V2 Global Trade Categories
+ * Soft delete (mark as inactive) or hard delete global trade category
+ */
+router.delete('/categories/:categoryId', async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+        const { hard = false } = req.query;
+        const startTime = Date.now();
+
+        logger.info(`🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting category ${categoryId}`, { hard });
+
+        const category = await TradeCategory.findOne({ _id: categoryId, companyId: 'global' });
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                error: 'Trade category not found',
+                source: 'v2-global-tradecategories'
+            });
+        }
+
+        if (hard === 'true') {
+            await TradeCategory.findByIdAndDelete(categoryId);
+            logger.info(`✅ V2 GLOBAL TRADE CATEGORIES: Category permanently deleted`, { categoryId, name: category.name });
+        } else {
+            category.isActive = false;
+            category.audit = category.audit || {};
+            category.audit.updatedAt = new Date();
+            category.audit.updatedBy = 'admin';
+            await category.save();
+            logger.info(`✅ V2 GLOBAL TRADE CATEGORIES: Category soft deleted`, { categoryId, name: category.name });
+        }
+
+        const responseTime = Date.now() - startTime;
+        res.json({
+            success: true,
+            message: `Trade category ${hard === 'true' ? 'permanently deleted' : 'deactivated'}`,
+            data: { categoryId, categoryName: category.name, deletionType: hard === 'true' ? 'permanent' : 'soft' },
+            meta: { responseTime, source: 'v2-global-tradecategories' }
+        });
+
+    } catch (error) {
+        logger.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting category', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete trade category',
+            details: error.message,
+            source: 'v2-global-tradecategories'
+        });
+    }
+});
+
+/**
+ * 🗑️ DELETE Q&A FROM TRADE CATEGORY - V2 Global Trade Categories
+ */
+router.delete('/categories/:categoryId/qna/:qnaId', async (req, res) => {
+    try {
+        const { categoryId, qnaId } = req.params;
+        const startTime = Date.now();
+
+        const category = await TradeCategory.findOne({ _id: categoryId, companyId: 'global' });
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                error: 'Trade category not found',
+                source: 'v2-global-tradecategories'
+            });
+        }
+
+        const qnaIndex = category.qnas.findIndex(qna => qna.id === qnaId || qna._id.toString() === qnaId);
+        if (qnaIndex === -1) {
+            return res.status(404).json({
+                success: false,
+                error: 'Q&A not found in this category',
+                source: 'v2-global-tradecategories'
+            });
+        }
+
+        const removedQnA = category.qnas[qnaIndex];
+        category.qnas.splice(qnaIndex, 1);
+
+        category.metadata = category.metadata || {};
+        category.metadata.totalQAs = category.qnas.length;
+        category.metadata.totalKeywords = category.qnas.reduce((total, qna) => total + (qna.keywords || []).length, 0);
+        category.metadata.lastUpdated = new Date();
+
+        await category.save();
+
+        const responseTime = Date.now() - startTime;
+        res.json({
+            success: true,
+            data: { categoryId, categoryName: category.name, deletedQnA: { id: removedQnA.id, question: removedQnA.question }, remainingQnAs: category.qnas.length },
+            meta: { responseTime, source: 'v2-global-tradecategories' },
+            message: `Q&A removed from "${category.name}"`
+        });
+
+    } catch (error) {
+        logger.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting Q&A', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete Q&A',
+            details: error.message,
+            source: 'v2-global-tradecategories'
+        });
+    }
+});
+
+/**
  * 🧹 V2 NUCLEAR CLEAN - DROP AND REBUILD COLLECTION
  * Clean slate approach for bulletproof V2 architecture
  */
