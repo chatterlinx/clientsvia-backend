@@ -704,12 +704,17 @@ router.post('/categories/:categoryId/generate-top-qnas', async (req, res) => {
         // Get industry-specific Q&As based on category name
         const generatedQnAs = generateIndustryQnAs(category.name, category.description);
         
-        // Add generated Q&As to category (avoid duplicates)
-        const existingQuestions = (category.qnas || []).map(qna => qna.question.toLowerCase());
+        // 🎯 ADMIN CONTROL: Add generated Q&As with flexible duplicate handling
+        const existingQuestions = (category.qnas || []).map(qna => qna.question.toLowerCase().trim());
         const newQnAs = [];
 
         for (const qnaData of generatedQnAs) {
-            if (!existingQuestions.includes(qnaData.question.toLowerCase())) {
+            const questionLower = qnaData.question.toLowerCase().trim();
+            
+            // Only skip if EXACT match exists - admin has full control to add similar questions
+            const exactMatch = existingQuestions.find(existing => existing === questionLower);
+            
+            if (!exactMatch) {
                 const qnaId = new ObjectId().toString();
                 const newQnA = {
                     id: qnaId,
