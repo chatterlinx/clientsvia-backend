@@ -206,12 +206,57 @@ class V2AIAgentRuntime {
         const aiLogic = company.aiAgentLogic;
         const personality = aiLogic.agentPersonality || {};
         
-        // Simple V2 response logic - can be enhanced later
+        // 🚀 V2 ENHANCED: Use Priority-Driven Knowledge Router for intelligent responses
+        try {
+            const PriorityRouter = require('./priorityDrivenKnowledgeRouter');
+            const router = new PriorityRouter();
+            
+            // Execute priority routing with V2 enhanced matching
+            const context = {
+                companyId: company._id.toString(),
+                query: userInput,
+                callState,
+                priorities: aiLogic.knowledgeSourcePriorities || {
+                    priorityFlow: [
+                        { source: 'companyQnA', priority: 1, threshold: 0.8, enabled: true },
+                        { source: 'tradeQnA', priority: 2, threshold: 0.75, enabled: true },
+                        { source: 'templates', priority: 3, threshold: 0.7, enabled: true },
+                        { source: 'inHouseFallback', priority: 4, threshold: 0.5, enabled: true }
+                    ]
+                }
+            };
+            
+            const routingResult = await router.executePriorityRouting(context);
+            
+            if (routingResult && routingResult.response && routingResult.confidence >= 0.5) {
+                console.log(`[V2 KNOWLEDGE] ✅ Found answer from ${routingResult.source} (confidence: ${routingResult.confidence})`);
+                
+                let responseText = routingResult.response;
+                
+                // Apply personality tone to response
+                responseText = this.applyV2PersonalityTone(responseText, personality);
+                
+                // V2 PURE SYSTEM: No placeholder contamination - response is pre-built
+                responseText = this.buildPureResponse(responseText, company);
+
+                return {
+                    text: responseText,
+                    action: 'continue',
+                    confidence: routingResult.confidence,
+                    source: routingResult.source,
+                    metadata: routingResult.metadata
+                };
+            }
+        } catch (knowledgeError) {
+            console.warn(`[V2 KNOWLEDGE] ⚠️ Knowledge routing failed, using fallback:`, knowledgeError.message);
+        }
+        
+        // 🔄 FALLBACK: Basic V2 response logic if knowledge routing fails
         let responseText = "I understand your question. Let me help you with that.";
         let action = 'continue';
         let confidence = 0.7;
 
-        // Check for common patterns
+        // Enhanced keyword matching for common queries
         const input = userInput.toLowerCase();
         
         if (input.includes('hello') || input.includes('hi') || input.includes('hey')) {

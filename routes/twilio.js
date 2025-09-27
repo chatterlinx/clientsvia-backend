@@ -1010,12 +1010,52 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       handleTransfer(twiml, company, "I apologize, but I cannot transfer you at this time. Please try calling back later or visiting our website for assistance.", companyID);
     } else {
       console.log('🎯 CHECKPOINT 20: AI continuing conversation');
-      console.log(`🗣️ AI Response: "${result.text}"`);
+      console.log(`🗣️ AI Response: "${result.response}"`);
       
-      // Continue conversation
-      twiml.say({
-        voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
-      }, escapeTwiML(result.text));
+      // 🎤 V2 ELEVENLABS INTEGRATION: Use ElevenLabs if configured
+      const company = await Company.findById(companyID);
+      const elevenLabsVoice = company?.aiAgentLogic?.voiceSettings?.voiceId;
+      const responseText = result.response || result.text || "I understand. How can I help you?";
+      
+      if (elevenLabsVoice && responseText) {
+        try {
+          console.log(`🎤 V2 ELEVENLABS: Using voice ${elevenLabsVoice} for response`);
+          
+          // Generate ElevenLabs audio
+          const { synthesizeSpeech } = require('../services/elevenLabsService');
+          const audioBuffer = await synthesizeSpeech({
+            text: responseText,
+            voiceId: elevenLabsVoice,
+            stability: company.aiAgentLogic?.voiceSettings?.stability || 0.5,
+            similarity_boost: company.aiAgentLogic?.voiceSettings?.similarityBoost || 0.75,
+            style: company.aiAgentLogic?.voiceSettings?.style || 0.0,
+            model_id: company.aiAgentLogic?.voiceSettings?.modelId || 'eleven_monolingual_v1'
+          });
+          
+          // Store audio in Redis for serving
+          const timestamp = Date.now();
+          const audioKey = `audio:v2:${callSid}_${timestamp}`;
+          await redisClient.setEx(audioKey, 300, audioBuffer.toString('base64'));
+          
+          const audioUrl = `https://${req.get('host')}/api/twilio/audio/v2/${callSid}_${timestamp}`;
+          twiml.play(audioUrl);
+          
+          console.log(`✅ V2 ELEVENLABS: Audio generated and stored at ${audioUrl}`);
+          
+        } catch (elevenLabsError) {
+          console.error('❌ V2 ELEVENLABS: Failed, falling back to Twilio voice:', elevenLabsError.message);
+          // Fallback to Twilio voice
+          twiml.say({
+            voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
+          }, escapeTwiML(responseText));
+        }
+      } else {
+        // Use Twilio voice as fallback
+        console.log('🎤 V2 FALLBACK: Using Twilio voice (no ElevenLabs configured)');
+        twiml.say({
+          voice: result.controlFlags?.tone === 'robotic' ? 'Polly.Joanna' : 'alice'
+        }, escapeTwiML(responseText));
+      }
       
       console.log('🎯 CHECKPOINT 21: Setting up next speech gathering');
       // Set up next gather
