@@ -22,7 +22,8 @@ const express = require('express');
 const router = express.Router();
 const Company = require('../../models/Company');
 const { authenticateJWT } = require('../../middleware/auth');
-const aiAgentCache = require('../../services/aiAgentCacheService');
+// V2 DELETED: Legacy enterprise aiAgentCacheService - using simple Redis directly
+const { redisClient } = require('../../clients');
 const logger = require('../../utils/logger');
 const Joi = require('joi');
 
@@ -71,8 +72,15 @@ router.get('/:companyId/knowledge-source-priorities', authenticateJWT, async (re
     try {
         logger.info(`🎯 GET priorities request for company ${companyId}`);
 
-        // Try cache first for sub-50ms performance
-        let priorities = await aiAgentCache.getPriorities(companyId);
+        // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+        let priorities = null;
+        try {
+            const cacheKey = `company:${companyId}:priorities`;
+            const cached = await redisClient.get(cacheKey);
+            if (cached) priorities = JSON.parse(cached);
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache check failed for priorities`, { error: error.message });
+        }
         
         if (!priorities) {
             // Cache miss - load from database
@@ -96,8 +104,13 @@ router.get('/:companyId/knowledge-source-priorities', authenticateJWT, async (re
                 logger.info(`🎯 Using default priorities for company ${companyId}`);
             }
 
-            // Cache the result for future requests
-            await aiAgentCache.cachePriorities(companyId, priorities);
+            // V2 SYSTEM: Simple Redis cache set (no legacy enterprise cache service)
+            try {
+                const cacheKey = `company:${companyId}:priorities`;
+                await redisClient.setex(cacheKey, 3600, JSON.stringify(priorities)); // 1 hour TTL
+            } catch (error) {
+                logger.warn(`⚠️ V2 Cache set failed for priorities`, { error: error.message });
+            }
         }
 
         const responseTime = Date.now() - startTime;
@@ -209,15 +222,19 @@ router.put('/:companyId/knowledge-source-priorities', authenticateJWT, async (re
         }
         console.log('✅ CHECKPOINT 4: MongoDB update successful');
 
-        // Invalidate cache to ensure fresh data
-        console.log('🔍 CHECKPOINT 5: Invalidating Redis cache...');
-        await aiAgentCache.invalidateCompany(companyId);
-        console.log('✅ CHECKPOINT 5: Redis cache invalidated');
-        
-        // Cache the new configuration
-        console.log('🔍 CHECKPOINT 6: Caching new data in Redis...');
-        await aiAgentCache.cachePriorities(companyId, updateData);
-        console.log('✅ CHECKPOINT 6: New data cached in Redis');
+        // V2 SYSTEM: Simple Redis cache invalidation and update (no legacy enterprise cache service)
+        console.log('🔍 CHECKPOINT 5: Invalidating V2 Redis cache...');
+        try {
+            const cacheKey = `company:${companyId}:priorities`;
+            await redisClient.del(cacheKey); // Invalidate old cache
+            console.log('✅ CHECKPOINT 5: V2 Redis cache invalidated');
+            
+            console.log('🔍 CHECKPOINT 6: Caching new data in V2 Redis...');
+            await redisClient.setex(cacheKey, 3600, JSON.stringify(updateData)); // Cache new data
+            console.log('✅ CHECKPOINT 6: New data cached in V2 Redis');
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache update failed for priorities`, { error: error.message });
+        }
 
         const responseTime = Date.now() - startTime;
         console.log('✅ CHECKPOINT 7: Sending success response');
@@ -279,8 +296,16 @@ router.post('/:companyId/knowledge-source-priorities/test-flow', authenticateJWT
 
         const { query, testAllSources, showConfidenceScores, showRoutingDecisions } = value;
 
-        // Get current priorities configuration
-        let priorities = await aiAgentCache.getPriorities(companyId);
+        // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+        let priorities = null;
+        try {
+            const cacheKey = `company:${companyId}:priorities`;
+            const cached = await redisClient.get(cacheKey);
+            if (cached) priorities = JSON.parse(cached);
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache check failed for priorities`, { error: error.message });
+        }
+        
         if (!priorities) {
             const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeSourcePriorities').lean();
             if (!company) {
@@ -395,9 +420,14 @@ router.post('/:companyId/knowledge-source-priorities/reset-defaults', authentica
             });
         }
 
-        // Invalidate cache and cache new defaults
-        await aiAgentCache.invalidateCompany(companyId);
-        await aiAgentCache.cachePriorities(companyId, defaultPriorities);
+        // V2 SYSTEM: Simple Redis cache invalidation and update (no legacy enterprise cache service)
+        try {
+            const cacheKey = `company:${companyId}:priorities`;
+            await redisClient.del(cacheKey); // Invalidate old cache
+            await redisClient.setex(cacheKey, 3600, JSON.stringify(defaultPriorities)); // Cache new defaults
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache update failed for priorities`, { error: error.message });
+        }
 
         const responseTime = Date.now() - startTime;
         logger.info(`🎯 POST reset-defaults success for company ${companyId}`, {
