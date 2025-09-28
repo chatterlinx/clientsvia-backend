@@ -5,6 +5,9 @@
 
 const express = require('express');
 const router = express.Router();
+
+// Import account deletion routes
+const accountDeletionRoutes = require('./admin/accountDeletion');
 const User = require('../models/User');
 const Company = require('../models/Company');
 const { authenticateJWT } = require('../middleware/auth');
@@ -199,5 +202,8 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
         });
     }
 });
+
+// Mount account deletion routes
+router.use('/account-deletion', accountDeletionRoutes);
 
 module.exports = router;
