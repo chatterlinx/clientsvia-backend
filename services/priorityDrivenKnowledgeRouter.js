@@ -24,7 +24,8 @@
 
 const Company = require('../models/Company');
 const CompanyKnowledgeQnA = require('../models/knowledge/CompanyQnA');
-const aiAgentCacheService = require('./aiAgentCacheService');
+// V2 DELETED: Legacy enterprise aiAgentCacheService - using simple Redis directly
+const { redisClient } = require('../clients');
 const logger = require('../utils/logger');
 
 class PriorityDrivenKnowledgeRouter {
@@ -216,11 +217,15 @@ class PriorityDrivenKnowledgeRouter {
     async queryKnowledgeSource(companyId, sourceType, query, context) {
         const cacheKey = `query:${companyId}:${sourceType}:${this.hashQuery(query)}`;
         
-        // Check cache first for performance
-        const cachedResult = await aiAgentCacheService.get(cacheKey);
-        if (cachedResult) {
-            logger.info(`🚀 Cache hit for ${sourceType}`, { routingId: context.routingId });
-            return cachedResult;
+        // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+        try {
+            const cachedResult = await redisClient.get(cacheKey);
+            if (cachedResult) {
+                logger.info(`🚀 V2 Cache hit for ${sourceType}`, { routingId: context.routingId });
+                return JSON.parse(cachedResult);
+            }
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache check failed for ${sourceType}`, { error: error.message });
         }
 
         let result;
@@ -527,9 +532,14 @@ class PriorityDrivenKnowledgeRouter {
      */
     async getPriorityConfiguration(companyId) {
         try {
-            // Try cache first
-            const cached = await aiAgentCacheService.getPriorities(companyId);
-            if (cached) return cached;
+            // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+            try {
+                const cacheKey = `company:${companyId}:priorities`;
+                const cached = await redisClient.get(cacheKey);
+                if (cached) return JSON.parse(cached);
+            } catch (error) {
+                logger.warn(`⚠️ V2 Cache check failed for priorities`, { error: error.message });
+            }
 
             // Load from database
             const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeSourcePriorities');
@@ -730,8 +740,15 @@ class PriorityDrivenKnowledgeRouter {
      */
     async applyPersonality(companyId, originalResponse, sourceType = 'general') {
         try {
-            // Load personality configuration from cache
-            const personalityConfig = await aiAgentCacheService.get(`company:${companyId}:personality`);
+            // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+            let personalityConfig = null;
+            try {
+                const cacheKey = `company:${companyId}:personality`;
+                const cached = await redisClient.get(cacheKey);
+                if (cached) personalityConfig = JSON.parse(cached);
+            } catch (error) {
+                logger.warn(`⚠️ V2 Cache check failed for personality`, { error: error.message });
+            }
             
             if (!personalityConfig || !personalityConfig.isCustomized) {
                 // No custom personality - return original response
