@@ -10,7 +10,7 @@
 //     - Graceful fallback with intelligent error recovery
 // 📝 FUTURE EXPANSION: 
 //     - Machine learning optimization of thresholds
-//     - A/B testing for routing strategies
+//     - V2 DELETED: Legacy A/B testing eliminated
 //     - Real-time performance analytics
 //     - Advanced context understanding
 //     - Multi-language support

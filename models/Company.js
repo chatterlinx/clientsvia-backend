@@ -158,7 +158,7 @@ const aiSettingsSchema = new mongoose.Schema({
     continuousLearning: {
         autoUpdateKnowledge: { type: Boolean, default: true },
         optimizeResponsePatterns: { type: Boolean, default: true },
-        abTestStrategies: { type: Boolean, default: false },
+        // V2 DELETED: Legacy abTestStrategies - enterprise bloat eliminated
         realTimeOptimization: { type: Boolean, default: true },
         predictiveIntentAnalysis: { type: Boolean, default: false }
     },
@@ -507,47 +507,7 @@ const companySchema = new mongoose.Schema({
             lastUpdated: { type: Date, default: Date.now }
         }],
         
-        // 🧪 ENTERPRISE FEATURES: A/B Testing Framework
-        abTests: [{
-            id: { type: String, required: true },
-            name: { type: String, required: true },
-            type: { type: String, enum: ['greeting', 'response-tone', 'escalation-timing', 'knowledge-source', 'custom'], required: true },
-            status: { type: String, enum: ['draft', 'running', 'paused', 'completed', 'analyzing'], default: 'draft' },
-            
-            // Test variants
-            variants: {
-                type: mongoose.Schema.Types.Mixed,
-                default: {
-                    A: { name: 'Control', traffic: 50, config: {} },
-                    B: { name: 'Variant', traffic: 50, config: {} }
-                }
-            },
-            
-            // Test configuration
-            config: {
-                successMetric: { type: String, enum: ['satisfaction', 'response-time', 'resolution-rate', 'escalation-rate', 'conversion-rate'], required: true },
-                duration: { type: Number, default: 7 }, // days
-                minSampleSize: { type: Number, default: 100 },
-                confidenceLevel: { type: Number, default: 95, min: 80, max: 99 },
-                significanceThreshold: { type: Number, default: 0.05 }
-            },
-            
-            // Test results
-            metrics: {
-                totalCalls: { type: Number, default: 0 },
-                progress: { type: Number, default: 0 }, // percentage
-                confidenceLevel: { type: Number, default: 0 },
-                leadingVariant: { type: String, default: '' },
-                improvement: { type: Number, default: 0 },
-                statisticalSignificance: { type: Boolean, default: false }
-            },
-            
-            // Metadata
-            createdAt: { type: Date, default: Date.now },
-            startedAt: { type: Date },
-            completedAt: { type: Date },
-            results: { type: mongoose.Schema.Types.Mixed, default: {} }
-        }],
+        // V2 DELETED: Legacy A/B testing framework - enterprise bloat eliminated
         
         // 👤 ENTERPRISE FEATURES: Advanced Personalization Engine
         personalization: {
