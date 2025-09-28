@@ -248,7 +248,12 @@ class PriorityDrivenKnowledgeRouter {
         }
 
         // Cache result for future queries (5 minute TTL)
-        await aiAgentCacheService.set(cacheKey, result, 300);
+        // V2 SYSTEM: Simple Redis cache set (no legacy enterprise cache service)
+        try {
+            await redisClient.setex(cacheKey, 300, JSON.stringify(result));
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache set failed`, { error: error.message });
+        }
         
         return result;
     }
@@ -305,9 +310,15 @@ class PriorityDrivenKnowledgeRouter {
     async queryTradeQnA(companyId, query, context) {
         const startTime = Date.now();
         try {
-            // 🚀 REDIS CACHE FIRST - Sub-50ms performance target
-            const aiAgentCache = require('./aiAgentCacheService');
-            let knowledge = await aiAgentCache.getKnowledge(companyId);
+            // 🚀 V2 REDIS CACHE FIRST - Sub-50ms performance target
+            let knowledge = null;
+            try {
+                const cacheKey = `company:${companyId}:knowledge`;
+                const cached = await redisClient.get(cacheKey);
+                if (cached) knowledge = JSON.parse(cached);
+            } catch (error) {
+                logger.warn(`⚠️ V2 Cache check failed for trade knowledge`, { error: error.message });
+            }
             
             if (!knowledge) {
                 // Cache miss - load from MongoDB and cache
@@ -552,7 +563,13 @@ class PriorityDrivenKnowledgeRouter {
             const config = company.aiAgentLogic.knowledgeSourcePriorities;
             
             // Cache for future use
-            await aiAgentCacheService.cachePriorities(companyId, config);
+            // V2 SYSTEM: Simple Redis cache set (no legacy enterprise cache service)
+            try {
+                const cacheKey = `company:${companyId}:priorities`;
+                await redisClient.setex(cacheKey, 3600, JSON.stringify(config));
+            } catch (error) {
+                logger.warn(`⚠️ V2 Cache set failed for priorities`, { error: error.message });
+            }
             
             return config;
 
