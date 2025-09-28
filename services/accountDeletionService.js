@@ -38,7 +38,7 @@ const logger = require('../utils/logger');
 
 // Import all models that reference companyId
 const Company = require('../models/Company');
-const CompanyQnA = require('../models/CompanyQnA');
+// V2 DELETED: Legacy CompanyQnA model - using CompanyKnowledgeQnA only
 const CompanyKnowledgeQnA = require('../models/knowledge/CompanyQnA');
 const Workflow = require('../models/Workflow');
 const WorkflowExecution = require('../models/WorkflowExecution');
@@ -116,7 +116,8 @@ class AccountDeletionService {
             };
 
             // Analyze CompanyQnA entries
-            const companyQnACount = await CompanyQnA.countDocuments({ companyId });
+            // V2 DELETED: Legacy CompanyQnA model - using CompanyKnowledgeQnA only
+            const companyQnACount = await CompanyKnowledgeQnA.countDocuments({ companyId });
             const knowledgeQnACount = await CompanyKnowledgeQnA.countDocuments({ companyId });
             analysis.dataScope.knowledge = {
                 companyQnA: companyQnACount,
@@ -199,7 +200,8 @@ class AccountDeletionService {
             backup.data.company = company.toObject();
 
             // Backup all CompanyQnA entries
-            const companyQnAs = await CompanyQnA.find({ companyId });
+            // V2 DELETED: Legacy CompanyQnA model - using CompanyKnowledgeQnA only
+            const companyQnAs = await CompanyKnowledgeQnA.find({ companyId });
             backup.data.companyQnA = companyQnAs.map(q => q.toObject());
 
             const knowledgeQnAs = await CompanyKnowledgeQnA.find({ companyId });

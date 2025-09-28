@@ -199,9 +199,9 @@ console.log('✅ V2 PURE SYSTEM: Legacy knowledge routes eliminated - V2 Knowled
 // DELETED: Legacy Enterprise Trade Categories route - replaced by V2 Global Trade Categories system
 
 // Company Q&A Seeding (Production Testing)
-const seedCompanyQnARoutes = require('./routes/seed-company-qna-production');
-app.use('/api', seedCompanyQnARoutes);
-console.log('✅ Company Q&A seeding routes registered at /api/seed-company-qna and /api/test-company-qna');
+// V2 DELETED: Legacy seed-company-qna-production routes - using V2 Knowledge Management system
+// app.use('/api', seedCompanyQnARoutes);
+// console.log('✅ Company Q&A seeding routes registered at /api/seed-company-qna and /api/test-company-qna');
 
 // Contact Lookup for Real-time Caller Identification
 const contactLookupRoutes = require('./routes/contactLookup');

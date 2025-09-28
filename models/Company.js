@@ -331,7 +331,7 @@ const companySchema = new mongoose.Schema({
         }
     },
     
-    enterpriseAgent: { type: mongoose.Schema.Types.Mixed, default: {} }, // Enterprise AI Agent Settings - using Mixed for flexibility
+    // V2 DELETED: Legacy enterpriseAgent field - using aiAgentLogic system only
     // Legacy personalityResponses field removed - using aiAgentLogic.responseCategories instead
     learningSettings: { type: learningSettingsSchema, default: () => ({}) },
     
@@ -1422,6 +1422,8 @@ const companySchema = new mongoose.Schema({
         autoLearningQueue: { type: Boolean, default: true }
     },        // 🚀 ENTERPRISE AI INTELLIGENCE CONTROL CENTER - PRODUCTION READY
         // Per-company configuration with composite confidence, provider routing, cost controls
+        // V2 DELETED: Legacy enterpriseAIIntelligence - using aiAgentLogic system only
+        /*
         enterpriseAIIntelligence: {
             // ========================================
             // COMPOSITE CONFIDENCE SCORING - PER SOURCE
@@ -1671,7 +1673,8 @@ const companySchema = new mongoose.Schema({
                 default: 'production' 
             },
             enabled: { type: Boolean, default: true }
-        },
+        }
+        */
 });
 
 // --- Middleware ---
