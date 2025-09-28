@@ -83,8 +83,7 @@ async function loadAllRoutes() {
         routes.eventHooksRoutes = await loadRouteWithTimeout('./routes/eventHooks', 'eventHooksRoutes');
         routes.transferRouterRoutes = await loadRouteWithTimeout('./routes/transferRouter', 'transferRouterRoutes');
         routes.enhancedAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/enhancedAgentSettings', 'enhancedAgentSettingsRoutes');
-        routes.aiAgentWorkflowRoutes = await loadRouteWithTimeout('./routes/aiAgentWorkflows', 'aiAgentWorkflowRoutes');
-        routes.aiAgentAnalyticsRoutes = await loadRouteWithTimeout('./routes/aiAgentAnalytics', 'aiAgentAnalyticsRoutes');
+        // V2 DELETED: Legacy aiAgentWorkflows and aiAgentAnalytics routes - using V2 AI Agent Logic system
         // REMOVED: knowledgeAutoPopulationRoutes - Replaced by comprehensive Company Q&A Management system
         // V2: Legacy AI agent routes deleted - using modern v2profile-aiagentlogic system
         // V2: Legacy agentPerformance route deleted - using modern AI Agent Logic analytics
@@ -220,8 +219,7 @@ function registerRoutes(routes) {
     app.use('/api/event-hooks', routes.eventHooksRoutes); // Event Hooks Management API
     app.use('/api/transfer-router', routes.transferRouterRoutes); // Transfer Router Management API
 
-    app.use('/api/ai-agent-workflows', routes.aiAgentWorkflowRoutes);
-    app.use('/api/ai-agent-analytics', routes.aiAgentAnalyticsRoutes);
+    // V2 DELETED: Legacy AI agent workflow and analytics route mounts - using V2 AI Agent Logic system
     // REMOVED: knowledge-auto-population routes - Replaced by comprehensive Company Q&A Management system
     // V2: Legacy AI agent route mounting removed - using modern v2profile-aiagentlogic system
     // V2: Legacy agentPerformance route deleted - using modern AI Agent Logic analytics

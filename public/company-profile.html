@@ -751,9 +751,7 @@
                             <button class="tab-button tab-button-inactive" id="tab-notes" data-tab="notes">
                                 <i class="fas fa-sticky-note mr-1"></i>Notes
                             </button>
-                             <button class="tab-button tab-button-inactive" id="tab-calendar-settings" data-tab="calendar-settings">
-                                <i class="fas fa-calendar-alt mr-1"></i>Calendar Settings
-                            </button>
+                             <!-- 🗑️ DELETED: Calendar Settings tab - legacy system removed -->
                             <!-- REMOVED: Legacy AI Settings tab - conflicts with 100% in-house AI Agent Logic system -->
                             <button class="tab-button tab-button-inactive" id="tab-ai-voice" data-tab="ai-voice">
                                 <i class="fas fa-microphone-alt mr-1"></i>AI Voice Settings
@@ -945,26 +943,7 @@
                     </div>
                     <!-- ===== TAB SECTION END: NOTES ===== -->
                     
-                    <!-- ===== TAB SECTION START: CALENDAR SETTINGS ===== -->
-                    <div id="calendar-settings-content" class="tab-content-item hidden">
-                         <section class="profile-section bg-transparent shadow-none p-0">
-                            <h2 class="profile-section-title"><i class="fas fa-calendar-alt mr-2 text-indigo-600"></i>Google Calendar Integration</h2>
-                            <div id="gcal-status-container" class="p-4 rounded-lg border bg-gray-50 mb-6">
-                                 <!-- Status content will be dynamically inserted here -->
-                                 <p class="text-gray-500">Checking connection status...</p>
-                            </div>
-
-                            <div id="gcal-calendars-list-container" class="hidden">
-                                <h3 class="text-lg font-semibold text-gray-700 mb-2">Available Calendars</h3>
-                                <p class="text-sm text-gray-500 mb-4">These calendars can be selected within the 'Service Scheduling Rules'. Only calendars you have 'write' access to are shown.</p>
-                                <div id="gcal-calendars-list" class="space-y-3 border rounded-lg p-4 bg-white max-h-96 overflow-y-auto">
-                                    <!-- Calendar list will be dynamically inserted here -->
-                                    <p class="text-gray-500">Loading calendars...</p>
-                                </div>
-                            </div>
-                         </section>
-                    </div>
-                    <!-- ===== TAB SECTION END: CALENDAR SETTINGS ===== -->
+                    <!-- 🗑️ DELETED: Calendar Settings tab content - legacy Google Calendar integration removed -->
 
                     <!-- ===== REMOVED: LEGACY AI SETTINGS TAB =====
                          This entire section was removed because it conflicts with the 

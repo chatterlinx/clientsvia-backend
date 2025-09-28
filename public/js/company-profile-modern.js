@@ -2778,20 +2778,7 @@ class CompanyProfileManager {
     // 🏗️ MISSING POPULATE FUNCTIONS - FIXING LOOSE HANGING CODES
     // ============================================================================
     
-    /**
-     * Populate Calendar Settings tab
-     */
-    populateCalendarSettingsTab() {
-        console.log('📅 Populating Calendar Settings tab...');
-        
-        try {
-            // Calendar settings are handled by embedded HTML forms
-            // No specific population needed as forms are already in HTML
-            console.log('✅ Calendar Settings tab populated');
-        } catch (error) {
-            console.error('❌ Error populating Calendar Settings tab:', error);
-        }
-    }
+    // 🗑️ DELETED: populateCalendarSettingsTab() - Calendar tab destroyed
 
     /**
      * Populate AI Settings tab
