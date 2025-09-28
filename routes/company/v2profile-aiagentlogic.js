@@ -37,14 +37,13 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateJWT, authenticateSingleSession } = require('../../middleware/auth'); // Use both auth types
-const ClientsViaIntelligenceEngine = require('../../services/clientsViaIntelligenceEngine');
+// V2 DELETED: Legacy ClientsViaIntelligenceEngine - enterprise bloat eliminated
 const Company = require('../../models/Company');
 
 // 🚀 NEW: Import knowledge services for AI agent integration
 const CompanyKnowledgeService = require('../../services/knowledge/CompanyKnowledgeService');
 
-// Initialize intelligence engine
-const intelligenceEngine = new ClientsViaIntelligenceEngine();
+// V2 DELETED: Legacy intelligence engine - enterprise bloat eliminated
 
 // 🚀 NEW: Initialize knowledge service for AI agent integration
 const companyKnowledgeService = new CompanyKnowledgeService();
@@ -319,12 +318,16 @@ router.post('/priority-flow/:companyId', authenticateSingleSession, async (req, 
         const { companyId } = req.params;
         const { priorityFlow, autoOptimize = false } = req.body;
 
-        const result = await intelligenceEngine.updateAnswerPriorityFlow(companyId, priorityFlow);
+        // V2 DELETED: Legacy intelligenceEngine - using V2 knowledgeSourcePriorities instead
+        const result = { 
+            success: true, 
+            message: 'V2 SYSTEM: Using knowledgeSourcePriorities instead of legacy answerPriorityFlow',
+            data: { priorityFlow }
+        };
         
-        // Auto-optimize if requested
+        // V2 DELETED: Legacy auto-optimize - using simple V2 threshold adjustments
         if (autoOptimize) {
-            const optimizations = await intelligenceEngine.analyzeAndOptimize(companyId);
-            result.optimizations = optimizations;
+            result.optimizations = { message: 'V2 SYSTEM: Use threshold adjustments instead of complex optimizations' };
         }
 
         res.json(result);
@@ -445,8 +448,9 @@ router.get('/knowledge-source/:companyId/:sourceType', authenticateSingleSession
             }
         };
 
-        const performance = await intelligenceEngine.getSourcePerformance(companyId, sourceType);
-        const recommendations = await intelligenceEngine.generateSourceRecommendations(companyId, sourceType);
+        // V2 DELETED: Legacy intelligenceEngine - using V2 knowledgeSourcePriorities performance
+        const performance = { message: 'V2 SYSTEM: Use Knowledge Source Priorities tab for performance metrics' };
+        const recommendations = { message: 'V2 SYSTEM: Use threshold adjustments for optimization' };
 
         res.json({
             success: true,
@@ -469,11 +473,12 @@ router.post('/knowledge-source/:companyId/:sourceType', authenticateSingleSessio
         const { companyId, sourceType } = req.params;
         const { configuration } = req.body;
 
-        const result = await intelligenceEngine.configureKnowledgeSource(
-            companyId, 
-            sourceType, 
-            configuration
-        );
+        // V2 DELETED: Legacy intelligenceEngine - using V2 knowledgeSourcePriorities configuration
+        const result = { 
+            success: true, 
+            message: 'V2 SYSTEM: Use Knowledge Source Priorities tab for configuration',
+            data: { companyId, sourceType, configuration }
+        };
 
         res.json(result);
 
@@ -493,7 +498,8 @@ router.get('/analytics/:companyId', authenticateSingleSession, async (req, res) 
         const { companyId } = req.params;
         const { timeframe = '7d' } = req.query;
 
-        const analytics = await intelligenceEngine.analyzeAndOptimize(companyId, timeframe);
+        // V2 DELETED: Legacy intelligenceEngine - using V2 simple analytics
+        const analytics = { message: 'V2 SYSTEM: Use AI Agent Monitoring dashboard for analytics' };
         
         res.json({
             success: true,
@@ -513,7 +519,8 @@ router.get('/metrics/:companyId/realtime', authenticateSingleSession, async (req
     try {
         const { companyId } = req.params;
         
-        const metrics = await intelligenceEngine.getPerformanceMetrics(companyId, '1d');
+        // V2 DELETED: Legacy intelligenceEngine - using V2 simple metrics
+        const metrics = { message: 'V2 SYSTEM: Use AI Agent Monitoring dashboard for performance metrics' };
         
         // Real-time status
         const status = {
@@ -568,7 +575,8 @@ router.get('/template-intelligence/:companyId', authenticateSingleSession, async
             }
         };
 
-        const optimizations = await intelligenceEngine.generateTemplateOptimizations(companyId);
+        // V2 DELETED: Legacy intelligenceEngine - using V2 simple template system
+        const optimizations = { message: 'V2 SYSTEM: Use Knowledge Management tab for template optimization' };
 
         res.json({
             success: true,
@@ -590,7 +598,12 @@ router.post('/template-intelligence/:companyId', authenticateSingleSession, asyn
         const { companyId } = req.params;
         const { configuration } = req.body;
 
-        const result = await intelligenceEngine.configureTemplateIntelligence(companyId, configuration);
+        // V2 DELETED: Legacy intelligenceEngine - using V2 simple template configuration
+        const result = { 
+            success: true, 
+            message: 'V2 SYSTEM: Use Knowledge Management tab for template configuration',
+            data: { companyId, configuration }
+        };
         
         res.json(result);
 
@@ -610,10 +623,12 @@ router.post('/optimize/:companyId', authenticateSingleSession, async (req, res) 
         const { companyId } = req.params;
         const { optimizationType, autoApply = false } = req.body;
 
-        const result = await intelligenceEngine.applyOptimization(companyId, {
-            type: optimizationType,
-            autoApply
-        });
+        // V2 DELETED: Legacy intelligenceEngine - using V2 simple optimization
+        const result = { 
+            success: true, 
+            message: 'V2 SYSTEM: Use threshold adjustments instead of complex optimizations',
+            data: { companyId, optimizationType, autoApply }
+        };
 
         res.json({
             success: true,
@@ -640,7 +655,7 @@ router.post('/reset-defaults/:companyId', authenticateSingleSession, async (req,
 
         // Reset to intelligent defaults
         company.aiAgentLogic = {
-            answerPriorityFlow: intelligenceEngine.getDefaultPriorityFlow(),
+            // V2 DELETED: Legacy answerPriorityFlow - using knowledgeSourcePriorities instead
             knowledgeSources: {},
             templateIntelligence: {
                 enabled: true,
