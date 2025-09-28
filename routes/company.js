@@ -4,27 +4,28 @@ const path = require('path');
 const { getDB } = require('../db');
 const { ObjectId } = require('mongodb');
 const Company = require('../models/Company'); // Add Company model import
-const { google } = require('googleapis'); // For Google Calendar
+// V2 DELETED: Google Calendar integration eliminated
+// const { google } = require('googleapis'); // For Google Calendar
 const { normalizePhoneNumber } = require('../utils/phone');
 const { redisClient } = require('../clients');
 const { apiLimiter } = require('../middleware/rateLimit'); // Rate limiting
 const { authenticateJWT, requireRole } = require('../middleware/auth'); // Authentication
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
 
-// Google OAuth2 Client Setup
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
-
-if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
-    console.warn("🔴 Google OAuth credentials are not fully configured in .env. Google Calendar integration will likely fail.");
-}
-
-const oauth2Client = new google.auth.OAuth2(
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    GOOGLE_REDIRECT_URI
-);
+// V2 DELETED: Google OAuth2 Client Setup - Calendar integration eliminated
+// const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+// const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+// const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
+// 
+// if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
+//     console.warn("🔴 Google OAuth credentials are not fully configured in .env. Google Calendar integration will likely fail.");
+// }
+// 
+// const oauth2Client = new google.auth.OAuth2(
+//     GOOGLE_CLIENT_ID,
+//     GOOGLE_CLIENT_SECRET,
+//     GOOGLE_REDIRECT_URI
+// );
 
 const daysOfWeekForOperatingHours = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -526,13 +527,13 @@ router.patch('/company/:companyId/aisettings', async (req, res) => {
         if (aiSettings.twilioSpeechConfidenceThreshold !== undefined) updatePayload['aiSettings.twilioSpeechConfidenceThreshold'] = Number(aiSettings.twilioSpeechConfidenceThreshold);
         if (aiSettings.maxRepeats !== undefined) updatePayload['aiSettings.maxRepeats'] = Number(aiSettings.maxRepeats);
 
-        // *** MODIFICATION FOR GOOGLE CALENDAR SWITCH ***
-        if (typeof aiSettings.enableGoogleCalendarIntegration === 'boolean') {
-            updatePayload['aiSettings.enableGoogleCalendarIntegration'] = aiSettings.enableGoogleCalendarIntegration;
-        } else if (currentAISettings.enableGoogleCalendarIntegration === undefined) {
-            // If not in payload and not in DB, default to false
-            updatePayload['aiSettings.enableGoogleCalendarIntegration'] = false;
-        }
+        // V2 DELETED: Google Calendar integration - calendar tab eliminated
+        // if (typeof aiSettings.enableGoogleCalendarIntegration === 'boolean') {
+        //     updatePayload['aiSettings.enableGoogleCalendarIntegration'] = aiSettings.enableGoogleCalendarIntegration;
+        // } else if (currentAISettings.enableGoogleCalendarIntegration === undefined) {
+        //     // If not in payload and not in DB, default to false
+        //     updatePayload['aiSettings.enableGoogleCalendarIntegration'] = false;
+        // }
         // Else, if not in payload but exists in DB, it will be preserved (no explicit $set)
 
         updatePayload.updatedAt = new Date();
@@ -1171,8 +1172,8 @@ router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
 
 // 🚀 V2 SYSTEM: Legacy knowledge routes DELETED - using V2 Knowledge Management system only
 
-// Include agent settings routes
-const agentSettingsRoutes = require('./company/agentSettings');
-router.use('/', agentSettingsRoutes);
+// V2 DELETED: Legacy agent settings routes - using V2 AI Agent Logic system
+// const agentSettingsRoutes = require('./company/agentSettings');
+// router.use('/', agentSettingsRoutes);
 
 module.exports = router;
