@@ -6,8 +6,9 @@
 const express = require('express');
 const router = express.Router();
 
-// Import account deletion routes
+// Import admin routes
 const accountDeletionRoutes = require('./admin/accountDeletion');
+const aiAgentMonitoringRoutes = require('./admin/aiAgentMonitoring');
 const User = require('../models/User');
 const Company = require('../models/Company');
 const { authenticateJWT } = require('../middleware/auth');
@@ -203,7 +204,8 @@ router.post('/clear-cache/:companyId', authenticateJWT, async (req, res) => {
     }
 });
 
-// Mount account deletion routes
+// Mount admin routes
 router.use('/account-deletion', accountDeletionRoutes);
+router.use('/ai-agent-monitoring', aiAgentMonitoringRoutes);
 
 module.exports = router;
