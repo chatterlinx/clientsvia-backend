@@ -31,7 +31,8 @@
 
 const CompanyQnA = require('../../models/knowledge/CompanyQnA');
 const KeywordGenerationService = require('./KeywordGenerationService');
-const natural = require('natural');
+// V2 DELETED: Legacy natural NLP library - using V2 keyword-based system
+// const natural = require('natural');
 const winston = require('winston');
 
 // Initialize Redis client
@@ -159,12 +160,14 @@ class CompanyKnowledgeService {
 
       // Step 2.1: Build or load per-company phonetic dictionary for trade terms
       const phoneticDict = await this.getCompanyPhoneticDictionary(companyId);
-      const metaphone = natural.Metaphone;
+      // V2 DELETED: Legacy natural Metaphone - using V2 keyword matching
+      // const metaphone = natural.Metaphone;
 
       // Create a trade-scoped fuzzy set from the generated query keywords
       const expandedQueryKeywords = new Set(queryKeywords.primary);
       queryKeywords.primary.forEach(token => {
-        const key = metaphone.process(token);
+        // V2 SYSTEM: Simple lowercase key instead of metaphone
+        const key = token.toLowerCase().trim();
         const expansions = phoneticDict[key] || [];
         expansions.forEach(exp => expandedQueryKeywords.add(exp));
       });
@@ -621,7 +624,8 @@ class CompanyKnowledgeService {
         .replace(/[^a-z0-9\s]/g, ' ')
         .split(/\s+/)
         .filter(Boolean);
-      const meta = (w) => natural.Metaphone.process(w);
+      // V2 SYSTEM: Simple string matching instead of metaphone
+      const meta = (w) => w.toLowerCase().trim();
       const setA = new Set(tok(a).map(meta));
       const setB = new Set(tok(b).map(meta));
       if (setA.size === 0 || setB.size === 0) return 0;
@@ -649,18 +653,21 @@ class CompanyKnowledgeService {
       .select('keywords tradeCategories')
       .limit(200)
       .lean();
-    const metaphone = natural.Metaphone;
+    // V2 DELETED: Legacy natural Metaphone - using V2 keyword matching
+    // const metaphone = natural.Metaphone;
     const dict = {};
     activeQnas.forEach(q => {
       (q.keywords || []).forEach(kw => {
-        const key = metaphone.process((kw || '').toLowerCase());
+        // V2 SYSTEM: Simple lowercase key instead of metaphone
+        const key = (kw || '').toLowerCase().trim();
         if (!key) return;
         if (!dict[key]) dict[key] = [];
         if (!dict[key].includes(kw)) dict[key].push(kw);
       });
       // Include trade category labels as anchors
       (q.tradeCategories || []).forEach(tc => {
-        const key = metaphone.process((tc || '').toLowerCase());
+        // V2 SYSTEM: Simple lowercase key instead of metaphone
+        const key = (tc || '').toLowerCase().trim();
         if (!key) return;
         if (!dict[key]) dict[key] = [];
         if (!dict[key].includes(tc)) dict[key].push(tc);
