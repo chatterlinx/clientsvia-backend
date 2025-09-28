@@ -36,11 +36,11 @@ const monitoringRoutes = require('./routes/monitoring');
 const llmRoutes = require('./routes/llm');
 const bookingRoutes = require('./routes/booking');
 const transferRoutes = require('./routes/transfer');
-const notesRoutes = require('./routes/notes'); // GOLD STANDARD: Enterprise Notes API
+const notesRoutes = require('./routes/notes'); // GOLD STANDARD: V2 Notes API
 
-// ENTERPRISE: New routes for enterprise functionality
-const knowledgeLifecycleRoutes = require('./routes/knowledgeLifecycle');
-const enterpriseAnalyticsRoutes = require('./routes/enterpriseAnalytics');
+// V2 DELETED: Legacy enterprise routes - using V2 AI Agent Logic system
+// const knowledgeLifecycleRoutes = require('./routes/knowledgeLifecycle');
+// const enterpriseAnalyticsRoutes = require('./routes/enterpriseAnalytics');
 
 // DELETED: Legacy Enterprise Trade Categories - replaced by V2 Global Trade Categories system
 
@@ -170,31 +170,31 @@ app.use('/api/monitoring', monitoringRoutes);
 app.use('/api/llm', llmRoutes);
 app.use('/api/booking', bookingRoutes);
 app.use('/api/transfer', transferRoutes);
-app.use('/api/notes', notesRoutes); // GOLD STANDARD: Enterprise Notes Management
+app.use('/api/notes', notesRoutes); // GOLD STANDARD: V2 Notes Management
 // V2 DELETED: Legacy /api/agent route mount - using V2 AI Agent Logic system
 app.use('/api/event-hooks', eventHooksRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/qna-learning', qnaLearningRoutes);
 
-// Enterprise AI Intelligence routes with error handling
-let enterpriseAIIntelligenceRoutes;
-try {
-  enterpriseAIIntelligenceRoutes = require('./routes/enterpriseAIIntelligence');
-  app.use('/api/enterprise-ai', enterpriseAIIntelligenceRoutes);
-} catch (error) {
-  console.error('Failed to load Enterprise AI Intelligence routes:', error.message);
-  process.exit(1);
-}
+// V2 DELETED: Legacy Enterprise AI Intelligence routes - using V2 AI Agent Logic system
+// let enterpriseAIIntelligenceRoutes;
+// try {
+//   enterpriseAIIntelligenceRoutes = require('./routes/enterpriseAIIntelligence');
+//   app.use('/api/enterprise-ai', enterpriseAIIntelligenceRoutes);
+// } catch (error) {
+//   console.error('Failed to load Enterprise AI Intelligence routes:', error.message);
+//   process.exit(1);
+// }
 
-// Enterprise Knowledge Lifecycle Management
-app.use('/api/knowledge-lifecycle', knowledgeLifecycleRoutes);
+// V2 DELETED: Legacy Enterprise Knowledge Lifecycle Management - using V2 AI Agent Logic system
+// app.use('/api/knowledge-lifecycle', knowledgeLifecycleRoutes);
 
 // 🚀 V2 PURE SYSTEM: Legacy knowledge routes ELIMINATED - using V2 Knowledge Management only
 // V2 Knowledge Management handles ALL knowledge operations through /api/company endpoints
 console.log('✅ V2 PURE SYSTEM: Legacy knowledge routes eliminated - V2 Knowledge Management active');
 
-// Enterprise Analytics and Reporting
-app.use('/api/enterprise-analytics', enterpriseAnalyticsRoutes);
+// V2 DELETED: Legacy Enterprise Analytics and Reporting - using V2 AI Agent Logic system
+// app.use('/api/enterprise-analytics', enterpriseAnalyticsRoutes);
 
 // DELETED: Legacy Enterprise Trade Categories route - replaced by V2 Global Trade Categories system
 
