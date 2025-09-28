@@ -82,63 +82,8 @@ const elevenLabsSettingsSchema = new mongoose.Schema({
     modelId: { type: String, trim: true, default: null }
 }, { _id: false });
 
-// REMOVED: Legacy aiSettingsSchema - replaced by aiAgentLogic system
+// V2 DELETED: Legacy aiSettingsSchema - replaced by aiAgentLogic system
 // All AI configuration now handled through aiAgentLogic field with 100% in-house system
-/*
-const aiSettingsSchema = new mongoose.Schema({
-    language: { type: String, default: 'en', trim: true }, // Primary language for agent conversations
-    model: { type: String, default: 'gemini-1.5-pro', trim: true },
-    personality: { type: String, default: 'friendly', trim: true },
-    // V2 DELETED: Google voice provider - using ElevenLabs only
-    // googleVoice: { type: String, default: 'en-US-Standard-A', trim: true },
-    voicePitch: { type: Number, default: 0 },
-    voiceSpeed: { type: Number, default: 1 },
-    responseLength: { type: String, default: 'concise', trim: true },
-    knowledgeBaseSource: { type: String, default: '', trim: true },
-    escalationKeywords: { type: String, default: '', trim: true },
-    sentimentAnalysis: { type: Boolean, default: false },
-    dataLogging: { type: Boolean, default: true },
-    proactiveOutreach: { type: Boolean, default: false },
-    inHouseFallbackEnabled: { type: Boolean, default: true }, // Enable in-house fallback system
-    customEscalationMessage: {
-        type: String,
-        default: 'I understand you have a question I haven\'t been able to answer directly. Let me connect you with one of our specialists who can provide you with the exact information you need.',
-        trim: true
-    },
-    ttsProvider: { type: String, default: 'elevenlabs', trim: true }, // Default to ElevenLabs for better voice quality
-    elevenLabs: { type: elevenLabsSettingsSchema, default: () => ({}) },
-    twilioSpeechConfidenceThreshold: { type: Number, default: 0.4 }, // Lower threshold for better speech recognition
-    fuzzyMatchThreshold: { type: Number, default: 0.3 }, // Better Q&A matching for all companies
-    ttsPitch: { type: Number, default: 0 },
-    ttsSpeed: { type: Number, default: 1 },
-    bargeIn: { type: Boolean, default: false }, // Let agent finish speaking for natural conversation flow
-    humanLikeFillers: { type: Boolean, default: false },
-    fillerPhrases: {
-        type: [String],
-        default: [
-            'Let me check that...',
-            'Alright, just a moment...'
-        ]
-    },
-    maxRepeats: { type: Number, default: 3 },
-    repeatEscalationMessage: {
-        type: String,
-        default: "I'm having trouble understanding. Let me connect you to a team member."
-    },
-    debugMode: { type: Boolean, default: false },
-    twilioVoice: { type: String, default: 'alice', trim: true }, // Consistent fallback voice
-    conversationContextTracking: { type: Boolean, default: true }, // Track conversation flow better
-    preventRepetitiveQuestions: { type: Boolean, default: true }, // Prevent asking same questions
-    
-    // V2 DELETED: Enterprise AI Intelligence Engine Settings - hijacking V2 system eliminated
-    // V2 DELETED: semanticKnowledge (87% confidence override) - enterprise bloat eliminated
-    // V2 DELETED: contextualMemory (enterprise memory complexity) - enterprise bloat eliminated  
-    // V2 DELETED: dynamicReasoning (ReAct framework complexity) - enterprise bloat eliminated
-    // V2 DELETED: smartEscalation (enterprise escalation logic) - enterprise bloat eliminated
-    // V2 DELETED: continuousLearning (enterprise optimization) - enterprise bloat eliminated
-    // V2 DELETED: performanceBenchmarks (87% targetConfidenceRate override) - enterprise bloat eliminated
-
-// --- Sub-schema for Agent Setup ---
 const daysOfWeekForOperatingHours = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const operatingHourSchema = new mongoose.Schema({ day: { type: String, required: true, enum: daysOfWeekForOperatingHours }, enabled: { type: Boolean, default: true }, start: { type: String, default: '09:00' }, end: { type: String, default: '17:00' } }, { _id: false });
 const protocolSchema = new mongoose.Schema({ systemDelay: { type: String, default: '' }, messageTaking: { type: String, default: '' }, callerReconnect: { type: String, default: '' }, whenInDoubt: { type: String, default: '' }, callerFrustration: { type: String, default: '' }, telemarketerFilter: { type: String, default: '' }, behaviorGuidelines: { type: String, default: '' }, bookingConfirmation: { type: String, default: '' }, textToPay: { type: String, default: '' } }, { _id: false });
