@@ -33,17 +33,7 @@
         .nav-link {
             @apply px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900;
         }
-        /* Style for the monitoring link to make it stand out */
-        .nav-link-monitoring {
-             @apply px-3 py-2 rounded-md text-sm font-medium text-yellow-700 bg-yellow-100 hover:bg-yellow-200 hover:text-yellow-800;
-        }
-        .nav-link-monitoring.active-tab { /* Ensure active state for monitoring also looks distinct if needed */
-            border-bottom-width: 2px;
-            border-color: #D97706; /* Amber-600 */
-            color: #92400E; /* Amber-800 */
-            font-weight: 600;
-            background-color: #FEF3C7; /* Amber-100 */
-        }
+        /* 🗑️ DELETED: Monitoring link styles - legacy alert system destroyed */
     </style>
 </head>
 <body class="bg-gray-100">
@@ -66,9 +56,7 @@
                         <a href="/v2global-trade-categories.html" class="nav-link" id="nav-trade-categories">
                             <i class="fas fa-tags mr-1"></i>V2 Global Trade Categories
                         </a>
-                        <a href="/dashboard.html" class="nav-link-monitoring" id="nav-monitoring-dashboard">
-                            <i class="fas fa-shield-alt mr-1"></i>Monitoring
-                        </a>
+                        <!-- 🗑️ DELETED: Monitoring tab - legacy alert system destroyed -->
                         <button onclick="logout()" class="nav-link text-red-600 hover:text-red-800" id="nav-logout">
                             <i class="fas fa-sign-out-alt mr-1"></i>Logout
                         </button>
@@ -86,7 +74,7 @@
                     <a href="/directory.html" class="block nav-link text-base" id="mobile-nav-directory">Directory</a>
                     <a href="/add-company.html" class="block nav-link text-base" id="mobile-nav-add-company">Add Company</a>
                     <a href="/v2global-trade-categories.html" class="block nav-link text-base" id="mobile-nav-trade-categories">V2 Global Trade Categories</a>
-                    <a href="/dashboard.html" class="block nav-link-monitoring text-base" id="mobile-nav-monitoring-dashboard">Monitoring</a>
+                    <!-- 🗑️ DELETED: Mobile monitoring tab - legacy alert system destroyed -->
                     <button onclick="logout()" class="block nav-link text-base text-red-600 hover:text-red-800 text-left w-full" id="mobile-nav-logout">
                         <i class="fas fa-sign-out-alt mr-1"></i>Logout
                     </button>
@@ -129,9 +117,7 @@
                          <a href="/v2global-trade-categories.html" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
                             <i class="fas fa-tags mr-2"></i>Manage V2 Global Trade Categories
                         </a>
-                        <a href="/dashboard.html" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
-                            <i class="fas fa-shield-alt mr-2"></i>View Monitoring Dashboard
-                        </a>
+                        <!-- 🗑️ DELETED: Monitoring dashboard button - legacy alert system destroyed -->
                     </div>
                 </div>
             </div>
@@ -170,21 +156,17 @@
             let currentPath = window.location.pathname.replace(/\/$/, ""); 
             if (currentPath === "" || currentPath === "/") currentPath = "/index.html"; 
 
-            const navLinks = document.querySelectorAll('header nav a.nav-link, header nav a.nav-link-monitoring, #mobile-menu a.nav-link, #mobile-menu a.nav-link-monitoring');
+            const navLinks = document.querySelectorAll('header nav a.nav-link, #mobile-menu a.nav-link');
             navLinks.forEach(link => {
                 let linkPath = new URL(link.href).pathname.replace(/\/$/, "");
                 if (linkPath === "" || linkPath === "/") linkPath = "/index.html"; 
 
                 link.classList.remove('active-tab');
-                if (!link.classList.contains('nav-link-monitoring')) {
-                    link.classList.add('text-gray-700'); 
-                }
+                link.classList.add('text-gray-700'); 
 
                 if (linkPath === currentPath) {
                     link.classList.add('active-tab');
-                    if (!link.classList.contains('nav-link-monitoring')) { 
-                        link.classList.remove('text-gray-700');
-                    }
+                    link.classList.remove('text-gray-700');
                 }
             });
 
