@@ -23,6 +23,7 @@
 // ============================================================================
 
 const Company = require('../models/Company');
+const CompanyKnowledgeQnA = require('../models/knowledge/CompanyQnA');
 const aiAgentCacheService = require('./aiAgentCacheService');
 const logger = require('../utils/logger');
 
@@ -253,18 +254,17 @@ class PriorityDrivenKnowledgeRouter {
      */
     async queryCompanyQnA(companyId, query, context) {
         try {
-            // 🎯 CLEAN ARCHITECTURE: Only use new unified knowledge management structure
-            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.companyQnA');
+            // V2 FIX: Use CompanyKnowledgeQnA collection (not embedded document)
+            const companyQnAs = await CompanyKnowledgeQnA.find({ companyId }).lean();
             
-            if (!company?.aiAgentLogic?.knowledgeManagement?.companyQnA) {
-                logger.info(`🔍 No companyQnA data found for company ${companyId}`, { routingId: context.routingId });
+            if (!companyQnAs || companyQnAs.length === 0) {
+                logger.info(`🔍 No companyQnA data found in collection for company ${companyId}`, { routingId: context.routingId });
                 return { confidence: 0, response: null, metadata: { source: 'companyQnA', error: 'No company Q&A data - use Knowledge Management tab to add Q&A entries' } };
             }
 
-            const companyQnA = company.aiAgentLogic.knowledgeManagement.companyQnA;
-            logger.info(`🔍 Found ${companyQnA.length} companyQnA entries`, { routingId: context.routingId });
+            logger.info(`🔍 Found ${companyQnAs.length} companyQnA entries in collection`, { routingId: context.routingId });
 
-            const activeQnA = companyQnA.filter(qna => qna.status === 'active');
+            const activeQnA = companyQnAs.filter(qna => qna.status === 'active');
 
             let bestMatch = { confidence: 0, response: null, metadata: {} };
 
@@ -277,7 +277,7 @@ class PriorityDrivenKnowledgeRouter {
                         response: qna.answer,
                         metadata: {
                             source: 'companyQnA',
-                            qnaId: qna.id,
+                            qnaId: qna._id.toString(),
                             category: qna.category,
                             matchedKeywords: this.getMatchedKeywords(query, qna.keywords)
                         }
