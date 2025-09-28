@@ -1233,6 +1233,12 @@ const companySchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // V2 DELETED: Enterprise AI Intelligence Control Center - massive legacy bloat eliminated
+
+// --- Middleware ---
+companySchema.pre('save', function(next) { 
+    this.updatedAt = new Date();
+    
+    // Migrate old phone number to new format if needed
     if (this.twilioConfig && this.twilioConfig.phoneNumber && this.twilioConfig.phoneNumbers.length === 0) {
         this.twilioConfig.phoneNumbers.push({
             phoneNumber: this.twilioConfig.phoneNumber,
