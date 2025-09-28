@@ -133,7 +133,7 @@ clientsvia-backend/
 │   ├── company.js              # Company management
 │   └── ...
 ├── 📁 services/                # Business logic services
-│   ├── clientsViaIntelligenceEngine.js
+│   ├── priorityDrivenKnowledgeRouter.js
 │   ├── templateIntelligenceEngine.js
 │   ├── agent.js                # Main agent service
 │   └── ...
