@@ -26,14 +26,16 @@
  * - Auto-generated on Q&A save via CompanyQnA model middleware
  */
 
-const natural = require('natural');
+// V2 DELETED: Legacy natural NLP library - using V2 keyword-based system
+// const natural = require('natural');
 const stopwords = require('stopwords').english;
 
 class KeywordGenerationService {
   constructor() {
     this.version = '2.0.0';
-    this.stemmer = natural.PorterStemmer;
-    this.tokenizer = new natural.WordTokenizer();
+    // V2 DELETED: Legacy natural NLP library - using V2 keyword-based system
+    // this.stemmer = natural.PorterStemmer;
+    // this.tokenizer = new natural.WordTokenizer();
     
     // Initialize trade-specific dictionaries
     this.tradeDictionaries = this.initializeTradeDictionaries();
@@ -106,7 +108,8 @@ class KeywordGenerationService {
       .replace(/\s+/g, ' ')
       .trim();
     
-    const tokens = this.tokenizer.tokenize(cleaned);
+    // V2 SYSTEM: Simple word splitting instead of natural tokenizer
+    const tokens = cleaned.toLowerCase().split(/\s+/).filter(word => word.length > 0);
     
     // Filter out stopwords and very short tokens
     return tokens
