@@ -5779,11 +5779,18 @@ This error needs to be fixed - not masked!
             try {
                 console.log('🧠 UNIFIED BRAIN: Loading agent brain configuration for company:', companyId);
                 
+                // V2 AUTH: Use proper authentication method available in scope
+                const authToken = getUniversalAuthToken();
+                if (!authToken) {
+                    console.error('❌ V2 PERSONALITY: No authentication token available');
+                    return;
+                }
+                
                 const response = await fetch(`/api/company/${companyId}/agent-brain`, {
                     method: 'GET',
                     headers: { 
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${getAuthToken()}`
+                        'Authorization': `Bearer ${authToken}`
                     }
                 });
 
