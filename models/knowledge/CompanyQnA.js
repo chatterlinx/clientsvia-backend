@@ -401,5 +401,6 @@ companyQnASchema.statics.regenerateAllKeywords = async function(companyId) {
   return results;
 };
 
+// V2 FIX: Use different model name to prevent conflict with /models/CompanyQnA.js
 // Export with explicit collection name to match production 'companyqnas' collection  
-module.exports = mongoose.model('CompanyQnA', companyQnASchema, 'companyqnas');
+module.exports = mongoose.models.CompanyKnowledgeQnA || mongoose.model('CompanyKnowledgeQnA', companyQnASchema, 'companyqnas');

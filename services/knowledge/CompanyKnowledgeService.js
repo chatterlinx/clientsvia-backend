@@ -29,7 +29,7 @@
  * - Error handling ensures graceful fallback without cache
  */
 
-const CompanyQnA = require('../../models/knowledge/CompanyQnA');
+const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
 const KeywordGenerationService = require('./KeywordGenerationService');
 // V2 DELETED: Legacy natural NLP library - using V2 keyword-based system
 // const natural = require('natural');
@@ -233,7 +233,7 @@ class CompanyKnowledgeService {
     
     try {
       // Use the static method from the model with optimized query
-      const results = await CompanyQnA.searchByKeywords(keywords, companyId, {
+      const results = await CompanyKnowledgeQnA.searchByKeywords(keywords, companyId, {
         limit: maxResults,
         minConfidence,
         categories: options.categories || [],
@@ -374,12 +374,12 @@ class CompanyKnowledgeService {
       // Execute query with pagination
       const skip = (page - 1) * limit;
       const [results, total] = await Promise.all([
-        CompanyQnA.find(query)
+        CompanyKnowledgeQnA.find(query)
           .sort({ [sortBy]: sortOrder })
           .skip(skip)
           .limit(limit)
           .lean(),
-        CompanyQnA.countDocuments(query)
+        CompanyKnowledgeQnA.countDocuments(query)
       ]);
 
       return {
@@ -413,7 +413,7 @@ class CompanyKnowledgeService {
       
       logger.info(`✏️ Updating Q&A: ${qnaId}`);
 
-      const qna = await CompanyQnA.findById(qnaId);
+      const qna = await CompanyKnowledgeQnA.findById(qnaId);
       if (!qna) {
         console.error('❌ CHECKPOINT: Q&A entry not found in database');
         return {
@@ -467,7 +467,7 @@ class CompanyKnowledgeService {
     try {
       logger.info(`🗑️ Deleting Q&A: ${qnaId}`);
 
-      const result = await CompanyQnA.findByIdAndUpdate(
+      const result = await CompanyKnowledgeQnA.findByIdAndUpdate(
         qnaId,
         { 
           status: 'archived',
@@ -560,7 +560,7 @@ class CompanyKnowledgeService {
     try {
       // Update Q&A usage statistics (non-blocking)
       setImmediate(async () => {
-        await CompanyQnA.updateOne(
+        await CompanyKnowledgeQnA.updateOne(
           { _id: qnaId },
           { 
             $inc: { usageCount: 1 },
@@ -649,7 +649,7 @@ class CompanyKnowledgeService {
     }
 
     // Derive dictionary from existing active Q&A keywords and trade terms
-    const activeQnas = await CompanyQnA.find({ companyId, status: 'active' })
+      const activeQnas = await CompanyKnowledgeQnA.find({ companyId, status: 'active' })
       .select('keywords tradeCategories')
       .limit(200)
       .lean();
@@ -723,7 +723,7 @@ class CompanyKnowledgeService {
 
     try {
       // Test MongoDB
-      await CompanyQnA.findOne().limit(1);
+      await CompanyKnowledgeQnA.findOne().limit(1);
       health.mongodb = 'healthy';
     } catch (error) {
       health.mongodb = 'unhealthy';

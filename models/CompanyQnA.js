@@ -222,4 +222,5 @@ companyQnASchema.statics.getAnalyticsSummary = function(companyId, dateRange = n
   ]);
 };
 
-module.exports = mongoose.model('CompanyQnA', companyQnASchema);
+// V2 FIX: Prevent model overwrite error - check if model already exists
+module.exports = mongoose.models.CompanyQnA || mongoose.model('CompanyQnA', companyQnASchema);
