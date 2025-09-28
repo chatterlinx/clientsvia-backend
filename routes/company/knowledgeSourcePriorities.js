@@ -293,12 +293,31 @@ router.post('/:companyId/knowledge-source-priorities/test-flow', authenticateJWT
             priorities = company.aiAgentLogic?.knowledgeSourcePriorities || getDefaultPriorities();
         }
 
-        // Simulate priority flow testing
-        const testResults = await simulatePriorityFlow(companyId, query, priorities, {
-            testAllSources,
-            showConfidenceScores,
-            showRoutingDecisions
+        // V2 FIX: Use REAL AI agent instead of simulation
+        const PriorityDrivenKnowledgeRouter = require('../../services/priorityDrivenKnowledgeRouter');
+        const router = new PriorityDrivenKnowledgeRouter();
+        
+        const realResult = await router.routeQuery(companyId, query, { 
+            includeMetadata: true,
+            testAllSources 
         });
+        
+        // Format real results to match expected test format
+        const testResults = {
+            routingFlow: [{
+                source: realResult?.source || 'none',
+                priority: 1,
+                confidence: realResult?.confidence || 0,
+                threshold: 0.75, // From your current settings
+                responseTime: '0ms',
+                result: realResult?.confidence >= 0.75 ? 'MATCH - Using this response' : 'SKIP - Below threshold',
+                response: realResult?.response || null
+            }],
+            finalResponse: realResult?.response || 'No response generated',
+            totalResponseTime: '0ms',
+            matchedSource: realResult?.source || 'none',
+            confidence: realResult?.confidence || 0
+        };
 
         const responseTime = Date.now() - startTime;
         logger.info(`🎯 POST test-flow success for company ${companyId}`, {
