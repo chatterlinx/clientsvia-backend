@@ -593,7 +593,7 @@ class PriorityDrivenKnowledgeRouter {
         return {
             enabled: true,
             priorityFlow: [
-                { source: 'companyQnA', priority: 1, threshold: 0.8, enabled: true },
+                { source: 'companyQnA', priority: 1, threshold: 0.65, enabled: true },
                 { source: 'tradeQnA', priority: 2, threshold: 0.75, enabled: true },
                 { source: 'templates', priority: 3, threshold: 0.7, enabled: true },
                 { source: 'inHouseFallback', priority: 4, threshold: 0.5, enabled: true }

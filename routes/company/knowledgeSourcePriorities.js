@@ -480,7 +480,7 @@ function getDefaultPriorities() {
             {
                 source: 'companyQnA',
                 priority: 1,
-                threshold: 0.8,
+                threshold: 0.65,
                 enabled: true,
                 fallbackBehavior: 'continue'
             },
