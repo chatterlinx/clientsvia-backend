@@ -58,12 +58,7 @@ const smsSettingsSchema = new mongoose.Schema({
 
 // V2 DELETED: Legacy Google OAuth schema - using JWT-only authentication system
 
-// --- CORRECTED: Sub-schema for Integrations ---
-const integrationsSchema = new mongoose.Schema({
-    highlevelApiKey: { type: String, trim: true, default: null },
-    highlevelCalendarId: { type: String, trim: true, default: null }
-    // V2 DELETED: Legacy googleOAuth field - using JWT-only authentication system
-}, { _id: false });
+// V2 DELETED: Legacy integrations schema - HighLevel and Google OAuth eliminated
 
 // --- Sub-schema for Learning Settings ---
 const learningSettingsSchema = new mongoose.Schema({
@@ -270,7 +265,7 @@ const companySchema = new mongoose.Schema({
     
     twilioConfig: { type: twilioConfigSchema, default: () => ({}) },
     smsSettings: { type: smsSettingsSchema, default: () => ({}) },
-    integrations: { type: integrationsSchema, default: () => ({}) }, 
+    // V2 DELETED: Legacy integrations field - HighLevel and Google OAuth eliminated 
     // REMOVED: Legacy aiSettings field - replaced by aiAgentLogic system
     agentSetup: { type: agentSetupSchema, default: () => ({}) },
     aiAgentSetup: { type: mongoose.Schema.Types.Mixed, default: null }, // New AI Agent Setup data
@@ -387,24 +382,7 @@ const companySchema = new mongoose.Schema({
             default: ['companyQnA', 'tradeQnA', 'templates', 'inHouseFallback']
         },
         
-        // Answer Priority Flow configuration
-        answerPriorityFlow: [{
-            id: { type: String, required: true },
-            name: { type: String, required: true },
-            description: { type: String, default: '' },
-            active: { type: Boolean, default: true },
-            primary: { type: Boolean, default: false },
-            priority: { type: Number, required: true },
-            icon: { type: String, default: 'cog' },
-            category: { type: String, default: 'other' },
-            confidenceThreshold: { type: Number, default: 0.7, min: 0, max: 1 },
-            intelligenceLevel: { type: String, enum: ['high', 'medium', 'low', 'smart'], default: 'medium' },
-            performance: {
-                successRate: { type: Number, default: 0, min: 0, max: 1 },
-                avgConfidence: { type: Number, default: 0, min: 0, max: 1 },
-                usageCount: { type: Number, default: 0, min: 0 }
-            }
-        }],
+        // V2 DELETED: Legacy answerPriorityFlow - using knowledgeSourcePriorities instead
         
         // Response Categories configuration
         responseCategories: {
@@ -471,41 +449,7 @@ const companySchema = new mongoose.Schema({
             }
         },
         
-        // 🎨 ENTERPRISE FEATURES: Conversation Flow Designer
-        conversationFlows: [{
-            id: { type: String, required: true },
-            name: { type: String, required: true },
-            description: { type: String, default: '' },
-            active: { type: Boolean, default: true },
-            
-            // Flow nodes and connections
-            nodes: [{
-                id: { type: String, required: true },
-                type: { type: String, enum: ['greeting', 'question', 'response', 'escalation', 'action'], required: true },
-                position: {
-                    x: { type: Number, default: 0 },
-                    y: { type: Number, default: 0 }
-                },
-                config: { type: mongoose.Schema.Types.Mixed, default: {} }
-            }],
-            
-            connections: [{
-                from: { type: String, required: true },
-                to: { type: String, required: true },
-                condition: { type: String, default: '' }
-            }],
-            
-            // Flow settings
-            triggers: {
-                type: { type: String, enum: ['any', 'business-hours', 'after-hours', 'keywords'], default: 'any' },
-                conditions: [{ type: String }]
-            },
-            priority: { type: String, enum: ['high', 'medium', 'low'], default: 'medium' },
-            
-            // Metadata
-            createdAt: { type: Date, default: Date.now },
-            lastUpdated: { type: Date, default: Date.now }
-        }],
+        // V2 DELETED: Legacy conversationFlows - enterprise flow designer eliminated
         
         // V2 DELETED: Legacy A/B testing framework - enterprise bloat eliminated
         
@@ -1311,9 +1255,7 @@ const companySchema = new mongoose.Schema({
             }
         },
         
-        // Legacy fields (keeping for backward compatibility)
-        highlevelApiKey: { type: String, trim: true, default: null },
-        highlevelCalendarId: { type: String, trim: true, default: null }
+        // V2 DELETED: Legacy HighLevel integration fields - enterprise bloat eliminated
         // V2 DELETED: Legacy googleOAuth field - using JWT-only authentication system
     },
     notes: { type: [noteSchema], default: [] },
