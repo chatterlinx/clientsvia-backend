@@ -5233,8 +5233,9 @@ This error needs to be fixed - not masked!
                     autoLearningQueue: safeGetChecked('agent-autoLearningQueue', true)
                 };
 
-                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
-                    method: 'POST',
+                // V2 FIX: Use correct V2 AI Agent Logic endpoint
+                const response = await fetch(`/api/admin/${companyId}/ai-settings`, {
+                    method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ tradeCategories, agentSettings })
                 });
@@ -9832,10 +9833,11 @@ Key Metrics:
                 console.log('🔍 CLIENT CHECKPOINT 2: Payload thresholds:', payload.aiAgentLogic.thresholds);
                 console.log('🔍 CLIENT CHECKPOINT 3: Payload memorySettings:', payload.aiAgentLogic.memorySettings);
                 
-                // 🎯 WORKING ENDPOINT: Use company/companies/agent-settings (POST) - known to work
-                console.log('🔍 SAVE FIX: Using working agent-settings POST endpoint - /api/company/companies/' + companyId + '/agent-settings');
-                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
-                    method: 'POST',
+                // V2 FIX: Use correct V2 AI Agent Logic endpoint (PUT method)
+                console.log('🔍 SAVE FIX: Using V2 ai-settings PUT endpoint - /api/admin/' + companyId + '/ai-settings');
+                // V2 FIX: Use correct V2 AI Agent Logic endpoint
+                const response = await fetch(`/api/admin/${companyId}/ai-settings`, {
+                    method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
                     },
@@ -10135,7 +10137,7 @@ Key Metrics:
                     
                     // Use the correct company agent settings endpoint that properly handles aiAgentLogic
                     try {
-                        console.log('🔍 CHECKPOINT 9: Making fetch request to /api/company/companies/' + companyId + '/agent-settings');
+                        console.log('🔍 CHECKPOINT 9: Making fetch request to /api/admin/' + companyId + '/ai-settings');
                         
                     const headers = {
                         'Content-Type': 'application/json'
@@ -10146,7 +10148,8 @@ Key Metrics:
                         headers['Authorization'] = `Bearer ${authToken}`;
                     }
                         
-                        const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
+                        // V2 FIX: Use correct V2 AI Agent Logic endpoint
+                const response = await fetch(`/api/admin/${companyId}/ai-settings`, {
                             method: 'POST',
                             headers: headers,
                             credentials: 'include', // Include cookies for additional auth
@@ -10244,7 +10247,8 @@ Key Metrics:
                                 verifyHeaders['Authorization'] = `Bearer ${authToken}`;
                             }
                             
-                            const verifyResponse = await fetch(`/api/company/companies/${companyId}/agent-settings?_verify=${Date.now()}`, {
+                            // V2 FIX: Use correct V2 AI Agent Logic endpoint
+                            const verifyResponse = await fetch(`/api/admin/${companyId}/ai-settings?_verify=${Date.now()}`, {
                                 method: 'GET',
                                 headers: verifyHeaders,
                                 credentials: 'include' // Include cookies for additional auth
@@ -10552,11 +10556,12 @@ Key Metrics:
                     agentSettings: agentSettings
                 };
                 
-                console.log('🤖 Sending save request to:', `/api/company/companies/${companyId}/agent-settings`);
+                console.log('🤖 Sending save request to:', `/api/admin/${companyId}/ai-settings`);
                 
                 // Save to backend
-                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
-                    method: 'POST',
+                // V2 FIX: Use correct V2 AI Agent Logic endpoint
+                const response = await fetch(`/api/admin/${companyId}/ai-settings`, {
+                    method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
                     },
@@ -10669,7 +10674,8 @@ Key Metrics:
                 
                 // Save to backend
                 try {
-                    const response = await fetch(`/api/company/companies/${companyId}/agent-settings`, {
+                    // V2 FIX: Use correct V2 AI Agent Logic endpoint
+                const response = await fetch(`/api/admin/${companyId}/ai-settings`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
@@ -10903,7 +10909,8 @@ Key Metrics:
             }
             
             try {
-                const response = await fetch(`/api/company/companies/${companyId}/agent-settings`);
+                // V2 FIX: Use correct V2 AI Agent Logic endpoint
+                const response = await fetch(`/api/admin/${companyId}/ai-settings`);
                 
                 if (response.ok) {
                     const config = await response.json();
