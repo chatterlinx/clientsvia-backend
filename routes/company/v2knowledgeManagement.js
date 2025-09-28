@@ -38,7 +38,8 @@ const router = express.Router();
 const Company = require('../../models/Company');
 const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
 const { authenticateJWT } = require('../../middleware/auth');
-const aiAgentCache = require('../../services/aiAgentCacheService');
+// V2 DELETED: Legacy enterprise aiAgentCacheService - using simple Redis directly
+const { redisClient } = require('../../clients');
 const logger = require('../../utils/logger');
 const Joi = require('joi');
 const { v4: uuidv4 } = require('uuid');
@@ -121,8 +122,15 @@ router.get('/:companyId/knowledge-management', authenticateJWT, async (req, res)
     try {
         logger.info(`📚 GET knowledge management request for company ${companyId}`);
 
-        // Try cache first for sub-50ms performance
-        let knowledge = await aiAgentCache.getKnowledge(companyId);
+        // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+        let knowledge = null;
+        try {
+            const cacheKey = `company:${companyId}:knowledge`;
+            const cached = await redisClient.get(cacheKey);
+            if (cached) knowledge = JSON.parse(cached);
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache check failed for knowledge`, { error: error.message });
+        }
         
         if (!knowledge) {
             // Cache miss - load from database
@@ -163,8 +171,13 @@ router.get('/:companyId/knowledge-management', authenticateJWT, async (req, res)
                 logger.info(`📚 Using default knowledge management for company ${companyId}`);
             }
 
-            // Cache the result for future requests
-            await aiAgentCache.cacheKnowledge(companyId, knowledge);
+            // V2 SYSTEM: Simple Redis cache set (no legacy enterprise cache service)
+            try {
+                const cacheKey = `company:${companyId}:knowledge`;
+                await redisClient.setex(cacheKey, 1800, JSON.stringify(knowledge)); // 30 min TTL
+            } catch (error) {
+                logger.warn(`⚠️ V2 Cache set failed for knowledge`, { error: error.message });
+            }
         }
 
         // Calculate statistics
@@ -246,11 +259,14 @@ router.put('/:companyId/knowledge-management', authenticateJWT, async (req, res)
             });
         }
 
-        // Invalidate cache to ensure fresh data
-        await aiAgentCache.invalidateCompany(companyId);
-        
-        // Cache the new configuration
-        await aiAgentCache.cacheKnowledge(companyId, updateData);
+        // V2 SYSTEM: Simple Redis cache invalidation and update (no legacy enterprise cache service)
+        try {
+            const cacheKey = `company:${companyId}:knowledge`;
+            await redisClient.del(cacheKey); // Invalidate old cache
+            await redisClient.setex(cacheKey, 1800, JSON.stringify(updateData)); // Cache new data
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache update failed for knowledge`, { error: error.message });
+        }
 
         const responseTime = Date.now() - startTime;
         logger.info(`📚 PUT knowledge management success for company ${companyId}`, {
@@ -336,8 +352,13 @@ router.post('/:companyId/knowledge-management/company-qna', authenticateJWT, asy
             });
         }
 
-        // Invalidate cache
-        await aiAgentCache.invalidateCompany(companyId);
+        // V2 SYSTEM: Simple Redis cache invalidation (no legacy enterprise cache service)
+        try {
+            const cacheKey = `company:${companyId}:knowledge`;
+            await redisClient.del(cacheKey);
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache invalidation failed`, { error: error.message });
+        }
 
         const responseTime = Date.now() - startTime;
         logger.info(`📚 V2 POST company Q&A success for company ${companyId}`, {
@@ -446,8 +467,13 @@ router.put('/:companyId/knowledge-management/company-qna/:id', authenticateJWT, 
         // Find the updated entry
         const updatedQnA = company.aiAgentLogic.knowledgeManagement.companyQnA.find(qna => qna.id === id);
 
-        // Invalidate cache
-        await aiAgentCache.invalidateCompany(companyId);
+        // V2 SYSTEM: Simple Redis cache invalidation (no legacy enterprise cache service)
+        try {
+            const cacheKey = `company:${companyId}:knowledge`;
+            await redisClient.del(cacheKey);
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache invalidation failed`, { error: error.message });
+        }
 
         const responseTime = Date.now() - startTime;
         logger.info(`📚 PUT company Q&A success for company ${companyId}`, {
@@ -516,8 +542,13 @@ router.delete('/:companyId/knowledge-management/company-qna/:id', authenticateJW
             });
         }
 
-        // Invalidate cache
-        await aiAgentCache.invalidateCompany(companyId);
+        // V2 SYSTEM: Simple Redis cache invalidation (no legacy enterprise cache service)
+        try {
+            const cacheKey = `company:${companyId}:knowledge`;
+            await redisClient.del(cacheKey);
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache invalidation failed`, { error: error.message });
+        }
 
         const responseTime = Date.now() - startTime;
         logger.info(`📚 DELETE company Q&A success for company ${companyId}`, {
@@ -614,8 +645,13 @@ router.post('/:companyId/knowledge-management/trade-qna', authenticateJWT, async
             });
         }
 
-        // Invalidate cache
-        await aiAgentCache.invalidateCompany(companyId);
+        // V2 SYSTEM: Simple Redis cache invalidation (no legacy enterprise cache service)
+        try {
+            const cacheKey = `company:${companyId}:knowledge`;
+            await redisClient.del(cacheKey);
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache invalidation failed`, { error: error.message });
+        }
 
         const responseTime = Date.now() - startTime;
         logger.info(`📚 Trade Q&A created successfully for company ${companyId} in ${responseTime}ms`);
@@ -709,8 +745,13 @@ router.put('/:companyId/knowledge-management/trade-qna/:id', authenticateJWT, as
             });
         }
 
-        // Invalidate cache
-        await aiAgentCache.invalidateCompany(companyId);
+        // V2 SYSTEM: Simple Redis cache invalidation (no legacy enterprise cache service)
+        try {
+            const cacheKey = `company:${companyId}:knowledge`;
+            await redisClient.del(cacheKey);
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache invalidation failed`, { error: error.message });
+        }
 
         const responseTime = Date.now() - startTime;
         logger.info(`📚 Trade Q&A updated successfully for company ${companyId} in ${responseTime}ms`);
@@ -773,8 +814,13 @@ router.delete('/:companyId/knowledge-management/trade-qna/:id', authenticateJWT,
             });
         }
 
-        // Invalidate cache
-        await aiAgentCache.invalidateCompany(companyId);
+        // V2 SYSTEM: Simple Redis cache invalidation (no legacy enterprise cache service)
+        try {
+            const cacheKey = `company:${companyId}:knowledge`;
+            await redisClient.del(cacheKey);
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache invalidation failed`, { error: error.message });
+        }
 
         const responseTime = Date.now() - startTime;
         logger.info(`📚 Trade Q&A deleted successfully for company ${companyId} in ${responseTime}ms`);
@@ -827,8 +873,16 @@ router.post('/:companyId/knowledge-management/test-ai-agent', authenticateJWT, a
 
         const { query, testSources, includeInactive, showDetails } = value;
 
-        // Get current knowledge management configuration
-        let knowledge = await aiAgentCache.getKnowledge(companyId);
+        // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+        let knowledge = null;
+        try {
+            const cacheKey = `company:${companyId}:knowledge`;
+            const cached = await redisClient.get(cacheKey);
+            if (cached) knowledge = JSON.parse(cached);
+        } catch (error) {
+            logger.warn(`⚠️ V2 Cache check failed for knowledge`, { error: error.message });
+        }
+        
         if (!knowledge) {
             const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement').lean();
             if (!company) {
