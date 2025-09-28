@@ -10909,8 +10909,21 @@ Key Metrics:
             }
             
             try {
-                // V2 FIX: Use correct V2 AI Agent Logic endpoint
-                const response = await fetch(`/api/admin/${companyId}/ai-settings`);
+                // V2 FIX: Use correct V2 AI Agent Logic endpoint with authentication
+                const authToken = getUniversalAuthToken();
+                if (!authToken) {
+                    console.warn('⚠️ No authentication token available for AI settings load');
+                    return;
+                }
+                
+                const response = await fetch(`/api/admin/${companyId}/ai-settings`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    credentials: 'include'
+                });
                 
                 if (response.ok) {
                     const config = await response.json();
