@@ -14640,12 +14640,12 @@ Key Metrics:
 
                     const testRequest = {
                         query,
-                        includePersonality,
+                        showConfidenceScores: true,
                         showRoutingDecisions: showRouting,
                         testAllSources
                     };
 
-                    const response = await fetch(`/api/company/${this.companyId}/priority-flow-testing/test-complete-flow`, {
+                    const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities/test-flow`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
