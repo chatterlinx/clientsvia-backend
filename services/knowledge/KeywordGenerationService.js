@@ -214,21 +214,29 @@ class KeywordGenerationService {
   }
 
   /**
-   * 🔄 SEMANTIC VARIATION GENERATION
-   * FIXED: Removed broken stemming that corrupted words
+   * 🔄 ENHANCED SEMANTIC VARIATION GENERATION
+   * V2 ENHANCED: Much stronger semantic understanding for AI agent
    */
   generateSemanticVariations(tokens) {
     const variations = new Set();
     
     tokens.forEach(token => {
-      // ✅ FIXED: Add the original token (most important!)
-      if (token.length >= 3) {
+      // ✅ Add the original token (most important!)
+      if (token.length >= 2) {
         variations.add(token);
       }
       
-      // Add synonyms if available
-      const synonyms = this.synonymMaps[token] || [];
+      // 🚀 ENHANCED: Add comprehensive synonyms
+      const synonyms = this.getEnhancedSynonyms(token);
       synonyms.forEach(synonym => variations.add(synonym));
+      
+      // 🚀 ENHANCED: Add contextual variations
+      const contextual = this.getContextualVariations(token);
+      contextual.forEach(variation => variations.add(variation));
+      
+      // 🚀 ENHANCED: Add question/answer variations
+      const questionVariations = this.getQuestionVariations(token);
+      questionVariations.forEach(variation => variations.add(variation));
       
       // Add related terms if available
       const related = this.getRelatedTerms(token);
@@ -240,6 +248,94 @@ class KeywordGenerationService {
     });
     
     return [...variations];
+  }
+
+  /**
+   * 🚀 ENHANCED SYNONYM GENERATION
+   * V2 ENHANCED: Comprehensive synonym mapping for better AI matching
+   */
+  getEnhancedSynonyms(token) {
+    const enhancedSynonyms = {
+      // Time/Schedule related
+      'hours': ['schedule', 'time', 'availability', 'open', 'operating', 'business'],
+      'open': ['available', 'operating', 'working', 'hours', 'schedule'],
+      'schedule': ['hours', 'time', 'availability', 'calendar', 'timing'],
+      'time': ['hours', 'schedule', 'when', 'availability'],
+      'when': ['hours', 'time', 'schedule', 'what time'],
+      
+      // Business related
+      'business': ['company', 'service', 'work', 'commercial', 'professional'],
+      'service': ['work', 'repair', 'fix', 'help', 'assistance'],
+      'company': ['business', 'service', 'firm', 'contractor'],
+      'work': ['service', 'job', 'repair', 'fix', 'help'],
+      
+      // Contact related
+      'phone': ['call', 'number', 'contact', 'reach', 'telephone'],
+      'call': ['phone', 'contact', 'reach', 'number'],
+      'contact': ['call', 'phone', 'reach', 'get hold'],
+      
+      // Location related
+      'location': ['address', 'where', 'place', 'site', 'area'],
+      'address': ['location', 'where', 'place', 'directions'],
+      'where': ['location', 'address', 'place', 'directions'],
+      
+      // Cost related
+      'cost': ['price', 'charge', 'fee', 'rate', 'expense'],
+      'price': ['cost', 'charge', 'fee', 'rate', 'how much'],
+      'charge': ['cost', 'price', 'fee', 'rate'],
+      'fee': ['cost', 'price', 'charge', 'rate'],
+      
+      // Emergency related
+      'emergency': ['urgent', 'immediate', 'asap', 'rush', 'critical'],
+      'urgent': ['emergency', 'immediate', 'asap', 'rush'],
+      'immediate': ['urgent', 'emergency', 'asap', 'now'],
+      
+      // Common question words
+      'what': ['which', 'how', 'tell me'],
+      'how': ['what', 'which', 'tell me'],
+      'can': ['able', 'possible', 'do you'],
+      'do': ['can', 'will', 'able'],
+      'will': ['can', 'do', 'able']
+    };
+    
+    return enhancedSynonyms[token] || [];
+  }
+
+  /**
+   * 🚀 CONTEXTUAL VARIATIONS
+   * V2 ENHANCED: Generate contextual variations based on business context
+   */
+  getContextualVariations(token) {
+    const contextualMaps = {
+      'hours': ['business hours', 'operating hours', 'open hours', 'work hours', 'service hours'],
+      'open': ['hours open', 'when open', 'open time', 'availability'],
+      'schedule': ['work schedule', 'business schedule', 'operating schedule'],
+      'service': ['services offered', 'what services', 'service types'],
+      'price': ['pricing', 'cost estimate', 'how much cost', 'rates'],
+      'location': ['where located', 'address', 'directions to'],
+      'contact': ['contact info', 'how to contact', 'reach you'],
+      'emergency': ['emergency service', 'urgent repair', 'after hours']
+    };
+    
+    return contextualMaps[token] || [];
+  }
+
+  /**
+   * 🚀 QUESTION VARIATIONS
+   * V2 ENHANCED: Generate natural question variations
+   */
+  getQuestionVariations(token) {
+    const questionMaps = {
+      'hours': ['what are your hours', 'when are you open', 'what time open', 'hours of operation'],
+      'open': ['are you open', 'when open', 'what time open', 'hours open'],
+      'service': ['what services', 'services offered', 'what do you do', 'types of service'],
+      'price': ['how much', 'what cost', 'pricing info', 'cost estimate'],
+      'location': ['where are you', 'your address', 'how to find you'],
+      'contact': ['how to contact', 'phone number', 'how to reach'],
+      'emergency': ['emergency service', 'after hours', 'urgent help']
+    };
+    
+    return questionMaps[token] || [];
   }
 
   /**
