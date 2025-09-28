@@ -1174,7 +1174,6 @@ const companySchema = new mongoose.Schema({
         
         // V2 DELETED: Legacy HighLevel integration fields - enterprise bloat eliminated
         // V2 DELETED: Legacy googleOAuth field - using JWT-only authentication system
-    },
     notes: { type: [noteSchema], default: [] },
     
     // Booking Scripts Configuration
