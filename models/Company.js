@@ -56,22 +56,13 @@ const smsSettingsSchema = new mongoose.Schema({
     appointmentReminders: { type: Boolean, default: false }
 }, { _id: false });
 
-// --- CORRECTED: Sub-schema for Google OAuth Tokens & Settings ---
-const googleOAuthSchema = new mongoose.Schema({
-    isAuthorized: { type: Boolean, default: false },
-    googleAccountEmail: { type: String, trim: true, default: null },
-    accessToken: { type: String, trim: true, default: null },
-    refreshToken: { type: String, trim: true, default: null },
-    expiryDate: { type: Number, default: null }, // Using Number for epoch milliseconds
-    lastAuthError: { type: String, default: null },
-    isEnabled: { type: Boolean, default: false } // Master switch for this integration
-}, { _id: false });
+// V2 DELETED: Legacy Google OAuth schema - using JWT-only authentication system
 
 // --- CORRECTED: Sub-schema for Integrations ---
 const integrationsSchema = new mongoose.Schema({
     highlevelApiKey: { type: String, trim: true, default: null },
-    highlevelCalendarId: { type: String, trim: true, default: null },
-    googleOAuth: { type: googleOAuthSchema, default: () => ({}) }
+    highlevelCalendarId: { type: String, trim: true, default: null }
+    // V2 DELETED: Legacy googleOAuth field - using JWT-only authentication system
 }, { _id: false });
 
 // --- Sub-schema for Learning Settings ---
@@ -1362,8 +1353,8 @@ const companySchema = new mongoose.Schema({
         
         // Legacy fields (keeping for backward compatibility)
         highlevelApiKey: { type: String, trim: true, default: null },
-        highlevelCalendarId: { type: String, trim: true, default: null },
-        googleOAuth: { type: googleOAuthSchema, default: () => ({}) }
+        highlevelCalendarId: { type: String, trim: true, default: null }
+        // V2 DELETED: Legacy googleOAuth field - using JWT-only authentication system
     },
     notes: { type: [noteSchema], default: [] },
     

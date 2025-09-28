@@ -96,8 +96,8 @@
             </div>
         </form>
 
-        <!-- Google OAuth Section -->
-        <div class="mt-6" id="googleOAuthSection" style="display: none;">
+        <!-- V2 DELETED: Legacy Google OAuth Section - using JWT-only authentication -->
+        <div class="mt-6" id="v2AuthSection" style="display: none;">
             <div class="relative">
                 <div class="absolute inset-0 flex items-center">
                     <div class="w-full border-t border-gray-300"></div>
@@ -140,19 +140,10 @@
     </div>
 
     <script>
-        // Check Google OAuth availability on page load
-        async function checkGoogleOAuthStatus() {
-            try {
-                const response = await fetch('/api/auth/google/status');
-                const data = await response.json();
-                
-                if (data.googleOAuthEnabled) {
-                    document.getElementById('googleOAuthSection').style.display = 'block';
-                }
-            } catch (error) {
-                console.log('Google OAuth status check failed:', error);
-                // Google OAuth section remains hidden
-            }
+        // V2 DELETED: Legacy Google OAuth status check - using JWT-only authentication
+        async function checkV2AuthStatus() {
+            // V2 system uses JWT authentication only - no OAuth needed
+            console.log('V2 JWT authentication system active');
         }
 
         // Check for URL parameters (success/error messages)
@@ -172,7 +163,7 @@
                 
                 let errorMessage = 'Authentication failed';
                 if (error === 'oauth_failed') {
-                    errorMessage = 'Google OAuth authentication failed';
+                    errorMessage = 'V2 JWT authentication failed';
                 } else if (error === 'oauth_error') {
                     errorMessage = 'An error occurred during Google authentication';
                 }
@@ -184,7 +175,7 @@
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
-            checkGoogleOAuthStatus();
+            checkV2AuthStatus();
             handleURLParams();
         });
 
