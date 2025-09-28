@@ -25,11 +25,12 @@ const authRoutes = require('./routes/auth');
 const companyRoutes = require('./routes/company');
 const settingsRoutes = require('./routes/settings');
 
-const aiAgentWorkflowRoutes = require('./routes/aiAgentWorkflows');
-const aiAgentAnalyticsRoutes = require('./routes/aiAgentAnalytics');
-const knowledgeAutoPopulationRoutes = require('./routes/knowledgeAutoPopulation');
-const enhancedAIAgentRoutes = require('./routes/enhancedAIAgent');
-const aiAgentHandlerRoutes = require('./routes/aiAgentHandler');
+// V2 DELETED: Legacy AI agent routes - using V2 AI Agent Logic system
+// const aiAgentWorkflowRoutes = require('./routes/aiAgentWorkflows');
+// const aiAgentAnalyticsRoutes = require('./routes/aiAgentAnalytics');
+// const knowledgeAutoPopulationRoutes = require('./routes/knowledgeAutoPopulation');
+// const enhancedAIAgentRoutes = require('./routes/enhancedAIAgent');
+// const aiAgentHandlerRoutes = require('./routes/aiAgentHandler');
 const monitoringRoutes = require('./routes/monitoring');
 // Local LLM routes removed - cloud-only LLM approach
 const llmRoutes = require('./routes/llm');
@@ -165,11 +166,12 @@ try {
 app.use('/api/company', companyRoutes);
 app.use('/api/company', settingsRoutes);
 
-app.use('/api/ai-agent-workflows', aiAgentWorkflowRoutes);
-app.use('/api/ai-agent-analytics', aiAgentAnalyticsRoutes);
-app.use('/api/knowledge-auto-population', knowledgeAutoPopulationRoutes);
-app.use('/api/enhanced-ai-agent', enhancedAIAgentRoutes);
-app.use('/api/ai-agent', aiAgentHandlerRoutes);
+// V2 DELETED: Legacy AI agent route mounts - using V2 AI Agent Logic system
+// app.use('/api/ai-agent-workflows', aiAgentWorkflowRoutes);
+// app.use('/api/ai-agent-analytics', aiAgentAnalyticsRoutes);
+// app.use('/api/knowledge-auto-population', knowledgeAutoPopulationRoutes);
+// app.use('/api/enhanced-ai-agent', enhancedAIAgentRoutes);
+// app.use('/api/ai-agent', aiAgentHandlerRoutes);
 app.use('/api/monitoring', monitoringRoutes);
 // Local LLM routes removed - cloud-only LLM approach
 app.use('/api/llm', llmRoutes);

@@ -861,5 +861,5 @@ class PriorityDrivenKnowledgeRouter {
     }
 }
 
-// Export singleton instance
-module.exports = new PriorityDrivenKnowledgeRouter();
+// Export the class for V2 system compatibility
+module.exports = PriorityDrivenKnowledgeRouter;

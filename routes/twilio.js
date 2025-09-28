@@ -12,7 +12,7 @@ const Company = require('../models/Company');
 const { initializeCall, processUserInput } = require('../services/v2AIAgentRuntime');
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
 // const aiAgentRuntime = require('../services/aiAgentRuntime');
-const { findCachedAnswer } = require('../utils/aiAgent');
+// V2 DELETED: Legacy findCachedAnswer - using V2 PriorityDrivenKnowledgeRouter
 const CompanyQnA = require('../models/knowledge/CompanyQnA');
 const fs = require('fs');
 const path = require('path');
@@ -530,8 +530,9 @@ router.post('/handle-speech', async (req, res) => {
     const fuzzyThreshold = company.aiSettings?.fuzzyMatchThreshold ?? 0.3;
     console.log(`[Q&A MATCHING] [SEARCH] Searching ${qnaEntries.length} Q&A entries with fuzzy threshold: ${fuzzyThreshold}`);
     
-    const cachedAnswer = findCachedAnswer(qnaEntries, speechText, fuzzyThreshold);
-    console.log(`[Q&A DEBUG] Match result:`, cachedAnswer);
+    // V2 SYSTEM: Use Priority-Driven Knowledge Router instead of legacy findCachedAnswer
+    console.log(`[V2 MIGRATION] Legacy Q&A matching disabled - use V2 AI Agent Runtime`);
+    const cachedAnswer = null; // Force V2 system usage
     
     if (cachedAnswer) {
       console.log(`[Q&A MATCH FOUND] [OK] Found Q&A response for ${callSid}: ${cachedAnswer.substring(0, 100)}...`);
