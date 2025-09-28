@@ -608,6 +608,26 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
 
         await category.save();
 
+        // 🚀 OPTIMIZATION: Invalidate trade Q&A keyword cache for all companies using this category
+        try {
+            const PriorityDrivenKnowledgeRouter = require('../../services/priorityDrivenKnowledgeRouter');
+            const router = new PriorityDrivenKnowledgeRouter();
+            
+            // Find all companies using this trade category and invalidate their cache
+            const Company = require('../../models/Company');
+            const companiesUsingCategory = await Company.find({ 
+                tradeCategories: categoryId 
+            }).select('_id').lean();
+            
+            companiesUsingCategory.forEach(company => {
+                router.invalidateKeywordCache(company._id.toString(), 'tradeQnA');
+            });
+            
+            logger.info(`🚀 Invalidated tradeQnA keyword cache for ${companiesUsingCategory.length} companies`);
+        } catch (cacheError) {
+            logger.warn('⚠️ Failed to invalidate keyword cache:', cacheError.message);
+        }
+
         // 🗑️ Clear related caches
         try {
             await redisClient.del('v2-global-trade-categories:*');

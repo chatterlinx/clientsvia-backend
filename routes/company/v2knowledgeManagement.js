@@ -339,6 +339,11 @@ router.post('/:companyId/knowledge-management/company-qna', authenticateJWT, asy
 
         // Save to CompanyKnowledgeQnA collection with auto-keyword generation
         const savedQnA = await newQnA.save();
+        
+        // 🚀 OPTIMIZATION: Invalidate keyword cache when Q&A added
+        const PriorityDrivenKnowledgeRouter = require('../../services/priorityDrivenKnowledgeRouter');
+        const router = new PriorityDrivenKnowledgeRouter();
+        router.invalidateKeywordCache(companyId, 'companyQnA');
 
         // Verify company exists
         const company = await Company.findById(companyId);
