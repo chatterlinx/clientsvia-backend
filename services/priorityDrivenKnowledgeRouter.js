@@ -730,15 +730,46 @@ class PriorityDrivenKnowledgeRouter {
                 logger.warn(`⚠️ V2 Cache check failed for priorities`, { error: error.message });
             }
 
-            // Load from database
-            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeSourcePriorities');
+            // 🎯 SINGLE SOURCE OF TRUTH: Load thresholds from Company.aiAgentLogic.thresholds
+            const company = await Company.findById(companyId).select('aiAgentLogic').lean();
             
-            if (!company?.aiAgentLogic?.knowledgeSourcePriorities) {
-                logger.warn(`No priority configuration found for company ${companyId}, using defaults`);
+            if (!company?.aiAgentLogic) {
+                logger.warn(`No AI agent logic found for company ${companyId}, using defaults`);
                 return this.getDefaultPriorityConfiguration();
             }
 
-            const config = company.aiAgentLogic.knowledgeSourcePriorities;
+            const aiLogic = company.aiAgentLogic;
+            const thresholds = aiLogic.thresholds || {};
+            
+            // Build priority configuration using Company's thresholds as SINGLE SOURCE OF TRUTH
+            const config = {
+                enabled: true,
+                priorityFlow: [
+                    { source: 'companyQnA', priority: 1, threshold: thresholds.companyQnA || 0.55, enabled: true },
+                    { source: 'tradeQnA', priority: 2, threshold: thresholds.tradeQnA || 0.75, enabled: true },
+                    { source: 'templates', priority: 3, threshold: thresholds.templates || 0.7, enabled: true },
+                    { source: 'inHouseFallback', priority: 4, threshold: thresholds.inHouseFallback || 0.5, enabled: true }
+                ],
+                memorySettings: aiLogic.memorySettings || {
+                    useConversationContext: true,
+                    contextWindow: 5,
+                    personalizeResponses: true
+                },
+                fallbackBehavior: aiLogic.fallbackBehavior || {
+                    noMatchFound: 'use_in_house_fallback',
+                    lowConfidence: 'escalate_or_fallback'
+                }
+            };
+
+            logger.info(`🎯 Loaded thresholds from Company document`, { 
+                companyId, 
+                thresholds: {
+                    companyQnA: config.priorityFlow[0].threshold,
+                    tradeQnA: config.priorityFlow[1].threshold,
+                    templates: config.priorityFlow[2].threshold,
+                    inHouseFallback: config.priorityFlow[3].threshold
+                }
+            });
             
             // Cache for future use
             // V2 SYSTEM: Simple Redis cache set (Redis v5+ compatible)
@@ -760,6 +791,8 @@ class PriorityDrivenKnowledgeRouter {
     }
 
     getDefaultPriorityConfiguration() {
+        // 🎯 SINGLE SOURCE OF TRUTH: All thresholds come from Company.aiAgentLogic.thresholds
+        // These are ONLY used as emergency fallbacks if company data is corrupted
         return {
             enabled: true,
             priorityFlow: [
