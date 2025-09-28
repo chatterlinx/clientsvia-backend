@@ -130,40 +130,13 @@ const aiSettingsSchema = new mongoose.Schema({
     conversationContextTracking: { type: Boolean, default: true }, // Track conversation flow better
     preventRepetitiveQuestions: { type: Boolean, default: true }, // Prevent asking same questions
     
-    // 🧠 AI Intelligence Engine Settings
-    semanticKnowledge: {
-        enabled: { type: Boolean, default: true },
-        confidenceThreshold: { type: Number, default: 0.87, min: 0, max: 1 }
-    },
-    contextualMemory: {
-        enabled: { type: Boolean, default: true },
-        personalizationLevel: { type: String, default: 'medium', enum: ['low', 'medium', 'high'] },
-        memoryRetentionHours: { type: Number, default: 24 }
-    },
-    dynamicReasoning: {
-        enabled: { type: Boolean, default: true },
-        useReActFramework: { type: Boolean, default: true },
-        maxReasoningSteps: { type: Number, default: 3 }
-    },
-    smartEscalation: {
-        enabled: { type: Boolean, default: true },
-        sentimentTrigger: { type: Boolean, default: true },
-        contextualHandoffs: { type: Boolean, default: true }
-    },
-    continuousLearning: {
-        autoUpdateKnowledge: { type: Boolean, default: true },
-        optimizeResponsePatterns: { type: Boolean, default: true },
-        // V2 DELETED: Legacy abTestStrategies - enterprise bloat eliminated
-        realTimeOptimization: { type: Boolean, default: true },
-        predictiveIntentAnalysis: { type: Boolean, default: false }
-    },
-    performanceBenchmarks: {
-        targetConfidenceRate: { type: Number, default: 0.87 },
-        targetResponseTime: { type: Number, default: 1.8 },
-        targetEscalationRate: { type: Number, default: 0.12 }
-    }
-}, { _id: false });
-*/
+    // V2 DELETED: Enterprise AI Intelligence Engine Settings - hijacking V2 system eliminated
+    // V2 DELETED: semanticKnowledge (87% confidence override) - enterprise bloat eliminated
+    // V2 DELETED: contextualMemory (enterprise memory complexity) - enterprise bloat eliminated  
+    // V2 DELETED: dynamicReasoning (ReAct framework complexity) - enterprise bloat eliminated
+    // V2 DELETED: smartEscalation (enterprise escalation logic) - enterprise bloat eliminated
+    // V2 DELETED: continuousLearning (enterprise optimization) - enterprise bloat eliminated
+    // V2 DELETED: performanceBenchmarks (87% targetConfidenceRate override) - enterprise bloat eliminated
 
 // --- Sub-schema for Agent Setup ---
 const daysOfWeekForOperatingHours = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -453,8 +426,7 @@ const companySchema = new mongoose.Schema({
         
         // V2 DELETED: Legacy A/B testing framework - enterprise bloat eliminated
         
-        // 👤 ENTERPRISE FEATURES: Advanced Personalization Engine
-        personalization: {
+        // V2 DELETED: Enterprise personalization engine - hijacking V2 system eliminated
             enabled: { type: Boolean, default: true },
             
             // Performance metrics
