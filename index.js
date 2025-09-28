@@ -72,7 +72,7 @@ async function loadAllRoutes() {
         routes.twilioRoutes = await loadRouteWithTimeout('./routes/twilio', 'twilioRoutes');
         routes.aiRoutes = await loadRouteWithTimeout('./routes/ai', 'aiRoutes');
         routes.elevenLabsRoutes = await loadRouteWithTimeout('./routes/elevenLabs', 'elevenLabsRoutes');
-        routes.uploadRoutes = await loadRouteWithTimeout('./routes/upload', 'uploadRoutes');
+        // V2 DELETED: Legacy upload routes - file upload functionality eliminated
         // V2 DELETED: Legacy agentSettings route - using V2 AI Agent Logic system
         // routes.companyAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/agentSettings', 'companyAgentSettingsRoutes');
         // Legacy personality routes removed - using modern AI Agent Logic system
@@ -82,8 +82,8 @@ async function loadAllRoutes() {
         // V2 DELETED: Legacy enterprise testing routes - using V2 AI Agent Logic system
         // routes.priorityFlowTestingRoutes = await loadRouteWithTimeout('./routes/company/priorityFlowTesting', 'priorityFlowTestingRoutes');
         // routes.agentTestingRoutes = await loadRouteWithTimeout('./routes/company/agentTesting', 'agentTestingRoutes');
-        routes.eventHooksRoutes = await loadRouteWithTimeout('./routes/eventHooks', 'eventHooksRoutes');
-        routes.transferRouterRoutes = await loadRouteWithTimeout('./routes/transferRouter', 'transferRouterRoutes');
+        // V2 DELETED: Legacy eventHooks routes - enterprise event system eliminated
+        // V2 DELETED: Legacy transferRouter routes - enterprise transfer system eliminated
         // V2 DELETED: Legacy enhancedAgentSettings - used external LLM models, violates 100% in-house AI system
         // V2 DELETED: Legacy aiAgentWorkflows and aiAgentAnalytics routes - using V2 AI Agent Logic system
         // REMOVED: knowledgeAutoPopulationRoutes - Replaced by comprehensive Company Q&A Management system
@@ -102,7 +102,7 @@ async function loadAllRoutes() {
         routes.v2GlobalAddCompanyRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-addcompany', 'v2GlobalAddCompanyRoutes');
         routes.v2GlobalTradeCategoriesRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-tradecategories', 'v2GlobalTradeCategoriesRoutes');
         routes.authRoutes = await loadRouteWithTimeout('./routes/auth', 'authRoutes');
-        routes.backupRoutes = await loadRouteWithTimeout('./routes/backup', 'backupRoutes');
+        // V2 DELETED: Legacy backup routes - enterprise backup system eliminated
         // REMOVED: Legacy CRM Management routes - will build V2 version in future
         
         // Load AI Agent Logic routes for enterprise features
@@ -199,7 +199,7 @@ function registerRoutes(routes) {
     app.use('/api/tts', routes.ttsRoutes);
     app.use('/api/ai', routes.aiRoutes);
     app.use('/api/elevenlabs', routes.elevenLabsRoutes);
-    app.use('/api/upload', routes.uploadRoutes);
+    // V2 DELETED: Legacy upload routes - file upload functionality eliminated
     // V2: Legacy /api/agent route removed - using /api/company/:companyId/agent-settings V2 route
     app.use('/api/auth', routes.authRoutes); // AUTH: User authentication and JWT token management
     app.use('/api/admin', routes.adminRoutes);
@@ -207,7 +207,7 @@ function registerRoutes(routes) {
     app.use('/api/v2global/directory', routes.v2GlobalDirectoryRoutes); // V2 Global Company Directory
     app.use('/api/v2global/addcompany', routes.v2GlobalAddCompanyRoutes); // V2 Global Add Company
     app.use('/api/v2global/trade-categories', routes.v2GlobalTradeCategoriesRoutes); // V2 Global Trade Categories
-    app.use('/api/backup', routes.backupRoutes); // BACKUP: Automated backup monitoring and management
+    // V2 DELETED: Legacy backup routes - enterprise backup system eliminated
     // V2 DELETED: Legacy company agent settings route - using V2 AI Agent Logic system
     // app.use('/api/company', routes.companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
     
@@ -219,9 +219,9 @@ function registerRoutes(routes) {
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 
-    // Register AI Agent routes
-    app.use('/api/event-hooks', routes.eventHooksRoutes); // Event Hooks Management API
-    app.use('/api/transfer-router', routes.transferRouterRoutes); // Transfer Router Management API
+    // V2 DELETED: Legacy AI Agent routes - enterprise event and transfer systems eliminated
+    // V2 DELETED: Legacy event-hooks routes - enterprise event system eliminated
+    // V2 DELETED: Legacy transfer-router routes - enterprise transfer system eliminated
 
     // V2 DELETED: Legacy AI agent workflow and analytics route mounts - using V2 AI Agent Logic system
     // REMOVED: knowledge-auto-population routes - Replaced by comprehensive Company Q&A Management system
