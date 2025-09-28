@@ -44,14 +44,7 @@ const enterpriseAnalyticsRoutes = require('./routes/enterpriseAnalytics');
 
 // DELETED: Legacy Enterprise Trade Categories - replaced by V2 Global Trade Categories system
 
-// ENTERPRISE: AI Agent Settings API with error handling
-let agentSettingsRoutes;
-try {
-  agentSettingsRoutes = require('./routes/agentSettings');
-} catch (error) {
-  console.error('Failed to load Agent Settings routes:', error.message);
-  process.exit(1);
-}
+// V2 DELETED: Legacy agentSettings routes - using V2 AI Agent Logic system
 
 // Event Hooks and Notification System Routes with error handling
 let eventHooksRoutes, notificationRoutes;
@@ -178,7 +171,7 @@ app.use('/api/llm', llmRoutes);
 app.use('/api/booking', bookingRoutes);
 app.use('/api/transfer', transferRoutes);
 app.use('/api/notes', notesRoutes); // GOLD STANDARD: Enterprise Notes Management
-app.use('/api/agent', agentSettingsRoutes); // ENTERPRISE: AI Agent Settings Management
+// V2 DELETED: Legacy /api/agent route mount - using V2 AI Agent Logic system
 app.use('/api/event-hooks', eventHooksRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/qna-learning', qnaLearningRoutes);

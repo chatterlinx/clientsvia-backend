@@ -66,7 +66,7 @@ async function loadAllRoutes() {
         routes.v2VoiceRoutes = await loadRouteWithTimeout('./routes/company/v2profile-voice', 'v2VoiceRoutes');
         // V2 DELETED: Legacy alerts route - depends on deleted Alert model
         // routes.alertRoutes = await loadRouteWithTimeout('./routes/alerts', 'alertRoutes');
-        routes.integrationsRoutes = await loadRouteWithTimeout('./routes/integrations', 'integrationsRoutes');
+        // V2 DELETED: Legacy integrations route - Google Calendar integration eliminated
         routes.ttsRoutes = await loadRouteWithTimeout('./routes/tts', 'ttsRoutes');
         routes.twilioRoutes = await loadRouteWithTimeout('./routes/twilio', 'twilioRoutes');
         routes.aiRoutes = await loadRouteWithTimeout('./routes/ai', 'aiRoutes');
@@ -82,7 +82,7 @@ async function loadAllRoutes() {
         routes.agentTestingRoutes = await loadRouteWithTimeout('./routes/company/agentTesting', 'agentTestingRoutes');
         routes.eventHooksRoutes = await loadRouteWithTimeout('./routes/eventHooks', 'eventHooksRoutes');
         routes.transferRouterRoutes = await loadRouteWithTimeout('./routes/transferRouter', 'transferRouterRoutes');
-        routes.enhancedAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/enhancedAgentSettings', 'enhancedAgentSettingsRoutes');
+        // V2 DELETED: Legacy enhancedAgentSettings - used external LLM models, violates 100% in-house AI system
         // V2 DELETED: Legacy aiAgentWorkflows and aiAgentAnalytics routes - using V2 AI Agent Logic system
         // REMOVED: knowledgeAutoPopulationRoutes - Replaced by comprehensive Company Q&A Management system
         // V2: Legacy AI agent routes deleted - using modern v2profile-aiagentlogic system
@@ -193,7 +193,7 @@ function registerRoutes(routes) {
     // V2: All legacy debug and seed routes deleted - no longer needed in V2 system
     // V2 DELETED: Legacy alerts route mounting - depends on deleted Alert model
     // app.use('/api/alerts', routes.alertRoutes);
-    app.use('/api/integrations', routes.integrationsRoutes);
+    // V2 DELETED: Legacy integrations route mount - Google Calendar integration eliminated
     app.use('/api/tts', routes.ttsRoutes);
     app.use('/api/ai', routes.aiRoutes);
     app.use('/api/elevenlabs', routes.elevenLabsRoutes);
@@ -213,7 +213,7 @@ function registerRoutes(routes) {
     app.use('/api/company', routes.knowledgeSourcePrioritiesRoutes); // ENTERPRISE: Knowledge Source Priorities Management
     app.use('/api/company', routes.priorityFlowTestingRoutes); // ENTERPRISE: Real-time Priority Flow Testing & Validation
     app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
-    app.use('/api/company', routes.enhancedAgentSettingsRoutes); // Enhanced LLM Selector & Agent Settings
+    // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 
     // Register AI Agent routes
     app.use('/api/event-hooks', routes.eventHooksRoutes); // Event Hooks Management API

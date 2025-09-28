@@ -299,7 +299,7 @@ class CompanyProfileManager {
             this.populateOverviewTab();
             this.populateConfigTab();
             this.populateNotesTab();
-            this.populateCalendarSettingsTab();
+            // 🗑️ DELETED: this.populateCalendarSettingsTab() - Calendar tab destroyed
             this.populateAISettingsTab();
             this.populateVoiceTab();
             this.populatePersonalityTab();
@@ -1359,7 +1359,7 @@ class CompanyProfileManager {
             
             // Add other tabs' data if they exist
             this.collectNotesData(configData);
-            this.collectCalendarData(configData);
+            // 🗑️ DELETED: this.collectCalendarData(configData) - Calendar tab destroyed
             this.collectAISettingsData(configData);
             this.collectVoiceData(configData);
             this.collectPersonalityData(configData);
