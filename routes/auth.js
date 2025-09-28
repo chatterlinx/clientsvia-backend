@@ -309,115 +309,13 @@ router.post('/logout', async (req, res) => {
     }
 });
 
-/**
- * Google OAuth Routes
- */
+// V2 DELETED: Google OAuth Routes - using JWT-only authentication system
+// Google OAuth authentication eliminated - V2 uses pure JWT authentication
 
-// Middleware to check if Google OAuth is configured
-const requireGoogleOAuth = (req, res, next) => {
-    const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-    if (!googleConfigured) {
-        return res.status(503).json({
-            error: 'Google OAuth not configured',
-            message: 'Google OAuth is not available. Please contact administrator.'
-        });
-    }
-    next();
-};
+// V2 DELETED: Google OAuth initiate route - eliminated
 
-/**
- * GET /api/auth/google - Initiate Google OAuth flow
- */
-router.get('/google', requireGoogleOAuth,
-    passport.authenticate('google', { scope: ['profile', 'email'] })
-);
-
-/**
- * GET /api/auth/google/callback - Handle Google OAuth callback
- */
-router.get('/google/callback', requireGoogleOAuth,
-    (req, res, next) => {
-        console.log('🔍 OAUTH CHECKPOINT 1: Entering callback route');
-        console.log('🔍 OAUTH CHECKPOINT 2: Session exists:', !!req.session);
-        console.log('🔍 OAUTH CHECKPOINT 3: Session ID:', req.session?.id);
-        next();
-    },
-    passport.authenticate('google', { failureRedirect: '/login.html?error=oauth_failed' }),
-    async (req, res) => {
-        console.log('🔍 OAUTH CHECKPOINT 4: Authentication successful, processing user...');
-        try {
-            const user = req.user;
-            console.log('🔍 OAUTH CHECKPOINT 5: User object received:', !!user);
-            
-            // Generate JWT token for the authenticated user
-            const token = jwt.sign(
-                { 
-                    userId: user._id, 
-                    email: user.email, 
-                    role: user.role 
-                },
-                process.env.JWT_SECRET,
-                { expiresIn: '7d' }
-            );
-            console.log('🔍 OAUTH CHECKPOINT 6: JWT token generated');
-            
-            // Log successful OAuth login
-            logger.info('Google OAuth login successful', { 
-                userId: user._id, 
-                email: user.email, 
-                role: user.role,
-                method: 'google_oauth'
-            });
-            
-            // Set JWT token as cookie for frontend
-            res.cookie('authToken', token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
-                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-            });
-            console.log('🔍 OAUTH CHECKPOINT 7: Cookie set, redirecting...');
-            
-            // Send HTML page that sets localStorage and redirects
-            res.send(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Authentication Success</title>
-                </head>
-                <body>
-                    <script>
-                        console.log('🔍 OAuth Success: Setting localStorage token...');
-                        localStorage.setItem('adminToken', '${token}');
-                        console.log('🔍 OAuth Success: Token stored, redirecting to dashboard...');
-                        window.location.href = '/index.html';
-                    </script>
-                    <p>Authentication successful, redirecting...</p>
-                </body>
-                </html>
-            `);
-            
-        } catch (err) {
-            console.error('🔍 OAUTH CHECKPOINT ERROR:', err);
-            logger.error('Google OAuth callback error:', err);
-            res.redirect('/login.html?error=oauth_error');
-        }
-    }
-);
-
-/**
- * GET /api/auth/google/status - Check Google OAuth configuration
- */
-router.get('/google/status', (req, res) => {
-    const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-    
-    res.json({
-        googleOAuthEnabled: googleConfigured,
-        message: googleConfigured ? 
-            'Google OAuth is configured and available' : 
-            'Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.'
-    });
-});
+// V2 DELETED: Google OAuth callback route - eliminated
+// V2 DELETED: Google OAuth callback handler and status route - eliminated
 
 /**
  * Emergency bypass routes for server-level access

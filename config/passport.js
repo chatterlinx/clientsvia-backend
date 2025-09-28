@@ -1,5 +1,6 @@
 const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
+// V2 DELETED: Google OAuth authentication - using JWT-only system
+// const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const User = require('../models/User');
 const Company = require('../models/Company');
 
@@ -18,110 +19,8 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-// Google OAuth Strategy - only initialize if credentials are available
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_REDIRECT_URI || "/api/auth/google/callback"
-  }, async (accessToken, refreshToken, profile, done) => {
-  try {
-    const email = profile.emails[0].value;
-    const domain = email.split('@')[1];
-    
-    // Check if user already exists
-    let user = await User.findOne({ 
-      $or: [
-        { googleId: profile.id },
-        { email: email }
-      ]
-    });
-
-    if (user) {
-      // Update existing user
-      user.googleId = profile.id;
-      user.name = profile.displayName;
-      user.avatar = profile.photos[0]?.value;
-      user.lastLogin = new Date();
-      await user.save();
-      return done(null, user);
-    }
-
-    // Multi-tenant logic: Check if domain is allowed
-    const allowedDomains = process.env.ALLOWED_DOMAINS ? 
-      process.env.ALLOWED_DOMAINS.split(',').map(d => d.trim()) : [];
-    
-    // Admin email whitelist for Google OAuth
-    const adminEmails = process.env.ADMIN_GOOGLE_EMAILS ? 
-      process.env.ADMIN_GOOGLE_EMAILS.split(',').map(e => e.trim().toLowerCase()) : [];
-    
-    // Check if this is an admin login attempt
-    const isAdminAttempt = adminEmails.length > 0 && adminEmails.includes(email.toLowerCase());
-    
-    if (allowedDomains.length > 0 && !allowedDomains.includes(domain) && !isAdminAttempt) {
-      return done(new Error(`Domain ${domain} is not authorized for this application`), null);
-    }
-    
-    // For admin users, check email whitelist
-    if (isAdminAttempt) {
-      // This is an authorized admin - create/update with admin role
-      if (user) {
-        user.googleId = profile.id;
-        user.name = profile.displayName;
-        user.avatar = profile.photos[0]?.value;
-        user.role = 'admin'; // Ensure admin role
-        user.lastLogin = new Date();
-        await user.save();
-        return done(null, user);
-      }
-      
-      // Create new admin user
-      user = new User({
-        googleId: profile.id,
-        email: email,
-        name: profile.displayName,
-        avatar: profile.photos[0]?.value,
-        role: 'admin', // Set admin role
-        allowedDomains: [domain],
-        lastLogin: new Date()
-      });
-      
-      await user.save();
-      return done(null, user);
-    }
-
-    // Try to find associated company by domain
-    let company = null;
-    if (domain) {
-      company = await Company.findOne({ 
-        $or: [
-          { 'contact.email': { $regex: `@${domain}$`, $options: 'i' } },
-          { 'allowedDomains': domain }
-        ]
-      });
-    }
-
-    // Create new user
-    user = new User({
-      googleId: profile.id,
-      email: email,
-      name: profile.displayName,
-      avatar: profile.photos[0]?.value,
-      companyId: company ? company._id : null,
-      allowedDomains: [domain],
-      lastLogin: new Date()
-    });
-
-    await user.save();
-    return done(null, user);
-
-  } catch (error) {
-    console.error('Google OAuth error:', error);
-    return done(error, null);
-  }
-}));
-} else {
-  console.warn('⚠️  Google OAuth credentials not configured. Google login will be disabled.');
-}
+// V2 DELETED: Google OAuth Strategy - using JWT-only authentication system
+// Google OAuth authentication eliminated - V2 uses pure JWT authentication
+// All Google OAuth functionality has been removed from the V2 system
 
 module.exports = passport;
