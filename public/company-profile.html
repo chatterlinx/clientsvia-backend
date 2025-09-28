@@ -17257,20 +17257,26 @@ Key Metrics:
 
         async runKnowledgeTestWithQuery(query) {
             try {
-                console.log(`Running knowledge test with query: ${query}`);
+                console.log(`🤖 V2 SYSTEM: Running REAL AI Agent knowledge test with query: ${query}`);
 
-                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/test-ai-agent`, {
+                // V2 FIX: Use the REAL AI Agent endpoint instead of simulation
+                const response = await fetch(`/api/ai-agent/company-knowledge/${this.companyId}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${this.getAuthToken()}`
                     },
-                    body: JSON.stringify({ query })
+                    body: JSON.stringify({ 
+                        query,
+                        confidence: 0.5, // Lower threshold for testing
+                        maxResults: 3
+                    })
                 });
 
                 if (response.ok) {
                     const data = await response.json();
-                    this.displayKnowledgeTestResults(data.data);
+                    // V2 FIX: Handle real AI agent response format
+                    this.displayRealAIAgentResults(data);
                 } else {
                     throw new Error(`Test failed: ${response.statusText}`);
                 }
@@ -17278,6 +17284,90 @@ Key Metrics:
                 console.error('Error running knowledge test:', error);
                 this.showErrorMessage('Knowledge test failed. Please try again.');
             }
+        }
+
+        displayRealAIAgentResults(data) {
+            const container = document.getElementById('knowledge-test-results');
+            const content = document.getElementById('knowledge-test-content');
+            
+            if (!container || !content) return;
+
+            console.log('🤖 V2 SYSTEM: Real AI Agent Response:', data);
+
+            // V2 SYSTEM: Display real AI agent results
+            let html = `
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h5 class="font-medium text-blue-800">🤖 V2 AI Agent Test Results</h5>
+                        <div class="text-sm text-gray-600">
+                            Source: ${data.source || 'V2 AI Agent'}
+                            ${data.responseTime ? ` | ${data.responseTime}ms` : ''}
+                            ${data.cacheHit ? ' | Cache Hit' : ' | Live Query'}
+                        </div>
+                    </div>
+            `;
+
+            if (data.success && data.answers && data.answers.length > 0) {
+                const bestAnswer = data.answers[0];
+                const confidence = Math.round((bestAnswer.confidence || data.confidence || 0) * 100);
+                
+                html += `
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-check-circle text-green-600 mr-2"></i>
+                            <span class="font-medium text-green-800">Answer Found</span>
+                            <span class="ml-2 text-sm bg-green-100 text-green-700 px-2 py-1 rounded">${confidence}% confidence</span>
+                        </div>
+                        <div class="text-sm text-green-700 mb-3">
+                            <strong>Question:</strong> ${bestAnswer.question}
+                        </div>
+                        <div class="text-sm text-green-700 mb-3">
+                            <strong>Answer:</strong> ${bestAnswer.answer}
+                        </div>
+                        ${bestAnswer.keywords ? `
+                            <div class="text-xs text-green-600">
+                                <strong>Keywords:</strong> ${bestAnswer.keywords.join(', ')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+
+                if (data.answers.length > 1) {
+                    html += `
+                        <div class="text-sm text-gray-600">
+                            <strong>Additional matches found:</strong> ${data.answers.length - 1} more answers
+                        </div>
+                    `;
+                }
+            } else {
+                html += `
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-exclamation-triangle text-yellow-600 mr-2"></i>
+                            <span class="font-medium text-yellow-800">No Answer Found</span>
+                        </div>
+                        <div class="text-sm text-yellow-700">
+                            The AI agent could not find a suitable answer in the knowledge base. 
+                            Consider adding this query to your Company Q&A.
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div class="text-xs text-blue-700 space-y-1">
+                            <div><strong>Total Found:</strong> ${data.totalFound || 0} entries</div>
+                            <div><strong>Response Time:</strong> ${data.responseTime || 'N/A'}ms</div>
+                            <div><strong>Cache Status:</strong> ${data.cacheHit ? 'Hit (Redis)' : 'Miss (Database)'}</div>
+                            <div><strong>Source:</strong> ${data.source || 'company_knowledge'}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            content.innerHTML = html;
+            container.classList.remove('hidden');
         }
 
         displayKnowledgeTestResults(results) {
