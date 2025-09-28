@@ -1658,7 +1658,7 @@ const companySchema = new mongoose.Schema({
                 
                 hotReload: {
                     enabled: { type: Boolean, default: true },
-                    kbReloadCron: { type: String, default: '0 */6 * * *' }, // Every 6 hours
+                    // V2 DELETED: Legacy kbReloadCron cron expression causing syntax error
                     embeddingVersioning: { type: Boolean, default: true }
                 }
             },
