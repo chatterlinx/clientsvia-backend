@@ -26,6 +26,7 @@ const { authenticateJWT } = require('../../middleware/auth');
 const { redisClient } = require('../../clients');
 const logger = require('../../utils/logger');
 const Joi = require('joi');
+const SmartThresholdOptimizer = require('../../services/smartThresholdOptimizer');
 
 // Validation schemas
 const priorityFlowSchema = Joi.object({
@@ -698,5 +699,84 @@ function generateSimulatedResponse(query, source, companyId) {
     
     return responses[source] || 'I can help you with that. Let me get you the information you need.';
 }
+
+/**
+ * 🧠 POST /api/company/:companyId/knowledge-source-priorities/smart-optimize
+ * AI-powered smart threshold optimization
+ */
+router.post('/:companyId/knowledge-source-priorities/smart-optimize', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+
+    try {
+        logger.info(`🧠 POST smart-optimize request for company ${companyId}`);
+
+        // Initialize the smart optimizer
+        const optimizer = new SmartThresholdOptimizer();
+        
+        // Run the optimization
+        const result = await optimizer.optimizeThresholds(companyId);
+        
+        if (!result.success) {
+            return res.status(400).json({
+                success: false,
+                message: result.message,
+                recommendations: result.recommendations,
+                meta: {
+                    responseTime: Date.now() - startTime
+                }
+            });
+        }
+
+        // Clear cache after optimization
+        try {
+            if (redisClient && redisClient.isReady) {
+                const cacheKey = `company:${companyId}:priorities`;
+                await redisClient.del(cacheKey);
+                logger.info(`🗑️ Cache cleared after smart optimization`);
+            }
+        } catch (error) {
+            logger.warn(`⚠️ Cache clear failed after optimization`, { error: error.message });
+        }
+
+        const responseTime = Date.now() - startTime;
+        logger.info(`🧠 POST smart-optimize success for company ${companyId}`, {
+            responseTime,
+            optimizedThresholds: result.optimizedThresholds,
+            confidence: result.confidence
+        });
+
+        res.json({
+            success: true,
+            message: result.message,
+            data: {
+                analysis: result.analysis,
+                optimizedThresholds: result.optimizedThresholds,
+                improvements: result.improvements,
+                confidence: result.confidence
+            },
+            meta: {
+                responseTime,
+                optimizationVersion: result.analysis?.optimizationVersion || 1
+            }
+        });
+
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        logger.error(`❌ POST smart-optimize failed for company ${companyId}`, {
+            error: error.message,
+            responseTime
+        });
+
+        res.status(500).json({
+            success: false,
+            message: 'Smart optimization failed',
+            error: error.message,
+            meta: {
+                responseTime
+            }
+        });
+    }
+});
 
 module.exports = router;
