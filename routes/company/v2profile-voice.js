@@ -318,4 +318,94 @@ router.patch('/:companyId/v2-voice-settings', async (req, res) => {
     }
 });
 
+/**
+ * @route   POST /api/company/cleanup-hardcoded-voice
+ * @desc    Emergency cleanup: Remove hardcoded voice ID from all companies
+ * @access  Private (Admin only)
+ */
+router.post('/cleanup-hardcoded-voice', async (req, res) => {
+    try {
+        const HARDCODED_VOICE_ID = 'pNInz6obpgDQGcFmaJgB';
+        
+        console.log('🧹 Starting emergency cleanup of hardcoded voice settings...');
+        
+        // Find companies with the hardcoded voice ID
+        const companiesWithHardcodedVoice = await Company.find({
+            'aiAgentLogic.voiceSettings.voiceId': HARDCODED_VOICE_ID
+        });
+
+        console.log(`🔍 Found ${companiesWithHardcodedVoice.length} companies with hardcoded voice ID`);
+
+        if (companiesWithHardcodedVoice.length === 0) {
+            return res.json({
+                success: true,
+                message: 'No companies found with hardcoded voice ID - cleanup not needed',
+                companiesUpdated: 0
+            });
+        }
+
+        // Reset voice settings to clean defaults
+        const updateResult = await Company.updateMany(
+            { 'aiAgentLogic.voiceSettings.voiceId': HARDCODED_VOICE_ID },
+            {
+                $set: {
+                    'aiAgentLogic.voiceSettings': {
+                        apiSource: 'clientsvia',
+                        apiKey: null,
+                        voiceId: null, // Reset to null - must be configured in UI
+                        stability: 0.5,
+                        similarityBoost: 0.7,
+                        styleExaggeration: 0.0,
+                        speakerBoost: true,
+                        aiModel: 'eleven_turbo_v2_5',
+                        outputFormat: 'mp3_44100_128',
+                        streamingLatency: 0,
+                        enabled: true,
+                        lastUpdated: new Date(),
+                        version: '2.0'
+                    }
+                }
+            }
+        );
+
+        // Clear Redis cache for all affected companies
+        if (redisClient) {
+            for (const company of companiesWithHardcodedVoice) {
+                const cacheKeys = [
+                    `company:${company._id}`,
+                    `voice:company:${company._id}`,
+                    `ai-agent:${company._id}`
+                ];
+                
+                if (company.twilioConfig?.phoneNumber) {
+                    cacheKeys.push(`company-phone:${company.twilioConfig.phoneNumber}`);
+                }
+                
+                await Promise.all(cacheKeys.map(key => redisClient.del(key)));
+                console.log(`🗑️ Cache cleared for company ${company._id}: ${cacheKeys.join(', ')}`);
+            }
+        }
+
+        console.log(`✅ Updated ${updateResult.modifiedCount} companies`);
+
+        res.json({
+            success: true,
+            message: 'Hardcoded voice settings cleaned up successfully',
+            companiesUpdated: updateResult.modifiedCount,
+            affectedCompanies: companiesWithHardcodedVoice.map(c => ({
+                id: c._id,
+                name: c.companyName
+            }))
+        });
+
+    } catch (error) {
+        console.error('❌ Emergency cleanup failed:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to cleanup hardcoded voice settings',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;
