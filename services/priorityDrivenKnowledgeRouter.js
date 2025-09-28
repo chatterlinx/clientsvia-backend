@@ -334,7 +334,10 @@ class PriorityDrivenKnowledgeRouter {
                 }
                 
                 knowledge = company.aiAgentLogic.knowledgeManagement;
-                await aiAgentCache.cacheKnowledge(companyId, knowledge);
+                // V2 FIX: Cache knowledge using direct Redis instead of deleted aiAgentCache
+                if (redisClient && redisClient.isReady) {
+                    await redisClient.setEx(`knowledge:${companyId}`, 300, JSON.stringify(knowledge));
+                }
                 console.log(`🔄 Trade Q&A cache miss - loaded from MongoDB (${Date.now() - startTime}ms)`);
             } else {
                 console.log(`⚡ Trade Q&A cache hit - Redis lookup (${Date.now() - startTime}ms)`);
