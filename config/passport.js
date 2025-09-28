@@ -1,6 +1,6 @@
 const passport = require('passport');
 // V2 DELETED: Google OAuth authentication - using JWT-only system
-// const GoogleStrategy = require('passport-google-oauth20').Strategy;
+// GoogleStrategy import completely eliminated from V2 system
 const User = require('../models/User');
 const Company = require('../models/Company');
 
