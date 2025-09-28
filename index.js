@@ -32,7 +32,8 @@ console.log('[INIT] Loading database modules...');
 const { connectDB } = require('./db');
 // V2 DELETED: Legacy AgentPromptService - depends on deleted AgentPrompt model
 // const AgentPromptService = require('./services/agentPromptsService');
-const BackupMonitoringService = require('./services/backupMonitoringService');
+// V2 DELETED: Legacy BackupMonitoringService - enterprise bloat eliminated
+// const BackupMonitoringService = require('./services/backupMonitoringService');
 console.log('[INIT] ✅ Database modules loaded');
 
 console.log('[INIT] Loading API routes...');
@@ -426,12 +427,13 @@ async function startServer() {
         console.log('[Server] Step 3/6: Skipping legacy agent prompts (V2 uses aiAgentLogic)...');
         console.log(`[Server] ✅ Step 3 COMPLETE: Legacy agent prompts skipped - V2 system active`);
         
-        console.log('[Server] Step 4/6: Initializing backup monitoring...');
+        console.log('[Server] Step 4/6: V2 DELETED - Legacy backup monitoring eliminated...');
         const backupStart = Date.now();
-        const backupMonitoring = new BackupMonitoringService();
-        backupMonitoring.start();
-        logger.info('🔄 Backup monitoring service initialized');
-        console.log(`[Server] ✅ Step 4 COMPLETE: Backup monitoring initialized in ${Date.now() - backupStart}ms`);
+        // V2 DELETED: Legacy BackupMonitoringService - enterprise bloat eliminated
+        // const backupMonitoring = new BackupMonitoringService();
+        // backupMonitoring.start();
+        logger.info('🔄 V2 SYSTEM: Backup monitoring service eliminated - using simple V2 architecture');
+        console.log(`[Server] ✅ Step 4 COMPLETE: Legacy backup monitoring eliminated in ${Date.now() - backupStart}ms`);
         
         console.log('[Server] Step 5/6: Preparing to bind to port...');
         const PORT = process.env.PORT || 3000;
