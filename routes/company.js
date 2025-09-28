@@ -507,7 +507,8 @@ router.patch('/company/:companyId/aisettings', async (req, res) => {
         const updatePayload = {};
         if (aiSettings.model !== undefined) updatePayload['aiSettings.model'] = aiSettings.model;
         if (aiSettings.personality !== undefined) updatePayload['aiSettings.personality'] = aiSettings.personality;
-        if (aiSettings.googleVoice !== undefined) updatePayload['aiSettings.googleVoice'] = aiSettings.googleVoice;
+        // V2 DELETED: Google voice provider - using ElevenLabs only
+        // if (aiSettings.googleVoice !== undefined) updatePayload['aiSettings.googleVoice'] = aiSettings.googleVoice;
         if (aiSettings.voicePitch !== undefined) updatePayload['aiSettings.voicePitch'] = Number(aiSettings.voicePitch);
         if (aiSettings.voiceSpeed !== undefined) updatePayload['aiSettings.voiceSpeed'] = Number(aiSettings.voiceSpeed);
         if (aiSettings.responseLength !== undefined) updatePayload['aiSettings.responseLength'] = aiSettings.responseLength;

@@ -103,7 +103,8 @@ const aiSettingsSchema = new mongoose.Schema({
     language: { type: String, default: 'en', trim: true }, // Primary language for agent conversations
     model: { type: String, default: 'gemini-1.5-pro', trim: true },
     personality: { type: String, default: 'friendly', trim: true },
-    googleVoice: { type: String, default: 'en-US-Standard-A', trim: true },
+    // V2 DELETED: Google voice provider - using ElevenLabs only
+    // googleVoice: { type: String, default: 'en-US-Standard-A', trim: true },
     voicePitch: { type: Number, default: 0 },
     voiceSpeed: { type: Number, default: 1 },
     responseLength: { type: String, default: 'concise', trim: true },
@@ -1458,20 +1459,20 @@ const companySchema = new mongoose.Schema({
                 },
                 tts: { 
                     type: [String], 
-                    default: ['elevenlabs', 'google'],
+                    default: ['elevenlabs'],
                     validate: {
                         validator: function(v) {
-                            const validProviders = ['elevenlabs', 'google', 'azure', 'aws'];
+                            const validProviders = ['elevenlabs'];
                             return v.every(provider => validProviders.includes(provider));
                         }
                     }
                 },
                 llm: { 
                     type: [String], 
-                    default: ['gemini', 'openai', 'claude'],
+                    default: ['in-house'],
                     validate: {
                         validator: function(v) {
-                            const validProviders = ['gemini', 'openai', 'claude', 'ollama'];
+                            const validProviders = ['in-house'];
                             return v.every(provider => validProviders.includes(provider));
                         }
                     }
