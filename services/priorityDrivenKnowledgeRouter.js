@@ -217,12 +217,14 @@ class PriorityDrivenKnowledgeRouter {
     async queryKnowledgeSource(companyId, sourceType, query, context) {
         const cacheKey = `query:${companyId}:${sourceType}:${this.hashQuery(query)}`;
         
-        // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache check (Redis v5+ compatible)
         try {
-            const cachedResult = await redisClient.get(cacheKey);
-            if (cachedResult) {
-                logger.info(`🚀 V2 Cache hit for ${sourceType}`, { routingId: context.routingId });
-                return JSON.parse(cachedResult);
+            if (redisClient && redisClient.isReady) {
+                const cachedResult = await redisClient.get(cacheKey);
+                if (cachedResult) {
+                    logger.info(`🚀 V2 Cache hit for ${sourceType}`, { routingId: context.routingId });
+                    return JSON.parse(cachedResult);
+                }
             }
         } catch (error) {
             logger.warn(`⚠️ V2 Cache check failed for ${sourceType}`, { error: error.message });
@@ -248,9 +250,11 @@ class PriorityDrivenKnowledgeRouter {
         }
 
         // Cache result for future queries (5 minute TTL)
-        // V2 SYSTEM: Simple Redis cache set (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache set (Redis v5+ compatible)
         try {
-            await redisClient.setex(cacheKey, 300, JSON.stringify(result));
+            if (redisClient && redisClient.isReady) {
+                await redisClient.setEx(cacheKey, 300, JSON.stringify(result));
+            }
         } catch (error) {
             logger.warn(`⚠️ V2 Cache set failed`, { error: error.message });
         }
@@ -310,12 +314,14 @@ class PriorityDrivenKnowledgeRouter {
     async queryTradeQnA(companyId, query, context) {
         const startTime = Date.now();
         try {
-            // 🚀 V2 REDIS CACHE FIRST - Sub-50ms performance target
+            // 🚀 V2 REDIS CACHE FIRST - Sub-50ms performance target (Redis v5+ compatible)
             let knowledge = null;
             try {
-                const cacheKey = `company:${companyId}:knowledge`;
-                const cached = await redisClient.get(cacheKey);
-                if (cached) knowledge = JSON.parse(cached);
+                if (redisClient && redisClient.isReady) {
+                    const cacheKey = `company:${companyId}:knowledge`;
+                    const cached = await redisClient.get(cacheKey);
+                    if (cached) knowledge = JSON.parse(cached);
+                }
             } catch (error) {
                 logger.warn(`⚠️ V2 Cache check failed for trade knowledge`, { error: error.message });
             }
@@ -543,11 +549,13 @@ class PriorityDrivenKnowledgeRouter {
      */
     async getPriorityConfiguration(companyId) {
         try {
-            // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+            // V2 SYSTEM: Simple Redis cache check (Redis v5+ compatible)
             try {
-                const cacheKey = `company:${companyId}:priorities`;
-                const cached = await redisClient.get(cacheKey);
-                if (cached) return JSON.parse(cached);
+                if (redisClient && redisClient.isReady) {
+                    const cacheKey = `company:${companyId}:priorities`;
+                    const cached = await redisClient.get(cacheKey);
+                    if (cached) return JSON.parse(cached);
+                }
             } catch (error) {
                 logger.warn(`⚠️ V2 Cache check failed for priorities`, { error: error.message });
             }
@@ -563,10 +571,12 @@ class PriorityDrivenKnowledgeRouter {
             const config = company.aiAgentLogic.knowledgeSourcePriorities;
             
             // Cache for future use
-            // V2 SYSTEM: Simple Redis cache set (no legacy enterprise cache service)
+            // V2 SYSTEM: Simple Redis cache set (Redis v5+ compatible)
             try {
-                const cacheKey = `company:${companyId}:priorities`;
-                await redisClient.setex(cacheKey, 3600, JSON.stringify(config));
+                if (redisClient && redisClient.isReady) {
+                    const cacheKey = `company:${companyId}:priorities`;
+                    await redisClient.setEx(cacheKey, 3600, JSON.stringify(config));
+                }
             } catch (error) {
                 logger.warn(`⚠️ V2 Cache set failed for priorities`, { error: error.message });
             }
@@ -757,12 +767,14 @@ class PriorityDrivenKnowledgeRouter {
      */
     async applyPersonality(companyId, originalResponse, sourceType = 'general') {
         try {
-            // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+            // V2 SYSTEM: Simple Redis cache check (Redis v5+ compatible)
             let personalityConfig = null;
             try {
-                const cacheKey = `company:${companyId}:personality`;
-                const cached = await redisClient.get(cacheKey);
-                if (cached) personalityConfig = JSON.parse(cached);
+                if (redisClient && redisClient.isReady) {
+                    const cacheKey = `company:${companyId}:personality`;
+                    const cached = await redisClient.get(cacheKey);
+                    if (cached) personalityConfig = JSON.parse(cached);
+                }
             } catch (error) {
                 logger.warn(`⚠️ V2 Cache check failed for personality`, { error: error.message });
             }
