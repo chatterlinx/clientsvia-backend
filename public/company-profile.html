@@ -4251,6 +4251,92 @@ This would be a great time to also check..."></textarea>
             }
         }
 
+        // 🚀 CRITICAL INTEGRATION: Save Voice Settings to aiAgentLogic.voiceSettings
+        async function saveVoiceSettings() {
+            console.log('🎤 Saving voice settings to V2 system...');
+            
+            try {
+                const companyId = getCurrentCompanyId();
+                if (!companyId) {
+                    throw new Error('Company ID not found');
+                }
+
+                // Collect voice settings from form
+                const useOwnApi = document.getElementById('useOwnApiKey')?.checked || false;
+                const apiKey = document.getElementById('elevenlabsApiKey')?.value || '';
+                const voiceId = document.getElementById('voice-selector')?.value || '';
+                const stability = parseFloat(document.getElementById('stability')?.value || '0.5');
+                const similarityBoost = parseFloat(document.getElementById('similarity-boost')?.value || '0.7');
+                const style = parseFloat(document.getElementById('style')?.value || '0.0');
+                const speakerBoost = document.getElementById('speaker-boost')?.checked || true;
+                const modelId = document.getElementById('model-selector')?.value || 'eleven_turbo_v2_5';
+                const outputFormat = document.getElementById('output-format')?.value || 'mp3_44100_128';
+                const streamingLatency = parseInt(document.getElementById('streaming-latency')?.value || '0');
+
+                // Validate required fields
+                if (!voiceId) {
+                    throw new Error('Please select a voice before saving');
+                }
+
+                if (useOwnApi && !apiKey) {
+                    throw new Error('API key is required when using your own ElevenLabs account');
+                }
+
+                // Show loading state
+                const saveButton = document.getElementById('save-voice-settings');
+                if (saveButton) {
+                    saveButton.disabled = true;
+                    saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+                }
+
+                // Prepare voice settings data
+                const voiceSettings = {
+                    apiSource: useOwnApi ? 'own' : 'clientsvia',
+                    apiKey: useOwnApi ? apiKey : null,
+                    voiceId: voiceId,
+                    stability: stability,
+                    similarityBoost: similarityBoost,
+                    styleExaggeration: style,
+                    speakerBoost: speakerBoost,
+                    aiModel: modelId,
+                    outputFormat: outputFormat,
+                    streamingLatency: streamingLatency
+                };
+
+                console.log('🎤 Voice settings to save:', voiceSettings);
+
+                // Save to V2 voice settings endpoint
+                const response = await fetch(`/api/company/${companyId}/v2-voice-settings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getUniversalAuthToken()}`
+                    },
+                    body: JSON.stringify(voiceSettings)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || 'Failed to save voice settings');
+                }
+
+                console.log('✅ Voice settings saved successfully');
+                showNotification('Voice settings saved successfully! Your AI agent will now use these settings.', 'success');
+
+            } catch (error) {
+                console.error('❌ Failed to save voice settings:', error);
+                showNotification(`Failed to save voice settings: ${error.message}`, 'error');
+            } finally {
+                // Reset button state
+                const saveButton = document.getElementById('save-voice-settings');
+                if (saveButton) {
+                    saveButton.disabled = false;
+                    saveButton.innerHTML = '<i class="fas fa-save mr-2"></i>Save Voice Settings';
+                }
+            }
+        }
+
         // Generate test audio
         async function generateTestAudio() {
             const companyId = getCurrentCompanyId();
@@ -4553,6 +4639,12 @@ This would be a great time to also check..."></textarea>
             if (categoryFilter) {
                 categoryFilter.addEventListener('change', filterVoices);
 
+            }
+
+            // Save Voice Settings button - CRITICAL INTEGRATION
+            const saveVoiceButton = document.getElementById('save-voice-settings');
+            if (saveVoiceButton) {
+                saveVoiceButton.addEventListener('click', saveVoiceSettings);
             }
 
             // Voice selector
