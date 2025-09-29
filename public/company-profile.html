@@ -18439,128 +18439,27 @@ Key Metrics:
         }
 
         /**
-         * 📋 Load and Display Saved Q&A Entries
+         * 🗑️ LEGACY ELIMINATION: Disabled legacy embedded Q&A loader
+         * This function previously loaded green Q&A entries from embedded company data
+         * ELIMINATED to prevent dual Q&A system conflicts
          */
         async loadAndDisplaySavedQnA() {
-            try {
-                console.log('📋 Loading saved Q&A entries...');
-                console.log('📋 Company ID:', this.companyId);
-                console.log('📋 Auth token available:', !!getUniversalAuthToken());
-                
-                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/company-qna`, {
-                    headers: {
-                        'Authorization': `Bearer ${getUniversalAuthToken()}`
-                    }
-                });
-
-                console.log('📋 Load response status:', response.status);
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('📋 Load error response:', errorText);
-                    throw new Error(`Failed to load saved Q&A: ${response.status} - ${errorText}`);
-                }
-
-                const data = await response.json();
-                const savedQnAs = data.data || [];
-                
-                console.log('📋 Loaded saved Q&A entries:', savedQnAs.length);
-                console.log('📋 Saved Q&A data:', savedQnAs);
-                
-                if (savedQnAs.length > 0) {
-                    console.log('📋 Displaying saved Q&A entries...');
-                    this.displaySavedQnA(savedQnAs);
-                } else {
-                    console.log('📋 No saved Q&A entries to display');
-                }
-                
-            } catch (error) {
-                console.error('❌ Error loading saved Q&A:', error);
-                // Don't show error to user - this is just for display
-            }
+            console.log('🗑️ LEGACY ELIMINATED: loadAndDisplaySavedQnA() disabled - no more green Q&A entries');
+            console.log('✅ CLEAN SYSTEM: Only AI-generated white Q&A entries will be displayed');
+            // Legacy embedded Q&A loading completely eliminated
+            // Only the clean AI-generated Q&A system remains active
         }
 
         /**
-         * 📋 Display Saved Q&A Entries
+         * 🗑️ LEGACY ELIMINATION: Green Q&A renderer completely disabled
+         * This function previously rendered green "Saved Question" entries from embedded data
+         * ELIMINATED to prevent dual Q&A system conflicts and legacy spaghetti contamination
          */
         displaySavedQnA(savedQnAs) {
-            const container = document.getElementById('generated-qna-list');
-            const emptyState = document.getElementById('empty-qna-state');
-            
-            if (!savedQnAs || savedQnAs.length === 0) {
-                emptyState.style.display = 'block';
-                return;
-            }
-            
-            emptyState.style.display = 'none';
-            
-            // 🔧 FIX: Remove existing saved Q&A entries to prevent duplicates
-            container.querySelectorAll('[data-saved-qna-id]').forEach(el => el.remove());
-            
-            // Add saved Q&A entries to the container (append to any generated ones)
-            const savedQnAHTML = savedQnAs.map((qna, index) => `
-                <div class="bg-green-50 border border-green-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow" data-saved-qna-id="${qna._id}">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex-1">
-                            <div class="flex items-center space-x-2 mb-2">
-                                <i class="fas fa-check-circle text-green-500"></i>
-                                <span class="text-sm font-medium text-green-700">Saved Question</span>
-                            </div>
-                            <div class="bg-white p-3 rounded border border-green-200">
-                                <strong class="text-gray-800">${qna.question}</strong>
-                            </div>
-                        </div>
-                        <div class="flex space-x-2 ml-4">
-                            <button class="edit-saved-qna-btn bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors" data-qna-id="${qna._id}">
-                                <i class="fas fa-edit mr-1"></i>Edit
-                            </button>
-                            <button class="delete-saved-qna-btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors" data-qna-id="${qna._id}">
-                                <i class="fas fa-trash mr-1"></i>Delete
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-4">
-                        <div class="flex items-center space-x-2 mb-2">
-                            <i class="fas fa-comment-dots text-green-500"></i>
-                            <span class="text-sm font-medium text-green-700">Answer</span>
-                        </div>
-                        <div class="bg-white p-3 rounded border border-green-200">
-                            <p class="text-gray-700">${qna.answer}</p>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <div class="flex items-center space-x-2 mb-2">
-                            <i class="fas fa-tags text-green-500"></i>
-                            <span class="text-sm font-medium text-green-700">Keywords</span>
-                        </div>
-                        <div class="bg-white p-2 rounded border border-green-200">
-                            <div class="flex flex-wrap gap-1">
-                                ${qna.keywords.map(keyword => `<span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">${keyword}</span>`).join('')}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-            
-            // Append saved Q&A to existing content
-            container.innerHTML += savedQnAHTML;
-            
-            // Add event listeners for edit/delete buttons
-            container.querySelectorAll('.edit-saved-qna-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const qnaId = e.target.closest('.edit-saved-qna-btn').dataset.qnaId;
-                    this.editSavedQnA(qnaId);
-                });
-            });
-            
-            container.querySelectorAll('.delete-saved-qna-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const qnaId = e.target.closest('.delete-saved-qna-btn').dataset.qnaId;
-                    this.deleteSavedQnA(qnaId);
-                });
-            });
+            console.log('🗑️ LEGACY ELIMINATED: displaySavedQnA() disabled - green Q&A rendering blocked');
+            console.log('✅ CLEAN SYSTEM: Legacy green Q&A entries will no longer appear');
+            // Legacy green Q&A rendering completely eliminated
+            // Only clean white AI-generated Q&A entries remain functional
         }
 
         /**
