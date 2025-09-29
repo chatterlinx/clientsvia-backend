@@ -44,6 +44,7 @@ const prioritiesUpdateSchema = Joi.object({
     memorySettings: Joi.object({
         useConversationContext: Joi.boolean().default(true),
         contextWindow: Joi.number().integer().min(1).max(10).default(5),
+        contextRetention: Joi.number().integer().min(1).max(120).default(30), // Support both field names
         personalizeResponses: Joi.boolean().default(true),
         mode: Joi.string().valid('conversation', 'session', 'customer', 'none').default('conversation')
     }),
@@ -554,14 +555,15 @@ function validatePriorityFlow(priorityFlow) {
         return { valid: false, message: 'Duplicate priorities in priority flow' };
     }
 
-    // Ensure inHouseFallback is always present and has always_respond behavior
+    // Ensure inHouseFallback is always present and set default behavior
     const fallbackSource = priorityFlow.find(item => item.source === 'inHouseFallback');
     if (!fallbackSource) {
         return { valid: false, message: 'inHouseFallback source is required' };
     }
 
-    if (fallbackSource.fallbackBehavior !== 'always_respond') {
-        return { valid: false, message: 'inHouseFallback must have always_respond behavior' };
+    // Auto-set fallbackBehavior if not provided
+    if (!fallbackSource.fallbackBehavior) {
+        fallbackSource.fallbackBehavior = 'always_respond';
     }
 
     return { valid: true };
