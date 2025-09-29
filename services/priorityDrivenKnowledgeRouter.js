@@ -299,8 +299,9 @@ class PriorityDrivenKnowledgeRouter {
                 const company = await Company.findById(companyId).select('tradeCategories').lean();
                 if (company?.tradeCategories) {
                     const TradeCategory = require('../models/TradeCategory');
+                    // V2 FIX: tradeCategories contains names, not ObjectIds
                     const categories = await TradeCategory.find({
-                        _id: { $in: company.tradeCategories }
+                        name: { $in: company.tradeCategories }
                     }).select('qnas.keywords').lean();
                     
                     categories.forEach(category => {

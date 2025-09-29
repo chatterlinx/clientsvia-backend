@@ -308,13 +308,8 @@ const companySchema = new mongoose.Schema({
             message: { type: String, default: 'I want to make sure I give you accurate information. Let me connect you with a specialist who can help.' }
         },
         
-        // Knowledge Source Priority Order - IN-HOUSE ONLY
-        knowledgeSourcePriorities: {
-            type: [String],
-            default: ['companyQnA', 'tradeQnA', 'templates', 'inHouseFallback']
-        },
-        
-        // V2 DELETED: Legacy answerPriorityFlow - using knowledgeSourcePriorities instead
+        // V2 DELETED: Legacy knowledgeSourcePriorities array - using V2 object structure instead
+        // V2 DELETED: Legacy answerPriorityFlow - using V2 knowledgeSourcePriorities object instead
         
         // Response Categories configuration
         responseCategories: {
