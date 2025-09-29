@@ -1912,6 +1912,30 @@
                                                                 <h4 class="text-lg font-semibold text-gray-800 mb-2">In-House Fallback Configuration</h4>
                                                                 <p class="text-sm text-gray-600">Configure smart keyword-based responses when no specific Q&A matches are found.</p>
                                                             </div>
+                                                            
+                                                            <!-- Smart Auto-Populate Section -->
+                                                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                                                                <h5 class="font-semibold text-blue-900 mb-3">Smart Auto-Populate</h5>
+                                                                <p class="text-sm text-blue-700 mb-4">Enter your service types to automatically generate professional responses and keywords.</p>
+                                                                
+                                                                <div class="space-y-3">
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-blue-800 mb-2">Service Types (separate multiple with commas):</label>
+                                                                        <input type="text" id="service-types-input" placeholder="e.g., HVAC Residential, Plumbing, Electrical Service" 
+                                                                               class="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                                                        <p class="text-xs text-blue-600 mt-1">Examples: "HVAC Commercial", "Plumbing + Electrical", "Dental Practice", "Auto Repair"</p>
+                                                                    </div>
+                                                                    
+                                                                    <div class="flex space-x-3">
+                                                                        <button id="auto-generate-fallback-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                                                                            <i class="fas fa-magic mr-2"></i>Auto-Generate Responses
+                                                                        </button>
+                                                                        <button id="clear-fallback-btn" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                                                                            <i class="fas fa-eraser mr-2"></i>Clear All
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
 
                                                             <!-- Fallback Categories -->
                                                             <div class="grid grid-cols-2 gap-6">
@@ -14263,14 +14287,23 @@ Key Metrics:
                     this.runSmartOptimization();
                 });
                 
-                // Auto-optimization toggle
-                document.getElementById('auto-optimization-toggle')?.addEventListener('change', (e) => {
-                    this.toggleAutoOptimization(e.target.checked);
-                });
-                
-                document.getElementById('auto-optimization-frequency')?.addEventListener('change', (e) => {
-                    this.updateAutoOptimizationFrequency(e.target.value);
-                });
+            // Auto-optimization toggle
+            document.getElementById('auto-optimization-toggle')?.addEventListener('change', (e) => {
+                this.toggleAutoOptimization(e.target.checked);
+            });
+            
+            document.getElementById('auto-optimization-frequency')?.addEventListener('change', (e) => {
+                this.updateAutoOptimizationFrequency(e.target.value);
+            });
+            
+            // Smart fallback auto-generate
+            document.getElementById('auto-generate-fallback-btn')?.addEventListener('click', () => {
+                this.autoGenerateFallbackResponses();
+            });
+            
+            document.getElementById('clear-fallback-btn')?.addEventListener('click', () => {
+                this.clearFallbackResponses();
+            });
 
                 // Reset defaults button
                 document.getElementById('reset-defaults-btn')?.addEventListener('click', () => {
@@ -14726,8 +14759,8 @@ Key Metrics:
                     const data = await response.json();
                     
                     if (response.ok && data.success) {
-                        alert(`🔄 Frequency updated to ${frequency}\n\nNext optimization: ${data.data.nextRun}`);
-                        console.log(`🔄 Auto-optimization frequency updated to ${frequency}`);
+                        alert(`Frequency updated to ${frequency}\n\nNext optimization: ${data.data.nextRun}`);
+                        console.log(`Auto-optimization frequency updated to ${frequency}`);
                     } else {
                         throw new Error(data.message || 'Failed to update frequency');
                     }
@@ -14735,6 +14768,212 @@ Key Metrics:
                     console.error('Error updating frequency:', error);
                     alert('Failed to update frequency: ' + error.message);
                 }
+            }
+            
+            autoGenerateFallbackResponses() {
+                const serviceTypesInput = document.getElementById('service-types-input');
+                const serviceTypes = serviceTypesInput.value.trim();
+                
+                if (!serviceTypes) {
+                    alert('Please enter service types first (e.g., "HVAC, Plumbing")');
+                    serviceTypesInput.focus();
+                    return;
+                }
+                
+                console.log(`Generating fallback responses for: ${serviceTypes}`);
+                
+                // Parse service types (handle multiple services)
+                const services = serviceTypes.split(',').map(s => s.trim().toLowerCase());
+                const generatedResponses = this.generateSmartResponses(services, serviceTypes);
+                
+                // Populate the text areas
+                this.populateFallbackFields(generatedResponses);
+                
+                alert(`Smart responses generated for: ${serviceTypes}\n\nYou can now review and customize them before saving.`);
+            }
+            
+            generateSmartResponses(services, originalInput) {
+                const companyName = this.companyData?.companyName || 'our company';
+                
+                // Detect primary service types
+                const isHVAC = services.some(s => s.includes('hvac') || s.includes('heating') || s.includes('cooling') || s.includes('air'));
+                const isPlumbing = services.some(s => s.includes('plumb'));
+                const isElectrical = services.some(s => s.includes('electric'));
+                const isDental = services.some(s => s.includes('dental') || s.includes('dentist'));
+                const isAuto = services.some(s => s.includes('auto') || s.includes('car') || s.includes('vehicle'));
+                
+                // Multi-service handling
+                const serviceList = [];
+                if (isHVAC) serviceList.push('heating and cooling');
+                if (isPlumbing) serviceList.push('plumbing');
+                if (isElectrical) serviceList.push('electrical');
+                if (isDental) serviceList.push('dental care');
+                if (isAuto) serviceList.push('automotive repair');
+                
+                const serviceDescription = serviceList.length > 1 
+                    ? serviceList.slice(0, -1).join(', ') + ' and ' + serviceList[serviceList.length - 1]
+                    : serviceList[0] || 'service';
+                
+                // Generate responses based on service mix
+                if (isDental) {
+                    return this.generateDentalResponses(companyName);
+                } else if (isAuto) {
+                    return this.generateAutoRepairResponses(companyName);
+                } else if (isHVAC || isPlumbing || isElectrical) {
+                    return this.generateTradeServiceResponses(companyName, serviceDescription, {isHVAC, isPlumbing, isElectrical});
+                } else {
+                    return this.generateGenericServiceResponses(companyName, originalInput);
+                }
+            }
+            
+            generateTradeServiceResponses(companyName, serviceDescription, serviceTypes) {
+                const {isHVAC, isPlumbing, isElectrical} = serviceTypes;
+                
+                // Multi-service keywords
+                const serviceKeywords = [];
+                if (isHVAC) serviceKeywords.push('repair', 'fix', 'service', 'maintenance', 'broken', 'not working', 'ac', 'air conditioning', 'heat', 'furnace', 'hvac');
+                if (isPlumbing) serviceKeywords.push('repair', 'fix', 'service', 'maintenance', 'broken', 'not working', 'leak', 'pipe', 'drain', 'toilet', 'sink', 'plumbing');
+                if (isElectrical) serviceKeywords.push('repair', 'fix', 'service', 'maintenance', 'broken', 'not working', 'electrical', 'wiring', 'outlet', 'breaker', 'power');
+                
+                const bookingKeywords = ['appointment', 'schedule', 'book', 'visit', 'when', 'available'];
+                if (isHVAC) bookingKeywords.push('maintenance', 'tune-up', 'inspection');
+                if (isPlumbing) bookingKeywords.push('installation', 'repair');
+                if (isElectrical) bookingKeywords.push('installation', 'wiring', 'upgrade');
+                
+                const emergencyKeywords = ['emergency', 'urgent', 'help', 'broken'];
+                if (isHVAC) emergencyKeywords.push('no heat', 'no air', 'flooding', 'leak');
+                if (isPlumbing) emergencyKeywords.push('flooding', 'leak', 'burst', 'backup');
+                if (isElectrical) emergencyKeywords.push('no power', 'sparks', 'outage');
+                
+                return {
+                    serviceRequests: {
+                        response: `I understand you need ${serviceDescription} assistance. Let me connect you with our certified technicians right away.`,
+                        keywords: [...new Set(serviceKeywords)].join(', ')
+                    },
+                    bookingRequests: {
+                        response: `I'd be happy to schedule your ${serviceDescription} appointment. Let me get you connected with our scheduling team.`,
+                        keywords: [...new Set(bookingKeywords)].join(', ')
+                    },
+                    emergencySituations: {
+                        response: `This sounds like a ${serviceDescription} emergency. Let me connect you with our emergency team immediately.`,
+                        keywords: [...new Set(emergencyKeywords)].join(', ')
+                    },
+                    generalInquiries: {
+                        response: `Thank you for contacting ${companyName}. We're your local ${serviceDescription} specialists. How can I help you today?`,
+                        keywords: 'hours, location, contact, info, question, help'
+                    }
+                };
+            }
+            
+            generateDentalResponses(companyName) {
+                return {
+                    serviceRequests: {
+                        response: `I'm sorry, but we're a dental practice and don't handle repair services. You'll need to contact the appropriate service provider for that type of issue.`,
+                        keywords: 'repair, fix, service, maintenance, broken, not working, ac, plumbing, electrical'
+                    },
+                    bookingRequests: {
+                        response: `I'd be happy to schedule your dental appointment. Let me get you connected with our scheduling team.`,
+                        keywords: 'appointment, schedule, book, visit, when, available, cleaning, checkup, dental'
+                    },
+                    emergencySituations: {
+                        response: `If this is a dental emergency, let me connect you with our emergency dental team. For other emergencies, please contact the appropriate emergency services.`,
+                        keywords: 'emergency, urgent, help, pain, tooth, dental'
+                    },
+                    generalInquiries: {
+                        response: `Thank you for contacting ${companyName}. We're your dental care specialists. How can I help you today?`,
+                        keywords: 'hours, location, contact, info, question, help'
+                    }
+                };
+            }
+            
+            generateAutoRepairResponses(companyName) {
+                return {
+                    serviceRequests: {
+                        response: `I understand you're having vehicle issues. Let me connect you with our automotive repair specialists right away.`,
+                        keywords: 'repair, fix, service, maintenance, broken, not working, car, vehicle, auto, engine, brake'
+                    },
+                    bookingRequests: {
+                        response: `I'd be happy to schedule your automotive service appointment. Let me get you connected with our scheduling team.`,
+                        keywords: 'appointment, schedule, book, visit, when, available, inspection, oil change'
+                    },
+                    emergencySituations: {
+                        response: `This sounds like an automotive emergency. Let me connect you with our emergency roadside assistance team.`,
+                        keywords: 'emergency, urgent, help, broken, towing, roadside, accident'
+                    },
+                    generalInquiries: {
+                        response: `Thank you for contacting ${companyName}. We're your automotive repair specialists. How can I help you today?`,
+                        keywords: 'hours, location, contact, info, question, help'
+                    }
+                };
+            }
+            
+            generateGenericServiceResponses(companyName, serviceTypes) {
+                return {
+                    serviceRequests: {
+                        response: `I understand you need ${serviceTypes} assistance. Let me connect you with our service team right away.`,
+                        keywords: 'repair, fix, service, maintenance, broken, not working'
+                    },
+                    bookingRequests: {
+                        response: `I'd be happy to schedule your service appointment. Let me get you connected with our scheduling team.`,
+                        keywords: 'appointment, schedule, book, visit, when, available'
+                    },
+                    emergencySituations: {
+                        response: `This sounds urgent. Let me connect you with our emergency team immediately.`,
+                        keywords: 'emergency, urgent, help, broken'
+                    },
+                    generalInquiries: {
+                        response: `Thank you for contacting ${companyName}. We specialize in ${serviceTypes}. How can I help you today?`,
+                        keywords: 'hours, location, contact, info, question, help'
+                    }
+                };
+            }
+            
+            populateFallbackFields(responses) {
+                // Service Requests
+                const serviceResponseField = document.querySelector('#km-fallback-content textarea[placeholder*="service-related"]');
+                const serviceKeywordsField = document.querySelector('#km-fallback-content input[placeholder*="repair, fix"]');
+                if (serviceResponseField) serviceResponseField.value = responses.serviceRequests.response;
+                if (serviceKeywordsField) serviceKeywordsField.value = responses.serviceRequests.keywords;
+                
+                // Booking Requests  
+                const bookingResponseField = document.querySelector('#km-fallback-content textarea[placeholder*="booking-related"]');
+                const bookingKeywordsField = document.querySelector('#km-fallback-content input[placeholder*="appointment"]');
+                if (bookingResponseField) bookingResponseField.value = responses.bookingRequests.response;
+                if (bookingKeywordsField) bookingKeywordsField.value = responses.bookingRequests.keywords;
+                
+                // Emergency Situations
+                const emergencyResponseField = document.querySelector('#km-fallback-content textarea[placeholder*="emergency"]');
+                const emergencyKeywordsField = document.querySelector('#km-fallback-content input[placeholder*="emergency, urgent"]');
+                if (emergencyResponseField) emergencyResponseField.value = responses.emergencySituations.response;
+                if (emergencyKeywordsField) emergencyKeywordsField.value = responses.emergencySituations.keywords;
+                
+                // General Inquiries
+                const generalResponseField = document.querySelector('#km-fallback-content textarea[placeholder*="general"]');
+                const generalKeywordsField = document.querySelector('#km-fallback-content input[placeholder*="hours, location"]');
+                if (generalResponseField) generalResponseField.value = responses.generalInquiries.response;
+                if (generalKeywordsField) generalKeywordsField.value = responses.generalInquiries.keywords;
+            }
+            
+            clearFallbackResponses() {
+                if (!confirm('Are you sure you want to clear all fallback responses and keywords?')) {
+                    return;
+                }
+                
+                // Clear all textarea and input fields in the fallback section
+                const fallbackSection = document.getElementById('km-fallback-content');
+                if (fallbackSection) {
+                    const textareas = fallbackSection.querySelectorAll('textarea');
+                    const inputs = fallbackSection.querySelectorAll('input[type="text"]');
+                    
+                    textareas.forEach(textarea => textarea.value = '');
+                    inputs.forEach(input => {
+                        if (input.id !== 'service-types-input') { // Don't clear the service types input
+                            input.value = '';
+                        }
+                    });
+                }
+                
+                alert('All fallback responses and keywords have been cleared.');
             }
 
             async resetToDefaults() {
