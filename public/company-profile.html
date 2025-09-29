@@ -18403,6 +18403,7 @@ Key Metrics:
                 }
                 
                 // 🔄 RELOAD SAVED Q&A ENTRIES TO SHOW IN UI
+                console.log('🔄 About to reload saved Q&A entries...');
                 await this.loadAndDisplaySavedQnA();
                 
             } catch (error) {
@@ -18443,6 +18444,8 @@ Key Metrics:
         async loadAndDisplaySavedQnA() {
             try {
                 console.log('📋 Loading saved Q&A entries...');
+                console.log('📋 Company ID:', this.companyId);
+                console.log('📋 Auth token available:', !!getUniversalAuthToken());
                 
                 const response = await fetch(`/api/company/${this.companyId}/knowledge-management/company-qna`, {
                     headers: {
@@ -18450,17 +18453,25 @@ Key Metrics:
                     }
                 });
 
+                console.log('📋 Load response status:', response.status);
+
                 if (!response.ok) {
-                    throw new Error(`Failed to load saved Q&A: ${response.status}`);
+                    const errorText = await response.text();
+                    console.error('📋 Load error response:', errorText);
+                    throw new Error(`Failed to load saved Q&A: ${response.status} - ${errorText}`);
                 }
 
                 const data = await response.json();
                 const savedQnAs = data.data || [];
                 
                 console.log('📋 Loaded saved Q&A entries:', savedQnAs.length);
+                console.log('📋 Saved Q&A data:', savedQnAs);
                 
                 if (savedQnAs.length > 0) {
+                    console.log('📋 Displaying saved Q&A entries...');
                     this.displaySavedQnA(savedQnAs);
+                } else {
+                    console.log('📋 No saved Q&A entries to display');
                 }
                 
             } catch (error) {
@@ -18482,6 +18493,9 @@ Key Metrics:
             }
             
             emptyState.style.display = 'none';
+            
+            // 🔧 FIX: Remove existing saved Q&A entries to prevent duplicates
+            container.querySelectorAll('[data-saved-qna-id]').forEach(el => el.remove());
             
             // Add saved Q&A entries to the container (append to any generated ones)
             const savedQnAHTML = savedQnAs.map((qna, index) => `
