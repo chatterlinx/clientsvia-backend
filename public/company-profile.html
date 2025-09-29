@@ -61,6 +61,18 @@
         .tab-button-inactive:hover { background-color: #D1D5DB; }
         .tab-content-item { @apply p-0 pt-6; } 
         .tab-content-item.hidden { display: none; }
+        
+        /* Auto-Optimization Toggle Switch */
+        #auto-optimization-toggle:checked + div .block {
+            background-color: #10b981;
+        }
+        #auto-optimization-toggle:checked + div .dot {
+            transform: translateX(100%);
+            background-color: white;
+        }
+        .dot {
+            transition: transform 0.3s ease-in-out;
+        }
         .wider-textbox { max-width: 800px; width: 100%; }
         .status-badge { @apply px-2.5 py-0.5 rounded-full text-xs font-medium; }
         .status-active { @apply bg-green-100 text-green-800; }
@@ -1530,9 +1542,28 @@
                                                                 <i class="fas fa-layer-group mr-2 text-indigo-600"></i>Priority Flow Configuration
                                                             </h4>
                                                             <div class="flex items-center space-x-2">
-                                                                <button id="smart-optimize-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border-2 border-purple-500 shadow-md">
-                                                                    <i class="fas fa-brain mr-2"></i>Smart Auto-Adjust
-                                                                </button>
+                            <div class="flex items-center space-x-4">
+                                <button id="smart-optimize-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border-2 border-purple-500 shadow-md">
+                                    <i class="fas fa-brain mr-2"></i>Smart Auto-Adjust
+                                </button>
+                                
+                                <div class="flex items-center space-x-3 bg-gray-50 px-4 py-2 rounded-lg border">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="checkbox" id="auto-optimization-toggle" class="sr-only">
+                                        <div class="relative">
+                                            <div class="block bg-gray-300 w-14 h-8 rounded-full"></div>
+                                            <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
+                                        </div>
+                                        <span class="ml-3 text-sm font-medium text-gray-700">Auto-Optimize</span>
+                                    </label>
+                                    
+                                    <select id="auto-optimization-frequency" class="text-sm border border-gray-300 rounded px-2 py-1 bg-white disabled:bg-gray-100" disabled>
+                                        <option value="daily">Daily</option>
+                                        <option value="weekly" selected>Weekly</option>
+                                        <option value="monthly">Monthly</option>
+                                    </select>
+                                </div>
+                            </div>
                                                                 <button id="reset-defaults-btn" class="text-gray-600 hover:text-gray-800 px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
                                                                     <i class="fas fa-undo mr-1"></i>Reset to Defaults
                                                                 </button>
@@ -14225,6 +14256,15 @@ Key Metrics:
                 document.getElementById('smart-optimize-btn')?.addEventListener('click', () => {
                     this.runSmartOptimization();
                 });
+                
+                // Auto-optimization toggle
+                document.getElementById('auto-optimization-toggle')?.addEventListener('change', (e) => {
+                    this.toggleAutoOptimization(e.target.checked);
+                });
+                
+                document.getElementById('auto-optimization-frequency')?.addEventListener('change', (e) => {
+                    this.updateAutoOptimizationFrequency(e.target.value);
+                });
 
                 // Reset defaults button
                 document.getElementById('reset-defaults-btn')?.addEventListener('click', () => {
@@ -14610,6 +14650,79 @@ Key Metrics:
                 message += 'Thresholds have been automatically optimized based on your actual call patterns!';
                 
                 alert(message);
+            }
+            
+            async toggleAutoOptimization(enabled) {
+                try {
+                    const frequencySelect = document.getElementById('auto-optimization-frequency');
+                    frequencySelect.disabled = !enabled;
+                    
+                    const frequency = frequencySelect.value;
+                    
+                    const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities/auto-optimization`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.getAuthToken()}`
+                        },
+                        body: JSON.stringify({
+                            enabled,
+                            frequency
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        const status = enabled ? 'ENABLED' : 'DISABLED';
+                        const message = enabled 
+                            ? `🤖 Auto-Optimization ENABLED!\n\nYour AI will now automatically optimize thresholds ${frequency}.\nNext optimization: ${data.data.nextRun}\n\nYou'll receive email notifications when changes are made.`
+                            : `⏸️ Auto-Optimization DISABLED\n\nAutomatic threshold adjustments have been turned off.\nYou can still use the manual "Smart Auto-Adjust" button anytime.`;
+                        
+                        alert(message);
+                        console.log(`🤖 Auto-optimization ${status} for company ${this.companyId}`);
+                    } else {
+                        throw new Error(data.message || 'Failed to update auto-optimization settings');
+                    }
+                } catch (error) {
+                    console.error('Error toggling auto-optimization:', error);
+                    alert('Failed to update auto-optimization: ' + error.message);
+                    
+                    // Revert toggle on error
+                    document.getElementById('auto-optimization-toggle').checked = !enabled;
+                }
+            }
+            
+            async updateAutoOptimizationFrequency(frequency) {
+                try {
+                    const enabled = document.getElementById('auto-optimization-toggle').checked;
+                    
+                    if (!enabled) return; // Only update if auto-optimization is enabled
+                    
+                    const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities/auto-optimization`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.getAuthToken()}`
+                        },
+                        body: JSON.stringify({
+                            enabled: true,
+                            frequency
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        alert(`🔄 Frequency updated to ${frequency}\n\nNext optimization: ${data.data.nextRun}`);
+                        console.log(`🔄 Auto-optimization frequency updated to ${frequency}`);
+                    } else {
+                        throw new Error(data.message || 'Failed to update frequency');
+                    }
+                } catch (error) {
+                    console.error('Error updating frequency:', error);
+                    alert('Failed to update frequency: ' + error.message);
+                }
             }
 
             async resetToDefaults() {

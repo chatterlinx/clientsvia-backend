@@ -779,4 +779,127 @@ router.post('/:companyId/knowledge-source-priorities/smart-optimize', authentica
     }
 });
 
+// ============================================================================
+// AUTO-OPTIMIZATION MANAGEMENT
+// 🤖 PURPOSE: Enable/disable automatic threshold optimization
+// 📅 FREQUENCY: Daily, Weekly, Monthly background optimization
+// 🔒 SAFETY: Requires minimum call volume and confidence thresholds
+// ============================================================================
+
+router.put('/:companyId/knowledge-source-priorities/auto-optimization', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+    const { enabled, frequency } = req.body;
+    
+    try {
+        logger.info(`🤖 PUT auto-optimization request for company ${companyId}`, { enabled, frequency });
+        
+        // Validate frequency
+        const validFrequencies = ['daily', 'weekly', 'monthly'];
+        if (enabled && !validFrequencies.includes(frequency)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid frequency. Must be daily, weekly, or monthly.',
+                meta: { responseTime: Date.now() - startTime }
+            });
+        }
+        
+        // Calculate next run time
+        let nextRun = null;
+        if (enabled) {
+            const now = new Date();
+            nextRun = new Date(now);
+            
+            switch (frequency) {
+                case 'daily':
+                    nextRun.setDate(now.getDate() + 1);
+                    nextRun.setHours(2, 0, 0, 0); // 2 AM daily
+                    break;
+                case 'weekly':
+                    nextRun.setDate(now.getDate() + (7 - now.getDay())); // Next Sunday
+                    nextRun.setHours(2, 0, 0, 0); // 2 AM Sunday
+                    break;
+                case 'monthly':
+                    nextRun.setMonth(now.getMonth() + 1, 1); // First of next month
+                    nextRun.setHours(2, 0, 0, 0); // 2 AM first of month
+                    break;
+            }
+        }
+        
+        // Update company settings
+        const updateData = {
+            'aiAgentLogic.autoOptimization.enabled': enabled,
+            'aiAgentLogic.autoOptimization.lastRun': enabled ? new Date() : null,
+            'aiAgentLogic.autoOptimization.nextRun': nextRun
+        };
+        
+        if (enabled) {
+            updateData['aiAgentLogic.autoOptimization.frequency'] = frequency;
+        }
+        
+        const company = await Company.findByIdAndUpdate(
+            companyId,
+            { $set: updateData },
+            { new: true, runValidators: true }
+        ).select('aiAgentLogic.autoOptimization');
+        
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found',
+                meta: { responseTime: Date.now() - startTime }
+            });
+        }
+        
+        // Clear cache
+        try {
+            if (redisClient && redisClient.isReady) {
+                const cacheKey = `company:${companyId}:priorities`;
+                await redisClient.del(cacheKey);
+                logger.info(`🗑️ Cache cleared after auto-optimization update`);
+            }
+        } catch (error) {
+            logger.warn(`⚠️ Cache clear failed after auto-optimization update`, { error: error.message });
+        }
+        
+        const responseTime = Date.now() - startTime;
+        const status = enabled ? 'ENABLED' : 'DISABLED';
+        
+        logger.info(`🤖 PUT auto-optimization ${status} for company ${companyId}`, {
+            responseTime,
+            frequency: enabled ? frequency : null,
+            nextRun: nextRun ? nextRun.toISOString() : null
+        });
+        
+        res.json({
+            success: true,
+            message: `Auto-optimization ${status.toLowerCase()} successfully`,
+            data: {
+                enabled,
+                frequency: enabled ? frequency : null,
+                nextRun: nextRun ? nextRun.toISOString() : null,
+                settings: company.aiAgentLogic.autoOptimization
+            },
+            meta: {
+                responseTime,
+                status
+            }
+        });
+        
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        logger.error(`❌ PUT auto-optimization failed for company ${companyId}`, {
+            error: error.message,
+            responseTime
+        });
+        
+        res.status(500).json({
+            success: false,
+            message: 'Auto-optimization update failed',
+            error: error.message,
+            meta: { responseTime }
+        });
+    }
+});
+
 module.exports = router;

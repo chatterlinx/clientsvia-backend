@@ -449,6 +449,15 @@ async function startServer() {
             console.log(`📊 Node environment: ${process.env.NODE_ENV || 'development'}`);
             console.log(`🎯 Server ready to accept connections on port ${PORT}`);
             console.log(`⏱️  Total startup time: ${Date.now() - routeStart}ms`);
+            
+            // 🤖 START AUTO-OPTIMIZATION SCHEDULER
+            try {
+                const autoOptimizationScheduler = require('./services/autoOptimizationScheduler');
+                autoOptimizationScheduler.start();
+                console.log(`[INIT] 🤖 Auto-optimization scheduler started - checking every hour`);
+            } catch (error) {
+                console.error(`[INIT] ❌ Failed to start auto-optimization scheduler:`, error.message);
+            }
         });
     } catch (err) {
         console.error('[Server Startup] ❌ CRITICAL ERROR - Server startup failed!');

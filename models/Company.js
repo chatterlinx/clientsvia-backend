@@ -274,12 +274,26 @@ const companySchema = new mongoose.Schema({
         lastUpdated: { type: Date, default: Date.now },
         
         // 🎯 IN-HOUSE ONLY: Knowledge Source Thresholds
-        thresholds: {
-            companyQnA: { type: Number, min: 0, max: 1, default: 0.8 },
-            tradeQnA: { type: Number, min: 0, max: 1, default: 0.75 },
-            templates: { type: Number, min: 0, max: 1, default: 0.7 },
-            inHouseFallback: { type: Number, min: 0, max: 1, default: 0.5 }
-        },
+                thresholds: {
+                    companyQnA: { type: Number, min: 0, max: 1, default: 0.8 },
+                    tradeQnA: { type: Number, min: 0, max: 1, default: 0.75 },
+                    templates: { type: Number, min: 0, max: 1, default: 0.7 },
+                    inHouseFallback: { type: Number, min: 0, max: 1, default: 0.5 }
+                },
+                autoOptimization: {
+                    enabled: { type: Boolean, default: false },
+                    frequency: { 
+                        type: String, 
+                        enum: ['daily', 'weekly', 'monthly'], 
+                        default: 'weekly' 
+                    },
+                    lastRun: { type: Date, default: null },
+                    nextRun: { type: Date, default: null },
+                    minCallsRequired: { type: Number, default: 50 }, // Need enough data
+                    notifyOnChanges: { type: Boolean, default: true },
+                    maxThresholdChange: { type: Number, default: 0.15 }, // Safety limit
+                    confidenceRequired: { type: Number, default: 0.7 } // Only auto-adjust if confident
+                },
         
         // Memory & Intelligence Settings
         memorySettings: {
