@@ -18193,29 +18193,51 @@ Key Metrics:
          */
         async saveCompanyProfileData(businessType, aiRole) {
             try {
-                console.log('💾 Saving company profile data...');
+                console.log('🔍 SAVE CHECKPOINT 1: Starting saveCompanyProfileData');
+                console.log('🔍 SAVE CHECKPOINT 2: Company ID:', this.companyId);
+                console.log('🔍 SAVE CHECKPOINT 3: Business Type:', businessType);
+                console.log('🔍 SAVE CHECKPOINT 4: AI Role:', aiRole);
+                console.log('🔍 SAVE CHECKPOINT 5: Auth token available:', !!getUniversalAuthToken());
                 
-                const response = await fetch(`/api/company/${this.companyId}/profile`, {
+                const savePayload = {
+                    businessType: businessType,
+                    'aiAgentLogic.personality.role': aiRole,
+                    'aiAgentLogic.lastUpdated': new Date()
+                };
+                console.log('🔍 SAVE CHECKPOINT 6: Save payload:', JSON.stringify(savePayload, null, 2));
+                
+                const endpoint = `/api/company/${this.companyId}/profile`;
+                console.log('🔍 SAVE CHECKPOINT 7: Endpoint:', endpoint);
+                
+                const response = await fetch(endpoint, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${getUniversalAuthToken()}`
                     },
-                    body: JSON.stringify({
-                        businessType: businessType,
-                        'aiAgentLogic.personality.role': aiRole,
-                        'aiAgentLogic.lastUpdated': new Date()
-                    })
+                    body: JSON.stringify(savePayload)
                 });
                 
+                console.log('🔍 SAVE CHECKPOINT 8: Response status:', response.status);
+                console.log('🔍 SAVE CHECKPOINT 9: Response OK:', response.ok);
+                console.log('🔍 SAVE CHECKPOINT 10: Response headers:', Object.fromEntries(response.headers.entries()));
+                
                 if (!response.ok) {
-                    throw new Error(`Failed to save profile: ${response.status}`);
+                    console.log('🔍 SAVE CHECKPOINT 11: Response NOT OK - getting error details');
+                    const errorText = await response.text();
+                    console.error('🔍 SAVE CHECKPOINT 12: Error response body:', errorText);
+                    throw new Error(`Failed to save profile: ${response.status} - ${errorText}`);
                 }
+                
+                console.log('🔍 SAVE CHECKPOINT 13: Response OK - parsing JSON');
+                const responseData = await response.json();
+                console.log('🔍 SAVE CHECKPOINT 14: Response data:', JSON.stringify(responseData, null, 2));
                 
                 console.log('✅ Company profile saved successfully');
                 
             } catch (error) {
                 console.error('❌ Error saving company profile:', error);
+                console.error('🔍 SAVE CHECKPOINT 15: Error stack:', error.stack);
                 throw error;
             }
         }
