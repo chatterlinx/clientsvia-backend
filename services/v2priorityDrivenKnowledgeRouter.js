@@ -22,7 +22,7 @@
 //     - Maintains conversation context and personality integration
 // ============================================================================
 
-const Company = require('../models/Company');
+const Company = require('../models/v2Company');
 const CompanyKnowledgeQnA = require('../models/knowledge/CompanyQnA');
 // V2 DELETED: Legacy v2 aiAgentCacheService - using simple Redis directly
 const { redisClient } = require('../clients');
@@ -298,7 +298,7 @@ class PriorityDrivenKnowledgeRouter {
                 // Get trade categories and extract keywords
                 const company = await Company.findById(companyId).select('tradeCategories').lean();
                 if (company?.tradeCategories) {
-                    const TradeCategory = require('../models/TradeCategory');
+                    const TradeCategory = require('../models/v2TradeCategory');
                     // V2 FIX: tradeCategories contains names, not ObjectIds
                     const categories = await TradeCategory.find({
                         name: { $in: company.tradeCategories }

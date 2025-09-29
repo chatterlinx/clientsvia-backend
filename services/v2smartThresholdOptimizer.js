@@ -14,7 +14,7 @@
 //     - Accounts for company-specific query patterns
 // ============================================================================
 
-const Company = require('../models/Company');
+const Company = require('../models/v2Company');
 const logger = require('../utils/logger');
 
 class SmartThresholdOptimizer {

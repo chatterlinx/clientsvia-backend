@@ -8,7 +8,7 @@
  * NOT from: legacy aiSettings, agentSetup, or personalityResponses
  */
 
-const Company = require('../models/Company');
+const Company = require('../models/v2Company');
 const { redisClient } = require('../clients');
 
 class V2AIAgentRuntime {

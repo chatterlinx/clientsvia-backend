@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const Company = require('../models/Company');
+const Company = require('../models/v2Company');
 const { 
   getAvailableVoices, 
   getAvailableModels,
@@ -87,7 +87,7 @@ async function synthesize(req, res) {
     
     // If companyId is provided, fetch company data for API key selection
     if (companyId) {
-      const Company = require('../models/Company');
+      const Company = require('../models/v2Company');
       company = await Company.findById(companyId);
       console.log(`🎙️ [Synthesize] Using company-specific settings for: ${company?.companyName || companyId}`);
     }
@@ -139,7 +139,7 @@ async function streamSynthesis(req, res) {
     
     // If companyId is provided, fetch company data for API key selection
     if (companyId) {
-      const Company = require('../models/Company');
+      const Company = require('../models/v2Company');
       company = await Company.findById(companyId);
       console.log(`🌊 [Stream] Using company-specific settings for: ${company?.companyName || companyId}`);
     }

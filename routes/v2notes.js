@@ -8,7 +8,7 @@ const express = require('express');
 const router = express.Router();
 const { getDB } = require('../db');
 const { ObjectId } = require('mongodb');
-const Company = require('../models/Company');
+const Company = require('../models/v2Company');
 const { authenticateJWT } = require('../middleware/auth');
 
 // Middleware to validate company ID and tenant isolation

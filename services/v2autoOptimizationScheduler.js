@@ -8,9 +8,9 @@
 // ============================================================================
 
 const cron = require('node-cron');
-const Company = require('../models/Company');
+const Company = require('../models/v2Company');
 const SmartThresholdOptimizer = require('./smartThresholdOptimizer');
-const AIAgentCallLog = require('../models/AIAgentCallLog');
+const AIAgentCallLog = require('../models/v2AIAgentCallLog');
 const logger = require('../utils/logger');
 
 class AutoOptimizationScheduler {

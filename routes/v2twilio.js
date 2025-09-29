@@ -7,7 +7,7 @@
 // TEST: "Would this work for company #1000 tomorrow?" If NO, fix it!
 const express = require('express');
 const twilio = require('twilio');
-const Company = require('../models/Company');
+const Company = require('../models/v2Company');
 // 🚀 V2 SYSTEM: Using V2 AI Agent Runtime instead of legacy agent.js
 const { initializeCall, processUserInput } = require('../services/v2AIAgentRuntime');
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime

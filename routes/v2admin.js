@@ -9,8 +9,8 @@ const router = express.Router();
 // Import admin routes
 const accountDeletionRoutes = require('./admin/accountDeletion');
 const aiAgentMonitoringRoutes = require('./admin/aiAgentMonitoring');
-const User = require('../models/User');
-const Company = require('../models/Company');
+const User = require('../models/v2User');
+const Company = require('../models/v2Company');
 const { authenticateJWT } = require('../middleware/auth');
 const redis = require('redis');
 

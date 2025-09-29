@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 const { getDB } = require('../db');
 const { ObjectId } = require('mongodb');
-const Company = require('../models/Company'); // Add Company model import
+const Company = require('../models/v2Company'); // V2 Company model import
 // V2 DELETED: Google Calendar integration eliminated
 // const { google } = require('googleapis'); // For Google Calendar
 const { normalizePhoneNumber } = require('../utils/phone');

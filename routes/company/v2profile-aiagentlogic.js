@@ -38,7 +38,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateJWT, authenticateSingleSession } = require('../../middleware/auth'); // Use both auth types
 // V2 DELETED: Legacy ClientsViaIntelligenceEngine - v2 bloat eliminated
-const Company = require('../../models/Company');
+const Company = require('../../models/v2Company');
 
 // 🚀 NEW: Import knowledge services for AI agent integration
 const CompanyKnowledgeService = require('../../services/knowledge/CompanyKnowledgeService');

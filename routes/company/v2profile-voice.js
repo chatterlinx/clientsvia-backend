@@ -24,7 +24,7 @@
 const express = require('express');
 const router = express.Router();
 const { ObjectId } = require('mongodb');
-const Company = require('../../models/Company');
+const Company = require('../../models/v2Company');
 const { redisClient } = require('../../clients');
 
 // Redis client imported above

@@ -35,7 +35,7 @@
 
 const express = require('express');
 const router = express.Router();
-const Company = require('../../models/Company');
+const Company = require('../../models/v2Company');
 const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
 const { authenticateJWT } = require('../../middleware/auth');
 // V2 DELETED: Legacy v2 aiAgentCacheService - using simple Redis directly
