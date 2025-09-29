@@ -610,7 +610,7 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
 
         // 🚀 OPTIMIZATION: Invalidate trade Q&A keyword cache for all companies using this category
         try {
-            const PriorityDrivenKnowledgeRouter = require('../../services/priorityDrivenKnowledgeRouter');
+            const PriorityDrivenKnowledgeRouter = require('../../services/v2priorityDrivenKnowledgeRouter');
             const router = new PriorityDrivenKnowledgeRouter();
             
             // Find all companies using this trade category and invalidate their cache

@@ -26,7 +26,7 @@ const { authenticateJWT } = require('../../middleware/auth');
 const { redisClient } = require('../../clients');
 const logger = require('../../utils/logger');
 const Joi = require('joi');
-const SmartThresholdOptimizer = require('../../services/smartThresholdOptimizer');
+const SmartThresholdOptimizer = require('../../services/v2smartThresholdOptimizer');
 
 // Validation schemas
 const priorityFlowSchema = Joi.object({
@@ -321,7 +321,7 @@ router.post('/:companyId/knowledge-source-priorities/test-flow', authenticateJWT
         }
 
         // V2 FIX: Use REAL AI agent instead of simulation
-        const PriorityDrivenKnowledgeRouter = require('../../services/priorityDrivenKnowledgeRouter');
+        const PriorityDrivenKnowledgeRouter = require('../../services/v2priorityDrivenKnowledgeRouter');
         const router = new PriorityDrivenKnowledgeRouter();
         
         const realResult = await router.routeQuery(companyId, query, { 

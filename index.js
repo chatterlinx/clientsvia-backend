@@ -447,7 +447,7 @@ async function startServer() {
             
             // 🤖 START AUTO-OPTIMIZATION SCHEDULER
             try {
-                const autoOptimizationScheduler = require('./services/autoOptimizationScheduler');
+                const autoOptimizationScheduler = require('./services/v2autoOptimizationScheduler');
                 autoOptimizationScheduler.start();
                 console.log(`[INIT] 🤖 Auto-optimization scheduler started - checking every hour`);
             } catch (error) {

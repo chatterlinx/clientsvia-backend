@@ -388,7 +388,7 @@ router.post('/:companyId/knowledge-management/company-qna', authenticateJWT, asy
         const savedQnA = await newQnA.save();
         
         // 🚀 OPTIMIZATION: Invalidate keyword cache when Q&A added
-        const PriorityDrivenKnowledgeRouter = require('../../services/priorityDrivenKnowledgeRouter');
+        const PriorityDrivenKnowledgeRouter = require('../../services/v2priorityDrivenKnowledgeRouter');
         const router = new PriorityDrivenKnowledgeRouter();
         router.invalidateKeywordCache(companyId, 'companyQnA');
 

@@ -28,7 +28,7 @@ const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
 const { authenticateJWT } = require('../../middleware/auth');
 // V2 DELETED: Legacy v2 aiAgentCacheService - using simple Redis directly
 const { redisClient } = require('../../clients');
-const PriorityDrivenKnowledgeRouter = require('../../services/priorityDrivenKnowledgeRouter');
+const PriorityDrivenKnowledgeRouter = require('../../services/v2priorityDrivenKnowledgeRouter');
 const logger = require('../../utils/logger');
 
 /**
