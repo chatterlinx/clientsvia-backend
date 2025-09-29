@@ -23,8 +23,8 @@
 
 const express = require('express');
 const router = express.Router();
-const User = require('../../models/User');
-const Company = require('../../models/Company');
+const User = require('../../models/v2User');
+const Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
 const redis = require('redis');
 

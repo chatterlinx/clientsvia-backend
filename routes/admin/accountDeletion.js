@@ -26,7 +26,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const accountDeletionService = require('../../services/accountDeletionService');
 const logger = require('../../utils/logger');
-const Company = require('../../models/Company');
+const Company = require('../../models/v2Company');
 
 // Rate limiting for deletion operations
 const deletionRateLimit = rateLimit({

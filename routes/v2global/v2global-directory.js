@@ -26,8 +26,8 @@
 
 const express = require('express');
 const router = express.Router();
-const Company = require('../../models/Company');
-const TradeCategory = require('../../models/TradeCategory');
+const Company = require('../../models/v2Company');
+const TradeCategory = require('../../models/v2TradeCategory');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const { redisClient } = require('../../clients');
 const logger = require('../../utils/logger');

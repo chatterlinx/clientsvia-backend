@@ -29,7 +29,7 @@ const express = require('express');
 const router = express.Router();
 const TradeCategory = require('../../models/TradeCategory');
 const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
-const Company = require('../../models/Company');
+const Company = require('../../models/v2Company');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const { redisClient } = require('../../clients');
 const logger = require('../../utils/logger');
@@ -614,7 +614,7 @@ router.post('/categories/:categoryId/qna', async (req, res) => {
             const router = new PriorityDrivenKnowledgeRouter();
             
             // Find all companies using this trade category and invalidate their cache
-            const Company = require('../../models/Company');
+            const Company = require('../../models/v2Company');
             const companiesUsingCategory = await Company.find({ 
                 tradeCategories: categoryId 
             }).select('_id').lean();
