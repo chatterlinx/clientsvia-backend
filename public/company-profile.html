@@ -14385,6 +14385,10 @@ Key Metrics:
                         this.priorities = data.data;
                         this.renderPriorityFlow();
                         this.updateGlobalSettings();
+                        
+                        // Load auto-optimization settings from company data
+                        this.loadAutoOptimizationSettings();
+                        
                         this.updateStatus('Active', 'green');
                         console.log('✅ Priorities loaded successfully');
                     } else if (response.status === 401) {
@@ -14974,6 +14978,56 @@ Key Metrics:
                 }
                 
                 alert('All fallback responses and keywords have been cleared.');
+            }
+            
+            async loadAutoOptimizationSettings() {
+                try {
+                    // Get company data to load auto-optimization settings
+                    const response = await fetch(`/api/company/${this.companyId}`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.getAuthToken()}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        const autoOptSettings = data.aiAgentLogic?.autoOptimization;
+                        
+                        if (autoOptSettings) {
+                            console.log('Loading auto-optimization settings:', autoOptSettings);
+                            
+                            // Set the toggle state
+                            const toggle = document.getElementById('auto-optimization-toggle');
+                            const settingsDiv = document.getElementById('auto-optimization-settings');
+                            const frequencySelect = document.getElementById('auto-optimization-frequency');
+                            
+                            if (toggle && settingsDiv && frequencySelect) {
+                                // Set toggle checked state
+                                toggle.checked = autoOptSettings.enabled || false;
+                                
+                                // Show/hide settings based on enabled state
+                                if (autoOptSettings.enabled) {
+                                    settingsDiv.classList.remove('hidden');
+                                } else {
+                                    settingsDiv.classList.add('hidden');
+                                }
+                                
+                                // Set frequency dropdown
+                                frequencySelect.value = autoOptSettings.frequency || 'weekly';
+                                
+                                console.log(`Auto-optimization loaded: ${autoOptSettings.enabled ? 'ENABLED' : 'DISABLED'} (${autoOptSettings.frequency || 'weekly'})`);
+                            }
+                        } else {
+                            console.log('No auto-optimization settings found, using defaults (disabled)');
+                        }
+                    } else {
+                        console.warn('Failed to load company data for auto-optimization settings');
+                    }
+                } catch (error) {
+                    console.error('Error loading auto-optimization settings:', error);
+                }
             }
 
             async resetToDefaults() {
