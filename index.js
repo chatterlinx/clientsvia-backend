@@ -96,7 +96,7 @@ async function loadAllRoutes() {
         // V2: Legacy monitoring route deleted - using modern AI Agent Logic monitoring system
         routes.v2NotesRoutes = await loadRouteWithTimeout('./routes/v2notes', 'v2NotesRoutes');
         // V2: Legacy agentProcessor route deleted - using modern AI Agent Logic processing system
-        routes.adminRoutes = await loadRouteWithTimeout('./routes/admin', 'adminRoutes');
+        routes.adminRoutes = await loadRouteWithTimeout('./routes/v2admin', 'adminRoutes');
         routes.v2GlobalAdminRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-admin', 'v2GlobalAdminRoutes');
         routes.v2GlobalDirectoryRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-directory', 'v2GlobalDirectoryRoutes');
         routes.v2GlobalAddCompanyRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-addcompany', 'v2GlobalAddCompanyRoutes');
