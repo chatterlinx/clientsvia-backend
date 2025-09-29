@@ -1530,7 +1530,7 @@
                                                                 <i class="fas fa-layer-group mr-2 text-indigo-600"></i>Priority Flow Configuration
                                                             </h4>
                                                             <div class="flex items-center space-x-2">
-                                                                <button id="smart-optimize-btn" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 shadow-lg">
+                                                                <button id="smart-optimize-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border-2 border-purple-500 shadow-md">
                                                                     <i class="fas fa-brain mr-2"></i>Smart Auto-Adjust
                                                                 </button>
                                                                 <button id="reset-defaults-btn" class="text-gray-600 hover:text-gray-800 px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
@@ -14567,7 +14567,7 @@ Key Metrics:
 
             async runSmartOptimization() {
                 try {
-                    this.showLoading('🧠 AI is analyzing your call patterns and optimizing thresholds...');
+                    console.log('🧠 AI is analyzing your call patterns and optimizing thresholds...');
                     
                     const response = await fetch(`/api/company/${this.companyId}/knowledge-source-priorities/smart-optimize`, {
                         method: 'POST',
@@ -14591,7 +14591,7 @@ Key Metrics:
                     }
                 } catch (error) {
                     console.error('Error running smart optimization:', error);
-                    this.showErrorMessage('Smart optimization failed: ' + error.message);
+                    alert('Smart optimization failed: ' + error.message);
                 }
             }
 
@@ -14609,7 +14609,7 @@ Key Metrics:
                 
                 message += 'Thresholds have been automatically optimized based on your actual call patterns!';
                 
-                this.showSuccessMessage(message);
+                alert(message);
             }
 
             async resetToDefaults() {
