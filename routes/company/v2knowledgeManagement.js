@@ -950,6 +950,88 @@ router.post('/:companyId/knowledge-management/test-ai-agent', authenticateJWT, a
 });
 
 /**
+ * 📋 PUT /api/company/:companyId/knowledge-management/in-house-fallback
+ * Update in-house fallback configuration
+ */
+router.put('/:companyId/knowledge-management/in-house-fallback', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+
+    try {
+        logger.info(`📋 PUT in-house fallback request for company ${companyId}`);
+
+        // Validate request body
+        const { error, value } = inHouseFallbackSchema.validate(req.body);
+        if (error) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid in-house fallback data',
+                error: 'VALIDATION_ERROR',
+                details: error.details
+            });
+        }
+
+        // Update company's in-house fallback configuration
+        const company = await Company.findByIdAndUpdate(
+            companyId,
+            {
+                $set: {
+                    'aiAgentLogic.knowledgeManagement.inHouseFallback': value,
+                    'aiAgentLogic.lastUpdated': new Date()
+                }
+            },
+            { new: true, runValidators: true }
+        ).select('aiAgentLogic.knowledgeManagement.inHouseFallback');
+
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found',
+                error: 'COMPANY_NOT_FOUND'
+            });
+        }
+
+        // Clear cache
+        try {
+            if (redisClient && redisClient.isReady) {
+                const cacheKey = `knowledge:${companyId}`;
+                await redisClient.del(cacheKey);
+                logger.info(`🗑️ Cache cleared for company ${companyId} after fallback update`);
+            }
+        } catch (error) {
+            logger.warn(`⚠️ Cache clear failed after fallback update`, { error: error.message });
+        }
+
+        const responseTime = Date.now() - startTime;
+        logger.info(`📋 PUT in-house fallback success for company ${companyId}`, { responseTime });
+
+        res.json({
+            success: true,
+            message: 'In-house fallback configuration updated successfully',
+            data: company.aiAgentLogic.knowledgeManagement.inHouseFallback,
+            meta: {
+                responseTime,
+                cacheCleared: true
+            }
+        });
+
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        logger.error(`❌ PUT in-house fallback failed for company ${companyId}`, {
+            error: error.message,
+            responseTime
+        });
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update in-house fallback configuration',
+            error: error.message,
+            meta: { responseTime }
+        });
+    }
+});
+
+/**
  * 🛠️ UTILITY FUNCTIONS
  */
 
