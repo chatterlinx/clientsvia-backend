@@ -15424,6 +15424,9 @@ Key Metrics:
             
             // Load saved company profile data
             await this.loadCompanyProfileData();
+            
+            // Load saved Q&A entries
+            await this.loadAndDisplaySavedQnA();
         }
 
         /**
@@ -18399,6 +18402,9 @@ Key Metrics:
                     document.getElementById('empty-qna-state').style.display = 'block';
                 }
                 
+                // 🔄 RELOAD SAVED Q&A ENTRIES TO SHOW IN UI
+                await this.loadAndDisplaySavedQnA();
+                
             } catch (error) {
                 console.error('❌ Error saving Q&A:', error);
                 alert('Failed to save Q&A. Please try again.');
@@ -18428,6 +18434,166 @@ Key Metrics:
                         document.getElementById('empty-qna-state').style.display = 'block';
                     }
                 }
+            }
+        }
+
+        /**
+         * 📋 Load and Display Saved Q&A Entries
+         */
+        async loadAndDisplaySavedQnA() {
+            try {
+                console.log('📋 Loading saved Q&A entries...');
+                
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/company-qna`, {
+                    headers: {
+                        'Authorization': `Bearer ${getUniversalAuthToken()}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to load saved Q&A: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const savedQnAs = data.data || [];
+                
+                console.log('📋 Loaded saved Q&A entries:', savedQnAs.length);
+                
+                if (savedQnAs.length > 0) {
+                    this.displaySavedQnA(savedQnAs);
+                }
+                
+            } catch (error) {
+                console.error('❌ Error loading saved Q&A:', error);
+                // Don't show error to user - this is just for display
+            }
+        }
+
+        /**
+         * 📋 Display Saved Q&A Entries
+         */
+        displaySavedQnA(savedQnAs) {
+            const container = document.getElementById('generated-qna-list');
+            const emptyState = document.getElementById('empty-qna-state');
+            
+            if (!savedQnAs || savedQnAs.length === 0) {
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            
+            // Add saved Q&A entries to the container (append to any generated ones)
+            const savedQnAHTML = savedQnAs.map((qna, index) => `
+                <div class="bg-green-50 border border-green-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow" data-saved-qna-id="${qna._id}">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 mb-2">
+                                <i class="fas fa-check-circle text-green-500"></i>
+                                <span class="text-sm font-medium text-green-700">Saved Question</span>
+                            </div>
+                            <div class="bg-white p-3 rounded border border-green-200">
+                                <strong class="text-gray-800">${qna.question}</strong>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2 ml-4">
+                            <button class="edit-saved-qna-btn bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors" data-qna-id="${qna._id}">
+                                <i class="fas fa-edit mr-1"></i>Edit
+                            </button>
+                            <button class="delete-saved-qna-btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors" data-qna-id="${qna._id}">
+                                <i class="fas fa-trash mr-1"></i>Delete
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <i class="fas fa-comment-dots text-green-500"></i>
+                            <span class="text-sm font-medium text-green-700">Answer</span>
+                        </div>
+                        <div class="bg-white p-3 rounded border border-green-200">
+                            <p class="text-gray-700">${qna.answer}</p>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex items-center space-x-2 mb-2">
+                            <i class="fas fa-tags text-green-500"></i>
+                            <span class="text-sm font-medium text-green-700">Keywords</span>
+                        </div>
+                        <div class="bg-white p-2 rounded border border-green-200">
+                            <div class="flex flex-wrap gap-1">
+                                ${qna.keywords.map(keyword => `<span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">${keyword}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Append saved Q&A to existing content
+            container.innerHTML += savedQnAHTML;
+            
+            // Add event listeners for edit/delete buttons
+            container.querySelectorAll('.edit-saved-qna-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const qnaId = e.target.closest('.edit-saved-qna-btn').dataset.qnaId;
+                    this.editSavedQnA(qnaId);
+                });
+            });
+            
+            container.querySelectorAll('.delete-saved-qna-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const qnaId = e.target.closest('.delete-saved-qna-btn').dataset.qnaId;
+                    this.deleteSavedQnA(qnaId);
+                });
+            });
+        }
+
+        /**
+         * ✏️ Edit Saved Q&A Entry
+         */
+        editSavedQnA(qnaId) {
+            // TODO: Implement edit functionality
+            alert('Edit functionality coming soon!');
+        }
+
+        /**
+         * 🗑️ Delete Saved Q&A Entry
+         */
+        async deleteSavedQnA(qnaId) {
+            if (!confirm('Are you sure you want to delete this saved Q&A entry?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/company-qna/${qnaId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${getUniversalAuthToken()}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to delete Q&A: ${response.status}`);
+                }
+
+                // Remove from UI
+                const qnaCard = document.querySelector(`[data-saved-qna-id="${qnaId}"]`);
+                if (qnaCard) {
+                    qnaCard.remove();
+                }
+
+                this.showSuccessMessage('Q&A deleted successfully!');
+
+                // Check if list is empty
+                const remainingCards = document.querySelectorAll('[data-saved-qna-id], [data-qna-index]');
+                if (remainingCards.length === 0) {
+                    document.getElementById('empty-qna-state').style.display = 'block';
+                }
+
+            } catch (error) {
+                console.error('❌ Error deleting Q&A:', error);
+                alert('Failed to delete Q&A. Please try again.');
             }
         }
     }
