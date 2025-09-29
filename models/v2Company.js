@@ -224,16 +224,7 @@ const companySchema = new mongoose.Schema({
         bufferMinutes: { type: Number, default: 120 },
         slotDuration: { type: Number, default: 60 }
     }],
-    messageTemplates: {
-        bookingConfirmation: {
-            sms: { type: String, default: "You're booked for {{time}} at {{companyName}}." },
-            email: { type: String, default: "Hi {{name}}, your booking is confirmed for {{time}}." }
-        },
-        fallbackMessage: {
-            sms: { type: String, default: "Message from customer: {{message}}" },
-            email: { type: String, default: "Customer message: {{message}}" }
-        }
-    },
+    // ☢️ NUCLEAR ELIMINATION: messageTemplates removed - legacy booking templates eliminated
     
     // V2 DELETED: Legacy v2Agent field - using aiAgentLogic system only
     // Legacy personalityResponses field removed - using aiAgentLogic.responseCategories instead
@@ -244,25 +235,7 @@ const companySchema = new mongoose.Schema({
     // 📚 REMOVED: Legacy hardcoded knowledge settings - All settings now come from aiAgentLogic UI configuration
     // This ensures true multi-tenant isolation where each company configures their own priorities and thresholds
     
-    // 🎯 Phase 1: Agent Priority Configuration (Database Model Only)
-    agentPriorityConfig: {
-        flow: [{
-            id: { 
-                type: String, 
-                required: true,
-                enum: ['company-knowledge', 'trade-categories', 'template-intelligence', 'learning-queue', 'emergency-llm']
-            },
-            priority: { type: Number, required: true, min: 1, max: 10 },
-            enabled: { type: Boolean, default: true }
-        }],
-        settings: {
-            knowledgeFirst: { type: Boolean, default: true },
-            autoLearning: { type: Boolean, default: true },
-            emergencyLLM: { type: Boolean, default: true }
-        },
-        createdAt: { type: Date, default: Date.now },
-        updatedAt: { type: Date, default: Date.now }
-    },
+    // ☢️ NUCLEAR ELIMINATION: agentPriorityConfig removed - legacy priority system eliminated
     
     // 🤖 AI Agent Logic Configuration
     aiAgentLogic: {
@@ -280,108 +253,22 @@ const companySchema = new mongoose.Schema({
                     templates: { type: Number, min: 0, max: 1, default: 0.7 },
                     inHouseFallback: { type: Number, min: 0, max: 1, default: 0.5 }
                 },
-                autoOptimization: {
-                    enabled: { type: Boolean, default: false },
-                    frequency: { 
-                        type: String, 
-                        enum: ['daily', 'weekly', 'monthly'], 
-                        default: 'weekly' 
-                    },
-                    lastRun: { type: Date, default: null },
-                    nextRun: { type: Date, default: null },
-                    minCallsRequired: { type: Number, default: 50 }, // Need enough data
-                    notifyOnChanges: { type: Boolean, default: true },
-                    maxThresholdChange: { type: Number, default: 0.15 }, // Safety limit
-                    confidenceRequired: { type: Number, default: 0.7 } // Only auto-adjust if confident
-                },
+                // ☢️ NUCLEAR ELIMINATION: autoOptimization removed - legacy optimization system eliminated
         
-        // Memory & Intelligence Settings
-        memorySettings: {
-            memoryMode: { type: String, enum: ['short', 'conversational', 'persistent'], default: 'conversational' },
-            contextRetention: { type: Number, min: 5, max: 120, default: 30 }
-        },
-        
-        // Fallback Behavior Configuration
-        fallbackBehavior: {
-            rejectLowConfidence: { type: Boolean, default: true },
-            escalateOnNoMatch: { type: Boolean, default: true },
-            message: { type: String, default: 'I want to make sure I give you accurate information. Let me connect you with a specialist who can help.' }
-        },
+        // ☢️ NUCLEAR ELIMINATION: memorySettings and fallbackBehavior removed - legacy behavior systems eliminated
         
         // V2 DELETED: Legacy knowledgeSourcePriorities array - using V2 object structure instead
         // V2 DELETED: Legacy answerPriorityFlow - using V2 knowledgeSourcePriorities object instead
         
-        // Response Categories configuration
-        responseCategories: {
-            core: {
-                type: mongoose.Schema.Types.Mixed,
-                default: {
-                    'greeting-response': 'Hi {{callerName}}! Thanks for calling {{companyName}}. How can I help you today?',
-                    'farewell-response': 'Thanks for calling {{companyName}}! Have a great day!',
-                    'transfer-response': 'Let me connect you with {{departmentName}} who can better assist you.',
-                    'service-unavailable-response': 'I\'m sorry, {{serviceType}} isn\'t available right now. Can I help with something else?',
-                    'hold-response': 'Please hold for just a moment while I look that up for you.',
-                    'business-hours-response': 'We\'re open {{businessHours}}. You can also visit our website at {{website}}.',
-                    'knowledge-base-error-response': 'I\'m sorry, I\'m having trouble accessing my knowledge base right now. Please try calling back later or visit our website for assistance.',
-                        'no-match-response': 'I understand you\'re looking for service. Let me connect you with one of our technicians who can help you right away.',
-                        'technical-difficulty-response': 'I apologize, but I\'m having technical difficulties. Please hold while I connect you to someone who can help.',
-                        'cant-understand-response': 'I want to make sure I understand what you need help with. Could you tell me a bit more about what\'s going on?',
-                        'transfer-unavailable-response': 'I understand you\'re looking for service. Let me connect you with one of our technicians who can help you right away.',
-                        'frustrated-caller-response': 'I understand your frustration, and I want to make sure you get the help you need. Let me connect you with one of our experienced technicians.',
-                        'gratitude-response': 'You\'re very welcome! I\'m happy to help. What else can I do for you today?',
-                        'urgency-response': 'I understand this is urgent. Let me get you connected with our emergency team right away. What\'s the situation?',
-                        'connection-trouble-response': 'It sounds like the line is breaking up. Can you still hear me clearly?'
-                }
-            },
-            advanced: {
-                type: mongoose.Schema.Types.Mixed,
-                default: {
-                    'emergency-response': 'This sounds like an emergency. Let me connect you with our emergency team immediately.',
-                    'after-hours-response': 'Thanks for calling! We\'re currently closed but will get back to you first thing in the morning.',
-                    'appointment-confirmation': 'Perfect! I\'ve scheduled your appointment for {{appointmentTime}} on {{appointmentDate}}.',
-                    'scheduling-conflict': 'That time slot isn\'t available. How about {{alternativeTime}} or {{alternativeTime2}}?'
-                }
-            },
-            emotional: {
-                type: mongoose.Schema.Types.Mixed,
-                default: {
-                    'frustrated-customer': 'I completely understand your frustration, and I\'m here to help make this right for you.',
-                    'appreciative-response': 'Thank you so much for your patience and for choosing {{companyName}}. We truly appreciate your business!',
-                    'problem-resolution': 'Don\'t worry, we\'ve handled this exact situation many times before. I\'ll make sure we get this resolved for you quickly.',
-                    'quality-assurance': 'You can count on us to deliver the highest quality service. We stand behind all our work with a 100% satisfaction guarantee.'
-                }
-            }
-        },
+        // ☢️ NUCLEAR ELIMINATION: responseCategories removed - massive legacy response templates eliminated
         
-        // 🚀 V2 FEATURES: Real-time Analytics
-        analytics: {
-            enabled: { type: Boolean, default: true },
-            realTimeUpdates: { type: Boolean, default: true },
-            retentionDays: { type: Number, default: 90 },
-            
-            // Metrics tracking
-            metrics: {
-                callVolume: { type: Number, default: 0 },
-                successRate: { type: Number, default: 0 },
-                avgResponseTime: { type: Number, default: 0 },
-                satisfactionScore: { type: Number, default: 0 }
-            },
-            
-            // Export settings
-            autoExports: {
-                enabled: { type: Boolean, default: false },
-                frequency: { type: String, enum: ['daily', 'weekly', 'monthly'], default: 'weekly' },
-                format: { type: String, enum: ['csv', 'json', 'pdf'], default: 'csv' },
-                recipients: [{ type: String }]
-            }
-        },
+        // ☢️ NUCLEAR ELIMINATION: analytics removed - legacy analytics system eliminated
         
         // V2 DELETED: Legacy conversationFlows - v2 flow designer eliminated
         
         // V2 DELETED: Legacy A/B testing framework - v2 bloat eliminated
         
-        // V2 DELETED: V2 personalization engine - hijacking V2 system eliminated
-            enabled: { type: Boolean, default: true },
+        // ☢️ NUCLEAR ELIMINATION: V2 personalization engine eliminated
             
             // Performance metrics
             metrics: {
