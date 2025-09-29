@@ -27,7 +27,7 @@
 
 const express = require('express');
 const router = express.Router();
-const TradeCategory = require('../../models/TradeCategory');
+const TradeCategory = require('../../models/v2TradeCategory');
 const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
 const Company = require('../../models/v2Company');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
