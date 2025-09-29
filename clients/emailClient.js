@@ -1,5 +1,5 @@
 // clients/emailClient.js
-// Enterprise-Grade Email Client with SendGrid Integration
+// V2-Grade Email Client with SendGrid Integration
 // Spartan Coder - Gold Standard Implementation
 
 const sgMail = require('@sendgrid/mail');

@@ -45,7 +45,7 @@ class AIConfigLoader {
     async get(companyID) {
         const cacheKey = `ai_config_${companyID}`;
         
-        // 🚀 STEP 1: Try Redis cache first (enterprise optimization)
+        // 🚀 STEP 1: Try Redis cache first (v2 optimization)
         try {
             if (redisClient) {
                 const cachedConfig = await redisClient.get(cacheKey);
@@ -200,7 +200,7 @@ class AIConfigLoader {
      * @param {Object} config - Configuration to cache
      */
     async cacheConfiguration(cacheKey, config) {
-        // 🚀 Primary: Store in Redis (enterprise optimization)
+        // 🚀 Primary: Store in Redis (v2 optimization)
         try {
             if (redisClient) {
                 await redisClient.setEx(cacheKey, this.cacheTimeout, JSON.stringify(config));

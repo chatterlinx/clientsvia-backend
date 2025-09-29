@@ -1,5 +1,5 @@
 /**
- * Company Knowledge Service - Enterprise Production System
+ * Company Knowledge Service - V2 Production System
  * Handles Company Q&A CRUD operations with Redis caching and AI agent integration
  * 
  * 🤖 AI AGENT ROUTING REFERENCE:

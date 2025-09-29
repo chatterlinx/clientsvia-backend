@@ -1,5 +1,5 @@
 /**
- * V2 GLOBAL DIRECTORY ROUTES - Enterprise Company Management
+ * V2 GLOBAL DIRECTORY ROUTES - V2 Company Management
  * 
  * 🌐 V2 GLOBAL DIRECTORY - ENTERPRISE ARCHITECTURE:
  * ╔══════════════════════════════════════════════════════════════════╗
@@ -20,7 +20,7 @@
  * - Export Functionality
  * - Bulk Operations
  * 
- * This V2 version provides enterprise-grade company management
+ * This V2 version provides v2-grade company management
  * with sub-50ms performance and complete legacy elimination.
  */
 

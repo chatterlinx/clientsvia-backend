@@ -1,7 +1,7 @@
 /**
  * 🏷️ TRADE CATEGORY MODEL
  * ========================
- * Mongoose model for Enterprise Trade Categories
+ * Mongoose model for V2 Trade Categories
  * Supports both global and company-specific categories
  * Optimized for AI Agent performance with Redis caching
  */
@@ -164,7 +164,7 @@ const TradeCategorySchema = new mongoose.Schema({
     collection: 'tradecategories'
 });
 
-// V2 OPTIMIZED INDEXES - Enterprise Performance
+// V2 OPTIMIZED INDEXES - V2 Performance
 TradeCategorySchema.index({ companyId: 1, name: 1 }, { unique: true, name: 'v2_company_name_unique' });
 TradeCategorySchema.index({ companyId: 1, isActive: 1 }, { name: 'v2_company_active' });
 TradeCategorySchema.index({ 'qnas.keywords': 1 }, { name: 'v2_qna_keywords' });
@@ -258,7 +258,7 @@ TradeCategorySchema.statics.searchQnAs = function(searchTerm, companyId = null) 
     ]);
 };
 
-// V2 OPTIMIZED INDEXES - Enterprise Performance
+// V2 OPTIMIZED INDEXES - V2 Performance
 TradeCategorySchema.index({ companyId: 1, name: 1 }, { unique: true, name: 'v2_company_name_unique' });
 TradeCategorySchema.index({ companyId: 1, isActive: 1 }, { name: 'v2_company_active' });
 TradeCategorySchema.index({ 'qnas.keywords': 1 }, { name: 'v2_qna_keywords' });

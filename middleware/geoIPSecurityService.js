@@ -1,5 +1,5 @@
 /**
- * Enterprise GeoIP Security Service
+ * V2 GeoIP Security Service
  * Validates login locations and detects impossible travel
  */
 

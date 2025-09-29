@@ -1,5 +1,5 @@
 /**
- * Enterprise Hardware ID Security Service
+ * V2 Hardware ID Security Service
  * Locks platform to specific hardware characteristics
  */
 

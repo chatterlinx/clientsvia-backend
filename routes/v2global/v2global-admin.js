@@ -1,5 +1,5 @@
 /**
- * V2 GLOBAL ADMIN ROUTES - Enterprise System Management
+ * V2 GLOBAL ADMIN ROUTES - V2 System Management
  * 
  * 🌐 V2 GLOBAL ADMIN DASHBOARD - ENTERPRISE ARCHITECTURE:
  * ╔══════════════════════════════════════════════════════════════════╗
@@ -14,11 +14,11 @@
  * V2 Global Admin Routes:
  * - Company Management (Directory, Add, Edit)
  * - System Monitoring (Alerts, Performance)
- * - Analytics Dashboard (Enterprise Metrics)
+ * - Analytics Dashboard (V2 Metrics)
  * - Emergency Tools (Cache Clear, User Fixes)
  * 
  * This V2 version eliminates legacy dependencies and provides
- * enterprise-grade admin functionality with sub-50ms performance.
+ * v2-grade admin functionality with sub-50ms performance.
  */
 
 const express = require('express');

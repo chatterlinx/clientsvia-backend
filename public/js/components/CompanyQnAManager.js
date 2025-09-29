@@ -1,6 +1,6 @@
 /**
  * Company Q&A Manager - Frontend Component
- * Enterprise-grade CRUD interface for Company Knowledge Base
+ * V2-grade CRUD interface for Company Knowledge Base
  * Integrates with Knowledge Sources Priority tab
  * 
  * 🤖 AI AGENT ROUTING REFERENCE - FRONTEND CONTROL:

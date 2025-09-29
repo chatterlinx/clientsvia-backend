@@ -345,7 +345,7 @@ router.patch('/company/:id', async (req, res) => {
                     if (Array.isArray(updates[key])) {
                         // 🎯 ENTERPRISE: Save to both legacy and new fields for compatibility
                         updateOperation['tradeTypes'] = updates[key];      // Legacy field
-                        updateOperation['tradeCategories'] = updates[key]; // Enterprise field
+                        updateOperation['tradeCategories'] = updates[key]; // V2 field
                         console.log(`💾 [TRADE CATEGORIES] Saving to both fields:`, updates[key]);
                     } else if (updates[key]) {
                         updateOperation['tradeTypes'] = [updates[key]];

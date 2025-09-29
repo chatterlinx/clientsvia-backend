@@ -1,5 +1,5 @@
 // clients/smsClient.js
-// Enterprise-Grade SMS Client with Twilio Integration
+// V2-Grade SMS Client with Twilio Integration
 // Spartan Coder - Gold Standard Implementation
 
 const twilio = require('twilio');

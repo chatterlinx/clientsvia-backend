@@ -1,5 +1,5 @@
 /**
- * V2 GLOBAL ADD COMPANY ROUTES - Enterprise Company Creation
+ * V2 GLOBAL ADD COMPANY ROUTES - V2 Company Creation
  * 
  * V2 GLOBAL ADD COMPANY - ENTERPRISE ARCHITECTURE:
  * ╔══════════════════════════════════════════════════════════════════╗
@@ -13,14 +13,14 @@
  * 
  * V2 Global Add Company Features:
  * - Streamlined 3-field creation (Name, Phone, Address)
- * - Auto-generated enterprise defaults
+ * - Auto-generated v2 defaults
  * - Comprehensive validation with helpful error messages
  * - Automatic AI Agent Logic initialization
  * - Trade category suggestions
  * - Timezone detection
  * - Profile completion tracking
  * 
- * This V2 version provides enterprise-grade company creation
+ * This V2 version provides v2-grade company creation
  * with intelligent defaults and complete legacy elimination.
  */
 
@@ -34,7 +34,7 @@ const logger = require('../../utils/logger');
 
 /**
  * 🏢 POST CREATE COMPANY - V2 Global Add Company
- * Streamlined company creation with enterprise defaults
+ * Streamlined company creation with v2 defaults
  */
 router.post('/companies', authenticateJWT, requireRole('admin'), async (req, res) => {
     try {
@@ -119,7 +119,7 @@ router.post('/companies', authenticateJWT, requireRole('admin'), async (req, res
             detectedTimezone = getTimezoneFromAreaCode(areaCode) || 'America/New_York';
         }
 
-        // 🏗️ Build comprehensive company data with V2 enterprise defaults
+        // 🏗️ Build comprehensive company data with V2 v2 defaults
         const newCompanyData = {
             // Basic Information
             companyName: companyName.trim(),
@@ -139,7 +139,7 @@ router.post('/companies', authenticateJWT, requireRole('admin'), async (req, res
             status: 'active',
             profileComplete: false, // Will be true once additional details are added
             
-            // V2 AI Agent Logic - Enterprise Defaults
+            // V2 AI Agent Logic - V2 Defaults
             aiAgentLogic: {
                 // Knowledge Source Thresholds
                 thresholds: {
@@ -299,7 +299,7 @@ router.post('/companies', authenticateJWT, requireRole('admin'), async (req, res
                 aiAgentLogicInitialized: true,
                 profileCompletionUrl: `/company-profile.html?id=${savedCompany._id}`
             },
-            message: `Company "${savedCompany.companyName}" created successfully with enterprise AI Agent Logic defaults`
+            message: `Company "${savedCompany.companyName}" created successfully with v2 AI Agent Logic defaults`
         });
 
     } catch (error) {

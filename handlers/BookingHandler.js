@@ -1,15 +1,15 @@
 // handlers/BookingHandler.js
-// Enterprise Booking Handler - Production Ready
+// V2 Booking Handler - Production Ready
 
 const { getDB } = require('../db');
 const { ObjectId } = require('mongodb');
 const crypto = require('crypto');
 
 /**
- * Get enterprise booking schema for a specific company, trade, and service type
+ * Get v2 booking schema for a specific company, trade, and service type
  */
-async function getEnterpriseBookingSchema(companyID, trade, serviceType) {
-    console.log(`[Enterprise Booking] Getting schema for ${companyID}/${trade}/${serviceType}`);
+async function getV2BookingSchema(companyID, trade, serviceType) {
+    console.log(`[V2 Booking] Getting schema for ${companyID}/${trade}/${serviceType}`);
     
     const db = getDB();
     if (!db) throw new Error('Database not connected');
@@ -17,20 +17,20 @@ async function getEnterpriseBookingSchema(companyID, trade, serviceType) {
     try {
         const schemaId = `${trade}-${serviceType}`.toLowerCase().replace(/\s+/g, '-');
         
-        const schema = await db.collection('enterpriseBookingSchemas').findOne({
+        const schema = await db.collection('v2BookingSchemas').findOne({
             companyID: companyID,
             schemaId: schemaId,
             'metadata.isActive': true
         });
 
         if (schema) {
-            console.log(`[Enterprise Booking] Found enterprise schema`);
+            console.log(`[V2 Booking] Found v2 schema`);
             return schema;
         }
 
         return await getLegacyBookingFlow(companyID, trade, serviceType);
     } catch (error) {
-        console.error('[Enterprise Booking] Error:', error);
+        console.error('[V2 Booking] Error:', error);
         throw error;
     }
 }
@@ -55,14 +55,14 @@ async function getLegacyBookingFlow(companyID, trade, serviceType) {
 }
 
 /**
- * Create enterprise booking session with idempotency
+ * Create v2 booking session with idempotency
  */
 async function createOrResumeBookingSession({ companyID, trade, serviceType, sessionId, idempotencyKey }) {
     const db = getDB();
     if (!db) throw new Error('Database not connected');
 
     try {
-        const schema = await getEnterpriseBookingSchema(companyID, trade, serviceType);
+        const schema = await getV2BookingSchema(companyID, trade, serviceType);
         if (!schema) throw new Error(`No booking schema found`);
 
         const newSessionId = generateSessionId();
@@ -87,7 +87,7 @@ async function createOrResumeBookingSession({ companyID, trade, serviceType, ses
             auditLog: []
         };
 
-        await db.collection('enterpriseBookingSessions').insertOne(newSession);
+        await db.collection('v2BookingSessions').insertOne(newSession);
         
         return {
             sessionId: newSessionId,
@@ -98,7 +98,7 @@ async function createOrResumeBookingSession({ companyID, trade, serviceType, ses
             expiresAt: expiresAt
         };
     } catch (error) {
-        console.error('[Enterprise Booking] Session error:', error);
+        console.error('[V2 Booking] Session error:', error);
         throw error;
     }
 }
@@ -178,7 +178,7 @@ async function getAvailableBookingFlows(companyID) {
                     description: script.description || `Book ${script.serviceType} service`,
                     stepCount: script.flowSteps?.length || 0,
                     isActive: script.isActive !== false,
-                    isEnterprise: script.isEnterprise || false
+                    isV2: script.isV2 || false
                 });
             });
         }
@@ -216,6 +216,6 @@ module.exports = {
     handleBookingFlow, 
     getAvailableBookingFlows,
     validateBookingFlow,
-    getEnterpriseBookingSchema,
+    getV2BookingSchema,
     createOrResumeBookingSession
 };

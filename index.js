@@ -32,7 +32,7 @@ console.log('[INIT] Loading database modules...');
 const { connectDB } = require('./db');
 // V2 DELETED: Legacy AgentPromptService - depends on deleted AgentPrompt model
 // const AgentPromptService = require('./services/agentPromptsService');
-// V2 DELETED: Legacy BackupMonitoringService - enterprise bloat eliminated
+// V2 DELETED: Legacy BackupMonitoringService - v2 bloat eliminated
 // const BackupMonitoringService = require('./services/backupMonitoringService');
 console.log('[INIT] ✅ Database modules loaded');
 
@@ -79,11 +79,11 @@ async function loadAllRoutes() {
         // 🚀 V2 PURE SYSTEM: Only V2 Knowledge Management - ALL LEGACY ELIMINATED
         routes.v2KnowledgeManagementRoutes = await loadRouteWithTimeout('./routes/company/v2knowledgeManagement', 'v2KnowledgeManagementRoutes');
         routes.knowledgeSourcePrioritiesRoutes = await loadRouteWithTimeout('./routes/company/knowledgeSourcePriorities', 'knowledgeSourcePrioritiesRoutes');
-        // V2 DELETED: Legacy enterprise testing routes - using V2 AI Agent Logic system
+        // V2 DELETED: Legacy v2 testing routes - using V2 AI Agent Logic system
         // routes.priorityFlowTestingRoutes = await loadRouteWithTimeout('./routes/company/priorityFlowTesting', 'priorityFlowTestingRoutes');
         // routes.agentTestingRoutes = await loadRouteWithTimeout('./routes/company/agentTesting', 'agentTestingRoutes');
-        // V2 DELETED: Legacy eventHooks routes - enterprise event system eliminated
-        // V2 DELETED: Legacy transferRouter routes - enterprise transfer system eliminated
+        // V2 DELETED: Legacy eventHooks routes - v2 event system eliminated
+        // V2 DELETED: Legacy transferRouter routes - v2 transfer system eliminated
         // V2 DELETED: Legacy enhancedAgentSettings - used external LLM models, violates 100% in-house AI system
         // V2 DELETED: Legacy aiAgentWorkflows and aiAgentAnalytics routes - using V2 AI Agent Logic system
         // REMOVED: knowledgeAutoPopulationRoutes - Replaced by comprehensive Company Q&A Management system
@@ -102,15 +102,15 @@ async function loadAllRoutes() {
         routes.v2GlobalAddCompanyRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-addcompany', 'v2GlobalAddCompanyRoutes');
         routes.v2GlobalTradeCategoriesRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-tradecategories', 'v2GlobalTradeCategoriesRoutes');
         routes.authRoutes = await loadRouteWithTimeout('./routes/auth', 'authRoutes');
-        // V2 DELETED: Legacy backup routes - enterprise backup system eliminated
+        // V2 DELETED: Legacy backup routes - v2 backup system eliminated
         // REMOVED: Legacy CRM Management routes - will build V2 version in future
         
-        // Load AI Agent Logic routes for enterprise features
+        // Load AI Agent Logic routes for v2 features
         routes.v2AIAgentLogicRoutes = await loadRouteWithTimeout('./routes/company/v2profile-aiagentlogic', 'v2AIAgentLogicRoutes');
         
-        // REMOVED: Legacy Enterprise AI Intelligence routes - archived to prevent external LLM dependencies
+        // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
         
-        // DELETED: Legacy Enterprise Trade Categories - replaced by V2 Global Trade Categories system
+        // DELETED: Legacy V2 Trade Categories - replaced by V2 Global Trade Categories system
         
         console.log('[INIT] ✅ All routes loaded successfully');
         return routes;
@@ -207,21 +207,21 @@ function registerRoutes(routes) {
     app.use('/api/v2global/directory', routes.v2GlobalDirectoryRoutes); // V2 Global Company Directory
     app.use('/api/v2global/addcompany', routes.v2GlobalAddCompanyRoutes); // V2 Global Add Company
     app.use('/api/v2global/trade-categories', routes.v2GlobalTradeCategoriesRoutes); // V2 Global Trade Categories
-    // V2 DELETED: Legacy backup routes - enterprise backup system eliminated
+    // V2 DELETED: Legacy backup routes - v2 backup system eliminated
     // V2 DELETED: Legacy company agent settings route - using V2 AI Agent Logic system
     // app.use('/api/company', routes.companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
     
     // 🚀 V2 PURE SYSTEM: Only V2 Knowledge Management - ALL LEGACY ELIMINATED
     app.use('/api/company', routes.v2KnowledgeManagementRoutes); // V2 ENTERPRISE: Pure V2 Knowledge Management System (Company Q&A, Trade Q&A, Templates)
     app.use('/api/company', routes.knowledgeSourcePrioritiesRoutes); // ENTERPRISE: Knowledge Source Priorities Management
-    // V2 DELETED: Legacy enterprise testing routes - using V2 AI Agent Logic system
+    // V2 DELETED: Legacy v2 testing routes - using V2 AI Agent Logic system
     // app.use('/api/company', routes.priorityFlowTestingRoutes); // ENTERPRISE: Real-time Priority Flow Testing & Validation
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 
-    // V2 DELETED: Legacy AI Agent routes - enterprise event and transfer systems eliminated
-    // V2 DELETED: Legacy event-hooks routes - enterprise event system eliminated
-    // V2 DELETED: Legacy transfer-router routes - enterprise transfer system eliminated
+    // V2 DELETED: Legacy AI Agent routes - v2 event and transfer systems eliminated
+    // V2 DELETED: Legacy event-hooks routes - v2 event system eliminated
+    // V2 DELETED: Legacy transfer-router routes - v2 transfer system eliminated
 
     // V2 DELETED: Legacy AI agent workflow and analytics route mounts - using V2 AI Agent Logic system
     // REMOVED: knowledge-auto-population routes - Replaced by comprehensive Company Q&A Management system
@@ -230,11 +230,11 @@ function registerRoutes(routes) {
     // V2: Legacy intentRouting route deleted - using modern AI Agent Logic intent classification
     // V2: Legacy bookingScripts route deleted - using modern AI Agent Logic booking flow
     // V2: Legacy monitoring route deleted - using modern AI Agent Logic monitoring system
-    app.use('/api/notes', routes.notesRoutes); // GOLD STANDARD: Enterprise Notes Management
+    app.use('/api/notes', routes.notesRoutes); // GOLD STANDARD: V2 Notes Management
     // V2: Legacy bookingHandler route deleted - using modern AI Agent Logic booking system
     // REMOVED: Legacy AI Intelligence routes - replaced by AI Agent Logic system
-    // REMOVED: Legacy Enterprise AI Intelligence routes - archived to prevent external LLM dependencies
-    // DELETED: Legacy enterprise trade categories route - replaced by V2 Global Trade Categories
+    // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
+    // DELETED: Legacy v2 trade categories route - replaced by V2 Global Trade Categories
 
     // Mount agent processor routes
     // V2: Legacy agentProcessor route deleted - using modern AI Agent Logic processing system
@@ -292,7 +292,7 @@ app.use((req, res, next) => {
     
     // REMOVED: Legacy CRM Management routes - will build V2 version in future
     
-    // AI Agent Logic routes for enterprise features (Analytics, A/B Testing, etc.)
+    // AI Agent Logic routes for v2 features (Analytics, A/B Testing, etc.)
     app.use('/api/ai-agent-logic', routes.v2AIAgentLogicRoutes);
     app.use('/api', routes.v2AIAgentLogicRoutes); // V2 AI Agent Logic - Also mount for direct API access
     
@@ -429,7 +429,7 @@ async function startServer() {
         
         console.log('[Server] Step 4/6: V2 DELETED - Legacy backup monitoring eliminated...');
         const backupStart = Date.now();
-        // V2 DELETED: Legacy BackupMonitoringService - enterprise bloat eliminated
+        // V2 DELETED: Legacy BackupMonitoringService - v2 bloat eliminated
         // const backupMonitoring = new BackupMonitoringService();
         // backupMonitoring.start();
         logger.info('🔄 V2 SYSTEM: Backup monitoring service eliminated - using simple V2 architecture');

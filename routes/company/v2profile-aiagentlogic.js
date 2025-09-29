@@ -37,13 +37,13 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateJWT, authenticateSingleSession } = require('../../middleware/auth'); // Use both auth types
-// V2 DELETED: Legacy ClientsViaIntelligenceEngine - enterprise bloat eliminated
+// V2 DELETED: Legacy ClientsViaIntelligenceEngine - v2 bloat eliminated
 const Company = require('../../models/Company');
 
 // 🚀 NEW: Import knowledge services for AI agent integration
 const CompanyKnowledgeService = require('../../services/knowledge/CompanyKnowledgeService');
 
-// V2 DELETED: Legacy intelligence engine - enterprise bloat eliminated
+// V2 DELETED: Legacy intelligence engine - v2 bloat eliminated
 
 // 🚀 NEW: Initialize knowledge service for AI agent integration
 const companyKnowledgeService = new CompanyKnowledgeService();
@@ -1126,7 +1126,7 @@ router.post('/ai-agent/company-knowledge/:companyId', async (req, res) => {
             });
         }
 
-        // Use the enterprise knowledge service
+        // Use the v2 knowledge service
         const result = await companyKnowledgeService.findAnswerForAIAgent(
             query,
             companyId,
@@ -2121,12 +2121,12 @@ router.get('/flow-designer/:companyId/flows', authenticateSingleSession, async (
  * ========================================= 
  */
 
-// Simple health check for enterprise features
+// Simple health check for v2 features
 router.get('/test/health', async (req, res) => {
     try {
         res.json({
             success: true,
-            message: 'Enterprise AI Agent Logic endpoints are operational',
+            message: 'V2 AI Agent Logic endpoints are operational',
             timestamp: new Date().toISOString(),
             features: {
                 analytics: 'available',

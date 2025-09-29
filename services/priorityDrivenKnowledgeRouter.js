@@ -1,6 +1,6 @@
 // ============================================================================
 // PRIORITY-DRIVEN KNOWLEDGE ROUTER - PHASE 4.1
-// 📋 DESCRIPTION: Enterprise-grade AI agent runtime with priority-based knowledge routing
+// 📋 DESCRIPTION: V2-grade AI agent runtime with priority-based knowledge routing
 // 🎯 PURPOSE: Route AI agent queries through configured knowledge sources with intelligent fallback
 // 🔧 FEATURES: 
 //     - Priority-based routing (companyQnA → tradeQnA → templates → inHouseFallback)
@@ -24,7 +24,7 @@
 
 const Company = require('../models/Company');
 const CompanyKnowledgeQnA = require('../models/knowledge/CompanyQnA');
-// V2 DELETED: Legacy enterprise aiAgentCacheService - using simple Redis directly
+// V2 DELETED: Legacy v2 aiAgentCacheService - using simple Redis directly
 const { redisClient } = require('../clients');
 const logger = require('../utils/logger');
 

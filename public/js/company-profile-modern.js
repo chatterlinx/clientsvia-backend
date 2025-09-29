@@ -325,7 +325,7 @@ class CompanyProfileManager {
        ======================================================================== */
 
     /**
-     * GOLD STANDARD: Populate Overview tab with enterprise-grade UX
+     * GOLD STANDARD: Populate Overview tab with v2-grade UX
      * Features: Live validation, auto-save, accessibility, error recovery
      */
     populateOverviewTab() {
@@ -334,22 +334,22 @@ class CompanyProfileManager {
             return;
         }
 
-        console.log('📄 Populating Overview tab with enterprise features...');
+        console.log('📄 Populating Overview tab with v2 features...');
 
         try {
             // Update header elements with current data
             this.updateHeaderElements();
 
             // Create modern always-editable form with validation
-            this.createEnterpriseEditableForm();
+            this.createV2EditableForm();
 
-            // Initialize contacts management with enterprise features
+            // Initialize contacts management with v2 features
             this.initializeContactsManagement();
             
             // Setup comprehensive validation and auto-save
-            this.setupEnterpriseFormValidation();
+            this.setupV2FormValidation();
 
-            console.log('✅ Overview tab initialized with enterprise features');
+            console.log('✅ Overview tab initialized with v2 features');
         } catch (error) {
             console.error('❌ Error initializing Overview tab:', error);
             this.showNotification('Failed to initialize Overview tab', 'error');
@@ -357,16 +357,16 @@ class CompanyProfileManager {
     }
 
     /**
-     * GOLD STANDARD: Create enterprise-grade always-editable form
+     * GOLD STANDARD: Create v2-grade always-editable form
      * Features: Validation, accessibility, progressive enhancement
      */
-    createEnterpriseEditableForm() {
+    createV2EditableForm() {
         if (!this.domElements.editFormContainer) {
             console.error('❌ Edit form container not found');
             return;
         }
 
-        const formHTML = this.generateEnterpriseFormHTML();
+        const formHTML = this.generateV2FormHTML();
         this.domElements.editFormContainer.innerHTML = formHTML;
         this.domElements.editFormContainer.classList.remove('hidden');
 
@@ -375,17 +375,17 @@ class CompanyProfileManager {
             this.domElements.editButton.style.display = 'none';
         }
 
-        // Initialize enterprise form features
+        // Initialize v2 form features
         this.initializeFormAccessibility();
         this.setupFormAutoSave();
         
-        console.log('🔧 Enterprise editable form created');
+        console.log('🔧 V2 editable form created');
     }
 
     /**
-     * GOLD STANDARD: Generate enterprise form HTML with validation
+     * GOLD STANDARD: Generate v2 form HTML with validation
      */
-    generateEnterpriseFormHTML() {
+    generateV2FormHTML() {
         const data = this.currentData;
         const requiredFields = ['companyName'];
         
@@ -429,7 +429,7 @@ class CompanyProfileManager {
                                 type="text" 
                                 id="edit-company-name" 
                                 name="companyName"
-                                class="form-input enterprise-input" 
+                                class="form-input v2-input" 
                                 value="${this.escapeHtml(data.companyName || data.name || '')}"
                                 placeholder="Enter your company name"
                                 required
@@ -450,7 +450,7 @@ class CompanyProfileManager {
                                 type="tel" 
                                 id="edit-business-phone" 
                                 name="businessPhone"
-                                class="form-input enterprise-input" 
+                                class="form-input v2-input" 
                                 value="${this.escapeHtml(data.companyPhone || data.businessPhone || '')}"
                                 placeholder="+1 (555) 123-4567"
                                 aria-describedby="business-phone-help"
@@ -470,7 +470,7 @@ class CompanyProfileManager {
                                 type="email" 
                                 id="edit-business-email" 
                                 name="businessEmail"
-                                class="form-input enterprise-input" 
+                                class="form-input v2-input" 
                                 value="${this.escapeHtml(data.businessEmail || '')}"
                                 placeholder="contact@yourcompany.com"
                                 aria-describedby="business-email-help"
@@ -490,7 +490,7 @@ class CompanyProfileManager {
                                 type="text" 
                                 id="edit-business-website" 
                                 name="businessWebsite"
-                                class="form-input enterprise-input" 
+                                class="form-input v2-input" 
                                 value="${this.escapeHtml(data.businessWebsite || '')}"
                                 placeholder="www.yourcompany.com"
                                 aria-describedby="business-website-help"
@@ -511,7 +511,7 @@ class CompanyProfileManager {
                             <textarea 
                                 id="edit-business-address" 
                                 name="businessAddress"
-                                class="form-textarea enterprise-input" 
+                                class="form-textarea v2-input" 
                                 rows="3"
                                 placeholder="123 Main Street&#10;Suite 100&#10;City, State 12345"
                                 aria-describedby="business-address-help"
@@ -531,7 +531,7 @@ class CompanyProfileManager {
                                 type="text" 
                                 id="edit-service-area" 
                                 name="serviceArea"
-                                class="form-input enterprise-input" 
+                                class="form-input v2-input" 
                                 value="${this.escapeHtml(data.serviceArea || '')}"
                                 placeholder="Greater Metro Area, 50-mile radius"
                                 aria-describedby="service-area-help"
@@ -550,7 +550,7 @@ class CompanyProfileManager {
                                 type="text" 
                                 id="edit-business-hours" 
                                 name="businessHours"
-                                class="form-input enterprise-input" 
+                                class="form-input v2-input" 
                                 value="${this.escapeHtml(data.businessHours || '')}"
                                 placeholder="Monday-Friday: 9:00 AM - 5:00 PM"
                                 aria-describedby="business-hours-help"
@@ -572,7 +572,7 @@ class CompanyProfileManager {
                         <textarea 
                             id="edit-description" 
                             name="description"
-                            class="form-textarea enterprise-input" 
+                            class="form-textarea v2-input" 
                             rows="4"
                             placeholder="Describe your business, services, and what makes you unique..."
                             aria-describedby="description-help"
@@ -598,7 +598,7 @@ class CompanyProfileManager {
                                 <i class="fas fa-magic text-blue-600"></i>
                             </div>
                             <div>
-                                <span class="text-sm text-blue-900 font-semibold">Enterprise Live Editing</span>
+                                <span class="text-sm text-blue-900 font-semibold">V2 Live Editing</span>
                                 <p class="text-xs text-blue-700 mt-1">Changes are validated in real-time and auto-saved</p>
                             </div>
                         </div>
@@ -613,18 +613,18 @@ class CompanyProfileManager {
     }
 
     /**
-     * GOLD STANDARD: Setup enterprise form validation and auto-save
+     * GOLD STANDARD: Setup v2 form validation and auto-save
      */
-    setupEnterpriseFormValidation() {
+    setupV2FormValidation() {
         const form = this.domElements.editFormContainer;
         if (!form) return;
 
-        // Get all enterprise inputs
-        const inputs = form.querySelectorAll('.enterprise-input');
+        // Get all v2 inputs
+        const inputs = form.querySelectorAll('.v2-input');
         
         inputs.forEach(input => {
             // Real-time validation on input
-            input.addEventListener('input', (e) => this.handleEnterpriseInput(e));
+            input.addEventListener('input', (e) => this.handleV2Input(e));
             input.addEventListener('blur', (e) => this.validateField(e.target));
             input.addEventListener('focus', (e) => this.clearFieldErrors(e.target));
         });
@@ -635,13 +635,13 @@ class CompanyProfileManager {
             descriptionField.addEventListener('input', () => this.updateCharacterCounter());
         }
 
-        console.log('🔧 Enterprise validation setup complete');
+        console.log('🔧 V2 validation setup complete');
     }
 
     /**
-     * GOLD STANDARD: Handle enterprise input with validation and auto-save
+     * GOLD STANDARD: Handle v2 input with validation and auto-save
      */
-    handleEnterpriseInput(event) {
+    handleV2Input(event) {
         const field = event.target;
         
         // Mark as changed for auto-save
@@ -657,11 +657,11 @@ class CompanyProfileManager {
         // Update form status
         this.setFormStatus('typing', 'Making changes...');
         
-        console.log(`📝 Enterprise field changed: ${field.name} = ${field.value.substring(0, 50)}...`);
+        console.log(`📝 V2 field changed: ${field.name} = ${field.value.substring(0, 50)}...`);
     }
 
     /**
-     * GOLD STANDARD: Validate individual field with enterprise rules
+     * GOLD STANDARD: Validate individual field with v2 rules
      */
     validateField(field) {
         const rules = field.getAttribute('data-validate');
@@ -746,7 +746,7 @@ class CompanyProfileManager {
     }
 
     /**
-     * GOLD STANDARD: Setup form auto-save with enterprise features
+     * GOLD STANDARD: Setup form auto-save with v2 features
      */
     setupFormAutoSave() {
         // Auto-save after 2 seconds of inactivity
@@ -755,7 +755,7 @@ class CompanyProfileManager {
         const form = this.domElements.editFormContainer;
         if (!form) return;
 
-        const inputs = form.querySelectorAll('.enterprise-input');
+        const inputs = form.querySelectorAll('.v2-input');
         inputs.forEach((input) => {
             input.addEventListener('input', () => {
                 clearTimeout(this.autoSaveTimeout);
@@ -781,13 +781,13 @@ class CompanyProfileManager {
        ======================================================================== */
 
     /**
-     * GOLD STANDARD: Initialize contacts management with enterprise features
+     * GOLD STANDARD: Initialize contacts management with v2 features
      */
     initializeContactsManagement() {
         try {
-            this.renderEnterpriseContactsSection();
-            this.setupEnterpriseContactsHandlers();
-            console.log('� Enterprise contacts management initialized');
+            this.renderV2ContactsSection();
+            this.setupV2ContactsHandlers();
+            console.log('� V2 contacts management initialized');
         } catch (error) {
             console.error('❌ Error initializing contacts:', error);
             this.showNotification('Failed to initialize contacts section', 'error');
@@ -795,10 +795,10 @@ class CompanyProfileManager {
     }
 
     /**
-     * Render enterprise contacts section
+     * Render v2 contacts section
      */
-    renderEnterpriseContactsSection() {
-        console.log('👥 Rendering enterprise contacts section...');
+    renderV2ContactsSection() {
+        console.log('👥 Rendering v2 contacts section...');
         
         const contactsContainer = document.getElementById('contacts-container');
         if (!contactsContainer) {
@@ -850,19 +850,19 @@ class CompanyProfileManager {
         `;
         
         contactsContainer.innerHTML = contactsHTML;
-        console.log('✅ Enterprise contacts section rendered');
+        console.log('✅ V2 contacts section rendered');
     }
     
     /**
-     * Setup enterprise contacts event handlers
+     * Setup v2 contacts event handlers
      */
-    setupEnterpriseContactsHandlers() {
-        console.log('👥 Setting up enterprise contacts handlers...');
+    setupV2ContactsHandlers() {
+        console.log('👥 Setting up v2 contacts handlers...');
         
         // Add any contact-related event listeners here
         // For now, this is mainly a display section, but we can add edit functionality later
         
-        console.log('✅ Enterprise contacts handlers setup complete');
+        console.log('✅ V2 contacts handlers setup complete');
     }
 
     /* ========================================================================
@@ -1397,38 +1397,38 @@ class CompanyProfileManager {
     }
 
     /**
-     * PRODUCTION: Populate Notes tab with enterprise-grade note management system
+     * PRODUCTION: Populate Notes tab with v2-grade note management system
      * Features: Pin/unpin, edit in-place, timestamps, search, categories, auto-save
      */
     populateNotesTab() {        
         // Initialize notes management system with advanced features
-        this.initializeEnterpriseNotesSystem();
+        this.initializeV2NotesSystem();
     }
 
     /**
-     * PRODUCTION: Initialize enterprise notes management system
+     * PRODUCTION: Initialize v2 notes management system
      */
-    initializeEnterpriseNotesSystem() {        
-        // Initialize notes array with enterprise structure
+    initializeV2NotesSystem() {        
+        // Initialize notes array with v2 structure
         this.notes = this.currentData?.notes || [];
         
         // Ensure notes have proper structure
         this.notes = this.notes.map(note => this.normalizeNoteStructure(note));
         
-        // Setup enterprise notes interface
-        this.setupEnterpriseNotesInterface();
+        // Setup v2 notes interface
+        this.setupV2NotesInterface();
         
         // Render notes with advanced features
-        this.renderEnterpriseNotes();
+        this.renderV2Notes();
         
         // Setup search and filtering
         this.setupNotesSearch();
         
-        console.log('✅ Enterprise notes system initialized with', this.notes.length, 'notes');
+        console.log('✅ V2 notes system initialized with', this.notes.length, 'notes');
     }
 
     /**
-     * PRODUCTION: Normalize note structure for enterprise features
+     * PRODUCTION: Normalize note structure for v2 features
      */
     normalizeNoteStructure(note) {
         return {
@@ -1458,29 +1458,29 @@ class CompanyProfileManager {
     }
 
     /**
-     * GOLD STANDARD: Setup enterprise notes interface with advanced controls
+     * GOLD STANDARD: Setup v2 notes interface with advanced controls
      */
-    setupEnterpriseNotesInterface() {
-        // Transform the basic notes HTML into enterprise-grade interface
+    setupV2NotesInterface() {
+        // Transform the basic notes HTML into v2-grade interface
         const notesContent = document.getElementById('notes-content');
         if (!notesContent) {
             console.error('❌ Notes content container not found');
             return;
         }
 
-        // Replace with enterprise notes interface
-        notesContent.innerHTML = this.generateEnterpriseNotesHTML();
+        // Replace with v2 notes interface
+        notesContent.innerHTML = this.generateV2NotesHTML();
         
         // Setup event listeners for advanced features
         this.setupNotesEventListeners();
         
-        console.log('✅ Enterprise notes interface created');
+        console.log('✅ V2 notes interface created');
     }
 
     /**
-     * GOLD STANDARD: Generate enterprise notes HTML interface
+     * GOLD STANDARD: Generate v2 notes HTML interface
      */
-    generateEnterpriseNotesHTML() {
+    generateV2NotesHTML() {
         return `
             <section class="profile-section bg-transparent shadow-none p-0">
                 <!-- Header with Stats and Controls -->
@@ -1586,7 +1586,7 @@ class CompanyProfileManager {
                                 <input type="checkbox" id="quick-note-pin" class="form-checkbox mr-2">
                                 <span class="text-sm text-gray-700">Pin to top</span>
                             </label>
-                            <button id="add-enterprise-note" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                            <button id="add-v2-note" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                                 <i class="fas fa-plus mr-2 text-sm"></i>
                                 Add Note
                             </button>
@@ -1595,7 +1595,7 @@ class CompanyProfileManager {
                 </div>
 
                 <!-- Notes Display Area -->
-                <div id="enterprise-notes-container">
+                <div id="v2-notes-container">
                     <!-- Notes will be rendered here -->
                 </div>
 
@@ -1618,9 +1618,9 @@ class CompanyProfileManager {
      */
     setupNotesEventListeners() {
         // Add note button
-        const addButton = document.getElementById('add-enterprise-note');
+        const addButton = document.getElementById('add-v2-note');
         if (addButton) {
-            addButton.addEventListener('click', () => this.addEnterpriseNote());
+            addButton.addEventListener('click', () => this.addV2Note());
         }
 
         // Search functionality
@@ -1638,7 +1638,7 @@ class CompanyProfileManager {
         // Sort options
         const sortSelect = document.getElementById('notes-sort');
         if (sortSelect) {
-            sortSelect.addEventListener('change', () => this.renderEnterpriseNotes());
+            sortSelect.addEventListener('change', () => this.renderV2Notes());
         }
 
         // Quick title auto-generation
@@ -1660,9 +1660,9 @@ class CompanyProfileManager {
     }
 
     /**
-     * PRODUCTION: Add enterprise note with full feature set
+     * PRODUCTION: Add v2 note with full feature set
      */
-    addEnterpriseNote() {        
+    addV2Note() {        
         const titleInput = document.getElementById('quick-note-title');
         const contentTextarea = document.getElementById('quick-note-content');
         const categorySelect = document.getElementById('quick-note-category');
@@ -1713,7 +1713,7 @@ class CompanyProfileManager {
         pinCheckbox.checked = false;
 
         // Update display
-        this.renderEnterpriseNotes();
+        this.renderV2Notes();
         this.setUnsavedChanges(true);
         this.showNotification('Note added successfully!', 'success');
     }
@@ -1734,14 +1734,14 @@ class CompanyProfileManager {
     }
 
     /**
-     * PRODUCTION: Render enterprise notes with advanced features
+     * PRODUCTION: Render v2 notes with advanced features
      */
-    renderEnterpriseNotes() {
-        const container = document.getElementById('enterprise-notes-container');
+    renderV2Notes() {
+        const container = document.getElementById('v2-notes-container');
         const emptyState = document.getElementById('notes-empty-state');
         
         if (!container) {
-            console.error('❌ Enterprise notes container not found');
+            console.error('❌ V2 notes container not found');
             return;
         }
 
@@ -1963,7 +1963,7 @@ class CompanyProfileManager {
      * GOLD STANDARD: Setup event listeners for individual note cards
      */
     setupNoteCardEventListeners() {
-        const container = document.getElementById('enterprise-notes-container');
+        const container = document.getElementById('v2-notes-container');
         if (!container) return;
 
         // Use event delegation for better performance
@@ -1976,7 +1976,7 @@ class CompanyProfileManager {
             } else if (e.target.closest('.edit-note-btn')) {
                 this.startEditNote(noteId);
             } else if (e.target.closest('.delete-note-btn')) {
-                this.deleteEnterpriseNote(noteId);
+                this.deleteV2Note(noteId);
             } else if (e.target.closest('.save-edit-btn')) {
                 this.saveEditNote(noteId);
             } else if (e.target.closest('.cancel-edit-btn')) {
@@ -2002,7 +2002,7 @@ class CompanyProfileManager {
             return new Date(b.updatedAt) - new Date(a.updatedAt);
         });
 
-        this.renderEnterpriseNotes();
+        this.renderV2Notes();
         this.setUnsavedChanges(true);
         
         const action = note.isPinned ? 'pinned' : 'unpinned';
@@ -2024,7 +2024,7 @@ class CompanyProfileManager {
         // Set this note to editing mode
         note.isEditing = true;
         
-        this.renderEnterpriseNotes();
+        this.renderV2Notes();
         
         // Focus on the content textarea
         setTimeout(() => {
@@ -2062,7 +2062,7 @@ class CompanyProfileManager {
         note.updatedAt = new Date().toISOString();
         note.isEditing = false;
 
-        this.renderEnterpriseNotes();
+        this.renderV2Notes();
         this.setUnsavedChanges(true);
         this.showNotification('Note updated successfully!', 'success');
         
@@ -2077,7 +2077,7 @@ class CompanyProfileManager {
         if (!note) return;
 
         note.isEditing = false;
-        this.renderEnterpriseNotes();
+        this.renderV2Notes();
         
         console.log('❌ Cancelled editing note:', note.title);
     }
@@ -2085,7 +2085,7 @@ class CompanyProfileManager {
     /**
      * GOLD STANDARD: Delete note with confirmation
      */
-    deleteEnterpriseNote(noteId) {
+    deleteV2Note(noteId) {
         const note = this.notes.find(n => n.id == noteId);
         if (!note) return;
 
@@ -2094,7 +2094,7 @@ class CompanyProfileManager {
         if (!confirm(confirmMessage)) return;
 
         this.notes = this.notes.filter(n => n.id != noteId);
-        this.renderEnterpriseNotes();
+        this.renderV2Notes();
         this.setUnsavedChanges(true);
         this.showNotification('Note deleted successfully!', 'success');
     }
@@ -2245,7 +2245,7 @@ class CompanyProfileManager {
         document.querySelectorAll('.delete-note').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const noteId = e.target.closest('.note-item').dataset.noteId;
-                this.deleteEnterpriseNote(noteId);
+                this.deleteV2Note(noteId);
             });
         });
 
@@ -2611,7 +2611,7 @@ class CompanyProfileManager {
     }
 
     /**
-     * ✅ PRODUCTION: Enterprise Company Q&A Manager Integration
+     * ✅ PRODUCTION: V2 Company Q&A Manager Integration
      * 🚀 PERFORMANCE: Embedded directly in AI Agent Logic Tab 2
      * 🛡️ SECURITY: Multi-tenant isolation with companyId validation
      * ⚡ REAL-TIME: Live AI agent testing and confidence scoring
@@ -2624,7 +2624,7 @@ class CompanyProfileManager {
         this.setupQnAEventListeners();
         this.initializeRealTimeTestingFeatures();
         
-        console.log('✅ Enterprise Company Q&A Manager ready - integrated with AI Agent Logic');
+        console.log('✅ V2 Company Q&A Manager ready - integrated with AI Agent Logic');
     }
 
     // ✅ PRODUCTION: Legacy knowledge sub-tabs removed

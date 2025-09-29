@@ -32,7 +32,7 @@ async function initializeRedis() {
     });
 
     redisClient.on('ready', () => {
-      console.log('🔥 Redis Session Store ready for enterprise operations');
+      console.log('🔥 Redis Session Store ready for v2 operations');
     });
 
     redisClient.on('error', (err) => {

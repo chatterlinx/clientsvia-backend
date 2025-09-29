@@ -15,7 +15,7 @@ const addressSchema = new mongoose.Schema({
     country: { type: String, trim: true, default: 'USA' }
 }, { _id: false });
 
-// --- Sub-schema for Enterprise Notes ---
+// --- Sub-schema for V2 Notes ---
 const noteSchema = new mongoose.Schema({
     _id: { type: ObjectId, default: () => new mongoose.Types.ObjectId() },
     id: { type: String, required: true }, // Frontend ID for compatibility
@@ -235,7 +235,7 @@ const companySchema = new mongoose.Schema({
         }
     },
     
-    // V2 DELETED: Legacy enterpriseAgent field - using aiAgentLogic system only
+    // V2 DELETED: Legacy v2Agent field - using aiAgentLogic system only
     // Legacy personalityResponses field removed - using aiAgentLogic.responseCategories instead
     learningSettings: { type: learningSettingsSchema, default: () => ({}) },
     
@@ -376,11 +376,11 @@ const companySchema = new mongoose.Schema({
             }
         },
         
-        // V2 DELETED: Legacy conversationFlows - enterprise flow designer eliminated
+        // V2 DELETED: Legacy conversationFlows - v2 flow designer eliminated
         
-        // V2 DELETED: Legacy A/B testing framework - enterprise bloat eliminated
+        // V2 DELETED: Legacy A/B testing framework - v2 bloat eliminated
         
-        // V2 DELETED: Enterprise personalization engine - hijacking V2 system eliminated
+        // V2 DELETED: V2 personalization engine - hijacking V2 system eliminated
             enabled: { type: Boolean, default: true },
             
             // Performance metrics
@@ -784,7 +784,7 @@ const companySchema = new mongoose.Schema({
             version: { type: Number, default: 1 },
             lastUpdated: { type: Date, default: Date.now },
             isCustomized: { type: Boolean, default: false },
-            safeZoneProfile: { type: String, default: 'enterprise-professional' },
+            safeZoneProfile: { type: String, default: 'v2-professional' },
             
             // Core Personality & Voice
             corePersonality: {
@@ -1166,7 +1166,7 @@ const companySchema = new mongoose.Schema({
                 default: 0 // 0 = best quality, higher = lower latency
             },
             
-            // Enterprise Features
+            // V2 Features
             enabled: { 
                 type: Boolean, 
                 default: true 
@@ -1181,7 +1181,7 @@ const companySchema = new mongoose.Schema({
             }
         },
         
-        // V2 DELETED: Legacy HighLevel integration fields - enterprise bloat eliminated
+        // V2 DELETED: Legacy HighLevel integration fields - v2 bloat eliminated
         // V2 DELETED: Legacy googleOAuth field - using JWT-only authentication system
     notes: { type: [noteSchema], default: [] },
     
@@ -1241,7 +1241,7 @@ const companySchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// V2 DELETED: Enterprise AI Intelligence Control Center - massive legacy bloat eliminated
+// V2 DELETED: V2 AI Intelligence Control Center - massive legacy bloat eliminated
 
 // --- Middleware ---
 companySchema.pre('save', function(next) { 

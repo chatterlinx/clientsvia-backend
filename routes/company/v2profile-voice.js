@@ -1,6 +1,6 @@
 /**
  * V2 AI Voice Settings API Routes
- * Enterprise-grade ElevenLabs integration with aiAgentLogic system
+ * V2-grade ElevenLabs integration with aiAgentLogic system
  * 
  * 🎤 V2 VOICE SETTINGS - ENTERPRISE ARCHITECTURE:
  * ╔══════════════════════════════════════════════════════════════════╗
@@ -18,7 +18,7 @@
  * - NEW: company.aiAgentLogic.voiceSettings.*
  * 
  * This ensures voice settings are part of the unified AI Agent Logic
- * system with complete enterprise-grade multi-tenant isolation.
+ * system with complete v2-grade multi-tenant isolation.
  */
 
 const express = require('express');
@@ -55,7 +55,7 @@ router.get('/:companyId/v2-voice-settings', async (req, res) => {
 
         // Get voice settings from V2 aiAgentLogic system
         const voiceSettings = company.aiAgentLogic?.voiceSettings || {
-            // V2 Default Settings - Enterprise Grade
+            // V2 Default Settings - V2 Grade
             apiSource: 'clientsvia', // 'clientsvia' or 'own'
             apiKey: null, // Only used when apiSource = 'own'
             voiceId: null,
@@ -71,7 +71,7 @@ router.get('/:companyId/v2-voice-settings', async (req, res) => {
             outputFormat: 'mp3_44100_128',
             streamingLatency: 0, // 0 = best quality, higher = lower latency
             
-            // Enterprise Features
+            // V2 Features
             enabled: true,
             lastUpdated: new Date(),
             version: '2.0'
@@ -174,7 +174,7 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             outputFormat: outputFormat,
             streamingLatency: parseInt(streamingLatency),
             
-            // Enterprise Metadata
+            // V2 Metadata
             enabled: true,
             lastUpdated: new Date(),
             version: '2.0'

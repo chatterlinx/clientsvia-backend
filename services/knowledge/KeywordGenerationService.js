@@ -1,6 +1,6 @@
 /**
  * AI-Powered Keyword Generation Service
- * Enterprise-grade natural language processing for Q&A optimization
+ * V2-grade natural language processing for Q&A optimization
  * 
  * 🤖 AI AGENT ROUTING REFERENCE - KEYWORD ENGINE:
  * ╔══════════════════════════════════════════════════════════════════╗

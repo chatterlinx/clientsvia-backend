@@ -1,5 +1,5 @@
 /**
- * Enterprise Redis Session Store
+ * V2 Redis Session Store
  * Replaces in-memory storage with persistent, scalable Redis
  */
 
@@ -30,7 +30,7 @@ class RedisSessionStore {
         });
 
         this.client.on('ready', () => {
-            console.log('🔥 Redis Session Store ready for enterprise operations');
+            console.log('🔥 Redis Session Store ready for v2 operations');
         });
 
         // Connect to Redis

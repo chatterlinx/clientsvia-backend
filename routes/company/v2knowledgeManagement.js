@@ -1,7 +1,7 @@
 /**
  * 📚 KNOWLEDGE MANAGEMENT API - V2 CLEAN VERSION
  * ===============================================
- * Enterprise-grade API endpoints for managing AI agent knowledge base
+ * V2-grade API endpoints for managing AI agent knowledge base
  * Multi-tenant, Redis-cached, priority-integrated system
  * 
  * 🆕 V2 IMPROVEMENTS:
@@ -38,7 +38,7 @@ const router = express.Router();
 const Company = require('../../models/Company');
 const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
 const { authenticateJWT } = require('../../middleware/auth');
-// V2 DELETED: Legacy enterprise aiAgentCacheService - using simple Redis directly
+// V2 DELETED: Legacy v2 aiAgentCacheService - using simple Redis directly
 const { redisClient } = require('../../clients');
 const logger = require('../../utils/logger');
 const Joi = require('joi');
@@ -122,7 +122,7 @@ router.get('/:companyId/knowledge-management', authenticateJWT, async (req, res)
     try {
         logger.info(`📚 GET knowledge management request for company ${companyId}`);
 
-        // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache check (no legacy v2 cache service)
         let knowledge = null;
         try {
             const cacheKey = `company:${companyId}:knowledge`;
@@ -171,7 +171,7 @@ router.get('/:companyId/knowledge-management', authenticateJWT, async (req, res)
                 logger.info(`📚 Using default knowledge management for company ${companyId}`);
             }
 
-            // V2 SYSTEM: Simple Redis cache set (no legacy enterprise cache service)
+            // V2 SYSTEM: Simple Redis cache set (no legacy v2 cache service)
             try {
                 const cacheKey = `company:${companyId}:knowledge`;
                 await redisClient.setex(cacheKey, 1800, JSON.stringify(knowledge)); // 30 min TTL
@@ -259,7 +259,7 @@ router.put('/:companyId/knowledge-management', authenticateJWT, async (req, res)
             });
         }
 
-        // V2 SYSTEM: Simple Redis cache invalidation and update (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache invalidation and update (no legacy v2 cache service)
         try {
             const cacheKey = `company:${companyId}:knowledge`;
             await redisClient.del(cacheKey); // Invalidate old cache
@@ -357,7 +357,7 @@ router.post('/:companyId/knowledge-management/company-qna', authenticateJWT, asy
             });
         }
 
-        // V2 SYSTEM: Simple Redis cache invalidation (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache invalidation (no legacy v2 cache service)
         try {
             const cacheKey = `company:${companyId}:knowledge`;
             await redisClient.del(cacheKey);
@@ -472,7 +472,7 @@ router.put('/:companyId/knowledge-management/company-qna/:id', authenticateJWT, 
         // Find the updated entry
         const updatedQnA = company.aiAgentLogic.knowledgeManagement.companyQnA.find(qna => qna.id === id);
 
-        // V2 SYSTEM: Simple Redis cache invalidation (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache invalidation (no legacy v2 cache service)
         try {
             const cacheKey = `company:${companyId}:knowledge`;
             await redisClient.del(cacheKey);
@@ -547,7 +547,7 @@ router.delete('/:companyId/knowledge-management/company-qna/:id', authenticateJW
             });
         }
 
-        // V2 SYSTEM: Simple Redis cache invalidation (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache invalidation (no legacy v2 cache service)
         try {
             const cacheKey = `company:${companyId}:knowledge`;
             await redisClient.del(cacheKey);
@@ -650,7 +650,7 @@ router.post('/:companyId/knowledge-management/trade-qna', authenticateJWT, async
             });
         }
 
-        // V2 SYSTEM: Simple Redis cache invalidation (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache invalidation (no legacy v2 cache service)
         try {
             const cacheKey = `company:${companyId}:knowledge`;
             await redisClient.del(cacheKey);
@@ -750,7 +750,7 @@ router.put('/:companyId/knowledge-management/trade-qna/:id', authenticateJWT, as
             });
         }
 
-        // V2 SYSTEM: Simple Redis cache invalidation (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache invalidation (no legacy v2 cache service)
         try {
             const cacheKey = `company:${companyId}:knowledge`;
             await redisClient.del(cacheKey);
@@ -819,7 +819,7 @@ router.delete('/:companyId/knowledge-management/trade-qna/:id', authenticateJWT,
             });
         }
 
-        // V2 SYSTEM: Simple Redis cache invalidation (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache invalidation (no legacy v2 cache service)
         try {
             const cacheKey = `company:${companyId}:knowledge`;
             await redisClient.del(cacheKey);
@@ -878,7 +878,7 @@ router.post('/:companyId/knowledge-management/test-ai-agent', authenticateJWT, a
 
         const { query, testSources, includeInactive, showDetails } = value;
 
-        // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache check (no legacy v2 cache service)
         let knowledge = null;
         try {
             const cacheKey = `company:${companyId}:knowledge`;

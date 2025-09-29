@@ -1,6 +1,6 @@
 /**
  * Company Q&A Model with AI-Powered Keyword Generation
- * Enterprise-grade knowledge base with automatic keyword extraction
+ * V2-grade knowledge base with automatic keyword extraction
  * 
  * 🤖 AI AGENT ROUTING REFERENCE:
  * ╔══════════════════════════════════════════════════════════════════╗

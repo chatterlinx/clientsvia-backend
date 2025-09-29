@@ -1,7 +1,7 @@
 /**
  * 🎯 KNOWLEDGE SOURCE PRIORITIES API
  * ==================================
- * Enterprise-grade API endpoints for managing AI agent priority flow
+ * V2-grade API endpoints for managing AI agent priority flow
  * Multi-tenant, Redis-cached, bulletproof error handling
  * 
  * ENDPOINTS:
@@ -22,7 +22,7 @@ const express = require('express');
 const router = express.Router();
 const Company = require('../../models/Company');
 const { authenticateJWT } = require('../../middleware/auth');
-// V2 DELETED: Legacy enterprise aiAgentCacheService - using simple Redis directly
+// V2 DELETED: Legacy v2 aiAgentCacheService - using simple Redis directly
 const { redisClient } = require('../../clients');
 const logger = require('../../utils/logger');
 const Joi = require('joi');
@@ -74,7 +74,7 @@ router.get('/:companyId/knowledge-source-priorities', authenticateJWT, async (re
     try {
         logger.info(`🎯 GET priorities request for company ${companyId}`);
 
-        // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache check (no legacy v2 cache service)
         let priorities = null;
         try {
             const cacheKey = `company:${companyId}:priorities`;
@@ -106,7 +106,7 @@ router.get('/:companyId/knowledge-source-priorities', authenticateJWT, async (re
                 logger.info(`🎯 Using default priorities for company ${companyId}`);
             }
 
-            // V2 SYSTEM: Simple Redis cache set (no legacy enterprise cache service)
+            // V2 SYSTEM: Simple Redis cache set (no legacy v2 cache service)
             try {
                 const cacheKey = `company:${companyId}:priorities`;
                 await redisClient.setex(cacheKey, 3600, JSON.stringify(priorities)); // 1 hour TTL
@@ -224,7 +224,7 @@ router.put('/:companyId/knowledge-source-priorities', authenticateJWT, async (re
         }
         console.log('✅ CHECKPOINT 4: MongoDB update successful');
 
-        // V2 SYSTEM: Simple Redis cache invalidation and update (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache invalidation and update (no legacy v2 cache service)
         console.log('🔍 CHECKPOINT 5: Invalidating V2 Redis cache...');
         try {
             const cacheKey = `company:${companyId}:priorities`;
@@ -298,7 +298,7 @@ router.post('/:companyId/knowledge-source-priorities/test-flow', authenticateJWT
 
         const { query, testAllSources, showConfidenceScores, showRoutingDecisions } = value;
 
-        // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache check (no legacy v2 cache service)
         let priorities = null;
         try {
             const cacheKey = `company:${companyId}:priorities`;
@@ -422,7 +422,7 @@ router.post('/:companyId/knowledge-source-priorities/reset-defaults', authentica
             });
         }
 
-        // V2 SYSTEM: Simple Redis cache invalidation and update (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache invalidation and update (no legacy v2 cache service)
         try {
             const cacheKey = `company:${companyId}:priorities`;
             await redisClient.del(cacheKey); // Invalidate old cache

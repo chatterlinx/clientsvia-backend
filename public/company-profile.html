@@ -489,8 +489,8 @@
             transform: rotate(2deg);
         }
         
-        /* Enterprise Buttons */
-        .enterprise-btn {
+        /* V2 Buttons */
+        .v2-btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border: none;
             color: white;
@@ -500,7 +500,7 @@
             transition: all 0.3s ease;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        .enterprise-btn:hover {
+        .v2-btn:hover {
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
@@ -519,8 +519,8 @@
             }
         }
 
-        /* Enterprise Features Styling */
-        .enterprise-badge {
+        /* V2 Features Styling */
+        .v2-badge {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 2px 8px;
@@ -608,7 +608,7 @@
             padding: 16px;
         }
         
-        .enterprise-save-button {
+        .v2-save-button {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border: none;
             border-radius: 12px;
@@ -619,38 +619,38 @@
             transition: all 0.3s ease;
         }
         
-        .enterprise-save-button:hover {
+        .v2-save-button:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
         }
         
-        .tab-nav-enterprise {
+        .tab-nav-v2 {
             border-bottom: 3px solid #e2e8f0;
             background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
             border-radius: 12px 12px 0 0;
             padding: 8px;
         }
         
-        .tab-nav-enterprise .clientsvia-tab-btn {
+        .tab-nav-v2 .clientsvia-tab-btn {
             position: relative;
             margin: 0 4px;
             border-radius: 8px;
             transition: all 0.3s ease;
         }
         
-        .tab-nav-enterprise .clientsvia-tab-btn:hover {
+        .tab-nav-v2 .clientsvia-tab-btn:hover {
             background: rgba(79, 70, 229, 0.1);
             transform: translateY(-1px);
         }
         
-        .tab-nav-enterprise .clientsvia-tab-btn.active {
+        .tab-nav-v2 .clientsvia-tab-btn.active {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border-color: transparent;
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }
         
-        .enterprise-card {
+        .v2-card {
             background: white;
             border: 1px solid #e2e8f0;
             border-radius: 12px;
@@ -659,7 +659,7 @@
             transition: all 0.3s ease;
         }
         
-        .enterprise-card:hover {
+        .v2-card:hover {
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
         }
         
@@ -676,13 +676,13 @@
         .status-paused { background-color: #f59e0b; }
         .status-completed { background-color: #6b7280; }
         
-        @keyframes pulse-enterprise {
+        @keyframes pulse-v2 {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
         
-        .loading-enterprise {
-            animation: pulse-enterprise 2s infinite;
+        .loading-v2 {
+            animation: pulse-v2 2s infinite;
         }
     </style>
 </head>
@@ -1437,7 +1437,7 @@
                             <!-- AI AGENT LOGIC SECTION - PRODUCTION MULTI-TENANT AI PLATFORM               -->
                             <!-- Architecture: KnowledgeRouter → BehaviorEngine → BookingHandler → Analytics  -->
                             <!-- Multi-tenant: Company-specific settings isolated by companyId               -->
-                            <!-- Production-ready: All 7 tabs integrated for enterprise deployment           -->
+                            <!-- Production-ready: All 7 tabs integrated for v2 deployment           -->
                             <!-- ============================================================================== -->
                             
                                 <!-- V2 AI AGENT LOGIC CONTAINER -->
@@ -1717,6 +1717,51 @@
                                                                 <button id="add-company-qna-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
                                                                     <i class="fas fa-plus mr-2"></i>Add Q&A
                                                                 </button>
+                                                            </div>
+                                                            
+                                                            <!-- AI-Powered Q&A Generator -->
+                                                            <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-6 mb-6">
+                                                                <div class="flex items-center mb-4">
+                                                                    <i class="fas fa-magic text-purple-600 text-xl mr-3"></i>
+                                                                    <h5 class="text-lg font-semibold text-purple-800">AI-Powered Q&A Generator</h5>
+                                                                    <span class="ml-3 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">Smart Assistant</span>
+                                                                </div>
+                                                                <p class="text-sm text-purple-700 mb-4">Let AI create professional Q&A entries for you. Just describe what customers need to know!</p>
+                                                                
+                                                                <div class="space-y-4">
+                                                                    <!-- Business Type -->
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-purple-800 mb-2">Business Type</label>
+                                                                        <select id="ai-business-type" class="w-full px-3 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white">
+                                                                            <option value="hvac-residential">HVAC Residential Service</option>
+                                                                            <option value="hvac-commercial">HVAC Commercial Service</option>
+                                                                            <option value="plumbing">Plumbing Service</option>
+                                                                            <option value="electrical">Electrical Service</option>
+                                                                            <option value="plumbing-electrical">Plumbing + Electrical</option>
+                                                                            <option value="dental">Dental Practice</option>
+                                                                            <option value="auto-repair">Auto Repair</option>
+                                                                            <option value="general-contractor">General Contractor</option>
+                                                                            <option value="other">Other Service Business</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    
+                                                                    <!-- Description Input -->
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-purple-800 mb-2">What do customers need to know?</label>
+                                                                        <textarea id="ai-description-input" rows="3" 
+                                                                                  class="w-full px-3 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                                                                  placeholder="Example: Hours of operation 9-5 M-F and Sat 9-3pm, emergency service available 24/7, free estimates for new customers"></textarea>
+                                                                        <p class="text-xs text-purple-600 mt-1">Be specific! Include hours, services, pricing, policies, contact info, etc.</p>
+                                                                    </div>
+                                                                    
+                                                                    <!-- Generate Button -->
+                                                                    <div class="flex items-center space-x-3">
+                                                                        <button id="generate-qna-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                                                            <i class="fas fa-brain mr-2"></i>Generate Professional Q&A
+                                                                        </button>
+                                                                        <span class="text-xs text-purple-600">AI will create question, answer, and keywords</span>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                             
                                                             <!-- Search and Filter -->
@@ -2113,16 +2158,7 @@
                                                                         <p class="text-xs text-gray-500 mt-1">Keywords help match customer queries (auto-generated from question/answer)</p>
                                                                     </div>
 
-                                                                    <!-- Confidence Field -->
-                                                                    <div>
-                                                                        <label for="qna-confidence" class="block text-sm font-medium text-gray-700 mb-1">Confidence Level</label>
-                                                                        <div class="flex items-center space-x-3">
-                                                                            <input type="range" id="qna-confidence" name="confidence" min="0.1" max="1" step="0.1" value="0.8"
-                                                                                   class="flex-1">
-                                                                            <span id="qna-confidence-value" class="text-sm font-medium text-gray-600 w-12">0.8</span>
-                                                                        </div>
-                                                                        <p class="text-xs text-gray-500 mt-1">How confident should the AI be to use this answer (0.1 = low, 1.0 = high)</p>
-                                                                    </div>
+                                                                    <!-- Confidence Level removed - managed in Priority Flow Configuration only -->
                                                                 </form>
                                                             </div>
 
@@ -7804,7 +7840,7 @@ Key Metrics:
         
         // Legacy initializeTradeQnATab() function removed - using modern AI Agent Logic system
         function initializeTradeQnATab_LEGACY_REMOVED() {
-            console.log('🔧 Initializing Enterprise Trade Q&A tab...');
+            console.log('🔧 Initializing V2 Trade Q&A tab...');
             
             // Load global trade categories for selection
             loadGlobalTradeCategories();
@@ -8170,7 +8206,7 @@ Key Metrics:
                 console.log('💾 Saving selected trades for company:', companyId);
                 console.log('💾 Selected trades:', selectedTrades);
                 
-                // 🚀 PRODUCTION: Use Mongoose + Redis approach for enterprise performance
+                // 🚀 PRODUCTION: Use Mongoose + Redis approach for v2 performance
                 const response = await fetch(`/api/company/${companyId}`, {
                     method: 'PATCH',
                     headers: {
@@ -8463,7 +8499,7 @@ Key Metrics:
                                 <i class="fas fa-trash"></i>
                             </button>
                             ` : `
-                                <span class="text-xs text-purple-600 px-2 py-1 bg-purple-50 rounded" title="Global Q&As are managed in Enterprise Trade Categories">
+                                <span class="text-xs text-purple-600 px-2 py-1 bg-purple-50 rounded" title="Global Q&As are managed in V2 Trade Categories">
                                     <i class="fas fa-lock mr-1"></i>Global
                                 </span>
                             `}
@@ -9223,7 +9259,7 @@ Key Metrics:
                     button.classList.add('active');
                     button.classList.remove('border-transparent', 'text-gray-500');
                     
-                    // Use indigo for priority tab, blue for enterprise tabs
+                    // Use indigo for priority tab, blue for v2 tabs
                     if (targetTab === 'priority') {
                         button.classList.add('border-indigo-500', 'text-indigo-600', 'bg-indigo-50');
                     } else {
@@ -9243,7 +9279,7 @@ Key Metrics:
                         console.error(`❌ Content not found for tab: ${targetTab}`);
                     }
                     
-                    // ✅ PRODUCTION: Initialize specific enterprise features when tabs are activated
+                    // ✅ PRODUCTION: Initialize specific v2 features when tabs are activated
                     switch(targetTab) {
                         case 'priority':
                             // Priority tab removed - default to knowledge
@@ -10829,7 +10865,7 @@ Key Metrics:
                     }
                 };
 
-                // 🏢 [IN-HOUSE ONLY] - Enterprise Knowledge Architecture (Micro-Surgery #3B)
+                // 🏢 [IN-HOUSE ONLY] - V2 Knowledge Architecture (Micro-Surgery #3B)
                 // BUSINESS DECISION: No external LLM - only in-house knowledge sources
                 const agentSettings = {
                     useLLM: false, // 🚫 BUSINESS RULE: No external LLM allowed
@@ -10927,10 +10963,10 @@ Key Metrics:
                 }
                 
             } catch (error) {
-                console.error('❌ Enterprise error saving AI Agent Logic configuration:', error);
+                console.error('❌ V2 error saving AI Agent Logic configuration:', error);
                 showNotification(`Failed to save AI Agent Logic: ${error.message}`, 'error');
                 
-                // Additional enterprise error tracking
+                // Additional v2 error tracking
                 if (error.message.includes('Authentication')) {
                     showNotification('Session expired - please refresh and try again', 'warning');
                 } else if (error.message.includes('Access denied')) {
@@ -11830,8 +11866,8 @@ Key Metrics:
             // No dynamic initialization needed - production nodes are pre-rendered
         }
 
-        // Enhanced save function to include all enterprise features
-        async function saveEnterpriseIntelligenceSettings() {
+        // Enhanced save function to include all v2 features
+        async function saveV2IntelligenceSettings() {
             const saveButton = document.getElementById('save-intelligence-btn');
             const originalText = saveButton.innerHTML;
             
@@ -11839,8 +11875,8 @@ Key Metrics:
                 saveButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
                 saveButton.disabled = true;
 
-                // Collect all enterprise settings
-                const enterpriseSettings = {
+                // Collect all v2 settings
+                const v2Settings = {
                     // Core AI settings
                     // answerPriority: getCurrentAnswerPriority(), // REMOVED: Legacy priority flow
                     thresholds: getCurrentThresholds(),
@@ -11851,7 +11887,7 @@ Key Metrics:
                     behaviorControls: getCurrentBehaviorControls(),
                     responseCategories: getCurrentResponseCategories(),
                     
-                    // Enterprise features
+                    // V2 features
                     analytics: {
                         enabled: true,
                         realTimeUpdates: true,
@@ -11878,7 +11914,7 @@ Key Metrics:
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(enterpriseSettings)
+                    body: JSON.stringify(v2Settings)
                 });
 
                 if (!response.ok) {
@@ -11888,7 +11924,7 @@ Key Metrics:
                 const data = await response.json();
                 
                 if (data.success) {
-                    showNotification('✅ Enterprise AI settings saved successfully!', 'success');
+                    showNotification('✅ V2 AI settings saved successfully!', 'success');
                 } else {
                     throw new Error(data.error || 'Failed to save settings');
                 }
@@ -11901,8 +11937,8 @@ Key Metrics:
                 }, 2000);
                 
             } catch (error) {
-                console.error('❌ Error saving enterprise settings:', error);
-                showNotification('Failed to save enterprise settings: ' + error.message, 'error');
+                console.error('❌ Error saving v2 settings:', error);
+                showNotification('Failed to save v2 settings: ' + error.message, 'error');
                 
                 // Reset button
                 saveButton.innerHTML = originalText;
@@ -11910,9 +11946,9 @@ Key Metrics:
             }
         }
 
-        // Initialize enterprise features
-        function initializeEnterpriseFeatures() {
-            console.log('🚀 Initializing enterprise AI features...');
+        // Initialize v2 features
+        function initializeV2Features() {
+            console.log('🚀 Initializing v2 AI features...');
             
             // Set up real-time analytics refresh
             if (document.getElementById('clientsvia-analytics-content')) {
@@ -11922,14 +11958,14 @@ Key Metrics:
             
         }
 
-        // Initialize enterprise features after loading
+        // Initialize v2 features after loading
         document.addEventListener('DOMContentLoaded', function() {
             // Legacy Emergency LLM floating code removed - no longer needed with V2 system
             
-            // Initialize enterprise features after delay
+            // Initialize v2 features after delay
             setTimeout(() => {
-                initializeEnterpriseFeatures();
-                console.log('🚀 Enterprise AI features initialized');
+                initializeV2Features();
+                console.log('🚀 V2 AI features initialized');
                 
                 // V2 DELETED: Legacy LLM floating cleanup - V2 uses aiAgentLogic system
                 // fixEmergencyLLMFloating();
@@ -13044,24 +13080,24 @@ Key Metrics:
         // ===============================================
 
         /**
-         * Load enterprise AI Intelligence settings on page load
+         * Load v2 AI Intelligence settings on page load
          */
-        // V2: Legacy Enterprise AI functions removed - use modern aiAgentLogic system
-        async function loadEnterpriseAISettings_DELETED() {
+        // V2: Legacy V2 AI functions removed - use modern aiAgentLogic system
+        async function loadV2AISettings_DELETED() {
             const companyId = getCurrentCompanyId();
             if (!companyId) return;
 
             try {
-                console.log('[Enterprise AI] Loading settings for company:', companyId);
+                console.log('[V2 AI] Loading settings for company:', companyId);
                 
-                const response = await fetch(`/api/enterprise-ai/companies/${companyId}/enterprise-ai-settings`);
+                const response = await fetch(`/api/v2-ai/companies/${companyId}/v2-ai-settings`);
                 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('[Enterprise AI] Loaded settings:', data);
+                    console.log('[V2 AI] Loaded settings:', data);
                     
                     // Populate the frontend controls with the settings
-                    populateEnterpriseAIControls(data.settings);
+                    populateV2AIControls(data.settings);
                     
                     // Update trade category weights
                     if (data.tradeCategories) {
@@ -13069,42 +13105,42 @@ Key Metrics:
                     }
                     
                 } else {
-                    // Silently fall back to defaults for missing optional enterprise features
-                    console.log('[Enterprise AI] No existing settings found, using defaults');
-                    await loadEnterpriseAIDefaults();
+                    // Silently fall back to defaults for missing optional v2 features
+                    console.log('[V2 AI] No existing settings found, using defaults');
+                    await loadV2AIDefaults();
                 }
             } catch (error) {
-                // Don't log errors for optional enterprise features that may not be implemented yet
-                console.log('[Enterprise AI] Using default settings (enterprise features not available)');
-                await loadEnterpriseAIDefaults();
+                // Don't log errors for optional v2 features that may not be implemented yet
+                console.log('[V2 AI] Using default settings (v2 features not available)');
+                await loadV2AIDefaults();
             }
         }
 
         /**
-         * Load enterprise AI defaults from backend
+         * Load v2 AI defaults from backend
          */
-        async function loadEnterpriseAIDefaults_DELETED() {
+        async function loadV2AIDefaults_DELETED() {
             try {
-                const response = await fetch('/api/enterprise-ai/enterprise-ai-defaults');
+                const response = await fetch('/api/v2-ai/v2-ai-defaults');
                 const data = await response.json();
                 
                 if (data.success) {
-                    populateEnterpriseAIControls(data.defaults);
-                    console.log('[Enterprise AI] Loaded defaults successfully');
+                    populateV2AIControls(data.defaults);
+                    console.log('[V2 AI] Loaded defaults successfully');
                 }
             } catch (error) {
-                console.error('[Enterprise AI] Error loading defaults:', error);
+                console.error('[V2 AI] Error loading defaults:', error);
                 // Use hardcoded fallback defaults
-                populateEnterpriseAIControls(getHardcodedDefaults());
+                populateV2AIControls(getHardcodedDefaults());
             }
         }
 
         /**
-         * Populate enterprise AI controls with settings data
+         * Populate v2 AI controls with settings data
          */
-        function populateEnterpriseAIControls_DELETED(settings) {
+        function populateV2AIControls_DELETED(settings) {
             try {
-                console.log('[Enterprise AI] Populating controls with:', settings);
+                console.log('[V2 AI] Populating controls with:', settings);
 
                 // Composite confidence settings
                 if (settings.compositeConfidence) {
@@ -13180,10 +13216,10 @@ Key Metrics:
                     }
                 }
 
-                console.log('[Enterprise AI] Controls populated successfully');
+                console.log('[V2 AI] Controls populated successfully');
                 
             } catch (error) {
-                console.error('[Enterprise AI] Error populating controls:', error);
+                console.error('[V2 AI] Error populating controls:', error);
             }
         }
 
@@ -13235,34 +13271,34 @@ Key Metrics:
         }
 
         /**
-         * Save enterprise AI Intelligence settings
+         * Save v2 AI Intelligence settings
          */
-        async function saveEnterpriseAI_DELETED() {
+        async function saveV2AI_DELETED() {
             const companyId = getCurrentCompanyId();
             if (!companyId) {
-                console.error('[Enterprise AI] No company ID found');
+                console.error('[V2 AI] No company ID found');
                 return;
             }
 
             try {
                 // Show saving state
-                // V2: Legacy Enterprise AI button removed
+                // V2: Legacy V2 AI button removed
                 const originalText = button.innerHTML;
                 button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Deploying...';
                 button.disabled = true;
 
-                // Collect all enterprise AI settings
-                const enterpriseSettings = collectEnterpriseAISettings();
+                // Collect all v2 AI settings
+                const v2Settings = collectV2AISettings();
                 
-                console.log('[Enterprise AI] Saving settings:', enterpriseSettings);
+                console.log('[V2 AI] Saving settings:', v2Settings);
 
-                const response = await fetch(`/api/enterprise-ai/companies/${companyId}/enterprise-ai-settings`, {
+                const response = await fetch(`/api/v2-ai/companies/${companyId}/v2-ai-settings`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        enterpriseAISettings: enterpriseSettings
+                        v2AISettings: v2Settings
                     })
                 });
 
@@ -13274,13 +13310,13 @@ Key Metrics:
                     button.classList.add('bg-green-600', 'hover:bg-green-700');
                     
                     // Show success indicator
-                    const indicator = document.getElementById('enterprise-ai-saved');
+                    const indicator = document.getElementById('v2-ai-saved');
                     if (indicator) {
                         indicator.classList.remove('hidden');
                         setTimeout(() => indicator.classList.add('hidden'), 3000);
                     }
                     
-                    console.log('[Enterprise AI] Settings saved successfully');
+                    console.log('[V2 AI] Settings saved successfully');
                     
                     // Reset button after delay
                     setTimeout(() => {
@@ -13295,9 +13331,9 @@ Key Metrics:
                 }
 
             } catch (error) {
-                console.error('[Enterprise AI] Error saving settings:', error);
+                console.error('[V2 AI] Error saving settings:', error);
                 
-                // V2: Legacy Enterprise AI button removed
+                // V2: Legacy V2 AI button removed
                 button.innerHTML = '<i class="fas fa-times mr-2"></i>Error - Try Again';
                 button.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
                 button.classList.add('bg-red-600', 'hover:bg-red-700');
@@ -13306,9 +13342,9 @@ Key Metrics:
         }
 
         /**
-         * Collect all enterprise AI settings from the form
+         * Collect all v2 AI settings from the form
          */
-        function collectEnterpriseAISettings_DELETED() {
+        function collectV2AISettings_DELETED() {
             return {
                 compositeConfidence: {
                     knowledgeWeights: {
@@ -13351,7 +13387,7 @@ Key Metrics:
                     piiDetectionEnabled: true,
                     maskSensitiveData: true
                 },
-                enterpriseFeatures: {
+                v2Features: {
                     enableDetailedLogging: true,
                     enablePerformanceMetrics: true,
                     enableCostTracking: true,
@@ -13385,10 +13421,10 @@ Key Metrics:
         }
 
         /**
-         * Reset enterprise AI to defaults
+         * Reset v2 AI to defaults
          */
-        async function resetEnterpriseAI_DELETED() {
-            if (!confirm('Reset all Enterprise AI settings to production defaults? This cannot be undone.')) {
+        async function resetV2AI_DELETED() {
+            if (!confirm('Reset all V2 AI settings to production defaults? This cannot be undone.')) {
                 return;
             }
 
@@ -13396,7 +13432,7 @@ Key Metrics:
             if (!companyId) return;
 
             try {
-                const response = await fetch(`/api/enterprise-ai/companies/${companyId}/reset-enterprise-ai`, {
+                const response = await fetch(`/api/v2-ai/companies/${companyId}/reset-v2-ai`, {
                     method: 'POST'
                 });
 
@@ -13404,22 +13440,22 @@ Key Metrics:
 
                 if (data.success) {
                     // Reload the settings
-                    // V2: Legacy Enterprise AI reload removed
-                    console.log('[Enterprise AI] Reset to defaults successfully');
+                    // V2: Legacy V2 AI reload removed
+                    console.log('[V2 AI] Reset to defaults successfully');
                     
                     // Show notification
                     if (typeof showNotification === 'function') {
-                        showNotification('Enterprise AI settings reset to production defaults', 'success');
+                        showNotification('V2 AI settings reset to production defaults', 'success');
                     }
                 } else {
                     throw new Error(data.error || 'Failed to reset settings');
                 }
 
             } catch (error) {
-                console.error('[Enterprise AI] Error resetting to defaults:', error);
+                console.error('[V2 AI] Error resetting to defaults:', error);
                 
                 if (typeof showNotification === 'function') {
-                    showNotification('Failed to reset Enterprise AI settings', 'error');
+                    showNotification('Failed to reset V2 AI settings', 'error');
                 }
             }
         }
@@ -13429,7 +13465,7 @@ Key Metrics:
          */
         async function exportAIConfig() {
             try {
-                const settings = collectEnterpriseAISettings();
+                const settings = collectV2AISettings();
                 const configJSON = JSON.stringify(settings, null, 2);
                 
                 // Create and download file
@@ -13437,16 +13473,16 @@ Key Metrics:
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `enterprise-ai-config-${new Date().toISOString().split('T')[0]}.json`;
+                a.download = `v2-ai-config-${new Date().toISOString().split('T')[0]}.json`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
                 
-                console.log('[Enterprise AI] Configuration exported successfully');
+                console.log('[V2 AI] Configuration exported successfully');
                 
             } catch (error) {
-                console.error('[Enterprise AI] Error exporting config:', error);
+                console.error('[V2 AI] Error exporting config:', error);
             }
         }
 
@@ -13526,12 +13562,12 @@ Key Metrics:
         // 🚀 INITIALIZE ENTERPRISE AI ON PAGE LOAD
         // ===============================================
 
-        // Add enterprise AI initialization to the existing page load
+        // Add v2 AI initialization to the existing page load
         document.addEventListener('DOMContentLoaded', function() {
-            // V2: Legacy Enterprise AI initialization removed - use modern aiAgentLogic system
+            // V2: Legacy V2 AI initialization removed - use modern aiAgentLogic system
         });
 
-        function initializeEnterpriseAIListeners_DELETED() {
+        function initializeV2AIListeners_DELETED() {
             // Knowledge weight sliders
             ['kb-company-weight', 'kb-clientsvia-weight', 'llm-fallback-weight', 'composite-threshold'].forEach(id => {
                 const slider = document.getElementById(id);
@@ -13725,7 +13761,7 @@ Key Metrics:
         // ========================================
         
         // V2: Legacy booking flow system removed - use Calendar Settings
-        let enterpriseBookingFlow_DELETED = {
+        let v2BookingFlow_DELETED = {
             companyID: window.currentCompanyID || '',
             tradeCategory: '',
             serviceType: '',
@@ -13761,7 +13797,7 @@ Key Metrics:
             ]
         };
 
-        function addEnterpriseBookingField() {
+        function addV2BookingField() {
             const fieldName = document.getElementById('new-field-name').value.trim();
             const fieldPrompt = document.getElementById('new-field-prompt').value.trim();
             const fieldType = document.getElementById('new-field-type').value;
@@ -13780,7 +13816,7 @@ Key Metrics:
             }
 
             const newStep = {
-                step: enterpriseBookingFlow.flowSteps.length + 1,
+                step: v2BookingFlow.flowSteps.length + 1,
                 field: fieldName,
                 prompt: fieldPrompt,
                 type: fieldType,
@@ -13800,10 +13836,10 @@ Key Metrics:
 
         // V2: Legacy booking flow removed - use modern Calendar Settings
         function updateBookingFlowTable_DELETED() {
-            // V2: DOM element 'enterprise-booking-flow-body' no longer exists
+            // V2: DOM element 'v2-booking-flow-body' no longer exists
             return;
 
-            enterpriseBookingFlow.flowSteps.forEach((step, index) => {
+            v2BookingFlow.flowSteps.forEach((step, index) => {
                 const isSystemDefault = ['customerName', 'phoneNumber', 'serviceAddress'].includes(step.field);
                 const validationClass = step.validation === 'required' ? 'bg-red-100 text-red-800' : 
                                        step.validation === 'optional' ? 'bg-gray-100 text-gray-800' :
@@ -13837,10 +13873,10 @@ Key Metrics:
                 return;
             }
 
-            enterpriseBookingFlow.flowSteps = enterpriseBookingFlow.flowSteps.filter(step => step.field !== fieldName);
+            v2BookingFlow.flowSteps = v2BookingFlow.flowSteps.filter(step => step.field !== fieldName);
             
             // Renumber steps
-            enterpriseBookingFlow.flowSteps.forEach((step, index) => {
+            v2BookingFlow.flowSteps.forEach((step, index) => {
                 step.step = index + 1;
             });
 
@@ -13854,7 +13890,7 @@ Key Metrics:
             
             const preview = document.getElementById('booking-schema-preview');
             const schema = {
-                companyID: enterpriseBookingFlow_DELETED.companyID || '{{companyID}}',
+                companyID: v2BookingFlow_DELETED.companyID || '{{companyID}}',
                 tradeCategory: document.getElementById('booking-trade-category').value || 'HVAC',
                 serviceType: document.getElementById('booking-service-type').value || 'Emergency',
                 sessionTTL: parseInt(document.getElementById('booking-session-ttl').value) || 24,
@@ -13863,10 +13899,10 @@ Key Metrics:
                 idempotencyKey: document.getElementById('booking-idempotency').checked ? '{{auto-generated}}' : false,
                 validation: document.getElementById('booking-validation').checked,
                 auditLog: document.getElementById('booking-audit-log').checked,
-                requiredFields: enterpriseBookingFlow.flowSteps
+                requiredFields: v2BookingFlow.flowSteps
                     .filter(step => step.validation === 'required')
                     .map(step => step.field),
-                flowSteps: enterpriseBookingFlow.flowSteps.map(step => ({
+                flowSteps: v2BookingFlow.flowSteps.map(step => ({
                     step: step.step,
                     field: step.field,
                     prompt: step.prompt,
@@ -13912,14 +13948,14 @@ Key Metrics:
 
             if (template) {
                 // Remove non-system fields
-                enterpriseBookingFlow.flowSteps = enterpriseBookingFlow.flowSteps.filter(step => 
+                v2BookingFlow.flowSteps = v2BookingFlow.flowSteps.filter(step => 
                     ['customerName', 'phoneNumber', 'serviceAddress'].includes(step.field)
                 );
 
                 // Add template fields
                 template.forEach((templateField, index) => {
-                    enterpriseBookingFlow.flowSteps.push({
-                        step: enterpriseBookingFlow.flowSteps.length + 1,
+                    v2BookingFlow.flowSteps.push({
+                        step: v2BookingFlow.flowSteps.length + 1,
                         ...templateField
                     });
                 });
@@ -13942,11 +13978,11 @@ Key Metrics:
                 errors.push('Service type is required');
             }
 
-            if (enterpriseBookingFlow.flowSteps.length < 3) {
+            if (v2BookingFlow.flowSteps.length < 3) {
                 errors.push('At least 3 fields are required (including system defaults)');
             }
 
-            const requiredFields = enterpriseBookingFlow.flowSteps.filter(step => step.validation === 'required');
+            const requiredFields = v2BookingFlow.flowSteps.filter(step => step.validation === 'required');
             if (requiredFields.length === 0) {
                 errors.push('At least one required field must be defined');
             }
@@ -13962,7 +13998,7 @@ Key Metrics:
 
         function resetBookingFlow_DELETED() {
             if (confirm('Reset to default booking flow? This will remove all custom fields.')) {
-                enterpriseBookingFlow.flowSteps = [
+                v2BookingFlow.flowSteps = [
                     {
                         step: 1,
                         field: 'customerName',
@@ -14006,13 +14042,13 @@ Key Metrics:
             });
         }
 
-        async function saveEnterpriseBookingFlow_DELETED() {
+        async function saveV2BookingFlow_DELETED() {
             if (!validateBookingFlow()) {
                 return;
             }
 
             const schema = {
-                companyID: enterpriseBookingFlow.companyID || window.currentCompanyID,
+                companyID: v2BookingFlow.companyID || window.currentCompanyID,
                 tradeCategory: document.getElementById('booking-trade-category').value,
                 serviceType: document.getElementById('booking-service-type').value,
                 sessionTTL: parseInt(document.getElementById('booking-session-ttl').value),
@@ -14021,16 +14057,16 @@ Key Metrics:
                 idempotencyKey: document.getElementById('booking-idempotency').checked,
                 validation: document.getElementById('booking-validation').checked,
                 auditLog: document.getElementById('booking-audit-log').checked,
-                requiredFields: enterpriseBookingFlow.flowSteps
+                requiredFields: v2BookingFlow.flowSteps
                     .filter(step => step.validation === 'required')
                     .map(step => step.field),
-                flowSteps: enterpriseBookingFlow.flowSteps,
+                flowSteps: v2BookingFlow.flowSteps,
                 createdAt: new Date().toISOString(),
                 version: '1.0.0'
             };
 
             try {
-                const response = await fetch('/api/booking/enterprise-schema', {
+                const response = await fetch('/api/booking/v2-schema', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -14042,21 +14078,21 @@ Key Metrics:
                     const result = await response.json();
                     
                     // Show success message
-                    document.getElementById('enterprise-booking-saved').classList.remove('hidden');
+                    document.getElementById('v2-booking-saved').classList.remove('hidden');
                     setTimeout(() => {
-                        document.getElementById('enterprise-booking-saved').classList.add('hidden');
+                        document.getElementById('v2-booking-saved').classList.add('hidden');
                     }, 3000);
                 } else {
                     const error = await response.json();
                     alert('Error saving booking flow: ' + (error.message || 'Unknown error'));
                 }
             } catch (error) {
-                console.error('Error saving enterprise booking flow:', error);
+                console.error('Error saving v2 booking flow:', error);
                 alert('Failed to save booking flow. Please try again.');
             }
         }
 
-        // Initialize enterprise booking flow on page load
+        // Initialize v2 booking flow on page load
         document.addEventListener('DOMContentLoaded', function() {
             // Set up event listeners for real-time schema updates
             ['booking-trade-category', 'booking-service-type', 'booking-session-ttl', 'booking-priority'].forEach(id => {
@@ -14196,7 +14232,7 @@ Key Metrics:
 
     // ============================================================================
     // KNOWLEDGE SOURCE PRIORITIES MANAGEMENT SYSTEM - PHASE 3.1
-    // 📋 DESCRIPTION: Enterprise-grade drag & drop priority management with real-time testing
+    // 📋 DESCRIPTION: V2-grade drag & drop priority management with real-time testing
     // 🎯 PURPOSE: Configure AI agent's knowledge source routing priorities and thresholds
     // 🔧 FEATURES: Drag & drop reordering, threshold sliders, enable/disable toggles, real-time testing
     // 📝 FUTURE EXPANSION: A/B testing, analytics dashboard, custom knowledge sources, ML optimization
@@ -15334,7 +15370,7 @@ Key Metrics:
 
     // ============================================================================
     // KNOWLEDGE MANAGEMENT SYSTEM - PHASE 3.2
-    // 📋 DESCRIPTION: Enterprise-grade knowledge base management with 4 sub-systems
+    // 📋 DESCRIPTION: V2-grade knowledge base management with 4 sub-systems
     // 🎯 PURPOSE: Complete CRUD operations for all AI agent knowledge sources
     // 🔧 FEATURES: 
     //     - Company Q&A: Business-specific questions with search/filter/categories

@@ -1,7 +1,7 @@
 /**
  * 🔍 AI AGENT MONITORING & DIAGNOSTICS API
  * =======================================
- * Enterprise-grade monitoring endpoints for AI agent system health
+ * V2-grade monitoring endpoints for AI agent system health
  * Real-time diagnostics, performance metrics, and failure detection
  * 
  * ENDPOINTS:
@@ -26,7 +26,7 @@ const router = express.Router();
 const Company = require('../../models/Company');
 const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
 const { authenticateJWT } = require('../../middleware/auth');
-// V2 DELETED: Legacy enterprise aiAgentCacheService - using simple Redis directly
+// V2 DELETED: Legacy v2 aiAgentCacheService - using simple Redis directly
 const { redisClient } = require('../../clients');
 const PriorityDrivenKnowledgeRouter = require('../../services/priorityDrivenKnowledgeRouter');
 const logger = require('../../utils/logger');
@@ -84,7 +84,7 @@ router.get('/health/:companyId', authenticateJWT, async (req, res) => {
 
         // 2. Redis Cache Health
         try {
-            // V2 SYSTEM: Simple Redis cache test (no legacy enterprise cache service)
+            // V2 SYSTEM: Simple Redis cache test (no legacy v2 cache service)
             let cacheTest = null;
             try {
                 const testKey = `health:test:${companyId}`;
@@ -257,7 +257,7 @@ router.get('/metrics/:companyId', authenticateJWT, async (req, res) => {
     try {
         // Get cached performance metrics
         const cacheKey = `metrics:${companyId}`;
-        // V2 SYSTEM: Simple Redis cache check (no legacy enterprise cache service)
+        // V2 SYSTEM: Simple Redis cache check (no legacy v2 cache service)
         let metrics = null;
         try {
             const cached = await redisClient.get(cacheKey);
@@ -296,7 +296,7 @@ router.get('/metrics/:companyId', authenticateJWT, async (req, res) => {
             };
             
             // Cache for 5 minutes
-            // V2 SYSTEM: Simple Redis cache set (no legacy enterprise cache service)
+            // V2 SYSTEM: Simple Redis cache set (no legacy v2 cache service)
             try {
                 await redisClient.setex(cacheKey, 300, JSON.stringify(metrics));
             } catch (error) {
@@ -428,7 +428,7 @@ router.get('/diagnostics/:companyId', authenticateJWT, async (req, res) => {
         let retrieved = null;
         try {
             const testKey = `diagnostic:${companyId}:${Date.now()}`;
-            // V2 SYSTEM: Simple Redis cache test (no legacy enterprise cache service)
+            // V2 SYSTEM: Simple Redis cache test (no legacy v2 cache service)
             try {
                 await redisClient.setex(testKey, 60, JSON.stringify({ test: true }));
                 const cached = await redisClient.get(testKey);

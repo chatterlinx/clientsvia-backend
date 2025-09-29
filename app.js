@@ -38,11 +38,11 @@ const bookingRoutes = require('./routes/booking');
 const transferRoutes = require('./routes/transfer');
 const notesRoutes = require('./routes/notes'); // GOLD STANDARD: V2 Notes API
 
-// V2 DELETED: Legacy enterprise routes - using V2 AI Agent Logic system
+// V2 DELETED: Legacy v2 routes - using V2 AI Agent Logic system
 // const knowledgeLifecycleRoutes = require('./routes/knowledgeLifecycle');
-// const enterpriseAnalyticsRoutes = require('./routes/enterpriseAnalytics');
+// const v2AnalyticsRoutes = require('./routes/v2Analytics');
 
-// DELETED: Legacy Enterprise Trade Categories - replaced by V2 Global Trade Categories system
+// DELETED: Legacy V2 Trade Categories - replaced by V2 Global Trade Categories system
 
 // V2 DELETED: Legacy agentSettings routes - using V2 AI Agent Logic system
 
@@ -146,7 +146,7 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 app.use('/api/auth', authRoutes);
 
-// 🚀 V2 KNOWLEDGE MANAGEMENT ROUTES - Enterprise Multi-Tenant Platform
+// 🚀 V2 KNOWLEDGE MANAGEMENT ROUTES - V2 Multi-Tenant Platform
 // CRITICAL: Must be mounted BEFORE main company routes to avoid route conflicts
 try {
     const v2KnowledgeManagementRoutes = require('./routes/company/v2knowledgeManagement');
@@ -176,27 +176,27 @@ app.use('/api/event-hooks', eventHooksRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/qna-learning', qnaLearningRoutes);
 
-// V2 DELETED: Legacy Enterprise AI Intelligence routes - using V2 AI Agent Logic system
-// let enterpriseAIIntelligenceRoutes;
+// V2 DELETED: Legacy V2 AI Intelligence routes - using V2 AI Agent Logic system
+// let v2AIIntelligenceRoutes;
 // try {
-//   enterpriseAIIntelligenceRoutes = require('./routes/enterpriseAIIntelligence');
-//   app.use('/api/enterprise-ai', enterpriseAIIntelligenceRoutes);
+//   v2AIIntelligenceRoutes = require('./routes/v2AIIntelligence');
+//   app.use('/api/v2-ai', v2AIIntelligenceRoutes);
 // } catch (error) {
-//   console.error('Failed to load Enterprise AI Intelligence routes:', error.message);
+//   console.error('Failed to load V2 AI Intelligence routes:', error.message);
 //   process.exit(1);
 // }
 
-// V2 DELETED: Legacy Enterprise Knowledge Lifecycle Management - using V2 AI Agent Logic system
+// V2 DELETED: Legacy V2 Knowledge Lifecycle Management - using V2 AI Agent Logic system
 // app.use('/api/knowledge-lifecycle', knowledgeLifecycleRoutes);
 
 // 🚀 V2 PURE SYSTEM: Legacy knowledge routes ELIMINATED - using V2 Knowledge Management only
 // V2 Knowledge Management handles ALL knowledge operations through /api/company endpoints
 console.log('✅ V2 PURE SYSTEM: Legacy knowledge routes eliminated - V2 Knowledge Management active');
 
-// V2 DELETED: Legacy Enterprise Analytics and Reporting - using V2 AI Agent Logic system
-// app.use('/api/enterprise-analytics', enterpriseAnalyticsRoutes);
+// V2 DELETED: Legacy V2 Analytics and Reporting - using V2 AI Agent Logic system
+// app.use('/api/v2-analytics', v2AnalyticsRoutes);
 
-// DELETED: Legacy Enterprise Trade Categories route - replaced by V2 Global Trade Categories system
+// DELETED: Legacy V2 Trade Categories route - replaced by V2 Global Trade Categories system
 
 // Company Q&A Seeding (Production Testing)
 // V2 DELETED: Legacy seed-company-qna-production routes - using V2 Knowledge Management system
@@ -208,7 +208,7 @@ const contactLookupRoutes = require('./routes/contactLookup');
 app.use('/api/contact-lookup', contactLookupRoutes);
 console.log('✅ Contact Lookup routes registered at /api/contact-lookup');
 
-// CRM Management System for Enterprise Contact Management
+// CRM Management System for V2 Contact Management
 console.log('🔍 About to load CRM Management routes...');
 try {
     const crmManagementRoutes = require('./routes/crmManagement');
@@ -244,7 +244,7 @@ try {
     console.log('ℹ️ AI Agent Logic Simple routes not found (optional)');
 }
 
-// 🚀 V2 GLOBAL SYSTEM ROUTES - Enterprise Multi-Tenant Platform
+// 🚀 V2 GLOBAL SYSTEM ROUTES - V2 Multi-Tenant Platform
 try {
     const v2GlobalTradeCategories = require('./routes/v2global/v2global-tradecategories');
     app.use('/api/v2global/trade-categories', v2GlobalTradeCategories);

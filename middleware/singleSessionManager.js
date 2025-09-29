@@ -1,5 +1,5 @@
 /**
- * Enterprise Single Session Security Manager
+ * V2 Single Session Security Manager
  * Top-notch security with Redis, GeoIP, Hardware ID, and Forced Re-auth
  */
 
@@ -9,9 +9,9 @@ const RedisSessionStore = require('./redisSessionStore');
 const GeoIPSecurityService = require('./geoIPSecurityService');
 const HardwareIDSecurityService = require('./hardwareIDSecurityService');
 
-class EnterpriseSingleSessionManager {
+class V2SingleSessionManager {
     constructor() {
-        // Enterprise components
+        // V2 components
         this.redisStore = new RedisSessionStore();
         this.geoIPService = new GeoIPSecurityService();
         this.hardwareService = new HardwareIDSecurityService();
@@ -25,11 +25,11 @@ class EnterpriseSingleSessionManager {
         // Rate limiting
         this.loginAttempts = new Map();
         
-        console.log('🛡️ Enterprise Single Session Manager initialized');
+        console.log('🛡️ V2 Single Session Manager initialized');
     }
 
     /**
-     * Create enterprise session with full security validation
+     * Create v2 session with full security validation
      */
     async createSession(userId, deviceInfo = {}) {
         try {
@@ -115,7 +115,7 @@ class EnterpriseSingleSessionManager {
                 securityLevel: sessionData.securityLevel
             });
 
-            console.log(`🔐 Enterprise session created for ${userId}: ${sessionId}`);
+            console.log(`🔐 V2 session created for ${userId}: ${sessionId}`);
             console.log(`📍 Location: ${geoValidation.location.city}, ${geoValidation.location.country} (${geoValidation.risk} risk)`);
             console.log(`🖥️ Device: ${enhancedFingerprint.substring(0, 10)}... (Security Level: ${sessionData.securityLevel})`);
             console.log(`💀 Killed ${killedCount} existing sessions`);
@@ -123,13 +123,13 @@ class EnterpriseSingleSessionManager {
             return { token, sessionId, sessionData, geoValidation };
 
         } catch (error) {
-            console.error('Enterprise session creation failed:', error);
+            console.error('V2 session creation failed:', error);
             throw error;
         }
     }
 
     /**
-     * Enterprise session validation with forced re-auth check
+     * V2 session validation with forced re-auth check
      */
     async validateSession(token) {
         try {
@@ -253,7 +253,7 @@ class EnterpriseSingleSessionManager {
     }
 
     /**
-     * Get enterprise session analytics
+     * Get v2 session analytics
      */
     async getSessionAnalytics() {
         const sessions = await this.redisStore.getAllActiveSessions();
@@ -366,7 +366,7 @@ class EnterpriseSingleSessionManager {
 }
 
 // Singleton instance
-const sessionManager = new EnterpriseSingleSessionManager();
+const sessionManager = new V2SingleSessionManager();
 
 // Cleanup expired sessions every 30 minutes
 setInterval(() => {

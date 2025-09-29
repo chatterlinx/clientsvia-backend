@@ -1,5 +1,5 @@
 /**
- * V2 GLOBAL TRADE CATEGORIES ROUTES - Enterprise Trade Management
+ * V2 GLOBAL TRADE CATEGORIES ROUTES - V2 Trade Management
  * 
  * V2 GLOBAL TRADE CATEGORIES - ENTERPRISE ARCHITECTURE:
  * ╔══════════════════════════════════════════════════════════════════╗
@@ -937,7 +937,7 @@ router.delete('/categories/:categoryId/qna/:qnaId', async (req, res) => {
 });
 
 /**
- * 🤖 AUTO-GENERATE TOP 20 Q&As - V2 Enterprise Feature
+ * 🤖 AUTO-GENERATE TOP 20 Q&As - V2 V2 Feature
  * Generate industry-specific, booking-focused Q&As for trade categories
  */
 router.post('/categories/:categoryId/generate-top-qnas', async (req, res) => {
