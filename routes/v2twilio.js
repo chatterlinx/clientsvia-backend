@@ -16,7 +16,7 @@ const { initializeCall, processUserInput } = require('../services/v2AIAgentRunti
 const CompanyKnowledgeQnA = require('../models/knowledge/CompanyQnA');
 const fs = require('fs');
 const path = require('path');
-const { synthesizeSpeech } = require('../services/elevenLabsService');
+const { synthesizeSpeech } = require('../services/v2elevenLabsService');
 const { redisClient } = require('../clients');
 const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils/phone');
 const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
@@ -1023,7 +1023,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           console.log(`🎤 V2 ELEVENLABS: Using voice ${elevenLabsVoice} for response`);
           
           // Generate ElevenLabs audio
-          const { synthesizeSpeech } = require('../services/elevenLabsService');
+          const { synthesizeSpeech } = require('../services/v2elevenLabsService');
           const audioBuffer = await synthesizeSpeech({
             text: responseText,
             voiceId: elevenLabsVoice,

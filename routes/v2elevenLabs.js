@@ -10,7 +10,7 @@ const {
   generateStaticPrompt,
   getUserInfo,
   getMockVoices
-} = require('../services/elevenLabsService');
+} = require('../services/v2elevenLabsService');
 
 /**
  * GET /api/elevenlabs/voices - Get all available voices

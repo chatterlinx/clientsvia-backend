@@ -1,5 +1,5 @@
 const express = require('express');
-const { getAvailableVoices } = require('../services/elevenLabsService');
+const { getAvailableVoices } = require('../services/v2elevenLabsService');
 const router = express.Router();
 const { getDB } = require('../db');
 const { ObjectId } = require('mongodb');

@@ -2,7 +2,8 @@
 // Enhanced Event Hook System for AI Agent Logic
 // Spartan Coder - Gold Standard Implementation
 
-const NotificationService = require('../services/notificationService');
+// V2 DELETED: NotificationService not in V2 system
+// const NotificationService = require('../services/notificationService');
 const NotificationLog = require('../models/v2NotificationLog');
 const templates = require('../config/messageTemplates.json');
 const smsClient = require('../clients/smsClient');
