@@ -18364,8 +18364,19 @@ Key Metrics:
                 saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...';
                 saveBtn.disabled = true;
                 
-                // Save to database
-                console.log('🔍 Saving Q&A to database:', { question, answer, keywords, companyId: this.companyId });
+                // Save to database with DEEP DEBUGGING
+                console.log('🔍 CHECKPOINT 1: Starting Q&A save process');
+                console.log('🔍 CHECKPOINT 2: Save data:', { question, answer, keywords, companyId: this.companyId });
+                console.log('🔍 CHECKPOINT 3: Auth token available:', !!getUniversalAuthToken());
+                console.log('🔍 CHECKPOINT 4: Save endpoint:', `/api/company/${this.companyId}/knowledge-management/company-qna`);
+                
+                const savePayload = {
+                    question,
+                    answer,
+                    keywords,
+                    status: 'active'
+                };
+                console.log('🔍 CHECKPOINT 5: Save payload:', JSON.stringify(savePayload, null, 2));
                 
                 const response = await fetch(`/api/company/${this.companyId}/knowledge-management/company-qna`, {
                     method: 'POST',
@@ -18373,24 +18384,26 @@ Key Metrics:
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${getUniversalAuthToken()}`
                     },
-                    body: JSON.stringify({
-                        question,
-                        answer,
-                        keywords,
-                        status: 'active'
-                    })
+                    body: JSON.stringify(savePayload)
                 });
                 
-                console.log('🔍 Q&A Save Response Status:', response.status);
+                console.log('🔍 CHECKPOINT 6: Response received - Status:', response.status);
+                console.log('🔍 CHECKPOINT 7: Response OK:', response.ok);
+                console.log('🔍 CHECKPOINT 8: Response headers:', Object.fromEntries(response.headers.entries()));
                 
                 if (!response.ok) {
+                    console.log('🔍 CHECKPOINT 9: Response NOT OK - Error occurred');
                     const errorData = await response.text();
-                    console.error('🔍 Q&A Save Error Response:', errorData);
+                    console.error('🔍 CHECKPOINT 10: Error response body:', errorData);
                     throw new Error(`Failed to save Q&A: ${response.status} - ${errorData}`);
                 }
                 
+                console.log('🔍 CHECKPOINT 11: Response OK - Parsing JSON');
                 const responseData = await response.json();
-                console.log('🔍 Q&A Save Success Response:', responseData);
+                console.log('🔍 CHECKPOINT 12: Full response data:', JSON.stringify(responseData, null, 2));
+                console.log('🔍 CHECKPOINT 13: Response success flag:', responseData.success);
+                console.log('🔍 CHECKPOINT 14: Response data field:', responseData.data);
+                console.log('🔍 CHECKPOINT 15: Response message:', responseData.message);
                 
                 // Show success and remove from generated list
                 this.showSuccessMessage('Q&A saved successfully!');
@@ -18403,8 +18416,10 @@ Key Metrics:
                 }
                 
                 // ✅ RE-ENABLED: Reload saved Q&A entries (V2 system is now clean)
-                console.log('🔄 Q&A saved successfully - reloading saved entries');
+                console.log('🔍 CHECKPOINT 16: Q&A saved successfully - starting reload process');
+                console.log('🔍 CHECKPOINT 17: About to call loadAndDisplaySavedQnA()');
                 await this.loadAndDisplaySavedQnA();
+                console.log('🔍 CHECKPOINT 18: loadAndDisplaySavedQnA() completed');
                 
             } catch (error) {
                 console.error('❌ Error saving Q&A:', error);
@@ -18443,9 +18458,12 @@ Key Metrics:
          * Replaces legacy embedded system with clean CompanyKnowledgeQnA collection
          */
         async loadAndDisplaySavedQnA() {
-            console.log('✅ CLEAN SYSTEM: Loading saved Q&A from standalone collection');
+            console.log('🔍 LOAD CHECKPOINT 1: Starting loadAndDisplaySavedQnA()');
+            console.log('🔍 LOAD CHECKPOINT 2: Company ID:', this.companyId);
+            console.log('🔍 LOAD CHECKPOINT 3: Auth token available:', !!getUniversalAuthToken());
             
             try {
+                console.log('🔍 LOAD CHECKPOINT 4: Making GET request to load saved Q&As');
                 const response = await fetch(`/api/company/${this.companyId}/knowledge-management/company-qna`, {
                     method: 'GET',
                     headers: {
@@ -18453,22 +18471,35 @@ Key Metrics:
                     }
                 });
 
+                console.log('🔍 LOAD CHECKPOINT 5: Load response status:', response.status);
+                console.log('🔍 LOAD CHECKPOINT 6: Load response OK:', response.ok);
+
                 if (!response.ok) {
-                    console.log('ℹ️ No saved Q&A entries found or error loading');
+                    console.log('🔍 LOAD CHECKPOINT 7: Response not OK - no saved entries or error');
+                    const errorText = await response.text();
+                    console.log('🔍 LOAD CHECKPOINT 8: Error response:', errorText);
                     return;
                 }
 
+                console.log('🔍 LOAD CHECKPOINT 9: Parsing JSON response');
                 const data = await response.json();
-                const savedQnAs = data.data || [];
+                console.log('🔍 LOAD CHECKPOINT 10: Full load response:', JSON.stringify(data, null, 2));
                 
-                console.log('✅ CLEAN SYSTEM: Loaded saved Q&A entries:', savedQnAs.length);
+                const savedQnAs = data.data || [];
+                console.log('🔍 LOAD CHECKPOINT 11: Extracted saved Q&As array:', savedQnAs.length, 'entries');
+                console.log('🔍 LOAD CHECKPOINT 12: First saved Q&A (if any):', savedQnAs[0]);
                 
                 if (savedQnAs.length > 0) {
+                    console.log('🔍 LOAD CHECKPOINT 13: Calling displayCleanSavedQnA()');
                     this.displayCleanSavedQnA(savedQnAs);
+                    console.log('🔍 LOAD CHECKPOINT 14: displayCleanSavedQnA() completed');
+                } else {
+                    console.log('🔍 LOAD CHECKPOINT 15: No saved Q&As to display');
                 }
                 
             } catch (error) {
-                console.log('ℹ️ CLEAN SYSTEM: No saved Q&A to display (this is normal for new companies)');
+                console.error('🔍 LOAD CHECKPOINT 16: Error in loadAndDisplaySavedQnA():', error);
+                console.error('🔍 LOAD CHECKPOINT 17: Error stack:', error.stack);
             }
         }
 
