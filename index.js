@@ -63,15 +63,15 @@ async function loadAllRoutes() {
     const routes = {};
     
     try {
-        routes.companyRoutes = await loadRouteWithTimeout('./routes/company', 'companyRoutes');
+        routes.v2CompanyRoutes = await loadRouteWithTimeout('./routes/v2company', 'v2CompanyRoutes');
         routes.v2VoiceRoutes = await loadRouteWithTimeout('./routes/company/v2profile-voice', 'v2VoiceRoutes');
         // V2 DELETED: Legacy alerts route - depends on deleted Alert model
         // routes.alertRoutes = await loadRouteWithTimeout('./routes/alerts', 'alertRoutes');
         // V2 DELETED: Legacy integrations route - Google Calendar integration eliminated
         routes.v2TtsRoutes = await loadRouteWithTimeout('./routes/v2tts', 'v2TtsRoutes');
-        routes.twilioRoutes = await loadRouteWithTimeout('./routes/twilio', 'twilioRoutes');
+        routes.v2TwilioRoutes = await loadRouteWithTimeout('./routes/v2twilio', 'v2TwilioRoutes');
         // V2 DELETED: Legacy external AI routes - violates 100% in-house AI system
-        routes.elevenLabsRoutes = await loadRouteWithTimeout('./routes/elevenLabs', 'elevenLabsRoutes');
+        routes.v2ElevenLabsRoutes = await loadRouteWithTimeout('./routes/v2elevenLabs', 'v2ElevenLabsRoutes');
         // V2 DELETED: Legacy upload routes - file upload functionality eliminated
         // V2 DELETED: Legacy agentSettings route - using V2 AI Agent Logic system
         // routes.companyAgentSettingsRoutes = await loadRouteWithTimeout('./routes/company/agentSettings', 'companyAgentSettingsRoutes');
@@ -101,7 +101,7 @@ async function loadAllRoutes() {
         routes.v2GlobalDirectoryRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-directory', 'v2GlobalDirectoryRoutes');
         routes.v2GlobalAddCompanyRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-addcompany', 'v2GlobalAddCompanyRoutes');
         routes.v2GlobalTradeCategoriesRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-tradecategories', 'v2GlobalTradeCategoriesRoutes');
-        routes.authRoutes = await loadRouteWithTimeout('./routes/auth', 'authRoutes');
+        routes.v2AuthRoutes = await loadRouteWithTimeout('./routes/v2auth', 'v2AuthRoutes');
         // V2 DELETED: Legacy backup routes - v2 backup system eliminated
         // REMOVED: Legacy CRM Management routes - will build V2 version in future
         
@@ -190,7 +190,7 @@ function registerRoutes(routes) {
     console.log('[INIT] Registering all API routes...');
     
     // --- API Routes ---
-    app.use('/api', routes.companyRoutes);
+    app.use('/api', routes.v2CompanyRoutes);
     app.use('/api', routes.v2VoiceRoutes); // V2 Voice Settings API
     // V2: All legacy debug and seed routes deleted - no longer needed in V2 system
     // V2 DELETED: Legacy alerts route mounting - depends on deleted Alert model
@@ -198,10 +198,10 @@ function registerRoutes(routes) {
     // V2 DELETED: Legacy integrations route mount - Google Calendar integration eliminated
     app.use('/api/tts', routes.v2TtsRoutes);
     // V2 DELETED: Legacy external AI routes - violates 100% in-house AI system
-    app.use('/api/elevenlabs', routes.elevenLabsRoutes);
+    app.use('/api/elevenlabs', routes.v2ElevenLabsRoutes);
     // V2 DELETED: Legacy upload routes - file upload functionality eliminated
     // V2: Legacy /api/agent route removed - using /api/company/:companyId/agent-settings V2 route
-    app.use('/api/auth', routes.authRoutes); // AUTH: User authentication and JWT token management
+    app.use('/api/auth', routes.v2AuthRoutes); // V2: User authentication and JWT token management
     app.use('/api/admin', routes.adminRoutes);
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
     app.use('/api/v2global/directory', routes.v2GlobalDirectoryRoutes); // V2 Global Company Directory
@@ -283,7 +283,7 @@ app.use((req, res, next) => {
 });
     
     // This line will now correctly handle all /api/twilio requests
-    app.use('/api/twilio', routes.twilioRoutes);
+    app.use('/api/twilio', routes.v2TwilioRoutes);
     
     // REMOVED: Legacy CRM Management routes - will build V2 version in future
     
