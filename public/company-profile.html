@@ -1546,16 +1546,19 @@
                                 
                                 <!-- Automatic Optimization -->
                                 <div class="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                    <div class="flex items-center justify-between mb-3">
-                                        <div>
-                                            <h5 class="font-semibold text-green-900">Automatic Optimization</h5>
-                                            <p class="text-sm text-green-700">Let AI optimize thresholds automatically in the background</p>
-                                        </div>
-                                        <label class="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" id="auto-optimization-toggle" class="sr-only peer">
-                                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                                        </label>
-                                    </div>
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h5 class="font-semibold text-green-900">Automatic Optimization</h5>
+                            <p class="text-sm text-green-700">Let AI optimize thresholds automatically in the background</p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <span id="auto-optimization-status" class="text-sm font-bold text-red-600">DISABLED</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="auto-optimization-toggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                            </label>
+                        </div>
+                    </div>
                                     
                                     <div id="auto-optimization-settings" class="hidden">
                                         <div class="flex items-center space-x-3">
@@ -14289,6 +14292,7 @@ Key Metrics:
                 
             // Auto-optimization toggle
             document.getElementById('auto-optimization-toggle')?.addEventListener('change', (e) => {
+                this.updateAutoOptimizationStatus(e.target.checked);
                 this.toggleAutoOptimization(e.target.checked);
             });
             
@@ -14980,6 +14984,19 @@ Key Metrics:
                 alert('All fallback responses and keywords have been cleared.');
             }
             
+            updateAutoOptimizationStatus(enabled) {
+                const statusLabel = document.getElementById('auto-optimization-status');
+                if (statusLabel) {
+                    if (enabled) {
+                        statusLabel.textContent = 'ENABLED';
+                        statusLabel.className = 'text-sm font-bold text-green-600';
+                    } else {
+                        statusLabel.textContent = 'DISABLED';
+                        statusLabel.className = 'text-sm font-bold text-red-600';
+                    }
+                }
+            }
+            
             async loadAutoOptimizationSettings() {
                 try {
                     // Get company data to load auto-optimization settings
@@ -15006,6 +15023,9 @@ Key Metrics:
                             if (toggle && settingsDiv && frequencySelect) {
                                 // Set toggle checked state
                                 toggle.checked = autoOptSettings.enabled || false;
+                                
+                                // Update status label
+                                this.updateAutoOptimizationStatus(autoOptSettings.enabled || false);
                                 
                                 // Show/hide settings based on enabled state
                                 if (autoOptSettings.enabled) {
