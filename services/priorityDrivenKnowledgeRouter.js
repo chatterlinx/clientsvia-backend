@@ -599,9 +599,12 @@ class PriorityDrivenKnowledgeRouter {
      */
     async queryInHouseFallback(companyId, query, context) {
         try {
-            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.inHouseFallback');
+            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.inHouseFallback agentBrain.identity.businessType companyName');
             
-            const fallbackConfig = company?.aiAgentLogic?.knowledgeManagement?.inHouseFallback || this.getDefaultFallback();
+            const businessType = company?.agentBrain?.identity?.businessType || '';
+            const companyName = company?.companyName || 'our company';
+            
+            const fallbackConfig = company?.aiAgentLogic?.knowledgeManagement?.inHouseFallback || this.getBusinessSpecificFallback(businessType, companyName);
             
             // Check each fallback category
             const categories = ['emergencySituations', 'serviceRequests', 'bookingRequests', 'generalInquiries'];
@@ -813,6 +816,77 @@ class PriorityDrivenKnowledgeRouter {
                 systemError: 'emergency_fallback'
             }
         };
+    }
+
+    getBusinessSpecificFallback(businessType, companyName) {
+        const businessTypeLower = businessType.toLowerCase();
+        
+        // Business-specific responses based on company type
+        if (businessTypeLower.includes('hvac') || businessTypeLower.includes('air') || businessTypeLower.includes('heating')) {
+            return {
+                serviceRequests: {
+                    response: `I understand you're having an HVAC issue. Let me connect you with our heating and cooling specialists right away.`,
+                    keywords: ["repair", "fix", "service", "maintenance", "broken", "not working", "ac", "air conditioning", "heat", "furnace"]
+                },
+                bookingRequests: {
+                    response: `I'd be happy to schedule your HVAC service appointment. Let me get you connected with our scheduling team.`,
+                    keywords: ["appointment", "schedule", "book", "visit", "when", "available", "maintenance", "tune-up"]
+                },
+                emergencySituations: {
+                    response: `This sounds like an HVAC emergency. Let me connect you with our emergency heating and cooling team immediately.`,
+                    keywords: ["emergency", "urgent", "help", "broken", "no heat", "no air", "flooding", "leak"]
+                },
+                generalInquiries: {
+                    response: `Thank you for contacting ${companyName}. We're your local HVAC specialists. How can I help you today?`,
+                    keywords: ["hours", "location", "contact", "info", "question", "help"]
+                }
+            };
+        }
+        
+        if (businessTypeLower.includes('dental') || businessTypeLower.includes('dentist')) {
+            return {
+                serviceRequests: {
+                    response: `I'm sorry, but we're a dental practice and don't handle repair services. You'll need to contact the appropriate service provider for that type of issue.`,
+                    keywords: ["repair", "fix", "service", "maintenance", "broken", "not working", "ac", "plumbing", "electrical"]
+                },
+                bookingRequests: {
+                    response: `I'd be happy to schedule your dental appointment. Let me get you connected with our scheduling team.`,
+                    keywords: ["appointment", "schedule", "book", "visit", "when", "available", "cleaning", "checkup"]
+                },
+                emergencySituations: {
+                    response: `If this is a dental emergency, let me connect you with our emergency dental team. For other emergencies, please contact the appropriate emergency services.`,
+                    keywords: ["emergency", "urgent", "help", "pain", "tooth", "dental"]
+                },
+                generalInquiries: {
+                    response: `Thank you for contacting ${companyName}. We're your dental care specialists. How can I help you today?`,
+                    keywords: ["hours", "location", "contact", "info", "question", "help"]
+                }
+            };
+        }
+        
+        if (businessTypeLower.includes('plumb')) {
+            return {
+                serviceRequests: {
+                    response: `I understand you're having a plumbing issue. Let me connect you with our plumbing specialists right away.`,
+                    keywords: ["repair", "fix", "service", "maintenance", "broken", "not working", "leak", "pipe", "drain", "toilet", "sink"]
+                },
+                bookingRequests: {
+                    response: `I'd be happy to schedule your plumbing service appointment. Let me get you connected with our scheduling team.`,
+                    keywords: ["appointment", "schedule", "book", "visit", "when", "available", "installation"]
+                },
+                emergencySituations: {
+                    response: `This sounds like a plumbing emergency. Let me connect you with our emergency plumbing team immediately.`,
+                    keywords: ["emergency", "urgent", "help", "broken", "flooding", "leak", "burst", "backup"]
+                },
+                generalInquiries: {
+                    response: `Thank you for contacting ${companyName}. We're your local plumbing specialists. How can I help you today?`,
+                    keywords: ["hours", "location", "contact", "info", "question", "help"]
+                }
+            };
+        }
+        
+        // Default fallback for unknown business types
+        return this.getDefaultFallback();
     }
 
     getDefaultFallback() {
