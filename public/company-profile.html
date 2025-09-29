@@ -1794,37 +1794,22 @@
                                                                 </div>
                                                             </div>
                                                             
-                                                            <!-- Search and Filter -->
-                                                            <div class="flex space-x-4 mb-6">
-                                                                <div class="flex-1">
-                                                                    <input type="text" id="company-qna-search" placeholder="Search questions or answers..." 
-                                                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                                            <!-- AI-Generated Q&A Management -->
+                                                            <div id="generated-qna-container" class="space-y-6">
+                                                                
+                                                                <!-- Generated Q&A List -->
+                                                                <div id="generated-qna-list" class="space-y-4">
+                                                                    <!-- AI-generated Q&A entries will appear here with edit/delete options -->
                                                                 </div>
-                                                                <select id="company-qna-category" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                                                    <option value="">All Categories</option>
-                                                                    <!-- Dynamic categories will be populated here -->
-                                                                </select>
-                                                                <select id="company-qna-status" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                                                    <option value="">All Status</option>
-                                                                    <option value="active">Active</option>
-                                                                    <option value="draft">Draft</option>
-                                                                    <option value="archived">Archived</option>
-                                                                </select>
-                                                            </div>
-
-                                                            <!-- Q&A List -->
-                                                            <div id="company-qna-list" class="space-y-3">
-                                                                <!-- Q&A items will be dynamically loaded here -->
-                                                            </div>
-
-                                                            <!-- Empty State -->
-                                                            <div id="company-qna-empty" class="text-center py-12 hidden">
-                                                                <i class="fas fa-question-circle text-gray-400 text-4xl mb-4"></i>
-                                                                <h5 class="text-lg font-medium text-gray-600 mb-2">No Company Q&A Found</h5>
-                                                                <p class="text-gray-500 mb-4">Start building your knowledge base by adding your first Q&A entry.</p>
-                                                                <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                                                                    <i class="fas fa-plus mr-2"></i>Add First Q&A
-                                                                </button>
+                                                                
+                                                                <!-- Empty State -->
+                                                                <div id="empty-qna-state" class="text-center py-12 text-gray-500">
+                                                                    <i class="fas fa-magic text-6xl mb-4 text-purple-300"></i>
+                                                                    <h3 class="text-xl font-semibold text-gray-700 mb-2">Ready for AI Magic!</h3>
+                                                                    <p class="text-gray-600">Use the AI-Powered Q&A Generator above to create professional Q&A entries instantly.</p>
+                                                                    <p class="text-sm text-gray-500 mt-2">Generate → Edit → Save - It's that simple!</p>
+                                                                </div>
+                                                                
                                                             </div>
                                                         </div>
 
@@ -15515,6 +15500,16 @@ Key Metrics:
                 this.runCustomKnowledgeTest();
             });
 
+            // AI Q&A Generator
+            document.getElementById('generate-qna-btn')?.addEventListener('click', () => {
+                this.generateAIQnA();
+            });
+
+            // AI Role Generator
+            document.getElementById('generate-ai-role-btn')?.addEventListener('click', () => {
+                this.generateAIRole();
+            });
+
             // Search and filter handlers
             document.getElementById('company-qna-search')?.addEventListener('input', () => {
                 this.filterCompanyQnA();
@@ -18001,6 +17996,290 @@ Key Metrics:
             setTimeout(() => {
                 infoDiv.remove();
             }, 4000);
+        }
+
+        /**
+         * 🤖 Generate AI Q&A
+         */
+        async generateAIQnA() {
+            try {
+                console.log('🤖 Generating AI Q&A...');
+                
+                // Get inputs
+                const businessType = document.getElementById('company-business-type')?.value || '';
+                const description = document.getElementById('ai-description-input')?.value || '';
+                
+                if (!businessType.trim()) {
+                    alert('Please enter your business type first (Section 1)');
+                    return;
+                }
+                
+                if (!description.trim()) {
+                    alert('Please describe what customers need to know');
+                    return;
+                }
+                
+                // Show loading
+                const generateBtn = document.getElementById('generate-qna-btn');
+                const originalText = generateBtn.innerHTML;
+                generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>AI Generating...';
+                generateBtn.disabled = true;
+                
+                // Call AI generation endpoint
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/generate-qna`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getUniversalAuthToken()}`
+                    },
+                    body: JSON.stringify({
+                        businessType: businessType.trim(),
+                        description: description.trim()
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`AI generation failed: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Display generated Q&A with edit options
+                this.displayGeneratedQnA(data.data);
+                
+                // Clear description input
+                document.getElementById('ai-description-input').value = '';
+                
+                // Show success message
+                this.showSuccessMessage('AI generated professional Q&A! Review and edit as needed.');
+                
+            } catch (error) {
+                console.error('❌ Error generating AI Q&A:', error);
+                alert('Failed to generate AI Q&A. Please try again.');
+            } finally {
+                // Reset button
+                const generateBtn = document.getElementById('generate-qna-btn');
+                generateBtn.innerHTML = '<i class="fas fa-brain mr-2"></i>Generate Professional Q&A';
+                generateBtn.disabled = false;
+            }
+        }
+
+        /**
+         * 🤖 Generate AI Role Description
+         */
+        async generateAIRole() {
+            try {
+                console.log('🤖 Generating AI Role...');
+                
+                // Get inputs
+                const businessType = document.getElementById('company-business-type')?.value || '';
+                const rawRole = document.getElementById('ai-agent-role-raw')?.value || '';
+                
+                if (!businessType.trim()) {
+                    alert('Please enter your business type first');
+                    return;
+                }
+                
+                if (!rawRole.trim()) {
+                    alert('Please describe your AI agent role first');
+                    return;
+                }
+                
+                // Show loading
+                const generateBtn = document.getElementById('generate-ai-role-btn');
+                const originalText = generateBtn.innerHTML;
+                generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>AI Writing...';
+                generateBtn.disabled = true;
+                
+                // Call AI generation endpoint
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/generate-role`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getUniversalAuthToken()}`
+                    },
+                    body: JSON.stringify({
+                        businessType: businessType.trim(),
+                        rawRole: rawRole.trim()
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`AI role generation failed: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Update the polished role textarea
+                document.getElementById('ai-agent-role-polished').value = data.data.polishedRole;
+                
+                // Show success message
+                this.showSuccessMessage('AI wrote your professional role description!');
+                
+            } catch (error) {
+                console.error('❌ Error generating AI role:', error);
+                alert('Failed to generate AI role. Please try again.');
+            } finally {
+                // Reset button
+                const generateBtn = document.getElementById('generate-ai-role-btn');
+                generateBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>AI: Write Professional Role Description';
+                generateBtn.disabled = false;
+            }
+        }
+
+        /**
+         * 📋 Display Generated Q&A with Edit/Delete Options
+         */
+        displayGeneratedQnA(qnaEntries) {
+            const container = document.getElementById('generated-qna-list');
+            const emptyState = document.getElementById('empty-qna-state');
+            
+            if (!qnaEntries || qnaEntries.length === 0) {
+                container.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            
+            container.innerHTML = qnaEntries.map((qna, index) => `
+                <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow" data-qna-index="${index}">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 mb-2">
+                                <i class="fas fa-question-circle text-blue-500"></i>
+                                <span class="text-sm font-medium text-gray-600">Question</span>
+                            </div>
+                            <textarea class="qna-question w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none" rows="2">${qna.question}</textarea>
+                        </div>
+                        <div class="flex space-x-2 ml-4">
+                            <button class="save-qna-btn bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors" data-index="${index}">
+                                <i class="fas fa-save mr-1"></i>Save
+                            </button>
+                            <button class="delete-qna-btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors" data-index="${index}">
+                                <i class="fas fa-trash mr-1"></i>Delete
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <i class="fas fa-comment-dots text-green-500"></i>
+                            <span class="text-sm font-medium text-gray-600">Answer</span>
+                        </div>
+                        <textarea class="qna-answer w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none" rows="3">${qna.answer}</textarea>
+                    </div>
+                    
+                    <div>
+                        <div class="flex items-center space-x-2 mb-2">
+                            <i class="fas fa-tags text-purple-500"></i>
+                            <span class="text-sm font-medium text-gray-600">Keywords</span>
+                        </div>
+                        <input type="text" class="qna-keywords w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" value="${qna.keywords.join(', ')}" placeholder="keyword1, keyword2, keyword3">
+                        <p class="text-xs text-gray-500 mt-1">Separate keywords with commas</p>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Add event listeners for save/delete buttons
+            container.querySelectorAll('.save-qna-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.closest('.save-qna-btn').dataset.index);
+                    this.saveGeneratedQnA(index);
+                });
+            });
+            
+            container.querySelectorAll('.delete-qna-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.closest('.delete-qna-btn').dataset.index);
+                    this.deleteGeneratedQnA(index);
+                });
+            });
+        }
+
+        /**
+         * 💾 Save Generated Q&A Entry
+         */
+        async saveGeneratedQnA(index) {
+            try {
+                const qnaCard = document.querySelector(`[data-qna-index="${index}"]`);
+                if (!qnaCard) return;
+                
+                const question = qnaCard.querySelector('.qna-question').value.trim();
+                const answer = qnaCard.querySelector('.qna-answer').value.trim();
+                const keywordsText = qnaCard.querySelector('.qna-keywords').value.trim();
+                const keywords = keywordsText.split(',').map(k => k.trim()).filter(k => k);
+                
+                if (!question || !answer) {
+                    alert('Question and answer are required');
+                    return;
+                }
+                
+                // Show loading on save button
+                const saveBtn = qnaCard.querySelector('.save-qna-btn');
+                const originalText = saveBtn.innerHTML;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...';
+                saveBtn.disabled = true;
+                
+                // Save to database
+                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/company-qna`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getUniversalAuthToken()}`
+                    },
+                    body: JSON.stringify({
+                        question,
+                        answer,
+                        keywords,
+                        status: 'active'
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to save Q&A: ${response.status}`);
+                }
+                
+                // Show success and remove from generated list
+                this.showSuccessMessage('Q&A saved successfully!');
+                qnaCard.remove();
+                
+                // Check if list is empty
+                const remainingCards = document.querySelectorAll('[data-qna-index]');
+                if (remainingCards.length === 0) {
+                    document.getElementById('empty-qna-state').style.display = 'block';
+                }
+                
+            } catch (error) {
+                console.error('❌ Error saving Q&A:', error);
+                alert('Failed to save Q&A. Please try again.');
+            } finally {
+                // Reset button
+                const qnaCard = document.querySelector(`[data-qna-index="${index}"]`);
+                if (qnaCard) {
+                    const saveBtn = qnaCard.querySelector('.save-qna-btn');
+                    saveBtn.innerHTML = '<i class="fas fa-save mr-1"></i>Save';
+                    saveBtn.disabled = false;
+                }
+            }
+        }
+
+        /**
+         * 🗑️ Delete Generated Q&A Entry
+         */
+        deleteGeneratedQnA(index) {
+            if (confirm('Are you sure you want to delete this Q&A entry?')) {
+                const qnaCard = document.querySelector(`[data-qna-index="${index}"]`);
+                if (qnaCard) {
+                    qnaCard.remove();
+                    
+                    // Check if list is empty
+                    const remainingCards = document.querySelectorAll('[data-qna-index]');
+                    if (remainingCards.length === 0) {
+                        document.getElementById('empty-qna-state').style.display = 'block';
+                    }
+                }
+            }
         }
     }
 

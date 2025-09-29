@@ -1450,4 +1450,310 @@ function calculateKeywordMatch(query, keywords) {
     return matches.length > 0 ? Math.min(matches.length / keywords.length + 0.3, 1.0) : 0;
 }
 
+/**
+ * 🤖 AI Q&A Generation Endpoint
+ * POST /api/company/:companyId/knowledge-management/generate-qna
+ */
+router.post('/:companyId/knowledge-management/generate-qna', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+    const { businessType, description } = req.body;
+
+    try {
+        logger.info(`🤖 AI Q&A generation request for company ${companyId}`);
+
+        if (!businessType || !description) {
+            return res.status(400).json({
+                success: false,
+                message: 'Business type and description are required',
+                error: 'MISSING_REQUIRED_FIELDS'
+            });
+        }
+
+        // Generate AI Q&A entries
+        const generatedQnA = await generateSmartQnA(businessType, description);
+
+        const responseTime = Date.now() - startTime;
+        logger.info(`🤖 AI Q&A generation success for company ${companyId}`, { 
+            responseTime,
+            entriesGenerated: generatedQnA.length
+        });
+
+        res.json({
+            success: true,
+            message: 'AI Q&A generated successfully',
+            data: generatedQnA,
+            meta: {
+                responseTime,
+                entriesGenerated: generatedQnA.length
+            }
+        });
+
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        logger.error(`❌ AI Q&A generation failed for company ${companyId}`, {
+            error: error.message,
+            responseTime
+        });
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to generate AI Q&A',
+            error: error.message,
+            meta: { responseTime }
+        });
+    }
+});
+
+/**
+ * 🤖 AI Role Generation Endpoint
+ * POST /api/company/:companyId/knowledge-management/generate-role
+ */
+router.post('/:companyId/knowledge-management/generate-role', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+    const { businessType, rawRole } = req.body;
+
+    try {
+        logger.info(`🤖 AI Role generation request for company ${companyId}`);
+
+        if (!businessType || !rawRole) {
+            return res.status(400).json({
+                success: false,
+                message: 'Business type and raw role are required',
+                error: 'MISSING_REQUIRED_FIELDS'
+            });
+        }
+
+        // Generate AI role description
+        const polishedRole = await generateSmartRole(businessType, rawRole);
+
+        const responseTime = Date.now() - startTime;
+        logger.info(`🤖 AI Role generation success for company ${companyId}`, { responseTime });
+
+        res.json({
+            success: true,
+            message: 'AI role generated successfully',
+            data: { polishedRole },
+            meta: { responseTime }
+        });
+
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        logger.error(`❌ AI Role generation failed for company ${companyId}`, {
+            error: error.message,
+            responseTime
+        });
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to generate AI role',
+            error: error.message,
+            meta: { responseTime }
+        });
+    }
+});
+
+/**
+ * 🤖 Smart Q&A Generator (In-House AI)
+ */
+async function generateSmartQnA(businessType, description) {
+    // In-house AI generation logic
+    const qnaTemplates = getQnATemplatesForBusiness(businessType);
+    const generatedEntries = [];
+
+    // Parse description for key information
+    const keyInfo = extractKeyInformation(description);
+    
+    // Generate relevant Q&A entries
+    for (const template of qnaTemplates) {
+        if (isRelevantTemplate(template, keyInfo)) {
+            const qna = {
+                question: personalizeQuestion(template.question, businessType, keyInfo),
+                answer: personalizeAnswer(template.answer, businessType, keyInfo, description),
+                keywords: generateKeywords(template.question, template.answer, businessType)
+            };
+            generatedEntries.push(qna);
+        }
+    }
+
+    return generatedEntries;
+}
+
+/**
+ * 🤖 Smart Role Generator (In-House AI)
+ */
+async function generateSmartRole(businessType, rawRole) {
+    // Professional role templates
+    const roleTemplates = {
+        'hvac': 'professional HVAC technician and customer service representative',
+        'plumbing': 'experienced plumbing professional and customer service specialist',
+        'electrical': 'certified electrician and customer service expert',
+        'dental': 'dental office receptionist and patient care coordinator',
+        'auto': 'automotive service advisor and customer care specialist',
+        'general': 'skilled contractor and customer service professional'
+    };
+
+    // Determine business category
+    const category = determineBusinessCategory(businessType);
+    const baseRole = roleTemplates[category] || roleTemplates['general'];
+
+    // Generate polished role
+    const polishedRole = `I am a ${baseRole} for ${businessType}. ${rawRole} I provide helpful, accurate information about our services, scheduling, pricing, and policies. I maintain a professional, friendly tone while ensuring customers receive the information they need to make informed decisions about our services.`;
+
+    return polishedRole;
+}
+
+/**
+ * 📋 Get Q&A Templates for Business Type
+ */
+function getQnATemplatesForBusiness(businessType) {
+    const templates = [
+        {
+            question: "What are your hours of operation?",
+            answer: "Our business hours are [HOURS]. We also offer [EMERGENCY_SERVICE] for urgent situations.",
+            keywords: ["hours", "open", "closed", "schedule", "time", "when", "availability"]
+        },
+        {
+            question: "Do you offer emergency services?",
+            answer: "Yes, we provide 24/7 emergency services for urgent situations. Emergency service rates may apply.",
+            keywords: ["emergency", "urgent", "24/7", "after hours", "weekend", "holiday"]
+        },
+        {
+            question: "What areas do you serve?",
+            answer: "We serve [SERVICE_AREA] and surrounding areas. Contact us to confirm service availability in your location.",
+            keywords: ["area", "location", "serve", "coverage", "where", "distance", "travel"]
+        },
+        {
+            question: "Do you provide free estimates?",
+            answer: "Yes, we offer free estimates for most services. Contact us to schedule your free consultation.",
+            keywords: ["estimate", "quote", "free", "cost", "price", "consultation", "evaluation"]
+        },
+        {
+            question: "Are you licensed and insured?",
+            answer: "Yes, we are fully licensed and insured for your protection and peace of mind.",
+            keywords: ["licensed", "insured", "certified", "bonded", "qualified", "credentials"]
+        }
+    ];
+
+    return templates;
+}
+
+/**
+ * 🔍 Extract Key Information from Description
+ */
+function extractKeyInformation(description) {
+    const keyInfo = {
+        hours: null,
+        emergency: false,
+        freeEstimates: false,
+        serviceArea: null
+    };
+
+    // Extract hours
+    const hoursMatch = description.match(/(\d{1,2})-(\d{1,2})|(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/i);
+    if (hoursMatch) {
+        keyInfo.hours = hoursMatch[0];
+    }
+
+    // Check for emergency service
+    if (/emergency|24\/7|after hours/i.test(description)) {
+        keyInfo.emergency = true;
+    }
+
+    // Check for free estimates
+    if (/free estimate|free consultation|no charge/i.test(description)) {
+        keyInfo.freeEstimates = true;
+    }
+
+    return keyInfo;
+}
+
+/**
+ * ✅ Check if Template is Relevant
+ */
+function isRelevantTemplate(template, keyInfo) {
+    // Always include hours template
+    if (template.question.includes("hours")) return true;
+    
+    // Include emergency template if mentioned
+    if (template.question.includes("emergency") && keyInfo.emergency) return true;
+    
+    // Include estimate template if mentioned
+    if (template.question.includes("estimate") && keyInfo.freeEstimates) return true;
+    
+    // Include licensing template (always relevant)
+    if (template.question.includes("licensed")) return true;
+    
+    return false;
+}
+
+/**
+ * 🎯 Personalize Question
+ */
+function personalizeQuestion(question, businessType, keyInfo) {
+    return question; // Questions are already generic enough
+}
+
+/**
+ * 🎯 Personalize Answer
+ */
+function personalizeAnswer(answer, businessType, keyInfo, description) {
+    let personalizedAnswer = answer;
+
+    // Replace placeholders with actual information
+    if (keyInfo.hours) {
+        personalizedAnswer = personalizedAnswer.replace('[HOURS]', keyInfo.hours);
+    } else {
+        personalizedAnswer = personalizedAnswer.replace('[HOURS]', 'Monday through Friday 8 AM to 5 PM');
+    }
+
+    if (keyInfo.emergency) {
+        personalizedAnswer = personalizedAnswer.replace('[EMERGENCY_SERVICE]', '24/7 emergency service');
+    } else {
+        personalizedAnswer = personalizedAnswer.replace('[EMERGENCY_SERVICE]', 'emergency service availability');
+    }
+
+    personalizedAnswer = personalizedAnswer.replace('[SERVICE_AREA]', 'our local area');
+
+    return personalizedAnswer;
+}
+
+/**
+ * 🏷️ Generate Keywords
+ */
+function generateKeywords(question, answer, businessType) {
+    const baseKeywords = [];
+    
+    // Extract keywords from question and answer
+    const text = `${question} ${answer}`.toLowerCase();
+    const words = text.match(/\b\w{3,}\b/g) || [];
+    
+    // Add relevant keywords
+    words.forEach(word => {
+        if (!['the', 'and', 'for', 'are', 'you', 'our', 'we', 'your', 'can', 'will', 'may'].includes(word)) {
+            if (!baseKeywords.includes(word)) {
+                baseKeywords.push(word);
+            }
+        }
+    });
+
+    return baseKeywords.slice(0, 8); // Limit to 8 keywords
+}
+
+/**
+ * 🏢 Determine Business Category
+ */
+function determineBusinessCategory(businessType) {
+    const type = businessType.toLowerCase();
+    
+    if (type.includes('hvac')) return 'hvac';
+    if (type.includes('plumb')) return 'plumbing';
+    if (type.includes('electric')) return 'electrical';
+    if (type.includes('dental')) return 'dental';
+    if (type.includes('auto')) return 'auto';
+    
+    return 'general';
+}
+
 module.exports = router;
