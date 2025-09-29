@@ -1,8 +1,8 @@
 const passport = require('passport');
 // V2 DELETED: Google OAuth authentication - using JWT-only system
 // GoogleStrategy import completely eliminated from V2 system
-const User = require('../models/User');
-const Company = require('../models/Company');
+const User = require('../models/v2User');
+const Company = require('../models/v2Company');
 
 // Serialize user for session
 passport.serializeUser((user, done) => {

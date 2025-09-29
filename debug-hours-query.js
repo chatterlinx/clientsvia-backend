@@ -14,7 +14,7 @@ async function debugHoursQuery() {
         
         // Import models
         const CompanyKnowledgeQnA = require('./models/knowledge/CompanyQnA');
-        const Company = require('./models/Company');
+        const Company = require('./models/v2Company');
         
         console.log('\n🔍 DEBUGGING: "What are your hours?" query');
         console.log('Company ID:', companyId);

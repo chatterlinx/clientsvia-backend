@@ -3,7 +3,7 @@
 // Spartan Coder - Gold Standard Implementation
 
 const NotificationService = require('../services/notificationService');
-const NotificationLog = require('../models/NotificationLog');
+const NotificationLog = require('../models/v2NotificationLog');
 const templates = require('../config/messageTemplates.json');
 const smsClient = require('../clients/smsClient');
 const emailClient = require('../clients/emailClient');

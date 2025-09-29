@@ -1714,7 +1714,7 @@ router.get('/tradeqa/:trade', async (req, res) => {
         console.log(`🔍 TradeQA lookup: trade=${trade}, query=${query}`);
         
         // Import TradeQnA model
-        const TradeQnA = require('../models/TradeQnA');
+        const TradeCategory = require('../../models/v2TradeCategory');
         
         // Build search criteria
         const searchCriteria = {

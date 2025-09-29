@@ -10,7 +10,7 @@
  */
 
 const mongoose = require('mongoose');
-const Company = require('../models/Company');
+const Company = require('../models/v2Company');
 require('dotenv').config();
 
 const HARDCODED_VOICE_ID = 'pNInz6obpgDQGcFmaJgB';

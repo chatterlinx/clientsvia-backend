@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const User = require('../models/v2User');
 const sessionManager = require('./singleSessionManager');
 
 // Extract JWT from either httpOnly cookie or Authorization header

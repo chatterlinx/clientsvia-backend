@@ -13,7 +13,7 @@ async function fixCompanyThresholds() {
         const companyId = '68813026dd95f599c74e49c7'; // Your company ID
         
         // Import models
-        const Company = require('./models/Company');
+        const Company = require('./models/v2Company');
         
         console.log('\n🎯 FIXING: Single Source of Truth for Thresholds');
         console.log('Company ID:', companyId);

@@ -24,7 +24,7 @@ async function validateCompanyExists(companyId) {
     throw new Error('Invalid company ID format');
   }
   
-  const Company = require('../models/Company');
+  const Company = require('../models/v2Company');
   const company = await Company.findById(companyId);
   
   if (!company) {
@@ -70,25 +70,25 @@ async function validateQAExists(companyId, categoryId, qaId) {
   return { company, category, qa };
 }
 
-// Validate employee exists
-async function validateEmployeeExists(employeeId) {
-  if (!employeeId) {
-    throw new Error('Employee ID is required');
-  }
-  
-  if (!isValidObjectId(employeeId)) {
-    throw new Error('Invalid employee ID format');
-  }
-  
-  const Employee = require('../models/Employee');
-  const employee = await Employee.findById(employeeId);
-  
-  if (!employee) {
-    throw new Error(`Employee with ID ${employeeId} not found`);
-  }
-  
-  return employee;
-}
+// V2 DELETED: Employee validation - Employee model not in V2 system
+// async function validateEmployeeExists(employeeId) {
+//   if (!employeeId) {
+//     throw new Error('Employee ID is required');
+//   }
+//   
+//   if (!isValidObjectId(employeeId)) {
+//     throw new Error('Invalid employee ID format');
+//   }
+//   
+//   const Employee = require('../models/v2Employee');
+//   const employee = await Employee.findById(employeeId);
+//   
+//   if (!employee) {
+//     throw new Error(`Employee with ID ${employeeId} not found`);
+//   }
+//   
+//   return employee;
+// }
 
 // Validate user exists (for Google OAuth)
 async function validateUserExists(userId) {
@@ -100,7 +100,7 @@ async function validateUserExists(userId) {
     throw new Error('Invalid user ID format');
   }
   
-  const User = require('../models/User');
+  const User = require('../models/v2User');
   const user = await User.findById(userId);
   
   if (!user) {

@@ -9,7 +9,7 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const TradeCategory = require('../models/TradeCategory');
+const TradeCategory = require('../models/v2TradeCategory');
 const { redisClient } = require('../clients');
 
 const categories = [

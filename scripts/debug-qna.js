@@ -32,7 +32,7 @@ async function debugQnA(companyId) {
         
         console.log('\n📚 Checking legacy CompanyQnA model...');
         try {
-            const CompanyQnA = require('../models/CompanyQnA');
+            const CompanyQnA = require('../models/v2CompanyQnA');
             const legacyQnas = await CompanyQnA.find({ companyId });
             console.log(`   Found ${legacyQnas.length} entries in legacy CompanyQnA`);
             
