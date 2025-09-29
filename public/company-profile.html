@@ -15557,6 +15557,11 @@ Key Metrics:
                 this.generateAIRole();
             });
 
+            // Save Company Profile Button
+            document.getElementById('save-company-profile-btn')?.addEventListener('click', () => {
+                this.saveCompanyProfile();
+            });
+
             // Search and filter handlers
             document.getElementById('company-qna-search')?.addEventListener('input', () => {
                 this.filterCompanyQnA();
@@ -18181,7 +18186,7 @@ Key Metrics:
         }
 
         /**
-         * 💾 Save Company Profile Data
+         * 💾 Save Company Profile Data (Internal Helper)
          */
         async saveCompanyProfileData(businessType, aiRole) {
             try {
@@ -18209,6 +18214,56 @@ Key Metrics:
             } catch (error) {
                 console.error('❌ Error saving company profile:', error);
                 throw error;
+            }
+        }
+
+        /**
+         * 💾 Save Company Profile (Button Handler)
+         */
+        async saveCompanyProfile() {
+            try {
+                console.log('💾 Manual save company profile...');
+                
+                // Get current values from form
+                const businessType = document.getElementById('company-business-type')?.value?.trim() || '';
+                const aiRoleRaw = document.getElementById('ai-agent-role-raw')?.value?.trim() || '';
+                const aiRolePolished = document.getElementById('ai-agent-role-polished')?.value?.trim() || '';
+                
+                if (!businessType) {
+                    alert('Please enter your business type first');
+                    return;
+                }
+                
+                // Use polished role if available, otherwise use raw role
+                const roleToSave = aiRolePolished || aiRoleRaw;
+                
+                if (!roleToSave) {
+                    alert('Please describe your AI agent role or generate one using AI');
+                    return;
+                }
+                
+                // Show loading on save button
+                const saveBtn = document.getElementById('save-company-profile-btn');
+                const originalText = saveBtn.innerHTML;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+                saveBtn.disabled = true;
+                
+                // Save to database
+                await this.saveCompanyProfileData(businessType, roleToSave);
+                
+                // Show success message
+                this.showSuccessMessage('Company profile saved successfully!');
+                
+            } catch (error) {
+                console.error('❌ Error saving company profile:', error);
+                alert('Failed to save company profile. Please try again.');
+            } finally {
+                // Reset button
+                const saveBtn = document.getElementById('save-company-profile-btn');
+                if (saveBtn) {
+                    saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Profile';
+                    saveBtn.disabled = false;
+                }
             }
         }
 
