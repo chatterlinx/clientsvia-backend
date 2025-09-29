@@ -1,7 +1,7 @@
 /**
  * V2 GLOBAL DIRECTORY ROUTES - V2 Company Management
  * 
- * 🌐 V2 GLOBAL DIRECTORY - ENTERPRISE ARCHITECTURE:
+ * 🌐 V2 GLOBAL DIRECTORY - V2 ARCHITECTURE:
  * ╔══════════════════════════════════════════════════════════════════╗
  * ║ COMPANY DIRECTORY V2 - MULTI-TENANT PLATFORM MANAGEMENT         ║
  * ╠══════════════════════════════════════════════════════════════════╣

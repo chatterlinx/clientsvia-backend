@@ -1,5 +1,5 @@
 /**
- * GOLD STANDARD ENTERPRISE NOTES ROUTES
+ * GOLD STANDARD V2 NOTES ROUTES
  * Chief Spartan Engineering - Multi-tenant Notes Management
  * Features: Full CRUD, tenant isolation, advanced search, categories, priorities
  */

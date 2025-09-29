@@ -188,7 +188,7 @@ const companySchema = new mongoose.Schema({
     agentSetup: { type: agentSetupSchema, default: () => ({}) },
     aiAgentSetup: { type: mongoose.Schema.Types.Mixed, default: null }, // New AI Agent Setup data
     
-    // 🚀 ENTERPRISE AI AGENT SETTINGS - Multi-tenant gold standard
+    // 🚀 V2 AI AGENT SETTINGS - Multi-tenant gold standard
     tradeCategories: { 
         type: [String], 
         default: [],
@@ -353,7 +353,7 @@ const companySchema = new mongoose.Schema({
             }
         },
         
-        // 🚀 ENTERPRISE FEATURES: Real-time Analytics
+        // 🚀 V2 FEATURES: Real-time Analytics
         analytics: {
             enabled: { type: Boolean, default: true },
             realTimeUpdates: { type: Boolean, default: true },
@@ -549,7 +549,7 @@ const companySchema = new mongoose.Schema({
             }
         },
 
-        // 🚀 ENTERPRISE AI AGENT MANAGEMENT SYSTEM - UNIFIED ARCHITECTURE
+        // 🚀 V2 AI AGENT MANAGEMENT SYSTEM - UNIFIED ARCHITECTURE
         // ================================================================
         // Complete Knowledge Management + Personality + Priorities System
         // Multi-tenant, Redis-cached, sub-50ms performance

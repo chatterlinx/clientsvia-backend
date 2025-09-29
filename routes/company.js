@@ -343,7 +343,7 @@ router.patch('/company/:id', async (req, res) => {
             if (Object.prototype.hasOwnProperty.call(updates, key)) {
                 if (key === 'tradeTypes' || key === 'tradeCategories') {
                     if (Array.isArray(updates[key])) {
-                        // 🎯 ENTERPRISE: Save to both legacy and new fields for compatibility
+                        // 🎯 V2: Save to both legacy and new fields for compatibility
                         updateOperation['tradeTypes'] = updates[key];      // Legacy field
                         updateOperation['tradeCategories'] = updates[key]; // V2 field
                         console.log(`💾 [TRADE CATEGORIES] Saving to both fields:`, updates[key]);
@@ -392,7 +392,7 @@ router.patch('/company/:id', async (req, res) => {
             console.log('📝 [NOTES DEBUG] Notes after save:', updatedCompany.notes.length, 'notes saved');
         }
 
-        // 🚀 ENTERPRISE OPTIMIZATION: Clear both company and AI config caches
+        // 🚀 V2 OPTIMIZATION: Clear both company and AI config caches
         const cacheKey = `company:${companyId}`;
         await redisClient.del(cacheKey);
         console.log(`DELETED from cache: ${cacheKey}`);

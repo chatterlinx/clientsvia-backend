@@ -1,7 +1,7 @@
 /**
  * V2 GLOBAL ADMIN ROUTES - V2 System Management
  * 
- * 🌐 V2 GLOBAL ADMIN DASHBOARD - ENTERPRISE ARCHITECTURE:
+ * 🌐 V2 GLOBAL ADMIN DASHBOARD - V2 ARCHITECTURE:
  * ╔══════════════════════════════════════════════════════════════════╗
  * ║ ADMIN DASHBOARD V2 - MULTI-TENANT PLATFORM MANAGEMENT           ║
  * ╠══════════════════════════════════════════════════════════════════╣

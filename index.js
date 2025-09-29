@@ -68,9 +68,9 @@ async function loadAllRoutes() {
         // V2 DELETED: Legacy alerts route - depends on deleted Alert model
         // routes.alertRoutes = await loadRouteWithTimeout('./routes/alerts', 'alertRoutes');
         // V2 DELETED: Legacy integrations route - Google Calendar integration eliminated
-        routes.ttsRoutes = await loadRouteWithTimeout('./routes/tts', 'ttsRoutes');
+        routes.v2TtsRoutes = await loadRouteWithTimeout('./routes/v2tts', 'v2TtsRoutes');
         routes.twilioRoutes = await loadRouteWithTimeout('./routes/twilio', 'twilioRoutes');
-        routes.aiRoutes = await loadRouteWithTimeout('./routes/ai', 'aiRoutes');
+        // V2 DELETED: Legacy external AI routes - violates 100% in-house AI system
         routes.elevenLabsRoutes = await loadRouteWithTimeout('./routes/elevenLabs', 'elevenLabsRoutes');
         // V2 DELETED: Legacy upload routes - file upload functionality eliminated
         // V2 DELETED: Legacy agentSettings route - using V2 AI Agent Logic system
@@ -78,7 +78,7 @@ async function loadAllRoutes() {
         // Legacy personality routes removed - using modern AI Agent Logic system
         // 🚀 V2 PURE SYSTEM: Only V2 Knowledge Management - ALL LEGACY ELIMINATED
         routes.v2KnowledgeManagementRoutes = await loadRouteWithTimeout('./routes/company/v2knowledgeManagement', 'v2KnowledgeManagementRoutes');
-        routes.knowledgeSourcePrioritiesRoutes = await loadRouteWithTimeout('./routes/company/knowledgeSourcePriorities', 'knowledgeSourcePrioritiesRoutes');
+        routes.v2KnowledgeSourcePrioritiesRoutes = await loadRouteWithTimeout('./routes/company/v2knowledgeSourcePriorities', 'v2KnowledgeSourcePrioritiesRoutes');
         // V2 DELETED: Legacy v2 testing routes - using V2 AI Agent Logic system
         // routes.priorityFlowTestingRoutes = await loadRouteWithTimeout('./routes/company/priorityFlowTesting', 'priorityFlowTestingRoutes');
         // routes.agentTestingRoutes = await loadRouteWithTimeout('./routes/company/agentTesting', 'agentTestingRoutes');
@@ -94,7 +94,7 @@ async function loadAllRoutes() {
         // V2: Legacy bookingHandler route deleted - using modern AI Agent Logic booking system
         // REMOVED: Legacy AI Intelligence routes - replaced by AI Agent Logic system
         // V2: Legacy monitoring route deleted - using modern AI Agent Logic monitoring system
-        routes.notesRoutes = await loadRouteWithTimeout('./routes/notes', 'notesRoutes');
+        routes.v2NotesRoutes = await loadRouteWithTimeout('./routes/v2notes', 'v2NotesRoutes');
         // V2: Legacy agentProcessor route deleted - using modern AI Agent Logic processing system
         routes.adminRoutes = await loadRouteWithTimeout('./routes/admin', 'adminRoutes');
         routes.v2GlobalAdminRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-admin', 'v2GlobalAdminRoutes');
@@ -196,8 +196,8 @@ function registerRoutes(routes) {
     // V2 DELETED: Legacy alerts route mounting - depends on deleted Alert model
     // app.use('/api/alerts', routes.alertRoutes);
     // V2 DELETED: Legacy integrations route mount - Google Calendar integration eliminated
-    app.use('/api/tts', routes.ttsRoutes);
-    app.use('/api/ai', routes.aiRoutes);
+    app.use('/api/tts', routes.v2TtsRoutes);
+    // V2 DELETED: Legacy external AI routes - violates 100% in-house AI system
     app.use('/api/elevenlabs', routes.elevenLabsRoutes);
     // V2 DELETED: Legacy upload routes - file upload functionality eliminated
     // V2: Legacy /api/agent route removed - using /api/company/:companyId/agent-settings V2 route
@@ -208,14 +208,9 @@ function registerRoutes(routes) {
     app.use('/api/v2global/addcompany', routes.v2GlobalAddCompanyRoutes); // V2 Global Add Company
     app.use('/api/v2global/trade-categories', routes.v2GlobalTradeCategoriesRoutes); // V2 Global Trade Categories
     // V2 DELETED: Legacy backup routes - v2 backup system eliminated
-    // V2 DELETED: Legacy company agent settings route - using V2 AI Agent Logic system
-    // app.use('/api/company', routes.companyAgentSettingsRoutes); // ENTERPRISE: Company-specific AI Agent Settings Management
-    
     // 🚀 V2 PURE SYSTEM: Only V2 Knowledge Management - ALL LEGACY ELIMINATED
-    app.use('/api/company', routes.v2KnowledgeManagementRoutes); // V2 ENTERPRISE: Pure V2 Knowledge Management System (Company Q&A, Trade Q&A, Templates)
-    app.use('/api/company', routes.knowledgeSourcePrioritiesRoutes); // ENTERPRISE: Knowledge Source Priorities Management
-    // V2 DELETED: Legacy v2 testing routes - using V2 AI Agent Logic system
-    // app.use('/api/company', routes.priorityFlowTestingRoutes); // ENTERPRISE: Real-time Priority Flow Testing & Validation
+    app.use('/api/company', routes.v2KnowledgeManagementRoutes); // V2: Pure V2 Knowledge Management System (Company Q&A, Trade Q&A, Templates)
+    app.use('/api/company', routes.v2KnowledgeSourcePrioritiesRoutes); // V2: Knowledge Source Priorities Management
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 
@@ -230,7 +225,7 @@ function registerRoutes(routes) {
     // V2: Legacy intentRouting route deleted - using modern AI Agent Logic intent classification
     // V2: Legacy bookingScripts route deleted - using modern AI Agent Logic booking flow
     // V2: Legacy monitoring route deleted - using modern AI Agent Logic monitoring system
-    app.use('/api/notes', routes.notesRoutes); // GOLD STANDARD: V2 Notes Management
+    app.use('/api/notes', routes.v2NotesRoutes); // V2: Notes Management
     // V2: Legacy bookingHandler route deleted - using modern AI Agent Logic booking system
     // REMOVED: Legacy AI Intelligence routes - replaced by AI Agent Logic system
     // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies

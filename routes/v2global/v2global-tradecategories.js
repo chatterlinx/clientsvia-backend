@@ -1,7 +1,7 @@
 /**
  * V2 GLOBAL TRADE CATEGORIES ROUTES - V2 Trade Management
  * 
- * V2 GLOBAL TRADE CATEGORIES - ENTERPRISE ARCHITECTURE:
+ * V2 GLOBAL TRADE CATEGORIES - V2 ARCHITECTURE:
  * ╔══════════════════════════════════════════════════════════════════╗
  * ║ TRADE CATEGORIES V2 - MULTI-TENANT PLATFORM MANAGEMENT          ║
  * ╠══════════════════════════════════════════════════════════════════╣

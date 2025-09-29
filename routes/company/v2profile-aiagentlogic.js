@@ -1087,7 +1087,7 @@ router.get('/verify-config', authenticateSingleSession, async (req, res) => {
  * 📊 ANALYTICS: Full request/response logging for optimization
  * ========================================= 
  * 
- * 🔄 ENTERPRISE ROUTING FLOW - PRIORITY #1:
+ * 🔄 V2 ROUTING FLOW - PRIORITY #1:
  * ╔══════════════════════════════════════════════════════════════════╗
  * ║ THIS IS THE CRITICAL PATH FOR ALL AI AGENT RESPONSES            ║
  * ╠══════════════════════════════════════════════════════════════════╣
@@ -1793,7 +1793,7 @@ router.get('/tradeqa/:trade', async (req, res) => {
 
 /**
  * ========================================= 
- * 🚀 ENTERPRISE AI AGENT LOGIC API ENDPOINTS
+ * 🚀 V2 AI AGENT LOGIC API ENDPOINTS
  * Real-time Analytics, Flow Designer, A/B Testing, Personalization
  * ========================================= 
  */
@@ -1867,7 +1867,7 @@ router.post('/analytics/:companyId/export', authenticateSingleSession, async (re
 
 /**
  * ========================================= 
- * ENTERPRISE FEATURES - A/B TESTING FRAMEWORK
+ * V2 FEATURES - A/B TESTING FRAMEWORK
  * ========================================= 
  */
 
@@ -1949,7 +1949,7 @@ router.get('/ab-testing/:companyId/tests', authenticateSingleSession, async (req
 
 /**
  * ========================================= 
- * ENTERPRISE FEATURES - PERSONALIZATION ENGINE
+ * V2 FEATURES - PERSONALIZATION ENGINE
  * ========================================= 
  */
 

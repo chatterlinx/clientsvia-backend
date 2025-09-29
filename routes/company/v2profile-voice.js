@@ -2,7 +2,7 @@
  * V2 AI Voice Settings API Routes
  * V2-grade ElevenLabs integration with aiAgentLogic system
  * 
- * 🎤 V2 VOICE SETTINGS - ENTERPRISE ARCHITECTURE:
+ * 🎤 V2 VOICE SETTINGS - V2 ARCHITECTURE:
  * ╔══════════════════════════════════════════════════════════════════╗
  * ║ ELEVENLABS INTEGRATION V2 - MULTI-TENANT VOICE SYSTEM            ║
  * ╠══════════════════════════════════════════════════════════════════╣

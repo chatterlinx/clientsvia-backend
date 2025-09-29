@@ -1,7 +1,7 @@
 /**
  * V2 GLOBAL ADD COMPANY ROUTES - V2 Company Creation
  * 
- * V2 GLOBAL ADD COMPANY - ENTERPRISE ARCHITECTURE:
+ * V2 GLOBAL ADD COMPANY - V2 ARCHITECTURE:
  * ╔══════════════════════════════════════════════════════════════════╗
  * ║ COMPANY CREATION V2 - MULTI-TENANT PLATFORM MANAGEMENT          ║
  * ╠══════════════════════════════════════════════════════════════════╣

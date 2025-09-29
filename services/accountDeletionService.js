@@ -1,5 +1,5 @@
 /**
- * 🗑️ ENTERPRISE ACCOUNT DELETION SERVICE
+ * 🗑️ V2 ACCOUNT DELETION SERVICE
  * =====================================
  * Complete multi-tenant account deletion with zero data residue
  * Handles all data layers: MongoDB, Redis, Files, Logs, Analytics
