@@ -15425,8 +15425,8 @@ Key Metrics:
             // Load saved company profile data
             await this.loadCompanyProfileData();
             
-            // 🚫 DISABLED: Load saved Q&A entries (legacy data contamination)
-            // await this.loadAndDisplaySavedQnA();
+            // ✅ RE-ENABLED: Load saved Q&A entries (V2 system is now clean)
+            await this.loadAndDisplaySavedQnA();
         }
 
         /**
@@ -18402,9 +18402,9 @@ Key Metrics:
                     document.getElementById('empty-qna-state').style.display = 'block';
                 }
                 
-                // 🚫 DISABLED: Reload saved Q&A entries (legacy data contamination)
-                console.log('🔄 Q&A saved successfully - legacy display disabled until clean V2 data');
-                // await this.loadAndDisplaySavedQnA();
+                // ✅ RE-ENABLED: Reload saved Q&A entries (V2 system is now clean)
+                console.log('🔄 Q&A saved successfully - reloading saved entries');
+                await this.loadAndDisplaySavedQnA();
                 
             } catch (error) {
                 console.error('❌ Error saving Q&A:', error);
