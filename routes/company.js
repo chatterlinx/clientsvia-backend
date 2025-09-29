@@ -658,6 +658,75 @@ router.patch('/company/:companyId/voice-settings', async (req, res) => {
     }
 });
 
+/**
+ * 💾 Company Profile Update Endpoint
+ * PATCH /api/company/:companyId/profile
+ */
+router.patch('/company/:companyId/profile', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const updateData = req.body;
+
+    console.log(`[API PATCH /api/company/${companyId}/profile] Received data:`, JSON.stringify(updateData, null, 2));
+
+    if (!ObjectId.isValid(companyId)) {
+        return res.status(400).json({ message: 'Invalid company ID format' });
+    }
+
+    try {
+        // Build update object with dot notation for nested fields
+        const updateFields = {};
+        
+        if (updateData.businessType) {
+            updateFields.businessType = updateData.businessType;
+        }
+        
+        // Handle nested aiAgentLogic fields
+        Object.keys(updateData).forEach(key => {
+            if (key.startsWith('aiAgentLogic.')) {
+                updateFields[key] = updateData[key];
+            }
+        });
+
+        // Always update lastUpdated
+        updateFields['aiAgentLogic.lastUpdated'] = new Date();
+
+        console.log(`[Profile Update] Updating fields:`, updateFields);
+
+        const result = await Company.findByIdAndUpdate(
+            companyId,
+            { $set: updateFields },
+            { new: true, runValidators: true }
+        );
+
+        if (!result) {
+            return res.status(404).json({ message: 'Company not found' });
+        }
+
+        // Clear Redis cache
+        try {
+            if (redisClient && redisClient.isReady) {
+                await redisClient.del(`company:${companyId}`);
+                console.log(`🗑️ Cache cleared for company ${companyId} after profile update`);
+            }
+        } catch (cacheError) {
+            console.warn('⚠️ Cache clear failed after profile update:', cacheError.message);
+        }
+
+        console.log(`✅ Company profile updated successfully for ${companyId}`);
+        res.json({ 
+            message: 'Company profile updated successfully', 
+            data: result 
+        });
+
+    } catch (error) {
+        console.error(`❌ Error updating company profile for ${companyId}:`, error);
+        res.status(500).json({ 
+            message: 'Failed to update company profile', 
+            error: error.message 
+        });
+    }
+});
+
 router.patch('/company/:companyId/agentsetup', async (req, res) => {
     const { companyId } = req.params;
     const { agentSetup, tradeTypes, timezone } = req.body;

@@ -15421,6 +15421,53 @@ Key Metrics:
             
             // Load initial data
             await this.loadKnowledgeData();
+            
+            // Load saved company profile data
+            await this.loadCompanyProfileData();
+        }
+
+        /**
+         * 📋 Load Saved Company Profile Data
+         */
+        async loadCompanyProfileData() {
+            try {
+                console.log('📋 Loading company profile data...');
+                
+                const response = await fetch(`/api/company/${this.companyId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${getUniversalAuthToken()}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to load company data: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const company = data.company || data;
+                
+                // Populate business type
+                if (company.businessType) {
+                    const businessTypeInput = document.getElementById('company-business-type');
+                    if (businessTypeInput) {
+                        businessTypeInput.value = company.businessType;
+                    }
+                }
+                
+                // Populate AI agent role if it exists
+                if (company.aiAgentLogic?.personality?.role) {
+                    const aiRolePolished = document.getElementById('ai-agent-role-polished');
+                    if (aiRolePolished) {
+                        aiRolePolished.value = company.aiAgentLogic.personality.role;
+                    }
+                }
+                
+                console.log('✅ Company profile data loaded successfully');
+                
+            } catch (error) {
+                console.error('❌ Error loading company profile data:', error);
+                // Don't show error to user - this is just for loading existing data
+            }
         }
 
         getCompanyId() {
@@ -18110,11 +18157,17 @@ Key Metrics:
                 
                 const data = await response.json();
                 
+                // 🎯 CLEAR THE RAW INPUT (no more confusion!)
+                document.getElementById('ai-agent-role-raw').value = '';
+                
                 // Update the polished role textarea
                 document.getElementById('ai-agent-role-polished').value = data.data.polishedRole;
                 
+                // 💾 SAVE EVERYTHING TO DATABASE
+                await this.saveCompanyProfileData(businessType.trim(), data.data.polishedRole);
+                
                 // Show success message
-                this.showSuccessMessage('AI wrote your professional role description!');
+                this.showSuccessMessage('AI wrote your professional role and saved it!');
                 
             } catch (error) {
                 console.error('❌ Error generating AI role:', error);
@@ -18124,6 +18177,38 @@ Key Metrics:
                 const generateBtn = document.getElementById('generate-ai-role-btn');
                 generateBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>AI: Write Professional Role Description';
                 generateBtn.disabled = false;
+            }
+        }
+
+        /**
+         * 💾 Save Company Profile Data
+         */
+        async saveCompanyProfileData(businessType, aiRole) {
+            try {
+                console.log('💾 Saving company profile data...');
+                
+                const response = await fetch(`/api/company/${this.companyId}/profile`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getUniversalAuthToken()}`
+                    },
+                    body: JSON.stringify({
+                        businessType: businessType,
+                        'aiAgentLogic.personality.role': aiRole,
+                        'aiAgentLogic.lastUpdated': new Date()
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to save profile: ${response.status}`);
+                }
+                
+                console.log('✅ Company profile saved successfully');
+                
+            } catch (error) {
+                console.error('❌ Error saving company profile:', error);
+                throw error;
             }
         }
 
