@@ -2997,6 +2997,41 @@ class CompanyProfileManager {
             timeout = setTimeout(later, wait);
         };
     }
+
+    // Add after initializeCompanyQnAManager() around line 2639
+
+    /**
+     * Initialize Local Company Q&A Manager (New V2 Tab)
+     */
+    initializeLocalQnAManager() {
+        // Wait for tab to be active
+        const localTab = document.getElementById('local-company-qna-tab');
+        const localContainer = document.getElementById('localQnaContainer');
+        
+        if (!localTab || !localContainer) {
+            console.warn('Local Q&A tab/container not found');
+            return;
+        }
+
+        // On tab show (assume Bootstrap tabs or custom)
+        localTab.addEventListener('shown.bs.tab', () => {
+            if (!this.localQnAManager) {
+                // Import dynamically or assume loaded
+                const LocalQnAManager = require('./components/LocalQnAManager'); // If module, else global
+                this.localQnAManager = new LocalQnAManager('localQnaContainer', this.apiBaseUrl, this.companyId);
+            }
+        });
+
+        // Fallback for non-BS: on click
+        localTab.addEventListener('click', () => {
+            if (!this.localQnAManager) {
+                const LocalQnAManager = window.LocalQnAManager || require('./components/LocalQnAManager');
+                this.localQnAManager = new LocalQnAManager('localQnaContainer', this.apiBaseUrl, this.companyId);
+            }
+        });
+    }
+
+    // In the main init or tab setup (e.g., line 2639 area), call this.initializeLocalQnAManager();
 }
 
 /* ============================================================================

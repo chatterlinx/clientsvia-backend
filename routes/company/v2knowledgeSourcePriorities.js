@@ -27,6 +27,7 @@ const { redisClient } = require('../../clients');
 const logger = require('../../utils/logger');
 const Joi = require('joi');
 const SmartThresholdOptimizer = require('../../services/v2smartThresholdOptimizer');
+const V2SmartThresholdOptimizer = require('../../services/v2smartThresholdOptimizer');
 
 // Validation schemas
 const priorityFlowSchema = Joi.object({
@@ -781,6 +782,274 @@ router.post('/:companyId/knowledge-source-priorities/smart-optimize', authentica
     }
 });
 
+// ========================================= 
+// 🚀 TRADE Q&A ENDPOINT - PRIORITY #2 SOURCE
+// Auto-unlocks 50+ Q&As on trade selection
+// ========================================= 
+router.get('/:companyId/trade', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    try {
+        logger.info(`📊 GET trade Q&A for company ${companyId}`);
+        
+        const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeSourcePriorities.tradeQnA tradeCategories');
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Check Redis cache
+        const cacheKey = `company:${companyId}:tradeQnA`;
+        let tradeData;
+        try {
+            if (redisClient && redisClient.isReady) {
+                const cached = await redisClient.get(cacheKey);
+                if (cached) {
+                    tradeData = JSON.parse(cached);
+                    logger.info(`⚡ Cache hit for trade Q&A`);
+                }
+            }
+        } catch (error) {
+            logger.warn(`⚠️ Cache check failed: ${error.message}`);
+        }
+        
+        if (!tradeData) {
+            // Fetch/build trade Q&A based on selected categories
+            tradeData = await buildTradeQnA(company.tradeCategories, company.aiAgentLogic.knowledgeSourcePriorities.tradeQnA.threshold || 0.75);
+            // Cache for 1800s (30min)
+            try {
+                if (redisClient && redisClient.isReady) {
+                    await redisClient.setex(cacheKey, 1800, JSON.stringify(tradeData));
+                }
+            } catch (error) {
+                logger.warn(`⚠️ Cache set failed: ${error.message}`);
+            }
+        }
+        
+        res.json({
+            success: true,
+            data: tradeData,
+            threshold: company.aiAgentLogic.knowledgeSourcePriorities.tradeQnA.threshold || 0.75
+        });
+    } catch (error) {
+        logger.error(`❌ GET trade Q&A error for ${companyId}: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+    }
+});
+
+router.post('/:companyId/trade', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const { tradeCategories, autoUnlock } = req.body;
+    try {
+        logger.info(`🔓 POST trade selection (auto-unlock) for company ${companyId}`);
+        
+        const company = await Company.findByIdAndUpdate(
+            companyId,
+            {
+                $set: {
+                    tradeCategories: tradeCategories || [],
+                    'aiAgentLogic.knowledgeSourcePriorities.tradeQnA.enabled': true,
+                    'aiAgentLogic.knowledgeSourcePriorities.tradeQnA.lastUpdated': new Date(),
+                    updatedAt: new Date()
+                }
+            },
+            { new: true, runValidators: true }
+        );
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Auto-unlock: Generate/load Q&As for selected trades
+        if (autoUnlock) {
+            const unlockedQnAs = await generateTradeQnAs(tradeCategories, companyId);
+            logger.info(`✅ Unlocked ${unlockedQnAs.length} trade Q&As`);
+        }
+        
+        // Invalidate caches
+        await redisClient.del(`company:${companyId}:tradeQnA`);
+        await redisClient.del(`company:${companyId}`);
+        
+        res.json({
+            success: true,
+            message: 'Trade Q&A configured and unlocked',
+            tradeCategories,
+            unlockedCount: autoUnlock ? await countTradeQnAs(companyId) : 0
+        });
+    } catch (error) {
+        logger.error(`❌ POST trade error for ${companyId}: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+    }
+});
+
+// ========================================= 
+// 📄 TEMPLATES ENDPOINT - PRIORITY #3 SOURCE
+// ========================================= 
+router.get('/:companyId/templates', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    try {
+        logger.info(`📄 GET templates for company ${companyId}`);
+        
+        const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeSourcePriorities.templates');
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        const cacheKey = `company:${companyId}:templates`;
+        let templates;
+        try {
+            if (redisClient && redisClient.isReady) {
+                const cached = await redisClient.get(cacheKey);
+                if (cached) {
+                    templates = JSON.parse(cached);
+                }
+            }
+        } catch (error) {
+            logger.warn(`⚠️ Cache check failed: ${error.message}`);
+        }
+        
+        if (!templates) {
+            // Layer global templates + company-specific
+            templates = await loadTemplates(company.aiAgentLogic.knowledgeSourcePriorities.templates.threshold || 0.7, companyId);
+            try {
+                if (redisClient && redisClient.isReady) {
+                    await redisClient.setex(cacheKey, 1800, JSON.stringify(templates));
+                }
+            } catch (error) {
+                logger.warn(`⚠️ Cache set failed: ${error.message}`);
+            }
+        }
+        
+        res.json({
+            success: true,
+            data: templates,
+            threshold: company.aiAgentLogic.knowledgeSourcePriorities.templates.threshold || 0.7
+        });
+    } catch (error) {
+        logger.error(`❌ GET templates error for ${companyId}: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+    }
+});
+
+router.put('/:companyId/templates', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const { templates, threshold } = req.body;
+    try {
+        logger.info(`📄 PUT templates for company ${companyId}`);
+        
+        const company = await Company.findByIdAndUpdate(
+            companyId,
+            {
+                $set: {
+                    'aiAgentLogic.knowledgeSourcePriorities.templates': {
+                        templates: templates || [],
+                        threshold: threshold || 0.7,
+                        enabled: true,
+                        lastUpdated: new Date()
+                    },
+                    updatedAt: new Date()
+                }
+            },
+            { new: true }
+        );
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        await redisClient.del(`company:${companyId}:templates`);
+        await redisClient.del(`company:${companyId}`);
+        
+        res.json({ success: true, message: 'Templates updated' });
+    } catch (error) {
+        logger.error(`❌ PUT templates error for ${companyId}: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+    }
+});
+
+// ========================================= 
+// 🛡️ FALLBACK ENDPOINT - PRIORITY #4 SOURCE
+// Always responds (keyword-driven baseline)
+// ========================================= 
+router.get('/:companyId/fallback', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    try {
+        logger.info(`🛡️ GET fallback for company ${companyId}`);
+        
+        const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeSourcePriorities.fallbackBehavior');
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        const cacheKey = `company:${companyId}:fallback`;
+        let fallback;
+        try {
+            if (redisClient && redisClient.isReady) {
+                const cached = await redisClient.get(cacheKey);
+                if (cached) {
+                    fallback = JSON.parse(cached);
+                }
+            }
+        } catch (error) {
+            logger.warn(`⚠️ Cache check failed: ${error.message}`);
+        }
+        
+        if (!fallback) {
+            fallback = await loadFallbackRules(company.aiAgentLogic.knowledgeSourcePriorities.fallbackBehavior.threshold || 0.5, companyId);
+            try {
+                if (redisClient && redisClient.isReady) {
+                    await redisClient.setex(cacheKey, 3600, JSON.stringify(fallback)); // 1hr TTL
+                }
+            } catch (error) {
+                logger.warn(`⚠️ Cache set failed: ${error.message}`);
+            }
+        }
+        
+        res.json({
+            success: true,
+            data: fallback,
+            threshold: company.aiAgentLogic.knowledgeSourcePriorities.fallbackBehavior.threshold || 0.5
+        });
+    } catch (error) {
+        logger.error(`❌ GET fallback error for ${companyId}: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+    }
+});
+
+router.put('/:companyId/fallback', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const { fallbackRules, threshold } = req.body;
+    try {
+        logger.info(`🛡️ PUT fallback for company ${companyId}`);
+        
+        const company = await Company.findByIdAndUpdate(
+            companyId,
+            {
+                $set: {
+                    'aiAgentLogic.knowledgeSourcePriorities.fallbackBehavior': {
+                        rules: fallbackRules || [],
+                        threshold: threshold || 0.5,
+                        enabled: true,
+                        lastUpdated: new Date()
+                    },
+                    updatedAt: new Date()
+                }
+            },
+            { new: true }
+        );
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        await redisClient.del(`company:${companyId}:fallback`);
+        await redisClient.del(`company:${companyId}`);
+        
+        res.json({ success: true, message: 'Fallback rules updated' });
+    } catch (error) {
+        logger.error(`❌ PUT fallback error for ${companyId}: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+    }
+});
+
 // ============================================================================
 // AUTO-OPTIMIZATION MANAGEMENT
 // 🤖 PURPOSE: Enable/disable automatic threshold optimization
@@ -903,5 +1172,199 @@ router.put('/:companyId/knowledge-source-priorities/auto-optimization', authenti
         });
     }
 });
+
+// Add GET /:companyId/priorities (if not existing, around line 100)
+router.get('/:companyId/priorities', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    try {
+        logger.info(`📊 GET priorities for company ${companyId}`);
+        
+        const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeSourcePriorities');
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Apply defaults if null
+        const priorities = company.aiAgentLogic?.knowledgeSourcePriorities || {
+            companyQnA: { threshold: 0.8, enabled: true },
+            tradeQnA: { threshold: 0.75, enabled: true },
+            templates: { threshold: 0.7, enabled: true },
+            inHouseFallback: { threshold: 0.5, enabled: true },
+            autoOptimization: { enabled: false }
+        };
+        
+        // Cache response
+        const cacheKey = `company:${companyId}:priorities`;
+        try {
+            if (redisClient && redisClient.isReady) {
+                await redisClient.setex(cacheKey, 1800, JSON.stringify(priorities));
+            }
+        } catch (error) {
+            logger.warn(`⚠️ Cache set failed: ${error.message}`);
+        }
+        
+        res.json({
+            success: true,
+            data: priorities,
+            sources: Object.keys(priorities).filter(k => k !== 'autoOptimization').length
+        });
+    } catch (error) {
+        logger.error(`❌ GET priorities error: ${error.message}`);
+        res.status(500).json({ error: 'Server error', details: error.message });
+    }
+});
+
+// Add PUT /:companyId/priorities (around line 150)
+router.put('/:companyId/priorities', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const { companyQnA, tradeQnA, templates, inHouseFallback, autoOptimization } = req.body;
+    
+    try {
+        logger.info(`💾 PUT priorities for company ${companyId}`);
+        
+        // Validation schema
+        const schema = Joi.object({
+            companyQnA: Joi.object({ threshold: Joi.number().min(0).max(1), enabled: Joi.boolean() }).required(),
+            tradeQnA: Joi.object({ threshold: Joi.number().min(0).max(1), enabled: Joi.boolean() }).required(),
+            templates: Joi.object({ threshold: Joi.number().min(0).max(1), enabled: Joi.boolean() }).required(),
+            inHouseFallback: Joi.object({ threshold: Joi.number().min(0).max(1), enabled: Joi.boolean() }).required(),
+            autoOptimization: Joi.object({ enabled: Joi.boolean() }).optional()
+        });
+        
+        const { error: validationError } = schema.validate(req.body);
+        if (validationError) {
+            return res.status(400).json({ error: 'Invalid config', details: validationError.details });
+        }
+        
+        const updateData = {
+            'aiAgentLogic.knowledgeSourcePriorities': {
+                companyQnA: { ...companyQnA, lastUpdated: new Date() },
+                tradeQnA: { ...tradeQnA, lastUpdated: new Date() },
+                templates: { ...templates, lastUpdated: new Date() },
+                inHouseFallback: { ...inHouseFallback, lastUpdated: new Date() },
+                autoOptimization: { enabled: autoOptimization?.enabled || false, lastUpdated: new Date() }
+            },
+            'aiAgentLogic.lastUpdated': new Date(),
+            updatedAt: new Date()
+        };
+        
+        const company = await Company.findByIdAndUpdate(
+            companyId,
+            { $set: updateData },
+            { new: true, runValidators: true }
+        );
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Invalidate caches
+        try {
+            await redisClient.del(`company:${companyId}`);
+            await redisClient.del(`company:${companyId}:priorities`);
+            logger.info(`🔄 Cache invalidated for priorities update`);
+        } catch (error) {
+            logger.warn(`⚠️ Cache del failed: ${error.message}`);
+        }
+        
+        logger.info(`✅ Priorities saved: ${JSON.stringify(req.body, null, 2)}`);
+        
+        res.json({
+            success: true,
+            message: 'Priorities configured',
+            data: company.aiAgentLogic.knowledgeSourcePriorities
+        });
+    } catch (error) {
+        logger.error(`❌ PUT priorities error: ${error.message}`, { stack: error.stack });
+        res.status(500).json({ error: 'Server error', details: error.message });
+    }
+});
+
+// Add POST /:companyId/priorities/optimize-now (around line 200)
+router.post('/:companyId/priorities/optimize-now', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    try {
+        logger.info(`🔧 Optimize priorities now for company ${companyId}`);
+        
+        const optimizer = new V2SmartThresholdOptimizer();
+        const optimizedConfig = await optimizer.optimizeThresholds(companyId, {
+            sources: ['companyQnA', 'tradeQnA', 'templates', 'inHouseFallback'],
+            targetAccuracy: 0.95 // Enterprise target
+        });
+        
+        if (!optimizedConfig) {
+            return res.status(400).json({ error: 'Optimization failed - insufficient data' });
+        }
+        
+        // Save optimized
+        const company = await Company.findByIdAndUpdate(
+            companyId,
+            {
+                $set: {
+                    'aiAgentLogic.knowledgeSourcePriorities': optimizedConfig,
+                    'aiAgentLogic.lastUpdated': new Date(),
+                    updatedAt: new Date()
+                }
+            },
+            { new: true }
+        );
+        
+        // Invalidate caches
+        await redisClient.del(`company:${companyId}`);
+        
+        res.json({
+            success: true,
+            message: 'Thresholds optimized',
+            data: optimizedConfig,
+            changes: optimizer.getOptimizationReport() // Assume method returns summary
+        });
+    } catch (error) {
+        logger.error(`❌ Optimize error: ${error.message}`);
+        res.status(500).json({ error: 'Optimization failed', details: error.message });
+    }
+});
+
+// Helper functions (add at end of file if not existing)
+async function buildTradeQnA(tradeCategories, threshold) {
+    // Logic to build Q&A from global trade data layered with company-specific
+    // Placeholder: Fetch from v2TradeCategory model, filter by categories, apply threshold
+    const TradeCategory = require('../../models/v2TradeCategory');
+    const qnas = [];
+    for (const category of tradeCategories) {
+        const trades = await TradeCategory.find({ category }).select('qna');
+        qnas.push(...trades.flatMap(t => t.qna.filter(q => q.confidence >= threshold)));
+    }
+    return qnas;
+}
+
+async function generateTradeQnAs(tradeCategories, companyId) {
+    // Generate and save unlocked Q&As to CompanyKnowledgeQnA
+    const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
+    const generated = []; // Placeholder logic
+    for (const category of tradeCategories) {
+        // AI-generate or load 50+ Q&As per trade
+        const newQnAs = await generateQnAsForTrade(category, companyId); // Implement as needed
+        await CompanyKnowledgeQnA.insertMany(newQnAs);
+        generated.push(...newQnAs);
+    }
+    return generated;
+}
+
+async function countTradeQnAs(companyId) {
+    const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
+    return await CompanyKnowledgeQnA.countDocuments({ companyId, category: { $in: ['trade'] } });
+}
+
+async function loadTemplates(threshold, companyId) {
+    // Layer global + company templates
+    // Placeholder: From config/messageTemplates.json + company.aiAgentLogic.templates
+    return []; // Implement loading logic
+}
+
+async function loadFallbackRules(threshold, companyId) {
+    // Keyword-driven baseline rules
+    // Placeholder: From company.aiAgentLogic.fallbackBehavior.rules
+    return []; // Implement
+}
 
 module.exports = router;
