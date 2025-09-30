@@ -304,51 +304,9 @@ router.put('/:companyId/knowledge-management', authenticateJWT, async (req, res)
 });
 
 /**
- * 📚 GET /api/company/:companyId/knowledge-management/company-qna
- * Get all Company Q&A entries
+ * V2 DELETED: Old flat Company Q&A GET endpoint
+ * Now using category-based endpoint at line ~2045
  */
-router.get('/:companyId/knowledge-management/company-qna', authenticateJWT, async (req, res) => {
-    const startTime = Date.now();
-    const { companyId } = req.params;
-
-    try {
-        logger.info(`📚 GET company Q&A request for company ${companyId}`);
-
-        // Load Company Q&A from CompanyKnowledgeQnA collection
-        const companyQnAs = await CompanyKnowledgeQnA.find({ companyId }).lean();
-        
-        const responseTime = Date.now() - startTime;
-        logger.info(`📚 GET company Q&A success for company ${companyId}`, { 
-            responseTime,
-            entriesFound: companyQnAs.length
-        });
-
-        res.json({
-            success: true,
-            message: 'Company Q&A loaded successfully',
-            data: companyQnAs,
-            meta: {
-                responseTime,
-                entriesFound: companyQnAs.length,
-                collection: 'CompanyKnowledgeQnA'
-            }
-        });
-
-    } catch (error) {
-        const responseTime = Date.now() - startTime;
-        logger.error(`❌ GET company Q&A failed for company ${companyId}`, {
-            error: error.message,
-            responseTime
-        });
-
-        res.status(500).json({
-            success: false,
-            message: 'Failed to load Company Q&A',
-            error: error.message,
-            meta: { responseTime }
-        });
-    }
-});
 
 /**
  * 📚 POST /api/company/:companyId/knowledge-management/company-qna
