@@ -18901,9 +18901,16 @@ Key Metrics:
 
             const generateBtn = document.getElementById('generate-local-qna-btn');
             if (generateBtn) {
+                console.log('🔧 DEBUG: Found generate button, attaching event listener');
                 generateBtn.removeEventListener('click', this.generateLocalQnAHandler);
-                this.generateLocalQnAHandler = () => this.generateLocalQnA();
+                this.generateLocalQnAHandler = () => {
+                    console.log('🎯 BUTTON CLICKED - Event listener triggered');
+                    this.generateLocalQnA();
+                };
                 generateBtn.addEventListener('click', this.generateLocalQnAHandler);
+                console.log('✅ DEBUG: Event listener attached successfully');
+            } else {
+                console.log('❌ DEBUG: Generate button not found!');
             }
         }
 
