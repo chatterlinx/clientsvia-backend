@@ -4103,36 +4103,42 @@ This would be a great time to also check..."></textarea>
             console.log('🎨 [RENDER-5] Building HTML for', categories.length, 'categories');
             container.innerHTML = categories.map(category => `
                 <div class="bg-white rounded-lg shadow fade-in" data-category-id="${category._id}">
-                    <div class="flex justify-between items-center p-6 border-b border-gray-200">
-                        <div>
-                            <h3 class="text-lg font-medium text-gray-900">${category.name}</h3>
-                            <p class="text-sm text-gray-500">${category.description || 'No description provided'}</p>
-                            <div class="flex items-center mt-2 space-x-4 text-xs text-gray-500">
+                    <!-- Category Header with Title & Description (Full Width) -->
+                    <div class="p-6 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-3">${category.name}</h3>
+                        <p class="text-sm text-gray-600 leading-relaxed mb-4">${category.description || 'No description provided'}</p>
+                        
+                        <!-- Stats Row -->
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-4 text-xs text-gray-500">
                                 <span><i class="fas fa-question-circle mr-1"></i>${category.statistics?.totalQnAs || 0} Q&As</span>
                                 <span><i class="fas fa-tags mr-1"></i>${category.statistics?.totalKeywords || 0} Keywords</span>
                                 <span><i class="fas fa-clock mr-1"></i>${formatDate(category.statistics?.lastUpdated)}</span>
                             </div>
-                        </div>
-                        <div class="flex items-center space-x-2">
-                            <button onclick="openQnAModal('${category._id}')" 
-                                    class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md text-sm">
-                                <i class="fas fa-plus mr-1"></i>Add Q&A
-                            </button>
-                        <button onclick="showGenerateQnAsModal('${category._id}', '${category.name.replace(/'/g, "\\'")}', ${(category.qnas || []).length})" 
-                                class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-md text-sm">
-                            <i class="fas fa-magic mr-1"></i>Generate Top 15 Q&As
-                        </button>
-                            <button onclick="regenerateCategoryKeywords('${category._id}')" 
-                                    class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-md text-sm">
-                                <i class="fas fa-magic mr-1"></i>Regenerate
-                            </button>
-                            <button onclick="deleteCategory('${category._id}')" 
-                                    class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm">
-                                <i class="fas fa-trash mr-1"></i>Delete
-                            </button>
+                            
+                            <!-- Action Buttons (Now Below Description!) -->
+                            <div class="flex items-center space-x-2">
+                                <button onclick="openQnAModal('${category._id}')" 
+                                        class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md text-sm transition duration-200">
+                                    <i class="fas fa-plus mr-1"></i>Add Q&A
+                                </button>
+                                <button onclick="showGenerateQnAsModal('${category._id}', '${category.name.replace(/'/g, "\\'")}', ${(category.qnas || []).length})" 
+                                        class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-md text-sm transition duration-200">
+                                    <i class="fas fa-magic mr-1"></i>Generate Top 15
+                                </button>
+                                <button onclick="regenerateCategoryKeywords('${category._id}')" 
+                                        class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-md text-sm transition duration-200">
+                                    <i class="fas fa-magic mr-1"></i>Regenerate
+                                </button>
+                                <button onclick="deleteCategory('${category._id}')" 
+                                        class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm transition duration-200">
+                                    <i class="fas fa-trash mr-1"></i>Delete
+                                </button>
+                            </div>
                         </div>
                     </div>
                     
+                    <!-- Q&As List -->
                     <div class="p-6">
                         ${renderQnAs(category._id, category.qnas || [])}
                     </div>
