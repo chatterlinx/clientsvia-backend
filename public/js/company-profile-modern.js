@@ -2998,48 +2998,7 @@ class CompanyProfileManager {
         };
     }
 
-    // Add after initializeCompanyQnAManager() around line 2639
-
-    /**
-     * Initialize Local Company Q&A Manager (New V2 Tab)
-     */
-    initializeLocalQnAManager() {
-        console.log('🔧 initializeLocalQnAManager called');
-        const localTab = document.getElementById('local-company-qna-tab');
-        const localContainer = document.getElementById('localQnaContainer');
-        
-        if (!localTab || !localContainer) {
-            console.error('❌ Local tab/container not found - tab ID: local-company-qna-tab, container: localQnaContainer');
-            return;
-        }
-        console.log('✅ Local tab/container found');
-
-        localTab.addEventListener('shown.bs.tab', () => {
-            console.log('🔥 Local tab shown - init manager');
-            if (!this.localQnAManager) {
-                const LocalQnAManagerClass = window.LocalQnAManager;
-                if (!LocalQnAManagerClass) {
-                    console.error('❌ window.LocalQnAManager not found - check script load');
-                    return;
-                }
-                this.localQnAManager = new LocalQnAManagerClass('localQnaContainer', this.apiBaseUrl, this.companyId);
-            }
-        });
-
-        localTab.addEventListener('click', () => {
-            if (!this.localQnAManager) {
-                console.log('🔥 Local tab clicked - fallback init');
-                const LocalQnAManagerClass = window.LocalQnAManager;
-                if (LocalQnAManagerClass) {
-                    this.localQnAManager = new LocalQnAManagerClass('localQnaContainer', this.apiBaseUrl, this.companyId);
-                } else {
-                    console.error('❌ Fallback failed - no LocalQnAManager');
-                }
-            }
-        });
-    }
-
-    // In the main init or tab setup (e.g., line 2639 area), call this.initializeLocalQnAManager();
+    // Local Company Q&A Manager removed - tab was deleted per user request
 }
 
 /* ============================================================================
@@ -3092,7 +3051,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Initialize tab managers
         console.log('🔧 Initializing tab managers...');
-        companyProfileManager.initializeLocalQnAManager(); // Add this line
         // ... other inits like KnowledgePriorities if present
         
         // Debug functions...
