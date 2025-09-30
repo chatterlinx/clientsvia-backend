@@ -4034,6 +4034,25 @@ This would be a great time to also check..."></textarea>
         // 🔧 MODIFIED: Extract companyId from URL instead of 'global'
         let currentCompanyId = new URLSearchParams(window.location.search).get('id');
 
+        // 🛡️ SAFEGUARD: Recover company ID from localStorage if lost from URL
+        if (!currentCompanyId) {
+            const savedId = localStorage.getItem('lastCompanyId');
+            if (savedId && savedId !== 'test123') {
+                currentCompanyId = savedId;
+                console.warn('⚠️ [RECOVERY] Company ID lost from URL, recovered from localStorage:', currentCompanyId);
+                // 🔧 FIX URL: Restore the ID parameter
+                const newUrl = `${window.location.pathname}?id=${currentCompanyId}`;
+                window.history.replaceState({}, '', newUrl);
+                console.log('✅ [RECOVERY] URL restored:', newUrl);
+            } else {
+                console.error('❌ [CRITICAL] No company ID found in URL or localStorage!');
+            }
+        } else {
+            // Store valid company ID for future recovery
+            localStorage.setItem('lastCompanyId', currentCompanyId);
+            console.log('💾 [STORAGE] Company ID saved to localStorage:', currentCompanyId);
+        }
+
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 [INIT-1] Company Q&A Category System starting');
