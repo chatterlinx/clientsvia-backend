@@ -1645,8 +1645,8 @@ async function generateSmartRole(businessType, rawRole) {
     const category = determineBusinessCategory(businessType);
     const baseRole = roleTemplates[category] || roleTemplates['general'];
 
-    // Generate polished role
-    const polishedRole = `I am a ${baseRole} for ${businessType}. ${rawRole} I provide helpful, accurate information about our services, scheduling, pricing, and policies. I maintain a professional, friendly tone while ensuring customers receive the information they need to make informed decisions about our services.`;
+    // ✅ FIXED: Use the user's raw role input directly, don't add generic contractor language
+    const polishedRole = `I am a ${baseRole} for ${businessType}. ${rawRole} I provide helpful, accurate information about our services, scheduling, and policies. I maintain a professional, friendly tone while ensuring customers receive the information they need.`;
 
     return polishedRole;
 }
@@ -1748,20 +1748,51 @@ function personalizeQuestion(question, businessType, keyInfo) {
 function personalizeAnswer(answer, businessType, keyInfo, description) {
     let personalizedAnswer = answer;
 
+    // ✅ FIXED: Extract actual information from user's description
+    const descriptionLower = description.toLowerCase();
+    
+    // Extract service area from description
+    let serviceArea = 'our local area';
+    if (descriptionLower.includes('county')) {
+        const countyMatch = description.match(/(\w+\s+county)/i);
+        if (countyMatch) serviceArea = countyMatch[1];
+    } else if (descriptionLower.includes('area')) {
+        const areaMatch = description.match(/(\w+\s+area)/i);
+        if (areaMatch) serviceArea = areaMatch[1];
+    } else if (descriptionLower.includes('city') || descriptionLower.includes('town')) {
+        const cityMatch = description.match(/(\w+(?:\s+\w+)?)\s+(?:city|town)/i);
+        if (cityMatch) serviceArea = cityMatch[1];
+    }
+
     // Replace placeholders with actual information
     if (keyInfo.hours) {
         personalizedAnswer = personalizedAnswer.replace('[HOURS]', keyInfo.hours);
     } else {
-        personalizedAnswer = personalizedAnswer.replace('[HOURS]', 'Monday through Friday 8 AM to 5 PM');
+        // ✅ FIXED: Use business-appropriate default hours
+        const category = determineBusinessCategory(businessType);
+        const defaultHours = category === 'dental' ? 
+            'Monday through Friday 8 AM to 5 PM' : 
+            'Monday through Friday 8 AM to 6 PM';
+        personalizedAnswer = personalizedAnswer.replace('[HOURS]', defaultHours);
     }
 
+    // ✅ FIXED: Use business-appropriate emergency service language
+    const category = determineBusinessCategory(businessType);
+    let emergencyService = 'emergency service availability';
+    if (category === 'dental') {
+        emergencyService = 'emergency dental care for urgent situations';
+    } else if (category === 'hvac' || category === 'plumbing' || category === 'electrical') {
+        emergencyService = '24/7 emergency service';
+    }
+    
     if (keyInfo.emergency) {
-        personalizedAnswer = personalizedAnswer.replace('[EMERGENCY_SERVICE]', '24/7 emergency service');
+        personalizedAnswer = personalizedAnswer.replace('[EMERGENCY_SERVICE]', emergencyService);
     } else {
-        personalizedAnswer = personalizedAnswer.replace('[EMERGENCY_SERVICE]', 'emergency service availability');
+        personalizedAnswer = personalizedAnswer.replace('[EMERGENCY_SERVICE]', emergencyService);
     }
 
-    personalizedAnswer = personalizedAnswer.replace('[SERVICE_AREA]', 'our local area');
+    // ✅ FIXED: Use actual service area from user description
+    personalizedAnswer = personalizedAnswer.replace('[SERVICE_AREA]', serviceArea);
 
     return personalizedAnswer;
 }
