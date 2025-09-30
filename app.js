@@ -160,12 +160,20 @@ try {
 // Main Company Q&A system (via v2knowledgeManagement.js) is working perfectly
 
 // 🔧 AI VARIABLES ROUTES - Reusable placeholders for AI Agent
+console.log('🔍 [AI-VAR-CHECKPOINT-1] Starting to load AI Variables routes...');
 try {
+    console.log('🔍 [AI-VAR-CHECKPOINT-2] About to require v2aiVariables.js...');
     const aiVariablesRoutes = require('./routes/company/v2aiVariables');
+    console.log('🔍 [AI-VAR-CHECKPOINT-3] Module loaded successfully!');
+    console.log('🔍 [AI-VAR-CHECKPOINT-4] Router type:', typeof aiVariablesRoutes);
+    console.log('🔍 [AI-VAR-CHECKPOINT-5] Router stack length:', aiVariablesRoutes.stack?.length || 'N/A');
+    
     app.use('/api/company', aiVariablesRoutes);
+    console.log('🔍 [AI-VAR-CHECKPOINT-6] app.use() called successfully');
     console.log('✅ AI Variables routes registered at /api/company/:companyId/ai-variables');
 } catch (error) {
-    console.error('❌ Failed to load AI Variables routes:', error);
+    console.error('❌ [AI-VAR-CHECKPOINT-ERROR] Failed to load AI Variables routes:', error);
+    console.error('❌ [AI-VAR-CHECKPOINT-ERROR] Error stack:', error.stack);
 }
 
 app.use('/api/company', companyRoutes);

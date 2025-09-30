@@ -12,14 +12,23 @@
 
 const express = require('express');
 const router = express.Router();
+
+console.log('🔍 [AI-VAR-FILE-1] v2aiVariables.js loading...');
+
 const v2Company = require('../../models/v2Company');
+console.log('🔍 [AI-VAR-FILE-2] v2Company model loaded');
+
 const { authenticateJWT } = require('../../middleware/auth');
+console.log('🔍 [AI-VAR-FILE-3] authenticateJWT loaded');
+
 const logger = require('../../utils/logger');
+console.log('🔍 [AI-VAR-FILE-4] logger loaded');
 
 /**
  * GET /api/company/:companyId/ai-variables
  * Load all AI variables for a company
  */
+console.log('🔍 [AI-VAR-FILE-5] Defining GET route...');
 router.get('/:companyId/ai-variables', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     
@@ -67,6 +76,7 @@ router.get('/:companyId/ai-variables', authenticateJWT, async (req, res) => {
  * POST /api/company/:companyId/ai-variables
  * Add a new AI variable
  */
+console.log('🔍 [AI-VAR-FILE-6] Defining POST route...');
 router.post('/:companyId/ai-variables', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     
@@ -151,6 +161,7 @@ router.post('/:companyId/ai-variables', authenticateJWT, async (req, res) => {
  * DELETE /api/company/:companyId/ai-variables/:varId
  * Delete an AI variable
  */
+console.log('🔍 [AI-VAR-FILE-7] Defining DELETE route...');
 router.delete('/:companyId/ai-variables/:varId', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     
@@ -207,5 +218,10 @@ router.delete('/:companyId/ai-variables/:varId', authenticateJWT, async (req, re
     }
 });
 
+console.log('🔍 [AI-VAR-FILE-8] All 3 routes defined successfully');
+console.log('🔍 [AI-VAR-FILE-9] Exporting router...');
+
 module.exports = router;
+
+console.log('🔍 [AI-VAR-FILE-10] ✅ v2aiVariables.js module export complete!');
 
