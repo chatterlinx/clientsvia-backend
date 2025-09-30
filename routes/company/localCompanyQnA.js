@@ -92,6 +92,67 @@ router.get('/:companyId/local-qna', authenticateJWT, async (req, res) => {
 });
 
 /**
+ * 🤖 AI-POWERED Q&A GENERATION (MUST BE BEFORE GENERIC POST ROUTE)
+ * POST /api/company/:companyId/local-qna/generate
+ */
+router.post('/:companyId/local-qna/generate', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+    const { businessType, description } = req.body;
+
+    try {
+        logger.info(`🤖 Generating AI Q&As for company ${companyId}`, {
+            businessType,
+            descriptionLength: description?.length
+        });
+
+        if (!businessType || !description) {
+            return res.status(400).json({
+                success: false,
+                message: 'Business type and description are required',
+                error: 'MISSING_REQUIRED_FIELDS'
+            });
+        }
+
+        // Generate AI Q&A entries using business-specific logic
+        const generatedQnAs = await generateLocalCompanyQnAs(businessType, description, companyId);
+
+        const responseTime = Date.now() - startTime;
+        
+        logger.info(`✅ AI Q&As generated successfully for company ${companyId}`, {
+            count: generatedQnAs.length,
+            responseTime
+        });
+
+        res.json({
+            success: true,
+            message: 'AI Q&As generated successfully',
+            data: generatedQnAs,
+            meta: {
+                responseTime,
+                entriesGenerated: generatedQnAs.length,
+                companyId,
+                businessType
+            }
+        });
+
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        logger.error(`❌ Error generating AI Q&As for company ${companyId}`, {
+            error: error.message,
+            responseTime
+        });
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to generate AI Q&As',
+            error: error.message,
+            meta: { responseTime }
+        });
+    }
+});
+
+/**
  * 📝 CREATE NEW LOCAL COMPANY Q&A
  * POST /api/company/:companyId/local-qna
  */
@@ -329,67 +390,6 @@ router.delete('/:companyId/local-qna/:qnaId', authenticateJWT, async (req, res) 
         res.status(500).json({
             success: false,
             message: 'Failed to delete Local Company Q&A',
-            error: error.message,
-            meta: { responseTime }
-        });
-    }
-});
-
-/**
- * 🤖 AI-POWERED Q&A GENERATION
- * POST /api/company/:companyId/local-qna/generate
- */
-router.post('/:companyId/local-qna/generate', authenticateJWT, async (req, res) => {
-    const startTime = Date.now();
-    const { companyId } = req.params;
-    const { businessType, description } = req.body;
-
-    try {
-        logger.info(`🤖 Generating AI Q&As for company ${companyId}`, {
-            businessType,
-            descriptionLength: description?.length
-        });
-
-        if (!businessType || !description) {
-            return res.status(400).json({
-                success: false,
-                message: 'Business type and description are required',
-                error: 'MISSING_REQUIRED_FIELDS'
-            });
-        }
-
-        // Generate AI Q&A entries using business-specific logic
-        const generatedQnAs = await generateLocalCompanyQnAs(businessType, description, companyId);
-
-        const responseTime = Date.now() - startTime;
-        
-        logger.info(`✅ AI Q&As generated successfully for company ${companyId}`, {
-            count: generatedQnAs.length,
-            responseTime
-        });
-
-        res.json({
-            success: true,
-            message: 'AI Q&As generated successfully',
-            data: generatedQnAs,
-            meta: {
-                responseTime,
-                entriesGenerated: generatedQnAs.length,
-                companyId,
-                businessType
-            }
-        });
-
-    } catch (error) {
-        const responseTime = Date.now() - startTime;
-        logger.error(`❌ Error generating AI Q&As for company ${companyId}`, {
-            error: error.message,
-            responseTime
-        });
-
-        res.status(500).json({
-            success: false,
-            message: 'Failed to generate AI Q&As',
             error: error.message,
             meta: { responseTime }
         });
