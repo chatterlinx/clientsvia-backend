@@ -159,11 +159,16 @@ try {
 // 🏢 LOCAL COMPANY Q&A ROUTES - V2 CLEAN SYSTEM
 // Fresh implementation with zero legacy contamination
 try {
+    console.log('🔍 LOADING LOCAL COMPANY Q&A ROUTES...');
     const localCompanyQnARoutes = require('./routes/company/localCompanyQnA');
+    console.log('🔍 LOCAL COMPANY Q&A ROUTES REQUIRED SUCCESSFULLY');
     app.use('/api/company', localCompanyQnARoutes);
     console.log('✅ Local Company Q&A routes registered at /api/company - Clean V2 system active - UPDATED');
 } catch (error) {
-    console.error('❌ Failed to load Local Company Q&A routes:', error);
+    console.error('🚨🚨🚨 CRITICAL: Failed to load Local Company Q&A routes 🚨🚨🚨');
+    console.error('🚨 Error name:', error.name);
+    console.error('🚨 Error message:', error.message);
+    console.error('🚨 Error stack:', error.stack);
 }
 
 app.use('/api/company', companyRoutes);
