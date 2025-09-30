@@ -18623,7 +18623,35 @@ Key Metrics:
             // Append saved Q&A to existing content (after any generated ones)
             container.innerHTML += savedQnAHTML;
             
+            // Wire up edit and delete buttons using event delegation
+            this.attachQnAButtonHandlers();
+            
             console.log('✅ CLEAN SYSTEM: Saved Q&A entries displayed successfully');
+        }
+
+        /**
+         * 🔌 Attach button handlers for edit/delete buttons
+         */
+        attachQnAButtonHandlers() {
+            const container = document.getElementById('generated-qna-list');
+            if (!container) return;
+
+            // Event delegation for edit buttons
+            container.addEventListener('click', (e) => {
+                const editBtn = e.target.closest('.edit-clean-qna-btn');
+                if (editBtn) {
+                    const qnaId = editBtn.dataset.qnaId;
+                    this.editSavedQnA(qnaId);
+                }
+
+                const deleteBtn = e.target.closest('.delete-clean-qna-btn');
+                if (deleteBtn) {
+                    const qnaId = deleteBtn.dataset.qnaId;
+                    this.deleteSavedQnA(qnaId);
+                }
+            });
+
+            console.log('✅ CLEAN SYSTEM: Edit/delete button handlers attached');
         }
 
         /**
@@ -18642,8 +18670,29 @@ Key Metrics:
          * ✏️ Edit Saved Q&A Entry
          */
         editSavedQnA(qnaId) {
-            // TODO: Implement edit functionality
-            alert('Edit functionality coming soon!');
+            console.log('✏️ EDIT: Opening editor for Q&A:', qnaId);
+            
+            // Open the Company Q&A Manager modal
+            const modal = document.getElementById('company-qna-modal');
+            if (!modal) {
+                console.error('❌ Modal not found!');
+                return;
+            }
+
+            modal.classList.remove('hidden');
+
+            // Initialize or get the CompanyQnAManager instance
+            if (!window.companyQnAManagerInstance) {
+                console.log('🔧 Initializing CompanyQnAManager...');
+                initializeModalCompanyQnAManager();
+            }
+
+            // Load the Q&A data into edit mode after a brief delay to ensure manager is ready
+            setTimeout(() => {
+                if (window.companyQnAManagerInstance) {
+                    window.companyQnAManagerInstance.editQnA(qnaId);
+                }
+            }, 100);
         }
 
         /**
