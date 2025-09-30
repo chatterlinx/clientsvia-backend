@@ -22043,6 +22043,206 @@ Key Metrics:
     // ============================================================================
     // END UNIFIED AI AGENT ORCHESTRATION SYSTEM
     // ============================================================================
+    
+    // ============================================================================
+    // 🔧 AI VARIABLES SYSTEM - Reusable Placeholders for AI Agent
+    // ============================================================================
+    
+    let aiVariables = [];
+    
+    // Load AI Variables
+    async function loadAIVariables() {
+        try {
+            console.log('📦 [AI-VAR-LOAD-1] Loading variables...');
+            const companyId = new URLSearchParams(window.location.search).get('id') || localStorage.getItem('lastCompanyId');
+            
+            if (!companyId) {
+                console.error('❌ [AI-VAR-LOAD-2] No company ID found');
+                showNotification('Error: Company ID not found', 'error');
+                return;
+            }
+            
+            const token = getUniversalAuthToken();
+            const response = await fetch(`/api/company/${companyId}/ai-variables`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const data = await response.json();
+            aiVariables = data.data || [];
+            
+            console.log(`✅ [AI-VAR-LOAD-3] Loaded ${aiVariables.length} variables`);
+            renderAIVariables();
+            
+        } catch (error) {
+            console.error('❌ [AI-VAR-LOAD-ERROR]', error);
+            showNotification('Failed to load AI variables', 'error');
+        }
+    }
+    
+    // Render AI Variables Table
+    function renderAIVariables() {
+        console.log('🎨 [AI-VAR-RENDER-1] Rendering variables...');
+        const tbody = document.getElementById('variables-table-body');
+        const noVarsRow = document.getElementById('no-variables-row');
+        
+        if (aiVariables.length === 0) {
+            if (noVarsRow) noVarsRow.style.display = '';
+            console.log('🎨 [AI-VAR-RENDER-2] No variables to display');
+            return;
+        }
+        
+        if (noVarsRow) noVarsRow.style.display = 'none';
+        
+        // Remove existing rows (except no-variables row)
+        Array.from(tbody.children).forEach(row => {
+            if (row.id !== 'no-variables-row') row.remove();
+        });
+        
+        // Add variable rows
+        aiVariables.forEach(variable => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    ${escapeHtml(variable.value)}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <code class="bg-purple-100 px-2 py-1 rounded text-purple-700">${escapeHtml(variable.placeholder)}</code>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button onclick="deleteAIVariable('${variable.id}')" 
+                            class="text-red-600 hover:text-red-900 transition duration-200">
+                        <i class="fas fa-trash mr-1"></i>Delete
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        console.log(`🎨 [AI-VAR-RENDER-3] Rendered ${aiVariables.length} variables`);
+    }
+    
+    // Add New Variable
+    async function handleAddVariable(event) {
+        event.preventDefault(); // Prevent form submission!
+        
+        try {
+            console.log('✏️ [AI-VAR-ADD-1] Adding new variable...');
+            const companyId = new URLSearchParams(window.location.search).get('id') || localStorage.getItem('lastCompanyId');
+            const valueInput = document.getElementById('variable-value');
+            const placeholderInput = document.getElementById('variable-placeholder');
+            
+            const value = valueInput.value.trim();
+            const placeholder = placeholderInput.value.trim();
+            
+            if (!value || !placeholder) {
+                showNotification('Please fill in both fields', 'error');
+                return;
+            }
+            
+            // Auto-add brackets if missing
+            let formattedPlaceholder = placeholder;
+            if (!formattedPlaceholder.startsWith('[')) formattedPlaceholder = '[' + formattedPlaceholder;
+            if (!formattedPlaceholder.endsWith(']')) formattedPlaceholder = formattedPlaceholder + ']';
+            
+            const token = getUniversalAuthToken();
+            const response = await fetch(`/api/company/${companyId}/ai-variables`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    value,
+                    placeholder: formattedPlaceholder
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to add variable');
+            }
+            
+            const data = await response.json();
+            console.log('✅ [AI-VAR-ADD-2] Variable added successfully');
+            
+            // Clear form
+            valueInput.value = '';
+            placeholderInput.value = '';
+            
+            // Reload variables
+            await loadAIVariables();
+            
+            showNotification('✅ Variable added successfully!', 'success');
+            
+        } catch (error) {
+            console.error('❌ [AI-VAR-ADD-ERROR]', error);
+            showNotification(error.message || 'Failed to add variable', 'error');
+        }
+    }
+    
+    // Delete Variable
+    async function deleteAIVariable(varId) {
+        if (!confirm('Delete this variable? It will be removed from all Q&As.')) return;
+        
+        try {
+            console.log('🗑️ [AI-VAR-DELETE-1] Deleting variable:', varId);
+            const companyId = new URLSearchParams(window.location.search).get('id') || localStorage.getItem('lastCompanyId');
+            const token = getUniversalAuthToken();
+            
+            const response = await fetch(`/api/company/${companyId}/ai-variables/${varId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!response.ok) throw new Error('Failed to delete variable');
+            
+            console.log('✅ [AI-VAR-DELETE-2] Variable deleted successfully');
+            await loadAIVariables();
+            showNotification('✅ Variable deleted successfully!', 'success');
+            
+        } catch (error) {
+            console.error('❌ [AI-VAR-DELETE-ERROR]', error);
+            showNotification('Failed to delete variable', 'error');
+        }
+    }
+    
+    // Helper: Escape HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Initialize AI Variables on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('🚀 [AI-VAR-INIT] Initializing AI Variables system...');
+        
+        // Attach form submit handler
+        const addVariableForm = document.getElementById('add-variable-form');
+        if (addVariableForm) {
+            addVariableForm.addEventListener('submit', handleAddVariable);
+            console.log('✅ [AI-VAR-INIT] Form handler attached');
+        }
+        
+        // Load variables when AI Variables tab is clicked
+        const aiVarTab = document.getElementById('km-tab-variables');
+        if (aiVarTab) {
+            aiVarTab.addEventListener('click', function() {
+                console.log('🔄 [AI-VAR-INIT] AI Variables tab clicked - loading...');
+                loadAIVariables();
+            });
+        }
+    });
+    
+    // ============================================================================
+    // END AI VARIABLES SYSTEM
+    // ============================================================================
     </script>
 
     <!-- Modern implementation handles all initialization -->

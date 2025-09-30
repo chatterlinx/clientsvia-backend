@@ -159,6 +159,15 @@ try {
 // V2 DELETED: Local Company Q&A routes - using main Company Q&A system instead
 // Main Company Q&A system (via v2knowledgeManagement.js) is working perfectly
 
+// 🔧 AI VARIABLES ROUTES - Reusable placeholders for AI Agent
+try {
+    const aiVariablesRoutes = require('./routes/company/v2aiVariables');
+    app.use('/api/company', aiVariablesRoutes);
+    console.log('✅ AI Variables routes registered at /api/company/:companyId/ai-variables');
+} catch (error) {
+    console.error('❌ Failed to load AI Variables routes:', error);
+}
+
 app.use('/api/company', companyRoutes);
 app.use('/api/company', settingsRoutes);
 
