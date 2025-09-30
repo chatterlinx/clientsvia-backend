@@ -1849,9 +1849,24 @@
                                                                         <label class="block text-sm font-medium text-gray-700 mb-2">
                                                                             <i class="fas fa-robot text-purple-600 mr-1"></i>AI Agent Role & Instructions *
                                                                         </label>
-                                                                        <textarea id="category-description" rows="6" placeholder="e.g., You are a professional receptionist at [Company Name]. Your role is to schedule appointments, answer service questions, and provide helpful information about our services..." 
-                                                                               class="w-full px-3 py-2 border border-purple-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 bg-purple-50"></textarea>
-                                                                        <p class="mt-1 text-xs text-purple-600">
+                                                                        <textarea id="category-description" rows="12" placeholder="Click 'Use Template' below for a professional starting point, or write your own..." 
+                                                                               class="w-full px-3 py-2 border border-purple-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 bg-purple-50 font-mono text-sm"></textarea>
+                                                                        
+                                                                        <!-- Template Helper Button -->
+                                                                        <div class="mt-2 flex items-center justify-between">
+                                                                            <button type="button" id="use-template-btn" 
+                                                                                    class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-md font-medium transition duration-200 shadow-sm">
+                                                                                <i class="fas fa-magic mr-2"></i>
+                                                                                Use Professional Template
+                                                                            </button>
+                                                                            <button type="button" id="clear-template-btn" 
+                                                                                    class="inline-flex items-center px-3 py-2 text-sm text-gray-600 hover:text-gray-800 transition duration-200">
+                                                                                <i class="fas fa-eraser mr-1"></i>
+                                                                                Clear
+                                                                            </button>
+                                                                        </div>
+                                                                        
+                                                                        <p class="mt-2 text-xs text-purple-600">
                                                                             <i class="fas fa-info-circle mr-1"></i>
                                                                             <strong>Critical:</strong> AI Agent will read and adopt this role when responding to calls. Be specific about tone, responsibilities, and behavior.
                                                                         </p>
@@ -4005,11 +4020,243 @@ This would be a great time to also check..."></textarea>
             // Q&A form
             document.getElementById('qna-form').addEventListener('submit', handleSaveQnA);
             
+            // 🎯 TEMPLATE HELPER BUTTONS
+            document.getElementById('use-template-btn').addEventListener('click', insertProfessionalTemplate);
+            document.getElementById('clear-template-btn').addEventListener('click', clearTemplate);
 
             // Real-time keyword preview
             document.getElementById('qna-question').addEventListener('input', updateKeywordPreview);
             document.getElementById('qna-answer').addEventListener('input', updateKeywordPreview);
             document.getElementById('manual-keywords').addEventListener('input', updateKeywordPreview);
+        }
+
+        // ============================================================
+        // 🎯 SECTION: PROFESSIONAL TEMPLATE SYSTEM
+        // ============================================================
+        
+        /**
+         * 🎯 Insert Professional AI Agent Role Template
+         * Auto-personalizes with category name from input field
+         */
+        function insertProfessionalTemplate() {
+            console.log('🎯 [TEMPLATE-1] Inserting professional template...');
+            
+            // Get category name for auto-personalization
+            const categoryNameInput = document.getElementById('category-name');
+            const categoryName = categoryNameInput.value.trim() || '[Category Name]';
+            const categoryNameUpper = categoryName.toUpperCase();
+            
+            console.log('🎯 [TEMPLATE-2] Category name:', categoryName);
+            
+            // Get icon based on category (optional enhancement)
+            const icon = getCategoryIcon(categoryName);
+            
+            // 🌟 WORLD-CLASS UNIVERSAL TEMPLATE
+            const template = `${icon} ${categoryNameUpper} - AI RECEPTIONIST
+${'='.repeat(60)}
+
+ROLE OVERVIEW:
+You are a professional, friendly, and efficient virtual receptionist 
+for [Company Name], a ${categoryName.toLowerCase()} business. Your primary 
+role is to greet customers warmly, understand their needs, provide 
+information about services, schedule appointments, and handle urgent 
+requests appropriately.
+
+${'='.repeat(60)}
+CORE RESPONSIBILITIES:
+${'='.repeat(60)}
+
+1. GREETING CUSTOMERS
+   • Always start with a warm, professional greeting
+   • Include the company name in your greeting
+   • Example: "Thank you for calling [Company Name]. How can I 
+     help you today?"
+
+2. UNDERSTANDING NEEDS
+   • Ask clarifying questions to identify what the customer needs
+   • Listen carefully and gather key details:
+     - Customer name & contact information
+     - Service location/address
+     - Description of their request or issue
+     - Urgency level (routine vs. urgent)
+
+3. SERVICE INFORMATION
+   • Explain what [Company Name] offers
+   • Services include:
+     [List main services here - e.g., "repairs, installations, 
+      maintenance, emergency service"]
+   • Provide general information about process and timeline
+   • Set clear expectations
+
+4. SCHEDULING & AVAILABILITY
+   • Check [Company Name]'s availability
+   • Business hours: [Business Hours]
+   • Offer available appointment times
+   • Confirm date, time, and service details
+   • Send confirmation if system is integrated
+
+5. URGENT/EMERGENCY HANDLING
+   • Identify situations requiring immediate attention:
+     [Define what constitutes an emergency for this business]
+   • Response: "I understand this is urgent. Let me get you 
+     help right away."
+   • Escalate immediately to on-call staff
+   • Reassure customer that help is coming
+
+${'='.repeat(60)}
+TONE & BEHAVIOR:
+${'='.repeat(60)}
+
+✓ DO:
+  • Stay polite, empathetic, and reassuring
+  • Use simple, clear language (avoid jargon)
+  • Collect all necessary customer information
+  • Provide clear next steps
+  • Escalate urgencies immediately
+  • Make customers feel heard and valued
+
+✗ DON'T:
+  • Make promises you can't keep
+  • Provide technical advice beyond company policy
+  • Quote exact prices unless authorized
+  • Diagnose complex issues
+  • Leave customers confused or without a plan
+
+${'='.repeat(60)}
+EXAMPLE DIALOGUE:
+${'='.repeat(60)}
+
+AI: "Good morning! Thank you for calling [Company Name]. 
+     My name is Alex. How can I help you today?"
+
+Customer: "I need to schedule a service appointment."
+
+AI: "I'd be happy to help you schedule that. May I get 
+     your name and the best contact number for you?"
+
+Customer: [Provides information]
+
+AI: "Thank you. Can you tell me a bit about what service 
+     you're looking for?"
+
+Customer: [Explains need]
+
+AI: "I understand. We have availability this week. Would 
+     [Day] at [Time] work for you?"
+
+Customer: "Yes, that works."
+
+AI: "Perfect! I've scheduled you for [Day] at [Time]. You'll 
+     receive a confirmation shortly. Is there anything else 
+     I can help you with today?"
+
+${'='.repeat(60)}
+IMPORTANT REMINDERS:
+${'='.repeat(60)}
+
+• Always use [Company Name] placeholder - it will be replaced 
+  with the actual company name automatically
+• Use [Business Hours] for hours of operation
+• Adapt your responses to the customer's tone and urgency
+• When in doubt, offer to have someone call them back
+• Your goal: Professional, helpful, and efficient service`;
+
+            // Insert into textarea
+            const textarea = document.getElementById('category-description');
+            textarea.value = template;
+            
+            // Visual feedback
+            textarea.classList.add('ring-2', 'ring-green-500');
+            setTimeout(() => {
+                textarea.classList.remove('ring-2', 'ring-green-500');
+            }, 1000);
+            
+            // Show success message
+            showNotification('✅ Professional template inserted! Customize it for your business.', 'success');
+            
+            console.log('🎯 [TEMPLATE-3] ✅ Template inserted successfully');
+        }
+        
+        /**
+         * 🔧 Get category icon based on name
+         */
+        function getCategoryIcon(categoryName) {
+            const nameLower = categoryName.toLowerCase();
+            
+            // Service businesses
+            if (nameLower.includes('plumb')) return '🔧';
+            if (nameLower.includes('hvac') || nameLower.includes('air') || nameLower.includes('heat')) return '❄️';
+            if (nameLower.includes('electric')) return '⚡';
+            if (nameLower.includes('roof')) return '🏠';
+            if (nameLower.includes('clean')) return '🧹';
+            if (nameLower.includes('landscap') || nameLower.includes('lawn')) return '🌳';
+            if (nameLower.includes('paint')) return '🎨';
+            if (nameLower.includes('carpet')) return '🧵';
+            if (nameLower.includes('pest')) return '🐛';
+            if (nameLower.includes('pool')) return '🏊';
+            
+            // Healthcare
+            if (nameLower.includes('dent')) return '🦷';
+            if (nameLower.includes('medic') || nameLower.includes('doctor')) return '⚕️';
+            if (nameLower.includes('vet')) return '🐾';
+            if (nameLower.includes('optom') || nameLower.includes('eye')) return '👁️';
+            if (nameLower.includes('chiro')) return '💆';
+            
+            // Professional services
+            if (nameLower.includes('legal') || nameLower.includes('law') || nameLower.includes('attorney')) return '⚖️';
+            if (nameLower.includes('account') || nameLower.includes('tax')) return '📊';
+            if (nameLower.includes('real estate') || nameLower.includes('realtor')) return '🏘️';
+            if (nameLower.includes('insurance')) return '🛡️';
+            if (nameLower.includes('financ')) return '💰';
+            
+            // Education & coaching
+            if (nameLower.includes('tutor') || nameLower.includes('education')) return '📚';
+            if (nameLower.includes('coach') || nameLower.includes('fitness')) return '💪';
+            if (nameLower.includes('music')) return '🎵';
+            if (nameLower.includes('dance')) return '💃';
+            
+            // Automotive
+            if (nameLower.includes('auto') || nameLower.includes('mechanic') || nameLower.includes('car')) return '🚗';
+            if (nameLower.includes('tow')) return '🚛';
+            
+            // Beauty & wellness
+            if (nameLower.includes('salon') || nameLower.includes('hair')) return '💇';
+            if (nameLower.includes('spa') || nameLower.includes('massage')) return '💆';
+            if (nameLower.includes('nail')) return '💅';
+            
+            // Food & hospitality
+            if (nameLower.includes('restaurant') || nameLower.includes('cafe')) return '🍽️';
+            if (nameLower.includes('hotel')) return '🏨';
+            if (nameLower.includes('cater')) return '🍕';
+            
+            // Default
+            return '🤖';
+        }
+        
+        /**
+         * 🧹 Clear template textarea
+         */
+        function clearTemplate() {
+            console.log('🧹 [TEMPLATE-CLEAR] Clearing template...');
+            const textarea = document.getElementById('category-description');
+            textarea.value = '';
+            textarea.focus();
+            showNotification('Template cleared', 'info');
+        }
+        
+        /**
+         * 📢 Show notification (helper function)
+         */
+        function showNotification(message, type = 'info') {
+            // Use existing notification system if available
+            if (typeof showSuccess === 'function' && type === 'success') {
+                showSuccess(message);
+            } else if (typeof showError === 'function' && type === 'error') {
+                showError(message);
+            } else {
+                // Fallback: console log
+                console.log(`[${type.toUpperCase()}] ${message}`);
+            }
         }
 
         // ============================================================
