@@ -20,7 +20,6 @@ const { v4: uuidv4 } = require('uuid');
 const CompanyKnowledgeQnA = require('../../models/knowledge/CompanyQnA');
 const KeywordGenerationService = require('../../services/knowledge/KeywordGenerationService');
 const { redisClient } = require('../../clients');
-const logger = require('../../utils/logger');
 const Company = require('../../models/v2Company');
 
 /**
