@@ -1662,28 +1662,109 @@ router.post('/:companyId/knowledge-management/generate-role', authenticateJWT, a
 
 /**
  * 🤖 Smart Q&A Generator (In-House AI)
+ * ✨ FOCUSED GENERATION: Creates targeted Q&As based on admin input
  */
 async function generateSmartQnA(businessType, description) {
-    // In-house AI generation logic
-    const qnaTemplates = getQnATemplatesForBusiness(businessType);
     const generatedEntries = [];
-
-    // Parse description for key information
-    const keyInfo = extractKeyInformation(description);
     
-    // Generate relevant Q&A entries
-    for (const template of qnaTemplates) {
-        if (isRelevantTemplate(template, keyInfo)) {
-            const qna = {
-                question: personalizeQuestion(template.question, businessType, keyInfo),
-                answer: personalizeAnswer(template.answer, businessType, keyInfo, description),
-                keywords: generateKeywords(template.question, template.answer, businessType)
-            };
-            generatedEntries.push(qna);
-        }
+    // Parse what the admin typed to understand the intent
+    const descriptionLower = description.toLowerCase();
+    
+    // 🎯 SMART DETECTION: Figure out what the admin is trying to add
+    const detectedTopics = [];
+    
+    // Service Area Detection
+    if (descriptionLower.match(/service|serve|area|county|city|location|miles|radius|cover/i)) {
+        detectedTopics.push({
+            type: 'serviceArea',
+            question: "What areas do you service?",
+            answer: description.trim(),
+            keywords: ['area', 'location', 'service', 'serve', 'where', 'coverage', 'distance', 'travel']
+        });
     }
-
+    
+    // Hours Detection
+    if (descriptionLower.match(/hour|open|close|monday|tuesday|wednesday|thursday|friday|saturday|sunday|am|pm|24\/7/i)) {
+        detectedTopics.push({
+            type: 'hours',
+            question: "What are your hours of operation?",
+            answer: description.trim(),
+            keywords: ['hours', 'open', 'closed', 'schedule', 'time', 'when', 'availability', 'monday', 'friday']
+        });
+    }
+    
+    // Emergency Service Detection
+    if (descriptionLower.match(/emergency|24\/7|urgent|after hours|weekend|night/i)) {
+        detectedTopics.push({
+            type: 'emergency',
+            question: "Do you offer emergency services?",
+            answer: description.trim(),
+            keywords: ['emergency', 'urgent', '24/7', 'after hours', 'weekend', 'night', 'immediate']
+        });
+    }
+    
+    // Pricing Detection
+    if (descriptionLower.match(/cost|price|pricing|fee|charge|\$|dollar|estimate|quote/i)) {
+        detectedTopics.push({
+            type: 'pricing',
+            question: "What are your pricing and service fees?",
+            answer: description.trim(),
+            keywords: ['cost', 'price', 'pricing', 'fee', 'charge', 'estimate', 'quote', 'how much']
+        });
+    }
+    
+    // Insurance/Payment Detection
+    if (descriptionLower.match(/insurance|payment|accept|visa|mastercard|card|cash|check|financing/i)) {
+        detectedTopics.push({
+            type: 'payment',
+            question: "What payment methods do you accept?",
+            answer: description.trim(),
+            keywords: ['payment', 'insurance', 'accept', 'visa', 'mastercard', 'cash', 'check', 'financing']
+        });
+    }
+    
+    // Brands/Equipment Detection
+    if (descriptionLower.match(/brand|equipment|install|carry|trane|carrier|lennox|rheem|goodman/i)) {
+        detectedTopics.push({
+            type: 'brands',
+            question: "What brands or equipment do you work with?",
+            answer: description.trim(),
+            keywords: ['brand', 'equipment', 'install', 'carry', 'model', 'manufacturer']
+        });
+    }
+    
+    // 🎯 IF NOTHING DETECTED: Create a general Q&A from the description
+    if (detectedTopics.length === 0) {
+        // Try to extract the key topic from the description
+        const words = description.trim().split(' ');
+        const firstFewWords = words.slice(0, 3).join(' ');
+        
+        generatedEntries.push({
+            question: `Tell me about ${firstFewWords}`,
+            answer: description.trim(),
+            keywords: extractKeywords(description)
+        });
+    } else {
+        // Add only the detected topics
+        generatedEntries.push(...detectedTopics);
+    }
+    
     return generatedEntries;
+}
+
+/**
+ * 🔑 Extract Keywords from Text
+ */
+function extractKeywords(text) {
+    // Remove common words and extract meaningful keywords
+    const commonWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'we', 'our', 'your', 'are', 'is'];
+    const words = text.toLowerCase()
+        .replace(/[^\w\s]/g, ' ')
+        .split(/\s+/)
+        .filter(word => word.length > 2 && !commonWords.includes(word));
+    
+    // Return unique keywords
+    return [...new Set(words)].slice(0, 10);
 }
 
 /**
