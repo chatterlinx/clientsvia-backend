@@ -2188,6 +2188,114 @@ router.post('/:companyId/knowledge-management/company-qna/categories', authentic
 });
 
 /**
+ * PUT /api/company/:companyId/knowledge-management/company-qna/categories/:categoryId
+ * Update a Company Q&A Category (name and/or AI Agent Role description)
+ */
+router.put('/:companyId/knowledge-management/company-qna/categories/:categoryId', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId, categoryId } = req.params;
+    const { name, description } = req.body;
+
+    try {
+        logger.info(`✏️ PUT company Q&A category`, { companyId, categoryId, name });
+
+        // Validation
+        if (!name || name.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Category name is required'
+            });
+        }
+
+        // Find the category
+        const category = await CompanyQnACategory.findOne({ _id: categoryId, companyId });
+        if (!category) {
+            logger.warn(`⚠️  Category not found`, { companyId, categoryId });
+            return res.status(404).json({
+                success: false,
+                message: 'Category not found or does not belong to this company',
+                meta: { responseTime: Date.now() - startTime }
+            });
+        }
+
+        // Check if new name conflicts with another category (if name is being changed)
+        if (name.trim().toLowerCase() !== category.name.toLowerCase()) {
+            const existingCategory = await CompanyQnACategory.findOne({ 
+                companyId, 
+                name: name.trim(),
+                _id: { $ne: categoryId } // Exclude current category
+            });
+            if (existingCategory) {
+                logger.warn(`⚠️  Category name already exists`, { companyId, name: name.trim(), existingCategoryId: existingCategory._id });
+                return res.status(409).json({
+                    success: false,
+                    message: 'A category with this name already exists for this company',
+                    error: 'Duplicate category name',
+                    meta: { responseTime: Date.now() - startTime }
+                });
+            }
+        }
+
+        // Update category
+        category.name = name.trim();
+        category.description = description?.trim() || '';
+        category.audit.updatedAt = new Date();
+        category.audit.updatedBy = 'admin';
+
+        const updatedCategory = await category.save();
+
+        // Invalidate cache
+        try {
+            await redisClient.del(`company:${companyId}:knowledge`);
+        } catch (error) {
+            logger.warn(`⚠️ Cache invalidation failed`, { error: error.message });
+        }
+
+        const responseTime = Date.now() - startTime;
+        logger.info(`✏️ PUT company Q&A category success`, { responseTime, categoryId: updatedCategory._id });
+
+        res.status(200).json({
+            success: true,
+            message: `Category "${updatedCategory.name}" updated successfully`,
+            data: {
+                _id: updatedCategory._id,
+                name: updatedCategory.name,
+                description: updatedCategory.description,
+                companyId: updatedCategory.companyId,
+                isActive: updatedCategory.isActive,
+                qnas: updatedCategory.qnas,
+                statistics: {
+                    totalQnAs: updatedCategory.qnas.filter(q => q.isActive).length,
+                    totalKeywords: updatedCategory.qnas.reduce((total, qna) => total + (qna.keywords ? qna.keywords.length : 0), 0),
+                    lastUpdated: updatedCategory.audit.updatedAt
+                },
+                updatedAt: updatedCategory.audit.updatedAt
+            },
+            meta: { responseTime }
+        });
+
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        logger.error(`❌ PUT company Q&A category failed`, {
+            error: error.message,
+            errorCode: error.code,
+            errorName: error.name,
+            companyId,
+            categoryId,
+            categoryName: name,
+            responseTime
+        });
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update category',
+            error: error.message,
+            meta: { responseTime }
+        });
+    }
+});
+
+/**
  * POST /api/company/:companyId/knowledge-management/company-qna/categories/:categoryId/qna
  * Add Q&A to a Company Q&A Category
  */
