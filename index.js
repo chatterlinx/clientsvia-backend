@@ -474,14 +474,16 @@ async function startServer() {
             console.log(`🎯 Server ready to accept connections on port ${PORT}`);
             console.log(`⏱️  Total startup time: ${Date.now() - routeStart}ms`);
             
-            // 🤖 START AUTO-OPTIMIZATION SCHEDULER
-            try {
-                const autoOptimizationScheduler = require('./services/v2autoOptimizationScheduler');
-                autoOptimizationScheduler.start();
-                console.log(`[INIT] 🤖 Auto-optimization scheduler started - checking every hour`);
-            } catch (error) {
-                console.error(`[INIT] ❌ Failed to start auto-optimization scheduler:`, error.message);
-            }
+            // 🤖 AUTO-OPTIMIZATION SCHEDULER - DISABLED (Missing dependency: smartThresholdOptimizer)
+            // TODO: Re-enable when smartThresholdOptimizer is implemented
+            // try {
+            //     const autoOptimizationScheduler = require('./services/v2autoOptimizationScheduler');
+            //     autoOptimizationScheduler.start();
+            //     console.log(`[INIT] 🤖 Auto-optimization scheduler started - checking every hour`);
+            // } catch (error) {
+            //     console.error(`[INIT] ❌ Failed to start auto-optimization scheduler:`, error.message);
+            // }
+            console.log(`[INIT] ℹ️  Auto-optimization scheduler disabled (optional feature)`);
         });
     } catch (err) {
         console.error('[Server Startup] ❌ CRITICAL ERROR - Server startup failed!');
