@@ -1837,21 +1837,11 @@
                                                         
                                                         <div id="km-local-company-content" class="km-tab-content active p-6">
                                                             
-                                                            <!-- Header Section -->
-                                                            <div class="flex items-center justify-between mb-6">
-                                                                <div>
-                                                                    <h4 class="text-xl font-bold text-green-800">Local Company Q&A</h4>
-                                                                    <p class="text-sm text-green-600 mt-1">Clean V2 system - Business-type aware AI generation</p>
-                                                                </div>
-                                                                <div class="flex space-x-3">
-                                                                    <button id="refresh-local-qna-btn" class="bg-green-100 hover:bg-green-200 text-green-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                                                                        <i class="fas fa-sync-alt mr-2"></i>Refresh
-                                                                    </button>
-                                                                    <button id="add-local-qna-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                                                                        <i class="fas fa-plus mr-2"></i>Add Q&A
-                                                                    </button>
-                                                                </div>
-                                                            </div>
+            <!-- Header Section -->
+            <div class="mb-6">
+                <h4 class="text-xl font-bold text-green-800">Local Company Q&A</h4>
+                <p class="text-sm text-green-600 mt-1">Clean V2 system - Business-type aware AI generation</p>
+            </div>
 
                                                             <!-- AI-Powered Q&A Generator -->
                                                             <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6 mb-6">
@@ -1862,36 +1852,37 @@
                                                                 </div>
                                                                 <p class="text-sm text-green-700 mb-4">Let AI create professional Q&A entries for you. Just describe what customers need to know!</p>
                                                                 
-                                                                <!-- Business Type Input -->
-                                                                <div class="grid grid-cols-2 gap-4 mb-4">
-                                                                    <div>
-                                                                        <label class="block text-sm font-medium text-green-800 mb-2">Business Type</label>
-                                                                        <input type="text" id="local-business-type" 
-                                                                               class="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                                                               placeholder="e.g., dental office, HVAC company, plumbing service">
-                                                                    </div>
-                                                                    <div>
-                                                                        <label class="block text-sm font-medium text-green-800 mb-2">Service Area</label>
-                                                                        <input type="text" id="local-service-area" 
-                                                                               class="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                                                               placeholder="e.g., Lee County FL area">
-                                                                    </div>
-                                                                </div>
+                <!-- Business Type Dropdown -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-green-800 mb-2">Business Type</label>
+                    <select id="local-business-type" class="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                        <option value="">Select your business type...</option>
+                        <option value="dental office">Dental Office</option>
+                        <option value="hvac company">HVAC Company</option>
+                        <option value="plumbing service">Plumbing Service</option>
+                        <option value="electrical contractor">Electrical Contractor</option>
+                        <option value="auto repair">Auto Repair Shop</option>
+                        <option value="law firm">Law Firm</option>
+                        <option value="medical practice">Medical Practice</option>
+                        <option value="restaurant">Restaurant</option>
+                        <option value="retail store">Retail Store</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
 
-                                                                <!-- Description Input -->
-                                                                <div class="mb-4">
-                                                                    <label class="block text-sm font-medium text-green-800 mb-2">What do customers need to know?</label>
-                                                                    <textarea id="local-ai-description" rows="3" 
-                                                                              class="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                                                              placeholder="Be specific! Include hours, services, pricing, policies, contact info, etc."></textarea>
-                                                                    <p class="text-xs text-green-600 mt-1">Be specific! Include hours, services, pricing, policies, contact info, etc.</p>
-                                                                </div>
+                <!-- What customers need to know -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-green-800 mb-2">What do customers need to know?</label>
+                    <textarea id="local-ai-description" rows="4" 
+                              class="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                              placeholder="Example: We are open Monday-Friday 9AM-5PM. We service Lee County FL area. Emergency calls available 24/7. We accept most insurance plans."></textarea>
+                    <p class="text-xs text-green-600 mt-1">Write exactly what customers should know - AI will create proper Q&A format with keywords</p>
+                </div>
 
-                                                                <!-- Generate Button -->
-                                                                <button id="generate-local-qna-btn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
-                                                                    <i class="fas fa-magic mr-2"></i>Generate Professional Q&A
-                                                                    <span class="ml-2 text-xs bg-green-500 px-2 py-1 rounded-full">AI will create question, answer, and keywords</span>
-                                                                </button>
+                <!-- Generate Button -->
+                <button id="generate-local-qna-btn" class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors text-lg">
+                    <i class="fas fa-magic mr-2"></i>Generate Professional Q&A
+                </button>
                                                             </div>
 
                                                             <!-- Generated Q&A Display Area -->
@@ -18914,13 +18905,6 @@ Key Metrics:
                 this.generateLocalQnAHandler = () => this.generateLocalQnA();
                 generateBtn.addEventListener('click', this.generateLocalQnAHandler);
             }
-
-            const refreshBtn = document.getElementById('refresh-local-qna-btn');
-            if (refreshBtn) {
-                refreshBtn.removeEventListener('click', this.refreshLocalQnAHandler);
-                this.refreshLocalQnAHandler = () => this.loadLocalCompanyQnA();
-                refreshBtn.addEventListener('click', this.refreshLocalQnAHandler);
-            }
         }
 
         /**
@@ -18963,15 +18947,14 @@ Key Metrics:
         async generateLocalQnA() {
             try {
                 const businessType = document.getElementById('local-business-type').value.trim();
-                const serviceArea = document.getElementById('local-service-area').value.trim();
                 const description = document.getElementById('local-ai-description').value.trim();
 
                 if (!businessType || !description) {
-                    this.showErrorMessage('Please fill in business type and description');
+                    this.showErrorMessage('Please select business type and describe what customers need to know');
                     return;
                 }
 
-                const fullDescription = serviceArea ? `${description}. We service ${serviceArea}.` : description;
+                const fullDescription = description;
 
                 console.log('🤖 Generating Local Company Q&A...', { businessType, description: fullDescription });
 
