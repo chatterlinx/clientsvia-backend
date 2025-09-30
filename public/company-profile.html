@@ -1695,6 +1695,9 @@
                                                                 <button id="km-tab-templates" class="km-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                                                                     <i class="fas fa-file-alt mr-2"></i>Templates
                                                                 </button>
+                                                                <button id="km-tab-variables" class="km-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                                                                    <i class="fas fa-code mr-2 text-purple-600"></i>AI Variables
+                                                                </button>
                                                                 <button id="km-tab-fallback" class="km-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                                                                     <i class="fas fa-shield-alt mr-2"></i>In-House Fallback
                                                                 </button>
@@ -2137,6 +2140,104 @@
                                                              📝 Categories: Service Requests, Booking Requests, Emergency, General
                                                              ⚠️  CRITICAL: This is the final fallback - always responds (0.5 threshold)
                                                         -->
+                                                        <!-- ========================================== -->
+                                                        <!-- AI VARIABLES TAB
+                                                             📋 Universal placeholder variables for AI Agent
+                                                             🎯 Shared across: Company Q&A, Trade Q&A, Templates
+                                                             🔧 Features: Add/Edit/Delete custom variables
+                                                             💡 Usage: [Company Name], [Business Hours], etc.
+                                                        -->
+                                                        <!-- ========================================== -->
+                                                        
+                                                        <div id="km-variables-content" class="km-tab-content p-6">
+                                                            <!-- Header Banner -->
+                                                            <div class="bg-gradient-to-r from-purple-100 to-indigo-100 border border-purple-200 rounded-lg p-4 mb-6">
+                                                                <div class="flex items-center">
+                                                                    <i class="fas fa-code text-purple-600 text-2xl mr-3"></i>
+                                                                    <div>
+                                                                        <h3 class="text-lg font-semibold text-purple-900">🔧 AI Agent Placeholder Variables</h3>
+                                                                        <p class="text-sm text-purple-700 mt-1">
+                                                                            Create reusable variables that AI will automatically replace in responses. Use across Company Q&A, Trade Q&A, and Templates for consistency.
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Add New Variable Form -->
+                                                            <div class="bg-white rounded-lg shadow mb-6 p-6">
+                                                                <h4 class="text-md font-medium text-gray-900 mb-4">
+                                                                    <i class="fas fa-plus-circle text-green-600 mr-2"></i>Add New Variable
+                                                                </h4>
+                                                                <form id="add-variable-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-gray-700 mb-2">Variable Value *</label>
+                                                                        <input type="text" id="variable-value" placeholder="e.g., Total Air" 
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                                                        <p class="text-xs text-gray-500 mt-1">The actual text AI will say</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-gray-700 mb-2">Placeholder Name *</label>
+                                                                        <input type="text" id="variable-placeholder" placeholder="e.g., [Company Name]" 
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                                                        <p class="text-xs text-gray-500 mt-1">Use in brackets: [Name]</p>
+                                                                    </div>
+                                                                    <div class="flex items-end">
+                                                                        <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md font-medium transition duration-200">
+                                                                            <i class="fas fa-plus mr-2"></i>Add Variable
+                                                                        </button>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+
+                                                            <!-- Variables Table -->
+                                                            <div class="bg-white rounded-lg shadow overflow-hidden">
+                                                                <div class="px-6 py-4 border-b border-gray-200">
+                                                                    <h4 class="text-md font-medium text-gray-900">
+                                                                        <i class="fas fa-list text-blue-600 mr-2"></i>Saved Variables
+                                                                    </h4>
+                                                                </div>
+                                                                <div class="overflow-x-auto">
+                                                                    <table class="min-w-full divide-y divide-gray-200">
+                                                                        <thead class="bg-gray-50">
+                                                                            <tr>
+                                                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                    Variable Value
+                                                                                </th>
+                                                                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                    Placeholder Usage
+                                                                                </th>
+                                                                                <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                                    Actions
+                                                                                </th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody id="variables-table-body" class="bg-white divide-y divide-gray-200">
+                                                                            <!-- Variables will be populated here -->
+                                                                            <tr id="no-variables-row">
+                                                                                <td colspan="3" class="px-6 py-12 text-center">
+                                                                                    <i class="fas fa-inbox text-gray-300 text-4xl mb-3"></i>
+                                                                                    <p class="text-gray-500">No variables yet. Add your first one above!</p>
+                                                                                </td>
+                                                                            </tr>
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Usage Examples -->
+                                                            <div class="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                                                <h5 class="text-sm font-semibold text-blue-900 mb-2">
+                                                                    <i class="fas fa-lightbulb text-blue-600 mr-2"></i>How to Use Variables
+                                                                </h5>
+                                                                <ul class="text-sm text-blue-800 space-y-1">
+                                                                    <li>• Use <code class="bg-blue-100 px-2 py-1 rounded">[Company Name]</code> in AI Agent Roles and Q&A answers</li>
+                                                                    <li>• AI will automatically replace with the actual value when responding</li>
+                                                                    <li>• Common examples: [Business Hours], [Service Area], [Phone Number], [Emergency Phone]</li>
+                                                                    <li>• Update once here - changes apply everywhere automatically!</li>
+                                                                </ul>
+                                                            </div>
+                                                        </div>
+
                                                         <!-- ========================================== -->
 
                                                         <!-- In-House Fallback Tab Content -->
