@@ -18946,10 +18946,16 @@ Key Metrics:
          */
         async generateLocalQnA() {
             try {
+                console.log('🚀 GENERATE BUTTON CLICKED - Starting generation process');
+                
                 const businessType = document.getElementById('local-business-type').value.trim();
                 const description = document.getElementById('local-ai-description').value.trim();
 
+                console.log('🔍 DEBUG: Business Type:', businessType);
+                console.log('🔍 DEBUG: Description:', description);
+
                 if (!businessType || !description) {
+                    console.log('❌ ERROR: Missing required fields');
                     this.showErrorMessage('Please select business type and describe what customers need to know');
                     return;
                 }
