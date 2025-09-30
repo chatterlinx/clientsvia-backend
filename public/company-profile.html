@@ -1712,273 +1712,273 @@
                                                         
                                                         <!-- Company Q&A Tab Content - 100% COPIED FROM GLOBAL TRADE CATEGORIES -->
                                                         <div id="km-company-content" class="km-tab-content active p-6">
-        <!-- V2 System Notice -->
-        <div class="bg-gradient-to-r from-purple-100 to-blue-100 border border-purple-200 rounded-lg p-4 mb-6">
-            <div class="flex items-center">
-                <i class="fas fa-rocket text-purple-600 text-lg mr-3"></i>
-                <div>
-                    <h3 class="text-sm font-medium text-purple-900">V2 Global Trade Categories System</h3>
-                    <p class="text-sm text-purple-700 mt-1">
-                        This is the new V2 system for managing global trade categories. All changes here will be inherited by company profiles that select these categories.
-                    </p>
-                </div>
-            </div>
-        </div>
+                                                    <!-- V2 System Notice -->
+                                                    <div class="bg-gradient-to-r from-purple-100 to-blue-100 border border-purple-200 rounded-lg p-4 mb-6">
+                                                        <div class="flex items-center">
+                                                            <i class="fas fa-rocket text-purple-600 text-lg mr-3"></i>
+                                                            <div>
+                                                                <h3 class="text-sm font-medium text-purple-900">V2 Global Trade Categories System</h3>
+                                                                <p class="text-sm text-purple-700 mt-1">
+                                                                    This is the new V2 system for managing global trade categories. All changes here will be inherited by company profiles that select these categories.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
 
-        <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="p-2 bg-blue-100 rounded-lg">
-                        <i class="fas fa-layer-group text-blue-600"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-500">Total Categories</p>
-                        <p id="stats-categories" class="text-2xl font-semibold text-gray-900">0</p>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="p-2 bg-green-100 rounded-lg">
-                        <i class="fas fa-question-circle text-green-600"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-500">Total Q&As</p>
-                        <p id="stats-qnas" class="text-2xl font-semibold text-gray-900">0</p>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="p-2 bg-purple-100 rounded-lg">
-                        <i class="fas fa-tags text-purple-600"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-500">Total Keywords</p>
-                        <p id="stats-keywords" class="text-2xl font-semibold text-gray-900">0</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+                                                    <!-- Stats Cards -->
+                                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                                                        <div class="bg-white rounded-lg shadow p-6">
+                                                            <div class="flex items-center">
+                                                                <div class="p-2 bg-blue-100 rounded-lg">
+                                                                    <i class="fas fa-layer-group text-blue-600"></i>
+                                                                </div>
+                                                                <div class="ml-4">
+                                                                    <p class="text-sm font-medium text-gray-500">Total Categories</p>
+                                                                    <p id="stats-categories" class="text-2xl font-semibold text-gray-900">0</p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="bg-white rounded-lg shadow p-6">
+                                                            <div class="flex items-center">
+                                                                <div class="p-2 bg-green-100 rounded-lg">
+                                                                    <i class="fas fa-question-circle text-green-600"></i>
+                                                                </div>
+                                                                <div class="ml-4">
+                                                                    <p class="text-sm font-medium text-gray-500">Total Q&As</p>
+                                                                    <p id="stats-qnas" class="text-2xl font-semibold text-gray-900">0</p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="bg-white rounded-lg shadow p-6">
+                                                            <div class="flex items-center">
+                                                                <div class="p-2 bg-purple-100 rounded-lg">
+                                                                    <i class="fas fa-tags text-purple-600"></i>
+                                                                </div>
+                                                                <div class="ml-4">
+                                                                    <p class="text-sm font-medium text-gray-500">Total Keywords</p>
+                                                                    <p id="stats-keywords" class="text-2xl font-semibold text-gray-900">0</p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
 
-        <!-- Quick Search & Add New Category Section -->
-        <div class="bg-white rounded-lg shadow mb-8">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-lg font-medium text-gray-900">
-                    <i class="fas fa-plus-circle text-green-600 mr-2"></i>Add New Trade Category
-                </h2>
-                <p class="text-sm text-gray-500 mt-1">Search existing categories first to avoid duplicates</p>
-            </div>
-            <div class="p-6">
-        <!-- Quick Search & Browse Dropdown -->
-        <div class="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <!-- Search Box -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fas fa-search text-blue-500 mr-1"></i>Quick Search Existing Categories
-                </label>
-                <div class="relative">
-                    <input type="text" id="quick-search" placeholder="Type to search existing categories..." 
-                           class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    <div class="absolute inset-y-0 right-0 flex items-center pr-3">
-                        <i class="fas fa-search text-gray-400"></i>
-                    </div>
+                                                    <!-- Quick Search & Add New Category Section -->
+                                                    <div class="bg-white rounded-lg shadow mb-8">
+                                                        <div class="px-6 py-4 border-b border-gray-200">
+                                                            <h2 class="text-lg font-medium text-gray-900">
+                                                                <i class="fas fa-plus-circle text-green-600 mr-2"></i>Add New Trade Category
+                                                            </h2>
+                                                            <p class="text-sm text-gray-500 mt-1">Search existing categories first to avoid duplicates</p>
+                                                        </div>
+                                                        <div class="p-6">
+                                                    <!-- Quick Search & Browse Dropdown -->
+                                                    <div class="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                        <!-- Search Box -->
+                                                        <div>
+                                                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                                                <i class="fas fa-search text-blue-500 mr-1"></i>Quick Search Existing Categories
+                                                            </label>
+                                                            <div class="relative">
+                                                                <input type="text" id="quick-search" placeholder="Type to search existing categories..." 
+                                                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                                                <div class="absolute inset-y-0 right-0 flex items-center pr-3">
+                                                                    <i class="fas fa-search text-gray-400"></i>
+                                                                </div>
                     
-                    <!-- Search Results Dropdown -->
-                    <div id="search-dropdown" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto">
-                        <div id="search-results" class="py-1">
-                            <!-- Results will be populated here -->
-                        </div>
-                    </div>
-                </div>
-                <div class="mt-2 text-xs text-gray-500">
-                    <span id="search-status">Start typing to search through existing categories...</span>
-                </div>
-            </div>
-
-            <!-- Browse All Categories Dropdown -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                    <i class="fas fa-list text-purple-500 mr-1"></i>Browse All Categories
-                </label>
-                <div class="relative">
-                    <button type="button" id="browse-dropdown-btn" 
-                            class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 hover:bg-gray-50">
-                        <span id="browse-dropdown-text" class="text-gray-500">Click to see all categories...</span>
-                    </button>
-                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                        <i class="fas fa-chevron-down text-gray-400" id="browse-chevron"></i>
-                    </div>
-                    
-                    <!-- Browse Categories Dropdown -->
-                    <div id="browse-dropdown" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto">
-                        <div id="browse-results" class="py-1">
-                            <!-- All categories will be populated here -->
-                        </div>
-                    </div>
-                </div>
-                <div class="mt-2 text-xs text-gray-500">
-                    <span id="browse-status">Browse through all available trade categories</span>
-                </div>
-            </div>
-        </div>
-
-                <!-- Add New Category Form -->
-                <div class="border-t pt-6">
-                    <h3 class="text-md font-medium text-gray-900 mb-4">
-                        <i class="fas fa-plus text-green-500 mr-2"></i>Create New Category
-                    </h3>
-                    <form id="add-category-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Category Name *</label>
-                            <input type="text" id="category-name" placeholder="e.g., HVAC, Plumbing, Electrical" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <div id="duplicate-warning" class="hidden mt-1 text-sm text-amber-600">
-                                <i class="fas fa-exclamation-triangle mr-1"></i>
-                                <span>Similar category exists - check search results above</span>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                            <input type="text" id="category-description" placeholder="Brief description of services" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                        <div class="flex items-end">
-                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition duration-200">
-                                <i class="fas fa-plus mr-2"></i>Create Category
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-
-        <!-- Categories List -->
-        <div class="space-y-6" id="categories-container">
-            <div class="text-center py-12">
-                <i class="fas fa-spinner fa-spin text-3xl text-gray-400 mb-4"></i>
-                <p class="text-gray-500">Loading V2 trade categories...</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Generate Q&As Confirmation Modal -->
-    <div id="generate-qnas-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
-            <div class="p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-medium text-gray-900">
-                        <i class="fas fa-magic text-purple-600 mr-2"></i>Generate Top 15 Q&As
-                    </h3>
-                    <button onclick="closeGenerateQnAsModal()" class="text-gray-400 hover:text-gray-600">
-                        <i class="fas fa-times text-xl"></i>
-                    </button>
-                </div>
-                
-                <div class="mb-6">
-                        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
-                            <h4 class="font-medium text-purple-900 mb-2">What will be generated:</h4>
-                            <ul class="text-sm text-purple-800 space-y-1">
-                                <li>• Up to 15 industry-specific Q&As for <span id="generate-category-name" class="font-medium"></span></li>
-                                <li>• Conversion-focused answers that lead to bookings</li>
-                                <li>• Professional, human-like conversational flow</li>
-                                <li>• Relevant keywords for AI agent matching</li>
-                                <li>• <strong>Admin Control:</strong> Add, edit, or delete any Q&As after generation</li>
-                            </ul>
-                        </div>
-                    
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                        <div class="flex items-center mb-2">
-                            <i class="fas fa-info-circle text-blue-600 mr-2"></i>
-                            <span class="font-medium text-blue-900">Current Status:</span>
-                        </div>
-                        <p class="text-sm text-blue-800">
-                            This category currently has <span id="current-qna-count" class="font-medium">0</span> Q&As.
-                            <span id="duplicate-warning" class="block mt-1 text-blue-700">
-                                Duplicate questions will be automatically skipped.
-                            </span>
-                        </p>
-                    </div>
-                    
-                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                            <div class="flex items-center mb-2">
-                                <i class="fas fa-crown text-amber-600 mr-2"></i>
-                                <span class="font-medium text-amber-900">Full Admin Control:</span>
-                            </div>
-                            <p class="text-sm text-amber-800">
-                                <strong>No limits!</strong> Add unlimited Q&As manually, edit any generated content, or delete what you don't need. You have complete control over your trade category content.
-                            </p>
-                        </div>
-                </div>
-                
-                <div class="flex justify-end space-x-3">
-                    <button onclick="closeGenerateQnAsModal()" 
-                            class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
-                        Cancel
-                    </button>
-                    <button onclick="confirmGenerateQnAs()" 
-                            class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-md">
-                        <i class="fas fa-magic mr-2"></i>Generate 15 Q&As
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Q&A Modal -->
-    <div id="qna-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
-            <div class="flex justify-between items-center p-6 border-b border-gray-200">
-                <h3 id="modal-title" class="text-lg font-medium text-gray-900">Add Q&A</h3>
-                <button onclick="closeQnAModal()" class="text-gray-400 hover:text-gray-600">
-                    <i class="fas fa-times text-xl"></i>
-                </button>
-            </div>
-            <form id="qna-form" class="p-6 space-y-4">
-                <input type="hidden" id="modal-category-id">
-                <input type="hidden" id="modal-qna-id">
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Question *</label>
-                    <textarea id="qna-question" rows="3" placeholder="Enter the customer question..." 
-                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Answer *</label>
-                    <textarea id="qna-answer" rows="4" placeholder="Enter the detailed answer..." 
-                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Manual Keywords (Optional)</label>
-                    <input type="text" id="manual-keywords" placeholder="Enter keywords separated by commas..." 
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <p class="text-xs text-gray-500 mt-1">Additional keywords will be auto-generated from the Q&A content</p>
-                </div>
-                
-                <div id="keyword-preview" class="space-y-2 hidden">
-                    <label class="block text-sm font-medium text-gray-700">Keyword Preview:</label>
-                    <div id="keyword-preview-content" class="flex flex-wrap gap-2"></div>
-                </div>
-                
-                <div class="flex justify-end space-x-3 pt-4">
-                    <button type="button" onclick="closeQnAModal()" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">
-                        Cancel
-                    </button>
-                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                        <i class="fas fa-save mr-2"></i>Save Q&A
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
+                                                                <!-- Search Results Dropdown -->
+                                                                <div id="search-dropdown" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto">
+                                                                    <div id="search-results" class="py-1">
+                                                                        <!-- Results will be populated here -->
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="mt-2 text-xs text-gray-500">
+                                                                <span id="search-status">Start typing to search through existing categories...</span>
+                                                            </div>
                                                         </div>
 
-                                                        <!-- ========================================== -->
+                                                        <!-- Browse All Categories Dropdown -->
+                                                        <div>
+                                                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                                                <i class="fas fa-list text-purple-500 mr-1"></i>Browse All Categories
+                                                            </label>
+                                                            <div class="relative">
+                                                                <button type="button" id="browse-dropdown-btn" 
+                                                                        class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 hover:bg-gray-50">
+                                                                    <span id="browse-dropdown-text" class="text-gray-500">Click to see all categories...</span>
+                                                                </button>
+                                                                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                                                    <i class="fas fa-chevron-down text-gray-400" id="browse-chevron"></i>
+                                                                </div>
+                    
+                                                                <!-- Browse Categories Dropdown -->
+                                                                <div id="browse-dropdown" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg hidden max-h-60 overflow-y-auto">
+                                                                    <div id="browse-results" class="py-1">
+                                                                        <!-- All categories will be populated here -->
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="mt-2 text-xs text-gray-500">
+                                                                <span id="browse-status">Browse through all available trade categories</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                            <!-- Add New Category Form -->
+                                                            <div class="border-t pt-6">
+                                                                <h3 class="text-md font-medium text-gray-900 mb-4">
+                                                                    <i class="fas fa-plus text-green-500 mr-2"></i>Create New Category
+                                                                </h3>
+                                                                <form id="add-category-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-gray-700 mb-2">Category Name *</label>
+                                                                        <input type="text" id="category-name" placeholder="e.g., HVAC, Plumbing, Electrical" 
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                                        <div id="duplicate-warning" class="hidden mt-1 text-sm text-amber-600">
+                                                                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                                                                            <span>Similar category exists - check search results above</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                                                                        <input type="text" id="category-description" placeholder="Brief description of services" 
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                                    </div>
+                                                                    <div class="flex items-end">
+                                                                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition duration-200">
+                                                                            <i class="fas fa-plus mr-2"></i>Create Category
+                                                                        </button>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+
+                                                    <!-- Categories List -->
+                                                    <div class="space-y-6" id="categories-container">
+                                                        <div class="text-center py-12">
+                                                            <i class="fas fa-spinner fa-spin text-3xl text-gray-400 mb-4"></i>
+                                                            <p class="text-gray-500">Loading V2 trade categories...</p>
+                                                        </div>
+                                                    </div>
+                                            </div>
+
+                                            <!-- Generate Q&As Confirmation Modal -->
+                                            <div id="generate-qnas-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+                                                    <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+                                                        <div class="p-6">
+                                                            <div class="flex justify-between items-center mb-4">
+                                                                <h3 class="text-lg font-medium text-gray-900">
+                                                                    <i class="fas fa-magic text-purple-600 mr-2"></i>Generate Top 15 Q&As
+                                                                </h3>
+                                                                <button onclick="closeGenerateQnAsModal()" class="text-gray-400 hover:text-gray-600">
+                                                                    <i class="fas fa-times text-xl"></i>
+                                                                </button>
+                                                            </div>
+                
+                                                            <div class="mb-6">
+                                                                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                                                                        <h4 class="font-medium text-purple-900 mb-2">What will be generated:</h4>
+                                                                        <ul class="text-sm text-purple-800 space-y-1">
+                                                                            <li>• Up to 15 industry-specific Q&As for <span id="generate-category-name" class="font-medium"></span></li>
+                                                                            <li>• Conversion-focused answers that lead to bookings</li>
+                                                                            <li>• Professional, human-like conversational flow</li>
+                                                                            <li>• Relevant keywords for AI agent matching</li>
+                                                                            <li>• <strong>Admin Control:</strong> Add, edit, or delete any Q&As after generation</li>
+                                                                        </ul>
+                                                                    </div>
+                    
+                                                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                                                    <div class="flex items-center mb-2">
+                                                                        <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+                                                                        <span class="font-medium text-blue-900">Current Status:</span>
+                                                                    </div>
+                                                                    <p class="text-sm text-blue-800">
+                                                                        This category currently has <span id="current-qna-count" class="font-medium">0</span> Q&As.
+                                                                        <span id="duplicate-warning" class="block mt-1 text-blue-700">
+                                                                            Duplicate questions will be automatically skipped.
+                                                                        </span>
+                                                                    </p>
+                                                                </div>
+                    
+                                                                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                                                                        <div class="flex items-center mb-2">
+                                                                            <i class="fas fa-crown text-amber-600 mr-2"></i>
+                                                                            <span class="font-medium text-amber-900">Full Admin Control:</span>
+                                                                        </div>
+                                                                        <p class="text-sm text-amber-800">
+                                                                            <strong>No limits!</strong> Add unlimited Q&As manually, edit any generated content, or delete what you don't need. You have complete control over your trade category content.
+                                                                        </p>
+                                                                    </div>
+                                                            </div>
+                
+                                                            <div class="flex justify-end space-x-3">
+                                                                <button onclick="closeGenerateQnAsModal()" 
+                                                                        class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                                                                    Cancel
+                                                                </button>
+                                                                <button onclick="confirmGenerateQnAs()" 
+                                                                        class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-md">
+                                                                    <i class="fas fa-magic mr-2"></i>Generate 15 Q&As
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                            </div>
+
+                                            <!-- Q&A Modal -->
+                                            <div id="qna-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+                                                    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+                                                        <div class="flex justify-between items-center p-6 border-b border-gray-200">
+                                                            <h3 id="modal-title" class="text-lg font-medium text-gray-900">Add Q&A</h3>
+                                                            <button onclick="closeQnAModal()" class="text-gray-400 hover:text-gray-600">
+                                                                <i class="fas fa-times text-xl"></i>
+                                                            </button>
+                                                        </div>
+                                                        <form id="qna-form" class="p-6 space-y-4">
+                                                            <input type="hidden" id="modal-category-id">
+                                                            <input type="hidden" id="modal-qna-id">
+                
+                                                            <div>
+                                                                <label class="block text-sm font-medium text-gray-700 mb-2">Question *</label>
+                                                                <textarea id="qna-question" rows="3" placeholder="Enter the customer question..." 
+                                                                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                                                            </div>
+                
+                                                            <div>
+                                                                <label class="block text-sm font-medium text-gray-700 mb-2">Answer *</label>
+                                                                <textarea id="qna-answer" rows="4" placeholder="Enter the detailed answer..." 
+                                                                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                                                            </div>
+                
+                                                            <div>
+                                                                <label class="block text-sm font-medium text-gray-700 mb-2">Manual Keywords (Optional)</label>
+                                                                <input type="text" id="manual-keywords" placeholder="Enter keywords separated by commas..." 
+                                                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                                <p class="text-xs text-gray-500 mt-1">Additional keywords will be auto-generated from the Q&A content</p>
+                                                            </div>
+                
+                                                            <div id="keyword-preview" class="space-y-2 hidden">
+                                                                <label class="block text-sm font-medium text-gray-700">Keyword Preview:</label>
+                                                                <div id="keyword-preview-content" class="flex flex-wrap gap-2"></div>
+                                                            </div>
+                
+                                                            <div class="flex justify-end space-x-3 pt-4">
+                                                                <button type="button" onclick="closeQnAModal()" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">
+                                                                    Cancel
+                                                                </button>
+                                                                <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                                                                    <i class="fas fa-save mr-2"></i>Save Q&A
+                                                                </button>
+                                                            </div>
+                                                        </form>
+                                                    </div>
+                                            </div>
+
+                                                                                                    </div>
+
+                                                                                                    <!-- ========================================== -->
                                                         <!-- TRADE Q&A SUB-TAB 
                                                              📋 Industry-specific technical knowledge
                                                              🔧 Features: Trade category selection, difficulty levels
@@ -3898,7 +3898,7 @@ This would be a great time to also check..."></textarea>
                 // console.log('🔄 V2 GLOBAL TRADE CATEGORIES: Loading categories from V2 API...');
                 
                 // V2 API endpoint
-                const authToken = getAuthToken();
+                const authToken = getUniversalAuthToken();
                 const headers = {};
                 if (authToken) {
                     headers['Authorization'] = `Bearer ${authToken}`;
@@ -3942,10 +3942,7 @@ This would be a great time to also check..."></textarea>
             }
         }
 
-        // Get auth token
-        function getAuthToken() {
-            return localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
-        }
+        // Note: Using getUniversalAuthToken() from company-profile-modern.js
 
         // Render categories
         function renderCategories(categories) {
@@ -4089,7 +4086,7 @@ This would be a great time to also check..."></textarea>
             try {
                 // console.log('🏗️ V2 GLOBAL TRADE CATEGORIES: Creating category:', { name, description });
                 
-                const authToken = getAuthToken();
+                const authToken = getUniversalAuthToken();
                 const headers = {
                     'Content-Type': 'application/json'
                 };
@@ -4155,7 +4152,7 @@ This would be a great time to also check..."></textarea>
                 
                 const method = qnaId ? 'PUT' : 'POST';
                 
-                const authToken = getAuthToken();
+                const authToken = getUniversalAuthToken();
                 const headers = {
                     'Content-Type': 'application/json'
                 };
@@ -4281,7 +4278,7 @@ This would be a great time to also check..."></textarea>
                 const response = await fetch(`/api/company/${currentCompanyId}/knowledge-management/company-qna/categories/${categoryId}/qna/${qnaId}`, {
                     method: 'DELETE',
                     headers: {
-                        'Authorization': `Bearer ${this.getAuthToken ? this.getAuthToken() : ''}`
+                        'Authorization': `Bearer ${getUniversalAuthToken()}`
                     }
                 });
 
@@ -4321,7 +4318,7 @@ This would be a great time to also check..."></textarea>
                 const response = await fetch(`/api/company/${currentCompanyId}/knowledge-management/company-qna/categories/${categoryId}`, {
                     method: 'DELETE',
                     headers: {
-                        'Authorization': `Bearer ${this.getAuthToken ? this.getAuthToken() : ''}`
+                        'Authorization': `Bearer ${getUniversalAuthToken()}`
                     }
                 });
 
@@ -4419,7 +4416,7 @@ This would be a great time to also check..."></textarea>
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${getAuthToken ? getAuthToken() : ''}`
+                        'Authorization': `Bearer ${getUniversalAuthToken()}`
                     }
                 });
 
