@@ -573,26 +573,39 @@ router.delete('/:companyId/knowledge-management/company-qna/:id', authenticateJW
     try {
         logger.info(`📚 DELETE company Q&A request for company ${companyId}, ID ${id}`);
 
-        // Remove the specific Q&A entry
-        const company = await Company.findByIdAndUpdate(
+        // V2 FIX: Delete from CompanyKnowledgeQnA collection (not embedded array)
+        const deletedQnA = await CompanyKnowledgeQnA.findByIdAndDelete(id);
+
+        if (!deletedQnA) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company Q&A not found',
+                error: 'QNA_NOT_FOUND'
+            });
+        }
+
+        // Verify the Q&A belonged to this company (security check)
+        if (deletedQnA.companyId.toString() !== companyId) {
+            // Restore the deleted Q&A (shouldn't happen with proper auth, but safety first)
+            await CompanyKnowledgeQnA.create(deletedQnA);
+            return res.status(403).json({
+                success: false,
+                message: 'Unauthorized: Q&A belongs to different company',
+                error: 'UNAUTHORIZED'
+            });
+        }
+
+        // Update company knowledge management lastUpdated timestamp
+        await Company.findByIdAndUpdate(
             companyId,
             {
-                $pull: { 'aiAgentLogic.knowledgeManagement.companyQnA': { id: id } },
                 $set: { 
                     'aiAgentLogic.knowledgeManagement.lastUpdated': new Date(),
                     updatedAt: new Date()
                 }
             },
-            { new: true, runValidators: true }
+            { runValidators: true }
         );
-
-        if (!company) {
-            return res.status(404).json({
-                success: false,
-                message: 'Company not found',
-                error: 'COMPANY_NOT_FOUND'
-            });
-        }
 
         // V2 SYSTEM: Simple Redis cache invalidation (no legacy v2 cache service)
         try {
