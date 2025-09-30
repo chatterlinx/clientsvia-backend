@@ -2003,13 +2003,13 @@
                 
                                                             <div>
                                                                 <label class="block text-sm font-medium text-gray-700 mb-2">Question *</label>
-                                                                <textarea id="qna-question" rows="3" placeholder="Enter the customer question..." 
+                                                                <textarea id="company-qna-question" rows="3" placeholder="Enter the customer question..." 
                                                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
                                                             </div>
                 
                                                             <div>
                                                                 <label class="block text-sm font-medium text-gray-700 mb-2">Answer *</label>
-                                                                <textarea id="qna-answer" rows="4" placeholder="Enter the detailed answer..." 
+                                                                <textarea id="company-qna-answer" rows="4" placeholder="Enter the detailed answer..." 
                                                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
                                                             </div>
                 
@@ -4057,8 +4057,8 @@ This would be a great time to also check..."></textarea>
             document.getElementById('clear-template-btn').addEventListener('click', clearTemplate);
 
             // Real-time keyword preview
-            document.getElementById('qna-question').addEventListener('input', updateKeywordPreview);
-            document.getElementById('qna-answer').addEventListener('input', updateKeywordPreview);
+            document.getElementById('company-qna-question').addEventListener('input', updateKeywordPreview);
+            document.getElementById('company-qna-answer').addEventListener('input', updateKeywordPreview);
             document.getElementById('manual-keywords').addEventListener('input', updateKeywordPreview);
         }
 
@@ -4735,8 +4735,8 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
             
             const categoryId = document.getElementById('modal-category-id').value;
             const qnaId = document.getElementById('modal-qna-id').value;
-            const question = document.getElementById('qna-question').value.trim();
-            const answer = document.getElementById('qna-answer').value.trim();
+            const question = document.getElementById('company-qna-question').value.trim();
+            const answer = document.getElementById('company-qna-answer').value.trim();
             const manualKeywords = document.getElementById('manual-keywords').value
                 .split(',')
                 .map(k => k.trim())
@@ -4854,8 +4854,8 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
             // console.log('✅ V2 EDIT: Q&A found for editing');
             
             // Populate form fields
-            document.getElementById('qna-question').value = qna.question || '';
-            document.getElementById('qna-answer').value = qna.answer || '';
+            document.getElementById('company-qna-question').value = qna.question || '';
+            document.getElementById('company-qna-answer').value = qna.answer || '';
             
             // Load ALL keywords so user can edit the complete list
             const allKeywords = qna.keywords || [];
@@ -5219,8 +5219,8 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
 
         // Update keyword preview in modal
         function updateKeywordPreview() {
-            const question = document.getElementById('qna-question').value.trim();
-            const answer = document.getElementById('qna-answer').value.trim();
+            const question = document.getElementById('company-qna-question').value.trim();
+            const answer = document.getElementById('company-qna-answer').value.trim();
             const manualKeywords = document.getElementById('manual-keywords').value
                 .split(',')
                 .map(k => k.trim())
@@ -18569,8 +18569,8 @@ Key Metrics:
             // Populate form if editing
             if (mode === 'edit' && qnaData) {
                 document.getElementById('qna-id').value = qnaData.id || '';
-                document.getElementById('qna-question').value = qnaData.question || '';
-                document.getElementById('qna-answer').value = qnaData.answer || '';
+                document.getElementById('company-qna-question').value = qnaData.question || '';
+                document.getElementById('company-qna-answer').value = qnaData.answer || '';
                 document.getElementById('qna-category').value = qnaData.category || 'general';
                 document.getElementById('qna-status').value = qnaData.status || 'active';
                 document.getElementById('qna-keywords').value = qnaData.keywords?.join(', ') || '';
@@ -18587,7 +18587,7 @@ Key Metrics:
             
             // Focus on first input
             setTimeout(() => {
-                document.getElementById('qna-question').focus();
+                document.getElementById('company-qna-question').focus();
             }, 100);
         }
 
@@ -21030,8 +21030,8 @@ Key Metrics:
         });
 
         document.getElementById('generate-keywords-btn')?.addEventListener('click', () => {
-            const question = document.getElementById('qna-question').value;
-            const answer = document.getElementById('qna-answer').value;
+            const question = document.getElementById('company-qna-question').value;
+            const answer = document.getElementById('company-qna-answer').value;
             const combinedText = `${question} ${answer}`;
             const keywords = knowledgeManager.generateKeywords(combinedText);
             document.getElementById('qna-keywords').value = keywords.join(', ');
