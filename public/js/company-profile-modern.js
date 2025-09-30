@@ -3004,29 +3004,37 @@ class CompanyProfileManager {
      * Initialize Local Company Q&A Manager (New V2 Tab)
      */
     initializeLocalQnAManager() {
-        // Wait for tab to be active
+        console.log('🔧 initializeLocalQnAManager called');
         const localTab = document.getElementById('local-company-qna-tab');
         const localContainer = document.getElementById('localQnaContainer');
         
         if (!localTab || !localContainer) {
-            console.warn('Local Q&A tab/container not found');
+            console.error('❌ Local tab/container not found - tab ID: local-company-qna-tab, container: localQnaContainer');
             return;
         }
+        console.log('✅ Local tab/container found');
 
-        // On tab show (assume Bootstrap tabs or custom)
         localTab.addEventListener('shown.bs.tab', () => {
+            console.log('🔥 Local tab shown - init manager');
             if (!this.localQnAManager) {
-                // Import dynamically or assume loaded
-                const LocalQnAManager = require('./components/LocalQnAManager'); // If module, else global
-                this.localQnAManager = new LocalQnAManager('localQnaContainer', this.apiBaseUrl, this.companyId);
+                const LocalQnAManagerClass = window.LocalQnAManager;
+                if (!LocalQnAManagerClass) {
+                    console.error('❌ window.LocalQnAManager not found - check script load');
+                    return;
+                }
+                this.localQnAManager = new LocalQnAManagerClass('localQnaContainer', this.apiBaseUrl, this.companyId);
             }
         });
 
-        // Fallback for non-BS: on click
         localTab.addEventListener('click', () => {
             if (!this.localQnAManager) {
-                const LocalQnAManager = window.LocalQnAManager || require('./components/LocalQnAManager');
-                this.localQnAManager = new LocalQnAManager('localQnaContainer', this.apiBaseUrl, this.companyId);
+                console.log('🔥 Local tab clicked - fallback init');
+                const LocalQnAManagerClass = window.LocalQnAManager;
+                if (LocalQnAManagerClass) {
+                    this.localQnAManager = new LocalQnAManagerClass('localQnaContainer', this.apiBaseUrl, this.companyId);
+                } else {
+                    console.error('❌ Fallback failed - no LocalQnAManager');
+                }
             }
         });
     }
@@ -3082,28 +3090,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         await companyProfileManager.init();
         
-        // Add global debug functions for testing
-        window.debugCompanyProfile = companyProfileManager;
-        window.testWebhookButton = () => {
-            console.log('🧪 Testing webhook button...');
-            if (companyProfileManager) {
-                companyProfileManager.setupWebhookToggle();
-                const btn = document.getElementById('toggleWebhookInfo');
-                const panel = document.getElementById('webhookInfoPanel');
-                console.log('Button found:', !!btn);
-                console.log('Panel found:', !!panel);
-                if (btn) {
-                    console.log('Button text:', btn.innerHTML);
-                    console.log('Button dataset:', btn.dataset);
-                }
-                if (panel) {
-                    console.log('Panel classes:', panel.className);
-                }
-            }
-        };
+        // Initialize tab managers
+        console.log('🔧 Initializing tab managers...');
+        companyProfileManager.initializeLocalQnAManager(); // Add this line
+        // ... other inits like KnowledgePriorities if present
         
+        // Debug functions...
     } catch (error) {
-        console.error('❌ Failed to initialize company profile:', error);
+        console.error('❌ Failed to initialize:', error);
     }
 });
 

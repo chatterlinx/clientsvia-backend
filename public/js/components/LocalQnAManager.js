@@ -2,11 +2,18 @@
  * Local Company Q&A Manager - Frontend Component for V2 Tab
  * Handles AI generation from business description, displays saved Q&As
  * Integrates with /api/company/:companyId/local-qna endpoints
+ * DEBUG: Added logs for troubleshooting button/API issues
  */
 
 class LocalQnAManager {
     constructor(containerId, apiBaseUrl, companyId) {
+        console.log('🔧 LocalQnAManager init called with containerId:', containerId, 'companyId:', companyId);
         this.container = document.getElementById(containerId);
+        if (!this.container) {
+            console.error('❌ LocalQnAManager: Container not found - ID:', containerId);
+        } else {
+            console.log('✅ LocalQnAManager: Container found');
+        }
         this.apiBaseUrl = apiBaseUrl;
         this.companyId = companyId;
         this.qnas = [];
@@ -14,106 +21,148 @@ class LocalQnAManager {
     }
 
     init() {
+        console.log('🔧 LocalQnAManager: Starting init()');
+        
         // Wire generate button
         const generateBtn = document.getElementById('generateProfessionalQnaBtn');
+        console.log('🔧 Button search: generateProfessionalQnaBtn found?', !!generateBtn);
         if (generateBtn) {
             generateBtn.addEventListener('click', (e) => {
+                console.log('🔥 Generate button clicked!');
                 e.preventDefault();
                 this.generateQnAs();
             });
         } else {
-            console.warn('Generate button not found - check ID');
+            console.warn('⚠️ Generate button not found - check HTML ID: generateProfessionalQnaBtn');
         }
 
         // Load existing Q&As
+        console.log('🔧 Loading initial Q&As...');
         this.loadQnAs();
 
-        // Edit/Delete handlers (delegate on table)
-        this.container.addEventListener('click', (e) => {
-            if (e.target.classList.contains('edit-qna-btn')) {
-                this.editQnA(e.target.dataset.id);
-            } else if (e.target.classList.contains('delete-qna-btn')) {
-                this.deleteQnA(e.target.dataset.id);
-            }
-        });
+        // Edit/Delete handlers
+        if (this.container) {
+            this.container.addEventListener('click', (e) => {
+                console.log('🔧 Click in container:', e.target.className);
+                if (e.target.classList.contains('edit-qna-btn')) {
+                    console.log('Edit clicked for ID:', e.target.dataset.id);
+                    this.editQnA(e.target.dataset.id);
+                } else if (e.target.classList.contains('delete-qna-btn')) {
+                    console.log('Delete clicked for ID:', e.target.dataset.id);
+                    this.deleteQnA(e.target.dataset.id);
+                }
+            });
+        } else {
+            console.error('❌ Container missing for event delegation');
+        }
+        console.log('✅ LocalQnAManager init complete');
     }
 
     async generateQnAs() {
+        console.log('🚀 generateQnAs() started');
+        
         const businessTypeSelect = document.getElementById('businessTypeSelect');
         const customerNeedsInput = document.getElementById('customerNeedsInput');
+        
+        console.log('🔍 Form elements: dropdown found?', !!businessTypeSelect, 'input found?', !!customerNeedsInput);
 
         if (!businessTypeSelect || !customerNeedsInput) {
+            console.error('❌ Form elements missing - dropdown ID: businessTypeSelect, input ID: customerNeedsInput');
             this.showError('UI elements not found - check form IDs');
             return;
         }
 
         const businessType = businessTypeSelect.value;
         const description = customerNeedsInput.value.trim();
+        
+        console.log('📝 Generate params: type=', businessType, 'desc=', description);
 
         if (!businessType || !description) {
+            console.warn('⚠️ Missing input: type=', businessType, 'desc length=', description.length);
             this.showError('Please select business type and enter description');
             return;
         }
 
         // Show loading
         const generateBtn = document.getElementById('generateProfessionalQnaBtn');
-        const originalText = generateBtn.textContent;
-        generateBtn.textContent = 'Generating...';
-        generateBtn.disabled = true;
+        const originalText = generateBtn ? generateBtn.textContent : 'Generate';
+        if (generateBtn) {
+            generateBtn.textContent = 'Generating...';
+            generateBtn.disabled = true;
+        }
         this.showLoading();
 
         try {
+            console.log('🌐 Calling API:', `${this.apiBaseUrl}/company/${this.companyId}/local-qna/generate`);
             const response = await fetch(`${this.apiBaseUrl}/company/${this.companyId}/local-qna/generate`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ businessType, description })
             });
-
+            
+            console.log('📡 API Response status:', response.status, 'ok?', response.ok);
+            
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const errorText = await response.text();
+                console.error('❌ API Error response:', errorText);
+                throw new Error(`HTTP ${response.status}: ${response.statusText} - Body: ${errorText.substring(0, 200)}`);
             }
 
             const result = await response.json();
+            console.log('✅ API Success data keys:', Object.keys(result), 'meta:', result.meta);
 
             if (result.success) {
+                console.log('🎉 Generation success, entries:', result.meta.entriesGenerated);
                 this.showSuccess(`Generated ${result.meta.entriesGenerated} professional Q&As!`);
                 this.loadQnAs(); // Reload to display
-                customerNeedsInput.value = ''; // Clear input
+                if (customerNeedsInput) customerNeedsInput.value = ''; // Clear input
             } else {
-                this.showError('Generation failed: ' + result.error);
+                console.error('❌ API success=false:', result.error);
+                this.showError('Generation failed: ' + (result.error || 'Unknown'));
             }
         } catch (error) {
-            console.error('Generation error:', error);
+            console.error('💥 Generate error:', error);
             this.showError('Failed to generate Q&As: ' + error.message);
         } finally {
-            generateBtn.textContent = originalText;
-            generateBtn.disabled = false;
+            if (generateBtn) {
+                generateBtn.textContent = originalText;
+                generateBtn.disabled = false;
+            }
             this.hideLoading();
         }
     }
 
     async loadQnAs() {
+        console.log('📥 loadQnAs() - fetching from API');
         try {
             const response = await fetch(`${this.apiBaseUrl}/company/${this.companyId}/local-qna`, {
                 credentials: 'include'
             });
-
-            if (!response.ok) throw new Error('Failed to load Q&As');
+            
+            console.log('📡 Load response status:', response.status);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Load error:', errorText);
+                throw new Error('Failed to load Q&As - Status: ' + response.status);
+            }
 
             const result = await response.json();
+            console.log('✅ Loaded Q&As count:', result.data ? result.data.length : 0);
             this.qnas = result.data || [];
             this.renderQnAs();
         } catch (error) {
-            console.error('Load Q&As error:', error);
-            this.showError('Failed to load saved Q&As');
+            console.error('💥 Load error:', error);
+            this.showError('Failed to load saved Q&As: ' + error.message);
         }
     }
 
     renderQnAs() {
-        const tableBody = document.getElementById('savedQnasTableBody'); // Assume tbody ID
+        console.log('🎨 Rendering', this.qnas.length, 'Q&As');
+        const tableBody = document.getElementById('savedQnasTableBody');
         if (!tableBody) {
-            console.warn('Table body not found - check ID: savedQnasTableBody');
+            console.error('❌ Table body not found - ID: savedQnasTableBody');
             return;
         }
 
@@ -121,6 +170,7 @@ class LocalQnAManager {
 
         if (this.qnas.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="4">No saved Q&As yet. Generate some above!</td></tr>';
+            console.log('ℹ️ No Q&As to render');
             return;
         }
 
@@ -139,55 +189,76 @@ class LocalQnAManager {
         });
 
         // Update count
-        const countEl = document.querySelector('.qna-count'); // Assume class
-        if (countEl) countEl.textContent = this.qnas.length;
+        const countEl = document.querySelector('.qna-count');
+        if (countEl) {
+            countEl.textContent = this.qnas.length;
+            console.log('✅ Count updated to', this.qnas.length);
+        } else {
+            console.warn('⚠️ Count element not found - class: .qna-count');
+        }
     }
 
     async editQnA(qnaId) {
+        console.log('✏️ Edit Q&A:', qnaId);
         const qna = this.qnas.find(q => q._id === qnaId);
-        if (!qna) return;
+        if (!qna) {
+            console.error('❌ Q&A not found for edit:', qnaId);
+            return;
+        }
 
-        // Populate modal/form (assume edit modal with IDs: editQuestionInput, editAnswerInput, etc.)
-        document.getElementById('editQuestionInput').value = qna.question;
-        document.getElementById('editAnswerInput').value = qna.answer;
-        // ... other fields ...
+        // Populate modal (assume IDs)
+        const editQuestion = document.getElementById('editQuestionInput');
+        const editAnswer = document.getElementById('editAnswerInput');
+        if (editQuestion) editQuestion.value = qna.question;
+        if (editAnswer) editAnswer.value = qna.answer;
+        console.log('📝 Populated edit form');
 
-        // Show modal (assume ID: editQnaModal)
-        document.getElementById('editQnaModal').style.display = 'block';
+        // Show modal
+        const modal = document.getElementById('editQnaModal');
+        if (modal) modal.style.display = 'block';
 
-        // On save, call update endpoint
+        // Save handler (assume button ID)
         const saveBtn = document.getElementById('saveEditQnaBtn');
-        const originalSave = saveBtn.onclick;
-        saveBtn.onclick = async () => {
-            try {
-                const updatedData = {
-                    question: document.getElementById('editQuestionInput').value,
-                    answer: document.getElementById('editAnswerInput').value,
-                    // ... other fields
-                };
+        if (saveBtn) {
+            const originalOnclick = saveBtn.onclick;
+            saveBtn.onclick = async () => {
+                console.log('💾 Saving edit...');
+                try {
+                    const updatedData = {
+                        question: editQuestion ? editQuestion.value : '',
+                        answer: editAnswer ? editAnswer.value : '',
+                        // Add other fields if needed
+                    };
+                    console.log('📤 Edit data:', updatedData);
 
-                const response = await fetch(`${this.apiBaseUrl}/company/${this.companyId}/local-qna/${qnaId}`, {
-                    method: 'PUT',
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updatedData)
-                });
+                    const response = await fetch(`${this.apiBaseUrl}/company/${this.companyId}/local-qna/${qnaId}`, {
+                        method: 'PUT',
+                        credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updatedData)
+                    });
 
-                if (response.ok) {
-                    this.showSuccess('Q&A updated');
-                    document.getElementById('editQnaModal').style.display = 'none';
-                    this.loadQnAs();
-                } else {
-                    this.showError('Update failed');
+                    console.log('📡 Edit response status:', response.status);
+                    if (response.ok) {
+                        this.showSuccess('Q&A updated');
+                        if (modal) modal.style.display = 'none';
+                        this.loadQnAs();
+                    } else {
+                        const errText = await response.text();
+                        console.error('❌ Edit failed:', errText);
+                        this.showError('Update failed: ' + errText);
+                    }
+                } catch (error) {
+                    console.error('💥 Edit error:', error);
+                    this.showError('Update error: ' + error.message);
                 }
-            } catch (error) {
-                this.showError('Update error: ' + error.message);
-            }
-            saveBtn.onclick = originalSave; // Restore
-        };
+                saveBtn.onclick = originalOnclick;
+            };
+        }
     }
 
     async deleteQnA(qnaId) {
+        console.log('🗑️ Delete Q&A:', qnaId);
         if (!confirm('Delete this Q&A?')) return;
 
         try {
@@ -196,20 +267,24 @@ class LocalQnAManager {
                 credentials: 'include'
             });
 
+            console.log('📡 Delete response status:', response.status);
             if (response.ok) {
                 this.showSuccess('Q&A deleted');
                 this.loadQnAs();
             } else {
-                this.showError('Delete failed');
+                const errText = await response.text();
+                console.error('❌ Delete failed:', errText);
+                this.showError('Delete failed: ' + errText);
             }
         } catch (error) {
+            console.error('💥 Delete error:', error);
             this.showError('Delete error: ' + error.message);
         }
     }
 
-    // UI Helpers (adapt from CompanyQnAManager patterns)
+    // UI Helpers (with logs)
     showSuccess(message) {
-        // Assume toast or alert div ID 'successToast'
+        console.log('✅ Success toast:', message);
         const toast = document.getElementById('successToast');
         if (toast) {
             toast.textContent = message;
@@ -221,7 +296,7 @@ class LocalQnAManager {
     }
 
     showError(message) {
-        // Assume 'errorToast'
+        console.error('❌ Error toast:', message);
         const toast = document.getElementById('errorToast');
         if (toast) {
             toast.textContent = message;
@@ -233,21 +308,28 @@ class LocalQnAManager {
     }
 
     showLoading() {
-        // Spinner on container or button
+        console.log('⏳ Showing loading spinner');
         const spinner = document.createElement('div');
         spinner.id = 'loadingSpinner';
         spinner.innerHTML = '<div class="spinner-border"></div> Generating Q&As...';
         spinner.className = 'loading-overlay';
-        this.container.appendChild(spinner);
+        if (this.container) this.container.appendChild(spinner);
     }
 
     hideLoading() {
+        console.log('✅ Hiding loading spinner');
         const spinner = document.getElementById('loadingSpinner');
         if (spinner) spinner.remove();
     }
 }
 
-// Export for use
+// Expose as global for browser <script> loading (no require)
+if (typeof window !== 'undefined') {
+    window.LocalQnAManager = LocalQnAManager;
+    console.log('🌐 LocalQnAManager exposed as window.LocalQnAManager');
+}
+
+// Module export for Node (if needed)
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = LocalQnAManager;
 }
