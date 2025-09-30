@@ -18783,6 +18783,381 @@ Key Metrics:
                 alert('Failed to delete Q&A. Please try again.');
             }
         }
+
+        // ========================================
+        // 🏢 LOCAL COMPANY Q&A METHODS - V2 CLEAN SYSTEM
+        // ========================================
+
+        /**
+         * 📋 Load Local Company Q&A Data
+         */
+        async loadLocalCompanyQnA() {
+            try {
+                console.log('🔍 Loading Local Company Q&As...');
+                const token = this.getAuthToken();
+                
+                const response = await fetch(`/api/company/${this.companyId}/local-qna`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Local Company Q&As loaded:', data.data);
+                    this.displayLocalCompanyQnAs(data.data);
+                    this.updateLocalQnACount(data.data.length);
+                } else {
+                    console.log('ℹ️ No Local Company Q&As found or error loading');
+                    this.displayLocalCompanyQnAs([]);
+                    this.updateLocalQnACount(0);
+                }
+                
+            } catch (error) {
+                console.error('❌ Error loading Local Company Q&As:', error);
+                this.displayLocalCompanyQnAs([]);
+                this.updateLocalQnACount(0);
+            }
+        }
+
+        /**
+         * 📊 Update Local Q&A Count
+         */
+        updateLocalQnACount(count) {
+            const countElement = document.getElementById('local-qna-count');
+            if (countElement) {
+                countElement.textContent = `${count} entries`;
+            }
+        }
+
+        /**
+         * 🎨 Display Local Company Q&As
+         */
+        displayLocalCompanyQnAs(qnas) {
+            const container = document.getElementById('local-saved-qna-list');
+            const emptyState = document.getElementById('local-empty-qna-state');
+            
+            if (!container) return;
+
+            if (qnas.length === 0) {
+                container.innerHTML = '';
+                if (emptyState) emptyState.style.display = 'block';
+                return;
+            }
+
+            if (emptyState) emptyState.style.display = 'none';
+
+            const qnaHTML = qnas.map(qna => `
+                <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow" data-local-qna-id="${qna._id}">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 mb-2">
+                                <i class="fas fa-map-marker-alt text-green-500"></i>
+                                <span class="text-sm font-medium text-green-700">Local Q&A</span>
+                                <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">${qna.category || 'general'}</span>
+                                <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">${qna.businessType || 'general'}</span>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded border border-gray-200">
+                                <strong class="text-gray-800">${qna.question}</strong>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2 ml-4">
+                            <button class="delete-local-qna-btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors" data-qna-id="${qna._id}">
+                                <i class="fas fa-trash mr-1"></i>Delete
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <i class="fas fa-comment-dots text-green-500"></i>
+                            <span class="text-sm font-medium text-green-700">Answer</span>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded border border-gray-200">
+                            <p class="text-gray-700">${qna.answer}</p>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex items-center space-x-2 mb-2">
+                            <i class="fas fa-tags text-green-500"></i>
+                            <span class="text-sm font-medium text-green-700">Keywords</span>
+                        </div>
+                        <div class="bg-gray-50 p-2 rounded border border-gray-200">
+                            <div class="flex flex-wrap gap-1">
+                                ${(qna.keywords || []).map(keyword => `<span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">${keyword}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            container.innerHTML = qnaHTML;
+            this.attachLocalQnAEventListeners();
+        }
+
+        /**
+         * 🎯 Attach Event Listeners for Local Q&A Actions
+         */
+        attachLocalQnAEventListeners() {
+            document.querySelectorAll('.delete-local-qna-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const qnaId = e.target.closest('button').getAttribute('data-qna-id');
+                    this.deleteLocalQnA(qnaId);
+                });
+            });
+
+            const generateBtn = document.getElementById('generate-local-qna-btn');
+            if (generateBtn) {
+                generateBtn.removeEventListener('click', this.generateLocalQnAHandler);
+                this.generateLocalQnAHandler = () => this.generateLocalQnA();
+                generateBtn.addEventListener('click', this.generateLocalQnAHandler);
+            }
+
+            const refreshBtn = document.getElementById('refresh-local-qna-btn');
+            if (refreshBtn) {
+                refreshBtn.removeEventListener('click', this.refreshLocalQnAHandler);
+                this.refreshLocalQnAHandler = () => this.loadLocalCompanyQnA();
+                refreshBtn.addEventListener('click', this.refreshLocalQnAHandler);
+            }
+        }
+
+        /**
+         * 🗑️ Delete Local Q&A
+         */
+        async deleteLocalQnA(qnaId) {
+            if (!confirm('Are you sure you want to delete this Q&A?')) {
+                return;
+            }
+
+            try {
+                console.log('🗑️ Deleting Local Q&A:', qnaId);
+
+                const token = this.getAuthToken();
+                const response = await fetch(`/api/company/${this.companyId}/local-qna/${qnaId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    console.log('✅ Local Q&A deleted successfully');
+                    await this.loadLocalCompanyQnA();
+                    this.showSuccessMessage('Q&A deleted successfully!');
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                    throw new Error(errorData.message || 'Failed to delete Q&A');
+                }
+
+            } catch (error) {
+                console.error('❌ Error deleting Local Q&A:', error);
+                this.showErrorMessage(`Failed to delete Q&A: ${error.message}`);
+            }
+        }
+
+        /**
+         * 🤖 Generate Local Company Q&A using AI
+         */
+        async generateLocalQnA() {
+            try {
+                const businessType = document.getElementById('local-business-type').value.trim();
+                const serviceArea = document.getElementById('local-service-area').value.trim();
+                const description = document.getElementById('local-ai-description').value.trim();
+
+                if (!businessType || !description) {
+                    this.showErrorMessage('Please fill in business type and description');
+                    return;
+                }
+
+                const fullDescription = serviceArea ? `${description}. We service ${serviceArea}.` : description;
+
+                console.log('🤖 Generating Local Company Q&A...', { businessType, description: fullDescription });
+
+                const generateBtn = document.getElementById('generate-local-qna-btn');
+                generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+                generateBtn.disabled = true;
+
+                const token = this.getAuthToken();
+                const response = await fetch(`/api/company/${this.companyId}/local-qna/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        businessType,
+                        description: fullDescription
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Local Q&A generated successfully:', data.data);
+                    this.displayGeneratedLocalQnAs(data.data);
+                    this.showSuccessMessage(`Generated ${data.data.length} Q&A entries!`);
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                    throw new Error(errorData.message || 'Failed to generate Q&A');
+                }
+
+            } catch (error) {
+                console.error('❌ Error generating Local Q&A:', error);
+                this.showErrorMessage(`Failed to generate Q&A: ${error.message}`);
+            } finally {
+                const generateBtn = document.getElementById('generate-local-qna-btn');
+                generateBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>Generate Professional Q&A';
+                generateBtn.disabled = false;
+            }
+        }
+
+        /**
+         * 🎨 Display Generated Local Q&As
+         */
+        displayGeneratedLocalQnAs(qnas) {
+            const container = document.getElementById('local-generated-qna-container');
+            const listContainer = document.getElementById('local-generated-qna-list');
+            
+            if (!container || !listContainer) return;
+
+            container.classList.remove('hidden');
+
+            const qnaHTML = qnas.map((qna, index) => `
+                <div class="bg-white border border-green-200 rounded-lg p-6 shadow-sm" data-qna-index="${index}">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 mb-2">
+                                <i class="fas fa-robot text-green-500"></i>
+                                <span class="text-sm font-medium text-green-700">AI Generated</span>
+                                <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">${qna.category || 'general'}</span>
+                            </div>
+                            <div class="bg-green-50 p-3 rounded border border-green-200">
+                                <strong class="text-gray-800">${qna.question}</strong>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2 ml-4">
+                            <button class="save-local-qna-btn bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors" data-qna-index="${index}">
+                                <i class="fas fa-save mr-1"></i>Save
+                            </button>
+                            <button class="discard-local-qna-btn bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors" data-qna-index="${index}">
+                                <i class="fas fa-times mr-1"></i>Discard
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <i class="fas fa-comment-dots text-green-500"></i>
+                            <span class="text-sm font-medium text-green-700">Answer</span>
+                        </div>
+                        <div class="bg-green-50 p-3 rounded border border-green-200">
+                            <p class="text-gray-700">${qna.answer}</p>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex items-center space-x-2 mb-2">
+                            <i class="fas fa-tags text-green-500"></i>
+                            <span class="text-sm font-medium text-green-700">Keywords</span>
+                        </div>
+                        <div class="bg-green-50 p-2 rounded border border-green-200">
+                            <div class="flex flex-wrap gap-1">
+                                ${(qna.keywords || []).map(keyword => `<span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">${keyword}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            listContainer.innerHTML = qnaHTML;
+            this.attachGeneratedQnAEventListeners(qnas);
+        }
+
+        /**
+         * 🎯 Attach Event Listeners for Generated Q&A Actions
+         */
+        attachGeneratedQnAEventListeners(qnas) {
+            document.querySelectorAll('.save-local-qna-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const index = parseInt(e.target.closest('button').getAttribute('data-qna-index'));
+                    await this.saveGeneratedLocalQnA(qnas[index], index);
+                });
+            });
+
+            document.querySelectorAll('.discard-local-qna-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.closest('button').getAttribute('data-qna-index'));
+                    this.discardGeneratedLocalQnA(index);
+                });
+            });
+        }
+
+        /**
+         * 💾 Save Generated Local Q&A
+         */
+        async saveGeneratedLocalQnA(qna, index) {
+            try {
+                console.log('💾 Saving generated Local Q&A:', qna);
+
+                const token = this.getAuthToken();
+                const response = await fetch(`/api/company/${this.companyId}/local-qna`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        question: qna.question,
+                        answer: qna.answer,
+                        keywords: qna.keywords,
+                        category: qna.category,
+                        businessType: qna.businessType,
+                        aiGenerated: true,
+                        generationSource: 'ai_generated',
+                        originalDescription: document.getElementById('local-ai-description').value.trim()
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Local Q&A saved successfully:', data.data);
+                    
+                    const qnaCard = document.querySelector(`[data-qna-index="${index}"]`);
+                    if (qnaCard) qnaCard.remove();
+                    
+                    const remainingCards = document.querySelectorAll('[data-qna-index]');
+                    if (remainingCards.length === 0) {
+                        document.getElementById('local-generated-qna-container').classList.add('hidden');
+                    }
+                    
+                    await this.loadLocalCompanyQnA();
+                    this.showSuccessMessage('Q&A saved successfully!');
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                    throw new Error(errorData.message || 'Failed to save Q&A');
+                }
+
+            } catch (error) {
+                console.error('❌ Error saving Local Q&A:', error);
+                this.showErrorMessage(`Failed to save Q&A: ${error.message}`);
+            }
+        }
+
+        /**
+         * 🗑️ Discard Generated Local Q&A
+         */
+        discardGeneratedLocalQnA(index) {
+            const qnaCard = document.querySelector(`[data-qna-index="${index}"]`);
+            if (qnaCard) {
+                qnaCard.remove();
+                
+                const remainingCards = document.querySelectorAll('[data-qna-index]');
+                if (remainingCards.length === 0) {
+                    document.getElementById('local-generated-qna-container').classList.add('hidden');
+                }
+            }
+        }
     }
 
     // Initialize the Knowledge Management System
