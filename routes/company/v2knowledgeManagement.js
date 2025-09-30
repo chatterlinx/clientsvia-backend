@@ -2031,10 +2031,11 @@ module.exports = router;
  * 🎯 COMPANY Q&A CATEGORIES - Full Category System
  * ==============================================================
  * These endpoints provide FULL category management for Company Q&As
- * using the same v2TradeCategory model but scoped by companyId
+ * using a SEPARATE CompanyQnACategory model with its own collection
+ * 100% ISOLATED from Global Trade Categories!
  */
 
-const TradeCategory = require('../../models/v2TradeCategory');
+const CompanyQnACategory = require('../../models/CompanyQnACategory');
 const { ObjectId } = require('mongodb');
 
 /**
@@ -2049,8 +2050,8 @@ router.get('/:companyId/knowledge-management/company-qna', authenticateJWT, asyn
     try {
         logger.info(`📚 GET company Q&A categories for company ${companyId}`);
 
-        // Load categories for this specific company
-        const categories = await TradeCategory.find({ companyId }).lean();
+        // Load categories for this specific company from SEPARATE collection
+        const categories = await CompanyQnACategory.find({ companyId }).lean();
         
         // Format response to match frontend expectations
         const formattedCategories = categories.map(cat => ({
@@ -2122,7 +2123,7 @@ router.post('/:companyId/knowledge-management/company-qna/categories', authentic
         }
 
         // Pre-check: Does this category already exist for this company?
-        const existingCategory = await TradeCategory.findOne({ companyId, name: name.trim() });
+        const existingCategory = await CompanyQnACategory.findOne({ companyId, name: name.trim() });
         if (existingCategory) {
             logger.warn(`⚠️  Category already exists for this company`, { companyId, name: name.trim(), existingCategoryId: existingCategory._id });
             return res.status(409).json({
@@ -2134,8 +2135,8 @@ router.post('/:companyId/knowledge-management/company-qna/categories', authentic
             });
         }
 
-        // Create new category scoped to this company
-        const newCategory = new TradeCategory({
+        // Create new category scoped to this company in SEPARATE collection
+        const newCategory = new CompanyQnACategory({
             name: name.trim(),
             description: description?.trim() || '',
             companyId: companyId, // Company-specific!
@@ -2249,7 +2250,7 @@ router.post('/:companyId/knowledge-management/company-qna/categories/:categoryId
         }
 
         // Find category
-        const category = await TradeCategory.findOne({ _id: categoryId, companyId });
+        const category = await CompanyQnACategory.findOne({ _id: categoryId, companyId });
         if (!category) {
             return res.status(404).json({
                 success: false,
@@ -2508,7 +2509,7 @@ router.delete('/:companyId/knowledge-management/company-qna/categories/:category
     try {
         logger.info(`📚 DELETE company Q&A category`, { companyId, categoryId });
 
-        const category = await TradeCategory.findOneAndDelete({ _id: categoryId, companyId });
+        const category = await CompanyQnACategory.findOneAndDelete({ _id: categoryId, companyId });
         if (!category) {
             return res.status(404).json({
                 success: false,
