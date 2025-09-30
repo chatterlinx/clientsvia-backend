@@ -2121,6 +2121,19 @@ router.post('/:companyId/knowledge-management/company-qna/categories', authentic
             });
         }
 
+        // Pre-check: Does this category already exist for this company?
+        const existingCategory = await TradeCategory.findOne({ companyId, name: name.trim() });
+        if (existingCategory) {
+            logger.warn(`⚠️  Category already exists for this company`, { companyId, name: name.trim(), existingCategoryId: existingCategory._id });
+            return res.status(409).json({
+                success: false,
+                message: 'A category with this name already exists for this company',
+                error: 'Duplicate category name',
+                existingCategoryId: existingCategory._id,
+                meta: { responseTime: Date.now() - startTime }
+            });
+        }
+
         // Create new category scoped to this company
         const newCategory = new TradeCategory({
             name: name.trim(),
@@ -2178,8 +2191,33 @@ router.post('/:companyId/knowledge-management/company-qna/categories', authentic
         const responseTime = Date.now() - startTime;
         logger.error(`❌ POST company Q&A category failed`, {
             error: error.message,
+            errorCode: error.code,
+            errorName: error.name,
+            companyId,
+            categoryName: name,
             responseTime
         });
+
+        // Enhanced error message for duplicate key errors
+        if (error.code === 11000) {
+            const duplicateInfo = {
+                message: 'A category with this name already exists',
+                hint: 'Each company can have categories with unique names. The same category name can exist across different companies.',
+                technicalDetails: error.message,
+                companyId,
+                categoryName: name
+            };
+            
+            logger.error(`❌ DUPLICATE KEY ERROR - Detailed info:`, duplicateInfo);
+            
+            return res.status(409).json({
+                success: false,
+                message: 'Duplicate category name',
+                error: error.message,
+                details: duplicateInfo,
+                meta: { responseTime }
+            });
+        }
 
         res.status(500).json({
             success: false,
