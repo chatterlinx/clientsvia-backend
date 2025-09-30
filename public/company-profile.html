@@ -3651,6 +3651,12 @@ This would be a great time to also check..."></textarea>
         let currentCompanyQnAs = [];
         let currentEditingQnAId = null;
 
+        // Helper: Extract company ID from URL
+        function extractCompanyId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('id');
+        }
+
         // Initialize Company Q&A tab
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 V2 COMPANY QNA: Initializing...');
