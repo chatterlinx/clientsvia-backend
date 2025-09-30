@@ -2308,7 +2308,7 @@ router.put('/:companyId/knowledge-management/company-qna/categories/:categoryId/
     try {
         logger.info(`📚 PUT company Q&A`, { companyId, categoryId, qnaId });
 
-        const category = await TradeCategory.findOne({ _id: categoryId, companyId });
+        const category = await CompanyQnACategory.findOne({ _id: categoryId, companyId });
         if (!category) {
             return res.status(404).json({
                 success: false,
@@ -2395,7 +2395,7 @@ router.delete('/:companyId/knowledge-management/company-qna/categories/:category
     try {
         logger.info(`📚 DELETE company Q&A`, { companyId, categoryId, qnaId });
 
-        const category = await TradeCategory.findOne({ _id: categoryId, companyId });
+        const category = await CompanyQnACategory.findOne({ _id: categoryId, companyId });
         if (!category) {
             return res.status(404).json({
                 success: false,
@@ -2521,7 +2521,7 @@ router.post('/:companyId/knowledge-management/company-qna/categories/:categoryId
     try {
         logger.info(`�� POST generate Q&As for company category`, { companyId, categoryId });
 
-        const category = await TradeCategory.findOne({ _id: categoryId, companyId });
+        const category = await CompanyQnACategory.findOne({ _id: categoryId, companyId });
         if (!category) {
             return res.status(404).json({
                 success: false,
