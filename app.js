@@ -161,7 +161,7 @@ try {
 try {
     const localCompanyQnARoutes = require('./routes/company/localCompanyQnA');
     app.use('/api/company', localCompanyQnARoutes);
-    console.log('✅ Local Company Q&A routes registered at /api/company - Clean V2 system active');
+    console.log('✅ Local Company Q&A routes registered at /api/company - Clean V2 system active - UPDATED');
 } catch (error) {
     console.error('❌ Failed to load Local Company Q&A routes:', error);
 }
