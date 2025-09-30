@@ -418,6 +418,35 @@ async function startServer() {
         await connectDB();
         console.log(`[Server] ✅ Step 2 COMPLETE: Database connected in ${Date.now() - dbStart}ms`);
         
+        // 🔧 FIX: Ensure v2TradeCategory indexes are correct for multi-tenancy
+        console.log('[Server] Step 2.5/7: Checking v2TradeCategory indexes...');
+        try {
+            const v2TradeCategory = require('./models/v2TradeCategory');
+            const indexes = await v2TradeCategory.collection.getIndexes();
+            
+            // Check for problematic 'name_1' index (unique on name only)
+            if (indexes.name_1) {
+                console.log('[Server] ⚠️  Found old name_1 index - dropping it for multi-tenancy...');
+                await v2TradeCategory.collection.dropIndex('name_1');
+                console.log('[Server] ✅ Dropped old name_1 index');
+            }
+            
+            // Ensure compound index exists
+            if (!indexes.v2_company_name_unique) {
+                console.log('[Server] 🔧 Creating v2_company_name_unique compound index...');
+                await v2TradeCategory.collection.createIndex(
+                    { companyId: 1, name: 1 }, 
+                    { unique: true, name: 'v2_company_name_unique' }
+                );
+                console.log('[Server] ✅ Created v2_company_name_unique index');
+            }
+            
+            console.log('[Server] ✅ v2TradeCategory indexes verified for multi-tenancy');
+        } catch (indexError) {
+            console.error('[Server] ⚠️  Index check/fix warning:', indexError.message);
+            // Don't crash server - indexes might already be correct
+        }
+        
         // V2 DELETED: Legacy agent prompts loading - V2 uses aiAgentLogic system
         console.log('[Server] Step 3/6: Skipping legacy agent prompts (V2 uses aiAgentLogic)...');
         console.log(`[Server] ✅ Step 3 COMPLETE: Legacy agent prompts skipped - V2 system active`);
