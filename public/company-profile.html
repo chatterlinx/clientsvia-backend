@@ -1905,9 +1905,12 @@
                                                                     </div>
                                                                     
                                                                     <!-- Submit Button -->
-                                                                    <div>
-                                                                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition duration-200">
+                                                                    <div class="flex space-x-3">
+                                                                        <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition duration-200">
                                                                             <i class="fas fa-plus mr-2"></i>Create Category
+                                                                        </button>
+                                                                        <button type="button" id="cancel-edit-btn" onclick="cancelEditCategory()" class="hidden px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition duration-200">
+                                                                            <i class="fas fa-times mr-2"></i>Cancel
                                                                         </button>
                                                                     </div>
                                                                 </form>
@@ -4580,6 +4583,10 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
                             
                             <!-- Action Buttons (Now Below Description!) -->
                             <div class="flex items-center space-x-2">
+                                <button onclick="editCategory('${category._id}')" 
+                                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm transition duration-200">
+                                    <i class="fas fa-edit mr-1"></i>Edit
+                                </button>
                                 <button onclick="openQnAModal('${category._id}')" 
                                         class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md text-sm transition duration-200">
                                     <i class="fas fa-plus mr-1"></i>Add Q&A
@@ -4688,23 +4695,28 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
         // ============================================================
         async function handleAddCategory(e) {
             e.preventDefault();
-            console.log('✏️ [CREATE-1] Form submitted');
+            
+            const form = e.target;
+            const editingCategoryId = form.dataset.editingCategoryId;
+            const isEditMode = !!editingCategoryId;
+            
+            console.log('✏️ [SAVE-1] Form submitted - Mode:', isEditMode ? 'EDIT' : 'CREATE');
             
             const name = document.getElementById('category-name').value.trim();
             const description = document.getElementById('category-description').value.trim();
-            console.log('✏️ [CREATE-2] Form data - Name:', name, 'Description:', description);
+            console.log('✏️ [SAVE-2] Form data - Name:', name, 'Description:', description);
             
             if (!name) {
-                console.log('✏️ [CREATE-3] ❌ Validation failed - name required');
+                console.log('✏️ [SAVE-3] ❌ Validation failed - name required');
                 showError('Category name is required');
                 return;
             }
 
-            console.log('✏️ [CREATE-4] ✓ Validation passed');
+            console.log('✏️ [SAVE-4] ✓ Validation passed');
 
             try {
                 const authToken = getUniversalAuthToken();
-                console.log('✏️ [CREATE-5] Auth token:', authToken ? 'Present ✓' : '❌ Missing');
+                console.log('✏️ [SAVE-5] Auth token:', authToken ? 'Present ✓' : '❌ Missing');
                 const headers = {
                     'Content-Type': 'application/json'
                 };
@@ -4712,12 +4724,16 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
                     headers['Authorization'] = `Bearer ${authToken}`;
                 }
                 
-                // 🔧 MODIFIED: Use companyId-scoped endpoint
-                const endpoint = `/api/company/${currentCompanyId}/knowledge-management/company-qna/categories`;
-                console.log('✏️ [CREATE-6] Sending POST to:', endpoint);
+                // 🔧 MODIFIED: Use different endpoint based on mode
+                const endpoint = isEditMode
+                    ? `/api/company/${currentCompanyId}/knowledge-management/company-qna/categories/${editingCategoryId}`
+                    : `/api/company/${currentCompanyId}/knowledge-management/company-qna/categories`;
+                
+                const method = isEditMode ? 'PUT' : 'POST';
+                console.log(`✏️ [SAVE-6] Sending ${method} to:`, endpoint);
                 
                 const response = await fetch(endpoint, {
-                    method: 'POST',
+                    method: method,
                     headers: headers,
                     body: JSON.stringify({
                         name,
@@ -4725,28 +4741,44 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
                     })
                 });
 
-                console.log('✏️ [CREATE-7] Response received - Status:', response.status, response.ok ? '✓' : '❌');
+                console.log('✏️ [SAVE-7] Response received - Status:', response.status, response.ok ? '✓' : '❌');
                 const result = await response.json();
-                console.log('✏️ [CREATE-8] Response data:', result);
+                console.log('✏️ [SAVE-8] Response data:', result);
                 
                 if (result.success) {
-                    console.log('✏️ [CREATE-9] ✅ Category created successfully!');
-                    console.log('✏️ [CREATE-10] Reloading categories...');
-                    showSuccess(result.message || 'Trade category created successfully');
-                    document.getElementById('add-category-form').reset();
+                    console.log(`✏️ [SAVE-9] ✅ Category ${isEditMode ? 'updated' : 'created'} successfully!`);
+                    console.log('✏️ [SAVE-10] Reloading categories...');
+                    showSuccess(result.message || `Category ${isEditMode ? 'updated' : 'created'} successfully`);
+                    
+                    // Reset form and clear edit mode
+                    form.reset();
+                    delete form.dataset.editingCategoryId;
+                    
+                    // Reset form title & button back to "Create" mode
+                    const formContainer = form.closest('.border-t');
+                    const formTitle = formContainer.querySelector('h3');
+                    const submitButton = form.querySelector('button[type="submit"]');
+                    const cancelButton = document.getElementById('cancel-edit-btn');
+                    
+                    formTitle.innerHTML = '<i class="fas fa-plus text-green-500 mr-2"></i>Create New Category';
+                    submitButton.innerHTML = '<i class="fas fa-plus mr-2"></i>Create Category';
+                    submitButton.className = 'flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition duration-200';
+                    cancelButton.classList.add('hidden');
+                    
+                    // Reload categories
                     await loadTradeCategories();
-                    console.log('✏️ [CREATE-11] ✅ Reload complete - operation finished!');
+                    console.log('✏️ [SAVE-11] ✅ Reload complete - operation finished!');
                 } else {
                     // Handle validation errors with details
                     if (result.details && Array.isArray(result.details)) {
                         throw new Error(result.details.join(', '));
                     } else {
-                        throw new Error(result.error || 'Failed to create category');
+                        throw new Error(result.error || `Failed to ${isEditMode ? 'update' : 'create'} category`);
                     }
                 }
             } catch (error) {
-                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error creating category:', error);
-                showError(error.message || 'Failed to create category');
+                // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error saving category:', error);
+                showError(error.message || `Failed to ${isEditMode ? 'update' : 'create'} category`);
             }
         }
 
@@ -4929,6 +4961,81 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
                 // console.error('❌ V2 GLOBAL TRADE CATEGORIES: Error deleting Q&A:', error);
                 showError(`Failed to delete Q&A: ${error.message}`);
             }
+        }
+
+        // Edit Category (Name + AI Agent Role)
+        function editCategory(categoryId) {
+            console.log('✏️ [EDIT-CAT-1] Opening edit form for category:', categoryId);
+            
+            // Find the category
+            const category = currentCategories.find(c => c._id === categoryId);
+            if (!category) {
+                console.error('❌ [EDIT-CAT-2] Category not found:', categoryId);
+                showError('Category not found');
+                return;
+            }
+            
+            console.log('✏️ [EDIT-CAT-3] Category found:', category.name);
+            
+            // Get form elements
+            const form = document.getElementById('add-category-form');
+            const formContainer = form.closest('.border-t');
+            const formTitle = formContainer.querySelector('h3');
+            const nameInput = document.getElementById('category-name');
+            const descriptionInput = document.getElementById('category-description');
+            const quickInfoInput = document.getElementById('company-quick-info');
+            const submitButton = form.querySelector('button[type="submit"]');
+            
+            // Change form to "Edit Mode"
+            formTitle.innerHTML = '<i class="fas fa-edit text-blue-500 mr-2"></i>Edit Category';
+            submitButton.innerHTML = '<i class="fas fa-save mr-2"></i>Update Category';
+            submitButton.className = 'flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition duration-200';
+            
+            // Show cancel button
+            const cancelButton = document.getElementById('cancel-edit-btn');
+            cancelButton.classList.remove('hidden');
+            
+            // Pre-fill form
+            nameInput.value = category.name;
+            descriptionInput.value = category.description || '';
+            quickInfoInput.value = ''; // Clear quick info (not stored)
+            
+            // Store category ID for submission
+            form.dataset.editingCategoryId = categoryId;
+            
+            // Scroll to form
+            formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            // Highlight the form briefly
+            formContainer.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.5)';
+            setTimeout(() => {
+                formContainer.style.boxShadow = '';
+            }, 2000);
+            
+            console.log('✏️ [EDIT-CAT-4] Form opened in edit mode');
+        }
+
+        // Cancel Edit Category (Return to Create Mode)
+        function cancelEditCategory() {
+            console.log('❌ [CANCEL-EDIT-1] Cancelling edit mode');
+            
+            const form = document.getElementById('add-category-form');
+            const formContainer = form.closest('.border-t');
+            const formTitle = formContainer.querySelector('h3');
+            const submitButton = form.querySelector('button[type="submit"]');
+            const cancelButton = document.getElementById('cancel-edit-btn');
+            
+            // Clear form
+            form.reset();
+            delete form.dataset.editingCategoryId;
+            
+            // Reset to "Create" mode
+            formTitle.innerHTML = '<i class="fas fa-plus text-green-500 mr-2"></i>Create New Category';
+            submitButton.innerHTML = '<i class="fas fa-plus mr-2"></i>Create Category';
+            submitButton.className = 'flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition duration-200';
+            cancelButton.classList.add('hidden');
+            
+            console.log('✏️ [CANCEL-EDIT-2] ✅ Form reset to create mode');
         }
 
         // Delete category - V2 Implementation
