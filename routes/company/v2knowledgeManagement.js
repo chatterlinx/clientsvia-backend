@@ -1504,7 +1504,12 @@ function calculateKeywordMatch(query, keywords) {
 router.post('/:companyId/knowledge-management/generate-qna', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     const { companyId } = req.params;
-    const { businessType, description } = req.body;
+    let { businessType, description } = req.body;
+    
+    // If no businessType provided, default to 'general'
+    if (!businessType) {
+        businessType = 'general';
+    }
 
     try {
         logger.info(`🤖 AI Q&A generation request for company ${companyId}`);
