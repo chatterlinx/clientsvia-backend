@@ -3866,16 +3866,24 @@ This would be a great time to also check..."></textarea>
         // 🚀 COMPANY Q&A SYSTEM - 100% COPIED FROM GLOBAL TRADE CATEGORIES
         // Modified for companyId scoping
         // =========================================
+        // ============================================================
+        // 🏗️ COMPANY Q&A CATEGORY SYSTEM - INITIALIZATION
+        // ============================================================
         let currentCategories = [];
         // 🔧 MODIFIED: Extract companyId from URL instead of 'global'
         let currentCompanyId = new URLSearchParams(window.location.search).get('id');
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 [INIT-1] Company Q&A Category System starting');
+            console.log('🚀 [INIT-2] Company ID extracted:', currentCompanyId);
+            
             // 🔧 MODIFIED: Company Q&A System (based on Global Trade Categories)
             loadTradeCategories();
             setupEventListeners();
             setupQuickSearch();
+            
+            console.log('🚀 [INIT-3] Initialization complete');
         });
 
         function setupEventListeners() {
@@ -3892,22 +3900,29 @@ This would be a great time to also check..."></textarea>
             document.getElementById('manual-keywords').addEventListener('input', updateKeywordPreview);
         }
 
-        // Load trade categories using V2 API
+        // ============================================================
+        // 📦 SECTION: DATA LOADING
+        // ============================================================
         async function loadTradeCategories() {
             try {
-                console.log('🔄 COMPANY Q&A: Loading categories from V2 API...');
+                console.log('📦 [LOAD-1] Starting category load for company:', currentCompanyId);
                 
                 // V2 API endpoint
                 const authToken = getUniversalAuthToken();
+                console.log('📦 [LOAD-2] Auth token:', authToken ? 'Present ✓' : '❌ Missing');
+                
                 const headers = {};
                 if (authToken) {
                     headers['Authorization'] = `Bearer ${authToken}`;
                 }
                 
                 // 🔧 MODIFIED: Use companyId-scoped endpoint instead of global
-                const response = await fetch(`/api/company/${currentCompanyId}/knowledge-management/company-qna?includeQnAs=true&includeStats=true`, {
-                    headers: headers
-                });
+                const endpoint = `/api/company/${currentCompanyId}/knowledge-management/company-qna?includeQnAs=true&includeStats=true`;
+                console.log('📦 [LOAD-3] Fetching from:', endpoint);
+                
+                const response = await fetch(endpoint, { headers: headers });
+                
+                console.log('📦 [LOAD-4] Response received - Status:', response.status, response.ok ? '✓' : '❌');
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -3915,14 +3930,18 @@ This would be a great time to also check..."></textarea>
                 
                 const result = await response.json();
                 
-                console.log('📦 COMPANY Q&A: API Response:', result);
-                console.log('📦 COMPANY Q&A: Categories count:', result.data?.length);
+                console.log('📦 [LOAD-5] Response parsed:', result);
+                console.log('📦 [LOAD-6] Categories in response:', result.data?.length || 0);
+                console.log('📦 [LOAD-7] First category (if any):', result.data?.[0]);
                 
                 if (result.success) {
                     currentCategories = result.data;
-                    console.log(`✅ COMPANY Q&A: Loaded ${currentCategories.length} categories`);
+                    console.log('📦 [LOAD-8] Categories stored in memory:', currentCategories.length);
+                    console.log('📦 [LOAD-9] Calling renderCategories()...');
                     renderCategories(currentCategories);
+                    console.log('📦 [LOAD-10] Calling updateStats()...');
                     updateStats();
+                    console.log('📦 [LOAD-11] ✅ Load complete!');
                 } else {
                     throw new Error(result.error || 'Failed to load categories');
                 }
@@ -3947,11 +3966,17 @@ This would be a great time to also check..."></textarea>
 
         // Note: Using getUniversalAuthToken() from company-profile-modern.js
 
-        // Render categories
+        // ============================================================
+        // 🎨 SECTION: RENDERING
+        // ============================================================
         function renderCategories(categories) {
+            console.log('🎨 [RENDER-1] Starting render with', categories.length, 'categories');
+            
             const container = document.getElementById('categories-container');
+            console.log('🎨 [RENDER-2] Container found:', container ? '✓' : '❌');
             
             if (categories.length === 0) {
+                console.log('🎨 [RENDER-3] No categories - showing empty state');
                 container.innerHTML = `
                     <div class="text-center py-12">
                         <i class="fas fa-industry text-4xl text-gray-300 mb-4"></i>
@@ -3959,9 +3984,11 @@ This would be a great time to also check..."></textarea>
                         <p class="text-gray-500">Create your first trade category to get started.</p>
                     </div>
                 `;
+                console.log('🎨 [RENDER-4] Empty state HTML inserted');
                 return;
             }
 
+            console.log('🎨 [RENDER-5] Building HTML for', categories.length, 'categories');
             container.innerHTML = categories.map(category => `
                 <div class="bg-white rounded-lg shadow fade-in" data-category-id="${category._id}">
                     <div class="flex justify-between items-center p-6 border-b border-gray-200">
@@ -3999,6 +4026,8 @@ This would be a great time to also check..."></textarea>
                     </div>
                 </div>
             `).join('');
+            console.log('🎨 [RENDER-6] HTML built - inserting into DOM');
+            console.log('🎨 [RENDER-7] ✅ Render complete!');
         }
 
         // Render Q&As for a category
@@ -4074,22 +4103,28 @@ This would be a great time to also check..."></textarea>
             `;
         }
 
-        // Handle add category using V2 API
+        // ============================================================
+        // ✏️ SECTION: CREATE OPERATION
+        // ============================================================
         async function handleAddCategory(e) {
             e.preventDefault();
+            console.log('✏️ [CREATE-1] Form submitted');
             
             const name = document.getElementById('category-name').value.trim();
             const description = document.getElementById('category-description').value.trim();
+            console.log('✏️ [CREATE-2] Form data - Name:', name, 'Description:', description);
             
             if (!name) {
+                console.log('✏️ [CREATE-3] ❌ Validation failed - name required');
                 showError('Category name is required');
                 return;
             }
 
+            console.log('✏️ [CREATE-4] ✓ Validation passed');
+
             try {
-                // console.log('🏗️ V2 GLOBAL TRADE CATEGORIES: Creating category:', { name, description });
-                
                 const authToken = getUniversalAuthToken();
+                console.log('✏️ [CREATE-5] Auth token:', authToken ? 'Present ✓' : '❌ Missing');
                 const headers = {
                     'Content-Type': 'application/json'
                 };
@@ -4098,7 +4133,10 @@ This would be a great time to also check..."></textarea>
                 }
                 
                 // 🔧 MODIFIED: Use companyId-scoped endpoint
-                const response = await fetch(`/api/company/${currentCompanyId}/knowledge-management/company-qna/categories`, {
+                const endpoint = `/api/company/${currentCompanyId}/knowledge-management/company-qna/categories`;
+                console.log('✏️ [CREATE-6] Sending POST to:', endpoint);
+                
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({
@@ -4107,14 +4145,17 @@ This would be a great time to also check..."></textarea>
                     })
                 });
 
+                console.log('✏️ [CREATE-7] Response received - Status:', response.status, response.ok ? '✓' : '❌');
                 const result = await response.json();
+                console.log('✏️ [CREATE-8] Response data:', result);
                 
                 if (result.success) {
-                    console.log('✅ COMPANY Q&A: Category created successfully, reloading...');
+                    console.log('✏️ [CREATE-9] ✅ Category created successfully!');
+                    console.log('✏️ [CREATE-10] Reloading categories...');
                     showSuccess(result.message || 'Trade category created successfully');
                     document.getElementById('add-category-form').reset();
                     await loadTradeCategories();
-                    console.log('✅ COMPANY Q&A: Reload complete');
+                    console.log('✏️ [CREATE-11] ✅ Reload complete - operation finished!');
                 } else {
                     // Handle validation errors with details
                     if (result.details && Array.isArray(result.details)) {
