@@ -18994,7 +18994,7 @@ Key Metrics:
                 generateBtn.disabled = true;
 
                 const token = this.getAuthToken();
-                const response = await fetch(`/api/company/${this.companyId}/knowledge-management/generate-qna`, {
+                const response = await fetch(`/api/company/${this.companyId}/local-qna/generate`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
