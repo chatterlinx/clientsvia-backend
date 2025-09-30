@@ -1898,29 +1898,56 @@
                 </div>
 
                 <!-- Generate Button -->
-                <button id="generate-local-qna-btn" onclick="(async function() {
-                    console.log('🔥 INLINE CLICK FIRED');
+                <button id="generate-local-qna-btn" onclick="handleGenerateLocalQnA()" class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors text-lg">
+                    <i class="fas fa-magic mr-2"></i>Generate Professional Q&A
+                </button>
+                
+                <script>
+                async function handleGenerateLocalQnA() {
+                    console.log('🔥 GENERATE BUTTON CLICKED');
                     const btn = document.getElementById('generate-local-qna-btn');
                     const businessType = document.getElementById('local-business-type').value.trim();
                     const description = document.getElementById('local-ai-description').value.trim();
-                    if (!businessType || !description) { alert('Please fill business type and description'); return; }
-                    btn.innerHTML = '<i class=\"fas fa-spinner fa-spin mr-2\"></i>Generating...';
+                    
+                    if (!businessType || !description) { 
+                        alert('Please fill in business type and description'); 
+                        return; 
+                    }
+                    
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
                     btn.disabled = true;
+                    
                     const token = localStorage.getItem('jwt_token');
                     const companyId = new URLSearchParams(window.location.search).get('id');
+                    
                     try {
                         const res = await fetch(`/api/company/${companyId}/local-qna/generate`, {
-                            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                            method: 'POST', 
+                            headers: { 
+                                'Content-Type': 'application/json', 
+                                'Authorization': `Bearer ${token}` 
+                            },
                             body: JSON.stringify({ businessType, description })
                         });
+                        
                         const data = await res.json();
-                        if (data.success) { alert(`Generated ${data.meta.entriesGenerated} Q&As! Refresh to see them.`); location.reload(); }
-                        else { alert('Error: ' + (data.message || 'Failed')); }
-                    } catch(e) { alert('Error: ' + e.message); }
-                    finally { btn.innerHTML = '<i class=\"fas fa-magic mr-2\"></i>Generate Professional Q&A'; btn.disabled = false; }
-                })()" class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors text-lg">
-                    <i class="fas fa-magic mr-2"></i>Generate Professional Q&A
-                </button>
+                        console.log('API Response:', data);
+                        
+                        if (data.success) { 
+                            alert(`✅ Generated ${data.meta.entriesGenerated} Q&As! Refresh to see them.`); 
+                            location.reload(); 
+                        } else { 
+                            alert('❌ Error: ' + (data.message || 'Failed')); 
+                        }
+                    } catch(e) { 
+                        console.error('Error:', e);
+                        alert('❌ Error: ' + e.message); 
+                    } finally { 
+                        btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Generate Professional Q&A'; 
+                        btn.disabled = false; 
+                    }
+                }
+                </script>
                                                             </div>
 
                                                             <!-- Generated Q&A Display Area -->
