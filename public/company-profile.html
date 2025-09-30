@@ -2220,17 +2220,19 @@
                                                                 <h4 class="text-md font-medium text-gray-900 mb-4">
                                                                     <i class="fas fa-plus-circle text-green-600 mr-2"></i>Add New Variable
                                                                 </h4>
-                                                                <form id="add-variable-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                                <form id="add-variable-form" class="grid grid-cols-1 md:grid-cols-3 gap-4" data-no-unsaved-warning="true">
                                                                     <div>
                                                                         <label class="block text-sm font-medium text-gray-700 mb-2">Variable Value *</label>
                                                                         <input type="text" id="variable-value" placeholder="e.g., Total Air" 
-                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                                                               data-no-unsaved-warning="true">
                                                                         <p class="text-xs text-gray-500 mt-1">The actual text AI will say</p>
                                                                     </div>
                                                                     <div>
                                                                         <label class="block text-sm font-medium text-gray-700 mb-2">Placeholder Name *</label>
                                                                         <input type="text" id="variable-placeholder" placeholder="e.g., [Company Name]" 
-                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                                                               data-no-unsaved-warning="true">
                                                                         <p class="text-xs text-gray-500 mt-1">Use in brackets: [Name]</p>
                                                                     </div>
                                                                     <div class="flex items-end">

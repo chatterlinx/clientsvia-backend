@@ -110,12 +110,27 @@ class CompanyProfileManager {
             const urlParams = new URLSearchParams(window.location.search);
             this.companyId = urlParams.get('id');
             console.log('🔍 Extracted company ID from URL:', this.companyId);
+            
+            // 🛡️ SAFEGUARD: Store company ID in localStorage to prevent loss
+            if (this.companyId) {
+                localStorage.setItem('lastCompanyId', this.companyId);
+            }
         }
         
-        // For testing - provide default ID if none provided
+        // 🔄 RECOVERY: Try to recover from localStorage if URL lost the ID
         if (!this.companyId) {
-            this.companyId = 'test123';
-            console.warn('⚠️ No company ID found in URL parameters, using test ID:', this.companyId);
+            const savedId = localStorage.getItem('lastCompanyId');
+            if (savedId && savedId !== 'test123') {
+                this.companyId = savedId;
+                console.warn('⚠️ Company ID lost from URL, recovered from localStorage:', this.companyId);
+                // 🔧 FIX URL: Restore the ID parameter
+                const newUrl = `${window.location.pathname}?id=${this.companyId}`;
+                window.history.replaceState({}, '', newUrl);
+                console.log('✅ URL restored:', newUrl);
+            } else {
+                this.companyId = 'test123';
+                console.warn('⚠️ No company ID found in URL or localStorage, using test ID:', this.companyId);
+            }
         }
         
         // Set global references for legacy compatibility
@@ -204,6 +219,13 @@ class CompanyProfileManager {
      */
     handleFormChange(event) {
         if (event.target.matches('input, textarea, select')) {
+            // 🛡️ SAFEGUARD: Skip unsaved warning for elements marked with data-no-unsaved-warning
+            if (event.target.hasAttribute('data-no-unsaved-warning') || 
+                event.target.closest('[data-no-unsaved-warning]')) {
+                console.log('📝 Change detected (no warning):', event.target.name || event.target.id);
+                return; // Don't trigger unsaved changes warning
+            }
+            
             console.log('📝 Change detected:', event.target.name || event.target.id, event.target.value);
             this.setUnsavedChanges(true);
         }
