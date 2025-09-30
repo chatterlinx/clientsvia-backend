@@ -3864,9 +3864,8 @@ This would be a great time to also check..."></textarea>
 
         // =========================================
         // 🚀 COMPANY Q&A SYSTEM - 100% COPIED FROM GLOBAL TRADE CATEGORIES
-        // Will modify API endpoints in next step for companyId scoping
+        // Modified for companyId scoping
         // =========================================
-    <script>
         let currentCategories = [];
         // 🔧 MODIFIED: Extract companyId from URL instead of 'global'
         let currentCompanyId = new URLSearchParams(window.location.search).get('id');
@@ -4986,7 +4985,6 @@ This would be a great time to also check..."></textarea>
             browseResults.innerHTML = resultsHTML;
             browseStatus.textContent = `Showing all ${sortedCategories.length} trade categories`;
         }
-    </script>
 
         // ========================================= 
         // AI AGENT HELPER FUNCTIONS
