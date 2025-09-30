@@ -3868,11 +3868,12 @@ This would be a great time to also check..."></textarea>
         // =========================================
     <script>
         let currentCategories = [];
-        let currentCompanyId = 'global';
+        // 🔧 MODIFIED: Extract companyId from URL instead of 'global'
+        let currentCompanyId = new URLSearchParams(window.location.search).get('id');
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
-            // V2 GLOBAL TRADE CATEGORIES: Initializing...
+            // 🔧 MODIFIED: Company Q&A System (based on Global Trade Categories)
             loadTradeCategories();
             setupEventListeners();
             setupQuickSearch();
@@ -3904,7 +3905,8 @@ This would be a great time to also check..."></textarea>
                     headers['Authorization'] = `Bearer ${authToken}`;
                 }
                 
-                const response = await fetch(`/api/v2global/trade-categories/categories?includeQnAs=true&includeStats=true`, {
+                // 🔧 MODIFIED: Use companyId-scoped endpoint instead of global
+                const response = await fetch(`/api/company/${currentCompanyId}/knowledge-management/company-qna?includeQnAs=true&includeStats=true`, {
                     headers: headers
                 });
                 
@@ -4096,7 +4098,8 @@ This would be a great time to also check..."></textarea>
                     headers['Authorization'] = `Bearer ${authToken}`;
                 }
                 
-                const response = await fetch('/api/v2global/trade-categories/categories', {
+                // 🔧 MODIFIED: Use companyId-scoped endpoint
+                const response = await fetch(`/api/company/${currentCompanyId}/knowledge-management/company-qna/categories`, {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify({
@@ -4146,9 +4149,10 @@ This would be a great time to also check..."></textarea>
             try {
                 // console.log('💾 V2 GLOBAL TRADE CATEGORIES: Saving Q&A:', { categoryId, qnaId, isEdit: !!qnaId });
                 
+                // 🔧 MODIFIED: Use companyId-scoped endpoint
                 const url = qnaId 
-                    ? `/api/v2global/trade-categories/categories/${categoryId}/qna/${qnaId}`
-                    : `/api/v2global/trade-categories/categories/${categoryId}/qna`;
+                    ? `/api/company/${currentCompanyId}/knowledge-management/company-qna/categories/${categoryId}/qna/${qnaId}`
+                    : `/api/company/${currentCompanyId}/knowledge-management/company-qna/categories/${categoryId}/qna`;
                 
                 const method = qnaId ? 'PUT' : 'POST';
                 
@@ -4274,7 +4278,8 @@ This would be a great time to also check..."></textarea>
             try {
                 // console.log('🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting Q&A:', { categoryId, qnaId });
 
-                const response = await fetch(`/api/v2global/trade-categories/categories/${categoryId}/qna/${qnaId}`, {
+                // 🔧 MODIFIED: Use companyId-scoped endpoint
+                const response = await fetch(`/api/company/${currentCompanyId}/knowledge-management/company-qna/categories/${categoryId}/qna/${qnaId}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${this.getAuthToken ? this.getAuthToken() : ''}`
@@ -4313,7 +4318,8 @@ This would be a great time to also check..."></textarea>
             try {
                 // console.log('🗑️ V2 GLOBAL TRADE CATEGORIES: Deleting category:', categoryId);
 
-                const response = await fetch(`/api/v2global/trade-categories/categories/${categoryId}`, {
+                // 🔧 MODIFIED: Use companyId-scoped endpoint
+                const response = await fetch(`/api/company/${currentCompanyId}/knowledge-management/company-qna/categories/${categoryId}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${this.getAuthToken ? this.getAuthToken() : ''}`
@@ -4409,7 +4415,8 @@ This would be a great time to also check..."></textarea>
                 
                 // console.log('🎯 V2 AUTO-GENERATE: Using category ID:', categoryId);
 
-                const response = await fetch(`/api/v2global/trade-categories/categories/${categoryId}/generate-top-qnas`, {
+                // 🔧 MODIFIED: Use companyId-scoped endpoint
+                const response = await fetch(`/api/company/${currentCompanyId}/knowledge-management/company-qna/categories/${categoryId}/generate-top-qnas`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
