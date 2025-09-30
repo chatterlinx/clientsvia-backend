@@ -156,6 +156,16 @@ try {
     console.error('❌ Failed to load V2 Knowledge Management routes:', error);
 }
 
+// 🏢 LOCAL COMPANY Q&A ROUTES - V2 CLEAN SYSTEM
+// Fresh implementation with zero legacy contamination
+try {
+    const localCompanyQnARoutes = require('./routes/company/localCompanyQnA');
+    app.use('/api/company', localCompanyQnARoutes);
+    console.log('✅ Local Company Q&A routes registered at /api/company - Clean V2 system active');
+} catch (error) {
+    console.error('❌ Failed to load Local Company Q&A routes:', error);
+}
+
 app.use('/api/company', companyRoutes);
 app.use('/api/company', settingsRoutes);
 

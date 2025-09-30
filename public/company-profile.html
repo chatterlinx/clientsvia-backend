@@ -1686,8 +1686,11 @@
                                                     <div class="bg-white border border-gray-200 rounded-lg mb-6">
                                                         <div class="border-b border-gray-200">
                                                             <nav class="flex space-x-8 px-6">
-                                                                <button id="km-tab-company" class="km-tab-btn active py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600">
+                                                                <button id="km-tab-company" class="km-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                                                                     <i class="fas fa-building mr-2"></i>Company Q&A
+                                                                </button>
+                                                                <button id="km-tab-local-company" class="km-tab-btn active py-4 px-1 border-b-2 border-green-500 font-medium text-sm text-green-600">
+                                                                    <i class="fas fa-map-marker-alt mr-2"></i>Local Company Q&A
                                                                 </button>
                                                                 <button id="km-tab-trade" class="km-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                                                                     <i class="fas fa-tools mr-2"></i>Trade Q&A
@@ -1821,6 +1824,121 @@
                                                              ⚠️  Difficulty: basic, intermediate, advanced, expert
                                                         -->
                                                         <!-- ========================================== -->
+
+                                                        <!-- 🏢 LOCAL COMPANY Q&A TAB - V2 CLEAN SYSTEM -->
+                                                        <!-- ========================================== -->
+                                                        <!-- 📋 DESCRIPTION: Fresh implementation with zero legacy contamination
+                                                             🎯 PURPOSE: Multi-tenant Q&A system with business-type awareness
+                                                             🔧 FEATURES: AI generation, full CRUD operations, admin management
+                                                             📝 BUSINESS TYPES: Dental, HVAC, Plumbing, Electrical, Auto, General
+                                                             ⚠️  ISOLATION: Complete companyId isolation for enterprise multi-tenancy
+                                                        -->
+                                                        <!-- ========================================== -->
+                                                        
+                                                        <div id="km-local-company-content" class="km-tab-content active p-6">
+                                                            
+                                                            <!-- Header Section -->
+                                                            <div class="flex items-center justify-between mb-6">
+                                                                <div>
+                                                                    <h4 class="text-xl font-bold text-green-800">Local Company Q&A</h4>
+                                                                    <p class="text-sm text-green-600 mt-1">Clean V2 system - Business-type aware AI generation</p>
+                                                                </div>
+                                                                <div class="flex space-x-3">
+                                                                    <button id="refresh-local-qna-btn" class="bg-green-100 hover:bg-green-200 text-green-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                                                                    </button>
+                                                                    <button id="add-local-qna-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                                                        <i class="fas fa-plus mr-2"></i>Add Q&A
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- AI-Powered Q&A Generator -->
+                                                            <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6 mb-6">
+                                                                <div class="flex items-center mb-4">
+                                                                    <i class="fas fa-robot text-green-600 text-xl mr-3"></i>
+                                                                    <h5 class="text-lg font-semibold text-green-800">AI-Powered Q&A Generator</h5>
+                                                                    <span class="ml-3 px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">Smart Assistant</span>
+                                                                </div>
+                                                                <p class="text-sm text-green-700 mb-4">Let AI create professional Q&A entries for you. Just describe what customers need to know!</p>
+                                                                
+                                                                <!-- Business Type Input -->
+                                                                <div class="grid grid-cols-2 gap-4 mb-4">
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-green-800 mb-2">Business Type</label>
+                                                                        <input type="text" id="local-business-type" 
+                                                                               class="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                               placeholder="e.g., dental office, HVAC company, plumbing service">
+                                                                    </div>
+                                                                    <div>
+                                                                        <label class="block text-sm font-medium text-green-800 mb-2">Service Area</label>
+                                                                        <input type="text" id="local-service-area" 
+                                                                               class="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                               placeholder="e.g., Lee County FL area">
+                                                                    </div>
+                                                                </div>
+
+                                                                <!-- Description Input -->
+                                                                <div class="mb-4">
+                                                                    <label class="block text-sm font-medium text-green-800 mb-2">What do customers need to know?</label>
+                                                                    <textarea id="local-ai-description" rows="3" 
+                                                                              class="w-full px-3 py-2 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                              placeholder="Be specific! Include hours, services, pricing, policies, contact info, etc."></textarea>
+                                                                    <p class="text-xs text-green-600 mt-1">Be specific! Include hours, services, pricing, policies, contact info, etc.</p>
+                                                                </div>
+
+                                                                <!-- Generate Button -->
+                                                                <button id="generate-local-qna-btn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                                                                    <i class="fas fa-magic mr-2"></i>Generate Professional Q&A
+                                                                    <span class="ml-2 text-xs bg-green-500 px-2 py-1 rounded-full">AI will create question, answer, and keywords</span>
+                                                                </button>
+                                                            </div>
+
+                                                            <!-- Generated Q&A Display Area -->
+                                                            <div id="local-generated-qna-container" class="mb-6 hidden">
+                                                                <div class="flex items-center justify-between mb-4">
+                                                                    <h5 class="text-lg font-semibold text-gray-800">Generated Q&As</h5>
+                                                                    <span class="text-sm text-gray-600">Review and save the ones you want</span>
+                                                                </div>
+                                                                <div id="local-generated-qna-list" class="space-y-4">
+                                                                    <!-- Generated Q&As will appear here -->
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Saved Q&A List -->
+                                                            <div>
+                                                                <div class="flex items-center justify-between mb-4">
+                                                                    <h5 class="text-lg font-semibold text-gray-800">Saved Q&As</h5>
+                                                                    <div class="flex items-center space-x-4">
+                                                                        <select id="local-qna-filter" class="px-3 py-1 border border-gray-300 rounded-lg text-sm">
+                                                                            <option value="all">All Categories</option>
+                                                                            <option value="hours">Hours</option>
+                                                                            <option value="services">Services</option>
+                                                                            <option value="pricing">Pricing</option>
+                                                                            <option value="emergency">Emergency</option>
+                                                                            <option value="insurance">Insurance</option>
+                                                                            <option value="location">Location</option>
+                                                                        </select>
+                                                                        <span id="local-qna-count" class="text-sm text-gray-600">0 entries</span>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <!-- Q&A List Container -->
+                                                                <div id="local-saved-qna-list" class="space-y-4">
+                                                                    <!-- Saved Q&As will appear here -->
+                                                                </div>
+
+                                                                <!-- Empty State -->
+                                                                <div id="local-empty-qna-state" class="text-center py-12 bg-gray-50 rounded-lg">
+                                                                    <i class="fas fa-comments text-gray-400 text-4xl mb-4"></i>
+                                                                    <h6 class="text-lg font-medium text-gray-600 mb-2">No Q&As Yet</h6>
+                                                                    <p class="text-gray-500 mb-4">Use the AI generator above to create your first Q&A entries</p>
+                                                                    <button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors" onclick="document.getElementById('local-business-type').focus()">
+                                                                        <i class="fas fa-magic mr-2"></i>Start with AI Generator
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
 
                                                         <!-- 🚀 V2 AI-OPTIMIZED TRADE Q&A INTERFACE -->
                                                         <div id="km-trade-content" class="km-tab-content p-6">
@@ -15459,9 +15577,16 @@ Key Metrics:
                 
                 // Populate AI agent role if it exists
                 if (company.aiAgentLogic?.personality?.role) {
+                    // Try to populate the polished field first (if it exists)
                     const aiRolePolished = document.getElementById('ai-agent-role-polished');
                     if (aiRolePolished) {
                         aiRolePolished.value = company.aiAgentLogic.personality.role;
+                    }
+                    
+                    // Also populate the raw field so user can see/edit it
+                    const aiRoleRaw = document.getElementById('ai-agent-role-raw');
+                    if (aiRoleRaw && !aiRoleRaw.value.trim()) {
+                        aiRoleRaw.value = company.aiAgentLogic.personality.role;
                     }
                 }
                 
@@ -15509,6 +15634,10 @@ Key Metrics:
             // Knowledge source sub-tabs
             document.getElementById('km-tab-company')?.addEventListener('click', () => {
                 this.switchKnowledgeTab('company');
+            });
+
+            document.getElementById('km-tab-local-company')?.addEventListener('click', () => {
+                this.switchKnowledgeTab('local-company');
             });
 
             document.getElementById('km-tab-trade')?.addEventListener('click', () => {
@@ -15645,6 +15774,11 @@ Key Metrics:
                 switch(tabName) {
                     case 'company':
                         tabBtn.classList.add('border-blue-500', 'text-blue-600');
+                        break;
+                    case 'local-company':
+                        tabBtn.classList.add('border-green-500', 'text-green-600');
+                        // Load Local Company Q&A data when tab is activated
+                        this.loadLocalCompanyQnA();
                         break;
                     case 'trade':
                         tabBtn.classList.add('border-green-500', 'text-green-600');
