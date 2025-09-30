@@ -3895,7 +3895,7 @@ This would be a great time to also check..."></textarea>
         // Load trade categories using V2 API
         async function loadTradeCategories() {
             try {
-                // console.log('🔄 V2 GLOBAL TRADE CATEGORIES: Loading categories from V2 API...');
+                console.log('🔄 COMPANY Q&A: Loading categories from V2 API...');
                 
                 // V2 API endpoint
                 const authToken = getUniversalAuthToken();
@@ -3915,9 +3915,12 @@ This would be a great time to also check..."></textarea>
                 
                 const result = await response.json();
                 
+                console.log('📦 COMPANY Q&A: API Response:', result);
+                console.log('📦 COMPANY Q&A: Categories count:', result.data?.length);
+                
                 if (result.success) {
                     currentCategories = result.data;
-                    // console.log(`✅ V2 GLOBAL TRADE CATEGORIES: Loaded ${currentCategories.length} categories`);
+                    console.log(`✅ COMPANY Q&A: Loaded ${currentCategories.length} categories`);
                     renderCategories(currentCategories);
                     updateStats();
                 } else {
@@ -4107,9 +4110,11 @@ This would be a great time to also check..."></textarea>
                 const result = await response.json();
                 
                 if (result.success) {
+                    console.log('✅ COMPANY Q&A: Category created successfully, reloading...');
                     showSuccess(result.message || 'Trade category created successfully');
                     document.getElementById('add-category-form').reset();
-                    loadTradeCategories();
+                    await loadTradeCategories();
+                    console.log('✅ COMPANY Q&A: Reload complete');
                 } else {
                     // Handle validation errors with details
                     if (result.details && Array.isArray(result.details)) {
