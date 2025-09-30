@@ -18135,14 +18135,15 @@ Key Metrics:
                 
                 const data = await response.json();
                 
-                // Display generated Q&A with edit options
-                this.displayGeneratedQnA(data.data);
+                // ✅ FIXED: Backend auto-saves now, so reload the saved Q&As from database
+                console.log(`✅ AI generated and saved ${data.meta.entriesGenerated} Q&As - reloading from database...`);
+                await this.loadAndDisplaySavedQnA();
                 
                 // Clear description input
                 document.getElementById('ai-description-input').value = '';
                 
                 // Show success message
-                this.showSuccessMessage('AI generated professional Q&A! Review and edit as needed.');
+                this.showSuccessMessage(`✅ Generated and saved ${data.meta.entriesGenerated} Q&A entries! They're now in your knowledge base.`);
                 
             } catch (error) {
                 console.error('❌ Error generating AI Q&A:', error);
