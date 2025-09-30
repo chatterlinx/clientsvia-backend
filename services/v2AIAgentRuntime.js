@@ -233,6 +233,16 @@ class V2AIAgentRuntime {
                 
                 let responseText = routingResult.response;
                 
+                // 🤖 AI AGENT ROLE INJECTION: If category has AI Agent Role, apply it to the response
+                if (routingResult.metadata?.aiAgentRole) {
+                    console.log(`🤖 [AI AGENT ROLE] Applying role from category: ${routingResult.metadata.category}`);
+                    console.log(`🤖 [AI AGENT ROLE] Role instructions: ${routingResult.metadata.aiAgentRole.substring(0, 150)}...`);
+                    
+                    // Prefix the response with role-aware context
+                    // This ensures the AI adopts the persona defined in the category
+                    responseText = this.applyAIAgentRole(responseText, routingResult.metadata.aiAgentRole, company);
+                }
+                
                 // Apply personality tone to response
                 responseText = this.applyV2PersonalityTone(responseText, personality);
                 
@@ -244,7 +254,10 @@ class V2AIAgentRuntime {
                     action: 'continue',
                     confidence: routingResult.confidence,
                     source: routingResult.source,
-                    metadata: routingResult.metadata
+                    metadata: {
+                        ...routingResult.metadata,
+                        aiAgentRoleApplied: !!routingResult.metadata?.aiAgentRole
+                    }
                 };
             }
         } catch (knowledgeError) {
@@ -324,6 +337,51 @@ class V2AIAgentRuntime {
         }
 
         return response;
+    }
+
+    /**
+     * 🤖 Apply AI Agent Role to Response
+     * Takes the base answer and enhances it with the AI Agent's role/persona
+     * @param {string} baseResponse - The base answer from Q&A
+     * @param {string} aiAgentRole - The AI Agent role instructions from category
+     * @param {Object} company - Company object
+     * @returns {string} Role-enhanced response
+     */
+    static applyAIAgentRole(baseResponse, aiAgentRole, company) {
+        console.log(`🤖 [AI ROLE] Applying AI Agent role to response`);
+        
+        // Parse role instructions to understand the persona
+        const roleLower = aiAgentRole.toLowerCase();
+        const companyName = company.companyName || 'our company';
+        
+        // Extract tone indicators from role
+        const isFriendly = roleLower.includes('friendly') || roleLower.includes('warm');
+        const isProfessional = roleLower.includes('professional') || roleLower.includes('formal');
+        const isHelpful = roleLower.includes('helpful') || roleLower.includes('assist');
+        const isReceptionist = roleLower.includes('receptionist');
+        
+        // 🎭 ROLE-AWARE RESPONSE ENHANCEMENT
+        // Add natural, role-appropriate phrasing
+        let enhancedResponse = baseResponse;
+        
+        // If role mentions scheduling/appointments and response doesn't offer to schedule
+        if (isReceptionist && roleLower.includes('appointment') && 
+            !baseResponse.toLowerCase().includes('schedule') && 
+            !baseResponse.toLowerCase().includes('appointment')) {
+            enhancedResponse += ` Would you like me to help you schedule an appointment?`;
+        }
+        
+        // If role emphasizes helpfulness, add helpful closing
+        if (isHelpful && !baseResponse.endsWith('?')) {
+            enhancedResponse += ` Is there anything else I can help you with today?`;
+        }
+        
+        // Replace generic company references with actual company name
+        enhancedResponse = enhancedResponse.replace(/\[Company Name\]/gi, companyName);
+        enhancedResponse = enhancedResponse.replace(/our company/gi, companyName);
+        
+        console.log(`🤖 [AI ROLE] ✅ Response enhanced with role persona`);
+        return enhancedResponse;
     }
 
     /**

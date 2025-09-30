@@ -24,6 +24,7 @@
 
 const Company = require('../models/v2Company');
 const CompanyKnowledgeQnA = require('../models/knowledge/CompanyQnA');
+const CompanyQnACategory = require('../models/CompanyQnACategory');
 // V2 DELETED: Legacy v2 aiAgentCacheService - using simple Redis directly
 const { redisClient } = require('../clients');
 const logger = require('../utils/logger');
@@ -425,6 +426,19 @@ class PriorityDrivenKnowledgeRouter {
 
             logger.info(`🔍 Found ${companyQnAs.length} companyQnA entries in collection`, { routingId: context.routingId });
 
+            // 🤖 LOAD AI AGENT ROLES: Get category information with AI Agent role instructions
+            const categories = await CompanyQnACategory.find({ companyId }).lean();
+            const categoryRoles = {};
+            categories.forEach(cat => {
+                if (cat.description && cat.description.trim()) {
+                    categoryRoles[cat.name] = cat.description; // description = AI Agent Role
+                }
+            });
+            logger.info(`🤖 Loaded ${Object.keys(categoryRoles).length} AI Agent roles from categories`, { 
+                routingId: context.routingId,
+                categories: Object.keys(categoryRoles)
+            });
+
             const activeQnA = companyQnAs.filter(qna => qna.status === 'active');
 
             let bestMatch = { confidence: 0, response: null, metadata: {} };
@@ -433,6 +447,9 @@ class PriorityDrivenKnowledgeRouter {
                 const confidence = this.calculateConfidence(query, qna.question, qna.keywords);
                 
                 if (confidence > bestMatch.confidence) {
+                    // 🤖 Get AI Agent Role for this Q&A's category
+                    const aiAgentRole = qna.category ? categoryRoles[qna.category] : null;
+                    
                     bestMatch = {
                         confidence,
                         response: qna.answer,
@@ -440,10 +457,20 @@ class PriorityDrivenKnowledgeRouter {
                             source: 'companyQnA',
                             qnaId: qna._id.toString(),
                             category: qna.category,
+                            aiAgentRole: aiAgentRole, // 🤖 AI AGENT ROLE - For AI to read and adopt!
                             matchedKeywords: this.getMatchedKeywords(query, qna.keywords)
                         }
                     };
                 }
+            }
+
+            // 🤖 Log if AI Agent Role is being used
+            if (bestMatch.metadata?.aiAgentRole) {
+                logger.info(`🤖 AI Agent Role loaded for response`, {
+                    routingId: context.routingId,
+                    category: bestMatch.metadata.category,
+                    rolePreview: bestMatch.metadata.aiAgentRole.substring(0, 100) + '...'
+                });
             }
 
             return bestMatch;
