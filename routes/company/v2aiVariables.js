@@ -12,18 +12,15 @@
 
 const express = require('express');
 const router = express.Router();
-const Company = require('../../models/v2Company');
-const { authenticateToken } = require('../../middleware/auth');
+const v2Company = require('../../models/v2Company');
+const { authenticateJWT } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
-
-// Apply authentication to all routes
-router.use(authenticateToken);
 
 /**
  * GET /api/company/:companyId/ai-variables
  * Load all AI variables for a company
  */
-router.get('/:companyId/ai-variables', async (req, res) => {
+router.get('/:companyId/ai-variables', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     
     try {
@@ -32,7 +29,7 @@ router.get('/:companyId/ai-variables', async (req, res) => {
         console.log(`📦 [AI-VAR-LOAD-1] Loading variables for company: ${companyId}`);
         
         // Load company with aiVariables only
-        const company = await Company.findById(companyId).select('aiVariables').lean();
+        const company = await v2Company.findById(companyId).select('aiVariables').lean();
         
         if (!company) {
             console.log(`❌ [AI-VAR-LOAD-2] Company not found: ${companyId}`);
@@ -70,7 +67,7 @@ router.get('/:companyId/ai-variables', async (req, res) => {
  * POST /api/company/:companyId/ai-variables
  * Add a new AI variable
  */
-router.post('/:companyId/ai-variables', async (req, res) => {
+router.post('/:companyId/ai-variables', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     
     try {
@@ -90,7 +87,7 @@ router.post('/:companyId/ai-variables', async (req, res) => {
         }
         
         // Find company
-        const company = await Company.findById(companyId);
+        const company = await v2Company.findById(companyId);
         
         if (!company) {
             console.log(`❌ [AI-VAR-CREATE-4] Company not found: ${companyId}`);
@@ -154,7 +151,7 @@ router.post('/:companyId/ai-variables', async (req, res) => {
  * DELETE /api/company/:companyId/ai-variables/:varId
  * Delete an AI variable
  */
-router.delete('/:companyId/ai-variables/:varId', async (req, res) => {
+router.delete('/:companyId/ai-variables/:varId', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     
     try {
@@ -163,7 +160,7 @@ router.delete('/:companyId/ai-variables/:varId', async (req, res) => {
         console.log(`🗑️ [AI-VAR-DELETE-1] Deleting variable: ${varId} from company: ${companyId}`);
         
         // Find company and remove variable
-        const company = await Company.findById(companyId);
+        const company = await v2Company.findById(companyId);
         
         if (!company) {
             console.log(`❌ [AI-VAR-DELETE-2] Company not found: ${companyId}`);
