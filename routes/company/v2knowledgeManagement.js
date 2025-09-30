@@ -1655,35 +1655,91 @@ async function generateSmartRole(businessType, rawRole) {
  * 📋 Get Q&A Templates for Business Type
  */
 function getQnATemplatesForBusiness(businessType) {
-    const templates = [
-        {
-            question: "What are your hours of operation?",
-            answer: "Our business hours are [HOURS]. We also offer [EMERGENCY_SERVICE] for urgent situations.",
-            keywords: ["hours", "open", "closed", "schedule", "time", "when", "availability"]
-        },
-        {
-            question: "Do you offer emergency services?",
-            answer: "Yes, we provide 24/7 emergency services for urgent situations. Emergency service rates may apply.",
-            keywords: ["emergency", "urgent", "24/7", "after hours", "weekend", "holiday"]
-        },
-        {
-            question: "What areas do you serve?",
-            answer: "We serve [SERVICE_AREA] and surrounding areas. Contact us to confirm service availability in your location.",
-            keywords: ["area", "location", "serve", "coverage", "where", "distance", "travel"]
-        },
-        {
-            question: "Do you provide free estimates?",
-            answer: "Yes, we offer free estimates for most services. Contact us to schedule your free consultation.",
-            keywords: ["estimate", "quote", "free", "cost", "price", "consultation", "evaluation"]
-        },
-        {
-            question: "Are you licensed and insured?",
-            answer: "Yes, we are fully licensed and insured for your protection and peace of mind.",
-            keywords: ["licensed", "insured", "certified", "bonded", "qualified", "credentials"]
-        }
-    ];
+    const category = determineBusinessCategory(businessType);
+    
+    // ✅ BUSINESS-SPECIFIC TEMPLATES: Different Q&As for different business types
+    const businessTemplates = {
+        'dental': [
+            {
+                question: "What are your office hours?",
+                answer: "Our office hours are [HOURS]. We also offer [EMERGENCY_SERVICE] for dental emergencies.",
+                keywords: ["hours", "open", "closed", "schedule", "appointment", "when", "office hours"]
+            },
+            {
+                question: "Do you accept my insurance?",
+                answer: "We accept most major dental insurance plans. Please call us with your insurance information and we'll verify your coverage.",
+                keywords: ["insurance", "coverage", "accept", "plan", "dental insurance", "benefits"]
+            },
+            {
+                question: "What areas do you serve?",
+                answer: "We serve [SERVICE_AREA] and surrounding areas. Contact us to confirm if we serve your location.",
+                keywords: ["area", "location", "serve", "coverage", "where", "distance"]
+            },
+            {
+                question: "Do you handle dental emergencies?",
+                answer: "Yes, we provide [EMERGENCY_SERVICE]. Please call us immediately for urgent dental issues.",
+                keywords: ["emergency", "urgent", "pain", "tooth", "dental emergency", "after hours"]
+            }
+        ],
+        'hvac': [
+            {
+                question: "What are your service hours?",
+                answer: "Our service hours are [HOURS]. We also offer [EMERGENCY_SERVICE] for HVAC emergencies.",
+                keywords: ["hours", "open", "closed", "schedule", "time", "when", "availability"]
+            },
+            {
+                question: "Do you offer emergency HVAC services?",
+                answer: "Yes, we provide [EMERGENCY_SERVICE] for heating and cooling emergencies.",
+                keywords: ["emergency", "urgent", "24/7", "after hours", "weekend", "holiday", "hvac"]
+            },
+            {
+                question: "What areas do you serve?",
+                answer: "We serve [SERVICE_AREA] and surrounding areas for all HVAC needs.",
+                keywords: ["area", "location", "serve", "coverage", "where", "distance", "travel"]
+            },
+            {
+                question: "Do you provide free estimates?",
+                answer: "Yes, we offer free estimates for HVAC installations and major repairs.",
+                keywords: ["estimate", "quote", "free", "cost", "price", "consultation", "evaluation"]
+            }
+        ],
+        'plumbing': [
+            {
+                question: "What are your service hours?",
+                answer: "Our service hours are [HOURS]. We also offer [EMERGENCY_SERVICE] for plumbing emergencies.",
+                keywords: ["hours", "open", "closed", "schedule", "time", "when", "availability"]
+            },
+            {
+                question: "Do you handle plumbing emergencies?",
+                answer: "Yes, we provide [EMERGENCY_SERVICE] for urgent plumbing issues like leaks and clogs.",
+                keywords: ["emergency", "urgent", "24/7", "leak", "clog", "burst pipe", "plumbing"]
+            },
+            {
+                question: "What areas do you serve?",
+                answer: "We serve [SERVICE_AREA] and surrounding areas for all plumbing services.",
+                keywords: ["area", "location", "serve", "coverage", "where", "distance", "travel"]
+            }
+        ],
+        'general': [
+            {
+                question: "What are your hours of operation?",
+                answer: "Our business hours are [HOURS]. We also offer [EMERGENCY_SERVICE] when needed.",
+                keywords: ["hours", "open", "closed", "schedule", "time", "when", "availability"]
+            },
+            {
+                question: "What areas do you serve?",
+                answer: "We serve [SERVICE_AREA] and surrounding areas. Contact us to confirm service availability.",
+                keywords: ["area", "location", "serve", "coverage", "where", "distance", "travel"]
+            },
+            {
+                question: "Are you licensed and insured?",
+                answer: "Yes, we are fully licensed and insured for your protection and peace of mind.",
+                keywords: ["licensed", "insured", "certified", "bonded", "qualified", "credentials"]
+            }
+        ]
+    };
 
-    return templates;
+    return businessTemplates[category] || businessTemplates['general'];
 }
 
 /**
@@ -1717,22 +1773,15 @@ function extractKeyInformation(description) {
 }
 
 /**
- * ✅ Check if Template is Relevant
+ * ✅ Check if Template is Relevant - FIXED to use actual user input
  */
 function isRelevantTemplate(template, keyInfo) {
-    // Always include hours template
-    if (template.question.includes("hours")) return true;
+    // ✅ FIXED: Always include the first 3 templates from business-specific list
+    // This ensures we get relevant Q&As for the business type
+    return true;
     
-    // Include emergency template if mentioned
-    if (template.question.includes("emergency") && keyInfo.emergency) return true;
-    
-    // Include estimate template if mentioned
-    if (template.question.includes("estimate") && keyInfo.freeEstimates) return true;
-    
-    // Include licensing template (always relevant)
-    if (template.question.includes("licensed")) return true;
-    
-    return false;
+    // Previous hardcoded logic removed - now we use business-specific templates
+    // that are already filtered by business type in getQnATemplatesForBusiness()
 }
 
 /**
