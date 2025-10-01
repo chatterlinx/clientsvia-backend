@@ -23480,6 +23480,24 @@ Key Metrics:
                 if (window.companyProfileManager && typeof window.companyProfileManager.switchTab === 'function') {
                     console.log('[V3-INIT-7a] Using companyProfileManager.switchTab()');
                     window.companyProfileManager.switchTab('ai-response-system');
+                    
+                    // VERIFY: Check if tab is actually visible
+                    setTimeout(() => {
+                        const content = document.getElementById('ai-response-system-content');
+                        const isVisible = content && !content.classList.contains('hidden');
+                        console.log('[V3-INIT-7d] Tab visibility check:', isVisible ? '✅ VISIBLE' : '❌ STILL HIDDEN');
+                        
+                        if (!isVisible && content) {
+                            console.log('[V3-INIT-7e] 🔧 FORCING tab visible with direct DOM manipulation');
+                            // Hide all tab contents
+                            document.querySelectorAll('.tab-content-item').forEach(item => {
+                                item.classList.add('hidden');
+                            });
+                            // Show AI Response System content
+                            content.classList.remove('hidden');
+                            console.log('[V3-INIT-7f] ✅ Tab now forced visible');
+                        }
+                    }, 100);
                 } else {
                     // FALLBACK: Direct DOM manipulation if switchTab not available
                     console.log('[V3-INIT-7b] Using direct DOM manipulation fallback');
