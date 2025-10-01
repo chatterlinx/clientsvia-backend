@@ -80,6 +80,74 @@
             z-index: auto !important;
         }
         
+        /* 🔧 AGGRESSIVE FIX: Tab navigation container - ensure ALL tabs are visible and clickable */ 
+        .mb-6 {
+            width: 100% !important;
+            max-width: none !important;
+            overflow: visible !important;
+        }
+        
+        /* 🔧 FIX: Container must expand to accommodate wrapped tabs */
+        .mb-6 {
+            min-height: auto !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+        
+        .mb-6 > .border-b.border-gray-300 {
+            width: 100% !important;
+            max-width: none !important; 
+            overflow: visible !important;
+            position: relative !important;
+            min-height: 80px !important; /* Allow space for wrapped tabs */
+            padding-bottom: 10px !important;
+        }
+        
+        .mb-6 > .border-b.border-gray-300 > nav {
+            width: 100% !important;
+            max-width: none !important;
+            overflow: visible !important;
+            flex-wrap: wrap !important; /* ALLOW wrapping but keep in container */
+            display: flex !important;
+            position: relative !important;
+            z-index: 100 !important;
+            gap: 4px !important; /* Add gap between wrapped tabs */
+            align-items: flex-start !important;
+        }
+        
+        /* 🔧 COMPACT TAB BUTTONS: Make them smaller to fit better */
+        .tab-button {
+            white-space: nowrap !important;
+            flex-shrink: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            position: relative !important;
+            z-index: 101 !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            font-size: 12px !important; /* Smaller font */
+            padding: 6px 10px !important; /* Smaller padding */
+            margin: 2px !important; /* Small margin for spacing */
+        }
+        
+        /* 🔧 COMPACT TAB BADGES: Make badges smaller too */
+        .tab-button span {
+            font-size: 10px !important;
+            padding: 1px 4px !important;
+            margin-left: 4px !important;
+        }
+        
+        /* 🔧 SPECIFIC FIX: Ensure right-side tabs are not hidden */
+        #tab-ai-agent-logic,
+        #tab-test-tab,
+        #tab-ai-response-system {
+            display: inline-flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            position: relative !important;
+            z-index: 102 !important;
+        }
+        
         /* 🧪 TEST TAB: Rainbow animation and super visible styling */
         @keyframes rainbow {
             0% { background: linear-gradient(45deg, #ff0000, #ff8000) !important; }
