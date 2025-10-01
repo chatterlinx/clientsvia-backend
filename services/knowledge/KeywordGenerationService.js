@@ -45,55 +45,71 @@ class KeywordGenerationService {
   }
 
   /**
-   * 🚀 MAIN KEYWORD GENERATION METHOD
-   * Generates comprehensive keywords using multiple AI techniques
+   * 🚀 V3 MAIN KEYWORD GENERATION METHOD
+   * Generates FOCUSED, HIGH-QUALITY keywords for precise matching
+   * 
+   * 🎯 V3 PHILOSOPHY:
+   * - LESS IS MORE: 5-8 laser-focused keywords > 15 generic ones
+   * - PHRASE EXTRACTION: "how much" > "how" + "much"
+   * - INTENT-SPECIFIC: Pricing keywords for pricing Q&As ONLY
+   * - NO POLLUTION: No generic keywords that match everything
    */
   async generateAdvancedKeywords(question, answer, context = {}) {
     const combinedText = `${question} ${answer}`.toLowerCase();
+    const questionLower = question.toLowerCase();
+    const answerLower = answer.toLowerCase();
     const { tradeCategories = [], companyName = '', businessType = '' } = context;
     
-    console.log('🧠 Advanced keyword generation started...');
+    console.log('🧠 V3 Advanced keyword generation started...');
+    console.log('📝 Question:', question);
+    console.log('📝 Answer:', answer);
     
-    // 1. Basic tokenization and cleaning
-    const tokens = this.cleanAndTokenize(combinedText);
+    // 🎯 STEP 1: Extract EXACT phrases from question (HIGHEST PRIORITY!)
+    const exactPhrases = this.extractExactPhrases(questionLower);
+    console.log('✅ Exact phrases:', exactPhrases);
     
-    // 2. Named Entity Recognition
-    const entities = this.extractNamedEntities(combinedText, companyName);
+    // 🎯 STEP 2: Detect Q&A intent (pricing, hours, location, etc.)
+    const qnaIntent = this.detectQnAIntent(questionLower, answerLower);
+    console.log('✅ Q&A Intent:', qnaIntent);
     
-    // 3. Technical term extraction
-    const technical = this.extractTechnicalTerms(tokens, tradeCategories);
+    // 🎯 STEP 3: Get FOCUSED keywords for this specific intent
+    const intentKeywords = this.getFocusedIntentKeywords(qnaIntent, questionLower, answerLower);
+    console.log('✅ Intent keywords:', intentKeywords);
     
-    // 4. Intent analysis
-    const intent = this.analyzeIntent(question);
+    // 🎯 STEP 4: Extract important nouns/verbs (ONLY if length > 3 chars)
+    const importantWords = this.extractImportantWords(questionLower, answerLower);
+    console.log('✅ Important words:', importantWords);
     
-    // 5. Semantic variations
-    const semantic = this.generateSemanticVariations(tokens);
+    // 🎯 STEP 5: Technical terms ONLY (if relevant to trade)
+    const technical = this.extractTechnicalTerms(this.cleanAndTokenize(combinedText), tradeCategories);
+    console.log('✅ Technical terms:', technical);
     
-    // 6. Trade-specific enhancement
-    const tradeEnhanced = this.enhanceWithTradeContext(tokens, tradeCategories);
-    
-    // 7. Combine and rank all keywords
+    // 🎯 STEP 6: Combine with STRICT DEDUPLICATION
     const allKeywords = [
-      ...entities,
-      ...technical,
-      ...intent,
-      ...semantic,
-      ...tradeEnhanced
+      ...exactPhrases,        // Highest priority: exact phrases
+      ...intentKeywords,      // Intent-specific keywords
+      ...importantWords,      // Important words from Q&A
+      ...technical            // Technical terms (if relevant)
     ];
     
-    // 8. Score and filter keywords
-    const rankedKeywords = this.rankAndFilterKeywords(allKeywords, combinedText);
+    // 🎯 STEP 7: STRICT FILTERING - Remove duplicates, generic words, and pollutants
+    const cleanedKeywords = this.strictFilter(allKeywords, qnaIntent);
+    console.log('✅ After strict filter:', cleanedKeywords);
+    
+    // 🎯 STEP 8: Rank by relevance and limit to TOP 8
+    const rankedKeywords = this.rankKeywordsByRelevance(cleanedKeywords, questionLower, answerLower);
+    const finalKeywords = rankedKeywords.slice(0, 8); // MAX 8 keywords for precision
     
     const result = {
-      primary: rankedKeywords.slice(0, 15), // Top 15 for primary matching
-      entities: entities.slice(0, 5),
-      technical: technical.slice(0, 5),
-      intent: intent.slice(0, 3),
-      semantic: semantic.slice(0, 10),
-      confidence: this.calculateConfidence(rankedKeywords, combinedText)
+      primary: finalKeywords,
+      entities: [],
+      technical: technical.slice(0, 3),
+      intent: [qnaIntent],
+      semantic: intentKeywords.slice(0, 5),
+      confidence: this.calculateConfidence(finalKeywords, combinedText)
     };
     
-    console.log('✅ Generated', result.primary.length, 'primary keywords:', result.primary.slice(0, 5));
+    console.log('✅ FINAL KEYWORDS (Top 8):', result.primary);
     
     return result;
   }
@@ -605,6 +621,214 @@ class KeywordGenerationService {
     };
     
     return businessTerms[token] || [];
+  }
+  
+  /**
+   * 🎯 V3: EXTRACT EXACT PHRASES FROM QUESTION
+   * Captures 2-3 word phrases that are highly specific
+   */
+  extractExactPhrases(question) {
+    const phrases = new Set();
+    const words = question.split(/\s+/).filter(w => w.length > 0);
+    
+    // 2-word phrases
+    for (let i = 0; i < words.length - 1; i++) {
+      const phrase = `${words[i]} ${words[i + 1]}`;
+      // Only add if not pure stopwords
+      if (!this.isPureStopwords(phrase)) {
+        phrases.add(phrase);
+      }
+    }
+    
+    // 3-word phrases for questions starting with "how much", "what are", etc.
+    for (let i = 0; i < words.length - 2; i++) {
+      const phrase = `${words[i]} ${words[i + 1]} ${words[i + 2]}`;
+      if (this.isValuablePhrase(phrase)) {
+        phrases.add(phrase);
+      }
+    }
+    
+    return [...phrases];
+  }
+  
+  /**
+   * 🎯 V3: DETECT Q&A INTENT (FOCUSED)
+   * Returns ONE specific intent, not multiple
+   */
+  detectQnAIntent(question, answer) {
+    const combined = `${question} ${answer}`;
+    
+    // Priority order: Most specific first
+    if (/\b(how much|cost|price|charge|fee|rate|\$|dollar|expensive|cheap)\b/.test(combined)) {
+      return 'pricing';
+    }
+    if (/\b(hours|open|closed|schedule|when|time|availability|operating)\b/.test(combined)) {
+      return 'hours';
+    }
+    if (/\b(where|location|address|directions|area|service area|city|county)\b/.test(combined)) {
+      return 'location';
+    }
+    if (/\b(emergency|urgent|24\/7|after hours|asap|immediate)\b/.test(combined)) {
+      return 'emergency';
+    }
+    if (/\b(water pressure|leak|drain|clog|pipe|sewer|faucet|toilet)\b/.test(combined)) {
+      return 'plumbing';
+    }
+    if (/\b(ac|air conditioning|hvac|heat|furnace|thermostat|cooling|heating)\b/.test(combined)) {
+      return 'hvac';
+    }
+    if (/\b(install|installation|new|setup|replace|replacement)\b/.test(combined)) {
+      return 'installation';
+    }
+    if (/\b(repair|fix|broken|not working|problem|issue)\b/.test(combined)) {
+      return 'repair';
+    }
+    if (/\b(appointment|schedule|book|reservation|available)\b/.test(combined)) {
+      return 'scheduling';
+    }
+    
+    return 'general';
+  }
+  
+  /**
+   * 🎯 V3: GET FOCUSED INTENT KEYWORDS
+   * Returns ONLY keywords relevant to this specific intent
+   */
+  getFocusedIntentKeywords(intent, question, answer) {
+    const focused = {
+      'pricing': ['cost', 'price', 'how much', 'charge', 'fee', 'rate', 'pricing'],
+      'hours': ['hours', 'open', 'schedule', 'time', 'when', 'availability'],
+      'location': ['where', 'location', 'address', 'area', 'service area'],
+      'emergency': ['emergency', 'urgent', '24/7', 'immediate', 'after hours'],
+      'plumbing': ['plumbing', 'water', 'leak', 'drain', 'pipe'],
+      'hvac': ['hvac', 'ac', 'air conditioning', 'heat', 'heating', 'cooling'],
+      'installation': ['install', 'installation', 'new', 'setup'],
+      'repair': ['repair', 'fix', 'broken', 'problem'],
+      'scheduling': ['appointment', 'schedule', 'book', 'available'],
+      'general': []
+    };
+    
+    const keywords = new Set();
+    const intentKeywords = focused[intent] || [];
+    
+    // Only add keywords that ACTUALLY appear in question or answer
+    intentKeywords.forEach(keyword => {
+      if (question.includes(keyword) || answer.includes(keyword)) {
+        keywords.add(keyword);
+      }
+    });
+    
+    return [...keywords];
+  }
+  
+  /**
+   * 🎯 V3: EXTRACT IMPORTANT WORDS (NOUNS/VERBS ONLY)
+   * Filters out generic words like "service", "calls", etc. unless intent-specific
+   */
+  extractImportantWords(question, answer) {
+    const words = new Set();
+    const combined = `${question} ${answer}`;
+    const tokens = combined.split(/\s+/);
+    
+    // Blacklist: Generic words that pollute keyword matching
+    const genericBlacklist = [
+      'service', 'services', 'call', 'calls', 'help', 'can', 'you', 'your',
+      'our', 'are', 'have', 'has', 'get', 'make', 'do', 'does', 'will',
+      'would', 'could', 'should', 'may', 'might', 'must', 'shall',
+      'the', 'and', 'for', 'with', 'from', 'about', 'into', 'through'
+    ];
+    
+    tokens.forEach(token => {
+      const clean = token.replace(/[^\w]/g, '').toLowerCase();
+      
+      // Only add if:
+      // 1. Length >= 4 characters (more specific)
+      // 2. NOT in generic blacklist
+      // 3. NOT a pure number
+      if (clean.length >= 4 && 
+          !genericBlacklist.includes(clean) && 
+          !/^\d+$/.test(clean)) {
+        words.add(clean);
+      }
+    });
+    
+    return [...words];
+  }
+  
+  /**
+   * 🎯 V3: STRICT FILTER
+   * Removes duplicates, substrings, and intent-polluting keywords
+   */
+  strictFilter(keywords, intent) {
+    const unique = [...new Set(keywords)]; // Deduplicate
+    const filtered = [];
+    
+    for (const keyword of unique) {
+      // Skip if empty or too short
+      if (!keyword || keyword.trim().length < 2) continue;
+      
+      // Skip if it's a substring of another keyword already added
+      const isSubstring = filtered.some(existing => 
+        existing.includes(keyword) && existing !== keyword
+      );
+      if (isSubstring) continue;
+      
+      // Skip generic pollutants
+      const pollutants = ['what', 'how', 'can', 'you', 'your', 'our', 'are', 'the'];
+      if (pollutants.includes(keyword)) continue;
+      
+      filtered.push(keyword.trim());
+    }
+    
+    return filtered;
+  }
+  
+  /**
+   * 🎯 V3: RANK KEYWORDS BY RELEVANCE
+   * Prioritizes exact matches in question, then answer, then length
+   */
+  rankKeywordsByRelevance(keywords, question, answer) {
+    const scored = keywords.map(keyword => {
+      let score = 0;
+      
+      // Highest priority: appears in question
+      if (question.includes(keyword)) score += 10;
+      
+      // Medium priority: appears in answer
+      if (answer.includes(keyword)) score += 5;
+      
+      // Phrase bonus: multi-word keywords are more specific
+      if (keyword.includes(' ')) score += 8;
+      
+      // Length bonus: longer keywords are more specific
+      score += Math.min(keyword.length / 2, 5);
+      
+      return { keyword, score };
+    });
+    
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.keyword);
+  }
+  
+  /**
+   * 🎯 V3: CHECK IF PHRASE IS PURE STOPWORDS
+   */
+  isPureStopwords(phrase) {
+    const stopwords = ['the', 'and', 'or', 'but', 'for', 'with', 'from', 'are', 'is', 'was', 'were'];
+    const words = phrase.split(' ');
+    return words.every(w => stopwords.includes(w));
+  }
+  
+  /**
+   * 🎯 V3: CHECK IF PHRASE IS VALUABLE (FOR 3-WORD PHRASES)
+   */
+  isValuablePhrase(phrase) {
+    const valuablePhrases = [
+      'how much are', 'what are your', 'can you help', 'do you have',
+      'where are you', 'when are you', 'what time do', 'how long does'
+    ];
+    return valuablePhrases.some(vp => phrase.startsWith(vp));
   }
 }
 

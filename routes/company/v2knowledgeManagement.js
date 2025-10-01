@@ -1946,25 +1946,12 @@ function personalizeAnswer(answer, businessType, keyInfo, description) {
 
 /**
  * 🏷️ Generate Keywords
+ * ❌ DEPRECATED: This function is no longer used
+ * ✅ ALL keyword generation now uses KeywordGenerationService V3
  */
-function generateKeywords(question, answer, businessType) {
-    const baseKeywords = [];
-    
-    // Extract keywords from question and answer
-    const text = `${question} ${answer}`.toLowerCase();
-    const words = text.match(/\b\w{3,}\b/g) || [];
-    
-    // Add relevant keywords
-    words.forEach(word => {
-        if (!['the', 'and', 'for', 'are', 'you', 'our', 'we', 'your', 'can', 'will', 'may'].includes(word)) {
-            if (!baseKeywords.includes(word)) {
-                baseKeywords.push(word);
-            }
-        }
-    });
-
-    return baseKeywords.slice(0, 8); // Limit to 8 keywords
-}
+// function generateKeywords(question, answer, businessType) {
+//     // DELETED - Use KeywordGenerationService instead
+// }
 
 /**
  * 🏢 Determine Business Category
@@ -2725,10 +2712,14 @@ router.post('/:companyId/knowledge-management/company-qna/categories/:categoryId
 });
 
 /**
- * AI Q&A Generator for Category
+ * 🚀 V3 AI Q&A Generator for Category
+ * ✨ NOW USES KeywordGenerationService FOR ALL KEYWORDS!
  */
 async function generateCategoryQnAs(categoryName, company) {
-    // This is a simplified version - you can enhance with more sophisticated AI
+    // ✅ V3: Use advanced KeywordGenerationService for ALL keywords
+    const KeywordGenerationService = require('../../services/knowledge/KeywordGenerationService');
+    const keywordService = new KeywordGenerationService();
+    
     const categoryLower = categoryName.toLowerCase();
     const companyName = company?.companyName || 'our company';
     
@@ -2786,22 +2777,39 @@ async function generateCategoryQnAs(categoryName, company) {
         ]
     };
 
-    // Determine category type and return appropriate templates
+    // Determine category type and get templates
+    let selectedTemplates = [];
     if (categoryLower.includes('hvac') || categoryLower.includes('heating') || categoryLower.includes('cooling') || categoryLower.includes('air')) {
-        return templates.hvac.map(t => ({ question: t.q, answer: t.a, keywords: t.k }));
+        selectedTemplates = templates.hvac;
     } else if (categoryLower.includes('plumb')) {
-        return templates.plumbing.map(t => ({ question: t.q, answer: t.a, keywords: t.k }));
+        selectedTemplates = templates.plumbing;
     } else if (categoryLower.includes('electric')) {
-        return templates.electrical.map(t => ({ question: t.q, answer: t.a, keywords: t.k }));
+        selectedTemplates = templates.electrical;
     } else {
         // Generic business Q&As
-        return [
-            { question: 'What are your hours of operation?', answer: `${companyName} is open Monday through Friday 8 AM to 6 PM.`, keywords: ['hours', 'open', 'schedule', 'time', 'availability'] },
-            { question: 'What areas do you service?', answer: `We service [SERVICE_AREA] and surrounding areas.`, keywords: ['area', 'location', 'service', 'coverage', 'where'] },
-            { question: 'Do you offer free estimates?', answer: `Yes, we provide free estimates for all services.`, keywords: ['estimate', 'free', 'quote', 'consultation', 'price'] },
-            { question: 'Are you licensed and insured?', answer: `Yes, ${companyName} is fully licensed and insured.`, keywords: ['licensed', 'insured', 'certified', 'qualified', 'bonded'] },
-            { question: 'Do you offer emergency services?', answer: `Yes, we provide emergency service for urgent situations.`, keywords: ['emergency', 'urgent', 'after hours', 'service', 'help'] }
+        selectedTemplates = [
+            { q: 'What are your hours of operation?', a: `${companyName} is open Monday through Friday 8 AM to 6 PM.` },
+            { q: 'What areas do you service?', a: `We service [SERVICE_AREA] and surrounding areas.` },
+            { q: 'Do you offer free estimates?', a: `Yes, we provide free estimates for all services.` },
+            { q: 'Are you licensed and insured?', a: `Yes, ${companyName} is fully licensed and insured.` },
+            { q: 'Do you offer emergency services?', a: `Yes, we provide emergency service for urgent situations.` }
         ];
     }
+    
+    // ✅ V3: Generate keywords dynamically using KeywordGenerationService
+    const qnasWithKeywords = await Promise.all(
+        selectedTemplates.map(async (t) => {
+            const generated = await keywordService.generateAdvancedKeywords(t.q, t.a, { 
+                tradeCategories: [categoryName] 
+            });
+            return {
+                question: t.q,
+                answer: t.a,
+                keywords: generated.primary // Use V3-generated keywords!
+            };
+        })
+    );
+    
+    return qnasWithKeywords;
 }
 
