@@ -71,6 +71,17 @@
             background: #ffff00 !important; /* Bright yellow background for debugging */
             border: 5px solid #ff0000 !important; /* Red border for debugging */
             padding: 20px !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 1000 !important;
+            margin-top: 0 !important;
+        }
+        
+        /* 🔥 SCROLL FIX: Ensure tab content area is scrollable and positioned correctly */
+        #tab-content-area {
+            position: relative !important;
+            overflow-y: auto !important;
+            max-height: none !important;
         }
         
         /* Clean toggle switch styling handled by Tailwind peer classes */
@@ -23511,6 +23522,20 @@ Key Metrics:
                                 height: content.offsetHeight,
                                 scrollHeight: content.scrollHeight
                             });
+                            
+                            // 🔥 SCROLL FIX: Scroll the element into view
+                            console.log('[V3-SCROLL-DEBUG] Scrolling element into view...');
+                            content.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            
+                            // 🔥 SCROLL FIX: Also scroll the page to top
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                            
+                            // 🔥 SCROLL FIX: Find and scroll tab content area
+                            const tabContentArea = document.getElementById('tab-content-area');
+                            if (tabContentArea) {
+                                tabContentArea.scrollTop = 0;
+                                console.log('[V3-SCROLL-DEBUG] Tab content area scrolled to top');
+                            }
                         }
                         
                         if (!isVisible && content) {
