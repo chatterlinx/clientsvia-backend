@@ -23544,9 +23544,22 @@ Key Metrics:
                 await loadResponseTemplates();
             });
             console.log('[V3-INIT-8] ✅ Tab click listener attached');
-        }
-
-        console.log('[V3-INIT-9] ✅ V3 AI Response System initialized successfully!');
+        }                        console.log('[V3-INIT-9] ✅ V3 AI Response System initialized successfully!');
+                        
+                        // 🔥 MANUAL TEST: Try to force the element visible after 3 seconds
+                        setTimeout(() => {
+                            const content = document.getElementById('ai-response-system-content');
+                            if (content) {
+                                console.log('[V3-MANUAL-TEST] Attempting to force element visible...');
+                                content.classList.remove('hidden');
+                                content.style.display = 'block';
+                                content.style.visibility = 'visible';
+                                content.style.opacity = '1';
+                                content.style.background = '#00ff00'; // Bright green
+                                content.style.border = '10px solid #0000ff'; // Blue border
+                                console.log('[V3-MANUAL-TEST] Element forced visible with bright green background');
+                            }
+                        }, 3000);
     });
 
     // ============================================================================
