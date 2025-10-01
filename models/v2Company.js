@@ -390,19 +390,6 @@ const companySchema = new mongoose.Schema({
             }
         },
         
-        // 🔧 AI PLACEHOLDERS: Reusable variables for AI Agent responses
-        // Used across Company Q&A, Trade Q&A, and Templates
-        // AI Agent will automatically replace [Placeholder Name] with actual value
-        aiPlaceholders: {
-            type: [{
-                id: { type: String, required: true }, // Unique ID for frontend
-                placeholder: { type: String, required: true, trim: true }, // e.g., "[Company Name]"
-                value: { type: String, required: true, trim: true }, // e.g., "Atlas Air"
-                createdAt: { type: Date, default: Date.now },
-                updatedAt: { type: Date, default: Date.now }
-            }],
-            default: []
-        },
         
         // 📞 Call Transfer & Escalation Configuration
         callTransferConfig: {

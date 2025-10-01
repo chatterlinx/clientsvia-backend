@@ -159,14 +159,6 @@ try {
 // V2 DELETED: Local Company Q&A routes - using main Company Q&A system instead
 // Main Company Q&A system (via v2knowledgeManagement.js) is working perfectly
 
-// 🔧 AI PLACEHOLDERS ROUTES - Fresh start! Clean implementation
-try {
-    const aiPlaceholderRoutes = require('./routes/company/v2aiPlaceholders');
-    app.use('/api/company', aiPlaceholderRoutes);
-    console.log('✅ AI Placeholders routes registered at /api/company/:companyId/ai-placeholders');
-} catch (error) {
-    console.error('❌ Failed to load AI Placeholders routes:', error);
-}
 
 app.use('/api/company', companyRoutes);
 app.use('/api/company', settingsRoutes);
