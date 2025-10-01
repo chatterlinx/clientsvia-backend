@@ -22905,11 +22905,14 @@ Key Metrics:
         console.log('[IR-RENDER-1] Rendering', v3InstantResponses.length, 'instant responses');
         const container = document.getElementById('instant-responses-list');
         if (!container) {
-            console.error('[IR-RENDER-2] Container not found');
+            console.error('[IR-RENDER-2] ❌ Container not found!');
             return;
         }
+        
+        console.log('[IR-RENDER-2] ✅ Container found:', container.parentElement?.parentElement?.id || 'unknown parent');
 
         if (v3InstantResponses.length === 0) {
+            console.log('[IR-RENDER-3] No responses - inserting empty state');
             container.innerHTML = `
                 <div class="text-center py-12 text-gray-400">
                     <i class="fas fa-bolt text-6xl mb-4 opacity-20"></i>
@@ -22917,6 +22920,7 @@ Key Metrics:
                     <p class="text-sm mt-2">Click "Add Instant Response" to create your first lightning-fast response!</p>
                 </div>
             `;
+            console.log('[IR-RENDER-4] ✅ Empty state HTML inserted');
             return;
         }
 
@@ -23180,11 +23184,14 @@ Key Metrics:
         console.log('[RT-RENDER-1] Rendering', v3ResponseTemplates.length, 'response templates');
         const container = document.getElementById('response-templates-list');
         if (!container) {
-            console.error('[RT-RENDER-2] Container not found');
+            console.error('[RT-RENDER-2] ❌ Container not found!');
             return;
         }
+        
+        console.log('[RT-RENDER-2] ✅ Container found:', container.parentElement?.parentElement?.id || 'unknown parent');
 
         if (v3ResponseTemplates.length === 0) {
+            console.log('[RT-RENDER-3] No templates - inserting empty state');
             container.innerHTML = `
                 <div class="text-center py-12 text-gray-400">
                     <i class="fas fa-file-alt text-6xl mb-4 opacity-20"></i>
@@ -23192,6 +23199,7 @@ Key Metrics:
                     <p class="text-sm mt-2">Click "Add Template" to create your first smart response template!</p>
                 </div>
             `;
+            console.log('[RT-RENDER-4] ✅ Empty state HTML inserted');
             return;
         }
 
