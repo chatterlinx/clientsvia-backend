@@ -139,7 +139,7 @@
         
         /* 🔧 SPECIFIC FIX: Ensure right-side tabs are not hidden */
         #tab-ai-agent-logic,
-        #tab-test-tab,
+
         #tab-ai-response-system {
             display: inline-flex !important;
             visibility: visible !important;
@@ -155,14 +155,6 @@
             50% { background: linear-gradient(45deg, #ffff00, #00ff00) !important; }
             75% { background: linear-gradient(45deg, #00ff00, #0000ff) !important; }
             100% { background: linear-gradient(45deg, #0000ff, #ff0000) !important; }
-        }
-        
-        #test-tab-content {
-            display: block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            position: relative !important;
-            z-index: 10000 !important;
         }
         
         /* 🔥 SCROLL FIX: Ensure tab content area is scrollable and positioned correctly */
@@ -870,20 +862,12 @@
                             </button>
                             <!-- Legacy personality responses tab removed - using modern AI Agent Logic system -->
                             <!-- ✅ PRODUCTION: Knowledge Sources integrated into AI Agent Logic Tab 2 -->
-                            <button class="tab-button tab-button-inactive" id="tab-left-test" data-tab="left-test">
-                                <i class="fas fa-arrow-left mr-1"></i>Left Test
-                                <span class="ml-2 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full font-bold">LEFT</span>
-                            </button>
-                            <button class="tab-button tab-button-inactive" id="tab-ai-agent-logic" data-tab="ai-agent-logic">
-                                <i class="fas fa-brain mr-1"></i>AI Agent Logic
-                            </button>
-                            <button class="tab-button tab-button-inactive" id="tab-test-tab" data-tab="test-tab">
-                                <i class="fas fa-flask mr-1"></i>Test Tab
-                                <span class="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full font-bold">TEST</span>
-                            </button>
                             <button class="tab-button tab-button-inactive" id="tab-ai-response-system" data-tab="ai-response-system">
                                 <i class="fas fa-bolt mr-1"></i>AI Response System
                                 <span class="ml-2 px-2 py-0.5 bg-yellow-500 text-white text-xs rounded-full font-bold">NEW</span>
+                            </button>
+                            <button class="tab-button tab-button-inactive" id="tab-ai-agent-logic" data-tab="ai-agent-logic">
+                                <i class="fas fa-brain mr-1"></i>AI Agent Logic
                             </button>
                             <!-- REMOVED: Legacy CRM & Contacts tab - will build V2 version in future -->
 
@@ -1597,77 +1581,240 @@
                     <!-- ✅ PRODUCTION: Knowledge Sources tab REMOVED - Now integrated into AI Agent Logic Tab 2 -->
                     <!-- 🗑️ CLEAN SWEEP: Legacy standalone Knowledge Sources implementation eliminated -->
 
-                    <!-- ===== TAB SECTION START: LEFT TEST TAB ===== -->
-                    <div id="left-test-content" class="tab-content-item hidden">
-                        <!-- MASSIVE LEFT TEST BANNER -->
-                        <div style="
-                            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-                            color: white !important;
-                            padding: 60px !important;
-                            text-align: center !important;
-                            font-size: 48px !important;
-                            font-weight: bold !important;
-                            border: 8px solid #1e40af !important;
-                            margin: 20px !important;
-                            border-radius: 15px !important;
-                            box-shadow: 0 20px 40px rgba(0,0,0,0.3) !important;
-                            text-shadow: 2px 2px 4px rgba(0,0,0,0.5) !important;
-                        ">
-                            ⬅️ LEFT TEST TAB IS WORKING! ⬅️
-                            <div style="font-size: 24px; margin-top: 20px; opacity: 0.9;">
-                                This tab is positioned to the LEFT of AI Agent Logic!
-                            </div>
-                            <div style="font-size: 18px; margin-top: 15px; opacity: 0.8;">
-                                If you see this clearly, the position issue is specific to tabs on the RIGHT side.
-                            </div>
+                    <!-- ===== TAB SECTION START: AI RESPONSE SYSTEM ===== -->
+                    <div id="ai-response-system-content" class="tab-content-item hidden">
+                        <!-- 🔥 HUGE DEBUG BANNER - IF YOU SEE THIS, THE TAB IS WORKING! -->
+                        <div style="background: linear-gradient(135deg, #ff0000 0%, #ff6b00 100%); color: white; padding: 40px; text-align: center; font-size: 36px; font-weight: bold; border: 5px solid #000; margin: 20px;">
+                            🎉 AI RESPONSE SYSTEM TAB IS VISIBLE! 🎉
+                            <div style="font-size: 18px; margin-top: 10px;">If you see this banner, the tab is loading correctly!</div>
                         </div>
                         
-                        <section class="profile-section">
-                            <h2 class="profile-section-title">
-                                <i class="fas fa-arrow-left mr-2 text-blue-600"></i>Left Position Test
-                            </h2>
+                        <section class="profile-section bg-transparent shadow-none p-0">
+                            <h2 class="profile-section-title"><i class="fas fa-bolt mr-2 text-yellow-600"></i>AI Response System</h2>
                             
-                            <div class="bg-white p-6 rounded-lg shadow-sm border">
-                                <h3 class="text-lg font-semibold mb-4">Position Analysis</h3>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                        <h4 class="font-medium text-blue-800 mb-2">✅ Working Tabs (Left Side):</h4>
-                                        <ul class="list-disc list-inside text-blue-700 space-y-1 text-sm">
-                                            <li>Overview</li>
-                                            <li>Configuration</li>
-                                            <li>Notes</li>
-                                            <li>AI Voice Settings</li>
-                                            <li><strong>Left Test (this tab)</strong></li>
-                                        </ul>
+                            <!-- ============================================================================== -->
+                            <!-- 🚀 V3 AI RESPONSE SYSTEM - WORLD-CLASS 5-TIER PRIORITY SYSTEM               -->
+                            <!-- New System: Testing alongside existing system before migration                -->
+                            <!-- Priority 0: Instant Responses (0-5ms) | Priority 3: Response Templates (100ms) -->
+                            <!-- ============================================================================== -->
+                            
+                            <!-- NEW SYSTEM BANNER -->
+                            <div class="bg-gradient-to-r from-yellow-50 to-purple-50 border-2 border-yellow-400 rounded-lg p-6 mb-8">
+                                <div class="flex items-start">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-rocket text-yellow-600 text-4xl"></i>
+                                    </div>
+                                    <div class="ml-6 flex-1">
+                                        <h3 class="text-2xl font-bold text-gray-900 mb-2">
+                                            🚀 World-Class AI Response System
+                                            <span class="ml-3 px-3 py-1 bg-yellow-500 text-white text-sm rounded-full font-bold animate-pulse">NEW</span>
+                                        </h3>
+                                        <p class="text-gray-700 mb-4 leading-relaxed">
+                                            Welcome to the <strong>next generation</strong> of AI agent response management! This system adds <strong>lightning-fast instant responses</strong> (0-5ms) and <strong>smart templates</strong> (100ms) to your existing Company Q&A and Trade Q&A knowledge base.
+                                        </p>
+                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                                            <div class="bg-white rounded-lg p-4 border-2 border-yellow-300">
+                                                <div class="flex items-center mb-2">
+                                                    <i class="fas fa-bolt text-yellow-600 text-xl mr-2"></i>
+                                                    <h4 class="font-semibold text-gray-900">Instant Responses</h4>
+                                                </div>
+                                                <p class="text-sm text-gray-600">0-5ms responses for greetings, emergencies, and common phrases</p>
+                                            </div>
+                                            <div class="bg-white rounded-lg p-4 border-2 border-purple-300">
+                                                <div class="flex items-center mb-2">
+                                                    <i class="fas fa-file-alt text-purple-600 text-xl mr-2"></i>
+                                                    <h4 class="font-semibold text-gray-900">Smart Templates</h4>
+                                                </div>
+                                                <p class="text-sm text-gray-600">100ms adaptive templates for service inquiries and transfers</p>
+                                            </div>
+                                            <div class="bg-white rounded-lg p-4 border-2 border-green-300">
+                                                <div class="flex items-center mb-2">
+                                                    <i class="fas fa-tachometer-alt text-green-600 text-xl mr-2"></i>
+                                                    <h4 class="font-semibold text-gray-900">96% Faster</h4>
+                                                </div>
+                                                <p class="text-sm text-gray-600">From 50ms to 2ms for common queries - instant human experience</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 🎯 5-TIER PRIORITY FLOW VISUALIZATION -->
+                            <div class="bg-white border-2 border-gray-200 rounded-lg p-6 mb-8">
+                                <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center">
+                                    <i class="fas fa-brain mr-3 text-purple-600"></i>
+                                    How Your AI Agent Thinks (5-Tier Priority System)
+                                </h3>
+                                <p class="text-sm text-gray-600 mb-6">Your AI agent processes queries in this exact order, choosing the fastest accurate response:</p>
+                                
+                                <div class="space-y-3">
+                                    <!-- Priority 0: Instant Responses -->
+                                    <div class="flex items-center space-x-4 p-4 bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-lg border-2 border-yellow-400 shadow-sm">
+                                        <div class="flex items-center justify-center w-10 h-10 bg-yellow-500 text-white rounded-full font-bold text-lg shadow-lg">
+                                            0
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="font-semibold text-gray-900 text-lg">⚡ Instant Responses</div>
+                                            <div class="text-sm text-gray-700">Greetings, emergencies, common phrases - zero thinking required</div>
+                                        </div>
+                                        <div class="flex items-center space-x-2">
+                                            <span class="px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded-full">0-5ms</span>
+                                            <span class="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">NEW!</span>
+                                        </div>
                                     </div>
                                     
-                                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                                        <h4 class="font-medium text-red-800 mb-2">❌ Problem Tabs (Right Side):</h4>
-                                        <ul class="list-disc list-inside text-red-700 space-y-1 text-sm">
-                                            <li>AI Agent Logic (?)</li>
-                                            <li>Test Tab (right of AI Agent Logic)</li>
-                                            <li>AI Response System (far right)</li>
-                                        </ul>
+                                    <!-- Priority 1: Company Q&A -->
+                                    <div class="flex items-center space-x-4 p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border-2 border-blue-300">
+                                        <div class="flex items-center justify-center w-10 h-10 bg-blue-500 text-white rounded-full font-bold text-lg">
+                                            1
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="font-semibold text-gray-900">📋 Company Q&A</div>
+                                            <div class="text-sm text-gray-600">Your specific business information and services</div>
+                                        </div>
+                                        <span class="px-3 py-1 bg-blue-500 text-white text-xs font-bold rounded-full">~50ms</span>
+                                    </div>
+                                    
+                                    <!-- Priority 2: Trade Q&A -->
+                                    <div class="flex items-center space-x-4 p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-lg border-2 border-green-300">
+                                        <div class="flex items-center justify-center w-10 h-10 bg-green-500 text-white rounded-full font-bold text-lg">
+                                            2
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="font-semibold text-gray-900">🔧 Trade Q&A</div>
+                                            <div class="text-sm text-gray-600">Industry-specific knowledge (HVAC, plumbing, electrical, etc.)</div>
+                                        </div>
+                                        <span class="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full">~75ms</span>
+                                    </div>
+                                    
+                                    <!-- Priority 3: Response Templates -->
+                                    <div class="flex items-center space-x-4 p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg border-2 border-purple-400 shadow-sm">
+                                        <div class="flex items-center justify-center w-10 h-10 bg-purple-500 text-white rounded-full font-bold text-lg shadow-lg">
+                                            3
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="font-semibold text-gray-900 text-lg">📝 Response Templates</div>
+                                            <div class="text-sm text-gray-700">Smart, adaptable templates for common scenarios</div>
+                                        </div>
+                                        <div class="flex items-center space-x-2">
+                                            <span class="px-3 py-1 bg-purple-500 text-white text-xs font-bold rounded-full">~100ms</span>
+                                            <span class="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">NEW!</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Priority 4: Fallback -->
+                                    <div class="flex items-center space-x-4 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border-2 border-gray-300">
+                                        <div class="flex items-center justify-center w-10 h-10 bg-gray-500 text-white rounded-full font-bold text-lg">
+                                            4
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="font-semibold text-gray-900">🤝 Fallback Response</div>
+                                            <div class="text-sm text-gray-600">Graceful transfer when no specific answer is found</div>
+                                        </div>
+                                        <span class="px-3 py-1 bg-gray-500 text-white text-xs font-bold rounded-full">~125ms</span>
                                     </div>
                                 </div>
                                 
-                                <div class="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                    <h4 class="font-medium text-yellow-800 mb-2">🔍 Hypothesis:</h4>
-                                    <p class="text-yellow-700 text-sm">
-                                        There may be a CSS issue, JavaScript error, or layout problem affecting tabs 
-                                        positioned after a certain point in the navigation. This could be due to:
+                                <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <p class="text-sm text-blue-800">
+                                        <i class="fas fa-lightbulb mr-2 text-blue-600"></i>
+                                        <strong>How it works:</strong> The AI checks each priority level in order. As soon as a confident match is found, it responds immediately without checking lower priorities. This ensures the fastest possible response while maintaining accuracy!
                                     </p>
-                                    <ul class="list-disc list-inside text-yellow-700 text-sm mt-2 space-y-1">
-                                        <li>CSS overflow or width constraints</li>
-                                        <li>JavaScript event delegation issues</li>
-                                        <li>Tab container width limitations</li>
-                                        <li>Z-index or positioning conflicts</li>
-                                    </ul>
                                 </div>
                             </div>
+
+                            <!-- ⚡ INSTANT RESPONSES SECTION -->
+                            <div class="bg-white border-2 border-yellow-300 rounded-lg p-6 mb-8 shadow-lg">
+                                <div class="flex items-center justify-between mb-6">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-bolt text-yellow-600 text-3xl mr-4"></i>
+                                        <div>
+                                            <h3 class="text-2xl font-bold text-gray-900">Instant Responses</h3>
+                                            <p class="text-sm text-gray-600 mt-1">Lightning-fast 0-5ms responses - no thinking required!</p>
+                                        </div>
+                                        <span class="ml-4 px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded-full animate-pulse">Priority 0</span>
+                                    </div>
+                                    <button id="add-instant-response-btn" class="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold transition-all transform hover:scale-105 shadow-lg">
+                                        <i class="fas fa-plus mr-2"></i>Add Instant Response
+                                    </button>
+                                </div>
+                                
+                                <div class="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
+                                    <div class="flex items-start">
+                                        <i class="fas fa-info-circle text-yellow-600 text-xl mr-3 mt-1"></i>
+                                        <div>
+                                            <h4 class="font-semibold text-yellow-900 mb-2">What are Instant Responses?</h4>
+                                            <p class="text-sm text-yellow-800 mb-3">
+                                                Instant responses are pre-configured answers that match specific trigger words with zero processing time. Perfect for:
+                                            </p>
+                                            <ul class="text-sm text-yellow-800 space-y-1 ml-4">
+                                                <li>• <strong>Greetings:</strong> "hello", "hi", "hey" → instant friendly greeting</li>
+                                                <li>• <strong>Emergencies:</strong> "emergency", "urgent", "asap" → instant escalation</li>
+                                                <li>• <strong>Common phrases:</strong> "thank you", "bye", "hold on" → instant acknowledgment</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Instant Responses List -->
+                                <div id="v3-instant-responses-list" class="space-y-3">
+                                    <!-- Will be populated by JavaScript -->
+                                    <div class="text-center py-12 text-gray-400">
+                                        <i class="fas fa-bolt text-6xl mb-4 opacity-20"></i>
+                                        <p class="text-lg">No instant responses yet</p>
+                                        <p class="text-sm mt-2">Click "Add Instant Response" to create your first lightning-fast response!</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 📋 RESPONSE TEMPLATES SECTION -->
+                            <div class="bg-white border-2 border-purple-300 rounded-lg p-6 mb-8 shadow-lg">
+                                <div class="flex items-center justify-between mb-6">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-file-alt text-purple-600 text-3xl mr-4"></i>
+                                        <div>
+                                            <h3 class="text-2xl font-bold text-gray-900">Response Templates</h3>
+                                            <p class="text-sm text-gray-600 mt-1">Smart, adaptable templates for common scenarios (~100ms)</p>
+                                        </div>
+                                        <span class="ml-4 px-3 py-1 bg-purple-500 text-white text-xs font-bold rounded-full animate-pulse">Priority 3</span>
+                                    </div>
+                                    <button id="add-response-template-main-btn" class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-bold transition-all transform hover:scale-105 shadow-lg">
+                                        <i class="fas fa-plus mr-2"></i>Add Template
+                                    </button>
+                                </div>
+                                
+                                <div class="bg-purple-50 border-2 border-purple-200 rounded-lg p-4 mb-6">
+                                    <div class="flex items-start">
+                                        <i class="fas fa-info-circle text-purple-600 text-xl mr-3 mt-1"></i>
+                                        <div>
+                                            <h4 class="font-semibold text-purple-900 mb-2">What are Response Templates?</h4>
+                                            <p class="text-sm text-purple-800 mb-3">
+                                                Response templates are flexible, keyword-matched answers that adapt to your agent's personality. Perfect for:
+                                            </p>
+                                            <ul class="text-sm text-purple-800 space-y-1 ml-4">
+                                                <li>• <strong>Service Inquiries:</strong> General questions about what you offer</li>
+                                                <li>• <strong>Pricing:</strong> Standard pricing information or quote requests</li>
+                                                <li>• <strong>Transfers:</strong> Routing to specific departments or people</li>
+                                                <li>• <strong>Closing:</strong> Polite conversation endings and next steps</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Response Templates List -->
+                                <div id="v3-response-templates-list" class="space-y-3">
+                                    <!-- Will be populated by JavaScript -->
+                                    <div class="text-center py-12 text-gray-400">
+                                        <i class="fas fa-file-alt text-6xl mb-4 opacity-20"></i>
+                                        <p class="text-lg">No response templates yet</p>
+                                        <p class="text-sm mt-2">Click "Add Template" to create your first smart response template!</p>
+                                    </div>
+                                </div>
+                            </div>
+
                         </section>
                     </div>
-                    <!-- ===== TAB SECTION END: LEFT TEST TAB ===== -->
+                    <!-- ===== TAB SECTION END: AI RESPONSE SYSTEM ===== -->
 
                     <!-- ===== TAB SECTION START: AI AGENT LOGIC ===== -->
                     <div id="ai-agent-logic-content" class="tab-content-item hidden">
@@ -4145,292 +4292,6 @@ This would be a great time to also check..."></textarea>
                     
             </div> <!-- End hidden personalization content -->
         </div> <!-- End hidden container -->
-
-                    <!-- ===== TAB SECTION START: TEST TAB ===== -->
-                    <div id="test-tab-content" class="tab-content-item hidden">
-                        <!-- Simple test content to verify tab system is working -->
-                        <div style="background: linear-gradient(135deg, #00ff00 0%, #00aa00 100%); color: white; padding: 40px; text-align: center; font-size: 36px; font-weight: bold; border: 5px solid #000; margin: 20px;">
-                            🧪 TEST TAB IS WORKING! 🧪
-                            <div style="font-size: 18px; margin-top: 10px;">This is a simple test to verify the tab system works!</div>
-                        </div>
-                        
-                        <section class="profile-section">
-                            <h2 class="profile-section-title">
-                                <i class="fas fa-flask mr-2 text-green-600"></i>Test Tab Content
-                            </h2>
-                            
-                            <div class="bg-white p-6 rounded-lg shadow-sm border">
-                                <h3 class="text-lg font-semibold mb-4">Simple Content Test</h3>
-                                <p class="text-gray-700 mb-4">
-                                    This is a simple test tab to verify that the tab system is working correctly. 
-                                    If you can see this content when clicking the "Test Tab" button, then the tab 
-                                    system itself is functioning properly.
-                                </p>
-                                
-                                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                                    <h4 class="font-medium text-green-800 mb-2">Test Elements:</h4>
-                                    <ul class="list-disc list-inside text-green-700 space-y-1">
-                                        <li>✅ Tab button click handler</li>
-                                        <li>✅ Content visibility toggle</li>
-                                        <li>✅ CSS styling and layout</li>
-                                        <li>✅ Basic HTML rendering</li>
-                                    </ul>
-                                </div>
-                                
-                                <div class="flex space-x-4">
-                                    <button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors" 
-                                            onclick="alert('Test button clicked! Tab system is working.')">
-                                        <i class="fas fa-check mr-2"></i>Test Button
-                                    </button>
-                                    <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-                                            onclick="console.log('Test console log from test tab')">
-                                        <i class="fas fa-terminal mr-2"></i>Console Test
-                                    </button>
-                                </div>
-                                
-                                <div class="mt-6 p-4 bg-gray-50 rounded-lg">
-                                    <h4 class="font-medium text-gray-800 mb-2">Current Time Test:</h4>
-                                    <p class="text-gray-600" id="test-tab-timestamp">Loading...</p>
-                                </div>
-                            </div>
-                        </section>
-                    </div>
-                    <!-- ===== TAB SECTION END: TEST TAB ===== -->
-
-                    <!-- ===== TAB SECTION START: AI RESPONSE SYSTEM ===== -->
-                    <div id="ai-response-system-content" class="tab-content-item hidden">
-                        <!-- 🔥 HUGE DEBUG BANNER - IF YOU SEE THIS, THE TAB IS WORKING! -->
-                        <div style="background: linear-gradient(135deg, #ff0000 0%, #ff6b00 100%); color: white; padding: 40px; text-align: center; font-size: 36px; font-weight: bold; border: 5px solid #000; margin: 20px;">
-                            🎉 AI RESPONSE SYSTEM TAB IS VISIBLE! 🎉
-                            <div style="font-size: 18px; margin-top: 10px;">If you see this banner, the tab is loading correctly!</div>
-                        </div>
-                        
-                        <section class="profile-section bg-transparent shadow-none p-0">
-                            <h2 class="profile-section-title"><i class="fas fa-bolt mr-2 text-yellow-600"></i>AI Response System</h2>
-                            
-                            <!-- ============================================================================== -->
-                            <!-- 🚀 V3 AI RESPONSE SYSTEM - WORLD-CLASS 5-TIER PRIORITY SYSTEM               -->
-                            <!-- New System: Testing alongside existing system before migration                -->
-                            <!-- Priority 0: Instant Responses (0-5ms) | Priority 3: Response Templates (100ms) -->
-                            <!-- ============================================================================== -->
-                            
-                            <!-- NEW SYSTEM BANNER -->
-                            <div class="bg-gradient-to-r from-yellow-50 to-purple-50 border-2 border-yellow-400 rounded-lg p-6 mb-8">
-                                <div class="flex items-start">
-                                    <div class="flex-shrink-0">
-                                        <i class="fas fa-rocket text-yellow-600 text-4xl"></i>
-                                    </div>
-                                    <div class="ml-6 flex-1">
-                                        <h3 class="text-2xl font-bold text-gray-900 mb-2">
-                                            🚀 World-Class AI Response System
-                                            <span class="ml-3 px-3 py-1 bg-yellow-500 text-white text-sm rounded-full font-bold animate-pulse">NEW</span>
-                                        </h3>
-                                        <p class="text-gray-700 mb-4 leading-relaxed">
-                                            Welcome to the <strong>next generation</strong> of AI agent response management! This system adds <strong>lightning-fast instant responses</strong> (0-5ms) and <strong>smart templates</strong> (100ms) to your existing Company Q&A and Trade Q&A knowledge base.
-                                        </p>
-                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                                            <div class="bg-white rounded-lg p-4 border-2 border-yellow-300">
-                                                <div class="flex items-center mb-2">
-                                                    <i class="fas fa-bolt text-yellow-600 text-xl mr-2"></i>
-                                                    <h4 class="font-semibold text-gray-900">Instant Responses</h4>
-                                                </div>
-                                                <p class="text-sm text-gray-600">0-5ms responses for greetings, emergencies, and common phrases</p>
-                                            </div>
-                                            <div class="bg-white rounded-lg p-4 border-2 border-purple-300">
-                                                <div class="flex items-center mb-2">
-                                                    <i class="fas fa-file-alt text-purple-600 text-xl mr-2"></i>
-                                                    <h4 class="font-semibold text-gray-900">Smart Templates</h4>
-                                                </div>
-                                                <p class="text-sm text-gray-600">100ms adaptive templates for service inquiries and transfers</p>
-                                            </div>
-                                            <div class="bg-white rounded-lg p-4 border-2 border-green-300">
-                                                <div class="flex items-center mb-2">
-                                                    <i class="fas fa-tachometer-alt text-green-600 text-xl mr-2"></i>
-                                                    <h4 class="font-semibold text-gray-900">96% Faster</h4>
-                                                </div>
-                                                <p class="text-sm text-gray-600">From 50ms to 2ms for common queries - instant human experience</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 🎯 5-TIER PRIORITY FLOW VISUALIZATION -->
-                            <div class="bg-white border-2 border-gray-200 rounded-lg p-6 mb-8">
-                                <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center">
-                                    <i class="fas fa-brain mr-3 text-purple-600"></i>
-                                    How Your AI Agent Thinks (5-Tier Priority System)
-                                </h3>
-                                <p class="text-sm text-gray-600 mb-6">Your AI agent processes queries in this exact order, choosing the fastest accurate response:</p>
-                                
-                                <div class="space-y-3">
-                                    <!-- Priority 0: Instant Responses -->
-                                    <div class="flex items-center space-x-4 p-4 bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-lg border-2 border-yellow-400 shadow-sm">
-                                        <div class="flex items-center justify-center w-10 h-10 bg-yellow-500 text-white rounded-full font-bold text-lg shadow-lg">
-                                            0
-                                        </div>
-                                        <div class="flex-1">
-                                            <div class="font-semibold text-gray-900 text-lg">⚡ Instant Responses</div>
-                                            <div class="text-sm text-gray-700">Greetings, emergencies, common phrases - zero thinking required</div>
-                                        </div>
-                                        <div class="flex items-center space-x-2">
-                                            <span class="px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded-full">0-5ms</span>
-                                            <span class="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">NEW!</span>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Priority 1: Company Q&A -->
-                                    <div class="flex items-center space-x-4 p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border-2 border-blue-300">
-                                        <div class="flex items-center justify-center w-10 h-10 bg-blue-500 text-white rounded-full font-bold text-lg">
-                                            1
-                                        </div>
-                                        <div class="flex-1">
-                                            <div class="font-semibold text-gray-900">📋 Company Q&A</div>
-                                            <div class="text-sm text-gray-600">Your specific business information and services</div>
-                                        </div>
-                                        <span class="px-3 py-1 bg-blue-500 text-white text-xs font-bold rounded-full">~50ms</span>
-                                    </div>
-                                    
-                                    <!-- Priority 2: Trade Q&A -->
-                                    <div class="flex items-center space-x-4 p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-lg border-2 border-green-300">
-                                        <div class="flex items-center justify-center w-10 h-10 bg-green-500 text-white rounded-full font-bold text-lg">
-                                            2
-                                        </div>
-                                        <div class="flex-1">
-                                            <div class="font-semibold text-gray-900">🔧 Trade Q&A</div>
-                                            <div class="text-sm text-gray-600">Industry-specific knowledge (HVAC, plumbing, electrical, etc.)</div>
-                                        </div>
-                                        <span class="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full">~75ms</span>
-                                    </div>
-                                    
-                                    <!-- Priority 3: Response Templates -->
-                                    <div class="flex items-center space-x-4 p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg border-2 border-purple-400 shadow-sm">
-                                        <div class="flex items-center justify-center w-10 h-10 bg-purple-500 text-white rounded-full font-bold text-lg shadow-lg">
-                                            3
-                                        </div>
-                                        <div class="flex-1">
-                                            <div class="font-semibold text-gray-900 text-lg">📝 Response Templates</div>
-                                            <div class="text-sm text-gray-700">Smart, adaptable templates for common scenarios</div>
-                                        </div>
-                                        <div class="flex items-center space-x-2">
-                                            <span class="px-3 py-1 bg-purple-500 text-white text-xs font-bold rounded-full">~100ms</span>
-                                            <span class="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">NEW!</span>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Priority 4: Fallback -->
-                                    <div class="flex items-center space-x-4 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border-2 border-gray-300">
-                                        <div class="flex items-center justify-center w-10 h-10 bg-gray-500 text-white rounded-full font-bold text-lg">
-                                            4
-                                        </div>
-                                        <div class="flex-1">
-                                            <div class="font-semibold text-gray-900">🤝 Fallback Response</div>
-                                            <div class="text-sm text-gray-600">Graceful transfer when no specific answer is found</div>
-                                        </div>
-                                        <span class="px-3 py-1 bg-gray-500 text-white text-xs font-bold rounded-full">~125ms</span>
-                                    </div>
-                                </div>
-                                
-                                <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                    <p class="text-sm text-blue-800">
-                                        <i class="fas fa-lightbulb mr-2 text-blue-600"></i>
-                                        <strong>How it works:</strong> The AI checks each priority level in order. As soon as a confident match is found, it responds immediately without checking lower priorities. This ensures the fastest possible response while maintaining accuracy!
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- ⚡ INSTANT RESPONSES SECTION -->
-                            <div class="bg-white border-2 border-yellow-300 rounded-lg p-6 mb-8 shadow-lg">
-                                <div class="flex items-center justify-between mb-6">
-                                    <div class="flex items-center">
-                                        <i class="fas fa-bolt text-yellow-600 text-3xl mr-4"></i>
-                                        <div>
-                                            <h3 class="text-2xl font-bold text-gray-900">Instant Responses</h3>
-                                            <p class="text-sm text-gray-600 mt-1">Lightning-fast 0-5ms responses - no thinking required!</p>
-                                        </div>
-                                        <span class="ml-4 px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded-full animate-pulse">Priority 0</span>
-                                    </div>
-                                    <button id="add-instant-response-btn" class="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-lg font-bold transition-all transform hover:scale-105 shadow-lg">
-                                        <i class="fas fa-plus mr-2"></i>Add Instant Response
-                                    </button>
-                                </div>
-                                
-                                <div class="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
-                                    <div class="flex items-start">
-                                        <i class="fas fa-info-circle text-yellow-600 text-xl mr-3 mt-1"></i>
-                                        <div>
-                                            <h4 class="font-semibold text-yellow-900 mb-2">What are Instant Responses?</h4>
-                                            <p class="text-sm text-yellow-800 mb-3">
-                                                Instant responses are pre-configured answers that match specific trigger words with zero processing time. Perfect for:
-                                            </p>
-                                            <ul class="text-sm text-yellow-800 space-y-1 ml-4">
-                                                <li>• <strong>Greetings:</strong> "hello", "hi", "hey" → instant friendly greeting</li>
-                                                <li>• <strong>Emergencies:</strong> "emergency", "urgent", "asap" → instant escalation</li>
-                                                <li>• <strong>Common phrases:</strong> "thank you", "bye", "hold on" → instant acknowledgment</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Instant Responses List -->
-                                <div id="v3-instant-responses-list" class="space-y-3">
-                                    <!-- Will be populated by JavaScript -->
-                                    <div class="text-center py-12 text-gray-400">
-                                        <i class="fas fa-bolt text-6xl mb-4 opacity-20"></i>
-                                        <p class="text-lg">No instant responses yet</p>
-                                        <p class="text-sm mt-2">Click "Add Instant Response" to create your first lightning-fast response!</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 📋 RESPONSE TEMPLATES SECTION -->
-                            <div class="bg-white border-2 border-purple-300 rounded-lg p-6 mb-8 shadow-lg">
-                                <div class="flex items-center justify-between mb-6">
-                                    <div class="flex items-center">
-                                        <i class="fas fa-file-alt text-purple-600 text-3xl mr-4"></i>
-                                        <div>
-                                            <h3 class="text-2xl font-bold text-gray-900">Response Templates</h3>
-                                            <p class="text-sm text-gray-600 mt-1">Smart, adaptable templates for common scenarios (~100ms)</p>
-                                        </div>
-                                        <span class="ml-4 px-3 py-1 bg-purple-500 text-white text-xs font-bold rounded-full animate-pulse">Priority 3</span>
-                                    </div>
-                                    <button id="add-response-template-main-btn" class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-bold transition-all transform hover:scale-105 shadow-lg">
-                                        <i class="fas fa-plus mr-2"></i>Add Template
-                                    </button>
-                                </div>
-                                
-                                <div class="bg-purple-50 border-2 border-purple-200 rounded-lg p-4 mb-6">
-                                    <div class="flex items-start">
-                                        <i class="fas fa-info-circle text-purple-600 text-xl mr-3 mt-1"></i>
-                                        <div>
-                                            <h4 class="font-semibold text-purple-900 mb-2">What are Response Templates?</h4>
-                                            <p class="text-sm text-purple-800 mb-3">
-                                                Response templates are flexible, keyword-matched answers that adapt to your agent's personality. Perfect for:
-                                            </p>
-                                            <ul class="text-sm text-purple-800 space-y-1 ml-4">
-                                                <li>• <strong>Service Inquiries:</strong> General questions about what you offer</li>
-                                                <li>• <strong>Pricing:</strong> Standard pricing information or quote requests</li>
-                                                <li>• <strong>Transfers:</strong> Routing to specific departments or people</li>
-                                                <li>• <strong>Closing:</strong> Polite conversation endings and next steps</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Response Templates List -->
-                                <div id="v3-response-templates-list" class="space-y-3">
-                                    <!-- Will be populated by JavaScript -->
-                                    <div class="text-center py-12 text-gray-400">
-                                        <i class="fas fa-file-alt text-6xl mb-4 opacity-20"></i>
-                                        <p class="text-lg">No response templates yet</p>
-                                        <p class="text-sm mt-2">Click "Add Template" to create your first smart response template!</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                        </section>
-                    </div>
-                    <!-- ===== TAB SECTION END: AI RESPONSE SYSTEM ===== -->
 
                     <!-- ============================================================================== -->
                     <!-- MODALS FOR AI RESPONSE SYSTEM                                                -->
@@ -23709,82 +23570,6 @@ Key Metrics:
                 document.getElementById('response-template-confidence-value').textContent = parseFloat(e.target.value).toFixed(2);
             });
             console.log('[V3-INIT-6] ✅ Confidence slider listener attached');
-        }
-
-        // Left test tab functionality (positioned before AI Agent Logic)
-        const leftTestTab = document.getElementById('tab-left-test');
-        if (leftTestTab) {
-            leftTestTab.addEventListener('click', function() {
-                console.log('[LEFT-TEST-TAB] Left test tab clicked - switching to left test content...');
-                
-                if (window.companyProfileManager && typeof window.companyProfileManager.switchTab === 'function') {
-                    window.companyProfileManager.switchTab('left-test');
-                } else {
-                    console.log('[LEFT-TEST-TAB] Direct DOM manipulation fallback');
-                    // Hide all tab content
-                    document.querySelectorAll('.tab-content-item').forEach(pane => {
-                        pane.classList.add('hidden');
-                    });
-                    
-                    // Show left test tab content
-                    const leftTestContent = document.getElementById('left-test-content');
-                    if (leftTestContent) {
-                        leftTestContent.classList.remove('hidden');
-                        console.log('[LEFT-TEST-TAB] ✅ Left test tab content should now be visible');
-                    }
-                    
-                    // Update active tab buttons
-                    document.querySelectorAll('[data-tab]').forEach(btn => {
-                        btn.classList.remove('active', 'tab-button-active');
-                        btn.classList.add('tab-button-inactive');
-                    });
-                    this.classList.add('active', 'tab-button-active');
-                    this.classList.remove('tab-button-inactive');
-                }
-            });
-            console.log('[LEFT-TEST-TAB] ✅ Left test tab event listener attached');
-        }
-
-        // Test tab functionality
-        const testTab = document.getElementById('tab-test-tab');
-        if (testTab) {
-            testTab.addEventListener('click', function() {
-                console.log('[TEST-TAB] Test tab clicked - switching to test content...');
-                
-                if (window.companyProfileManager && typeof window.companyProfileManager.switchTab === 'function') {
-                    window.companyProfileManager.switchTab('test-tab');
-                    
-                    // Update timestamp in test tab
-                    setTimeout(() => {
-                        const timestampEl = document.getElementById('test-tab-timestamp');
-                        if (timestampEl) {
-                            timestampEl.textContent = new Date().toLocaleString();
-                        }
-                    }, 100);
-                } else {
-                    console.log('[TEST-TAB] Direct DOM manipulation fallback');
-                    // Hide all tab content
-                    document.querySelectorAll('.tab-content-item').forEach(pane => {
-                        pane.classList.add('hidden');
-                    });
-                    
-                    // Show test tab content
-                    const testContent = document.getElementById('test-tab-content');
-                    if (testContent) {
-                        testContent.classList.remove('hidden');
-                        console.log('[TEST-TAB] ✅ Test tab content should now be visible');
-                    }
-                    
-                    // Update active tab buttons
-                    document.querySelectorAll('[data-tab]').forEach(btn => {
-                        btn.classList.remove('active', 'tab-button-active');
-                        btn.classList.add('tab-button-inactive');
-                    });
-                    this.classList.add('active', 'tab-button-active');
-                    this.classList.remove('tab-button-inactive');
-                }
-            });
-            console.log('[TEST-TAB] ✅ Test tab event listener attached');
         }
 
         // Load data when AI Response System tab is opened
