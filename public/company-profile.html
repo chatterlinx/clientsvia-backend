@@ -22091,7 +22091,9 @@ Key Metrics:
                     console.log('💾 Save instant response:', formData);
                     showNotification('Instant response saved successfully!', 'success');
                     closeInstantResponseModal();
-                    loadAgentPersonalitySettings(); // Refresh the display
+                    
+                    // 🔄 REFRESH: Reload agent brain to display the newly saved instant response
+                    await loadUnifiedAgentBrain(); // This will call renderInstantResponses()
                 } catch (error) {
                     console.error('❌ Error saving instant response:', error);
                     showNotification('Failed to save instant response', 'error');
@@ -22136,7 +22138,9 @@ Key Metrics:
                     console.log('💾 Save response template:', formData);
                     showNotification('Response template saved successfully!', 'success');
                     closeResponseTemplateModal();
-                    loadAgentPersonalitySettings(); // Refresh the display
+                    
+                    // 🔄 REFRESH: Reload agent brain to display the newly saved response template
+                    await loadUnifiedAgentBrain(); // This will call renderResponseTemplates()
                 } catch (error) {
                     console.error('❌ Error saving response template:', error);
                     showNotification('Failed to save response template', 'error');
