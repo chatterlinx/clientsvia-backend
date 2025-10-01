@@ -1363,7 +1363,7 @@ console.log('[INIT] ✅ Quick Variables routes added to v2company.js (piggybacke
 console.log('[INIT] 🚀 Loading V3 AI Response System routes (Instant Responses + Templates)...');
 
 // ⚡ GET INSTANT RESPONSES
-router.get('/:companyId/instant-responses', authenticateJWT, async (req, res) => {
+router.get('/company/:companyId/instant-responses', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     const { companyId } = req.params;
     
@@ -1402,7 +1402,7 @@ router.get('/:companyId/instant-responses', authenticateJWT, async (req, res) =>
 });
 
 // ⚡ POST NEW INSTANT RESPONSE
-router.post('/:companyId/instant-responses', authenticateJWT, async (req, res) => {
+router.post('/company/:companyId/instant-responses', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     const { companyId } = req.params;
     const { trigger, response, category, priority } = req.body;
@@ -1487,7 +1487,7 @@ router.post('/:companyId/instant-responses', authenticateJWT, async (req, res) =
 });
 
 // ⚡ PUT UPDATE INSTANT RESPONSE
-router.put('/:companyId/instant-responses/:responseId', authenticateJWT, async (req, res) => {
+router.put('/company/:companyId/instant-responses/:responseId', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     const { companyId, responseId } = req.params;
     const { trigger, response, category, priority, enabled } = req.body;
@@ -1550,7 +1550,7 @@ router.put('/:companyId/instant-responses/:responseId', authenticateJWT, async (
 });
 
 // ⚡ DELETE INSTANT RESPONSE
-router.delete('/:companyId/instant-responses/:responseId', authenticateJWT, async (req, res) => {
+router.delete('/company/:companyId/instant-responses/:responseId', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     const { companyId, responseId } = req.params;
     
@@ -1616,7 +1616,7 @@ router.delete('/:companyId/instant-responses/:responseId', authenticateJWT, asyn
 });
 
 // 📋 GET RESPONSE TEMPLATES
-router.get('/:companyId/response-templates', authenticateJWT, async (req, res) => {
+router.get('/company/:companyId/response-templates', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     const { companyId } = req.params;
     
@@ -1655,7 +1655,7 @@ router.get('/:companyId/response-templates', authenticateJWT, async (req, res) =
 });
 
 // 📋 POST NEW RESPONSE TEMPLATE
-router.post('/:companyId/response-templates', authenticateJWT, async (req, res) => {
+router.post('/company/:companyId/response-templates', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     const { companyId } = req.params;
     const { name, template, category, keywords, confidence } = req.body;
@@ -1748,7 +1748,7 @@ router.post('/:companyId/response-templates', authenticateJWT, async (req, res) 
 });
 
 // 📋 PUT UPDATE RESPONSE TEMPLATE
-router.put('/:companyId/response-templates/:templateId', authenticateJWT, async (req, res) => {
+router.put('/company/:companyId/response-templates/:templateId', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     const { companyId, templateId } = req.params;
     const { name, template, category, keywords, confidence, enabled } = req.body;
@@ -1812,7 +1812,7 @@ router.put('/:companyId/response-templates/:templateId', authenticateJWT, async 
 });
 
 // 📋 DELETE RESPONSE TEMPLATE
-router.delete('/:companyId/response-templates/:templateId', authenticateJWT, async (req, res) => {
+router.delete('/company/:companyId/response-templates/:templateId', authenticateJWT, async (req, res) => {
     const startTime = Date.now();
     const { companyId, templateId } = req.params;
     
