@@ -4184,6 +4184,244 @@ This would be a great time to also check..."></textarea>
                         </section>
                     </div>
                     <!-- ===== TAB SECTION END: AI RESPONSE SYSTEM ===== -->
+
+                    <!-- ============================================================================== -->
+                    <!-- MODALS FOR AI RESPONSE SYSTEM                                                -->
+                    <!-- ============================================================================== -->
+
+                    <!-- ⚡ INSTANT RESPONSE MODAL -->
+                    <div id="instant-response-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <!-- Modal Header -->
+                            <div class="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white p-6 rounded-t-xl">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-bolt text-3xl mr-4"></i>
+                                        <div>
+                                            <h3 id="instant-response-modal-title" class="text-2xl font-bold">Add Instant Response</h3>
+                                            <p class="text-yellow-100 text-sm mt-1">Lightning-fast 0-5ms response</p>
+                                        </div>
+                                    </div>
+                                    <button onclick="closeInstantResponseModal()" class="text-white hover:text-yellow-200 transition-colors">
+                                        <i class="fas fa-times text-2xl"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Modal Body -->
+                            <form id="instant-response-form" class="p-6 space-y-6">
+                                <input type="hidden" id="instant-response-id" />
+
+                                <!-- Trigger Keywords -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                        <i class="fas fa-tags text-yellow-600 mr-2"></i>Trigger Keywords *
+                                    </label>
+                                    <input type="text" id="instant-response-triggers" 
+                                           placeholder="hello, hi, hey there, good morning" 
+                                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent" 
+                                           required>
+                                    <p class="text-xs text-gray-600 mt-2">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Separate multiple keywords with commas. These words will trigger this instant response.
+                                    </p>
+                                </div>
+
+                                <!-- Response Text -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                        <i class="fas fa-comment-alt text-yellow-600 mr-2"></i>Response Text *
+                                    </label>
+                                    <textarea id="instant-response-text" rows="4" 
+                                              placeholder="Hi there! Thank you for calling. How can I help you today?" 
+                                              class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent" 
+                                              required></textarea>
+                                    <p class="text-xs text-gray-600 mt-2">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        This is the exact response customers will hear (0ms response time).
+                                    </p>
+                                </div>
+
+                                <!-- Category -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                        <i class="fas fa-folder text-yellow-600 mr-2"></i>Category
+                                    </label>
+                                    <select id="instant-response-category" 
+                                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                                        <option value="greeting">Greeting</option>
+                                        <option value="emergency">Emergency</option>
+                                        <option value="common">Common Phrase</option>
+                                    </select>
+                                </div>
+
+                                <!-- Priority -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                        <i class="fas fa-sort-numeric-down text-yellow-600 mr-2"></i>Priority (1-10)
+                                    </label>
+                                    <input type="number" id="instant-response-priority" min="1" max="10" value="5" 
+                                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                                    <p class="text-xs text-gray-600 mt-2">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Higher priority = checked first. Use 10 for emergencies, 1 for low priority.
+                                    </p>
+                                </div>
+
+                                <!-- Enabled Toggle -->
+                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                    <div>
+                                        <label class="text-sm font-semibold text-gray-800">Enabled</label>
+                                        <p class="text-xs text-gray-600 mt-1">Instant response is active and will be used</p>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="instant-response-enabled" checked class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                                    </label>
+                                </div>
+
+                                <!-- Action Buttons -->
+                                <div class="flex justify-end space-x-3 pt-4 border-t">
+                                    <button type="button" onclick="closeInstantResponseModal()" 
+                                            class="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" 
+                                            class="px-6 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-lg hover:from-yellow-600 hover:to-yellow-700 transition-all font-bold shadow-lg">
+                                        <i class="fas fa-save mr-2"></i><span id="instant-response-submit-text">Save Instant Response</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- 📋 RESPONSE TEMPLATE MODAL -->
+                    <div id="response-template-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                            <!-- Modal Header -->
+                            <div class="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-xl">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-file-alt text-3xl mr-4"></i>
+                                        <div>
+                                            <h3 id="response-template-modal-title" class="text-2xl font-bold">Add Response Template</h3>
+                                            <p class="text-purple-100 text-sm mt-1">Smart, adaptable template (~100ms)</p>
+                                        </div>
+                                    </div>
+                                    <button onclick="closeResponseTemplateModal()" class="text-white hover:text-purple-200 transition-colors">
+                                        <i class="fas fa-times text-2xl"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Modal Body -->
+                            <form id="response-template-form" class="p-6 space-y-6">
+                                <input type="hidden" id="response-template-id" />
+
+                                <!-- Template Name -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                        <i class="fas fa-tag text-purple-600 mr-2"></i>Template Name *
+                                    </label>
+                                    <input type="text" id="response-template-name" 
+                                           placeholder="Service Inquiry Response" 
+                                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
+                                           required>
+                                    <p class="text-xs text-gray-600 mt-2">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        A descriptive name for this template (internal use only).
+                                    </p>
+                                </div>
+
+                                <!-- Template Text -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                        <i class="fas fa-file-text text-purple-600 mr-2"></i>Template Text *
+                                    </label>
+                                    <textarea id="response-template-text" rows="5" 
+                                              placeholder="We offer a wide range of services including... Would you like to schedule an appointment?" 
+                                              class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
+                                              required></textarea>
+                                    <p class="text-xs text-gray-600 mt-2">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        The response template that will be used. Can include placeholders like [Company Name].
+                                    </p>
+                                </div>
+
+                                <!-- Category -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                        <i class="fas fa-folder text-purple-600 mr-2"></i>Category *
+                                    </label>
+                                    <select id="response-template-category" 
+                                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
+                                            required>
+                                        <option value="">Select a category...</option>
+                                        <option value="service">Service Inquiry</option>
+                                        <option value="pricing">Pricing</option>
+                                        <option value="transfer">Transfer/Routing</option>
+                                        <option value="closing">Closing/Farewell</option>
+                                        <option value="greeting">Greeting</option>
+                                        <option value="emergency">Emergency</option>
+                                    </select>
+                                </div>
+
+                                <!-- Keywords -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                        <i class="fas fa-key text-purple-600 mr-2"></i>Keywords
+                                    </label>
+                                    <input type="text" id="response-template-keywords" 
+                                           placeholder="services, what do you do, offerings, capabilities" 
+                                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                    <p class="text-xs text-gray-600 mt-2">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Separate multiple keywords with commas. These help match customer queries to this template.
+                                    </p>
+                                </div>
+
+                                <!-- Confidence Threshold -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                        <i class="fas fa-chart-line text-purple-600 mr-2"></i>Confidence Threshold
+                                    </label>
+                                    <div class="flex items-center space-x-4">
+                                        <input type="range" id="response-template-confidence" min="0" max="1" step="0.05" value="0.7" 
+                                               class="flex-1 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-purple-500">
+                                        <span id="response-template-confidence-value" class="text-lg font-bold text-purple-600 min-w-[3rem]">0.70</span>
+                                    </div>
+                                    <p class="text-xs text-gray-600 mt-2">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        How confident the AI must be to use this template (0.5-1.0). Higher = more strict matching.
+                                    </p>
+                                </div>
+
+                                <!-- Enabled Toggle -->
+                                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                    <div>
+                                        <label class="text-sm font-semibold text-gray-800">Enabled</label>
+                                        <p class="text-xs text-gray-600 mt-1">Template is active and will be used</p>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="response-template-enabled" checked class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
+                                    </label>
+                                </div>
+
+                                <!-- Action Buttons -->
+                                <div class="flex justify-end space-x-3 pt-4 border-t">
+                                    <button type="button" onclick="closeResponseTemplateModal()" 
+                                            class="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" 
+                                            class="px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all font-bold shadow-lg">
+                                        <i class="fas fa-save mr-2"></i><span id="response-template-submit-text">Save Template</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
         
         </main>
         
@@ -22605,6 +22843,635 @@ Key Metrics:
     
     // ============================================================================
     // END QUICK VARIABLES
+    // ============================================================================
+
+    // ============================================================================
+    // 🚀 V3 AI RESPONSE SYSTEM - JAVASCRIPT
+    // ============================================================================
+    console.log('[V3-INIT] 🚀 Initializing V3 AI Response System JavaScript...');
+
+    let v3InstantResponses = [];
+    let v3ResponseTemplates = [];
+    let v3CurrentEditingResponse = null;
+    let v3CurrentEditingTemplate = null;
+
+    // ============================================================
+    // INSTANT RESPONSES - CRUD OPERATIONS
+    // ============================================================
+
+    /**
+     * ⚡ Load Instant Responses
+     */
+    async function loadInstantResponses() {
+        console.log('[IR-LOAD-1] Loading instant responses...');
+        try {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) {
+                console.error('[IR-LOAD-2] No company ID found');
+                return;
+            }
+
+            const authToken = getUniversalAuthToken();
+            console.log('[IR-LOAD-3] Fetching from:', `/api/company/${companyId}/instant-responses`);
+
+            const response = await fetch(`/api/company/${companyId}/instant-responses`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+
+            console.log('[IR-LOAD-4] Response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('[IR-LOAD-5] Data received:', data);
+
+            if (data.success) {
+                v3InstantResponses = data.data || [];
+                console.log('[IR-LOAD-6] ✅ Loaded', v3InstantResponses.length, 'instant responses');
+                renderInstantResponses();
+            }
+        } catch (error) {
+            console.error('[IR-LOAD-ERROR] Error loading instant responses:', error);
+            showNotification('Failed to load instant responses', 'error');
+        }
+    }
+
+    /**
+     * ⚡ Render Instant Responses
+     */
+    function renderInstantResponses() {
+        console.log('[IR-RENDER-1] Rendering', v3InstantResponses.length, 'instant responses');
+        const container = document.getElementById('instant-responses-list');
+        if (!container) {
+            console.error('[IR-RENDER-2] Container not found');
+            return;
+        }
+
+        if (v3InstantResponses.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-12 text-gray-400">
+                    <i class="fas fa-bolt text-6xl mb-4 opacity-20"></i>
+                    <p class="text-lg">No instant responses yet</p>
+                    <p class="text-sm mt-2">Click "Add Instant Response" to create your first lightning-fast response!</p>
+                </div>
+            `;
+            return;
+        }
+
+        const html = v3InstantResponses.map(response => `
+            <div class="bg-gradient-to-r from-yellow-50 to-yellow-100 border-2 border-yellow-300 rounded-lg p-4 hover:shadow-lg transition-all">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center mb-2">
+                            <span class="px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded-full">${response.category}</span>
+                            <span class="ml-2 px-2 py-1 ${response.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'} text-xs rounded-full">
+                                ${response.enabled ? '✓ Enabled' : '✗ Disabled'}
+                            </span>
+                            <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                Priority: ${response.priority}
+                            </span>
+                        </div>
+                        <div class="mb-3">
+                            <div class="text-xs text-yellow-800 font-semibold mb-1">Triggers:</div>
+                            <div class="flex flex-wrap gap-1">
+                                ${response.trigger.map(t => `<span class="px-2 py-1 bg-yellow-200 text-yellow-900 text-xs rounded">${t}</span>`).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-yellow-800 font-semibold mb-1">Response:</div>
+                            <p class="text-sm text-gray-800 italic">"${response.response}"</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-col space-y-2 ml-4">
+                        <button onclick="editInstantResponse('${response.id}')" 
+                                class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs font-medium transition-colors">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button onclick="deleteInstantResponse('${response.id}')" 
+                                class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-medium transition-colors">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        container.innerHTML = html;
+        console.log('[IR-RENDER-3] ✅ Render complete');
+    }
+
+    /**
+     * ⚡ Open Instant Response Modal (Add or Edit)
+     */
+    function openInstantResponseModal(responseId = null) {
+        console.log('[IR-MODAL-1] Opening modal:', responseId ? 'EDIT' : 'ADD');
+        const modal = document.getElementById('instant-response-modal');
+        const title = document.getElementById('instant-response-modal-title');
+        const submitText = document.getElementById('instant-response-submit-text');
+        
+        if (responseId) {
+            // Edit mode
+            const response = v3InstantResponses.find(r => r.id === responseId);
+            if (!response) {
+                console.error('[IR-MODAL-2] Response not found:', responseId);
+                return;
+            }
+
+            console.log('[IR-MODAL-3] Editing response:', response);
+            v3CurrentEditingResponse = responseId;
+
+            title.textContent = 'Edit Instant Response';
+            submitText.textContent = 'Update Instant Response';
+
+            document.getElementById('instant-response-id').value = response.id;
+            document.getElementById('instant-response-triggers').value = response.trigger.join(', ');
+            document.getElementById('instant-response-text').value = response.response;
+            document.getElementById('instant-response-category').value = response.category;
+            document.getElementById('instant-response-priority').value = response.priority;
+            document.getElementById('instant-response-enabled').checked = response.enabled;
+        } else {
+            // Add mode
+            console.log('[IR-MODAL-4] Creating new response');
+            v3CurrentEditingResponse = null;
+
+            title.textContent = 'Add Instant Response';
+            submitText.textContent = 'Save Instant Response';
+
+            document.getElementById('instant-response-form').reset();
+            document.getElementById('instant-response-id').value = '';
+            document.getElementById('instant-response-enabled').checked = true;
+        }
+
+        modal.classList.remove('hidden');
+        console.log('[IR-MODAL-5] ✅ Modal opened');
+    }
+
+    /**
+     * ⚡ Close Instant Response Modal
+     */
+    function closeInstantResponseModal() {
+        console.log('[IR-MODAL-6] Closing modal');
+        const modal = document.getElementById('instant-response-modal');
+        modal.classList.add('hidden');
+        v3CurrentEditingResponse = null;
+    }
+
+    /**
+     * ⚡ Save Instant Response
+     */
+    async function saveInstantResponse(e) {
+        e.preventDefault();
+        console.log('[IR-SAVE-1] Saving instant response...');
+
+        try {
+            const companyId = getCurrentCompanyId();
+            const responseId = document.getElementById('instant-response-id').value;
+            const isEdit = !!responseId;
+
+            const triggers = document.getElementById('instant-response-triggers').value
+                .split(',')
+                .map(t => t.trim())
+                .filter(t => t);
+
+            const formData = {
+                trigger: triggers,
+                response: document.getElementById('instant-response-text').value.trim(),
+                category: document.getElementById('instant-response-category').value,
+                priority: parseInt(document.getElementById('instant-response-priority').value),
+                enabled: document.getElementById('instant-response-enabled').checked
+            };
+
+            console.log('[IR-SAVE-2] Form data:', formData);
+
+            const authToken = getUniversalAuthToken();
+            const url = isEdit 
+                ? `/api/company/${companyId}/instant-responses/${responseId}`
+                : `/api/company/${companyId}/instant-responses`;
+            const method = isEdit ? 'PUT' : 'POST';
+
+            console.log('[IR-SAVE-3] Request:', method, url);
+
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify(formData)
+            });
+
+            console.log('[IR-SAVE-4] Response status:', response.status);
+
+            const data = await response.json();
+            console.log('[IR-SAVE-5] Response data:', data);
+
+            if (data.success) {
+                console.log('[IR-SAVE-6] ✅ Success!');
+                showNotification(data.message || 'Instant response saved!', 'success');
+                closeInstantResponseModal();
+                await loadInstantResponses();
+            } else {
+                throw new Error(data.message || 'Failed to save');
+            }
+        } catch (error) {
+            console.error('[IR-SAVE-ERROR] Error:', error);
+            showNotification('Failed to save instant response: ' + error.message, 'error');
+        }
+    }
+
+    /**
+     * ⚡ Edit Instant Response
+     */
+    function editInstantResponse(responseId) {
+        console.log('[IR-EDIT] Opening edit modal for:', responseId);
+        openInstantResponseModal(responseId);
+    }
+
+    /**
+     * ⚡ Delete Instant Response
+     */
+    async function deleteInstantResponse(responseId) {
+        console.log('[IR-DELETE-1] Deleting instant response:', responseId);
+
+        if (!confirm('Are you sure you want to delete this instant response?')) {
+            console.log('[IR-DELETE-2] Cancelled by user');
+            return;
+        }
+
+        try {
+            const companyId = getCurrentCompanyId();
+            const authToken = getUniversalAuthToken();
+            const url = `/api/company/${companyId}/instant-responses/${responseId}`;
+
+            console.log('[IR-DELETE-3] DELETE request to:', url);
+
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+
+            console.log('[IR-DELETE-4] Response status:', response.status);
+
+            const data = await response.json();
+            console.log('[IR-DELETE-5] Response data:', data);
+
+            if (data.success) {
+                console.log('[IR-DELETE-6] ✅ Deleted successfully');
+                showNotification('Instant response deleted', 'success');
+                await loadInstantResponses();
+            } else {
+                throw new Error(data.message || 'Failed to delete');
+            }
+        } catch (error) {
+            console.error('[IR-DELETE-ERROR] Error:', error);
+            showNotification('Failed to delete instant response: ' + error.message, 'error');
+        }
+    }
+
+    // ============================================================
+    // RESPONSE TEMPLATES - CRUD OPERATIONS
+    // ============================================================
+
+    /**
+     * 📋 Load Response Templates
+     */
+    async function loadResponseTemplates() {
+        console.log('[RT-LOAD-1] Loading response templates...');
+        try {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) {
+                console.error('[RT-LOAD-2] No company ID found');
+                return;
+            }
+
+            const authToken = getUniversalAuthToken();
+            console.log('[RT-LOAD-3] Fetching from:', `/api/company/${companyId}/response-templates`);
+
+            const response = await fetch(`/api/company/${companyId}/response-templates`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+
+            console.log('[RT-LOAD-4] Response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('[RT-LOAD-5] Data received:', data);
+
+            if (data.success) {
+                v3ResponseTemplates = data.data || [];
+                console.log('[RT-LOAD-6] ✅ Loaded', v3ResponseTemplates.length, 'response templates');
+                renderResponseTemplates();
+            }
+        } catch (error) {
+            console.error('[RT-LOAD-ERROR] Error loading response templates:', error);
+            showNotification('Failed to load response templates', 'error');
+        }
+    }
+
+    /**
+     * 📋 Render Response Templates
+     */
+    function renderResponseTemplates() {
+        console.log('[RT-RENDER-1] Rendering', v3ResponseTemplates.length, 'response templates');
+        const container = document.getElementById('response-templates-list');
+        if (!container) {
+            console.error('[RT-RENDER-2] Container not found');
+            return;
+        }
+
+        if (v3ResponseTemplates.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-12 text-gray-400">
+                    <i class="fas fa-file-alt text-6xl mb-4 opacity-20"></i>
+                    <p class="text-lg">No response templates yet</p>
+                    <p class="text-sm mt-2">Click "Add Template" to create your first smart response template!</p>
+                </div>
+            `;
+            return;
+        }
+
+        const html = v3ResponseTemplates.map(template => `
+            <div class="bg-gradient-to-r from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4 hover:shadow-lg transition-all">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center mb-2">
+                            <h4 class="text-lg font-bold text-gray-900">${template.name}</h4>
+                            <span class="ml-3 px-3 py-1 bg-purple-500 text-white text-xs font-bold rounded-full">${template.category}</span>
+                            <span class="ml-2 px-2 py-1 ${template.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'} text-xs rounded-full">
+                                ${template.enabled ? '✓ Enabled' : '✗ Disabled'}
+                            </span>
+                        </div>
+                        <div class="mb-3">
+                            <div class="text-xs text-purple-800 font-semibold mb-1">Template Text:</div>
+                            <p class="text-sm text-gray-800 italic">"${template.template}"</p>
+                        </div>
+                        ${template.keywords && template.keywords.length > 0 ? `
+                            <div class="mb-3">
+                                <div class="text-xs text-purple-800 font-semibold mb-1">Keywords:</div>
+                                <div class="flex flex-wrap gap-1">
+                                    ${template.keywords.map(k => `<span class="px-2 py-1 bg-purple-200 text-purple-900 text-xs rounded">${k}</span>`).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        <div class="flex items-center space-x-4 text-xs text-gray-600">
+                            <span><i class="fas fa-chart-line mr-1"></i>Confidence: ${(template.confidence * 100).toFixed(0)}%</span>
+                            <span><i class="fas fa-clock mr-1"></i>Used: ${template.usageCount || 0} times</span>
+                        </div>
+                    </div>
+                    <div class="flex flex-col space-y-2 ml-4">
+                        <button onclick="editResponseTemplate('${template.id}')" 
+                                class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs font-medium transition-colors">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button onclick="deleteResponseTemplate('${template.id}')" 
+                                class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-medium transition-colors">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        container.innerHTML = html;
+        console.log('[RT-RENDER-3] ✅ Render complete');
+    }
+
+    /**
+     * 📋 Open Response Template Modal (Add or Edit)
+     */
+    function openResponseTemplateModal(templateId = null) {
+        console.log('[RT-MODAL-1] Opening modal:', templateId ? 'EDIT' : 'ADD');
+        const modal = document.getElementById('response-template-modal');
+        const title = document.getElementById('response-template-modal-title');
+        const submitText = document.getElementById('response-template-submit-text');
+        
+        if (templateId) {
+            // Edit mode
+            const template = v3ResponseTemplates.find(t => t.id === templateId);
+            if (!template) {
+                console.error('[RT-MODAL-2] Template not found:', templateId);
+                return;
+            }
+
+            console.log('[RT-MODAL-3] Editing template:', template);
+            v3CurrentEditingTemplate = templateId;
+
+            title.textContent = 'Edit Response Template';
+            submitText.textContent = 'Update Template';
+
+            document.getElementById('response-template-id').value = template.id;
+            document.getElementById('response-template-name').value = template.name;
+            document.getElementById('response-template-text').value = template.template;
+            document.getElementById('response-template-category').value = template.category;
+            document.getElementById('response-template-keywords').value = (template.keywords || []).join(', ');
+            document.getElementById('response-template-confidence').value = template.confidence;
+            document.getElementById('response-template-confidence-value').textContent = template.confidence.toFixed(2);
+            document.getElementById('response-template-enabled').checked = template.enabled;
+        } else {
+            // Add mode
+            console.log('[RT-MODAL-4] Creating new template');
+            v3CurrentEditingTemplate = null;
+
+            title.textContent = 'Add Response Template';
+            submitText.textContent = 'Save Template';
+
+            document.getElementById('response-template-form').reset();
+            document.getElementById('response-template-id').value = '';
+            document.getElementById('response-template-confidence').value = 0.7;
+            document.getElementById('response-template-confidence-value').textContent = '0.70';
+            document.getElementById('response-template-enabled').checked = true;
+        }
+
+        modal.classList.remove('hidden');
+        console.log('[RT-MODAL-5] ✅ Modal opened');
+    }
+
+    /**
+     * 📋 Close Response Template Modal
+     */
+    function closeResponseTemplateModal() {
+        console.log('[RT-MODAL-6] Closing modal');
+        const modal = document.getElementById('response-template-modal');
+        modal.classList.add('hidden');
+        v3CurrentEditingTemplate = null;
+    }
+
+    /**
+     * 📋 Save Response Template
+     */
+    async function saveResponseTemplate(e) {
+        e.preventDefault();
+        console.log('[RT-SAVE-1] Saving response template...');
+
+        try {
+            const companyId = getCurrentCompanyId();
+            const templateId = document.getElementById('response-template-id').value;
+            const isEdit = !!templateId;
+
+            const keywords = document.getElementById('response-template-keywords').value
+                .split(',')
+                .map(k => k.trim())
+                .filter(k => k);
+
+            const formData = {
+                name: document.getElementById('response-template-name').value.trim(),
+                template: document.getElementById('response-template-text').value.trim(),
+                category: document.getElementById('response-template-category').value,
+                keywords: keywords,
+                confidence: parseFloat(document.getElementById('response-template-confidence').value),
+                enabled: document.getElementById('response-template-enabled').checked
+            };
+
+            console.log('[RT-SAVE-2] Form data:', formData);
+
+            const authToken = getUniversalAuthToken();
+            const url = isEdit 
+                ? `/api/company/${companyId}/response-templates/${templateId}`
+                : `/api/company/${companyId}/response-templates`;
+            const method = isEdit ? 'PUT' : 'POST';
+
+            console.log('[RT-SAVE-3] Request:', method, url);
+
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify(formData)
+            });
+
+            console.log('[RT-SAVE-4] Response status:', response.status);
+
+            const data = await response.json();
+            console.log('[RT-SAVE-5] Response data:', data);
+
+            if (data.success) {
+                console.log('[RT-SAVE-6] ✅ Success!');
+                showNotification(data.message || 'Response template saved!', 'success');
+                closeResponseTemplateModal();
+                await loadResponseTemplates();
+            } else {
+                throw new Error(data.message || 'Failed to save');
+            }
+        } catch (error) {
+            console.error('[RT-SAVE-ERROR] Error:', error);
+            showNotification('Failed to save response template: ' + error.message, 'error');
+        }
+    }
+
+    /**
+     * 📋 Edit Response Template
+     */
+    function editResponseTemplate(templateId) {
+        console.log('[RT-EDIT] Opening edit modal for:', templateId);
+        openResponseTemplateModal(templateId);
+    }
+
+    /**
+     * 📋 Delete Response Template
+     */
+    async function deleteResponseTemplate(templateId) {
+        console.log('[RT-DELETE-1] Deleting response template:', templateId);
+
+        if (!confirm('Are you sure you want to delete this response template?')) {
+            console.log('[RT-DELETE-2] Cancelled by user');
+            return;
+        }
+
+        try {
+            const companyId = getCurrentCompanyId();
+            const authToken = getUniversalAuthToken();
+            const url = `/api/company/${companyId}/response-templates/${templateId}`;
+
+            console.log('[RT-DELETE-3] DELETE request to:', url);
+
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+
+            console.log('[RT-DELETE-4] Response status:', response.status);
+
+            const data = await response.json();
+            console.log('[RT-DELETE-5] Response data:', data);
+
+            if (data.success) {
+                console.log('[RT-DELETE-6] ✅ Deleted successfully');
+                showNotification('Response template deleted', 'success');
+                await loadResponseTemplates();
+            } else {
+                throw new Error(data.message || 'Failed to delete');
+            }
+        } catch (error) {
+            console.error('[RT-DELETE-ERROR] Error:', error);
+            showNotification('Failed to delete response template: ' + error.message, 'error');
+        }
+    }
+
+    // ============================================================
+    // INITIALIZATION & EVENT LISTENERS
+    // ============================================================
+
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('[V3-INIT-1] Setting up V3 AI Response System event listeners...');
+
+        // Modal form submissions
+        const instantResponseForm = document.getElementById('instant-response-form');
+        if (instantResponseForm) {
+            instantResponseForm.addEventListener('submit', saveInstantResponse);
+            console.log('[V3-INIT-2] ✅ Instant response form listener attached');
+        }
+
+        const responseTemplateForm = document.getElementById('response-template-form');
+        if (responseTemplateForm) {
+            responseTemplateForm.addEventListener('submit', saveResponseTemplate);
+            console.log('[V3-INIT-3] ✅ Response template form listener attached');
+        }
+
+        // Add buttons
+        const addInstantResponseBtn = document.getElementById('add-instant-response-btn');
+        if (addInstantResponseBtn) {
+            addInstantResponseBtn.addEventListener('click', () => openInstantResponseModal());
+            console.log('[V3-INIT-4] ✅ Add instant response button listener attached');
+        }
+
+        const addResponseTemplateMainBtn = document.getElementById('add-response-template-main-btn');
+        if (addResponseTemplateMainBtn) {
+            addResponseTemplateMainBtn.addEventListener('click', () => openResponseTemplateModal());
+            console.log('[V3-INIT-5] ✅ Add response template button listener attached');
+        }
+
+        // Confidence slider real-time update
+        const confidenceSlider = document.getElementById('response-template-confidence');
+        if (confidenceSlider) {
+            confidenceSlider.addEventListener('input', (e) => {
+                document.getElementById('response-template-confidence-value').textContent = parseFloat(e.target.value).toFixed(2);
+            });
+            console.log('[V3-INIT-6] ✅ Confidence slider listener attached');
+        }
+
+        // Load data when AI Response System tab is opened
+        const aiResponseSystemTab = document.getElementById('tab-ai-response-system');
+        if (aiResponseSystemTab) {
+            aiResponseSystemTab.addEventListener('click', async function() {
+                console.log('[V3-INIT-7] AI Response System tab clicked - loading data...');
+                await loadInstantResponses();
+                await loadResponseTemplates();
+            });
+            console.log('[V3-INIT-8] ✅ Tab click listener attached');
+        }
+
+        console.log('[V3-INIT-9] ✅ V3 AI Response System initialized successfully!');
+    });
+
+    // ============================================================================
+    // END V3 AI RESPONSE SYSTEM
     // ============================================================================
     
     </script>
