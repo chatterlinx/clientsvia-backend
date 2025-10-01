@@ -1936,32 +1936,74 @@
                                                                         </div>
                                                                     </div>
                                                                     
-                                                                    <!-- AI Agent Role (Full Width!) -->
-                                                                    <div>
-                                                                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                                                                            <i class="fas fa-robot text-purple-600 mr-1"></i>AI Agent Role & Instructions *
-                                                                        </label>
-                                                                        <textarea id="category-description" rows="12" placeholder="Click 'Use Template' below for a professional starting point, or write your own..." 
-                                                                               class="w-full px-3 py-2 border border-purple-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 bg-purple-50 font-mono text-sm"></textarea>
-                                                                        
-                                                                        <!-- Template Helper Button -->
-                                                                        <div class="mt-2 flex items-center justify-between">
-                                                                            <button type="button" id="use-template-btn" 
-                                                                                    class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition duration-200 shadow-sm">
-                                                                                <i class="fas fa-magic mr-2"></i>
-                                                                                Use Professional Template
-                                                                            </button>
-                                                                            <button type="button" id="clear-template-btn" 
-                                                                                    class="inline-flex items-center px-3 py-2 text-sm text-gray-600 hover:text-gray-800 transition duration-200">
-                                                                                <i class="fas fa-eraser mr-1"></i>
-                                                                                Clear
+                                                                    <!-- 🤖 AI AGENT MASTER CONTROL (TABBED INTERFACE) -->
+                                                                    <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-4">
+                                                                        <div class="flex items-center justify-between mb-4">
+                                                                            <h3 class="text-lg font-semibold text-purple-900">
+                                                                                <i class="fas fa-robot text-purple-600 mr-2"></i>🤖 AI Agent Master Control
+                                                                            </h3>
+                                                                            <button type="button" onclick="toggleAIAgentTabs()" class="text-purple-600 hover:text-purple-800 transition">
+                                                                                <i id="ai-agent-chevron" class="fas fa-chevron-down"></i>
                                                                             </button>
                                                                         </div>
                                                                         
-                                                                        <p class="mt-2 text-xs text-purple-600">
-                                                                            <i class="fas fa-info-circle mr-1"></i>
-                                                                            <strong>Critical:</strong> AI Agent will read and adopt this role when responding to calls. Be specific about tone, responsibilities, and behavior.
-                                                                        </p>
+                                                                        <div id="ai-agent-tabs-container" class="hidden">
+                                                                            <p class="text-sm text-purple-700 mb-4">
+                                                                                Define how your AI receptionist behaves. Each tab controls a different aspect of the conversation.
+                                                                            </p>
+                                                                            
+                                                                            <!-- Tab Navigation -->
+                                                                            <div class="flex space-x-2 border-b border-purple-200 mb-4 overflow-x-auto">
+                                                                                <button type="button" onclick="switchAITab('overview')" id="tab-overview" class="ai-tab active px-4 py-2 text-sm font-medium text-purple-700 border-b-2 border-purple-600 whitespace-nowrap">
+                                                                                    <i class="fas fa-book mr-1"></i>Overview
+                                                                                </button>
+                                                                                <button type="button" onclick="switchAITab('greeting')" id="tab-greeting" class="ai-tab px-4 py-2 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-purple-700 hover:border-purple-300 whitespace-nowrap">
+                                                                                    <i class="fas fa-hand-wave mr-1"></i>Greeting
+                                                                                </button>
+                                                                                <button type="button" onclick="switchAITab('dialogue')" id="tab-dialogue" class="ai-tab px-4 py-2 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-purple-700 hover:border-purple-300 whitespace-nowrap">
+                                                                                    <i class="fas fa-comments mr-1"></i>Dialogue
+                                                                                </button>
+                                                                                <button type="button" onclick="switchAITab('emergency')" id="tab-emergency" class="ai-tab px-4 py-2 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-purple-700 hover:border-purple-300 whitespace-nowrap">
+                                                                                    <i class="fas fa-exclamation-triangle mr-1"></i>Emergency
+                                                                                </button>
+                                                                                <button type="button" onclick="switchAITab('advanced')" id="tab-advanced" class="ai-tab px-4 py-2 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-purple-700 hover:border-purple-300 whitespace-nowrap">
+                                                                                    <i class="fas fa-cog mr-1"></i>Advanced
+                                                                                </button>
+                                                                            </div>
+                                                                            
+                                                                            <!-- Tab Content Panels -->
+                                                                            <div id="ai-tab-content" class="bg-white rounded-lg p-4 border border-purple-200 min-h-64">
+                                                                                <!-- Content will be dynamically loaded here -->
+                                                                                <div class="text-center text-gray-500 py-8">
+                                                                                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                                                                    <p>Loading...</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            
+                                                                            <!-- Quick Actions -->
+                                                                            <div class="mt-4 flex items-center justify-between">
+                                                                                <button type="button" id="use-template-btn" onclick="insertProfessionalTemplate()"
+                                                                                        class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition duration-200 shadow-sm text-sm">
+                                                                                    <i class="fas fa-magic mr-2"></i>
+                                                                                    Use Professional Template
+                                                                                </button>
+                                                                                <div class="flex space-x-2">
+                                                                                    <button type="button" onclick="viewFullTemplate()"
+                                                                                            class="inline-flex items-center px-3 py-2 text-sm text-purple-600 hover:text-purple-800 transition duration-200">
+                                                                                        <i class="fas fa-eye mr-1"></i>
+                                                                                        View Full Template
+                                                                                    </button>
+                                                                                    <button type="button" id="clear-template-btn" onclick="clearTemplate()"
+                                                                                            class="inline-flex items-center px-3 py-2 text-sm text-gray-600 hover:text-gray-800 transition duration-200">
+                                                                                        <i class="fas fa-eraser mr-1"></i>
+                                                                                        Clear
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        
+                                                                        <!-- Hidden textarea for form submission -->
+                                                                        <textarea id="category-description" class="hidden"></textarea>
                                                                     </div>
                                                                     
                                                                     <!-- Submit Button -->
@@ -4419,8 +4461,313 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
             console.log('🧹 [TEMPLATE-CLEAR] Clearing template...');
             const textarea = document.getElementById('category-description');
             textarea.value = '';
-            textarea.focus();
+            aiAgentTemplate = { overview: '', greeting: '', dialogue: '', emergency: '', advanced: '' };
             showNotification('Template cleared', 'info');
+        }
+        
+        // ============================================================
+        // 🤖 AI AGENT TABBED INTERFACE
+        // ============================================================
+        
+        let aiAgentTemplate = {
+            overview: '',
+            greeting: '',
+            dialogue: '',
+            emergency: '',
+            advanced: ''
+        };
+        let currentAITab = 'overview';
+        
+        /**
+         * Toggle AI Agent tabs visibility
+         */
+        function toggleAIAgentTabs() {
+            const container = document.getElementById('ai-agent-tabs-container');
+            const chevron = document.getElementById('ai-agent-chevron');
+            
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                chevron.classList.remove('fa-chevron-down');
+                chevron.classList.add('fa-chevron-up');
+                // Load the first tab
+                switchAITab('overview');
+            } else {
+                container.classList.add('hidden');
+                chevron.classList.remove('fa-chevron-up');
+                chevron.classList.add('fa-chevron-down');
+            }
+        }
+        
+        /**
+         * Switch between AI Agent tabs
+         */
+        function switchAITab(tabName) {
+            console.log('📑 [AI-TAB] Switching to:', tabName);
+            currentAITab = tabName;
+            
+            // Update tab button states
+            document.querySelectorAll('.ai-tab').forEach(tab => {
+                tab.classList.remove('active', 'text-purple-700', 'border-purple-600');
+                tab.classList.add('text-gray-600', 'border-transparent');
+            });
+            
+            const activeTab = document.getElementById(`tab-${tabName}`);
+            if (activeTab) {
+                activeTab.classList.add('active', 'text-purple-700', 'border-purple-600');
+                activeTab.classList.remove('text-gray-600', 'border-transparent');
+            }
+            
+            // Load tab content
+            loadAITabContent(tabName);
+        }
+        
+        /**
+         * Load content for specific AI Agent tab
+         */
+        function loadAITabContent(tabName) {
+            const contentDiv = document.getElementById('ai-tab-content');
+            const fullTemplate = document.getElementById('category-description').value;
+            
+            // Parse template if it exists
+            if (fullTemplate && fullTemplate.includes('ROLE OVERVIEW')) {
+                parseTemplateIntoTabs(fullTemplate);
+            }
+            
+            let content = '';
+            
+            switch(tabName) {
+                case 'overview':
+                    content = `
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-2 flex items-center">
+                                <i class="fas fa-book text-purple-600 mr-2"></i>
+                                Role Overview
+                            </h4>
+                            <p class="text-sm text-gray-600 mb-3">
+                                Define the AI's primary identity, business type, and core mission.
+                            </p>
+                            <textarea id="tab-content-overview" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 text-sm" placeholder="You are a professional, friendly, and efficient virtual receptionist for [Company Name]...">${aiAgentTemplate.overview || ''}</textarea>
+                            <button type="button" onclick="saveTabContent('overview')" class="mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm">
+                                <i class="fas fa-save mr-1"></i>Save Overview
+                            </button>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'greeting':
+                    content = `
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-2 flex items-center">
+                                <i class="fas fa-hand-wave text-purple-600 mr-2"></i>
+                                Greeting & Introduction
+                            </h4>
+                            <p class="text-sm text-gray-600 mb-3">
+                                How the AI should greet customers and introduce itself.
+                            </p>
+                            <textarea id="tab-content-greeting" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 text-sm" placeholder="Always start with: 'Thank you for calling [Company Name]. How can I help you today?'">${aiAgentTemplate.greeting || ''}</textarea>
+                            <button type="button" onclick="saveTabContent('greeting')" class="mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm">
+                                <i class="fas fa-save mr-1"></i>Save Greeting
+                            </button>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'dialogue':
+                    content = `
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-2 flex items-center">
+                                <i class="fas fa-comments text-purple-600 mr-2"></i>
+                                Example Dialogue Flow
+                            </h4>
+                            <p class="text-sm text-gray-600 mb-3">
+                                Show the AI how a typical conversation should flow.
+                            </p>
+                            <textarea id="tab-content-dialogue" rows="10" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 text-sm font-mono" placeholder="AI: 'Good morning! Thank you for calling [Company Name]...'\nCustomer: 'I need to schedule a service.'\nAI: 'I'd be happy to help you...'">${aiAgentTemplate.dialogue || ''}</textarea>
+                            <button type="button" onclick="saveTabContent('dialogue')" class="mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm">
+                                <i class="fas fa-save mr-1"></i>Save Dialogue
+                            </button>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'emergency':
+                    content = `
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-2 flex items-center">
+                                <i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>
+                                Emergency Handling
+                            </h4>
+                            <p class="text-sm text-gray-600 mb-3">
+                                Define how the AI should handle urgent or emergency situations.
+                            </p>
+                            <textarea id="tab-content-emergency" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 text-sm" placeholder="For emergencies: 'We have 24/7 emergency service. Let me get you help immediately.'">${aiAgentTemplate.emergency || ''}</textarea>
+                            <button type="button" onclick="saveTabContent('emergency')" class="mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm">
+                                <i class="fas fa-save mr-1"></i>Save Emergency Protocol
+                            </button>
+                        </div>
+                    `;
+                    break;
+                    
+                case 'advanced':
+                    content = `
+                        <div>
+                            <h4 class="font-semibold text-gray-900 mb-2 flex items-center">
+                                <i class="fas fa-cog text-purple-600 mr-2"></i>
+                                Advanced Settings
+                            </h4>
+                            <p class="text-sm text-gray-600 mb-3">
+                                DO/DON'T rules, tone guidelines, and other advanced instructions.
+                            </p>
+                            <textarea id="tab-content-advanced" rows="8" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 text-sm" placeholder="✓ DO:\n• Stay polite and empathetic\n• Collect customer information\n\n✗ DON'T:\n• Make promises you can't keep\n• Quote exact prices">${aiAgentTemplate.advanced || ''}</textarea>
+                            <button type="button" onclick="saveTabContent('advanced')" class="mt-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm">
+                                <i class="fas fa-save mr-1"></i>Save Advanced Settings
+                            </button>
+                        </div>
+                    `;
+                    break;
+            }
+            
+            contentDiv.innerHTML = content;
+        }
+        
+        /**
+         * Save content from active tab
+         */
+        function saveTabContent(tabName) {
+            const textarea = document.getElementById(`tab-content-${tabName}`);
+            if (textarea) {
+                aiAgentTemplate[tabName] = textarea.value;
+                reconstructFullTemplate();
+                showNotification(`✅ ${tabName.charAt(0).toUpperCase() + tabName.slice(1)} saved!`, 'success');
+            }
+        }
+        
+        /**
+         * Parse existing template into tab sections
+         */
+        function parseTemplateIntoTabs(template) {
+            // Only parse if tabs are empty
+            if (aiAgentTemplate.overview) return;
+            
+            const lines = template.split('\n');
+            let currentSection = '';
+            let buffer = [];
+            
+            for (const line of lines) {
+                if (line.includes('ROLE OVERVIEW:')) {
+                    currentSection = 'overview';
+                    buffer = [];
+                } else if (line.includes('GREETING CUSTOMERS') || line.includes('1. GREETING')) {
+                    if (currentSection === 'overview') aiAgentTemplate.overview = buffer.join('\n').trim();
+                    currentSection = 'greeting';
+                    buffer = [];
+                } else if (line.includes('EXAMPLE DIALOGUE:')) {
+                    if (currentSection === 'greeting') aiAgentTemplate.greeting = buffer.join('\n').trim();
+                    currentSection = 'dialogue';
+                    buffer = [];
+                } else if (line.includes('URGENT/EMERGENCY') || line.includes('5. URGENT')) {
+                    if (currentSection === 'dialogue') aiAgentTemplate.dialogue = buffer.join('\n').trim();
+                    currentSection = 'emergency';
+                    buffer = [];
+                } else if (line.includes('TONE & BEHAVIOR:') || line.includes('DO:')) {
+                    if (currentSection === 'emergency') aiAgentTemplate.emergency = buffer.join('\n').trim();
+                    currentSection = 'advanced';
+                    buffer = [];
+                } else if (!line.startsWith('=') && line.trim()) {
+                    buffer.push(line);
+                }
+            }
+            
+            // Save last section
+            if (currentSection === 'advanced') aiAgentTemplate.advanced = buffer.join('\n').trim();
+        }
+        
+        /**
+         * Reconstruct full template from tab sections
+         */
+        function reconstructFullTemplate() {
+            const icon = getCategoryIcon(document.getElementById('category-name')?.value || 'service');
+            const categoryName = document.getElementById('category-name')?.value || 'Service';
+            
+            let fullTemplate = `${icon} ${categoryName.toUpperCase()} - AI RECEPTIONIST\n`;
+            fullTemplate += '='.repeat(60) + '\n\n';
+            
+            if (aiAgentTemplate.overview) {
+                fullTemplate += 'ROLE OVERVIEW:\n';
+                fullTemplate += aiAgentTemplate.overview + '\n\n';
+                fullTemplate += '='.repeat(60) + '\n';
+            }
+            
+            if (aiAgentTemplate.greeting) {
+                fullTemplate += 'GREETING CUSTOMERS:\n';
+                fullTemplate += aiAgentTemplate.greeting + '\n\n';
+            }
+            
+            if (aiAgentTemplate.dialogue) {
+                fullTemplate += '='.repeat(60) + '\n';
+                fullTemplate += 'EXAMPLE DIALOGUE:\n';
+                fullTemplate += '='.repeat(60) + '\n';
+                fullTemplate += aiAgentTemplate.dialogue + '\n\n';
+            }
+            
+            if (aiAgentTemplate.emergency) {
+                fullTemplate += 'URGENT/EMERGENCY HANDLING:\n';
+                fullTemplate += aiAgentTemplate.emergency + '\n\n';
+            }
+            
+            if (aiAgentTemplate.advanced) {
+                fullTemplate += '='.repeat(60) + '\n';
+                fullTemplate += 'TONE & BEHAVIOR:\n';
+                fullTemplate += '='.repeat(60) + '\n';
+                fullTemplate += aiAgentTemplate.advanced + '\n';
+            }
+            
+            fullTemplate += '\n' + '='.repeat(60) + '\n';
+            fullTemplate += 'IMPORTANT REMINDERS:\n';
+            fullTemplate += '='.repeat(60) + '\n';
+            fullTemplate += '• Always use [Company Name] placeholder - automatically replaced\n';
+            fullTemplate += '• Use [Business Hours] for hours if not specified\n';
+            fullTemplate += '• Adapt responses to customer tone and urgency\n';
+            fullTemplate += '• Your goal: Professional, helpful, efficient service\n';
+            
+            document.getElementById('category-description').value = fullTemplate;
+        }
+        
+        /**
+         * View full template in modal
+         */
+        function viewFullTemplate() {
+            reconstructFullTemplate();
+            const template = document.getElementById('category-description').value;
+            
+            if (!template) {
+                showNotification('No template to view. Use "Use Professional Template" to generate one.', 'info');
+                return;
+            }
+            
+            // Create modal
+            const modal = `
+                <div id="template-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onclick="document.getElementById('template-modal').remove()">
+                    <div class="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto p-6" onclick="event.stopPropagation()">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold text-gray-900">
+                                <i class="fas fa-eye text-purple-600 mr-2"></i>Full AI Agent Template
+                            </h3>
+                            <button onclick="document.getElementById('template-modal').remove()" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        <pre class="bg-gray-50 p-4 rounded border border-gray-200 text-sm font-mono whitespace-pre-wrap">${template}</pre>
+                        <div class="mt-4 flex justify-end">
+                            <button onclick="document.getElementById('template-modal').remove()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modal);
         }
         
         /**
