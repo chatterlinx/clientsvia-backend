@@ -390,10 +390,10 @@ const companySchema = new mongoose.Schema({
             }
         },
         
-        // 🔧 AI VARIABLES: Reusable placeholders for AI Agent responses
+        // 🔧 AI PLACEHOLDERS: Reusable variables for AI Agent responses
         // Used across Company Q&A, Trade Q&A, and Templates
-        // AI Agent will automatically replace [Variable Name] with actual value
-        aiVariables: {
+        // AI Agent will automatically replace [Placeholder Name] with actual value
+        aiPlaceholders: {
             type: [{
                 id: { type: String, required: true }, // Unique ID for frontend
                 placeholder: { type: String, required: true, trim: true }, // e.g., "[Company Name]"
