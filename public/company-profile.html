@@ -22116,22 +22116,50 @@ Key Metrics:
     }
     
     async function loadQuickVars() {
+        console.log('[QV-LOAD-1] Starting load...');
         const companyId = new URLSearchParams(window.location.search).get('id');
-        if (!companyId) return;
+        if (!companyId) {
+            console.error('[QV-LOAD-2] No company ID');
+            return;
+        }
+        
+        console.log('[QV-LOAD-3] Company ID:', companyId);
         
         try {
             const token = getUniversalAuthToken();
-            const res = await fetch(`/api/company/${companyId}/quick-variables`, {
+            console.log('[QV-LOAD-4] Token:', token ? 'Present' : 'Missing');
+            
+            const url = `/api/company/${companyId}/quick-variables`;
+            console.log('[QV-LOAD-5] Fetching from:', url);
+            
+            const res = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
+            console.log('[QV-LOAD-6] Response status:', res.status, res.ok ? 'OK' : 'FAILED');
+            
+            if (!res.ok) {
+                const text = await res.text();
+                console.error('[QV-LOAD-7] Non-OK response:', text.substring(0, 200));
+                
+                if (res.status === 404) {
+                    console.error('[QV-LOAD-8] 404 - Routes not deployed yet! Wait for Render...');
+                    showNotification('Quick Variables feature deploying... Please wait 2-3 minutes', 'info');
+                    return;
+                }
+                throw new Error(`HTTP ${res.status}`);
+            }
+            
             const data = await res.json();
+            console.log('[QV-LOAD-9] Data received:', data);
+            
             if (data.success) {
                 quickVars = data.data || [];
+                console.log('[QV-LOAD-10] Loaded', quickVars.length, 'variables');
                 renderQuickVars();
             }
         } catch (error) {
-            console.error('Error loading quick vars:', error);
+            console.error('[QV-LOAD-ERROR] Error:', error);
         }
     }
     
@@ -22188,22 +22216,35 @@ Key Metrics:
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
+                console.log('[QV-ADD-1] Form submitted');
+                
                 const nameInput = document.getElementById('qv-name');
                 const valueInput = document.getElementById('qv-value');
                 
                 const name = nameInput.value.trim();
                 const value = valueInput.value.trim();
                 
+                console.log('[QV-ADD-2] Name:', name, 'Value:', value);
+                
                 if (!name || !value) {
+                    console.error('[QV-ADD-3] Validation failed - empty fields');
                     alert('Please fill both fields');
                     return;
                 }
                 
+                console.log('[QV-ADD-4] Validation passed');
+                
                 const companyId = new URLSearchParams(window.location.search).get('id');
+                console.log('[QV-ADD-5] Company ID:', companyId);
                 
                 try {
                     const token = getUniversalAuthToken();
-                    const res = await fetch(`/api/company/${companyId}/quick-variables`, {
+                    console.log('[QV-ADD-6] Token:', token ? 'Present' : 'Missing');
+                    
+                    const url = `/api/company/${companyId}/quick-variables`;
+                    console.log('[QV-ADD-7] POSTing to:', url);
+                    
+                    const res = await fetch(url, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -22212,16 +22253,34 @@ Key Metrics:
                         body: JSON.stringify({ name, value })
                     });
                     
+                    console.log('[QV-ADD-8] Response status:', res.status, res.ok ? 'OK' : 'FAILED');
+                    
+                    if (!res.ok) {
+                        const text = await res.text();
+                        console.error('[QV-ADD-9] Non-OK response:', text.substring(0, 200));
+                        
+                        if (res.status === 404) {
+                            console.error('[QV-ADD-10] 404 - Routes not deployed yet!');
+                            alert('Quick Variables feature still deploying. Please wait 2-3 minutes and try again.');
+                            return;
+                        }
+                        throw new Error(`HTTP ${res.status}`);
+                    }
+                    
                     const data = await res.json();
+                    console.log('[QV-ADD-11] Response data:', data);
+                    
                     if (data.success) {
+                        console.log('[QV-ADD-12] Success!');
                         showNotification('Variable added', 'success');
                         form.reset();
                         loadQuickVars();
                     } else {
+                        console.error('[QV-ADD-13] Server returned error:', data.message);
                         alert(data.message || 'Failed to add');
                     }
                 } catch (error) {
-                    console.error('Error adding:', error);
+                    console.error('[QV-ADD-ERROR] Error:', error);
                     alert('Failed to add variable');
                 }
             });
