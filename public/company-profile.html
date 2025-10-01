@@ -14777,7 +14777,7 @@ Key Metrics:
                 
                 // Add click listeners to all tab buttons
                 const tabButtons = [
-                    { id: 'clientsvia-tab-priority', target: 'priority' },
+                    // Note: 'priority' tab functionality is now handled by the main "AI Response System" tab
                     // Legacy tab removed - using modern implementation
                     { id: 'clientsvia-tab-flow-designer', target: 'flow-designer' },
                     { id: 'clientsvia-tab-ab-testing', target: 'ab-testing' },
@@ -14796,10 +14796,10 @@ Key Metrics:
                     }
                 });
                 
-
+                console.log(`✅ ClientsVia tab listeners initialized: ${listenersAdded} listeners added`);
                 
-                // Set default active tab (priority)
-                switchClientsviaTab('priority');
+                // Note: Default active tab is now handled by the main tab system (AI Response System)
+                // No longer calling switchClientsviaTab('priority') as it's handled by the main tab system
                 
             } catch (error) {
                 console.error('❌ Failed to initialize ClientsVia tab listeners:', error);
