@@ -23,7 +23,7 @@
 // ============================================================================
 
 const Company = require('../models/v2Company');
-const CompanyKnowledgeQnA = require('../models/knowledge/CompanyQnA');
+// V3 SYSTEM: CompanyQnACategory is the NEW category-based Q&A system (replaces old flat CompanyKnowledgeQnA)
 const CompanyQnACategory = require('../models/CompanyQnACategory');
 // V2 DELETED: Legacy v2 aiAgentCacheService - using simple Redis directly
 const { redisClient } = require('../clients');
@@ -285,14 +285,19 @@ class PriorityDrivenKnowledgeRouter {
         
         try {
             if (source === 'companyQnA') {
-                const companyQnAs = await CompanyKnowledgeQnA.find({ 
+                // 🎯 V3 FIX: Load keywords from NEW category-based system
+                const categories = await CompanyQnACategory.find({ 
                     companyId, 
-                    status: 'active' 
-                }).select('keywords').lean();
+                    isActive: true 
+                }).select('qnas.keywords').lean();
                 
-                companyQnAs.forEach(qna => {
-                    if (qna.keywords && Array.isArray(qna.keywords)) {
-                        qna.keywords.forEach(keyword => allKeywords.add(keyword.toLowerCase()));
+                categories.forEach(category => {
+                    if (category.qnas && Array.isArray(category.qnas)) {
+                        category.qnas.forEach(qna => {
+                            if (qna.isActive !== false && qna.keywords && Array.isArray(qna.keywords)) {
+                                qna.keywords.forEach(keyword => allKeywords.add(keyword.toLowerCase()));
+                            }
+                        });
                     }
                 });
             } else if (source === 'tradeQnA') {
@@ -416,48 +421,73 @@ class PriorityDrivenKnowledgeRouter {
                 routingId: context.routingId 
             });
 
-            // V2 FIX: Use CompanyKnowledgeQnA collection (not embedded document)
-            const companyQnAs = await CompanyKnowledgeQnA.find({ companyId }).lean();
+            // 🎯 V3 FIX: Load from NEW category-based system (CompanyQnACategory)
+            // This is the NEW system built yesterday - NOT the legacy flat CompanyKnowledgeQnA!
+            const categories = await CompanyQnACategory.find({ 
+                companyId, 
+                isActive: true 
+            }).lean();
             
-            if (!companyQnAs || companyQnAs.length === 0) {
-                logger.info(`🔍 No companyQnA data found in collection for company ${companyId}`, { routingId: context.routingId });
-                return { confidence: 0, response: null, metadata: { source: 'companyQnA', error: 'No company Q&A data - use Knowledge Management tab to add Q&A entries' } };
+            if (!categories || categories.length === 0) {
+                logger.info(`🔍 No Company Q&A categories found for company ${companyId}`, { routingId: context.routingId });
+                return { confidence: 0, response: null, metadata: { source: 'companyQnA', error: 'No company Q&A categories - use Company Q&A tab to create categories and add Q&As' } };
             }
 
-            logger.info(`🔍 Found ${companyQnAs.length} companyQnA entries in collection`, { routingId: context.routingId });
+            logger.info(`🔍 Found ${categories.length} Company Q&A categories`, { 
+                routingId: context.routingId,
+                categoryNames: categories.map(c => c.name)
+            });
 
-            // 🤖 LOAD AI AGENT ROLES: Get category information with AI Agent role instructions
-            const categories = await CompanyQnACategory.find({ companyId }).lean();
+            // 🤖 BUILD CATEGORY ROLES MAP & FLATTEN ALL Q&As FROM ALL CATEGORIES
             const categoryRoles = {};
+            const allQnAs = [];
+            
             categories.forEach(cat => {
+                // Store AI Agent Role for this category
                 if (cat.description && cat.description.trim()) {
                     categoryRoles[cat.name] = cat.description; // description = AI Agent Role
                 }
+                
+                // Flatten Q&As from this category (with category name attached)
+                if (cat.qnas && Array.isArray(cat.qnas)) {
+                    cat.qnas.forEach(qna => {
+                        if (qna.isActive !== false) { // Default true if not specified
+                            allQnAs.push({
+                                ...qna,
+                                categoryId: cat._id.toString(),
+                                categoryName: cat.name,
+                                aiAgentRole: categoryRoles[cat.name] || null
+                            });
+                        }
+                    });
+                }
             });
-            logger.info(`🤖 Loaded ${Object.keys(categoryRoles).length} AI Agent roles from categories`, { 
+            
+            logger.info(`🤖 Loaded ${Object.keys(categoryRoles).length} AI Agent roles, ${allQnAs.length} total Q&As`, { 
                 routingId: context.routingId,
                 categories: Object.keys(categoryRoles)
             });
-
-            const activeQnA = companyQnAs.filter(qna => qna.status === 'active');
+            
+            if (allQnAs.length === 0) {
+                logger.info(`🔍 No Q&As found in categories for company ${companyId}`, { routingId: context.routingId });
+                return { confidence: 0, response: null, metadata: { source: 'companyQnA', error: 'No Q&As in categories - use "Generate Top 15 Q&As" or add manually' } };
+            }
 
             let bestMatch = { confidence: 0, response: null, metadata: {} };
 
-            for (const qna of activeQnA) {
+            for (const qna of allQnAs) {
                 const confidence = this.calculateConfidence(query, qna.question, qna.keywords);
                 
                 if (confidence > bestMatch.confidence) {
-                    // 🤖 Get AI Agent Role for this Q&A's category
-                    const aiAgentRole = qna.category ? categoryRoles[qna.category] : null;
-                    
                     bestMatch = {
                         confidence,
                         response: qna.answer,
                         metadata: {
                             source: 'companyQnA',
-                            qnaId: qna._id.toString(),
-                            category: qna.category,
-                            aiAgentRole: aiAgentRole, // 🤖 AI AGENT ROLE - For AI to read and adopt!
+                            qnaId: qna.id || qna._id?.toString(),
+                            categoryId: qna.categoryId,
+                            category: qna.categoryName,
+                            aiAgentRole: qna.aiAgentRole, // 🤖 AI AGENT ROLE - For AI to read and adopt!
                             matchedKeywords: this.getMatchedKeywords(query, qna.keywords)
                         }
                     };
