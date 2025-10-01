@@ -785,6 +785,10 @@
                             <button class="tab-button tab-button-inactive" id="tab-ai-agent-logic" data-tab="ai-agent-logic">
                                 <i class="fas fa-brain mr-1"></i>AI Agent Logic
                             </button>
+                            <button class="tab-button tab-button-inactive" id="tab-test-tab" data-tab="test-tab">
+                                <i class="fas fa-flask mr-1"></i>Test Tab
+                                <span class="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full font-bold">TEST</span>
+                            </button>
                             <button class="tab-button tab-button-inactive" id="tab-ai-response-system" data-tab="ai-response-system">
                                 <i class="fas fa-bolt mr-1"></i>AI Response System
                                 <span class="ml-2 px-2 py-0.5 bg-yellow-500 text-white text-xs rounded-full font-bold">NEW</span>
@@ -3977,6 +3981,57 @@ This would be a great time to also check..."></textarea>
                     
             </div> <!-- End hidden personalization content -->
         </div> <!-- End hidden container -->
+
+                    <!-- ===== TAB SECTION START: TEST TAB ===== -->
+                    <div id="test-tab-content" class="tab-content-item hidden">
+                        <!-- Simple test content to verify tab system is working -->
+                        <div style="background: linear-gradient(135deg, #00ff00 0%, #00aa00 100%); color: white; padding: 40px; text-align: center; font-size: 36px; font-weight: bold; border: 5px solid #000; margin: 20px;">
+                            🧪 TEST TAB IS WORKING! 🧪
+                            <div style="font-size: 18px; margin-top: 10px;">This is a simple test to verify the tab system works!</div>
+                        </div>
+                        
+                        <section class="profile-section">
+                            <h2 class="profile-section-title">
+                                <i class="fas fa-flask mr-2 text-green-600"></i>Test Tab Content
+                            </h2>
+                            
+                            <div class="bg-white p-6 rounded-lg shadow-sm border">
+                                <h3 class="text-lg font-semibold mb-4">Simple Content Test</h3>
+                                <p class="text-gray-700 mb-4">
+                                    This is a simple test tab to verify that the tab system is working correctly. 
+                                    If you can see this content when clicking the "Test Tab" button, then the tab 
+                                    system itself is functioning properly.
+                                </p>
+                                
+                                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                                    <h4 class="font-medium text-green-800 mb-2">Test Elements:</h4>
+                                    <ul class="list-disc list-inside text-green-700 space-y-1">
+                                        <li>✅ Tab button click handler</li>
+                                        <li>✅ Content visibility toggle</li>
+                                        <li>✅ CSS styling and layout</li>
+                                        <li>✅ Basic HTML rendering</li>
+                                    </ul>
+                                </div>
+                                
+                                <div class="flex space-x-4">
+                                    <button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors" 
+                                            onclick="alert('Test button clicked! Tab system is working.')">
+                                        <i class="fas fa-check mr-2"></i>Test Button
+                                    </button>
+                                    <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                                            onclick="console.log('Test console log from test tab')">
+                                        <i class="fas fa-terminal mr-2"></i>Console Test
+                                    </button>
+                                </div>
+                                
+                                <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+                                    <h4 class="font-medium text-gray-800 mb-2">Current Time Test:</h4>
+                                    <p class="text-gray-600" id="test-tab-timestamp">Loading...</p>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                    <!-- ===== TAB SECTION END: TEST TAB ===== -->
 
                     <!-- ===== TAB SECTION START: AI RESPONSE SYSTEM ===== -->
                     <div id="ai-response-system-content" class="tab-content-item hidden">
@@ -23490,6 +23545,48 @@ Key Metrics:
                 document.getElementById('response-template-confidence-value').textContent = parseFloat(e.target.value).toFixed(2);
             });
             console.log('[V3-INIT-6] ✅ Confidence slider listener attached');
+        }
+
+        // Test tab functionality
+        const testTab = document.getElementById('tab-test-tab');
+        if (testTab) {
+            testTab.addEventListener('click', function() {
+                console.log('[TEST-TAB] Test tab clicked - switching to test content...');
+                
+                if (window.companyProfileManager && typeof window.companyProfileManager.switchTab === 'function') {
+                    window.companyProfileManager.switchTab('test-tab');
+                    
+                    // Update timestamp in test tab
+                    setTimeout(() => {
+                        const timestampEl = document.getElementById('test-tab-timestamp');
+                        if (timestampEl) {
+                            timestampEl.textContent = new Date().toLocaleString();
+                        }
+                    }, 100);
+                } else {
+                    console.log('[TEST-TAB] Direct DOM manipulation fallback');
+                    // Hide all tab content
+                    document.querySelectorAll('.tab-content-item').forEach(pane => {
+                        pane.classList.add('hidden');
+                    });
+                    
+                    // Show test tab content
+                    const testContent = document.getElementById('test-tab-content');
+                    if (testContent) {
+                        testContent.classList.remove('hidden');
+                        console.log('[TEST-TAB] ✅ Test tab content should now be visible');
+                    }
+                    
+                    // Update active tab buttons
+                    document.querySelectorAll('[data-tab]').forEach(btn => {
+                        btn.classList.remove('active', 'tab-button-active');
+                        btn.classList.add('tab-button-inactive');
+                    });
+                    this.classList.add('active', 'tab-button-active');
+                    this.classList.remove('tab-button-inactive');
+                }
+            });
+            console.log('[TEST-TAB] ✅ Test tab event listener attached');
         }
 
         // Load data when AI Response System tab is opened
