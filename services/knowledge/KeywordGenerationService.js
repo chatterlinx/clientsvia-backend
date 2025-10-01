@@ -96,9 +96,9 @@ class KeywordGenerationService {
     const cleanedKeywords = this.strictFilter(allKeywords, qnaIntent);
     console.log('✅ After strict filter:', cleanedKeywords);
     
-    // 🎯 STEP 8: Rank by relevance and limit to TOP 8
+    // 🎯 STEP 8: Rank by relevance and limit to TOP 10
     const rankedKeywords = this.rankKeywordsByRelevance(cleanedKeywords, questionLower, answerLower);
-    const finalKeywords = rankedKeywords.slice(0, 8); // MAX 8 keywords for precision
+    const finalKeywords = rankedKeywords.slice(0, 10); // MAX 10 keywords for precision + coverage
     
     const result = {
       primary: finalKeywords,
@@ -109,7 +109,7 @@ class KeywordGenerationService {
       confidence: this.calculateConfidence(finalKeywords, combinedText)
     };
     
-    console.log('✅ FINAL KEYWORDS (Top 8):', result.primary);
+    console.log('✅ FINAL KEYWORDS (Top 10):', result.primary);
     
     return result;
   }
@@ -629,13 +629,24 @@ class KeywordGenerationService {
    */
   extractExactPhrases(question) {
     const phrases = new Set();
-    const words = question.split(/\s+/).filter(w => w.length > 0);
+    // Strip punctuation from question for cleaner keywords
+    const cleanQuestion = question.replace(/[?!.,;:]/g, '').toLowerCase();
+    const words = cleanQuestion.split(/\s+/).filter(w => w.length > 0);
+    
+    // 🚀 BLACKLIST: Generic 2-word phrases that pollute search
+    const genericPhraseBlacklist = [
+      'can you', 'do you', 'are you', 'will you', 'would you',
+      'you help', 'you provide', 'you offer', 'you have', 'you service',
+      'are your', 'is your', 'does your', 'do your',
+      'we have', 'we are', 'we offer', 'we provide',
+      'what are', 'what is', 'how are', 'where are', 'when are'
+    ];
     
     // 2-word phrases
     for (let i = 0; i < words.length - 1; i++) {
       const phrase = `${words[i]} ${words[i + 1]}`;
-      // Only add if not pure stopwords
-      if (!this.isPureStopwords(phrase)) {
+      // Only add if not pure stopwords AND not in generic blacklist
+      if (!this.isPureStopwords(phrase) && !genericPhraseBlacklist.includes(phrase)) {
         phrases.add(phrase);
       }
     }
@@ -724,33 +735,41 @@ class KeywordGenerationService {
   /**
    * 🎯 V3: EXTRACT IMPORTANT WORDS (NOUNS/VERBS ONLY)
    * Filters out generic words like "service", "calls", etc. unless intent-specific
+   * 🚀 V3.1: Now extracts CRITICAL answer keywords separately for higher priority
    */
   extractImportantWords(question, answer) {
     const words = new Set();
-    const combined = `${question} ${answer}`;
-    const tokens = combined.split(/\s+/);
     
     // Blacklist: Generic words that pollute keyword matching
     const genericBlacklist = [
-      'service', 'services', 'call', 'calls', 'help', 'can', 'you', 'your',
-      'our', 'are', 'have', 'has', 'get', 'make', 'do', 'does', 'will',
-      'would', 'could', 'should', 'may', 'might', 'must', 'shall',
-      'the', 'and', 'for', 'with', 'from', 'about', 'into', 'through'
+      'help', 'can', 'you', 'your', 'our', 'are', 'have', 'has', 
+      'get', 'make', 'does', 'will', 'would', 'could', 'should', 
+      'may', 'might', 'must', 'shall', 'the', 'and', 'for', 'with', 
+      'from', 'about', 'into', 'through', 'that', 'this', 'these', 'those'
     ];
     
-    tokens.forEach(token => {
-      const clean = token.replace(/[^\w]/g, '').toLowerCase();
-      
-      // Only add if:
-      // 1. Length >= 4 characters (more specific)
-      // 2. NOT in generic blacklist
-      // 3. NOT a pure number
-      if (clean.length >= 4 && 
-          !genericBlacklist.includes(clean) && 
-          !/^\d+$/.test(clean)) {
-        words.add(clean);
+    // 🎯 CRITICAL: Extract single-word keywords from QUESTION (highest priority)
+    const questionTokens = question.toLowerCase().replace(/[?!.,;:]/g, '').split(/\s+/);
+    questionTokens.forEach(token => {
+      if (token.length >= 3 && !genericBlacklist.includes(token) && !/^\d+$/.test(token)) {
+        words.add(token);
       }
     });
+    
+    // 🎯 CRITICAL: Extract single-word keywords from ANSWER (important details!)
+    const answerTokens = answer.toLowerCase().replace(/[?!.,;:]/g, '').split(/\s+/);
+    answerTokens.forEach(token => {
+      if (token.length >= 3 && !genericBlacklist.includes(token) && !/^\d+$/.test(token)) {
+        words.add(token);
+      }
+    });
+    
+    // 🎯 SPECIAL: Extract numbers and prices (like "$89", "1-2 hours")
+    const priceMatches = answer.match(/\$\d+/g) || [];
+    priceMatches.forEach(price => words.add(price));
+    
+    const timeMatches = answer.match(/\d+-\d+\s+(hours?|minutes?|days?)/gi) || [];
+    timeMatches.forEach(time => words.add(time.toLowerCase()));
     
     return [...words];
   }
