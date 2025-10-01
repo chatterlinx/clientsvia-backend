@@ -1354,4 +1354,529 @@ router.delete('/company/:companyId/quick-variables/:id', authenticateJWT, async 
 
 console.log('[INIT] ✅ Quick Variables routes added to v2company.js (piggybacked!)');
 
+// ============================================================
+// 🚀 V3 AI RESPONSE SYSTEM - INSTANT RESPONSES & TEMPLATES
+// ============================================================
+// Piggyback strategy: Add to existing deployed file to avoid 404 errors
+// Data already exists in v2Company.agentBrain.instantResponses & responseTemplates
+
+console.log('[INIT] 🚀 Loading V3 AI Response System routes (Instant Responses + Templates)...');
+
+// ⚡ GET INSTANT RESPONSES
+router.get('/:companyId/instant-responses', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+    
+    try {
+        console.log(`[IR-GET-1] Loading instant responses for company: ${companyId}`);
+        
+        const company = await Company.findById(companyId)
+            .select('agentBrain.instantResponses')
+            .lean();
+        
+        if (!company) {
+            console.log(`[IR-GET-2] ❌ Company not found: ${companyId}`);
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Company not found' 
+            });
+        }
+        
+        const instantResponses = company.agentBrain?.instantResponses || [];
+        console.log(`[IR-GET-3] ✅ Loaded ${instantResponses.length} instant responses`);
+        
+        res.json({
+            success: true,
+            data: instantResponses,
+            meta: { responseTime: Date.now() - startTime }
+        });
+        
+    } catch (error) {
+        console.error('[IR-GET-ERROR] Error loading instant responses:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to load instant responses',
+            error: error.message 
+        });
+    }
+});
+
+// ⚡ POST NEW INSTANT RESPONSE
+router.post('/:companyId/instant-responses', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+    const { trigger, response, category, priority } = req.body;
+    
+    try {
+        console.log(`[IR-POST-1] Creating instant response for company: ${companyId}`);
+        console.log(`[IR-POST-2] Data:`, { trigger, category, priority });
+        
+        // Validation
+        if (!trigger || !Array.isArray(trigger) || trigger.length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Trigger keywords are required (array)' 
+            });
+        }
+        if (!response || response.trim().length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Response is required' 
+            });
+        }
+        
+        const company = await Company.findById(companyId);
+        if (!company) {
+            console.log(`[IR-POST-3] ❌ Company not found: ${companyId}`);
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Company not found' 
+            });
+        }
+        
+        // Initialize agentBrain if needed
+        if (!company.agentBrain) {
+            company.agentBrain = { version: 1, lastUpdated: new Date() };
+        }
+        if (!company.agentBrain.instantResponses) {
+            company.agentBrain.instantResponses = [];
+        }
+        
+        // Create new instant response
+        const newInstantResponse = {
+            id: `ir_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            trigger: trigger.map(t => t.trim().toLowerCase()),
+            response: response.trim(),
+            category: category || 'common',
+            priority: priority || 5,
+            enabled: true,
+            createdAt: new Date(),
+            usageCount: 0
+        };
+        
+        company.agentBrain.instantResponses.push(newInstantResponse);
+        company.agentBrain.lastUpdated = new Date();
+        
+        await company.save();
+        
+        // Clear cache
+        try {
+            await redisClient.del(`company:${companyId}`);
+            console.log(`[IR-POST-4] ✅ Cache cleared for company: ${companyId}`);
+        } catch (cacheError) {
+            console.warn(`[IR-POST-5] ⚠️  Cache clear failed:`, cacheError.message);
+        }
+        
+        console.log(`[IR-POST-6] ✅ Instant response created: ${newInstantResponse.id}`);
+        
+        res.json({
+            success: true,
+            message: 'Instant response created successfully',
+            data: newInstantResponse,
+            meta: { responseTime: Date.now() - startTime }
+        });
+        
+    } catch (error) {
+        console.error('[IR-POST-ERROR] Error creating instant response:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to create instant response',
+            error: error.message 
+        });
+    }
+});
+
+// ⚡ PUT UPDATE INSTANT RESPONSE
+router.put('/:companyId/instant-responses/:responseId', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId, responseId } = req.params;
+    const { trigger, response, category, priority, enabled } = req.body;
+    
+    try {
+        console.log(`[IR-PUT-1] Updating instant response: ${responseId}`);
+        
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Company not found' 
+            });
+        }
+        
+        const instantResponse = company.agentBrain?.instantResponses?.find(ir => ir.id === responseId);
+        if (!instantResponse) {
+            console.log(`[IR-PUT-2] ❌ Instant response not found: ${responseId}`);
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Instant response not found' 
+            });
+        }
+        
+        // Update fields
+        if (trigger) instantResponse.trigger = trigger.map(t => t.trim().toLowerCase());
+        if (response) instantResponse.response = response.trim();
+        if (category) instantResponse.category = category;
+        if (priority !== undefined) instantResponse.priority = priority;
+        if (enabled !== undefined) instantResponse.enabled = enabled;
+        instantResponse.updatedAt = new Date();
+        
+        company.agentBrain.lastUpdated = new Date();
+        await company.save();
+        
+        // Clear cache
+        try {
+            await redisClient.del(`company:${companyId}`);
+        } catch (cacheError) {
+            console.warn(`[IR-PUT-3] ⚠️  Cache clear failed:`, cacheError.message);
+        }
+        
+        console.log(`[IR-PUT-4] ✅ Instant response updated: ${responseId}`);
+        
+        res.json({
+            success: true,
+            message: 'Instant response updated successfully',
+            data: instantResponse,
+            meta: { responseTime: Date.now() - startTime }
+        });
+        
+    } catch (error) {
+        console.error('[IR-PUT-ERROR] Error updating instant response:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to update instant response',
+            error: error.message 
+        });
+    }
+});
+
+// ⚡ DELETE INSTANT RESPONSE
+router.delete('/:companyId/instant-responses/:responseId', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId, responseId } = req.params;
+    
+    try {
+        console.log(`[IR-DELETE-1] Deleting instant response: ${responseId}`);
+        
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Company not found' 
+            });
+        }
+        
+        const initialLength = company.agentBrain?.instantResponses?.length || 0;
+        if (!company.agentBrain?.instantResponses) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'No instant responses found' 
+            });
+        }
+        
+        company.agentBrain.instantResponses = company.agentBrain.instantResponses.filter(
+            ir => ir.id !== responseId
+        );
+        
+        const finalLength = company.agentBrain.instantResponses.length;
+        
+        if (initialLength === finalLength) {
+            console.log(`[IR-DELETE-2] ❌ Instant response not found: ${responseId}`);
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Instant response not found' 
+            });
+        }
+        
+        company.agentBrain.lastUpdated = new Date();
+        await company.save();
+        
+        // Clear cache
+        try {
+            await redisClient.del(`company:${companyId}`);
+        } catch (cacheError) {
+            console.warn(`[IR-DELETE-3] ⚠️  Cache clear failed:`, cacheError.message);
+        }
+        
+        console.log(`[IR-DELETE-4] ✅ Instant response deleted: ${responseId}`);
+        
+        res.json({
+            success: true,
+            message: 'Instant response deleted successfully',
+            meta: { responseTime: Date.now() - startTime }
+        });
+        
+    } catch (error) {
+        console.error('[IR-DELETE-ERROR] Error deleting instant response:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to delete instant response',
+            error: error.message 
+        });
+    }
+});
+
+// 📋 GET RESPONSE TEMPLATES
+router.get('/:companyId/response-templates', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+    
+    try {
+        console.log(`[RT-GET-1] Loading response templates for company: ${companyId}`);
+        
+        const company = await Company.findById(companyId)
+            .select('agentBrain.responseTemplates')
+            .lean();
+        
+        if (!company) {
+            console.log(`[RT-GET-2] ❌ Company not found: ${companyId}`);
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Company not found' 
+            });
+        }
+        
+        const responseTemplates = company.agentBrain?.responseTemplates || [];
+        console.log(`[RT-GET-3] ✅ Loaded ${responseTemplates.length} response templates`);
+        
+        res.json({
+            success: true,
+            data: responseTemplates,
+            meta: { responseTime: Date.now() - startTime }
+        });
+        
+    } catch (error) {
+        console.error('[RT-GET-ERROR] Error loading response templates:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to load response templates',
+            error: error.message 
+        });
+    }
+});
+
+// 📋 POST NEW RESPONSE TEMPLATE
+router.post('/:companyId/response-templates', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+    const { name, template, category, keywords, confidence } = req.body;
+    
+    try {
+        console.log(`[RT-POST-1] Creating response template for company: ${companyId}`);
+        console.log(`[RT-POST-2] Data:`, { name, category, confidence });
+        
+        // Validation
+        if (!name || name.trim().length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Template name is required' 
+            });
+        }
+        if (!template || template.trim().length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Template text is required' 
+            });
+        }
+        if (!category) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Category is required' 
+            });
+        }
+        
+        const company = await Company.findById(companyId);
+        if (!company) {
+            console.log(`[RT-POST-3] ❌ Company not found: ${companyId}`);
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Company not found' 
+            });
+        }
+        
+        // Initialize agentBrain if needed
+        if (!company.agentBrain) {
+            company.agentBrain = { version: 1, lastUpdated: new Date() };
+        }
+        if (!company.agentBrain.responseTemplates) {
+            company.agentBrain.responseTemplates = [];
+        }
+        
+        // Create new response template
+        const newTemplate = {
+            id: `rt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            name: name.trim(),
+            template: template.trim(),
+            category,
+            keywords: keywords ? keywords.map(k => k.trim().toLowerCase()) : [],
+            confidence: confidence || 0.7,
+            enabled: true,
+            createdAt: new Date(),
+            usageCount: 0,
+            lastUsed: null
+        };
+        
+        company.agentBrain.responseTemplates.push(newTemplate);
+        company.agentBrain.lastUpdated = new Date();
+        
+        await company.save();
+        
+        // Clear cache
+        try {
+            await redisClient.del(`company:${companyId}`);
+            console.log(`[RT-POST-4] ✅ Cache cleared for company: ${companyId}`);
+        } catch (cacheError) {
+            console.warn(`[RT-POST-5] ⚠️  Cache clear failed:`, cacheError.message);
+        }
+        
+        console.log(`[RT-POST-6] ✅ Response template created: ${newTemplate.id}`);
+        
+        res.json({
+            success: true,
+            message: 'Response template created successfully',
+            data: newTemplate,
+            meta: { responseTime: Date.now() - startTime }
+        });
+        
+    } catch (error) {
+        console.error('[RT-POST-ERROR] Error creating response template:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to create response template',
+            error: error.message 
+        });
+    }
+});
+
+// 📋 PUT UPDATE RESPONSE TEMPLATE
+router.put('/:companyId/response-templates/:templateId', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId, templateId } = req.params;
+    const { name, template, category, keywords, confidence, enabled } = req.body;
+    
+    try {
+        console.log(`[RT-PUT-1] Updating response template: ${templateId}`);
+        
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Company not found' 
+            });
+        }
+        
+        const responseTemplate = company.agentBrain?.responseTemplates?.find(rt => rt.id === templateId);
+        if (!responseTemplate) {
+            console.log(`[RT-PUT-2] ❌ Response template not found: ${templateId}`);
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Response template not found' 
+            });
+        }
+        
+        // Update fields
+        if (name) responseTemplate.name = name.trim();
+        if (template) responseTemplate.template = template.trim();
+        if (category) responseTemplate.category = category;
+        if (keywords) responseTemplate.keywords = keywords.map(k => k.trim().toLowerCase());
+        if (confidence !== undefined) responseTemplate.confidence = confidence;
+        if (enabled !== undefined) responseTemplate.enabled = enabled;
+        responseTemplate.updatedAt = new Date();
+        
+        company.agentBrain.lastUpdated = new Date();
+        await company.save();
+        
+        // Clear cache
+        try {
+            await redisClient.del(`company:${companyId}`);
+        } catch (cacheError) {
+            console.warn(`[RT-PUT-3] ⚠️  Cache clear failed:`, cacheError.message);
+        }
+        
+        console.log(`[RT-PUT-4] ✅ Response template updated: ${templateId}`);
+        
+        res.json({
+            success: true,
+            message: 'Response template updated successfully',
+            data: responseTemplate,
+            meta: { responseTime: Date.now() - startTime }
+        });
+        
+    } catch (error) {
+        console.error('[RT-PUT-ERROR] Error updating response template:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to update response template',
+            error: error.message 
+        });
+    }
+});
+
+// 📋 DELETE RESPONSE TEMPLATE
+router.delete('/:companyId/response-templates/:templateId', authenticateJWT, async (req, res) => {
+    const startTime = Date.now();
+    const { companyId, templateId } = req.params;
+    
+    try {
+        console.log(`[RT-DELETE-1] Deleting response template: ${templateId}`);
+        
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Company not found' 
+            });
+        }
+        
+        const initialLength = company.agentBrain?.responseTemplates?.length || 0;
+        if (!company.agentBrain?.responseTemplates) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'No response templates found' 
+            });
+        }
+        
+        company.agentBrain.responseTemplates = company.agentBrain.responseTemplates.filter(
+            rt => rt.id !== templateId
+        );
+        
+        const finalLength = company.agentBrain.responseTemplates.length;
+        
+        if (initialLength === finalLength) {
+            console.log(`[RT-DELETE-2] ❌ Response template not found: ${templateId}`);
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Response template not found' 
+            });
+        }
+        
+        company.agentBrain.lastUpdated = new Date();
+        await company.save();
+        
+        // Clear cache
+        try {
+            await redisClient.del(`company:${companyId}`);
+        } catch (cacheError) {
+            console.warn(`[RT-DELETE-3] ⚠️  Cache clear failed:`, cacheError.message);
+        }
+        
+        console.log(`[RT-DELETE-4] ✅ Response template deleted: ${templateId}`);
+        
+        res.json({
+            success: true,
+            message: 'Response template deleted successfully',
+            meta: { responseTime: Date.now() - startTime }
+        });
+        
+    } catch (error) {
+        console.error('[RT-DELETE-ERROR] Error deleting response template:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to delete response template',
+            error: error.message 
+        });
+    }
+});
+
+console.log('[INIT] ✅ V3 AI Response System routes added (Instant Responses + Templates piggybacked!)');
+
 module.exports = router;
