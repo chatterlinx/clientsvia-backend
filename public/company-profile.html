@@ -23469,6 +23469,13 @@ Key Metrics:
         if (aiResponseSystemTab) {
             aiResponseSystemTab.addEventListener('click', async function() {
                 console.log('[V3-INIT-7] AI Response System tab clicked - loading data...');
+                
+                // First, switch to the tab (show the content)
+                if (window.companyProfileManager && typeof window.companyProfileManager.switchTab === 'function') {
+                    window.companyProfileManager.switchTab('ai-response-system');
+                }
+                
+                // Then load the data
                 await loadInstantResponses();
                 await loadResponseTemplates();
             });
