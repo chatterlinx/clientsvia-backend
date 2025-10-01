@@ -83,9 +83,18 @@ app.use(cors({ origin: false })); // Restrict origins
 app.use(apiLimiter);              // Rate limiting
 app.use(express.json());          // Body parsing
 
-// Serve static files from public directory
-app.use(express.static(path.join(__dirname, 'public')));
-console.log('✅ Static files served from /public directory');
+// Serve static files from public directory with no-cache for HTML files
+app.use(express.static(path.join(__dirname, 'public'), {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.html')) {
+            // Force HTML files to never cache
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+    }
+}));
+console.log('✅ Static files served from /public directory (HTML files: no-cache)');
 
 // TEMPORARILY DISABLE REDIS FOR DEBUGGING
 console.log('⚠️ Redis disabled for debugging - using memory store only');
