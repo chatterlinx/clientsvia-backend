@@ -380,6 +380,27 @@ class V2AIAgentRuntime {
         enhancedResponse = enhancedResponse.replace(/\[Company Name\]/gi, companyName);
         enhancedResponse = enhancedResponse.replace(/our company/gi, companyName);
         
+        // 🔧 QUICK VARIABLES: Replace all Quick Variables with their actual values
+        // Supports both [brackets] and {braces}, case-insensitive
+        if (company.quickVariables && Array.isArray(company.quickVariables)) {
+            console.log(`🔧 [QUICK-VARS] Replacing ${company.quickVariables.length} Quick Variables`);
+            company.quickVariables.forEach(variable => {
+                // Escape special regex characters in variable name
+                const escapedName = variable.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                
+                // Match both [Variable Name] and {Variable Name}, case-insensitive
+                // Pattern: [\[{]variable name[\]}]
+                const regex = new RegExp(`[\\[{]\\s*${escapedName}\\s*[\\]}]`, 'gi');
+                
+                const before = enhancedResponse;
+                enhancedResponse = enhancedResponse.replace(regex, variable.value);
+                
+                if (before !== enhancedResponse) {
+                    console.log(`🔧 [QUICK-VARS] Replaced [${variable.name}] or {${variable.name}} → ${variable.value}`);
+                }
+            });
+        }
+        
         console.log(`🤖 [AI ROLE] ✅ Response enhanced with role persona`);
         return enhancedResponse;
     }

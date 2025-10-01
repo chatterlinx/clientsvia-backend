@@ -626,7 +626,7 @@ class PriorityDrivenKnowledgeRouter {
      */
     async queryInHouseFallback(companyId, query, context) {
         try {
-            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.inHouseFallback agentBrain.identity.businessType companyName');
+            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.inHouseFallback agentBrain.identity.businessType companyName quickVariables');
             
             const businessType = company?.agentBrain?.identity?.businessType || '';
             const companyName = company?.companyName || 'our company';
