@@ -787,6 +787,72 @@
                                     <i class="fas fa-plus mr-1"></i>Add Contact
                                 </button>
                             </div>
+
+                            <!-- AI Placeholders Section -->
+                            <div id="ai-placeholders-section" class="mt-8 border-t border-gray-200 pt-8">
+                                <div class="flex items-center justify-between mb-4 cursor-pointer" onclick="toggleAIPlaceholders()">
+                                    <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                                        <i class="fas fa-code mr-2 text-purple-600"></i>AI Placeholder
+                                        <i id="ai-placeholders-chevron" class="fas fa-chevron-down ml-2 text-gray-400 text-sm"></i>
+                                    </h2>
+                                    <span class="text-xs text-gray-500">Click to expand/collapse</span>
+                                </div>
+                                
+                                <div id="ai-placeholders-content" class="hidden">
+                                    <p class="text-sm text-gray-600 mb-4">
+                                        Define reusable variables that AI will automatically replace in responses. 
+                                        Use across Company Q&A, Trade Q&A, and Templates for consistency.
+                                    </p>
+                                    
+                                    <!-- Add New Placeholder Form -->
+                                    <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                                        <h3 class="text-sm font-semibold text-gray-700 mb-3">Add New Placeholder</h3>
+                                        <form id="add-placeholder-form" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-600 mb-1">Placeholder Name</label>
+                                                <input type="text" id="placeholder-name" placeholder="e.g., [Company Name]" 
+                                                       class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                                <p class="text-xs text-gray-500 mt-1">Use brackets: [Name]</p>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-600 mb-1">Value</label>
+                                                <input type="text" id="placeholder-value" placeholder="e.g., Atlas Air" 
+                                                       class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                                <p class="text-xs text-gray-500 mt-1">The actual text AI will say</p>
+                                            </div>
+                                            <div class="flex items-end">
+                                                <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium transition duration-200">
+                                                    <i class="fas fa-plus mr-1"></i>Add Placeholder
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                    
+                                    <!-- Placeholders List -->
+                                    <div id="placeholders-list" class="space-y-2">
+                                        <!-- Placeholders will be rendered here -->
+                                    </div>
+                                    
+                                    <!-- Empty State -->
+                                    <div id="placeholders-empty-state" class="text-center py-6 text-gray-500 hidden">
+                                        <i class="fas fa-inbox text-3xl mb-2"></i>
+                                        <p class="text-sm">No placeholders yet. Add your first one above!</p>
+                                    </div>
+                                    
+                                    <!-- Usage Examples -->
+                                    <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                        <h4 class="text-xs font-semibold text-blue-900 mb-2">
+                                            <i class="fas fa-lightbulb text-blue-600 mr-1"></i>How to Use
+                                        </h4>
+                                        <ul class="text-xs text-blue-800 space-y-1">
+                                            <li>• Use <code class="bg-blue-100 px-1 py-0.5 rounded">[Company Name]</code> in Q&A answers</li>
+                                            <li>• AI will automatically replace with the actual value</li>
+                                            <li>• Common examples: [Business Hours], [Service Area], [Phone Number]</li>
+                                            <li>• Update once here - changes apply everywhere!</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
                         </section>
                     </div>
                     <!-- ===== TAB SECTION END: OVERVIEW ===== -->
@@ -22349,6 +22415,202 @@ Key Metrics:
     
     // ============================================================================
     // END AI VARIABLES SYSTEM
+    // ============================================================================
+
+    // ============================================================================
+    // AI PLACEHOLDERS SYSTEM - Fresh Start!
+    // ============================================================================
+    
+    let aiPlaceholders = [];
+    
+    // Toggle collapse/expand
+    function toggleAIPlaceholders() {
+        const content = document.getElementById('ai-placeholders-content');
+        const chevron = document.getElementById('ai-placeholders-chevron');
+        
+        if (content.classList.contains('hidden')) {
+            content.classList.remove('hidden');
+            chevron.classList.replace('fa-chevron-down', 'fa-chevron-up');
+            // Load placeholders when opened
+            loadAIPlaceholders();
+        } else {
+            content.classList.add('hidden');
+            chevron.classList.replace('fa-chevron-up', 'fa-chevron-down');
+        }
+    }
+    
+    // Load placeholders
+    async function loadAIPlaceholders() {
+        console.log('[AI-PLACEHOLDER] Loading placeholders...');
+        
+        const companyId = new URLSearchParams(window.location.search).get('id');
+        if (!companyId) {
+            console.error('[AI-PLACEHOLDER] No company ID found');
+            return;
+        }
+        
+        try {
+            const authToken = getUniversalAuthToken();
+            const response = await fetch(`/api/company/${companyId}/ai-placeholders`, {
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                aiPlaceholders = result.data || [];
+                console.log(`[AI-PLACEHOLDER] Loaded ${aiPlaceholders.length} placeholders`);
+                renderAIPlaceholders();
+            } else {
+                console.error('[AI-PLACEHOLDER] Load failed:', result.message);
+            }
+        } catch (error) {
+            console.error('[AI-PLACEHOLDER] Error loading:', error);
+        }
+    }
+    
+    // Render placeholders
+    function renderAIPlaceholders() {
+        const container = document.getElementById('placeholders-list');
+        const emptyState = document.getElementById('placeholders-empty-state');
+        
+        if (aiPlaceholders.length === 0) {
+            container.innerHTML = '';
+            emptyState.classList.remove('hidden');
+            return;
+        }
+        
+        emptyState.classList.add('hidden');
+        
+        container.innerHTML = aiPlaceholders.map(p => `
+            <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-purple-300 transition">
+                <div class="flex-1">
+                    <div class="flex items-center">
+                        <code class="text-sm font-mono bg-purple-50 text-purple-700 px-2 py-1 rounded mr-3">${escapeHtml(p.placeholder)}</code>
+                        <i class="fas fa-arrow-right text-gray-400 mx-2"></i>
+                        <span class="text-sm text-gray-700">${escapeHtml(p.value)}</span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2 ml-4">
+                    <button onclick="editAIPlaceholder('${p.id}')" class="text-blue-600 hover:text-blue-800 text-sm">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="deleteAIPlaceholder('${p.id}')" class="text-red-600 hover:text-red-800 text-sm">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    // Add placeholder form handler
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('add-placeholder-form');
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const nameInput = document.getElementById('placeholder-name');
+                const valueInput = document.getElementById('placeholder-value');
+                
+                let placeholder = nameInput.value.trim();
+                const value = valueInput.value.trim();
+                
+                if (!placeholder || !value) {
+                    alert('Please fill in both fields');
+                    return;
+                }
+                
+                // Auto-add brackets if not present
+                if (!placeholder.startsWith('[')) placeholder = '[' + placeholder;
+                if (!placeholder.endsWith(']')) placeholder = placeholder + ']';
+                
+                console.log('[AI-PLACEHOLDER] Creating:', placeholder, '→', value);
+                
+                const companyId = new URLSearchParams(window.location.search).get('id');
+                
+                try {
+                    const authToken = getUniversalAuthToken();
+                    const response = await fetch(`/api/company/${companyId}/ai-placeholders`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: JSON.stringify({ placeholder, value })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        console.log('[AI-PLACEHOLDER] Created successfully');
+                        showNotification('Placeholder added successfully!', 'success');
+                        form.reset();
+                        loadAIPlaceholders();
+                    } else {
+                        console.error('[AI-PLACEHOLDER] Create failed:', result.message);
+                        alert(result.message || 'Failed to add placeholder');
+                    }
+                } catch (error) {
+                    console.error('[AI-PLACEHOLDER] Error creating:', error);
+                    alert('Failed to add placeholder');
+                }
+            });
+        }
+    });
+    
+    // Delete placeholder
+    async function deleteAIPlaceholder(id) {
+        if (!confirm('Delete this placeholder?')) return;
+        
+        console.log('[AI-PLACEHOLDER] Deleting:', id);
+        
+        const companyId = new URLSearchParams(window.location.search).get('id');
+        
+        try {
+            const authToken = getUniversalAuthToken();
+            const response = await fetch(`/api/company/${companyId}/ai-placeholders/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log('[AI-PLACEHOLDER] Deleted successfully');
+                showNotification('Placeholder deleted', 'success');
+                loadAIPlaceholders();
+            } else {
+                console.error('[AI-PLACEHOLDER] Delete failed:', result.message);
+                alert(result.message || 'Failed to delete placeholder');
+            }
+        } catch (error) {
+            console.error('[AI-PLACEHOLDER] Error deleting:', error);
+            alert('Failed to delete placeholder');
+        }
+    }
+    
+    // Edit placeholder (simple version - just delete and re-add)
+    function editAIPlaceholder(id) {
+        const placeholder = aiPlaceholders.find(p => p.id === id);
+        if (!placeholder) return;
+        
+        const nameInput = document.getElementById('placeholder-name');
+        const valueInput = document.getElementById('placeholder-value');
+        
+        nameInput.value = placeholder.placeholder;
+        valueInput.value = placeholder.value;
+        
+        // Delete old one
+        deleteAIPlaceholder(id);
+    }
+    
+    // ============================================================================
+    // END AI PLACEHOLDERS SYSTEM
     // ============================================================================
     </script>
 
