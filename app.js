@@ -159,6 +159,9 @@ try {
 // V2 DELETED: Local Company Q&A routes - using main Company Q&A system instead
 // Main Company Q&A system (via v2knowledgeManagement.js) is working perfectly
 
+// Quick Variables - Simple reusable text snippets
+const quickVariablesRoutes = require('./routes/company/quickVariables');
+app.use('/api/company', quickVariablesRoutes);
 
 app.use('/api/company', companyRoutes);
 app.use('/api/company', settingsRoutes);

@@ -390,6 +390,16 @@ const companySchema = new mongoose.Schema({
             }
         },
         
+        // Quick Variables - Simple reusable text snippets
+        quickVariables: {
+            type: [{
+                id: { type: String, required: true },
+                name: { type: String, required: true, trim: true },
+                value: { type: String, required: true, trim: true },
+                createdAt: { type: Date, default: Date.now }
+            }],
+            default: []
+        },
         
         // 📞 Call Transfer & Escalation Configuration
         callTransferConfig: {
