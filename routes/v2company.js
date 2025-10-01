@@ -1245,4 +1245,113 @@ router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
 // const agentSettingsRoutes = require('./company/agentSettings');
 // router.use('/', agentSettingsRoutes);
 
+// ============================================================================
+// QUICK VARIABLES - Piggybacking on existing v2company routes!
+// ============================================================================
+
+// GET all quick variables for a company
+router.get('/company/:companyId/quick-variables', authenticateJWT, async (req, res) => {
+    console.log('[QV-GET] Quick Variables GET called! Company ID:', req.params.companyId);
+    try {
+        const v2Company = require('../models/v2Company');
+        const company = await v2Company.findById(req.params.companyId).select('quickVariables').lean();
+        
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+        
+        console.log('[QV-GET] Returning', (company.quickVariables || []).length, 'variables');
+        res.json({
+            success: true,
+            data: company.quickVariables || []
+        });
+    } catch (error) {
+        console.error('[QV-GET] Error loading quick variables:', error);
+        res.status(500).json({ success: false, message: 'Failed to load variables' });
+    }
+});
+
+// POST create new quick variable
+router.post('/company/:companyId/quick-variables', authenticateJWT, async (req, res) => {
+    console.log('[QV-POST] Quick Variables POST called! Company ID:', req.params.companyId);
+    try {
+        const { v4: uuidv4 } = require('uuid');
+        const v2Company = require('../models/v2Company');
+        const { name, value } = req.body;
+        
+        if (!name || !value) {
+            return res.status(400).json({ success: false, message: 'Name and value required' });
+        }
+        
+        const company = await v2Company.findById(req.params.companyId);
+        
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+        
+        if (!company.quickVariables) {
+            company.quickVariables = [];
+        }
+        
+        // Check duplicate
+        const exists = company.quickVariables.find(v => v.name.toLowerCase() === name.toLowerCase());
+        if (exists) {
+            return res.status(409).json({ success: false, message: 'Variable name already exists' });
+        }
+        
+        const newVar = {
+            id: uuidv4(),
+            name: name.trim(),
+            value: value.trim(),
+            createdAt: new Date()
+        };
+        
+        company.quickVariables.push(newVar);
+        await company.save();
+        
+        console.log('[QV-POST] Variable created:', newVar.id);
+        res.status(201).json({
+            success: true,
+            message: 'Variable created',
+            data: newVar
+        });
+    } catch (error) {
+        console.error('[QV-POST] Error creating quick variable:', error);
+        res.status(500).json({ success: false, message: 'Failed to create variable' });
+    }
+});
+
+// DELETE quick variable
+router.delete('/company/:companyId/quick-variables/:id', authenticateJWT, async (req, res) => {
+    console.log('[QV-DELETE] Quick Variables DELETE called! Company ID:', req.params.companyId, 'Var ID:', req.params.id);
+    try {
+        const v2Company = require('../models/v2Company');
+        const company = await v2Company.findById(req.params.companyId);
+        
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+        
+        const before = company.quickVariables?.length || 0;
+        company.quickVariables = company.quickVariables?.filter(v => v.id !== req.params.id) || [];
+        
+        if (company.quickVariables.length === before) {
+            return res.status(404).json({ success: false, message: 'Variable not found' });
+        }
+        
+        await company.save();
+        
+        console.log('[QV-DELETE] Variable deleted');
+        res.json({
+            success: true,
+            message: 'Variable deleted'
+        });
+    } catch (error) {
+        console.error('[QV-DELETE] Error deleting quick variable:', error);
+        res.status(500).json({ success: false, message: 'Failed to delete variable' });
+    }
+});
+
+console.log('[INIT] ✅ Quick Variables routes added to v2company.js (piggybacked!)');
+
 module.exports = router;
