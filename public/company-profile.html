@@ -62,6 +62,17 @@
         .tab-content-item { @apply p-0 pt-6; } 
         .tab-content-item.hidden { display: none; }
         
+        /* 🔥 DEBUG: Force AI Response System to be visible for debugging */
+        #ai-response-system-content.tab-content-item:not(.hidden) { 
+            display: block !important; 
+            visibility: visible !important; 
+            opacity: 1 !important; 
+            position: relative !important;
+            background: #ffff00 !important; /* Bright yellow background for debugging */
+            border: 5px solid #ff0000 !important; /* Red border for debugging */
+            padding: 20px !important;
+        }
+        
         /* Clean toggle switch styling handled by Tailwind peer classes */
         .wider-textbox { max-width: 800px; width: 100%; }
         .status-badge { @apply px-2.5 py-0.5 rounded-full text-xs font-medium; }
@@ -23486,6 +23497,21 @@ Key Metrics:
                         const content = document.getElementById('ai-response-system-content');
                         const isVisible = content && !content.classList.contains('hidden');
                         console.log('[V3-INIT-7d] Tab visibility check:', isVisible ? '✅ VISIBLE' : '❌ STILL HIDDEN');
+                        
+                        // 🔥 EXTENDED DEBUG: Check all CSS properties
+                        if (content) {
+                            const computedStyle = window.getComputedStyle(content);
+                            console.log('[V3-DEBUG] Element classes:', content.className);
+                            console.log('[V3-DEBUG] Display style:', computedStyle.display);
+                            console.log('[V3-DEBUG] Visibility style:', computedStyle.visibility);
+                            console.log('[V3-DEBUG] Opacity style:', computedStyle.opacity);
+                            console.log('[V3-DEBUG] Position style:', computedStyle.position);
+                            console.log('[V3-DEBUG] Element dimensions:', {
+                                width: content.offsetWidth,
+                                height: content.offsetHeight,
+                                scrollHeight: content.scrollHeight
+                            });
+                        }
                         
                         if (!isVisible && content) {
                             console.log('[V3-INIT-7e] 🔧 FORCING tab visible with direct DOM manipulation');
