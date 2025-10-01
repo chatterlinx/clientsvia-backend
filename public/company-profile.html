@@ -62,26 +62,22 @@
         .tab-content-item { @apply p-0 pt-6; } 
         .tab-content-item.hidden { display: none; }
         
-        /* 🔥 EXTREME DEBUG: Force AI Response System to be visible ABOVE EVERYTHING */
+        /* ✅ CLEAN: AI Response System working normally */
         #ai-response-system-content.tab-content-item:not(.hidden) { 
             display: block !important; 
             visibility: visible !important; 
             opacity: 1 !important; 
-            position: fixed !important; /* FIXED positioning to guarantee visibility */
-            background: #ff0000 !important; /* BRIGHT RED background for maximum visibility */
-            border: 10px solid #000000 !important; /* THICK BLACK border */
-            padding: 40px !important;
-            top: 100px !important; /* Position from top of viewport */
-            left: 100px !important; /* Position from left of viewport */
-            right: 100px !important; /* Position from right of viewport */
-            z-index: 99999 !important; /* MAXIMUM z-index */
+            position: relative !important;
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
             margin: 0 !important;
-            width: auto !important;
+            width: 100% !important;
             height: auto !important;
             max-width: none !important;
-            max-height: 80vh !important;
-            overflow-y: auto !important;
-            box-shadow: 0 0 50px rgba(0,0,0,0.8) !important; /* HUGE shadow */
+            max-height: none !important;
+            overflow-y: visible !important;
+            z-index: auto !important;
         }
         
         /* 🧪 TEST TAB: Rainbow animation and super visible styling */
@@ -806,6 +802,10 @@
                             </button>
                             <!-- Legacy personality responses tab removed - using modern AI Agent Logic system -->
                             <!-- ✅ PRODUCTION: Knowledge Sources integrated into AI Agent Logic Tab 2 -->
+                            <button class="tab-button tab-button-inactive" id="tab-left-test" data-tab="left-test">
+                                <i class="fas fa-arrow-left mr-1"></i>Left Test
+                                <span class="ml-2 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full font-bold">LEFT</span>
+                            </button>
                             <button class="tab-button tab-button-inactive" id="tab-ai-agent-logic" data-tab="ai-agent-logic">
                                 <i class="fas fa-brain mr-1"></i>AI Agent Logic
                             </button>
@@ -1528,6 +1528,78 @@
 
                     <!-- ✅ PRODUCTION: Knowledge Sources tab REMOVED - Now integrated into AI Agent Logic Tab 2 -->
                     <!-- 🗑️ CLEAN SWEEP: Legacy standalone Knowledge Sources implementation eliminated -->
+
+                    <!-- ===== TAB SECTION START: LEFT TEST TAB ===== -->
+                    <div id="left-test-content" class="tab-content-item hidden">
+                        <!-- MASSIVE LEFT TEST BANNER -->
+                        <div style="
+                            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+                            color: white !important;
+                            padding: 60px !important;
+                            text-align: center !important;
+                            font-size: 48px !important;
+                            font-weight: bold !important;
+                            border: 8px solid #1e40af !important;
+                            margin: 20px !important;
+                            border-radius: 15px !important;
+                            box-shadow: 0 20px 40px rgba(0,0,0,0.3) !important;
+                            text-shadow: 2px 2px 4px rgba(0,0,0,0.5) !important;
+                        ">
+                            ⬅️ LEFT TEST TAB IS WORKING! ⬅️
+                            <div style="font-size: 24px; margin-top: 20px; opacity: 0.9;">
+                                This tab is positioned to the LEFT of AI Agent Logic!
+                            </div>
+                            <div style="font-size: 18px; margin-top: 15px; opacity: 0.8;">
+                                If you see this clearly, the position issue is specific to tabs on the RIGHT side.
+                            </div>
+                        </div>
+                        
+                        <section class="profile-section">
+                            <h2 class="profile-section-title">
+                                <i class="fas fa-arrow-left mr-2 text-blue-600"></i>Left Position Test
+                            </h2>
+                            
+                            <div class="bg-white p-6 rounded-lg shadow-sm border">
+                                <h3 class="text-lg font-semibold mb-4">Position Analysis</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                        <h4 class="font-medium text-blue-800 mb-2">✅ Working Tabs (Left Side):</h4>
+                                        <ul class="list-disc list-inside text-blue-700 space-y-1 text-sm">
+                                            <li>Overview</li>
+                                            <li>Configuration</li>
+                                            <li>Notes</li>
+                                            <li>AI Voice Settings</li>
+                                            <li><strong>Left Test (this tab)</strong></li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                                        <h4 class="font-medium text-red-800 mb-2">❌ Problem Tabs (Right Side):</h4>
+                                        <ul class="list-disc list-inside text-red-700 space-y-1 text-sm">
+                                            <li>AI Agent Logic (?)</li>
+                                            <li>Test Tab (right of AI Agent Logic)</li>
+                                            <li>AI Response System (far right)</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                    <h4 class="font-medium text-yellow-800 mb-2">🔍 Hypothesis:</h4>
+                                    <p class="text-yellow-700 text-sm">
+                                        There may be a CSS issue, JavaScript error, or layout problem affecting tabs 
+                                        positioned after a certain point in the navigation. This could be due to:
+                                    </p>
+                                    <ul class="list-disc list-inside text-yellow-700 text-sm mt-2 space-y-1">
+                                        <li>CSS overflow or width constraints</li>
+                                        <li>JavaScript event delegation issues</li>
+                                        <li>Tab container width limitations</li>
+                                        <li>Z-index or positioning conflicts</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                    <!-- ===== TAB SECTION END: LEFT TEST TAB ===== -->
 
                     <!-- ===== TAB SECTION START: AI AGENT LOGIC ===== -->
                     <div id="ai-agent-logic-content" class="tab-content-item hidden">
@@ -4008,28 +4080,6 @@ This would be a great time to also check..."></textarea>
 
                     <!-- ===== TAB SECTION START: TEST TAB ===== -->
                     <div id="test-tab-content" class="tab-content-item hidden">
-                        <!-- MASSIVE TEST BANNER - IMPOSSIBLE TO MISS -->
-                        <div style="
-                            position: fixed !important;
-                            top: 0 !important;
-                            left: 0 !important;
-                            width: 100vw !important;
-                            height: 100vh !important;
-                            background: linear-gradient(45deg, #ff0000, #00ff00, #0000ff, #ffff00) !important;
-                            animation: rainbow 2s infinite !important;
-                            z-index: 999999 !important;
-                            display: flex !important;
-                            align-items: center !important;
-                            justify-content: center !important;
-                            color: white !important;
-                            font-size: 72px !important;
-                            font-weight: bold !important;
-                            text-shadow: 4px 4px 8px rgba(0,0,0,0.8) !important;
-                            border: 10px solid #000 !important;
-                        ">
-                            🚀 TEST TAB IS WORKING! 🚀
-                        </div>
-                        
                         <!-- Simple test content to verify tab system is working -->
                         <div style="background: linear-gradient(135deg, #00ff00 0%, #00aa00 100%); color: white; padding: 40px; text-align: center; font-size: 36px; font-weight: bold; border: 5px solid #000; margin: 20px;">
                             🧪 TEST TAB IS WORKING! 🧪
@@ -23593,6 +23643,40 @@ Key Metrics:
             console.log('[V3-INIT-6] ✅ Confidence slider listener attached');
         }
 
+        // Left test tab functionality (positioned before AI Agent Logic)
+        const leftTestTab = document.getElementById('tab-left-test');
+        if (leftTestTab) {
+            leftTestTab.addEventListener('click', function() {
+                console.log('[LEFT-TEST-TAB] Left test tab clicked - switching to left test content...');
+                
+                if (window.companyProfileManager && typeof window.companyProfileManager.switchTab === 'function') {
+                    window.companyProfileManager.switchTab('left-test');
+                } else {
+                    console.log('[LEFT-TEST-TAB] Direct DOM manipulation fallback');
+                    // Hide all tab content
+                    document.querySelectorAll('.tab-content-item').forEach(pane => {
+                        pane.classList.add('hidden');
+                    });
+                    
+                    // Show left test tab content
+                    const leftTestContent = document.getElementById('left-test-content');
+                    if (leftTestContent) {
+                        leftTestContent.classList.remove('hidden');
+                        console.log('[LEFT-TEST-TAB] ✅ Left test tab content should now be visible');
+                    }
+                    
+                    // Update active tab buttons
+                    document.querySelectorAll('[data-tab]').forEach(btn => {
+                        btn.classList.remove('active', 'tab-button-active');
+                        btn.classList.add('tab-button-inactive');
+                    });
+                    this.classList.add('active', 'tab-button-active');
+                    this.classList.remove('tab-button-inactive');
+                }
+            });
+            console.log('[LEFT-TEST-TAB] ✅ Left test tab event listener attached');
+        }
+
         // Test tab functionality
         const testTab = document.getElementById('tab-test-tab');
         if (testTab) {
@@ -23714,60 +23798,7 @@ Key Metrics:
             console.log('[V3-INIT-8] ✅ Tab click listener attached');
         }                        console.log('[V3-INIT-9] ✅ V3 AI Response System initialized successfully!');
                         
-                        // 🔥 EXTREME TEST: Create a completely new overlay element to test visibility
-                        setTimeout(() => {
-                            console.log('[V3-EXTREME-TEST] Creating nuclear test overlay...');
-                            
-                            // Create a test overlay that MUST be visible
-                            const testOverlay = document.createElement('div');
-                            testOverlay.id = 'nuclear-test-overlay';
-                            testOverlay.innerHTML = `
-                                <div style="text-align: center; padding: 40px; color: white; font-size: 24px; font-weight: bold;">
-                                    🚨 NUCLEAR TEST OVERLAY 🚨<br>
-                                    If you see this, JavaScript is working!<br>
-                                    <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 20px; padding: 10px 20px; font-size: 16px; background: white; color: black; border: none; border-radius: 5px; cursor: pointer;">
-                                        Click to Close
-                                    </button>
-                                </div>
-                            `;
-                            testOverlay.style.cssText = `
-                                position: fixed !important;
-                                top: 0 !important;
-                                left: 0 !important;
-                                width: 100vw !important;
-                                height: 100vh !important;
-                                background: rgba(255, 0, 0, 0.9) !important;
-                                z-index: 999999 !important;
-                                display: flex !important;
-                                align-items: center !important;
-                                justify-content: center !important;
-                                opacity: 1 !important;
-                                visibility: visible !important;
-                            `;
-                            
-                            document.body.appendChild(testOverlay);
-                            console.log('[V3-EXTREME-TEST] ✅ Nuclear test overlay created and added to DOM');
-                            
-                            // Also try to fix the original element
-                            const content = document.getElementById('ai-response-system-content');
-                            if (content) {
-                                console.log('[V3-MANUAL-TEST] Also attempting to force original element visible...');
-                                content.classList.remove('hidden');
-                                content.style.display = 'block';
-                                content.style.visibility = 'visible';
-                                content.style.opacity = '1';
-                                content.style.position = 'fixed';
-                                content.style.top = '150px';
-                                content.style.left = '150px';
-                                content.style.zIndex = '999998';
-                                content.style.background = '#00ff00'; // Bright green
-                                content.style.border = '10px solid #0000ff'; // Blue border
-                                content.style.width = '80%';
-                                content.style.height = '60%';
-                                content.style.overflow = 'auto';
-                                console.log('[V3-MANUAL-TEST] Original element also forced visible');
-                            }
-                        }, 3000);
+                        // ✅ SUCCESS: Tab system is working! Removed extreme test overlay.
     });
 
     // ============================================================================
