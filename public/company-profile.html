@@ -3166,23 +3166,23 @@ This would be a great time to also check..."></textarea>
                                                         </div>
                                                     </div>
                                                     
-                                                    <!-- ⚡ INSTANT RESPONSE MODAL -->
-                                                    <div id="instant-response-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+                                                    <!-- ⚡ LEGACY INSTANT RESPONSE MODAL (DISABLED) -->
+                                                    <div id="instant-response-modal-legacy" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50" style="display: none !important;">
                                                         <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
                                                             <div class="flex items-center justify-between mb-4">
-                                                                <h3 class="text-lg font-bold text-gray-900" id="instant-response-modal-title">Add Instant Response</h3>
+                                                                <h3 class="text-lg font-bold text-gray-900" id="instant-response-modal-title-legacy">Add Instant Response</h3>
                                                                 <button type="button" class="text-gray-400 hover:text-gray-600" onclick="closeInstantResponseModal()">
                                                                     <i class="fas fa-times text-xl"></i>
                                                                 </button>
                                                             </div>
                                                             
-                                                            <form id="instant-response-form" class="space-y-4">
-                                                                <input type="hidden" id="instant-response-id" value="">
+                                                            <form id="instant-response-form-legacy" class="space-y-4">
+                                                                <input type="hidden" id="instant-response-id-legacy" value="">
                                                                 
                                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                                     <div>
                                                                         <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                                                                        <select id="instant-response-category" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" required>
+                                                                        <select id="instant-response-category-legacy" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" required>
                                                                             <option value="greeting">Greeting</option>
                                                                             <option value="emergency">Emergency</option>
                                                                             <option value="common">Common</option>
@@ -3191,25 +3191,25 @@ This would be a great time to also check..."></textarea>
                                                                     
                                                                     <div>
                                                                         <label class="block text-sm font-medium text-gray-700 mb-2">Priority (1-10)</label>
-                                                                        <input type="number" id="instant-response-priority" min="1" max="10" value="5" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" required>
+                                                                        <input type="number" id="instant-response-priority-legacy" min="1" max="10" value="5" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" required>
                                                                     </div>
                                                                 </div>
                                                                 
                                                                 <div>
                                                                     <label class="block text-sm font-medium text-gray-700 mb-2">Trigger Keywords (comma-separated)</label>
-                                                                    <input type="text" id="instant-response-triggers" placeholder="hello, hi, hey there" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" required>
+                                                                    <input type="text" id="instant-response-triggers-legacy" placeholder="hello, hi, hey there" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" required>
                                                                     <p class="text-xs text-gray-500 mt-1">Words or phrases that will trigger this instant response</p>
                                                                 </div>
                                                                 
                                                                 <div>
                                                                     <label class="block text-sm font-medium text-gray-700 mb-2">Response Text</label>
-                                                                    <textarea id="instant-response-text" rows="3" placeholder="Hi there! How can I help you today?" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" required></textarea>
+                                                                    <textarea id="instant-response-text-legacy" rows="3" placeholder="Hi there! How can I help you today?" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" required></textarea>
                                                                     <p class="text-xs text-gray-500 mt-1">The exact response customers will hear (0ms response time)</p>
                                                                 </div>
                                                                 
                                                                 <div class="flex items-center">
-                                                                    <input type="checkbox" id="instant-response-enabled" checked class="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded">
-                                                                    <label for="instant-response-enabled" class="ml-2 text-sm text-gray-700">Enabled</label>
+                                                                    <input type="checkbox" id="instant-response-enabled-legacy" checked class="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded">
+                                                                    <label for="instant-response-enabled-legacy" class="ml-2 text-sm text-gray-700">Enabled</label>
                                                                 </div>
                                                                 
                                                                 <div class="flex justify-end space-x-3 pt-4">
@@ -3275,28 +3275,28 @@ This would be a great time to also check..."></textarea>
                                                         </div>
                                                     </div>
                                                     
-                                                    <!-- 📋 RESPONSE TEMPLATE MODAL -->
-                                                    <div id="response-template-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+                                                    <!-- 📋 LEGACY RESPONSE TEMPLATE MODAL (DISABLED) -->
+                                                    <div id="response-template-modal-legacy" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50" style="display: none !important;">
                                                         <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-4/5 lg:w-3/4 shadow-lg rounded-md bg-white">
                                                             <div class="flex items-center justify-between mb-4">
-                                                                <h3 class="text-lg font-bold text-gray-900" id="response-template-modal-title">Add Response Template</h3>
+                                                                <h3 class="text-lg font-bold text-gray-900" id="response-template-modal-title-legacy">Add Response Template</h3>
                                                                 <button type="button" class="text-gray-400 hover:text-gray-600" onclick="closeResponseTemplateModal()">
                                                                     <i class="fas fa-times text-xl"></i>
                                                                 </button>
                                                             </div>
                                                             
-                                                            <form id="response-template-form" class="space-y-4">
-                                                                <input type="hidden" id="response-template-id" value="">
+                                                            <form id="response-template-form-legacy" class="space-y-4">
+                                                                <input type="hidden" id="response-template-id-legacy" value="">
                                                                 
                                                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                                     <div>
                                                                         <label class="block text-sm font-medium text-gray-700 mb-2">Template Name</label>
-                                                                        <input type="text" id="response-template-name" placeholder="Service Inquiry Response" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
+                                                                        <input type="text" id="response-template-name-legacy" placeholder="Service Inquiry Response" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
                                                                     </div>
                                                                     
                                                                     <div>
                                                                         <label class="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                                                                        <select id="response-template-category" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
+                                                                        <select id="response-template-category-legacy" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
                                                                             <option value="service">Service</option>
                                                                             <option value="pricing">Pricing</option>
                                                                             <option value="transfer">Transfer</option>
@@ -3308,25 +3308,25 @@ This would be a great time to also check..."></textarea>
                                                                     
                                                                     <div>
                                                                         <label class="block text-sm font-medium text-gray-700 mb-2">Confidence (0.1-1.0)</label>
-                                                                        <input type="number" id="response-template-confidence" min="0.1" max="1.0" step="0.1" value="0.7" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
+                                                                        <input type="number" id="response-template-confidence-legacy" min="0.1" max="1.0" step="0.1" value="0.7" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
                                                                     </div>
                                                                 </div>
                                                                 
                                                                 <div>
                                                                     <label class="block text-sm font-medium text-gray-700 mb-2">Keywords (comma-separated)</label>
-                                                                    <input type="text" id="response-template-keywords" placeholder="service, repair, fix, maintenance" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
+                                                                    <input type="text" id="response-template-keywords-legacy" placeholder="service, repair, fix, maintenance" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required>
                                                                     <p class="text-xs text-gray-500 mt-1">Keywords that will trigger this template</p>
                                                                 </div>
                                                                 
                                                                 <div>
                                                                     <label class="block text-sm font-medium text-gray-700 mb-2">Template Response</label>
-                                                                    <textarea id="response-template-text" rows="4" placeholder="I'd be happy to help you with our services. Let me get you connected with our service team who can provide detailed information about what we can do for you." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required></textarea>
+                                                                    <textarea id="response-template-text-legacy" rows="4" placeholder="I'd be happy to help you with our services. Let me get you connected with our service team who can provide detailed information about what we can do for you." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" required></textarea>
                                                                     <p class="text-xs text-gray-500 mt-1">The response template (adapts to your personality settings)</p>
                                                                 </div>
                                                                 
                                                                 <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                                                                     <h5 class="font-medium text-blue-800 mb-2">Template Variables (Optional)</h5>
-                                                                    <div id="template-variables-container" class="space-y-2">
+                                                                    <div id="template-variables-container-legacy" class="space-y-2">
                                                                         <!-- Variables will be added dynamically -->
                                                                     </div>
                                                                     <button type="button" onclick="addTemplateVariable()" class="mt-2 px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors">
@@ -3335,8 +3335,8 @@ This would be a great time to also check..."></textarea>
                                                                 </div>
                                                                 
                                                                 <div class="flex items-center">
-                                                                    <input type="checkbox" id="response-template-enabled" checked class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
-                                                                    <label for="response-template-enabled" class="ml-2 text-sm text-gray-700">Enabled</label>
+                                                                    <input type="checkbox" id="response-template-enabled-legacy" checked class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+                                                                    <label for="response-template-enabled-legacy" class="ml-2 text-sm text-gray-700">Enabled</label>
                                                                 </div>
                                                                 
                                                                 <div class="flex justify-end space-x-3 pt-4">
