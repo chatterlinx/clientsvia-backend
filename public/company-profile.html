@@ -2070,7 +2070,7 @@
 
                                                     <!-- Knowledge Source Tabs -->
                                                     <div class="bg-white border border-gray-200 rounded-lg mb-6">
-                                                        <div class="border-b border-gray-200">
+                                                        <div class="border-b border-gray-200 sticky top-16 z-30 bg-white">
                                                             <nav class="flex space-x-8 px-6">
                                                                 <!-- ⚡ PRIORITY 0: INSTANT RESPONSES TAB -->
                                                                 <button id="km-tab-instant" class="km-tab-btn py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600">
@@ -15046,6 +15046,18 @@ Key Metrics:
                         
                         // 🎯 Initialize ClientsVia AI Agent Logic tab navigation
                         initializeClientsviaTabListeners();
+                        
+                        // ⚡ Initialize Instant Responses if tab is already active on page load
+                        setTimeout(() => {
+                            const instantTab = document.getElementById('km-tab-instant');
+                            const instantContent = document.getElementById('km-instant-content');
+                            if (instantTab && instantContent && instantContent.classList.contains('active')) {
+                                console.log('⚡ [PAGE-LOAD] Instant Responses tab active - initializing manager');
+                                if (typeof initializeInstantResponsesManager === 'function') {
+                                    initializeInstantResponsesManager();
+                                }
+                            }
+                        }, 500);
                     } else {
                         // Wait a bit longer for the manager to initialize
                         setTimeout(waitForManager, 100);
