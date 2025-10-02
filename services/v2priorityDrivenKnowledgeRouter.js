@@ -238,6 +238,9 @@ class PriorityDrivenKnowledgeRouter {
         let result;
         
         switch (sourceType) {
+            case 'instantResponses':
+                result = await this.queryInstantResponses(companyId, query, context);
+                break;
             case 'companyQnA':
                 result = await this.queryCompanyQnA(companyId, query, context);
                 break;
@@ -268,128 +271,91 @@ class PriorityDrivenKnowledgeRouter {
     }
 
     /**
-     * 🚀 KEYWORD INDEX OPTIMIZATION - PRE-FILTER BEFORE EXPENSIVE QUERIES
-     * 📋 Builds and caches keyword indexes for lightning-fast pre-filtering
-     * ⚡ Performance: Sub-10ms keyword matching vs 100ms+ full Q&A scanning
+     * ⚡ INSTANT RESPONSES QUERY ENGINE (PRIORITY 0)
+     * 📋 Ultra-fast matching for instant responses (sub-5ms target)
+     * 🎯 Purpose: Provide immediate answers to common queries without LLM overhead
+     * ⚠️  CRITICAL: Must be fastest source - no DB queries, uses in-memory matching
      */
-    async getKeywordIndex(companyId, source) {
-        const cacheKey = `${companyId}_${source}_keywords`;
-        const cached = this.keywordIndexCache.get(cacheKey);
-        
-        // Return cached index if still valid
-        if (cached && (Date.now() - cached.timestamp) < this.keywordCacheExpiry) {
-            return cached.keywords;
-        }
-        
-        let allKeywords = new Set();
-        
+    async queryInstantResponses(companyId, query, context) {
         try {
-            if (source === 'companyQnA') {
-                // 🎯 V3 FIX: Load keywords from NEW category-based system
-                const categories = await CompanyQnACategory.find({ 
-                    companyId, 
-                    isActive: true 
-                }).select('qnas.keywords').lean();
-                
-                categories.forEach(category => {
-                    if (category.qnas && Array.isArray(category.qnas)) {
-                        category.qnas.forEach(qna => {
-                            if (qna.isActive !== false && qna.keywords && Array.isArray(qna.keywords)) {
-                                qna.keywords.forEach(keyword => allKeywords.add(keyword.toLowerCase()));
-                            }
-                        });
-                    }
+            const instantResponseMatcher = require('./v2InstantResponseMatcher');
+            
+            logger.info(`⚡ Querying instant responses for "${query.substring(0, 50)}..."`, {
+                routingId: context.routingId
+            });
+
+            // Get company to access instant responses
+            const company = await Company.findById(companyId)
+                .select('instantResponses')
+                .lean();
+
+            if (!company || !company.instantResponses || company.instantResponses.length === 0) {
+                logger.info(`ℹ️ No instant responses configured for company`, {
+                    routingId: context.routingId,
+                    companyId
                 });
-            } else if (source === 'tradeQnA') {
-                // Get trade categories and extract keywords
-                const company = await Company.findById(companyId).select('tradeCategories').lean();
-                if (company?.tradeCategories) {
-                    const TradeCategory = require('../models/v2TradeCategory');
-                    // V2 FIX: tradeCategories contains names, not ObjectIds
-                    const categories = await TradeCategory.find({
-                        name: { $in: company.tradeCategories }
-                    }).select('qnas.keywords').lean();
-                    
-                    categories.forEach(category => {
-                        if (category.qnas && Array.isArray(category.qnas)) {
-                            category.qnas.forEach(qna => {
-                                if (qna.keywords && Array.isArray(qna.keywords)) {
-                                    qna.keywords.forEach(keyword => allKeywords.add(keyword.toLowerCase()));
-                                }
-                            });
-                        }
-                    });
-                }
+                return {
+                    confidence: 0,
+                    response: null,
+                    metadata: {
+                        source: 'instantResponses',
+                        reason: 'No instant responses configured'
+                    }
+                };
             }
-            
-            const keywordArray = Array.from(allKeywords);
-            
-            // Cache the keyword index
-            this.keywordIndexCache.set(cacheKey, {
-                keywords: keywordArray,
-                timestamp: Date.now()
+
+            // Perform matching using instant response matcher
+            const match = instantResponseMatcher.match(query, company.instantResponses);
+
+            if (match) {
+                logger.info(`✅ Instant response match found`, {
+                    routingId: context.routingId,
+                    confidence: match.score,
+                    trigger: match.trigger,
+                    matchTimeMs: match.matchTimeMs
+                });
+
+                return {
+                    confidence: match.score,
+                    response: match.response,
+                    metadata: {
+                        source: 'instantResponses',
+                        trigger: match.trigger,
+                        category: match.category,
+                        matchTimeMs: match.matchTimeMs,
+                        responseId: match.responseId
+                    }
+                };
+            }
+
+            logger.info(`ℹ️ No instant response match found`, {
+                routingId: context.routingId
             });
-            
-            logger.info(`🚀 Built keyword index for ${source}`, { 
-                companyId, 
-                keywordCount: keywordArray.length 
-            });
-            
-            return keywordArray;
-            
+
+            return {
+                confidence: 0,
+                response: null,
+                metadata: {
+                    source: 'instantResponses',
+                    reason: 'No match above confidence threshold'
+                }
+            };
+
         } catch (error) {
-            logger.error(`❌ Failed to build keyword index for ${source}`, { 
-                companyId, 
-                error: error.message 
+            logger.error(`❌ Error querying instant responses`, {
+                routingId: context.routingId,
+                error: error.message,
+                stack: error.stack
             });
-            return [];
-        }
-    }
 
-    /**
-     * ⚡ SMART PRE-FILTER - SKIP ENTIRE SECTIONS THAT CAN'T MATCH
-     * 📋 Checks if query contains ANY keywords from a knowledge source
-     * 🎯 Performance: 10x faster routing by eliminating impossible matches
-     */
-    async canSourceMatch(companyId, query, source) {
-        const keywords = await this.getKeywordIndex(companyId, source);
-        if (keywords.length === 0) return false;
-        
-        const queryWords = query.toLowerCase().split(/\s+/);
-        
-        // Check if ANY query word matches ANY source keyword
-        for (const queryWord of queryWords) {
-            for (const keyword of keywords) {
-                if (keyword.includes(queryWord) || queryWord.includes(keyword)) {
-                    return true;
+            return {
+                confidence: 0,
+                response: null,
+                metadata: {
+                    source: 'instantResponses',
+                    error: error.message
                 }
-            }
-        }
-        
-        return false;
-    }
-
-    /**
-     * 🔄 CACHE INVALIDATION - CLEAR KEYWORD INDEXES WHEN Q&A UPDATED
-     * 📋 Call this method when Q&A entries are added/updated/deleted
-     * ⚡ Ensures keyword indexes stay fresh and accurate
-     */
-    invalidateKeywordCache(companyId, source = null) {
-        if (source) {
-            // Invalidate specific source
-            const cacheKey = `${companyId}_${source}_keywords`;
-            this.keywordIndexCache.delete(cacheKey);
-            logger.info(`🔄 Invalidated keyword cache for ${source}`, { companyId });
-        } else {
-            // Invalidate all sources for company
-            const keysToDelete = [];
-            for (const key of this.keywordIndexCache.keys()) {
-                if (key.startsWith(`${companyId}_`)) {
-                    keysToDelete.push(key);
-                }
-            }
-            keysToDelete.forEach(key => this.keywordIndexCache.delete(key));
-            logger.info(`🔄 Invalidated all keyword caches for company`, { companyId, count: keysToDelete.length });
+            };
         }
     }
 
