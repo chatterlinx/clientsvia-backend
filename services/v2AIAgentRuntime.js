@@ -86,15 +86,20 @@ class V2AIAgentRuntime {
         const aiLogic = company.aiAgentLogic;
         let greeting = null;
 
-        // V2 PRIORITY ORDER - AGENT PERSONALITY SYSTEM ONLY
+        // 🎤 PRIORITY 0: INITIAL GREETING (NEW SYSTEM - Highest Priority!)
+        if (aiLogic.initialGreeting && aiLogic.initialGreeting.trim()) {
+            greeting = aiLogic.initialGreeting;
+            console.log(`✅ V2 GREETING: Using Initial Greeting (Priority -1): "${greeting}"`);
+        }
+        // V2 PRIORITY ORDER - AGENT PERSONALITY SYSTEM (Fallback 1)
         // 1. Check V2 Agent Personality opening phrases
-        if (aiLogic.agentPersonality?.conversationPatterns?.openingPhrases?.length > 0) {
+        else if (aiLogic.agentPersonality?.conversationPatterns?.openingPhrases?.length > 0) {
             const phrases = aiLogic.agentPersonality.conversationPatterns.openingPhrases;
             greeting = phrases[0]; // Use first opening phrase
             console.log(`✅ V2 GREETING: Using V2 opening phrase: "${greeting}"`);
         }
         
-        // 2. V2 PURE SYSTEM: Pre-configured greetings with NO dynamic insertion
+        // 2. V2 PURE SYSTEM: Pre-configured greetings with NO dynamic insertion (Fallback 2)
         else {
             const personality = aiLogic.agentPersonality || {};
             const tone = personality.corePersonality?.voiceTone || 'friendly';

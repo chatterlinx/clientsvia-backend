@@ -2444,6 +2444,54 @@
                                                                 </p>
                                                             </div>
                                                             
+                                                            <!-- 🎤 INITIAL GREETING SECTION -->
+                                                            <div class="bg-gradient-to-r from-green-50 to-teal-50 border-2 border-green-300 rounded-lg p-6 mb-6">
+                                                                <h3 class="text-lg font-bold text-green-900 mb-3 flex items-center">
+                                                                    <i class="fas fa-phone-volume mr-2"></i>🎤 Initial Greeting (Plays First!)
+                                                                </h3>
+                                                                <p class="text-sm text-green-700 mb-4">
+                                                                    📞 This greeting plays <strong>immediately</strong> when a customer calls, before any AI processing starts. Use <code class="bg-green-200 px-2 py-1 rounded">[Company Name]</code> to automatically insert your company name.
+                                                                </p>
+                                                                
+                                                                <label for="initial-greeting-input" class="block font-semibold text-gray-800 mb-2">
+                                                                    Greeting Text:
+                                                                </label>
+                                                                <textarea 
+                                                                    id="initial-greeting-input" 
+                                                                    rows="3" 
+                                                                    class="w-full px-4 py-3 border-2 border-green-300 rounded-lg font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-vertical"
+                                                                    placeholder="Thank you for calling [Company Name]. How can I help you today?"
+                                                                    maxlength="500"
+                                                                    style="font-size: 15px; line-height: 1.6;"
+                                                                ></textarea>
+                                                                
+                                                                <!-- Preview Section -->
+                                                                <div class="mt-3 bg-white border-l-4 border-green-500 rounded-lg p-4">
+                                                                    <div class="flex items-start gap-3">
+                                                                        <i class="fas fa-eye text-green-600 text-lg mt-1"></i>
+                                                                        <div class="flex-1">
+                                                                            <p class="text-xs font-semibold text-green-800 mb-1">PREVIEW (How it will sound):</p>
+                                                                            <p id="initial-greeting-preview" class="text-sm text-gray-700 italic">
+                                                                                Thank you for calling [Company Name]. How can I help you today?
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <div class="mt-4 flex gap-3">
+                                                                    <button id="save-initial-greeting-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md">
+                                                                        <i class="fas fa-save mr-2"></i>Save Initial Greeting
+                                                                    </button>
+                                                                    <button id="reset-initial-greeting-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-3 px-6 rounded-lg transition duration-200">
+                                                                        <i class="fas fa-undo mr-2"></i>Reset to Default
+                                                                    </button>
+                                                                </div>
+                                                                
+                                                                <div class="mt-3 text-xs text-green-700">
+                                                                    <strong>💡 Pro Tip:</strong> Keep it short (1-2 sentences), friendly, and professional. The greeting sets the tone for the entire conversation!
+                                                                </div>
+                                                            </div>
+                                                            
                                                             <!-- ⚡ ACTION BUTTONS -->
                                                             <div class="mb-6">
                                                                 <button id="add-category-btn" class="btn btn-primary" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; padding: 12px 24px; font-weight: 600;">
@@ -22369,6 +22417,9 @@ Key Metrics:
             await window.instantResponseCategoriesManager.init();
             
             console.log('✅ InstantResponseCategoriesManager initialized successfully');
+            
+            // Initialize Initial Greeting system
+            await initializeInitialGreeting();
         } catch (error) {
             console.error('❌ Error initializing InstantResponseCategoriesManager:', error);
         }
@@ -22425,6 +22476,116 @@ Key Metrics:
             console.log('✅ InstantResponsesManager initialized successfully');
         } catch (error) {
             console.error('❌ Failed to initialize InstantResponsesManager:', error);
+        }
+    }
+
+    // ========================================
+    // INITIAL GREETING MANAGEMENT
+    // ========================================
+
+    async function initializeInitialGreeting() {
+        const companyId = getCurrentCompanyId() || window.companyId;
+        
+        if (!companyId) {
+            console.error('❌ No company ID for initial greeting');
+            return;
+        }
+
+        console.log('🎤 Initializing Initial Greeting system');
+
+        const input = document.getElementById('initial-greeting-input');
+        const preview = document.getElementById('initial-greeting-preview');
+        const saveBtn = document.getElementById('save-initial-greeting-btn');
+        const resetBtn = document.getElementById('reset-initial-greeting-btn');
+
+        if (!input || !preview || !saveBtn || !resetBtn) {
+            console.warn('⚠️ Initial greeting elements not found (tab may not be active yet)');
+            return;
+        }
+
+        // Load current greeting from company data
+        await loadInitialGreeting(companyId, input, preview);
+
+        // Real-time preview update as user types
+        input.addEventListener('input', function() {
+            updateGreetingPreview(this.value, preview, companyId);
+        });
+
+        // Save button
+        saveBtn.addEventListener('click', async function() {
+            await saveInitialGreeting(companyId, input.value);
+        });
+
+        // Reset button
+        resetBtn.addEventListener('click', function() {
+            const defaultGreeting = 'Thank you for calling [Company Name]. How can I help you today?';
+            input.value = defaultGreeting;
+            updateGreetingPreview(defaultGreeting, preview, companyId);
+        });
+
+        console.log('✅ Initial Greeting system initialized');
+    }
+
+    async function loadInitialGreeting(companyId, input, preview) {
+        try {
+            const token = localStorage.getItem('adminToken') || 
+                         localStorage.getItem('authToken') || 
+                         sessionStorage.getItem('authToken');
+
+            const response = await fetch(`/api/company/${companyId}`, {
+                credentials: 'include',
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+
+            if (response.ok) {
+                const company = await response.json();
+                const greeting = company.aiAgentLogic?.initialGreeting || 
+                                'Thank you for calling [Company Name]. How can I help you today?';
+                
+                input.value = greeting;
+                updateGreetingPreview(greeting, preview, companyId);
+                console.log('✅ Initial greeting loaded');
+            }
+        } catch (error) {
+            console.error('❌ Error loading initial greeting:', error);
+        }
+    }
+
+    function updateGreetingPreview(text, preview, companyId) {
+        // Replace [Company Name] with actual company name for preview
+        const companyName = window.currentCompany?.companyName || 'Your Company';
+        const previewText = text.replace(/\[Company Name\]/g, companyName);
+        preview.textContent = previewText || 'Thank you for calling [Company Name]. How can I help you today?';
+    }
+
+    async function saveInitialGreeting(companyId, greetingText) {
+        try {
+            const token = localStorage.getItem('adminToken') || 
+                         localStorage.getItem('authToken') || 
+                         sessionStorage.getItem('authToken');
+
+            const response = await fetch(`/api/company/${companyId}`, {
+                method: 'PATCH',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({
+                    'aiAgentLogic.initialGreeting': greetingText
+                })
+            });
+
+            if (response.ok) {
+                // Show success notification
+                alert('✅ Initial greeting saved successfully!');
+                console.log('✅ Initial greeting saved');
+            } else {
+                throw new Error(`HTTP ${response.status}`);
+            }
+        } catch (error) {
+            console.error('❌ Error saving initial greeting:', error);
+            alert('❌ Failed to save initial greeting. Please try again.');
         }
     }
 

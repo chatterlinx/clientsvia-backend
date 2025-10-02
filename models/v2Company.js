@@ -104,11 +104,8 @@ const agentSetupSchema = new mongoose.Schema({
     use247Routing: { type: Boolean, default: false },
     afterHoursAction: { type: String, default: 'message', trim: true },
     onCallForwardingNumber: { type: String, default: '', trim: true },
-    greetingType: { type: String, enum: ['tts', 'audio'], default: 'tts' },
-    greetingAudioUrl: { type: String, default: '', trim: true },
-    agentGreeting: { type: String, default: '', trim: true },
-    mainAgentScript: { type: String, default: '', trim: true },
-    agentClosing: { type: String, default: '', trim: true },
+    // ☢️ NUKED: greetingType, greetingAudioUrl, agentGreeting - replaced by aiAgentLogic.initialGreeting
+    // ☢️ NUKED: mainAgentScript, agentClosing - legacy agent setup system eliminated
     protocols: { type: protocolSchema, default: () => ({}) },
     textToPayPhoneSource: { type: String, default: 'callerID', trim: true },
     schedulingRules: { type: [schedulingRuleSchema], default: [] },
@@ -245,6 +242,14 @@ const companySchema = new mongoose.Schema({
         // Versioning for configuration tracking
         version: { type: Number, default: 1 },
         lastUpdated: { type: Date, default: Date.now },
+        
+        // 🎤 INITIAL GREETING (PRIORITY -1: Plays FIRST when call connects)
+        initialGreeting: { 
+            type: String, 
+            default: 'Thank you for calling [Company Name]. How can I help you today?',
+            trim: true,
+            maxlength: 500
+        },
         
         // 🎯 IN-HOUSE ONLY: Knowledge Source Thresholds
                 thresholds: {
