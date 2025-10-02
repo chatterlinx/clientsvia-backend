@@ -83,10 +83,10 @@ function validateInstantResponse(req, res, next) {
 // ============================================================================
 
 /**
- * GET /api/v2/company/:companyId/instant-responses
+ * GET /:companyId/instant-responses
  * Get all instant responses for a company
  */
-router.get('/', validateCompanyAccess, async (req, res) => {
+router.get('/:companyId/instant-responses', validateCompanyAccess, async (req, res) => {
   try {
     const company = req.company;
     const instantResponses = company.instantResponses || [];
@@ -122,10 +122,10 @@ router.get('/', validateCompanyAccess, async (req, res) => {
 });
 
 /**
- * POST /api/v2/company/:companyId/instant-responses
+ * POST /:companyId/instant-responses
  * Create a new instant response
  */
-router.post('/', validateCompanyAccess, validateInstantResponse, async (req, res) => {
+router.post('/:companyId/instant-responses', validateCompanyAccess, validateInstantResponse, async (req, res) => {
   try {
     const company = req.company;
     const { trigger, response, category, priority, enabled, notes } = req.body;
@@ -177,10 +177,10 @@ router.post('/', validateCompanyAccess, validateInstantResponse, async (req, res
 });
 
 /**
- * PUT /api/v2/company/:companyId/instant-responses/:responseId
+ * PUT /:companyId/instant-responses/:responseId
  * Update an instant response
  */
-router.put('/:responseId', validateCompanyAccess, validateInstantResponse, async (req, res) => {
+router.put('/:companyId/instant-responses/:responseId', validateCompanyAccess, validateInstantResponse, async (req, res) => {
   try {
     const company = req.company;
     const { responseId } = req.params;
@@ -242,10 +242,10 @@ router.put('/:responseId', validateCompanyAccess, validateInstantResponse, async
 });
 
 /**
- * DELETE /api/v2/company/:companyId/instant-responses/:responseId
+ * DELETE /:companyId/instant-responses/:responseId
  * Delete an instant response
  */
-router.delete('/:responseId', validateCompanyAccess, async (req, res) => {
+router.delete('/:companyId/instant-responses/:responseId', validateCompanyAccess, async (req, res) => {
   try {
     const company = req.company;
     const { responseId } = req.params;
@@ -287,7 +287,7 @@ router.delete('/:responseId', validateCompanyAccess, async (req, res) => {
  * POST /api/v2/company/:companyId/instant-responses/bulk
  * Bulk create instant responses
  */
-router.post('/bulk', validateCompanyAccess, async (req, res) => {
+router.post('/:companyId/instant-responses/bulk', validateCompanyAccess, async (req, res) => {
   try {
     const company = req.company;
     const { instantResponses } = req.body;
@@ -369,7 +369,7 @@ router.post('/bulk', validateCompanyAccess, async (req, res) => {
  * GET /api/v2/company/:companyId/instant-responses/export
  * Export instant responses
  */
-router.get('/export', validateCompanyAccess, async (req, res) => {
+router.get('/:companyId/instant-responses/export', validateCompanyAccess, async (req, res) => {
   try {
     const company = req.company;
     const instantResponses = company.instantResponses || [];
@@ -408,7 +408,7 @@ router.get('/export', validateCompanyAccess, async (req, res) => {
  * POST /api/v2/company/:companyId/instant-responses/import
  * Import instant responses from JSON
  */
-router.post('/import', validateCompanyAccess, async (req, res) => {
+router.post('/:companyId/instant-responses/import', validateCompanyAccess, async (req, res) => {
   try {
     const company = req.company;
     const { instantResponses, mode } = req.body; // mode: 'append' or 'replace'
@@ -492,7 +492,7 @@ router.post('/import', validateCompanyAccess, async (req, res) => {
  * POST /api/v2/company/:companyId/instant-responses/copy-from/:sourceCompanyId
  * Copy instant responses from another company
  */
-router.post('/copy-from/:sourceCompanyId', validateCompanyAccess, async (req, res) => {
+router.post('/:companyId/instant-responses/copy-from/:sourceCompanyId', validateCompanyAccess, async (req, res) => {
   try {
     const targetCompany = req.company;
     const { sourceCompanyId } = req.params;
@@ -591,7 +591,7 @@ router.post('/copy-from/:sourceCompanyId', validateCompanyAccess, async (req, re
  * GET /api/v2/company/:companyId/instant-responses/templates
  * Get available templates
  */
-router.get('/templates', validateCompanyAccess, async (req, res) => {
+router.get('/:companyId/instant-responses/templates', validateCompanyAccess, async (req, res) => {
   try {
     const { category, tags, search } = req.query;
 
@@ -629,7 +629,7 @@ router.get('/templates', validateCompanyAccess, async (req, res) => {
  * POST /api/v2/company/:companyId/instant-responses/apply-template/:templateId
  * Apply a template to company
  */
-router.post('/apply-template/:templateId', validateCompanyAccess, async (req, res) => {
+router.post('/:companyId/instant-responses/apply-template/:templateId', validateCompanyAccess, async (req, res) => {
   try {
     const company = req.company;
     const { templateId } = req.params;
@@ -721,7 +721,7 @@ router.post('/apply-template/:templateId', validateCompanyAccess, async (req, re
  * POST /api/v2/company/:companyId/instant-responses/suggest-variations
  * Get variation suggestions for a trigger
  */
-router.post('/suggest-variations', validateCompanyAccess, async (req, res) => {
+router.post('/:companyId/instant-responses/suggest-variations', validateCompanyAccess, async (req, res) => {
   try {
     const company = req.company;
     const { trigger } = req.body;
@@ -753,7 +753,7 @@ router.post('/suggest-variations', validateCompanyAccess, async (req, res) => {
  * GET /api/v2/company/:companyId/instant-responses/analyze-coverage
  * Analyze instant response coverage
  */
-router.get('/analyze-coverage', validateCompanyAccess, async (req, res) => {
+router.get('/:companyId/instant-responses/analyze-coverage', validateCompanyAccess, async (req, res) => {
   try {
     const company = req.company;
     const instantResponses = company.instantResponses || [];
@@ -781,7 +781,7 @@ router.get('/analyze-coverage', validateCompanyAccess, async (req, res) => {
  * POST /api/v2/company/:companyId/instant-responses/test-match
  * Test matching a query against instant responses
  */
-router.post('/test-match', validateCompanyAccess, async (req, res) => {
+router.post('/:companyId/instant-responses/test-match', validateCompanyAccess, async (req, res) => {
   try {
     const company = req.company;
     const { query } = req.body;
@@ -815,10 +815,10 @@ router.post('/test-match', validateCompanyAccess, async (req, res) => {
 });
 
 /**
- * GET /api/v2/company/:companyId/instant-responses/stats
+ * GET /:companyId/instant-responses/stats
  * Get instant response statistics
  */
-router.get('/stats', validateCompanyAccess, async (req, res) => {
+router.get('/:companyId/instant-responses/stats', validateCompanyAccess, async (req, res) => {
   try {
     const company = req.company;
     const instantResponses = company.instantResponses || [];

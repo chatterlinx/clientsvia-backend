@@ -168,7 +168,7 @@ try {
 // 🚀 V2 INSTANT RESPONSES ROUTES - Priority 0 System
 try {
     const v2InstantResponsesRoutes = require('./routes/company/v2instantResponses');
-    app.use('/api/v2/company/:companyId/instant-responses', v2InstantResponsesRoutes);
+    app.use('/api/v2/company', v2InstantResponsesRoutes);
     console.log('✅ V2 Instant Responses routes registered at /api/v2/company/:companyId/instant-responses');
 } catch (error) {
     console.error('❌ Failed to load V2 Instant Responses routes:', error);
