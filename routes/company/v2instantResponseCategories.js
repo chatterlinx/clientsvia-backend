@@ -243,6 +243,23 @@ router.post('/:companyId/instant-response-categories/generate-variations', authe
       console.log(`✨ [AI] Fallback generated ${variations.length} variations`);
     }
 
+    // Final safety check: If no variations generated, create basic fallback
+    if (variations.length === 0) {
+      console.warn('[AI] No variations generated! Creating emergency fallback...');
+      const base = trigger.trim();
+      variations = [
+        base.toLowerCase(),
+        base.toUpperCase(),
+        base.charAt(0).toUpperCase() + base.slice(1).toLowerCase(),
+      ].filter(v => v !== base) // Remove exact match
+       .slice(0, Math.min(count, 3));
+      
+      console.log(`✨ [AI] Emergency fallback: ${variations.length} variations`);
+    }
+    
+    console.log(`✨ [AI] FINAL RESULT: Returning ${variations.length} variations`);
+    console.log(`✨ [AI] Variations:`, variations);
+
     res.status(200).json({
       success: true,
       data: variations,
