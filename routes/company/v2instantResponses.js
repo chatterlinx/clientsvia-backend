@@ -724,7 +724,7 @@ router.post('/:companyId/instant-responses/apply-template/:templateId', authenti
  */
 router.post('/:companyId/instant-responses/suggest-variations', authenticateJWT, validateCompanyAccess, async (req, res) => {
   try {
-    const company = req.company;
+    const { companyId } = req.params;
     const { trigger } = req.body;
 
     if (!trigger) {
@@ -734,7 +734,10 @@ router.post('/:companyId/instant-responses/suggest-variations', authenticateJWT,
       });
     }
 
-    const existingTriggers = company.instantResponses.map(r => r.trigger);
+    // 🔧 FIX: Load existing instant responses from collection, not company document
+    const existingResponses = await InstantResponse.find({ companyId }).select('trigger').lean();
+    const existingTriggers = existingResponses.map(r => r.trigger);
+    
     const suggestions = variationSuggestionEngine.suggestVariations(trigger, existingTriggers);
 
     res.json({
@@ -743,6 +746,7 @@ router.post('/:companyId/instant-responses/suggest-variations', authenticateJWT,
     });
   } catch (error) {
     console.error('[InstantResponses] Suggest variations error:', error);
+    console.error('[InstantResponses] Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Failed to generate suggestions'
@@ -756,8 +760,10 @@ router.post('/:companyId/instant-responses/suggest-variations', authenticateJWT,
  */
 router.get('/:companyId/instant-responses/analyze-coverage', authenticateJWT, validateCompanyAccess, async (req, res) => {
   try {
-    const company = req.company;
-    const instantResponses = company.instantResponses || [];
+    const { companyId } = req.params;
+    
+    // 🔧 FIX: Load instant responses from collection, not company document
+    const instantResponses = await InstantResponse.find({ companyId }).lean();
 
     const analysis = variationSuggestionEngine.analyzeCoverage(instantResponses);
 
@@ -767,6 +773,7 @@ router.get('/:companyId/instant-responses/analyze-coverage', authenticateJWT, va
     });
   } catch (error) {
     console.error('[InstantResponses] Analyze coverage error:', error);
+    console.error('[InstantResponses] Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Failed to analyze coverage'

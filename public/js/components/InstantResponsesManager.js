@@ -750,15 +750,32 @@ class InstantResponsesManager {
             return;
         }
 
-        const html = suggestions.slice(0, 10).map(s => `
-            <div class="variation-item">
-                <span class="variation-text">${this.escapeHtml(s.text)}</span>
-                <span class="variation-type">${s.type}</span>
-                <span class="variation-confidence">${(s.confidence * 100).toFixed(0)}%</span>
+        const html = `
+            <div style="margin-bottom: 12px; padding: 10px; background: #e7f3ff; border-radius: 6px; border-left: 4px solid #0066cc;">
+                <p style="margin: 0; font-size: 13px; color: #0066cc;">
+                    <i class="fas fa-info-circle"></i> <strong>Click any variation</strong> to use it as your trigger phrase
+                </p>
             </div>
-        `).join('');
+            ${suggestions.slice(0, 10).map((s, idx) => `
+                <div class="variation-item" data-variation="${this.escapeHtml(s.text)}" style="cursor: pointer;">
+                    <span class="variation-text">${this.escapeHtml(s.text)}</span>
+                    <span class="variation-type">${s.type}</span>
+                    <span class="variation-confidence">${(s.confidence * 100).toFixed(0)}%</span>
+                </div>
+            `).join('')}
+        `;
 
         container.innerHTML = html;
+        
+        // Make variations clickable to use them
+        container.querySelectorAll('.variation-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const variation = item.getAttribute('data-variation');
+                document.getElementById('trigger').value = variation;
+                this.showSuccess(`✅ Using variation: "${variation}"`);
+            });
+        });
+        
         variationsContainer.style.display = 'block';
     }
 
