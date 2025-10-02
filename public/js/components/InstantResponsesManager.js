@@ -8,11 +8,11 @@
  * ║ FASTEST RESPONSE TIER - SUB-5MS TARGET PERFORMANCE              ║
  * ╠══════════════════════════════════════════════════════════════════╣
  * ║ Data Flow: This UI → API Routes → Matcher → Response            ║
- * ║ ├─ CRUD Operations: /api/v2/company/:id/instant-responses       ║
- * ║ ├─ Template Library: /api/v2/company/:id/instant-responses/templates ║
- * ║ ├─ AI Suggestions: /api/v2/company/:id/instant-responses/suggest-variations ║
- * ║ ├─ Test Matching: /api/v2/company/:id/instant-responses/test-match ║
- * ║ └─ Coverage Analysis: /api/v2/company/:id/instant-responses/analyze-coverage ║
+ * ║ ├─ CRUD Operations: /api/company/:id/instant-responses       ║
+ * ║ ├─ Template Library: /api/company/:id/instant-responses/templates ║
+ * ║ ├─ AI Suggestions: /api/company/:id/instant-responses/suggest-variations ║
+ * ║ ├─ Test Matching: /api/company/:id/instant-responses/test-match ║
+ * ║ └─ Coverage Analysis: /api/company/:id/instant-responses/analyze-coverage ║
  * ╚══════════════════════════════════════════════════════════════════╝
  * 
  * 🎯 KEY FEATURES:
@@ -417,7 +417,7 @@ class InstantResponsesManager {
         }
 
         try {
-            const response = await fetch(`/api/v2/company/${this.currentCompanyId}/instant-responses`, {
+            const response = await fetch(`/api/company/${this.currentCompanyId}/instant-responses`, {
                 credentials: 'include'
             });
 
@@ -442,7 +442,7 @@ class InstantResponsesManager {
         if (!this.currentCompanyId) return;
 
         try {
-            const response = await fetch(`/api/v2/company/${this.currentCompanyId}/instant-responses/stats`, {
+            const response = await fetch(`/api/company/${this.currentCompanyId}/instant-responses/stats`, {
                 credentials: 'include'
             });
 
@@ -627,8 +627,8 @@ class InstantResponsesManager {
 
         try {
             const url = responseId ? 
-                `/api/v2/company/${this.currentCompanyId}/instant-responses/${responseId}` :
-                `/api/v2/company/${this.currentCompanyId}/instant-responses`;
+                `/api/company/${this.currentCompanyId}/instant-responses/${responseId}` :
+                `/api/company/${this.currentCompanyId}/instant-responses`;
             
             const method = responseId ? 'PUT' : 'POST';
 
@@ -662,7 +662,7 @@ class InstantResponsesManager {
 
         try {
             const response = await fetch(
-                `/api/v2/company/${this.currentCompanyId}/instant-responses/${responseId}`,
+                `/api/company/${this.currentCompanyId}/instant-responses/${responseId}`,
                 {
                     method: 'DELETE',
                     credentials: 'include'
@@ -692,7 +692,7 @@ class InstantResponsesManager {
 
         try {
             const response = await fetch(
-                `/api/v2/company/${this.currentCompanyId}/instant-responses/suggest-variations`,
+                `/api/company/${this.currentCompanyId}/instant-responses/suggest-variations`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -750,7 +750,7 @@ class InstantResponsesManager {
     async loadTemplates() {
         try {
             const response = await fetch(
-                `/api/v2/company/${this.currentCompanyId}/instant-responses/templates`,
+                `/api/company/${this.currentCompanyId}/instant-responses/templates`,
                 { credentials: 'include' }
             );
 
@@ -809,7 +809,7 @@ class InstantResponsesManager {
 
         try {
             const response = await fetch(
-                `/api/v2/company/${this.currentCompanyId}/instant-responses/apply-template/${templateId}`,
+                `/api/company/${this.currentCompanyId}/instant-responses/apply-template/${templateId}`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -851,7 +851,7 @@ class InstantResponsesManager {
 
         try {
             const response = await fetch(
-                `/api/v2/company/${this.currentCompanyId}/instant-responses/test-match`,
+                `/api/company/${this.currentCompanyId}/instant-responses/test-match`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -916,7 +916,7 @@ class InstantResponsesManager {
     async analyzeCoverage() {
         try {
             const response = await fetch(
-                `/api/v2/company/${this.currentCompanyId}/instant-responses/analyze-coverage`,
+                `/api/company/${this.currentCompanyId}/instant-responses/analyze-coverage`,
                 { credentials: 'include' }
             );
 
@@ -983,7 +983,7 @@ class InstantResponsesManager {
     async handleExport() {
         try {
             const response = await fetch(
-                `/api/v2/company/${this.currentCompanyId}/instant-responses/export`,
+                `/api/company/${this.currentCompanyId}/instant-responses/export`,
                 { credentials: 'include' }
             );
 
@@ -1025,7 +1025,7 @@ class InstantResponsesManager {
                     'replace' : 'append';
 
                 const response = await fetch(
-                    `/api/v2/company/${this.currentCompanyId}/instant-responses/import`,
+                    `/api/company/${this.currentCompanyId}/instant-responses/import`,
                     {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },

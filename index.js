@@ -214,7 +214,7 @@ function registerRoutes(routes) {
     app.use('/api/company', routes.v2KnowledgeManagementRoutes); // V2: Pure V2 Knowledge Management System (Company Q&A, Trade Q&A, Templates)
     app.use('/api/company', routes.v2KnowledgeSourcePrioritiesRoutes); // V2: Knowledge Source Priorities Management
     // ⚡ V2 INSTANT RESPONSES SYSTEM - Priority 0 Knowledge Tier (Ultra-fast sub-5ms responses)
-    app.use('/api/v2/company', routes.v2InstantResponsesRoutes); // V2: Instant Responses CRUD, Templates, Matching
+    app.use('/api/company', routes.v2InstantResponsesRoutes); // V2: Instant Responses CRUD, Templates, Matching (consistency with other /api/company routes)
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 
