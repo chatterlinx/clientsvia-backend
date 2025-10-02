@@ -2068,6 +2068,11 @@
                                                     <div class="bg-white border border-gray-200 rounded-lg mb-6">
                                                         <div class="border-b border-gray-200">
                                                             <nav class="flex space-x-8 px-6">
+                                                                <!-- ⚡ PRIORITY 0: INSTANT RESPONSES TAB -->
+                                                                <button id="km-tab-instant" class="km-tab-btn py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600">
+                                                                    <i class="fas fa-bolt mr-2 text-yellow-500"></i>⚡ Instant Responses
+                                                                </button>
+                                                                
                                                                 <button id="km-tab-company" class="km-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                                                                     <i class="fas fa-building mr-2"></i>Company Q&A
                                                                 </button>
@@ -2084,6 +2089,64 @@
                                                         </div>
 
                                                         <!-- ========================================== -->
+                                                        <!-- ⚡ INSTANT RESPONSES TAB (PRIORITY 0)
+                                                             🎯 PURPOSE: Ultra-fast sub-5ms responses
+                                                             🔧 Features: Word-boundary matching, triggers, categories
+                                                             📝 Status: IN DEVELOPMENT - ISOLATED SYSTEM
+                                                             ⚠️  IMPORTANT: Completely separate from Company Q&A
+                                                        -->
+                                                        <!-- ========================================== -->
+                                                        
+                                                        <div id="km-instant-content" class="km-tab-content active p-6">
+                                                            <!-- 🚧 DEVELOPMENT BANNER -->
+                                                            <div class="bg-gradient-to-r from-yellow-100 via-yellow-50 to-blue-100 border-2 border-yellow-400 rounded-lg p-6 mb-6 shadow-lg">
+                                                                <div class="flex items-start">
+                                                                    <div class="flex-shrink-0">
+                                                                        <i class="fas fa-bolt text-yellow-500 text-4xl"></i>
+                                                                    </div>
+                                                                    <div class="ml-4 flex-1">
+                                                                        <h3 class="text-xl font-bold text-gray-900 mb-2">
+                                                                            ⚡ Instant Responses System (Priority 0)
+                                                                        </h3>
+                                                                        <p class="text-sm text-gray-700 mb-3">
+                                                                            <strong>Status:</strong> 🚧 In Development - Isolated System<br>
+                                                                            <strong>Purpose:</strong> Ultra-fast sub-5ms responses using word-boundary matching<br>
+                                                                            <strong>Note:</strong> This is completely separate from Company Q&A and will not affect existing functionality
+                                                                        </p>
+                                                                        <div class="bg-white bg-opacity-50 rounded-lg p-3 border border-yellow-300">
+                                                                            <p class="text-xs text-gray-600 font-mono">
+                                                                                <strong>Container ID:</strong> km-instant-content<br>
+                                                                                <strong>Tab ID:</strong> km-tab-instant<br>
+                                                                                <strong>Backend Status:</strong> ⏳ Not yet connected
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- 📊 PLACEHOLDER CONTENT -->
+                                                            <div class="bg-white border border-gray-200 rounded-lg p-8 text-center">
+                                                                <i class="fas fa-bolt text-6xl text-gray-300 mb-4"></i>
+                                                                <h4 class="text-lg font-semibold text-gray-700 mb-2">Instant Responses Tab - Ready for Backend</h4>
+                                                                <p class="text-sm text-gray-500 mb-4">
+                                                                    This tab is isolated and ready. Backend API routes will be added next.
+                                                                </p>
+                                                                <div class="inline-block bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+                                                                    <p class="text-xs text-blue-800 font-semibold mb-2">✅ Tab Checklist:</p>
+                                                                    <ul class="text-xs text-blue-700 space-y-1">
+                                                                        <li>✅ Tab button added (km-tab-instant)</li>
+                                                                        <li>✅ Content container created (km-instant-content)</li>
+                                                                        <li>✅ Banner shows system is isolated</li>
+                                                                        <li>✅ Set as default active tab</li>
+                                                                        <li>⏳ Backend API routes (next step)</li>
+                                                                        <li>⏳ Load/render functions (next step)</li>
+                                                                        <li>⏳ CRUD modals (next step)</li>
+                                                                    </ul>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- ========================================== -->
                                                         <!-- COMPANY Q&A SUB-TAB 
                                                              📋 Business-specific questions and answers
                                                              🔧 Features: Search, category filter, status management
@@ -2093,7 +2156,7 @@
                                                         <!-- ========================================== -->
                                                         
                                                         <!-- Company Q&A Tab Content - 100% COPIED FROM GLOBAL TRADE CATEGORIES -->
-                                                        <div id="km-company-content" class="km-tab-content active p-6">
+                                                        <div id="km-company-content" class="km-tab-content hidden p-6">
                                                     <!-- V2 System Notice -->
                                                     <div class="bg-gradient-to-r from-purple-100 to-blue-100 border border-purple-200 rounded-lg p-4 mb-6">
                                                         <div class="flex items-center">
@@ -18278,6 +18341,11 @@ Key Metrics:
 
                 // Set appropriate color based on tab
                 switch(tabName) {
+                    case 'instant':
+                        tabBtn.classList.add('border-blue-500', 'text-blue-600');
+                        console.log('⚡ [INSTANT-TAB] Switched to Instant Responses tab');
+                        // Backend will be connected later
+                        break;
                     case 'company':
                         tabBtn.classList.add('border-blue-500', 'text-blue-600');
                         break;
