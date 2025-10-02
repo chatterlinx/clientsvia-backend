@@ -160,6 +160,59 @@ router.get('/:companyId/instant-response-categories', authenticateJWT, validateC
 });
 
 /**
+ * POST /:companyId/instant-response-categories/generate-variations
+ * Generate 8 variations of a trigger phrase
+ * NOTE: Must come BEFORE /:categoryId routes to avoid route collision
+ */
+router.post('/:companyId/instant-response-categories/generate-variations', authenticateJWT, validateCompanyAccess, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { trigger, count = 8 } = req.body;
+
+    if (!trigger) {
+      return res.status(400).json({
+        success: false,
+        error: 'Trigger phrase is required'
+      });
+    }
+
+    console.log(`✨ [AI] Generating ${count} variations for: "${trigger}"`);
+    console.log(`✨ [AI] Variation engine available:`, typeof variationSuggestionEngine);
+
+    // Use existing variation engine with error handling
+    let suggestions;
+    try {
+      suggestions = variationSuggestionEngine.suggestVariations(trigger, [], count);
+      console.log(`✨ [AI] Generated ${suggestions.length} suggestions`);
+    } catch (engineError) {
+      console.error('[AI] Variation engine error:', engineError);
+      // Fallback: return simple variations if engine fails
+      suggestions = [
+        { text: trigger },
+        { text: trigger.toLowerCase() },
+        { text: trigger.charAt(0).toUpperCase() + trigger.slice(1).toLowerCase() }
+      ];
+    }
+
+    // Extract just the text variations
+    const variations = suggestions.map(s => s.text || s);
+
+    res.status(200).json({
+      success: true,
+      data: variations,
+      message: `Generated ${variations.length} variations`
+    });
+  } catch (error) {
+    console.error('[AI] Generate variations error:', error);
+    console.error('[AI] Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate variations'
+    });
+  }
+});
+
+/**
  * GET /:companyId/instant-response-categories/:categoryId
  * Get a specific category with all Q&As
  */
@@ -545,58 +598,6 @@ router.post('/:companyId/instant-response-categories/:categoryId/generate-qnas',
     res.status(500).json({
       success: false,
       error: 'Failed to generate Q&As'
-    });
-  }
-});
-
-/**
- * POST /:companyId/instant-response-categories/generate-variations
- * Generate 8 variations of a trigger phrase
- */
-router.post('/:companyId/instant-response-categories/generate-variations', authenticateJWT, validateCompanyAccess, async (req, res) => {
-  try {
-    const { companyId } = req.params;
-    const { trigger, count = 8 } = req.body;
-
-    if (!trigger) {
-      return res.status(400).json({
-        success: false,
-        error: 'Trigger phrase is required'
-      });
-    }
-
-    console.log(`✨ [AI] Generating ${count} variations for: "${trigger}"`);
-    console.log(`✨ [AI] Variation engine available:`, typeof variationSuggestionEngine);
-
-    // Use existing variation engine with error handling
-    let suggestions;
-    try {
-      suggestions = variationSuggestionEngine.suggestVariations(trigger, [], count);
-      console.log(`✨ [AI] Generated ${suggestions.length} suggestions`);
-    } catch (engineError) {
-      console.error('[AI] Variation engine error:', engineError);
-      // Fallback: return simple variations if engine fails
-      suggestions = [
-        { text: trigger },
-        { text: trigger.toLowerCase() },
-        { text: trigger.charAt(0).toUpperCase() + trigger.slice(1).toLowerCase() }
-      ];
-    }
-
-    // Extract just the text variations
-    const variations = suggestions.map(s => s.text || s);
-
-    res.status(200).json({
-      success: true,
-      data: variations,
-      message: `Generated ${variations.length} variations`
-    });
-  } catch (error) {
-    console.error('[AI] Generate variations error:', error);
-    console.error('[AI] Error stack:', error.stack);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate variations'
     });
   }
 });
