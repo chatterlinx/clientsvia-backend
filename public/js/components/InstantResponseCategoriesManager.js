@@ -781,9 +781,9 @@ class InstantResponseCategoriesManager {
 
     async saveQnAModal() {
         const mainTrigger = document.getElementById('qna-main-trigger').value.trim();
-        const response = document.getElementById('qna-response').value.trim();
+        const responseText = document.getElementById('qna-response').value.trim();
         
-        if (!mainTrigger || !response) {
+        if (!mainTrigger || !responseText) {
             this.showError('Main trigger and response are required');
             return;
         }
@@ -793,10 +793,29 @@ class InstantResponseCategoriesManager {
             ? this.currentVariations 
             : [mainTrigger];
         
+        // Parse responses - check if it's formatted with [Variation 1], [Variation 2], etc.
+        let responses = [];
+        if (responseText.includes('[Variation 1]')) {
+            // AI-generated format with multiple variations
+            responses = responseText
+                .split(/---+/)
+                .map(section => {
+                    // Remove [Variation X] header and trim
+                    return section.replace(/\[Variation \d+\]/g, '').trim();
+                })
+                .filter(r => r.length > 0);
+        } else {
+            // Single response - wrap in array
+            responses = [responseText];
+        }
+        
+        console.log(`💾 Saving Q&A with ${responses.length} response variations`);
+        
         // Build Q&A data
         const qnaData = {
             triggers,
-            response,
+            responses, // ARRAY of responses (1-10 variations)
+            rotationMode: 'random', // Default to random rotation
             enabled: document.getElementById('qna-enabled').value === 'true',
             priority: parseInt(document.getElementById('qna-priority').value),
             notes: document.getElementById('qna-notes').value.trim(),
