@@ -888,6 +888,92 @@ class InstantResponseCategoriesManager {
         console.log(`ℹ️ ${message}`);
         alert(message);
     }
+
+    // ========================================================================
+    // AI RESPONSE SUGGESTION (MULTI-VARIATION)
+    // ========================================================================
+
+    /**
+     * Call backend to suggest MULTIPLE response variations
+     */
+    async suggestAIResponses(categoryName, categoryDescription, mainTrigger, variations) {
+        try {
+            const authToken = this.getAuthToken();
+            const response = await fetch(`/api/company/${this.companyId}/instant-response-categories/suggest-response`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                },
+                body: JSON.stringify({
+                    categoryName,
+                    categoryDescription,
+                    mainTrigger,
+                    variations
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            return result.data?.responses || []; // Returns array of responses
+        } catch (error) {
+            console.error('Error generating AI response variations:', error);
+            this.showError('Failed to generate AI response suggestions');
+            return [];
+        }
+    }
+
+    /**
+     * Handle AI Suggest Response button click
+     * Generates 3 response variations and populates the textarea
+     */
+    async suggestAIResponseForModal() {
+        const mainTrigger = document.getElementById('qna-main-trigger').value.trim();
+        
+        if (!mainTrigger) {
+            this.showError('Please enter a main trigger phrase first');
+            return;
+        }
+        
+        try {
+            const category = this.categories.find(c => c._id === this.currentCategoryId);
+            const categoryName = category?.name || '';
+            const categoryDescription = category?.description || '';
+            
+            console.log('✨ Generating AI response suggestions (3 variations)...');
+            this.showInfo('AI is generating 3 response variations... Please wait.');
+            
+            const suggestedResponses = await this.suggestAIResponses(
+                categoryName,
+                categoryDescription,
+                mainTrigger,
+                this.currentVariations || [mainTrigger]
+            );
+            
+            if (suggestedResponses && suggestedResponses.length > 0) {
+                // Join all 3 responses with separator for user to see all options
+                const formattedResponses = suggestedResponses
+                    .map((r, i) => `[Variation ${i + 1}]\n${r}`)
+                    .join('\n\n---\n\n');
+                
+                document.getElementById('qna-response').value = formattedResponses;
+                
+                this.showSuccess(`Generated ${suggestedResponses.length} response variations! Review and edit as needed.`);
+                
+                console.log('✅ AI suggestions populated into textarea');
+                console.log('📝 Variations:', suggestedResponses);
+            } else {
+                this.showError('AI did not return any response suggestions. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error suggesting AI responses:', error);
+            this.showError('Failed to generate AI response variations');
+        }
+    }
 }
 
 // Export for use in company profile

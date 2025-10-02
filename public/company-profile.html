@@ -1582,8 +1582,16 @@
                                     <textarea id="qna-response" required rows="4"
                                               placeholder="e.g., I completely understand your frustration. Let me help you get this resolved right away."
                                               style="width: 100%; padding: 14px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; resize: vertical; line-height: 1.6;"></textarea>
-                                    <small style="color: #7f8c8d; font-size: 13px; display: block; margin-top: 5px;">
-                                        📝 Keep it natural, empathetic, and action-oriented
+                                    
+                                    <!-- AI SUGGEST RESPONSE BUTTON -->
+                                    <button type="button" onclick="instantResponseCategoriesManager.suggestAIResponseForModal()" 
+                                            style="margin-top: 10px; padding: 10px 20px; border: none; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 8px; font-weight: 700; color: white; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-magic"></i>
+                                        AI Suggest Response (3 variations)
+                                    </button>
+                                    
+                                    <small style="color: #7f8c8d; font-size: 13px; display: block; margin-top: 8px;">
+                                        💡 AI will generate 3 response variations based on your trigger phrase and category
                                     </small>
                                 </div>
                                 
