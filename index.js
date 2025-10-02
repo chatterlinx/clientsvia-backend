@@ -79,6 +79,8 @@ async function loadAllRoutes() {
         // 🚀 V2 PURE SYSTEM: Only V2 Knowledge Management - ALL LEGACY ELIMINATED
         routes.v2KnowledgeManagementRoutes = await loadRouteWithTimeout('./routes/company/v2knowledgeManagement', 'v2KnowledgeManagementRoutes');
         routes.v2KnowledgeSourcePrioritiesRoutes = await loadRouteWithTimeout('./routes/company/v2knowledgeSourcePriorities', 'v2KnowledgeSourcePrioritiesRoutes');
+        // ⚡ V2 INSTANT RESPONSES SYSTEM - Priority 0 Knowledge Tier
+        routes.v2InstantResponsesRoutes = await loadRouteWithTimeout('./routes/company/v2instantResponses', 'v2InstantResponsesRoutes');
         // V2 DELETED: Legacy v2 testing routes - using V2 AI Agent Logic system
         // routes.priorityFlowTestingRoutes = await loadRouteWithTimeout('./routes/company/priorityFlowTesting', 'priorityFlowTestingRoutes');
         // routes.agentTestingRoutes = await loadRouteWithTimeout('./routes/company/agentTesting', 'agentTestingRoutes');
@@ -211,6 +213,8 @@ function registerRoutes(routes) {
     // 🚀 V2 PURE SYSTEM: Only V2 Knowledge Management - ALL LEGACY ELIMINATED
     app.use('/api/company', routes.v2KnowledgeManagementRoutes); // V2: Pure V2 Knowledge Management System (Company Q&A, Trade Q&A, Templates)
     app.use('/api/company', routes.v2KnowledgeSourcePrioritiesRoutes); // V2: Knowledge Source Priorities Management
+    // ⚡ V2 INSTANT RESPONSES SYSTEM - Priority 0 Knowledge Tier (Ultra-fast sub-5ms responses)
+    app.use('/api/v2/company', routes.v2InstantResponsesRoutes); // V2: Instant Responses CRUD, Templates, Matching
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 
