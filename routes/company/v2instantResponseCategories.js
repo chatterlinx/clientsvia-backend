@@ -180,22 +180,43 @@ router.post('/:companyId/instant-response-categories/generate-variations', authe
     console.log(`✨ [AI] Variation engine available:`, typeof variationSuggestionEngine);
 
     // Use existing variation engine with error handling
-    let suggestions;
+    let result;
+    let variations = [];
+    
     try {
-      suggestions = variationSuggestionEngine.suggestVariations(trigger, [], count);
-      console.log(`✨ [AI] Generated ${suggestions.length} suggestions`);
+      // variationSuggestionEngine.suggestVariations returns: { suggestions: [...], metadata: {...} }
+      result = variationSuggestionEngine.suggestVariations(trigger, []);
+      console.log(`✨ [AI] Engine result:`, JSON.stringify(result, null, 2));
+      
+      if (result && result.suggestions && Array.isArray(result.suggestions)) {
+        // Each suggestion is an object like: { text: "...", confidence: 0.8, source: "..." }
+        variations = result.suggestions
+          .slice(0, count) // Take only the requested count
+          .map(s => s.text || s); // Extract just the text
+        
+        console.log(`✨ [AI] Extracted ${variations.length} variations from ${result.suggestions.length} suggestions`);
+      } else {
+        console.warn('[AI] Unexpected result format:', result);
+        throw new Error('Invalid result format from variation engine');
+      }
     } catch (engineError) {
       console.error('[AI] Variation engine error:', engineError);
-      // Fallback: return simple variations if engine fails
-      suggestions = [
-        { text: trigger },
-        { text: trigger.toLowerCase() },
-        { text: trigger.charAt(0).toUpperCase() + trigger.slice(1).toLowerCase() }
-      ];
+      console.error('[AI] Error stack:', engineError.stack);
+      
+      // Fallback: Generate simple variations manually
+      const base = trigger.trim();
+      variations = [
+        base.toLowerCase(),
+        base.toUpperCase(),
+        base.charAt(0).toUpperCase() + base.slice(1).toLowerCase(),
+        base.replace(/\s+/g, ''), // Remove spaces
+        base.split(' ').reverse().join(' '), // Reverse word order
+      ].filter((v, i, arr) => arr.indexOf(v) === i) // Remove duplicates
+       .filter(v => v !== base) // Remove original
+       .slice(0, count);
+      
+      console.log(`✨ [AI] Fallback generated ${variations.length} variations`);
     }
-
-    // Extract just the text variations
-    const variations = suggestions.map(s => s.text || s);
 
     res.status(200).json({
       success: true,
