@@ -19,6 +19,7 @@ const router = express.Router({ mergeParams: true });
 const InstantResponseCategory = require('../../models/InstantResponseCategory');
 const KeywordGenerationService = require('../../services/knowledge/KeywordGenerationService');
 const smartVariationGenerator = require('../../services/smartVariationGenerator');
+const aiResponseSuggestionService = require('../../services/aiResponseSuggestionService');
 const Joi = require('joi');
 const { authenticateJWT } = require('../../middleware/auth');
 
@@ -155,6 +156,59 @@ router.get('/:companyId/instant-response-categories', authenticateJWT, validateC
     res.status(500).json({
       success: false,
       error: 'Failed to load categories'
+    });
+  }
+});
+
+/**
+ * POST /:companyId/instant-response-categories/suggest-response
+ * AI-powered response suggestion based on context
+ * NOTE: Must come BEFORE /:categoryId routes to avoid route collision
+ */
+router.post('/:companyId/instant-response-categories/suggest-response', authenticateJWT, validateCompanyAccess, async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { categoryName, categoryDescription, mainTrigger, variations } = req.body;
+
+    if (!mainTrigger) {
+      return res.status(400).json({
+        success: false,
+        error: 'Main trigger is required'
+      });
+    }
+
+    console.log(`✨ [AI Suggest] Generating response for: "${mainTrigger}"`);
+    console.log(`✨ [AI Suggest] Category: ${categoryName || 'N/A'}`);
+
+    // Get company name for personalization
+    const Company = require('../../models/v2Company');
+    const company = await Company.findById(companyId).select('companyName').lean();
+    const companyName = company?.companyName || '[Company Name]';
+
+    // Generate AI response suggestion
+    const suggestedResponse = aiResponseSuggestionService.suggestResponse({
+      categoryName: categoryName || '',
+      categoryDescription: categoryDescription || '',
+      mainTrigger,
+      variations: variations || [],
+      companyName
+    });
+
+    console.log(`✨ [AI Suggest] Generated: "${suggestedResponse}"`);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        response: suggestedResponse
+      },
+      message: 'AI response generated successfully'
+    });
+  } catch (error) {
+    console.error('[AI Suggest] Error:', error);
+    console.error('[AI Suggest] Stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate AI response suggestion'
     });
   }
 });

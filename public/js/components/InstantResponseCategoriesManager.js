@@ -290,6 +290,37 @@ class InstantResponseCategoriesManager {
         }
     }
 
+    async suggestAIResponse(categoryName, categoryDescription, mainTrigger, variations) {
+        try {
+            const authToken = this.getAuthToken();
+            const response = await fetch(`/api/company/${this.companyId}/instant-response-categories/suggest-response`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                },
+                body: JSON.stringify({
+                    categoryName,
+                    categoryDescription,
+                    mainTrigger,
+                    variations
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            return result.data?.response || '';
+        } catch (error) {
+            console.error('Error generating AI response:', error);
+            this.showError('Failed to generate AI response suggestion');
+            return '';
+        }
+    }
+
     async generateQnAs(categoryId) {
         try {
             const authToken = this.getAuthToken();
@@ -650,6 +681,41 @@ class InstantResponseCategoriesManager {
         } catch (error) {
             console.error('Error generating variations:', error);
             this.showError('Failed to generate variations');
+        }
+    }
+
+    async suggestAIResponseForModal() {
+        const mainTrigger = document.getElementById('qna-main-trigger').value.trim();
+        
+        if (!mainTrigger) {
+            this.showError('Please enter a main trigger phrase first');
+            return;
+        }
+        
+        try {
+            // Get category context
+            const category = this.categories.find(c => c._id === this.currentCategoryId);
+            const categoryName = category?.name || '';
+            const categoryDescription = category?.description || '';
+            
+            console.log('✨ Generating AI response suggestion...');
+            
+            // Call AI suggestion service
+            const suggestedResponse = await this.suggestAIResponse(
+                categoryName,
+                categoryDescription,
+                mainTrigger,
+                this.currentVariations || [mainTrigger]
+            );
+            
+            if (suggestedResponse) {
+                // Auto-fill the response textarea
+                document.getElementById('qna-response').value = suggestedResponse;
+                this.showSuccess('AI response suggestion generated!');
+            }
+        } catch (error) {
+            console.error('Error suggesting AI response:', error);
+            this.showError('Failed to generate AI response');
         }
     }
 
