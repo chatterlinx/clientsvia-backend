@@ -18329,6 +18329,7 @@ Key Metrics:
 
             document.querySelectorAll('.km-tab-content').forEach(content => {
                 content.classList.remove('active');
+                content.classList.add('hidden'); // Add Tailwind hidden class
             });
 
             // Activate selected tab
@@ -18338,6 +18339,7 @@ Key Metrics:
             if (tabBtn && tabContent) {
                 tabBtn.classList.add('active');
                 tabContent.classList.add('active');
+                tabContent.classList.remove('hidden'); // Remove Tailwind hidden class
 
                 // Set appropriate color based on tab
                 switch(tabName) {
