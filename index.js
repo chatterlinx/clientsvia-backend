@@ -110,6 +110,9 @@ async function loadAllRoutes() {
         // Load AI Agent Logic routes for v2 features
         routes.v2AIAgentLogicRoutes = await loadRouteWithTimeout('./routes/company/v2profile-aiagentlogic', 'v2AIAgentLogicRoutes');
         
+        // ⚡ V2 INSTANT RESPONSE CATEGORIES SYSTEM - Priority 0 Knowledge Tier (Category-based organization)
+        routes.v2InstantResponseCategoriesRoutes = await loadRouteWithTimeout('./routes/company/v2instantResponseCategories', 'v2InstantResponseCategoriesRoutes');
+        
         // REMOVED: Legacy V2 AI Intelligence routes - archived to prevent external LLM dependencies
         
         // DELETED: Legacy V2 Trade Categories - replaced by V2 Global Trade Categories system
@@ -215,6 +218,8 @@ function registerRoutes(routes) {
     app.use('/api/company', routes.v2KnowledgeSourcePrioritiesRoutes); // V2: Knowledge Source Priorities Management
     // ⚡ V2 INSTANT RESPONSES SYSTEM - Priority 0 Knowledge Tier (Ultra-fast sub-5ms responses)
     app.use('/api/company', routes.v2InstantResponsesRoutes); // V2: Instant Responses CRUD, Templates, Matching (consistency with other /api/company routes)
+    // ⚡ V2 INSTANT RESPONSE CATEGORIES SYSTEM - Priority 0 Knowledge Tier (Category-based organization with Q&As)
+    app.use('/api/company', routes.v2InstantResponseCategoriesRoutes); // V2: Category CRUD, Q&A management, AI generation
     // app.use('/api/company', routes.agentTestingRoutes); // MODULE 3: AI Agent Testing Console
     // V2 DELETED: Legacy enhancedAgentSettings route mount - used external LLMs, violates in-house AI system
 
