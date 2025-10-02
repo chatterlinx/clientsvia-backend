@@ -528,6 +528,44 @@ class InstantResponseCategoriesManager {
         `;
     }
 
+    renderResponseVariations(qna) {
+        const responses = qna.responses || (qna.response ? [qna.response] : []);
+        
+        if (responses.length === 0) {
+            return '<p style="color: #adb5bd; font-style: italic; font-size: 13px; margin: 0;">No response set</p>';
+        }
+        
+        if (responses.length === 1) {
+            // Single response
+            return `
+                <p style="color: #495057; font-size: 14px; margin: 0; line-height: 1.5;">
+                    → ${this.escapeHtml(responses[0])}
+                </p>
+            `;
+        }
+        
+        // Multiple responses - show all with badges
+        return `
+            <div style="margin-top: 5px;">
+                ${responses.map((resp, idx) => `
+                    <div style="display: flex; align-items: start; gap: 8px; margin-bottom: 5px;">
+                        <span style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 2px;">
+                            ${idx + 1}
+                        </span>
+                        <p style="color: #495057; font-size: 14px; margin: 0; line-height: 1.5; flex: 1;">
+                            ${this.escapeHtml(resp)}
+                        </p>
+                    </div>
+                `).join('')}
+                <div style="margin-top: 8px; padding: 8px; background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border-radius: 6px;">
+                    <small style="color: #667eea; font-weight: 600;">
+                        <i class="fas fa-sync-alt mr-1"></i>${responses.length} response variations - AI rotates for natural conversation
+                    </small>
+                </div>
+            </div>
+        `;
+    }
+
     renderQnA(categoryId, qna) {
         const triggers = qna.triggers || [];
         const mainTrigger = triggers[0] || '';
@@ -545,9 +583,7 @@ class InstantResponseCategoriesManager {
                             ${!qna.enabled ? '<span class="badge badge-secondary">Disabled</span>' : ''}
                             ${qna.timing?.enabled ? '<span class="badge badge-warning"><i class="fas fa-clock mr-1"></i>Timed</span>' : ''}
                         </div>
-                        <p style="color: #495057; font-size: 14px; margin: 0; line-height: 1.5;">
-                            → ${this.escapeHtml(qna.response)}
-                        </p>
+                        ${this.renderResponseVariations(qna)}
                         ${qna.keywords?.length > 0 ? `
                             <div style="margin-top: 8px;">
                                 <small style="color: #6c757d;">

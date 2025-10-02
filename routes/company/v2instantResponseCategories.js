@@ -576,14 +576,27 @@ router.put('/:companyId/instant-response-categories/:categoryId/qnas/:qnaId', au
       });
     }
 
-    // Regenerate keywords if triggers or response changed
+    // Regenerate keywords if triggers or responses changed
     const qna = category.findQnAById(qnaId);
-    if (qna && (updates.triggers || updates.response)) {
+    if (qna && (updates.triggers || updates.responses || updates.response)) {
       const keywordService = new KeywordGenerationService();
       const triggerText = (updates.triggers || qna.triggers).join(' ');
-      const responseText = updates.response || qna.response;
+      
+      // Handle both new (responses array) and legacy (single response) formats
+      let responseText = '';
+      if (updates.responses) {
+        responseText = updates.responses.join(' ');
+      } else if (updates.response) {
+        responseText = updates.response;
+      } else if (qna.responses) {
+        responseText = qna.responses.join(' ');
+      } else if (qna.response) {
+        responseText = qna.response;
+      }
+      
       const generated = await keywordService.generateAdvancedKeywords(triggerText, responseText, { companyId });
       updates.keywords = generated.primary || [];
+      console.log(`🔑 [Q&A] Regenerated ${updates.keywords.length} keywords for update`);
     }
 
     const updatedQnA = category.updateQnA(qnaId, updates);
