@@ -62,7 +62,14 @@ async function validateCompanyAccess(req, res, next) {
 const instantResponseSchema = Joi.object({
   trigger: Joi.string().trim().min(3).max(200).required(),
   response: Joi.string().trim().min(5).max(500).required(),
-  category: Joi.string().valid('hours', 'location', 'pricing', 'services', 'contact', 'booking', 'emergency', 'other').optional(),
+  category: Joi.string().valid(
+    // Conversational AI Personality Categories (Priority 0)
+    'acknowledgment', 'waiting', 'consultation', 'appreciation', 'smalltalk',
+    // Business Information Categories
+    'hours', 'location', 'pricing', 'services', 'contact', 'booking', 'emergency',
+    // Other
+    'other'
+  ).optional(),
   priority: Joi.number().integer().min(0).max(100).optional(),
   enabled: Joi.boolean().optional(),
   notes: Joi.string().trim().allow('').optional()
