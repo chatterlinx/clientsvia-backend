@@ -28,6 +28,17 @@ function verifyToken(req, res, next) {
 
 // Enhanced JWT Authentication with User lookup
 async function authenticateJWT(req, res, next) {
+  // 🚨 TEMPORARY DEV BYPASS - Remove for production
+  if (process.env.SKIP_AUTH === 'true') {
+    console.log('🚨 DEV MODE: Skipping authentication (SKIP_AUTH=true)');
+    const User = require('../models/v2User');
+    const devUser = await User.findOne({ email: 'admin@clientsvia.com' });
+    if (devUser) {
+      req.user = devUser;
+      return next();
+    }
+  }
+  
   const token = getTokenFromRequest(req);
   
   try {

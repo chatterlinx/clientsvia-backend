@@ -23,28 +23,18 @@ async function createAdminUser() {
             console.log('   Role:', existingAdmin.role);
             console.log('   Status:', existingAdmin.status);
             
-            // Ask if they want to reset the password
-            const readline = require('readline');
-            const rl = readline.createInterface({
-                input: process.stdin,
-                output: process.stdout
-            });
-            
-            const answer = await new Promise(resolve => {
-                rl.question('Do you want to reset the password? (y/N): ', resolve);
-            });
-            rl.close();
-            
-            if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
-                const hashedPassword = await bcrypt.hash('admin123', 10);
-                existingAdmin.password = hashedPassword;
-                existingAdmin.status = 'active';
-                await existingAdmin.save();
-                console.log('✅ Admin password reset successfully!');
-                console.log('   Email: admin@clientsvia.com');
-                console.log('   Password: admin123');
-                console.log('   Role: admin');
-            }
+            // Auto-reset password without prompting
+            console.log('🔄 Auto-resetting password...');
+            const hashedPassword = await bcrypt.hash('admin123', 10);
+            existingAdmin.password = hashedPassword;
+            existingAdmin.status = 'active';
+            await existingAdmin.save();
+            console.log('✅ Admin password reset successfully!');
+            console.log('');
+            console.log('📝 Login Credentials:');
+            console.log('   Email: admin@clientsvia.com');
+            console.log('   Password: admin123');
+            console.log('   Role: admin');
             
             await mongoose.disconnect();
             return;
