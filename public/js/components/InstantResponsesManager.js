@@ -147,13 +147,22 @@ class InstantResponsesManager {
                     <div class="filter-group">
                         <select id="categoryFilter" class="form-control">
                             <option value="">All Categories</option>
-                            <option value="hours">Hours</option>
-                            <option value="location">Location</option>
-                            <option value="pricing">Pricing</option>
-                            <option value="services">Services</option>
-                            <option value="contact">Contact</option>
-                            <option value="booking">Booking</option>
-                            <option value="emergency">Emergency</option>
+                            <optgroup label="Conversational (AI Personality)">
+                                <option value="acknowledgment">Acknowledgments</option>
+                                <option value="waiting">Customer Waiting</option>
+                                <option value="consultation">Consultation/Checking</option>
+                                <option value="appreciation">Thanks/Appreciation</option>
+                                <option value="smalltalk">Small Talk</option>
+                            </optgroup>
+                            <optgroup label="Business Information">
+                                <option value="hours">Hours</option>
+                                <option value="location">Location</option>
+                                <option value="pricing">Pricing</option>
+                                <option value="services">Services</option>
+                                <option value="contact">Contact</option>
+                                <option value="booking">Booking</option>
+                                <option value="emergency">Emergency</option>
+                            </optgroup>
                             <option value="other">Other</option>
                         </select>
                     </div>
@@ -228,13 +237,22 @@ class InstantResponsesManager {
                                 <div class="form-group">
                                     <label for="category">Category</label>
                                     <select id="category" class="form-control">
-                                        <option value="hours">Hours</option>
-                                        <option value="location">Location</option>
-                                        <option value="pricing">Pricing</option>
-                                        <option value="services">Services</option>
-                                        <option value="contact">Contact</option>
-                                        <option value="booking">Booking</option>
-                                        <option value="emergency">Emergency</option>
+                                        <optgroup label="Conversational (AI Personality)">
+                                            <option value="acknowledgment">Acknowledgments (okay, sure, yes)</option>
+                                            <option value="waiting">Customer Waiting (hold on, one moment)</option>
+                                            <option value="consultation">Consultation/Checking (ask wife, check with partner)</option>
+                                            <option value="appreciation">Thanks/Appreciation (thank you)</option>
+                                            <option value="smalltalk">Small Talk (how are you, weather)</option>
+                                        </optgroup>
+                                        <optgroup label="Business Information">
+                                            <option value="hours">Hours</option>
+                                            <option value="location">Location</option>
+                                            <option value="pricing">Pricing</option>
+                                            <option value="services">Services</option>
+                                            <option value="contact">Contact</option>
+                                            <option value="booking">Booking</option>
+                                            <option value="emergency">Emergency</option>
+                                        </optgroup>
                                         <option value="other">Other</option>
                                     </select>
                                 </div>
