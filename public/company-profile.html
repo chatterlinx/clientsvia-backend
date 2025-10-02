@@ -18197,6 +18197,10 @@ Key Metrics:
             });
 
             // Knowledge source sub-tabs
+            document.getElementById('km-tab-instant')?.addEventListener('click', () => {
+                this.switchKnowledgeTab('instant');
+            });
+
             document.getElementById('km-tab-company')?.addEventListener('click', () => {
                 this.switchKnowledgeTab('company');
             });
