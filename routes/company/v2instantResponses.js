@@ -128,13 +128,14 @@ router.get('/:companyId/instant-responses', authenticateJWT, validateCompanyAcce
  */
 router.post('/:companyId/instant-responses', authenticateJWT, validateCompanyAccess, validateInstantResponse, async (req, res) => {
   try {
-    const company = req.company;
+    const { companyId } = req.params;
     const { trigger, response, category, priority, enabled, notes } = req.body;
 
-    // Check for duplicate trigger
-    const existingTrigger = company.instantResponses.find(
-      r => r.trigger.toLowerCase() === trigger.toLowerCase()
-    );
+    // Check for duplicate trigger in separate collection
+    const existingTrigger = await InstantResponse.findOne({
+      companyId,
+      trigger: { $regex: new RegExp(`^${trigger}$`, 'i') }
+    });
 
     if (existingTrigger) {
       return res.status(409).json({
@@ -143,33 +144,37 @@ router.post('/:companyId/instant-responses', authenticateJWT, validateCompanyAcc
       });
     }
 
-    // Create new instant response
-    const newResponse = {
+    // Auto-generate keywords from trigger and response
+    const KeywordGenerationService = require('../../services/knowledge/KeywordGenerationService');
+    const keywordService = new KeywordGenerationService();
+    const keywords = await keywordService.generateAdvancedKeywords(trigger, response, { companyId });
+
+    // Create new instant response in separate collection
+    const newResponse = new InstantResponse({
+      companyId,
       trigger,
       response,
       category: category || 'other',
       priority: priority !== undefined ? priority : 50,
       enabled: enabled !== undefined ? enabled : true,
       notes: notes || '',
+      keywords: keywords.primary || [],
       createdAt: new Date(),
       updatedAt: new Date()
-    };
+    });
 
-    company.instantResponses.push(newResponse);
-    await company.save();
-
-    // Get the created response (with _id)
-    const created = company.instantResponses[company.instantResponses.length - 1];
+    const saved = await newResponse.save();
 
     res.status(201).json({
       success: true,
       data: {
-        instantResponse: created,
-        message: 'Instant response created successfully'
+        instantResponse: saved,
+        message: 'Instant response created successfully with auto-generated keywords'
       }
     });
   } catch (error) {
     console.error('[InstantResponses] Create error:', error);
+    console.error('[InstantResponses] Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Failed to create instant response'
@@ -183,16 +188,13 @@ router.post('/:companyId/instant-responses', authenticateJWT, validateCompanyAcc
  */
 router.put('/:companyId/instant-responses/:responseId', authenticateJWT, validateCompanyAccess, validateInstantResponse, async (req, res) => {
   try {
-    const company = req.company;
-    const { responseId } = req.params;
+    const { companyId, responseId } = req.params;
     const { trigger, response, category, priority, enabled, notes } = req.body;
 
-    // Find the response to update
-    const responseIndex = company.instantResponses.findIndex(
-      r => r._id.toString() === responseId
-    );
+    // Find the response to update in separate collection
+    const existingResponse = await InstantResponse.findOne({ _id: responseId, companyId });
 
-    if (responseIndex === -1) {
+    if (!existingResponse) {
       return res.status(404).json({
         success: false,
         error: 'Instant response not found'
@@ -200,41 +202,50 @@ router.put('/:companyId/instant-responses/:responseId', authenticateJWT, validat
     }
 
     // Check for duplicate trigger (excluding current response)
-    const existingTrigger = company.instantResponses.find(
-      r => r._id.toString() !== responseId && 
-           r.trigger.toLowerCase() === trigger.toLowerCase()
-    );
+    const duplicateTrigger = await InstantResponse.findOne({
+      companyId,
+      _id: { $ne: responseId },
+      trigger: { $regex: new RegExp(`^${trigger}$`, 'i') }
+    });
 
-    if (existingTrigger) {
+    if (duplicateTrigger) {
       return res.status(409).json({
         success: false,
         error: 'Another response with this trigger already exists'
       });
     }
 
-    // Update the response
-    company.instantResponses[responseIndex] = {
-      ...company.instantResponses[responseIndex].toObject(),
-      trigger,
-      response,
-      category: category || company.instantResponses[responseIndex].category,
-      priority: priority !== undefined ? priority : company.instantResponses[responseIndex].priority,
-      enabled: enabled !== undefined ? enabled : company.instantResponses[responseIndex].enabled,
-      notes: notes !== undefined ? notes : company.instantResponses[responseIndex].notes,
-      updatedAt: new Date()
-    };
+    // Auto-generate keywords if trigger or response changed
+    let keywords = existingResponse.keywords || [];
+    if (trigger !== existingResponse.trigger || response !== existingResponse.response) {
+      const KeywordGenerationService = require('../../services/knowledge/KeywordGenerationService');
+      const keywordService = new KeywordGenerationService();
+      const generated = await keywordService.generateAdvancedKeywords(trigger, response, { companyId });
+      keywords = generated.primary || [];
+    }
 
-    await company.save();
+    // Update the response
+    existingResponse.trigger = trigger;
+    existingResponse.response = response;
+    existingResponse.category = category || existingResponse.category;
+    existingResponse.priority = priority !== undefined ? priority : existingResponse.priority;
+    existingResponse.enabled = enabled !== undefined ? enabled : existingResponse.enabled;
+    existingResponse.notes = notes !== undefined ? notes : existingResponse.notes;
+    existingResponse.keywords = keywords;
+    existingResponse.updatedAt = new Date();
+
+    const saved = await existingResponse.save();
 
     res.json({
       success: true,
       data: {
-        instantResponse: company.instantResponses[responseIndex],
-        message: 'Instant response updated successfully'
+        instantResponse: saved,
+        message: 'Instant response updated successfully with refreshed keywords'
       }
     });
   } catch (error) {
     console.error('[InstantResponses] Update error:', error);
+    console.error('[InstantResponses] Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Failed to update instant response'
