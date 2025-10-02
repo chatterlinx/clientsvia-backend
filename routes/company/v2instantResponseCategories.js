@@ -177,31 +177,56 @@ router.post('/:companyId/instant-response-categories/generate-variations', authe
     }
 
     console.log(`✨ [AI] Generating ${count} variations for: "${trigger}"`);
-    console.log(`✨ [AI] Variation engine available:`, typeof variationSuggestionEngine);
+    console.log(`✨ [AI] Variation engine type:`, typeof variationSuggestionEngine);
+    console.log(`✨ [AI] Variation engine has suggestVariations:`, typeof variationSuggestionEngine.suggestVariations);
 
-    // Use existing variation engine with error handling
-    let result;
+    // Use existing variation engine with COMPREHENSIVE error handling
     let variations = [];
     
     try {
-      // variationSuggestionEngine.suggestVariations returns: { suggestions: [...], metadata: {...} }
-      result = variationSuggestionEngine.suggestVariations(trigger, []);
-      console.log(`✨ [AI] Engine result:`, JSON.stringify(result, null, 2));
+      console.log(`✨ [AI] CHECKPOINT 1: About to call suggestVariations()`);
       
-      if (result && result.suggestions && Array.isArray(result.suggestions)) {
-        // Each suggestion is an object like: { text: "...", confidence: 0.8, source: "..." }
-        variations = result.suggestions
-          .slice(0, count) // Take only the requested count
-          .map(s => s.text || s); // Extract just the text
-        
-        console.log(`✨ [AI] Extracted ${variations.length} variations from ${result.suggestions.length} suggestions`);
-      } else {
-        console.warn('[AI] Unexpected result format:', result);
-        throw new Error('Invalid result format from variation engine');
+      // variationSuggestionEngine.suggestVariations returns: { suggestions: [...], metadata: {...} }
+      const result = variationSuggestionEngine.suggestVariations(trigger, []);
+      
+      console.log(`✨ [AI] CHECKPOINT 2: Engine returned successfully`);
+      console.log(`✨ [AI] Result type:`, typeof result);
+      console.log(`✨ [AI] Result keys:`, result ? Object.keys(result) : 'null');
+      
+      if (!result) {
+        console.error('[AI] Result is null or undefined!');
+        throw new Error('Engine returned null/undefined');
       }
+      
+      if (!result.suggestions) {
+        console.error('[AI] Result missing suggestions array!', result);
+        throw new Error('Result missing suggestions array');
+      }
+      
+      if (!Array.isArray(result.suggestions)) {
+        console.error('[AI] suggestions is not an array!', typeof result.suggestions);
+        throw new Error('suggestions is not an array');
+      }
+      
+      console.log(`✨ [AI] CHECKPOINT 3: Got ${result.suggestions.length} suggestions`);
+      console.log(`✨ [AI] First suggestion sample:`, result.suggestions[0]);
+      
+      // Each suggestion is an object like: { text: "...", confidence: 0.8, type: "..." }
+      variations = result.suggestions
+        .slice(0, count) // Take only the requested count
+        .map(s => {
+          if (typeof s === 'string') return s;
+          if (s && s.text) return s.text;
+          console.warn('[AI] Unexpected suggestion format:', s);
+          return String(s);
+        });
+      
+      console.log(`✨ [AI] CHECKPOINT 4: Extracted ${variations.length} text variations`);
+      
     } catch (engineError) {
-      console.error('[AI] Variation engine error:', engineError);
-      console.error('[AI] Error stack:', engineError.stack);
+      console.error('❌ [AI] VARIATION ENGINE CRASHED:', engineError.message);
+      console.error('❌ [AI] Error name:', engineError.name);
+      console.error('❌ [AI] Error stack:', engineError.stack);
       
       // Fallback: Generate simple variations manually
       const base = trigger.trim();
