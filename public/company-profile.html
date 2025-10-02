@@ -1518,6 +1518,218 @@
                         </div>
                     </div>
                     
+                    <!-- Add/Edit Q&A Modal (MEGA FORM) -->
+                    <div id="qna-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center; overflow-y: auto; padding: 20px;">
+                        <div style="background: white; border-radius: 16px; max-width: 900px; width: 100%; max-height: 95vh; overflow-y: auto; padding: 40px; box-shadow: 0 25px 80px rgba(0,0,0,0.4);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #f0f0f0;">
+                                <h3 id="qna-modal-title" style="font-size: 28px; font-weight: 800; color: #1a1a1a; margin: 0; display: flex; align-items: center; gap: 12px;">
+                                    <span style="font-size: 32px;">💬</span>
+                                    <span>Add Q&A</span>
+                                </h3>
+                                <button onclick="instantResponseCategoriesManager.closeQnAModal()" style="background: none; border: none; font-size: 32px; color: #999; cursor: pointer; padding: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s;">
+                                    &times;
+                                </button>
+                            </div>
+                            
+                            <form id="qna-form" onsubmit="event.preventDefault(); instantResponseCategoriesManager.saveQnAModal();">
+                                <!-- TRIGGER VARIATIONS SECTION -->
+                                <div style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border: 2px solid #667eea40; border-radius: 12px; padding: 25px; margin-bottom: 25px;">
+                                    <h4 style="font-size: 18px; font-weight: 700; color: #667eea; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-bolt"></i> Trigger Phrases
+                                    </h4>
+                                    
+                                    <div style="margin-bottom: 15px;">
+                                        <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px; font-size: 14px;">
+                                            Main Trigger <span style="color: #e74c3c;">*</span>
+                                        </label>
+                                        <div style="display: flex; gap: 10px;">
+                                            <input type="text" id="qna-main-trigger" required
+                                                   placeholder="e.g., I'm frustrated, please hold, thank you"
+                                                   style="flex: 1; padding: 14px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px; font-weight: 500;">
+                                            <button type="button" onclick="instantResponseCategoriesManager.generateTriggerVariations()" 
+                                                    style="padding: 14px 24px; border: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; font-weight: 700; color: white; cursor: pointer; white-space: nowrap; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);">
+                                                <i class="fas fa-magic mr-2"></i>Generate 8 Variations
+                                            </button>
+                                        </div>
+                                        <small style="color: #7f8c8d; font-size: 13px; display: block; margin-top: 5px;">
+                                            💡 Click "Generate Variations" to auto-create similar phrases
+                                        </small>
+                                    </div>
+                                    
+                                    <div id="variations-container" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 2px dashed #d0d0d0;">
+                                        <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 12px; font-size: 14px;">
+                                            Variations (Click ✏️ to edit, ❌ to remove, or click "+ Add" to add more)
+                                        </label>
+                                        <div id="variations-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+                                            <!-- Variations will be inserted here -->
+                                        </div>
+                                        <button type="button" onclick="instantResponseCategoriesManager.addVariation()" 
+                                                style="padding: 10px 20px; border: 2px dashed #667eea; background: white; border-radius: 8px; font-weight: 600; color: #667eea; cursor: pointer;">
+                                            <i class="fas fa-plus mr-2"></i>Add Variation
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- RESPONSE SECTION -->
+                                <div style="background: #f8f9fa; border: 2px solid #e0e0e0; border-radius: 12px; padding: 25px; margin-bottom: 25px;">
+                                    <h4 style="font-size: 18px; font-weight: 700; color: #2c3e50; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-comment-dots"></i> AI Response
+                                    </h4>
+                                    
+                                    <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px; font-size: 14px;">
+                                        What should AI say? <span style="color: #e74c3c;">*</span>
+                                    </label>
+                                    <textarea id="qna-response" required rows="4"
+                                              placeholder="e.g., I completely understand your frustration. Let me help you get this resolved right away."
+                                              style="width: 100%; padding: 14px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; resize: vertical; line-height: 1.6;"></textarea>
+                                    <small style="color: #7f8c8d; font-size: 13px; display: block; margin-top: 5px;">
+                                        📝 Keep it natural, empathetic, and action-oriented
+                                    </small>
+                                </div>
+                                
+                                <!-- ADVANCED BEHAVIOR (Collapsible) -->
+                                <div id="advanced-section" style="border: 2px solid #ffd70020; border-radius: 12px; margin-bottom: 25px; overflow: hidden;">
+                                    <button type="button" onclick="instantResponseCategoriesManager.toggleAdvanced()" 
+                                            style="width: 100%; padding: 20px 25px; background: linear-gradient(135deg, #ffd70015 0%, #ff850015 100%); border: none; display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                                        <span style="font-size: 16px; font-weight: 700; color: #f39c12; display: flex; align-items: center; gap: 10px;">
+                                            <i class="fas fa-cog"></i> Advanced Behavior (Optional - For Complex Scenarios)
+                                        </span>
+                                        <i id="advanced-toggle-icon" class="fas fa-chevron-down" style="color: #f39c12; font-size: 14px;"></i>
+                                    </button>
+                                    
+                                    <div id="advanced-content" style="display: none; padding: 25px; background: white;">
+                                        <!-- TIMING & FOLLOW-UP -->
+                                        <div style="margin-bottom: 25px;">
+                                            <h5 style="font-size: 16px; font-weight: 700; color: #e67e22; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
+                                                <i class="fas fa-clock"></i> Timing & Follow-Up
+                                            </h5>
+                                            
+                                            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; cursor: pointer;">
+                                                <input type="checkbox" id="qna-timing-enabled" 
+                                                       style="width: 20px; height: 20px; cursor: pointer;">
+                                                <span style="font-weight: 600; color: #2c3e50;">Enable follow-up after silence</span>
+                                            </label>
+                                            
+                                            <div id="timing-options" style="display: none; padding-left: 30px; border-left: 3px solid #e67e22; margin-left: 10px;">
+                                                <div style="display: grid; grid-template-columns: 150px 1fr; gap: 15px; align-items: center; margin-bottom: 15px;">
+                                                    <label style="font-weight: 600; color: #555; font-size: 14px;">Wait Duration:</label>
+                                                    <input type="number" id="qna-wait-seconds" value="90" min="10" max="600"
+                                                           style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+                                                </div>
+                                                
+                                                <div style="margin-bottom: 15px;">
+                                                    <label style="display: block; font-weight: 600; color: #555; margin-bottom: 8px; font-size: 14px;">Follow-up Message:</label>
+                                                    <textarea id="qna-followup-message" rows="2" placeholder="e.g., Excuse me, are you ready? I'm still here to help!"
+                                                              style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;"></textarea>
+                                                </div>
+                                                
+                                                <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; cursor: pointer;">
+                                                    <input type="checkbox" id="qna-second-followup" 
+                                                           style="width: 18px; height: 18px; cursor: pointer;">
+                                                    <span style="font-weight: 600; color: #2c3e50; font-size: 14px;">Enable 2nd follow-up</span>
+                                                </label>
+                                                
+                                                <div id="second-followup-options" style="display: none; margin-left: 28px;">
+                                                    <div style="display: grid; grid-template-columns: 150px 1fr; gap: 15px; align-items: center; margin-bottom: 15px;">
+                                                        <label style="font-weight: 600; color: #555; font-size: 14px;">Wait Duration:</label>
+                                                        <input type="number" id="qna-second-wait" value="120" min="10" max="600"
+                                                               style="padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+                                                    </div>
+                                                    
+                                                    <div>
+                                                        <label style="display: block; font-weight: 600; color: #555; margin-bottom: 8px; font-size: 14px;">2nd Follow-up Message:</label>
+                                                        <textarea id="qna-second-message" rows="2" placeholder="e.g., I'm still here whenever you're ready!"
+                                                                  style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;"></textarea>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- CONTEXT AWARENESS -->
+                                        <div style="margin-bottom: 25px;">
+                                            <h5 style="font-size: 16px; font-weight: 700; color: #3498db; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
+                                                <i class="fas fa-brain"></i> Context Awareness
+                                            </h5>
+                                            
+                                            <label style="display: flex; align-items: start; gap: 12px; cursor: pointer; padding: 15px; background: #ecf0f1; border-radius: 8px;">
+                                                <input type="checkbox" id="qna-context-aware" 
+                                                       style="width: 20px; height: 20px; cursor: pointer; margin-top: 2px;">
+                                                <div>
+                                                    <span style="font-weight: 600; color: #2c3e50; display: block; margin-bottom: 5px;">Remember conversation context</span>
+                                                    <small style="color: #7f8c8d; font-size: 13px; line-height: 1.5;">
+                                                        AI will personalize this response based on what was discussed earlier in the conversation
+                                                        <br>Example: If discussing pricing, AI might say "Take your time reviewing the pricing..."
+                                                    </small>
+                                                </div>
+                                            </label>
+                                        </div>
+                                        
+                                        <!-- PRIORITY -->
+                                        <div>
+                                            <h5 style="font-size: 16px; font-weight: 700; color: #9b59b6; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
+                                                <i class="fas fa-sort-amount-down"></i> Priority
+                                            </h5>
+                                            
+                                            <div style="background: #ecf0f1; border-radius: 8px; padding: 15px;">
+                                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 14px;">
+                                                    Match Priority: <span id="qna-priority-display" style="color: #9b59b6; font-size: 18px;">50</span>
+                                                </label>
+                                                <input type="range" id="qna-priority" min="1" max="100" value="50" 
+                                                       style="width: 100%; height: 8px; cursor: pointer;">
+                                                <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                                                    <small style="color: #7f8c8d; font-size: 12px;">Low (checked last)</small>
+                                                    <small style="color: #7f8c8d; font-size: 12px;">High (checked first)</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- STATUS & NOTES -->
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
+                                    <div>
+                                        <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px; font-size: 14px;">
+                                            Status
+                                        </label>
+                                        <select id="qna-enabled" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; cursor: pointer;">
+                                            <option value="true">✅ Enabled (Active)</option>
+                                            <option value="false">❌ Disabled (Inactive)</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div>
+                                        <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px; font-size: 14px;">
+                                            Keywords <small style="color: #95a5a6; font-weight: 400;">(Auto-generated)</small>
+                                        </label>
+                                        <div id="qna-keywords-display" style="padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; background: #f8f9fa; min-height: 48px; font-size: 13px; color: #7f8c8d; display: flex; align-items: center;">
+                                            Keywords will be generated automatically
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div style="margin-bottom: 25px;">
+                                    <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px; font-size: 14px;">
+                                        Notes <small style="color: #95a5a6; font-weight: 400;">(Optional - Internal use only)</small>
+                                    </label>
+                                    <textarea id="qna-notes" rows="2" placeholder="Any special instructions or notes about this Q&A..."
+                                              style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; resize: vertical;"></textarea>
+                                </div>
+                                
+                                <!-- SUBMIT BUTTONS -->
+                                <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 20px; border-top: 2px solid #f0f0f0;">
+                                    <button type="button" onclick="instantResponseCategoriesManager.closeQnAModal()"
+                                            style="padding: 14px 28px; border: 2px solid #e0e0e0; background: white; border-radius: 8px; font-weight: 600; color: #7f8c8d; cursor: pointer; font-size: 15px;">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" id="save-qna-btn"
+                                            style="padding: 14px 32px; border: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; font-weight: 700; color: white; cursor: pointer; font-size: 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);">
+                                        <i class="fas fa-save mr-2"></i>Save Q&A
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    
                     <!-- Add/Edit Placeholder Modal -->
                     <div id="placeholder-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
                         <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
@@ -14360,6 +14572,37 @@ Key Metrics:
     <script src="/js/components/CompanyQnAManager.js"></script>
     <script src="/js/components/InstantResponsesManager.js"></script>
     <script src="/js/components/InstantResponseCategoriesManager.js"></script>
+    
+    <!-- Q&A Modal Event Listeners -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Priority slider live update
+            const prioritySlider = document.getElementById('qna-priority');
+            const priorityDisplay = document.getElementById('qna-priority-display');
+            if (prioritySlider) {
+                prioritySlider.addEventListener('input', function() {
+                    priorityDisplay.textContent = this.value;
+                });
+            }
+            
+            // Timing checkbox toggles
+            const timingCheckbox = document.getElementById('qna-timing-enabled');
+            const timingOptions = document.getElementById('timing-options');
+            if (timingCheckbox) {
+                timingCheckbox.addEventListener('change', function() {
+                    timingOptions.style.display = this.checked ? 'block' : 'none';
+                });
+            }
+            
+            const secondFollowupCheckbox = document.getElementById('qna-second-followup');
+            const secondFollowupOptions = document.getElementById('second-followup-options');
+            if (secondFollowupCheckbox) {
+                secondFollowupCheckbox.addEventListener('change', function() {
+                    secondFollowupOptions.style.display = this.checked ? 'block' : 'none';
+                });
+            }
+        });
+    </script>
     
     <script src="/js/company-profile-modern.js?v=2.21"></script>
 

@@ -545,17 +545,228 @@ class InstantResponseCategoriesManager {
     }
 
     // ========================================================================
-    // Q&A MODAL HANDLERS (Stub for Phase 2)
+    // Q&A MODAL HANDLERS
     // ========================================================================
 
     openAddQnAModal(categoryId) {
-        this.showInfo('Q&A modal coming in Phase 2! 🚀');
-        console.log(`Opening Add Q&A modal for category: ${categoryId}`);
+        this.currentCategory = this.categories.find(c => c._id === categoryId);
+        this.currentQnA = null;
+        this.currentVariations = [];
+        
+        document.getElementById('qna-modal-title').innerHTML = '<span style="font-size: 32px;">💬</span><span>Add Q&A</span>';
+        this.resetQnAForm();
+        document.getElementById('qna-modal').style.display = 'flex';
     }
 
     openEditQnAModal(categoryId, qnaId) {
-        this.showInfo('Q&A editing coming in Phase 2! 🚀');
-        console.log(`Opening Edit Q&A modal for category: ${categoryId}, Q&A: ${qnaId}`);
+        this.currentCategory = this.categories.find(c => c._id === categoryId);
+        this.currentQnA = this.currentCategory?.qnas.find(q => q.id === qnaId);
+        
+        if (!this.currentQnA) {
+            this.showError('Q&A not found');
+            return;
+        }
+        
+        document.getElementById('qna-modal-title').innerHTML = '<span style="font-size: 32px;">✏️</span><span>Edit Q&A</span>';
+        this.populateQnAForm(this.currentQnA);
+        document.getElementById('qna-modal').style.display = 'flex';
+    }
+
+    closeQnAModal() {
+        document.getElementById('qna-modal').style.display = 'none';
+        this.currentCategory = null;
+        this.currentQnA = null;
+        this.currentVariations = [];
+    }
+
+    resetQnAForm() {
+        document.getElementById('qna-main-trigger').value = '';
+        document.getElementById('qna-response').value = '';
+        document.getElementById('qna-enabled').value = 'true';
+        document.getElementById('qna-notes').value = '';
+        document.getElementById('qna-priority').value = '50';
+        document.getElementById('qna-priority-display').textContent = '50';
+        document.getElementById('qna-timing-enabled').checked = false;
+        document.getElementById('qna-context-aware').checked = false;
+        document.getElementById('variations-container').style.display = 'none';
+        document.getElementById('variations-list').innerHTML = '';
+        document.getElementById('qna-keywords-display').textContent = 'Keywords will be generated automatically';
+        this.currentVariations = [];
+    }
+
+    populateQnAForm(qna) {
+        document.getElementById('qna-main-trigger').value = qna.triggers[0] || '';
+        document.getElementById('qna-response').value = qna.response || '';
+        document.getElementById('qna-enabled').value = qna.enabled ? 'true' : 'false';
+        document.getElementById('qna-notes').value = qna.notes || '';
+        document.getElementById('qna-priority').value = qna.priority || 50;
+        document.getElementById('qna-priority-display').textContent = qna.priority || 50;
+        document.getElementById('qna-context-aware').checked = qna.contextAware || false;
+        
+        // Load variations
+        this.currentVariations = [...qna.triggers];
+        if (this.currentVariations.length > 1) {
+            this.renderVariations();
+        }
+        
+        // Load timing settings
+        if (qna.timing?.enabled) {
+            document.getElementById('qna-timing-enabled').checked = true;
+            document.getElementById('qna-wait-seconds').value = qna.timing.waitSeconds || 90;
+            document.getElementById('qna-followup-message').value = qna.timing.followUpMessage || '';
+            document.getElementById('timing-options').style.display = 'block';
+            
+            if (qna.timing.secondFollowUp?.enabled) {
+                document.getElementById('qna-second-followup').checked = true;
+                document.getElementById('qna-second-wait').value = qna.timing.secondFollowUp.waitSeconds || 120;
+                document.getElementById('qna-second-message').value = qna.timing.secondFollowUp.message || '';
+                document.getElementById('second-followup-options').style.display = 'block';
+            }
+        }
+        
+        // Display keywords
+        if (qna.keywords && qna.keywords.length > 0) {
+            const keywordsHtml = qna.keywords.slice(0, 5).map(k => `<span class="badge badge-primary">${this.escapeHtml(k)}</span>`).join(' ');
+            document.getElementById('qna-keywords-display').innerHTML = keywordsHtml;
+        }
+    }
+
+    async generateTriggerVariations() {
+        const mainTrigger = document.getElementById('qna-main-trigger').value.trim();
+        
+        if (!mainTrigger) {
+            this.showError('Please enter a main trigger phrase first');
+            return;
+        }
+        
+        try {
+            const variations = await this.generateVariations(mainTrigger);
+            
+            // Start with main trigger, add variations
+            this.currentVariations = [mainTrigger, ...variations.filter(v => v !== mainTrigger)];
+            this.renderVariations();
+            
+            this.showSuccess(`Generated ${variations.length} variations!`);
+        } catch (error) {
+            console.error('Error generating variations:', error);
+            this.showError('Failed to generate variations');
+        }
+    }
+
+    renderVariations() {
+        const container = document.getElementById('variations-container');
+        const list = document.getElementById('variations-list');
+        
+        if (this.currentVariations.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'block';
+        list.innerHTML = this.currentVariations.map((v, idx) => `
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px; background: white; border: 2px solid #e0e0e0; border-radius: 8px;">
+                <span style="flex: 1; font-size: 15px; color: #2c3e50; font-weight: 500;">${this.escapeHtml(v)}</span>
+                <button type="button" onclick="instantResponseCategoriesManager.editVariation(${idx})" 
+                        style="padding: 6px 12px; border: none; background: #3498db; border-radius: 6px; color: white; cursor: pointer; font-size: 13px;">
+                    ✏️ Edit
+                </button>
+                <button type="button" onclick="instantResponseCategoriesManager.removeVariation(${idx})" 
+                        style="padding: 6px 12px; border: none; background: #e74c3c; border-radius: 6px; color: white; cursor: pointer; font-size: 13px;">
+                    ❌ Remove
+                </button>
+            </div>
+        `).join('');
+    }
+
+    addVariation() {
+        const newVariation = prompt('Enter a new variation:');
+        if (newVariation && newVariation.trim()) {
+            this.currentVariations.push(newVariation.trim());
+            this.renderVariations();
+        }
+    }
+
+    editVariation(index) {
+        const current = this.currentVariations[index];
+        const updated = prompt('Edit variation:', current);
+        if (updated && updated.trim()) {
+            this.currentVariations[index] = updated.trim();
+            this.renderVariations();
+        }
+    }
+
+    removeVariation(index) {
+        this.currentVariations.splice(index, 1);
+        this.renderVariations();
+    }
+
+    toggleAdvanced() {
+        const content = document.getElementById('advanced-content');
+        const icon = document.getElementById('advanced-toggle-icon');
+        
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            icon.className = 'fas fa-chevron-up';
+        } else {
+            content.style.display = 'none';
+            icon.className = 'fas fa-chevron-down';
+        }
+    }
+
+    async saveQnAModal() {
+        const mainTrigger = document.getElementById('qna-main-trigger').value.trim();
+        const response = document.getElementById('qna-response').value.trim();
+        
+        if (!mainTrigger || !response) {
+            this.showError('Main trigger and response are required');
+            return;
+        }
+        
+        // Build triggers array
+        const triggers = this.currentVariations.length > 0 
+            ? this.currentVariations 
+            : [mainTrigger];
+        
+        // Build Q&A data
+        const qnaData = {
+            triggers,
+            response,
+            enabled: document.getElementById('qna-enabled').value === 'true',
+            priority: parseInt(document.getElementById('qna-priority').value),
+            notes: document.getElementById('qna-notes').value.trim(),
+            contextAware: document.getElementById('qna-context-aware').checked
+        };
+        
+        // Add timing if enabled
+        if (document.getElementById('qna-timing-enabled').checked) {
+            qnaData.timing = {
+                enabled: true,
+                waitSeconds: parseInt(document.getElementById('qna-wait-seconds').value),
+                followUpMessage: document.getElementById('qna-followup-message').value.trim()
+            };
+            
+            if (document.getElementById('qna-second-followup').checked) {
+                qnaData.timing.secondFollowUp = {
+                    enabled: true,
+                    waitSeconds: parseInt(document.getElementById('qna-second-wait').value),
+                    message: document.getElementById('qna-second-message').value.trim()
+                };
+            }
+        }
+        
+        try {
+            if (this.currentQnA) {
+                // Update existing
+                await this.updateQnA(this.currentCategory._id, this.currentQnA.id, qnaData);
+            } else {
+                // Create new
+                await this.addQnA(this.currentCategory._id, qnaData);
+            }
+            
+            this.closeQnAModal();
+        } catch (error) {
+            // Error already shown in API call
+        }
     }
 
     async handleDeleteQnA(categoryId, qnaId) {
@@ -567,8 +778,19 @@ class InstantResponseCategoriesManager {
     }
 
     async handleGenerateQnAs(categoryId) {
-        this.showInfo('AI generation coming in Phase 2! 🚀');
-        console.log(`Generating Q&As for category: ${categoryId}`);
+        if (!confirm('Generate 10 AI-suggested Q&As based on this category? This may take a few seconds.')) {
+            return;
+        }
+        
+        try {
+            const suggestions = await this.generateQnAs(categoryId);
+            this.showSuccess(`Generated ${suggestions.length} Q&A suggestions! Review and save the ones you like.`);
+            
+            // TODO: Display suggestions in a preview modal
+            console.log('Generated suggestions:', suggestions);
+        } catch (error) {
+            this.showError('Failed to generate Q&As');
+        }
     }
 
     // ========================================================================
