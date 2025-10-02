@@ -18308,7 +18308,9 @@ Key Metrics:
                         tabBtn.classList.add('border-blue-500', 'text-blue-600');
                         console.log('⚡ [INSTANT-TAB] Switched to Instant Responses tab');
                         // Initialize Instant Responses Manager if not already done
-                        this.initializeInstantResponsesManager();
+                        if (typeof initializeInstantResponsesManager === 'function') {
+                            initializeInstantResponsesManager();
+                        }
                         break;
                     case 'company':
                         tabBtn.classList.add('border-blue-500', 'text-blue-600');
@@ -21965,11 +21967,19 @@ Key Metrics:
      * 🎯 Initializes the InstantResponsesManager component for ultra-fast sub-5ms responses
      * 📋 This is the frontend manager for the Priority 0 knowledge tier
      */
-    initializeInstantResponsesManager() {
+    function initializeInstantResponsesManager() {
+        // Get company ID from URL or window
+        const companyId = getCurrentCompanyId() || window.companyId;
+        
+        if (!companyId) {
+            console.error('❌ No company ID available for InstantResponsesManager');
+            return;
+        }
+        
         // Check if already initialized
         if (window.instantResponsesManager) {
             console.log('⚡ InstantResponsesManager already initialized, setting company ID');
-            window.instantResponsesManager.setCompanyId(this.companyId);
+            window.instantResponsesManager.setCompanyId(companyId);
             return;
         }
 
@@ -21980,7 +21990,7 @@ Key Metrics:
         }
 
         try {
-            console.log('⚡ Initializing InstantResponsesManager for company:', this.companyId);
+            console.log('⚡ Initializing InstantResponsesManager for company:', companyId);
             
             // Create API client stub (the manager will use fetch directly)
             const apiClient = {
@@ -22010,7 +22020,7 @@ Key Metrics:
             );
 
             // Set the company ID
-            window.instantResponsesManager.setCompanyId(this.companyId);
+            window.instantResponsesManager.setCompanyId(companyId);
 
             console.log('✅ InstantResponsesManager initialized successfully');
         } catch (error) {
