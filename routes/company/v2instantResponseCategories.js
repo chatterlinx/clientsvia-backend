@@ -566,12 +566,25 @@ router.post('/:companyId/instant-response-categories/generate-variations', authe
     }
 
     console.log(`✨ [AI] Generating ${count} variations for: "${trigger}"`);
+    console.log(`✨ [AI] Variation engine available:`, typeof variationSuggestionEngine);
 
-    // Use existing variation engine
-    const suggestions = variationSuggestionEngine.suggestVariations(trigger, [], count);
+    // Use existing variation engine with error handling
+    let suggestions;
+    try {
+      suggestions = variationSuggestionEngine.suggestVariations(trigger, [], count);
+      console.log(`✨ [AI] Generated ${suggestions.length} suggestions`);
+    } catch (engineError) {
+      console.error('[AI] Variation engine error:', engineError);
+      // Fallback: return simple variations if engine fails
+      suggestions = [
+        { text: trigger },
+        { text: trigger.toLowerCase() },
+        { text: trigger.charAt(0).toUpperCase() + trigger.slice(1).toLowerCase() }
+      ];
+    }
 
     // Extract just the text variations
-    const variations = suggestions.map(s => s.text);
+    const variations = suggestions.map(s => s.text || s);
 
     res.status(200).json({
       success: true,
@@ -580,6 +593,7 @@ router.post('/:companyId/instant-response-categories/generate-variations', authe
     });
   } catch (error) {
     console.error('[AI] Generate variations error:', error);
+    console.error('[AI] Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Failed to generate variations'
