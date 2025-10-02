@@ -22089,7 +22089,7 @@ Key Metrics:
      * 🎯 Initializes the InstantResponsesManager component for ultra-fast sub-5ms responses
      * 📋 This is the frontend manager for the Priority 0 knowledge tier
      */
-    function initializeInstantResponsesManager() {
+    async function initializeInstantResponsesManager() {
         // Get company ID from URL or window
         const companyId = getCurrentCompanyId() || window.companyId;
         
