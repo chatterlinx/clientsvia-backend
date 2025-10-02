@@ -19,36 +19,48 @@
 
 class AIResponseSuggestionService {
   /**
-   * Generate AI response suggestion based on context
+   * Generate MULTIPLE AI response variations based on context
+   * Returns 3-5 variations to avoid sounding robotic
    * @param {Object} context - Context for generation
    * @param {String} context.categoryName - Category name
    * @param {String} context.categoryDescription - Category description
    * @param {String} context.mainTrigger - Main trigger phrase
    * @param {Array} context.variations - Trigger variations
    * @param {String} context.companyName - Company name (optional)
-   * @returns {String} - Suggested response
+   * @param {Number} context.count - Number of variations to generate (default: 3)
+   * @returns {Array} - Array of suggested responses
    */
-  suggestResponse(context) {
+  suggestResponses(context) {
     const {
       categoryName = '',
       categoryDescription = '',
       mainTrigger = '',
       variations = [],
-      companyName = '[Company Name]'
+      companyName = '[Company Name]',
+      count = 3
     } = context;
 
-    console.log(`[AI Suggest] Generating response for trigger: "${mainTrigger}"`);
+    console.log(`[AI Suggest] Generating ${count} response variations for: "${mainTrigger}"`);
     console.log(`[AI Suggest] Category: ${categoryName}`);
 
     // Detect intent from trigger and category
     const intent = this.detectIntent(mainTrigger, categoryName, categoryDescription);
     console.log(`[AI Suggest] Detected intent: ${intent}`);
 
-    // Generate response based on intent
-    const response = this.generateResponseForIntent(intent, mainTrigger, categoryDescription, companyName);
+    // Generate multiple response variations
+    const responses = this.generateResponseVariationsForIntent(intent, mainTrigger, categoryDescription, companyName, count);
 
-    console.log(`[AI Suggest] Generated response: "${response}"`);
-    return response;
+    console.log(`[AI Suggest] Generated ${responses.length} variations`);
+    return responses;
+  }
+
+  /**
+   * Generate SINGLE response (for backwards compatibility)
+   * @deprecated Use suggestResponses() instead for multi-variation support
+   */
+  suggestResponse(context) {
+    const responses = this.suggestResponses({ ...context, count: 1 });
+    return responses[0] || "I'm here to help!";
   }
 
   /**
@@ -113,9 +125,29 @@ class AIResponseSuggestionService {
   }
 
   /**
-   * Generate response based on detected intent
+   * Generate MULTIPLE response variations for intent (NEW)
+   */
+  generateResponseVariationsForIntent(intent, trigger, description, companyName, count = 3) {
+    const allResponses = this.getAllResponsesForIntent(intent, companyName);
+    
+    // Shuffle and return requested count
+    const shuffled = allResponses.sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, Math.min(count, allResponses.length));
+  }
+
+  /**
+   * Generate SINGLE response (legacy method)
+   * @deprecated
    */
   generateResponseForIntent(intent, trigger, description, companyName) {
+    const responses = this.getAllResponsesForIntent(intent, companyName);
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  /**
+   * Get all available responses for an intent
+   */
+  getAllResponsesForIntent(intent, companyName = '[Company Name]') {
     const responses = {
       greeting: [
         `Hi! How can I help you today?`,
@@ -184,11 +216,8 @@ class AIResponseSuggestionService {
     // Get responses for this intent
     const intentResponses = responses[intent] || responses.acknowledgment;
     
-    // Pick a random response for variety
-    const selectedResponse = intentResponses[Math.floor(Math.random() * intentResponses.length)];
-    
-    // Replace company name placeholder if present
-    return selectedResponse.replace('[Company Name]', companyName);
+    // Replace company name placeholder in all responses
+    return intentResponses.map(r => r.replace(/\[Company Name\]/g, companyName));
   }
 
   /**

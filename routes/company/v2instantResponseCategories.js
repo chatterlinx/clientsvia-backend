@@ -185,23 +185,25 @@ router.post('/:companyId/instant-response-categories/suggest-response', authenti
     const company = await Company.findById(companyId).select('companyName').lean();
     const companyName = company?.companyName || '[Company Name]';
 
-    // Generate AI response suggestion
-    const suggestedResponse = aiResponseSuggestionService.suggestResponse({
+    // Generate MULTIPLE AI response variations (3-5)
+    const suggestedResponses = aiResponseSuggestionService.suggestResponses({
       categoryName: categoryName || '',
       categoryDescription: categoryDescription || '',
       mainTrigger,
       variations: variations || [],
-      companyName
+      companyName,
+      count: 3 // Generate 3 variations by default
     });
 
-    console.log(`✨ [AI Suggest] Generated: "${suggestedResponse}"`);
+    console.log(`✨ [AI Suggest] Generated ${suggestedResponses.length} variations`);
+    console.log(`✨ [AI Suggest] First: "${suggestedResponses[0]}"`);
 
     res.status(200).json({
       success: true,
       data: {
-        response: suggestedResponse
+        responses: suggestedResponses
       },
-      message: 'AI response generated successfully'
+      message: `Generated ${suggestedResponses.length} response variations`
     });
   } catch (error) {
     console.error('[AI Suggest] Error:', error);

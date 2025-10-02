@@ -39,13 +39,25 @@ const QnASchema = new mongoose.Schema({
     }
   },
 
-  // 💬 RESPONSE - What AI says when triggered
-  response: {
-    type: String,
+  // 💬 RESPONSE VARIATIONS - Multiple responses to avoid sounding robotic
+  // AI will rotate/randomize between these for natural conversation
+  responses: {
+    type: [String],
     required: true,
-    trim: true,
-    minlength: 5,
-    maxlength: 500
+    validate: {
+      validator: function(arr) {
+        return arr && arr.length > 0 && arr.length <= 10 &&
+               arr.every(r => r && r.trim().length >= 5 && r.trim().length <= 500);
+      },
+      message: 'Must have 1-10 responses, each 5-500 characters'
+    }
+  },
+
+  // 🔄 ROTATION MODE - How to select response variation
+  rotationMode: {
+    type: String,
+    enum: ['random', 'sequential', 'weighted'],
+    default: 'random'
   },
 
   // 🔑 KEYWORDS - Auto-generated for fast matching
@@ -274,7 +286,7 @@ InstantResponseCategorySchema.index({ companyId: 1, enabled: 1 });
 // Text index for searching triggers and responses
 InstantResponseCategorySchema.index({ 
   'qnas.triggers': 'text', 
-  'qnas.response': 'text',
+  'qnas.responses': 'text',
   name: 'text',
   description: 'text'
 });
@@ -380,6 +392,76 @@ InstantResponseCategorySchema.statics.searchQnAs = async function(companyId, sea
     companyId,
     $text: { $search: searchTerm }
   }).lean();
+};
+
+// ============================================================================
+// Q&A HELPER METHODS
+// ============================================================================
+
+/**
+ * 🎲 Select a response variation intelligently
+ * Avoids repetition by tracking recently used responses within a call session
+ * 
+ * @param {Object} qna - Q&A object with responses array
+ * @param {Array} recentlyUsed - Array of recently used response indices (optional)
+ * @returns {String} - Selected response
+ */
+QnASchema.methods.selectResponse = function(recentlyUsed = []) {
+  if (!this.responses || this.responses.length === 0) {
+    return "I'm here to help!"; // Emergency fallback
+  }
+
+  // If only one response, return it
+  if (this.responses.length === 1) {
+    return this.responses[0];
+  }
+
+  // Filter out recently used responses (if within same call)
+  const availableIndices = [];
+  for (let i = 0; i < this.responses.length; i++) {
+    if (!recentlyUsed.includes(i)) {
+      availableIndices.push(i);
+    }
+  }
+
+  // If all responses were used recently, reset and use any
+  const indicesToChooseFrom = availableIndices.length > 0 
+    ? availableIndices 
+    : Array.from({ length: this.responses.length }, (_, i) => i);
+
+  // Select based on rotation mode
+  let selectedIndex;
+  
+  switch (this.rotationMode) {
+    case 'sequential':
+      // Use the next one in sequence
+      const lastUsed = recentlyUsed[recentlyUsed.length - 1] || -1;
+      selectedIndex = (lastUsed + 1) % this.responses.length;
+      break;
+      
+    case 'weighted':
+      // Prefer responses that haven't been used as much (future enhancement)
+      selectedIndex = indicesToChooseFrom[0];
+      break;
+      
+    case 'random':
+    default:
+      // Random selection from available responses
+      selectedIndex = indicesToChooseFrom[Math.floor(Math.random() * indicesToChooseFrom.length)];
+      break;
+  }
+
+  return this.responses[selectedIndex];
+};
+
+/**
+ * 🎯 Get a specific response by index (for testing/debugging)
+ */
+QnASchema.methods.getResponseByIndex = function(index) {
+  if (index >= 0 && index < this.responses.length) {
+    return this.responses[index];
+  }
+  return this.responses[0]; // Default to first
 };
 
 // ============================================================================
