@@ -19,6 +19,48 @@
  */
 
 module.exports = {
+  // === GREETINGS & HELLOS ===
+  greeting: {
+    canonical: 'greeting',
+    variations: [
+      'hi',
+      'hello',
+      'hey',
+      'hiya',
+      'heya',
+      'good morning',
+      'good afternoon',
+      'good evening',
+      'morning',
+      'afternoon',
+      'evening',
+      'howdy',
+      'hey there',
+      'hi there',
+      'hello there',
+      'sup',
+      'what\'s up',
+      'whats up',
+      'wassup',
+      'yo',
+      'alo',
+      'allo',
+      'ello',
+      'hullo',
+      'oi',
+      'greetings',
+      'good day',
+      'gday',
+      'g\'day',
+      'yello',
+      'hola',
+      'bonjour',
+      'ciao',
+      'salutations',
+      'welcome'
+    ]
+  },
+
   // === HOURS & SCHEDULING ===
   hours: {
     canonical: 'hours',
@@ -383,6 +425,143 @@ module.exports = {
       'asap',
       'soon',
       'later'
+    ]
+  },
+
+  // === THANK YOU & GRATITUDE ===
+  thanks: {
+    canonical: 'thanks',
+    variations: [
+      'thanks',
+      'thank you',
+      'thank you so much',
+      'thanks so much',
+      'thank you very much',
+      'many thanks',
+      'thx',
+      'thanx',
+      'ty',
+      'appreciate it',
+      'appreciate that',
+      'i appreciate it',
+      'much appreciated',
+      'grateful',
+      'thankful',
+      'cheers',
+      'thanks a lot',
+      'thanks a bunch'
+    ]
+  },
+
+  // === PLEASE HOLD / WAIT ===
+  wait: {
+    canonical: 'wait',
+    variations: [
+      'please hold',
+      'hold on',
+      'hold please',
+      'one moment',
+      'just a moment',
+      'one second',
+      'one sec',
+      'wait',
+      'wait please',
+      'hang on',
+      'give me a second',
+      'give me a moment',
+      'bear with me',
+      'just a sec',
+      'hold tight',
+      'standby',
+      'stay on the line'
+    ]
+  },
+
+  // === FRUSTRATION / UPSET ===
+  frustrated: {
+    canonical: 'frustrated',
+    variations: [
+      'frustrated',
+      'frustrating',
+      'frustration',
+      'annoyed',
+      'annoying',
+      'upset',
+      'angry',
+      'mad',
+      'not happy',
+      'unhappy',
+      'disappointed',
+      'fed up',
+      'had enough',
+      'tired of this',
+      'irritated',
+      'aggravated',
+      'bothered'
+    ]
+  },
+
+  // === APOLOGY / SORRY ===
+  sorry: {
+    canonical: 'sorry',
+    variations: [
+      'sorry',
+      'apologies',
+      'apologize',
+      'my apologies',
+      'i apologize',
+      'excuse me',
+      'pardon me',
+      'forgive me',
+      'my bad',
+      'my mistake',
+      'oops'
+    ]
+  },
+
+  // === HELP / ASSISTANCE ===
+  help: {
+    canonical: 'help',
+    variations: [
+      'help',
+      'help me',
+      'can you help',
+      'need help',
+      'assist',
+      'assistance',
+      'support',
+      'aid',
+      'guide me',
+      'show me',
+      'tell me',
+      'explain',
+      'clarify'
+    ]
+  },
+
+  // === GOODBYE / FAREWELL ===
+  goodbye: {
+    canonical: 'goodbye',
+    variations: [
+      'goodbye',
+      'bye',
+      'bye bye',
+      'see you',
+      'see ya',
+      'later',
+      'talk later',
+      'talk soon',
+      'have a good day',
+      'have a nice day',
+      'take care',
+      'farewell',
+      'so long',
+      'catch you later',
+      'peace',
+      'peace out',
+      'adios',
+      'ciao',
+      'au revoir'
     ]
   },
 
