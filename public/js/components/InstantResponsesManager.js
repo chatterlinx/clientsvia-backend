@@ -363,6 +363,18 @@ class InstantResponsesManager {
     }
 
     /**
+     * 🔐 GET AUTH TOKEN
+     */
+    getAuthToken() {
+        // Check all possible token storage locations
+        return localStorage.getItem('adminToken') ||
+               localStorage.getItem('authToken') ||
+               sessionStorage.getItem('authToken') ||
+               localStorage.getItem('token') ||
+               sessionStorage.getItem('token') || '';
+    }
+
+    /**
      * 🔗 ATTACH EVENT LISTENERS
      */
     attachEventListeners() {
@@ -417,8 +429,10 @@ class InstantResponsesManager {
         }
 
         try {
+            const authToken = this.getAuthToken();
             const response = await fetch(`/api/company/${this.currentCompanyId}/instant-responses`, {
-                credentials: 'include'
+                credentials: 'include',
+                headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
             });
 
             if (!response.ok) {
@@ -442,8 +456,10 @@ class InstantResponsesManager {
         if (!this.currentCompanyId) return;
 
         try {
+            const authToken = this.getAuthToken();
             const response = await fetch(`/api/company/${this.currentCompanyId}/instant-responses/stats`, {
-                credentials: 'include'
+                credentials: 'include',
+                headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
             });
 
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -631,10 +647,14 @@ class InstantResponsesManager {
                 `/api/company/${this.currentCompanyId}/instant-responses`;
             
             const method = responseId ? 'PUT' : 'POST';
+            const authToken = this.getAuthToken();
 
             const response = await fetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                },
                 credentials: 'include',
                 body: JSON.stringify(formData)
             });
@@ -661,11 +681,13 @@ class InstantResponsesManager {
         if (!confirm('Are you sure you want to delete this instant response?')) return;
 
         try {
+            const authToken = this.getAuthToken();
             const response = await fetch(
                 `/api/company/${this.currentCompanyId}/instant-responses/${responseId}`,
                 {
                     method: 'DELETE',
-                    credentials: 'include'
+                    credentials: 'include',
+                    headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
                 }
             );
 
@@ -691,11 +713,15 @@ class InstantResponsesManager {
         }
 
         try {
+            const authToken = this.getAuthToken();
             const response = await fetch(
                 `/api/company/${this.currentCompanyId}/instant-responses/suggest-variations`,
                 {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                    },
                     credentials: 'include',
                     body: JSON.stringify({ trigger })
                 }
@@ -749,9 +775,13 @@ class InstantResponsesManager {
      */
     async loadTemplates() {
         try {
+            const authToken = this.getAuthToken();
             const response = await fetch(
                 `/api/company/${this.currentCompanyId}/instant-responses/templates`,
-                { credentials: 'include' }
+                { 
+                    credentials: 'include',
+                    headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+                }
             );
 
             if (!response.ok) throw new Error('Failed to load templates');
@@ -808,11 +838,15 @@ class InstantResponsesManager {
             'replace' : 'append';
 
         try {
+            const authToken = this.getAuthToken();
             const response = await fetch(
                 `/api/company/${this.currentCompanyId}/instant-responses/apply-template/${templateId}`,
                 {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                    },
                     credentials: 'include',
                     body: JSON.stringify({ mode })
                 }
@@ -850,11 +884,15 @@ class InstantResponsesManager {
         }
 
         try {
+            const authToken = this.getAuthToken();
             const response = await fetch(
                 `/api/company/${this.currentCompanyId}/instant-responses/test-match`,
                 {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                    },
                     credentials: 'include',
                     body: JSON.stringify({ query })
                 }
@@ -915,9 +953,13 @@ class InstantResponsesManager {
      */
     async analyzeCoverage() {
         try {
+            const authToken = this.getAuthToken();
             const response = await fetch(
                 `/api/company/${this.currentCompanyId}/instant-responses/analyze-coverage`,
-                { credentials: 'include' }
+                { 
+                    credentials: 'include',
+                    headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+                }
             );
 
             if (!response.ok) throw new Error('Analysis failed');
@@ -982,9 +1024,13 @@ class InstantResponsesManager {
      */
     async handleExport() {
         try {
+            const authToken = this.getAuthToken();
             const response = await fetch(
                 `/api/company/${this.currentCompanyId}/instant-responses/export`,
-                { credentials: 'include' }
+                { 
+                    credentials: 'include',
+                    headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+                }
             );
 
             if (!response.ok) throw new Error('Export failed');
@@ -1024,11 +1070,15 @@ class InstantResponsesManager {
                 const mode = confirm('Replace all existing responses? Click OK to replace, Cancel to append.') ? 
                     'replace' : 'append';
 
+                const authToken = this.getAuthToken();
                 const response = await fetch(
                     `/api/company/${this.currentCompanyId}/instant-responses/import`,
                     {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                        },
                         credentials: 'include',
                         body: JSON.stringify({ 
                             instantResponses: data.instantResponses,
