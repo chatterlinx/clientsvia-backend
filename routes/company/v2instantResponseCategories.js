@@ -18,7 +18,7 @@ const express = require('express');
 const router = express.Router({ mergeParams: true });
 const InstantResponseCategory = require('../../models/InstantResponseCategory');
 const KeywordGenerationService = require('../../services/knowledge/KeywordGenerationService');
-const variationSuggestionEngine = require('../../services/variationSuggestionEngine');
+const smartVariationGenerator = require('../../services/smartVariationGenerator');
 const Joi = require('joi');
 const { authenticateJWT } = require('../../middleware/auth');
 
@@ -176,71 +176,35 @@ router.post('/:companyId/instant-response-categories/generate-variations', authe
       });
     }
 
-    console.log(`✨ [AI] Generating ${count} variations for: "${trigger}"`);
-    console.log(`✨ [AI] Variation engine type:`, typeof variationSuggestionEngine);
-    console.log(`✨ [AI] Variation engine has suggestVariations:`, typeof variationSuggestionEngine.suggestVariations);
+    console.log(`✨ [SmartGen] Generating ${count} variations for: "${trigger}"`);
 
-    // Use existing variation engine with COMPREHENSIVE error handling
+    // Use Smart Variation Generator (algorithmic, no hidden dictionaries)
     let variations = [];
     
     try {
-      console.log(`✨ [AI] CHECKPOINT 1: About to call suggestVariations()`);
+      console.log(`✨ [SmartGen] Calling smart variation generator...`);
       
-      // variationSuggestionEngine.suggestVariations returns: { suggestions: [...], metadata: {...} }
-      const result = variationSuggestionEngine.suggestVariations(trigger, []);
+      // Generate variations using linguistic patterns
+      variations = smartVariationGenerator.generateVariations(trigger, count);
       
-      console.log(`✨ [AI] CHECKPOINT 2: Engine returned successfully`);
-      console.log(`✨ [AI] Result type:`, typeof result);
-      console.log(`✨ [AI] Result keys:`, result ? Object.keys(result) : 'null');
+      console.log(`✨ [SmartGen] Generated ${variations.length} variations`);
+      console.log(`✨ [SmartGen] Sample variations:`, variations.slice(0, 3));
       
-      if (!result) {
-        console.error('[AI] Result is null or undefined!');
-        throw new Error('Engine returned null/undefined');
-      }
+    } catch (error) {
+      console.error('❌ [SmartGen] Generator error:', error.message);
+      console.error('❌ [SmartGen] Stack:', error.stack);
       
-      if (!result.suggestions) {
-        console.error('[AI] Result missing suggestions array!', result);
-        throw new Error('Result missing suggestions array');
-      }
-      
-      if (!Array.isArray(result.suggestions)) {
-        console.error('[AI] suggestions is not an array!', typeof result.suggestions);
-        throw new Error('suggestions is not an array');
-      }
-      
-      console.log(`✨ [AI] CHECKPOINT 3: Got ${result.suggestions.length} suggestions`);
-      console.log(`✨ [AI] First suggestion sample:`, result.suggestions[0]);
-      
-      // Each suggestion is an object like: { text: "...", confidence: 0.8, type: "..." }
-      variations = result.suggestions
-        .slice(0, count) // Take only the requested count
-        .map(s => {
-          if (typeof s === 'string') return s;
-          if (s && s.text) return s.text;
-          console.warn('[AI] Unexpected suggestion format:', s);
-          return String(s);
-        });
-      
-      console.log(`✨ [AI] CHECKPOINT 4: Extracted ${variations.length} text variations`);
-      
-    } catch (engineError) {
-      console.error('❌ [AI] VARIATION ENGINE CRASHED:', engineError.message);
-      console.error('❌ [AI] Error name:', engineError.name);
-      console.error('❌ [AI] Error stack:', engineError.stack);
-      
-      // Fallback: Generate simple variations manually
+      // Fallback: Basic case variations
       const base = trigger.trim();
       variations = [
         base.toLowerCase(),
         base.toUpperCase(),
         base.charAt(0).toUpperCase() + base.slice(1).toLowerCase(),
-        base.replace(/\s+/g, ''), // Remove spaces
-        base.split(' ').reverse().join(' '), // Reverse word order
       ].filter((v, i, arr) => arr.indexOf(v) === i) // Remove duplicates
        .filter(v => v !== base) // Remove original
        .slice(0, count);
       
-      console.log(`✨ [AI] Fallback generated ${variations.length} variations`);
+      console.log(`✨ [SmartGen] Fallback generated ${variations.length} variations`);
     }
 
     // Final safety check: If no variations generated, create basic fallback
