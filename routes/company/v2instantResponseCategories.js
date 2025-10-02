@@ -79,7 +79,16 @@ function validateCategory(req, res, next) {
  */
 const qnaSchema = Joi.object({
   triggers: Joi.array().items(Joi.string().trim().min(2).max(200)).min(1).max(20).required(),
-  response: Joi.string().trim().min(5).max(500).required(),
+  
+  // MULTI-RESPONSE SUPPORT - Array of 1-10 response variations
+  responses: Joi.array().items(Joi.string().trim().min(5).max(500)).min(1).max(10).required(),
+  
+  // ROTATION MODE - How to cycle through responses
+  rotationMode: Joi.string().valid('random', 'sequential', 'weighted').optional(),
+  
+  // Legacy single response field (for backwards compatibility)
+  response: Joi.string().trim().min(5).max(500).optional(),
+  
   keywords: Joi.array().items(Joi.string()).optional(),
   timing: Joi.object({
     enabled: Joi.boolean().optional(),
@@ -102,6 +111,19 @@ const qnaSchema = Joi.object({
   priority: Joi.number().min(1).max(100).optional(),
   enabled: Joi.boolean().optional(),
   notes: Joi.string().max(1000).allow('').optional()
+}).custom((value, helpers) => {
+  // Convert legacy single response to array if needed
+  if (value.response && !value.responses) {
+    value.responses = [value.response];
+    delete value.response;
+  }
+  
+  // Validate at least one response exists
+  if (!value.responses || value.responses.length === 0) {
+    return helpers.error('custom.responses.required', { message: 'At least one response is required' });
+  }
+  
+  return value;
 });
 
 function validateQnA(req, res, next) {
@@ -507,8 +529,10 @@ router.post('/:companyId/instant-response-categories/:categoryId/qnas', authenti
     if (!qnaData.keywords || qnaData.keywords.length === 0) {
       const keywordService = new KeywordGenerationService();
       const triggerText = qnaData.triggers.join(' ');
-      const generated = await keywordService.generateAdvancedKeywords(triggerText, qnaData.response, { companyId });
+      const responseText = qnaData.responses ? qnaData.responses.join(' ') : '';
+      const generated = await keywordService.generateAdvancedKeywords(triggerText, responseText, { companyId });
       qnaData.keywords = generated.primary || [];
+      console.log(`🔑 [Q&A] Auto-generated ${qnaData.keywords.length} keywords from ${qnaData.responses.length} response variations`);
     }
 
     // Add Q&A
