@@ -313,6 +313,10 @@ router.get('/:companyId/v2-voice-settings', async (req, res) => {
 router.post('/:companyId/v2-voice-settings', async (req, res) => {
     try {
         const { companyId } = req.params;
+        
+        console.log(`🔍 [SAVE-1] POST request received for company: ${companyId}`);
+        console.log(`🔍 [SAVE-2] Request body:`, JSON.stringify(req.body, null, 2));
+        
         const {
             apiSource = 'clientsvia',
             apiKey,
@@ -326,7 +330,16 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             streamingLatency = 0
         } = req.body;
 
+        console.log(`🔍 [SAVE-3] Parsed values:`, {
+            apiSource,
+            voiceId,
+            stability,
+            similarityBoost,
+            aiModel
+        });
+
         if (!ObjectId.isValid(companyId)) {
+            console.log(`❌ [SAVE-4] Invalid company ID format: ${companyId}`);
             return res.status(400).json({
                 success: false,
                 message: 'Invalid company ID format'
@@ -335,6 +348,7 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
 
         // Validate required fields
         if (!voiceId) {
+            console.log(`❌ [SAVE-5] Voice ID missing`);
             return res.status(400).json({
                 success: false,
                 message: 'Voice ID is required'
@@ -342,27 +356,36 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
         }
 
         if (apiSource === 'own' && !apiKey) {
+            console.log(`❌ [SAVE-6] API key required for own API source`);
             return res.status(400).json({
                 success: false,
                 message: 'API key is required when using own ElevenLabs account'
             });
         }
 
+        console.log(`🔍 [SAVE-7] Fetching company from database...`);
         const company = await Company.findById(companyId);
+        
         if (!company) {
+            console.log(`❌ [SAVE-8] Company not found: ${companyId}`);
             return res.status(404).json({
                 success: false,
                 message: 'Company not found'
             });
         }
 
+        console.log(`🔍 [SAVE-9] Company found: ${company.companyName}`);
+        console.log(`🔍 [SAVE-10] Existing aiAgentLogic:`, !!company.aiAgentLogic);
+        console.log(`🔍 [SAVE-11] Existing voiceSettings:`, JSON.stringify(company.aiAgentLogic?.voiceSettings, null, 2));
+
         // Initialize aiAgentLogic if not exists
         if (!company.aiAgentLogic) {
+            console.log(`🔍 [SAVE-12] Initializing new aiAgentLogic object`);
             company.aiAgentLogic = {};
         }
 
         // V2 Voice Settings Structure
-        company.aiAgentLogic.voiceSettings = {
+        const newVoiceSettings = {
             apiSource: apiSource,
             apiKey: apiSource === 'own' ? apiKey : null,
             voiceId: voiceId,
@@ -384,11 +407,27 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             version: '2.0'
         };
 
+        console.log(`🔍 [SAVE-13] New voice settings to save:`, JSON.stringify(newVoiceSettings, null, 2));
+        
+        company.aiAgentLogic.voiceSettings = newVoiceSettings;
+
+        console.log(`🔍 [SAVE-14] Voice settings assigned to company object`);
+        console.log(`🔍 [SAVE-15] company.aiAgentLogic.voiceSettings is now:`, JSON.stringify(company.aiAgentLogic.voiceSettings, null, 2));
+
         // Save to database
-        await company.save();
+        console.log(`🔍 [SAVE-16] Calling company.save()...`);
+        const saveResult = await company.save();
+        console.log(`🔍 [SAVE-17] Save completed successfully`);
+        console.log(`🔍 [SAVE-18] Saved document _id:`, saveResult._id);
+
+        // Verify save by reloading from DB
+        console.log(`🔍 [SAVE-19] Verifying save by reloading from database...`);
+        const verifyCompany = await Company.findById(companyId);
+        console.log(`🔍 [SAVE-20] Verification - voiceSettings from DB:`, JSON.stringify(verifyCompany.aiAgentLogic?.voiceSettings, null, 2));
 
         // Clear Redis cache for immediate effect
         if (redisClient) {
+            console.log(`🔍 [SAVE-21] Clearing Redis cache...`);
             const cacheKeys = [
                 `company:${companyId}`,
                 `voice:company:${companyId}`,
@@ -401,10 +440,12 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             }
             
             await Promise.all(cacheKeys.map(key => redisClient.del(key)));
-            console.log(`🗑️ V2 Voice cache cleared for company ${companyId}: ${cacheKeys.join(', ')}`);
+            console.log(`🗑️ [SAVE-22] V2 Voice cache cleared for company ${companyId}: ${cacheKeys.join(', ')}`);
+        } else {
+            console.log(`⚠️ [SAVE-23] Redis client not available - skipping cache clear`);
         }
 
-        console.log(`✅ V2 Voice settings saved for company ${companyId}:`, {
+        console.log(`✅ [SAVE-24] V2 Voice settings saved for company ${companyId}:`, {
             voiceId,
             apiSource,
             aiModel,
@@ -417,6 +458,8 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             safeSettings.apiKey = '*****';
         }
 
+        console.log(`🔍 [SAVE-25] Sending success response to client`);
+
         res.json({
             success: true,
             message: 'V2 voice settings saved successfully',
@@ -425,7 +468,8 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('❌ Error saving V2 voice settings:', error);
+        console.error('❌ [SAVE-ERROR] Error saving V2 voice settings:', error);
+        console.error('❌ [SAVE-ERROR] Stack trace:', error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to save voice settings',

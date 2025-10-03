@@ -281,6 +281,16 @@ router.post('/voice', async (req, res) => {
         req.body.To
       );
       
+      console.log(`🔍 [CALL-1] Call initialized successfully`);
+      console.log(`🔍 [CALL-2] Greeting from initializeCall:`, initResult.greeting);
+      console.log(`🔍 [CALL-3] Voice settings from initializeCall:`, JSON.stringify(initResult.voiceSettings, null, 2));
+      
+      // DOUBLE-CHECK: Reload company to verify voiceSettings are in DB
+      console.log(`🔍 [CALL-4] Double-checking voice settings from database...`);
+      const freshCompany = await Company.findById(company._id);
+      console.log(`🔍 [CALL-5] Fresh company.aiAgentLogic exists:`, !!freshCompany.aiAgentLogic);
+      console.log(`🔍 [CALL-6] Fresh company.aiAgentLogic.voiceSettings:`, JSON.stringify(freshCompany.aiAgentLogic?.voiceSettings, null, 2));
+      
       console.log(`[V2 AGENT] Call initialized, greeting: "${initResult.greeting}"`);
       console.log(`[V2 VOICE] Voice settings:`, JSON.stringify(initResult.voiceSettings, null, 2));
       
@@ -299,6 +309,9 @@ router.post('/voice', async (req, res) => {
 
       // Use V2 Voice Settings for TTS
       const elevenLabsVoice = initResult.voiceSettings?.voiceId;
+      console.log(`🔍 [CALL-7] Extracted voice ID from initResult: ${elevenLabsVoice || 'NOT SET'}`);
+      console.log(`🔍 [CALL-8] Has greeting: ${!!initResult.greeting}`);
+      console.log(`🔍 [CALL-9] Will use ElevenLabs: ${!!(elevenLabsVoice && initResult.greeting)}`);
       console.log(`[V2 VOICE CHECK] ElevenLabs Voice ID: ${elevenLabsVoice || 'NOT SET'}`);
       console.log(`[V2 VOICE CHECK] Has greeting: ${!!initResult.greeting}`);
       
