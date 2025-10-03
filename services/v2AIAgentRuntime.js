@@ -219,7 +219,7 @@ class V2AIAgentRuntime {
         
         // 🚀 V2 ENHANCED: Use Priority-Driven Knowledge Router for intelligent responses
         try {
-            const PriorityRouter = require('./priorityDrivenKnowledgeRouter');
+            const PriorityRouter = require('./v2priorityDrivenKnowledgeRouter');
             const router = new PriorityRouter();
             
             // Execute priority routing with V2 enhanced matching
