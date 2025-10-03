@@ -45,6 +45,12 @@ class V2AIAgentRuntime {
             }
 
             console.log(`✅ V2 AGENT: Found V2 configuration for ${company.businessName || company.companyName}`);
+            
+            // 🔍 DIAGNOSTIC: Log voice settings from database
+            console.log(`🔍 V2 VOICE DEBUG: Raw voiceSettings from DB:`, JSON.stringify(company.aiAgentLogic?.voiceSettings, null, 2));
+            console.log(`🔍 V2 VOICE DEBUG: Has voiceSettings: ${!!company.aiAgentLogic?.voiceSettings}`);
+            console.log(`🔍 V2 VOICE DEBUG: Voice ID: ${company.aiAgentLogic?.voiceSettings?.voiceId || 'NOT SET'}`);
+            console.log(`🔍 V2 VOICE DEBUG: API Source: ${company.aiAgentLogic?.voiceSettings?.apiSource || 'NOT SET'}`);
 
             // Generate V2 greeting from Agent Personality system
             const greeting = this.generateV2Greeting(company);

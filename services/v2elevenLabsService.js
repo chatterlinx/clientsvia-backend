@@ -5,34 +5,46 @@ const path = require('path');
 const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 
 function getElevenLabsApiKey(company) {
+  console.log(`🔍 [API KEY CHECK] Starting API key detection for company: ${company?._id || 'unknown'}`);
+  
   // V2 VOICE SETTINGS: Check new aiAgentLogic.voiceSettings path first
   const v2VoiceSettings = company?.aiAgentLogic?.voiceSettings;
+  console.log(`🔍 [API KEY CHECK] Has voiceSettings: ${!!v2VoiceSettings}`);
+  console.log(`🔍 [API KEY CHECK] API Source: ${v2VoiceSettings?.apiSource || 'NOT SET'}`);
+  console.log(`🔍 [API KEY CHECK] Has company API key: ${!!(v2VoiceSettings?.apiKey)}`);
+  console.log(`🔍 [API KEY CHECK] Has global ELEVENLABS_API_KEY env: ${!!process.env.ELEVENLABS_API_KEY}`);
+  
   if (v2VoiceSettings) {
     const useOwnApi = v2VoiceSettings.apiSource === 'own';
     const companyKey = v2VoiceSettings.apiKey;
     
     if (useOwnApi && companyKey && companyKey.trim()) {
-      console.log(`🔑 V2: Company ${company._id || 'unknown'} using own ElevenLabs API`);
+      console.log(`🔑 V2: Company ${company._id || 'unknown'} using OWN ElevenLabs API (last 4: ...${companyKey.slice(-4)})`);
       return companyKey.trim();
     }
     
     // V2 system defaults to ClientsVia global API when apiSource = 'clientsvia'
     if (v2VoiceSettings.apiSource === 'clientsvia' || !useOwnApi) {
       if (process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_API_KEY.trim()) {
-        console.log(`🏢 V2: Using ClientsVia global ElevenLabs API for company ${company?._id || 'global'}`);
-        return process.env.ELEVENLABS_API_KEY.trim();
+        const globalKey = process.env.ELEVENLABS_API_KEY.trim();
+        console.log(`🏢 V2: Using ClientsVia GLOBAL ElevenLabs API for company ${company?._id || 'global'} (last 4: ...${globalKey.slice(-4)})`);
+        return globalKey;
+      } else {
+        console.error(`❌ V2: API Source is 'clientsvia' but ELEVENLABS_API_KEY env variable is NOT SET!`);
       }
     }
   }
   
   // V2 ONLY: No legacy support - use ClientsVia global API as fallback
   if (process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_API_KEY.trim()) {
-    console.log(`🏢 V2: Using ClientsVia global ElevenLabs API for company ${company?._id || 'global'}`);
-    return process.env.ELEVENLABS_API_KEY.trim();
+    const globalKey = process.env.ELEVENLABS_API_KEY.trim();
+    console.log(`🏢 V2: Using ClientsVia GLOBAL ElevenLabs API (fallback) for company ${company?._id || 'global'} (last 4: ...${globalKey.slice(-4)})`);
+    return globalKey;
   }
   
   // No valid key found
-  console.warn(`⚠️ No ElevenLabs API key configured for company ${company?._id || 'global'}`);
+  console.error(`⚠️ No ElevenLabs API key configured for company ${company?._id || 'global'}`);
+  console.error(`⚠️ Checked: voiceSettings.apiKey (company-specific), process.env.ELEVENLABS_API_KEY (global)`);
   return null;
 }
 
