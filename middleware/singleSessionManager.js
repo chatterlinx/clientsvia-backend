@@ -207,6 +207,21 @@ class V2SingleSessionManager {
     }
 
     /**
+     * Generate base device fingerprint
+     */
+    generateDeviceFingerprint(deviceInfo) {
+        const components = [
+            deviceInfo.userAgent || 'unknown',
+            deviceInfo.ipAddress || 'unknown',
+            deviceInfo.location || 'unknown'
+        ].join('|');
+        
+        return crypto.createHash('sha256')
+            .update(components)
+            .digest('hex');
+    }
+
+    /**
      * Generate enhanced device fingerprint
      */
     generateEnhancedFingerprint(deviceInfo) {
