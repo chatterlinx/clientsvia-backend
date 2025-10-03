@@ -282,6 +282,7 @@ router.post('/voice', async (req, res) => {
       );
       
       console.log(`[V2 AGENT] Call initialized, greeting: "${initResult.greeting}"`);
+      console.log(`[V2 VOICE] Voice settings:`, JSON.stringify(initResult.voiceSettings, null, 2));
       
       // Set up speech gathering with V2 Agent response handler
       const gather = twiml.gather({
@@ -298,8 +299,12 @@ router.post('/voice', async (req, res) => {
 
       // Use V2 Voice Settings for TTS
       const elevenLabsVoice = initResult.voiceSettings?.voiceId;
+      console.log(`[V2 VOICE CHECK] ElevenLabs Voice ID: ${elevenLabsVoice || 'NOT SET'}`);
+      console.log(`[V2 VOICE CHECK] Has greeting: ${!!initResult.greeting}`);
+      
       if (elevenLabsVoice && initResult.greeting) {
         try {
+          console.log(`[TTS START] ✅ Using ElevenLabs voice ${elevenLabsVoice} for initial greeting`);
           console.log(`[TTS START] [TTS] Starting AI Agent Logic greeting TTS synthesis...`);
           const ttsStartTime = Date.now();
           
@@ -323,11 +328,13 @@ router.post('/voice', async (req, res) => {
           fs.writeFileSync(filePath, buffer);
           gather.play(`${req.protocol}://${req.get('host')}/audio/${fileName}`);
         } catch (err) {
-          console.error('AI Agent Logic TTS failed, using Say:', err);
+          console.error('❌ AI Agent Logic TTS failed, using Say:', err);
+          console.error('❌ Error details:', err.message);
           gather.say(escapeTwiML(initResult.greeting));
         }
       } else {
         // Fallback to Say if no voice or greeting
+        console.log(`⚠️ Fallback to Twilio Say - Voice: ${elevenLabsVoice ? 'SET' : 'MISSING'}, Greeting: ${initResult.greeting ? 'SET' : 'MISSING'}`);
         const fallbackGreeting = initResult.greeting || "Configuration error - no greeting configured";
         gather.say(escapeTwiML(fallbackGreeting));
       }
