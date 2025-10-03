@@ -196,7 +196,7 @@ function registerRoutes(routes) {
     
     // --- API Routes ---
     app.use('/api', routes.v2CompanyRoutes);
-    app.use('/api', routes.v2VoiceRoutes); // V2 Voice Settings API
+    app.use('/api/company', routes.v2VoiceRoutes); // V2 Voice Settings API (must be /api/company for /:companyId/v2-voice-settings)
     // V2: All legacy debug and seed routes deleted - no longer needed in V2 system
     // V2 DELETED: Legacy alerts route mounting - depends on deleted Alert model
     // app.use('/api/alerts', routes.alertRoutes);
