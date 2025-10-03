@@ -26,8 +26,206 @@ const router = express.Router();
 const { ObjectId } = require('mongodb');
 const Company = require('../../models/v2Company');
 const { redisClient } = require('../../clients');
+const { getAvailableVoices, getUserInfo } = require('../../services/v2elevenLabsService');
 
-// Redis client imported above
+/**
+ * @route   GET /api/company/:companyId/v2-voice-settings/status
+ * @desc    COMPREHENSIVE SYSTEM CHECK - Database + ElevenLabs API + Twilio Integration
+ * @access  Private
+ */
+router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        if (!ObjectId.isValid(companyId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid company ID format'
+            });
+        }
+
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: 'Company not found'
+            });
+        }
+
+        console.log(`🔍 [VOICE STATUS] Running comprehensive check for ${company.companyName}`);
+
+        const status = {
+            timestamp: new Date().toISOString(),
+            companyId: company._id,
+            companyName: company.companyName,
+            checks: {}
+        };
+
+        // ========================================
+        // CHECK 1: DATABASE - Are settings saved?
+        // ========================================
+        console.log(`🔍 [CHECK 1] Database check...`);
+        const voiceSettings = company.aiAgentLogic?.voiceSettings;
+        
+        status.checks.database = {
+            name: 'Database Storage',
+            passed: !!(voiceSettings && voiceSettings.voiceId),
+            details: {}
+        };
+
+        if (voiceSettings && voiceSettings.voiceId) {
+            status.checks.database.details = {
+                voiceId: voiceSettings.voiceId,
+                apiSource: voiceSettings.apiSource,
+                aiModel: voiceSettings.aiModel,
+                stability: voiceSettings.stability,
+                similarityBoost: voiceSettings.similarityBoost,
+                lastUpdated: voiceSettings.lastUpdated
+            };
+            console.log(`✅ [CHECK 1] Database: PASS - Voice ID: ${voiceSettings.voiceId}`);
+        } else {
+            status.checks.database.details.error = 'No voice settings found in database';
+            status.checks.database.details.solution = 'Go to AI Voice Settings tab and save a voice';
+            console.log(`❌ [CHECK 1] Database: FAIL - No voice settings`);
+        }
+
+        // ========================================
+        // CHECK 2: ELEVENLABS API - Can we connect?
+        // ========================================
+        console.log(`🔍 [CHECK 2] ElevenLabs API check...`);
+        status.checks.elevenLabsApi = {
+            name: 'ElevenLabs API Connection',
+            passed: false,
+            details: {}
+        };
+
+        try {
+            const apiKey = voiceSettings?.apiSource === 'own' 
+                ? voiceSettings?.apiKey 
+                : process.env.ELEVENLABS_API_KEY;
+
+            if (!apiKey) {
+                status.checks.elevenLabsApi.details.error = 'No API key available';
+                status.checks.elevenLabsApi.details.apiSource = voiceSettings?.apiSource || 'not configured';
+                console.log(`❌ [CHECK 2] API: FAIL - No API key`);
+            } else {
+                const userInfo = await getUserInfo({ company });
+                status.checks.elevenLabsApi.passed = true;
+                status.checks.elevenLabsApi.details = {
+                    subscription: userInfo.subscription?.tier || 'unknown',
+                    charactersUsed: userInfo.subscription?.character_count || 0,
+                    charactersLimit: userInfo.subscription?.character_limit || 0,
+                    apiKeySource: voiceSettings?.apiSource === 'own' ? 'Your Own API' : 'ClientsVia Global'
+                };
+                console.log(`✅ [CHECK 2] API: PASS - ${status.checks.elevenLabsApi.details.subscription}`);
+            }
+        } catch (error) {
+            status.checks.elevenLabsApi.details.error = error.message;
+            console.log(`❌ [CHECK 2] API: FAIL - ${error.message}`);
+        }
+
+        // ========================================
+        // CHECK 3: VOICE VALIDATION - Is voice ID valid?
+        // ========================================
+        console.log(`🔍 [CHECK 3] Voice validation check...`);
+        status.checks.voiceValidation = {
+            name: 'Voice ID Validation',
+            passed: false,
+            details: {}
+        };
+
+        if (voiceSettings && voiceSettings.voiceId && status.checks.elevenLabsApi.passed) {
+            try {
+                const voices = await getAvailableVoices({ company });
+                const voice = voices.find(v => v.voice_id === voiceSettings.voiceId);
+                
+                if (voice) {
+                    status.checks.voiceValidation.passed = true;
+                    status.checks.voiceValidation.details = {
+                        voiceId: voice.voice_id,
+                        voiceName: voice.name,
+                        gender: voice.labels?.gender || 'unknown',
+                        category: voice.labels?.category || 'general',
+                        previewUrl: voice.preview_url
+                    };
+                    console.log(`✅ [CHECK 3] Voice: PASS - ${voice.name}`);
+                } else {
+                    status.checks.voiceValidation.details.error = 'Voice ID not found in available voices';
+                    status.checks.voiceValidation.details.voiceId = voiceSettings.voiceId;
+                    console.log(`❌ [CHECK 3] Voice: FAIL - Voice ID not found`);
+                }
+            } catch (error) {
+                status.checks.voiceValidation.details.error = error.message;
+                console.log(`❌ [CHECK 3] Voice: FAIL - ${error.message}`);
+            }
+        } else {
+            status.checks.voiceValidation.details.error = 'Cannot validate - no voice ID or API unavailable';
+            console.log(`⚠️ [CHECK 3] Voice: SKIP - No voice ID or API failed`);
+        }
+
+        // ========================================
+        // CHECK 4: TWILIO INTEGRATION - What will be used on calls?
+        // ========================================
+        console.log(`🔍 [CHECK 4] Twilio integration check...`);
+        status.checks.twilioIntegration = {
+            name: 'Twilio Call Integration',
+            passed: false,
+            details: {}
+        };
+
+        const allChecksPassed = status.checks.database.passed && 
+                               status.checks.elevenLabsApi.passed && 
+                               status.checks.voiceValidation.passed;
+
+        if (allChecksPassed) {
+            status.checks.twilioIntegration.passed = true;
+            status.checks.twilioIntegration.details = {
+                willUse: 'ElevenLabs',
+                voiceName: status.checks.voiceValidation.details.voiceName,
+                voiceId: status.checks.voiceValidation.details.voiceId,
+                apiSource: status.checks.elevenLabsApi.details.apiKeySource,
+                model: voiceSettings.aiModel,
+                quality: `Stability: ${voiceSettings.stability}, Similarity: ${voiceSettings.similarityBoost}`
+            };
+            console.log(`✅ [CHECK 4] Twilio: PASS - Will use ElevenLabs`);
+        } else {
+            status.checks.twilioIntegration.details = {
+                willUse: 'Twilio Default Voice (Alice)',
+                reason: 'One or more checks failed',
+                failedChecks: []
+            };
+            
+            if (!status.checks.database.passed) status.checks.twilioIntegration.details.failedChecks.push('Database');
+            if (!status.checks.elevenLabsApi.passed) status.checks.twilioIntegration.details.failedChecks.push('ElevenLabs API');
+            if (!status.checks.voiceValidation.passed) status.checks.twilioIntegration.details.failedChecks.push('Voice Validation');
+            
+            console.log(`❌ [CHECK 4] Twilio: FAIL - Will fall back to Twilio voice`);
+        }
+
+        // ========================================
+        // OVERALL STATUS
+        // ========================================
+        status.overallStatus = allChecksPassed ? 'OPERATIONAL' : 'DEGRADED';
+        status.summary = allChecksPassed 
+            ? `✅ All systems operational - Calls will use ${status.checks.voiceValidation.details.voiceName} (ElevenLabs)`
+            : `⚠️ System degraded - Calls will use Twilio's default voice (Alice)`;
+
+        console.log(`🔍 [STATUS] Overall: ${status.overallStatus}`);
+
+        res.json({
+            success: true,
+            status
+        });
+
+    } catch (error) {
+        console.error('❌ Error running voice settings status check:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to run status check',
+            error: error.message
+        });
+    }
+});
 
 /**
  * @route   GET /api/company/:companyId/v2-voice-settings

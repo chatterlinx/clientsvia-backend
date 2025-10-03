@@ -7736,8 +7736,11 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
             // API Key toggle
             const apiToggle = document.getElementById('useOwnApiKey');
             if (apiToggle) {
+                // FORCE reset to OFF on page load (default to ClientsVia Global API)
+                apiToggle.checked = false;
+                toggleApiKeySource(); // Apply the "off" state
+                
                 apiToggle.addEventListener('change', toggleApiKeySource);
-
             }
 
             // Test voice button
@@ -22553,7 +22556,7 @@ Key Metrics:
         console.log('✅ Initial Greeting system initialized');
     }
 
-    // 🔊 Load and display voice settings status from database
+    // 🔊 Load and display COMPREHENSIVE voice settings status (System Health Check)
     async function loadVoiceSettingsStatus() {
         const statusContent = document.getElementById('voice-settings-status-content');
         if (!statusContent) return;
@@ -22571,7 +22574,7 @@ Key Metrics:
             }
 
             const token = getUniversalAuthToken();
-            const response = await fetch(`/api/company/${companyId}/v2-voice-settings`, {
+            const response = await fetch(`/api/company/${companyId}/v2-voice-settings/status`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -22581,12 +22584,126 @@ Key Metrics:
 
             const result = await response.json();
             
-            console.log('🔍 [VOICE STATUS] GET response:', result);
-            console.log('🔍 [VOICE STATUS] Has settings:', !!result.settings);
-            console.log('🔍 [VOICE STATUS] Has voiceId:', !!result.settings?.voiceId);
-            console.log('🔍 [VOICE STATUS] Full settings:', result.settings);
+            console.log('🔍 [VOICE STATUS] System check result:', result);
 
-            if (response.ok && result.success && result.settings && result.settings.voiceId) {
+            if (response.ok && result.success && result.status) {
+                const status = result.status;
+                const checks = status.checks;
+                
+                // Build comprehensive status display
+                let statusHTML = '<div class="space-y-4">';
+                
+                // Overall Status Banner
+                if (status.overallStatus === 'OPERATIONAL') {
+                    statusHTML += `
+                        <div class="bg-green-50 border-2 border-green-500 rounded-lg p-4">
+                            <div class="flex items-center text-green-800">
+                                <i class="fas fa-check-circle text-2xl mr-3"></i>
+                                <div>
+                                    <div class="font-bold text-lg">✅ System Operational</div>
+                                    <div class="text-sm">${status.summary}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    statusHTML += `
+                        <div class="bg-red-50 border-2 border-red-500 rounded-lg p-4">
+                            <div class="flex items-center text-red-800">
+                                <i class="fas fa-exclamation-triangle text-2xl mr-3"></i>
+                                <div>
+                                    <div class="font-bold text-lg">⚠️ System Degraded</div>
+                                    <div class="text-sm">${status.summary}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Individual Checks
+                statusHTML += '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+                
+                // Check 1: Database
+                statusHTML += `
+                    <div class="border rounded-lg p-3 ${checks.database.passed ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}">
+                        <div class="flex items-center mb-2">
+                            <i class="fas ${checks.database.passed ? 'fa-check-circle text-green-600' : 'fa-times-circle text-red-600'} mr-2"></i>
+                            <span class="font-semibold">${checks.database.name}</span>
+                        </div>
+                        ${checks.database.passed ? `
+                            <div class="text-xs text-gray-700">
+                                <div><strong>Voice ID:</strong> ${checks.database.details.voiceId}</div>
+                                <div><strong>API Source:</strong> ${checks.database.details.apiSource}</div>
+                            </div>
+                        ` : `
+                            <div class="text-xs text-red-700">${checks.database.details.error || 'Failed'}</div>
+                        `}
+                    </div>
+                `;
+                
+                // Check 2: ElevenLabs API
+                statusHTML += `
+                    <div class="border rounded-lg p-3 ${checks.elevenLabsApi.passed ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}">
+                        <div class="flex items-center mb-2">
+                            <i class="fas ${checks.elevenLabsApi.passed ? 'fa-check-circle text-green-600' : 'fa-times-circle text-red-600'} mr-2"></i>
+                            <span class="font-semibold">${checks.elevenLabsApi.name}</span>
+                        </div>
+                        ${checks.elevenLabsApi.passed ? `
+                            <div class="text-xs text-gray-700">
+                                <div><strong>Subscription:</strong> ${checks.elevenLabsApi.details.subscription}</div>
+                                <div><strong>Characters:</strong> ${checks.elevenLabsApi.details.charactersUsed} / ${checks.elevenLabsApi.details.charactersLimit}</div>
+                            </div>
+                        ` : `
+                            <div class="text-xs text-red-700">${checks.elevenLabsApi.details.error || 'Failed'}</div>
+                        `}
+                    </div>
+                `;
+                
+                // Check 3: Voice Validation
+                statusHTML += `
+                    <div class="border rounded-lg p-3 ${checks.voiceValidation.passed ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}">
+                        <div class="flex items-center mb-2">
+                            <i class="fas ${checks.voiceValidation.passed ? 'fa-check-circle text-green-600' : 'fa-times-circle text-red-600'} mr-2"></i>
+                            <span class="font-semibold">${checks.voiceValidation.name}</span>
+                        </div>
+                        ${checks.voiceValidation.passed ? `
+                            <div class="text-xs text-gray-700">
+                                <div><strong>Voice:</strong> ${checks.voiceValidation.details.voiceName}</div>
+                                <div><strong>Gender:</strong> ${checks.voiceValidation.details.gender}</div>
+                            </div>
+                        ` : `
+                            <div class="text-xs text-red-700">${checks.voiceValidation.details.error || 'Failed'}</div>
+                        `}
+                    </div>
+                `;
+                
+                // Check 4: Twilio Integration
+                statusHTML += `
+                    <div class="border rounded-lg p-3 ${checks.twilioIntegration.passed ? 'bg-green-50 border-green-300' : 'bg-yellow-50 border-yellow-300'}">
+                        <div class="flex items-center mb-2">
+                            <i class="fas ${checks.twilioIntegration.passed ? 'fa-check-circle text-green-600' : 'fa-exclamation-triangle text-yellow-600'} mr-2"></i>
+                            <span class="font-semibold">${checks.twilioIntegration.name}</span>
+                        </div>
+                        <div class="text-xs ${checks.twilioIntegration.passed ? 'text-gray-700' : 'text-yellow-700'}">
+                            <div><strong>Will Use:</strong> ${checks.twilioIntegration.details.willUse}</div>
+                            ${checks.twilioIntegration.details.reason ? `<div><strong>Reason:</strong> ${checks.twilioIntegration.details.reason}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                statusHTML += '</div>'; // End grid
+                
+                // Timestamp
+                statusHTML += `
+                    <div class="text-xs text-gray-500 mt-3 text-center">
+                        Last checked: ${new Date(status.timestamp).toLocaleString()}
+                    </div>
+                `;
+                
+                statusHTML += '</div>';
+                
+                statusContent.innerHTML = statusHTML;
+            } else if (response.ok && result.success && result.settings && result.settings.voiceId) {
                 // Voice settings exist in database
                 const settings = result.settings;
                 
