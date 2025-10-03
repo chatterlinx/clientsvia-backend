@@ -228,11 +228,18 @@
                 
                 const data = await response.json();
                 
+                console.log('🔍 Login response:', data);
+                console.log('🔍 Token present:', !!data.token);
+                console.log('🔍 Token value:', data.token ? `${data.token.substring(0, 20)}...` : 'MISSING');
+                
                 if (response.ok) {
                     // Login successful - store the JWT token
                     if (data.token) {
                         localStorage.setItem('adminToken', data.token);
                         localStorage.setItem('adminUser', JSON.stringify(data.user));
+                        console.log('✅ Token saved to localStorage');
+                    } else {
+                        console.error('❌ No token in response!');
                     }
                     buttonText.textContent = 'Success! Redirecting...';
                     setTimeout(() => {
