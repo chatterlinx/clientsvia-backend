@@ -7372,12 +7372,18 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
 
                 const result = await response.json();
 
+                console.log('🔍 Save response status:', response.status);
+                console.log('🔍 Save response data:', result);
+
                 if (!response.ok) {
+                    console.error('❌ Save failed with status:', response.status);
+                    console.error('❌ Error details:', result);
                     throw new Error(result.message || 'Failed to save voice settings');
                 }
 
-                console.log('✅ Voice settings saved successfully');
-                showNotification('Voice settings saved successfully! Your AI agent will now use these settings.', 'success');
+                console.log('✅ Voice settings saved successfully to database!');
+                console.log('✅ Saved settings:', result.settings);
+                showNotification('✅ Voice settings saved! Make a test call to hear the new voice.', 'success');
 
             } catch (error) {
                 console.error('❌ Failed to save voice settings:', error);
