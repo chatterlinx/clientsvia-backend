@@ -22580,6 +22580,11 @@ Key Metrics:
             });
 
             const result = await response.json();
+            
+            console.log('🔍 [VOICE STATUS] GET response:', result);
+            console.log('🔍 [VOICE STATUS] Has settings:', !!result.settings);
+            console.log('🔍 [VOICE STATUS] Has voiceId:', !!result.settings?.voiceId);
+            console.log('🔍 [VOICE STATUS] Full settings:', result.settings);
 
             if (response.ok && result.success && result.settings && result.settings.voiceId) {
                 // Voice settings exist in database
