@@ -124,7 +124,7 @@ router.post('/login', async (req, res) => {
             location: req.headers['cf-ipcountry'] || 'Unknown'
         };
         
-        const sessionResult = sessionManager.createSession(user._id.toString(), deviceInfo);
+        const sessionResult = await sessionManager.createSession(user._id.toString(), deviceInfo);
         
         // Log successful login with session info
         logger.auth('Login successful - new session created', { 
