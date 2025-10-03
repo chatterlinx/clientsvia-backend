@@ -6,9 +6,9 @@ const User = require('../models/v2User');
 const { authenticateJWT, authenticateSingleSession } = require('../middleware/auth');
 const sessionManager = require('../middleware/singleSessionManager');
 const logger = require('../utils/logger');
-// Import configured passport (this loads the strategies)
-require('../config/passport');
-const passport = require('passport');
+// V2 DELETED: Passport imports - using JWT-only authentication system
+// require('../config/passport');
+// const passport = require('passport');
 
 /**
  * POST /api/auth/register - Register a new admin user

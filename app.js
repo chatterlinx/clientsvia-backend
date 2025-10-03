@@ -15,7 +15,8 @@ const mongoose = require('mongoose');
 const session = require('express-session');
 const RedisStore = require('connect-redis').default;
 const redis = require('redis');
-const passport = require('./config/passport');
+// V2 DELETED: Passport - using JWT-only authentication system
+// const passport = require('./config/passport');
 
 const { secureHeaders } = require('./middleware/helmet');
 const { apiLimiter } = require('./middleware/rateLimit');
@@ -139,12 +140,12 @@ app.use(session({
 }));
 console.log('✅ PRODUCTION: Redis session store configured - memory leaks eliminated!');
 
-// Initialize Passport
-console.log('🔍 CHECKPOINT 4: Initializing Passport...');
-app.use(passport.initialize());
-console.log('🔍 CHECKPOINT 5: Passport initialized');
-app.use(passport.session());
-console.log('🔍 CHECKPOINT 6: Passport session middleware applied');
+// V2 DELETED: Passport initialization - using JWT-only authentication system
+// console.log('🔍 CHECKPOINT 4: Initializing Passport...');
+// app.use(passport.initialize());
+// console.log('🔍 CHECKPOINT 5: Passport initialized');
+// app.use(passport.session());
+// console.log('🔍 CHECKPOINT 6: Passport session middleware applied');
 
 console.log('🔍 CHECKPOINT 7: Connecting to MongoDB...');
 

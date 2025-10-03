@@ -143,10 +143,11 @@ console.log('[INIT] Setting up Express middleware...');
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// SESSION CONFIGURATION FOR OAUTH
+// SESSION CONFIGURATION FOR JWT
 console.log('🔍 SESSION CHECKPOINT 1: Starting session configuration in index.js...');
 const session = require('express-session');
-const passport = require('./config/passport');
+// V2 DELETED: Passport - using JWT-only authentication system
+// const passport = require('./config/passport');
 
 console.log('🔍 SESSION CHECKPOINT 2: Creating Redis session store for production...');
 
@@ -169,12 +170,12 @@ app.use(session({
 console.log('✅ PRODUCTION: Redis session store configured - no more memory leaks!');
 console.log('🔍 SESSION CHECKPOINT 3: Session middleware applied successfully');
 
-// Initialize Passport
-console.log('🔍 SESSION CHECKPOINT 4: Initializing Passport...');
-app.use(passport.initialize());
-console.log('🔍 SESSION CHECKPOINT 5: Passport initialized');
-app.use(passport.session());
-console.log('🔍 SESSION CHECKPOINT 6: Passport session middleware applied');
+// V2 DELETED: Passport initialization - using JWT-only authentication system
+// console.log('🔍 SESSION CHECKPOINT 4: Initializing Passport...');
+// app.use(passport.initialize());
+// console.log('🔍 SESSION CHECKPOINT 5: Passport initialized');
+// app.use(passport.session());
+// console.log('🔍 SESSION CHECKPOINT 6: Passport session middleware applied');
 
 // Add compression for better performance
 const compression = require('compression');
