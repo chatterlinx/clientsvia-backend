@@ -53,6 +53,12 @@ router.get('/:companyId/v2-voice-settings', async (req, res) => {
             });
         }
 
+        // 🔍 DIAGNOSTIC: Log what we're getting from the database
+        console.log(`🔍 [GET VOICE] Company: ${company.companyName}`);
+        console.log(`🔍 [GET VOICE] Has aiAgentLogic:`, !!company.aiAgentLogic);
+        console.log(`🔍 [GET VOICE] Has voiceSettings:`, !!company.aiAgentLogic?.voiceSettings);
+        console.log(`🔍 [GET VOICE] Raw voiceSettings:`, JSON.stringify(company.aiAgentLogic?.voiceSettings, null, 2));
+
         // Get voice settings from V2 aiAgentLogic system
         const voiceSettings = company.aiAgentLogic?.voiceSettings || {
             // V2 Default Settings - V2 Grade
