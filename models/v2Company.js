@@ -1006,9 +1006,9 @@ const companySchema = new mongoose.Schema({
                 lastOptimized: { type: Date, default: Date.now }
             },
 
-        // 🎤 V2 VOICE SETTINGS - ELEVENLABS INTEGRATION
-        // Migrated from legacy aiSettings.elevenLabs to aiAgentLogic.voiceSettings
-        voiceSettings: {
+            // 🎤 V2 VOICE SETTINGS - ELEVENLABS INTEGRATION
+            // Migrated from legacy aiSettings.elevenLabs to aiAgentLogic.voiceSettings
+            voiceSettings: {
             // API Configuration
             apiSource: { 
                 type: String, 
