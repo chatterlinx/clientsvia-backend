@@ -1022,8 +1022,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       // 🎤 V2 ELEVENLABS INTEGRATION: Use ElevenLabs if configured
       const company = await Company.findById(companyID);
+      
+      // 🔍 DIAGNOSTIC: Log voice settings check
+      console.log('🔍 V2 VOICE CHECK: Company loaded:', !!company);
+      console.log('🔍 V2 VOICE CHECK: aiAgentLogic exists:', !!company?.aiAgentLogic);
+      console.log('🔍 V2 VOICE CHECK: voiceSettings exists:', !!company?.aiAgentLogic?.voiceSettings);
+      console.log('🔍 V2 VOICE CHECK: Full voiceSettings:', JSON.stringify(company?.aiAgentLogic?.voiceSettings, null, 2));
+      
       const elevenLabsVoice = company?.aiAgentLogic?.voiceSettings?.voiceId;
+      console.log('🔍 V2 VOICE CHECK: Extracted voiceId:', elevenLabsVoice || 'NOT FOUND');
+      
       const responseText = result.response || result.text || "I understand. How can I help you?";
+      console.log('🔍 V2 VOICE CHECK: Response text:', responseText);
+      console.log('🔍 V2 VOICE CHECK: Will use ElevenLabs:', !!(elevenLabsVoice && responseText));
       
       if (elevenLabsVoice && responseText) {
         try {
