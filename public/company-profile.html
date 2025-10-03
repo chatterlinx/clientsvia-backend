@@ -2444,6 +2444,18 @@
                                                                 </p>
                                                             </div>
                                                             
+                                                            <!-- 🎤 VOICE SETTINGS STATUS CARD -->
+                                                            <div id="voice-settings-status-card" class="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-6 mb-6">
+                                                                <h3 class="text-lg font-bold text-blue-900 mb-3 flex items-center">
+                                                                    <i class="fas fa-microphone-alt mr-2"></i>🔊 Current Voice Settings (Saved in Database)
+                                                                </h3>
+                                                                <div id="voice-settings-status-content" class="text-sm">
+                                                                    <div class="flex items-center text-gray-600">
+                                                                        <i class="fas fa-spinner fa-spin mr-2"></i>Loading voice settings...
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            
                                                             <!-- 🎤 INITIAL GREETING SECTION -->
                                                             <div class="bg-gradient-to-r from-green-50 to-teal-50 border-2 border-green-300 rounded-lg p-6 mb-6">
                                                                 <h3 class="text-lg font-bold text-green-900 mb-3 flex items-center">
@@ -7387,6 +7399,9 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
                 console.log('✅ Voice settings saved successfully to database!');
                 console.log('✅ Saved settings:', result.settings);
                 showNotification('✅ Voice settings saved! Make a test call to hear the new voice.', 'success');
+                
+                // Reload voice settings status card to show what was saved
+                await loadVoiceSettingsStatus();
 
             } catch (error) {
                 console.error('❌ Failed to save voice settings:', error);
@@ -22427,6 +22442,9 @@ Key Metrics:
             
             console.log('✅ InstantResponseCategoriesManager initialized successfully');
             
+            // Initialize Voice Settings Status Card
+            await loadVoiceSettingsStatus();
+            
             // Initialize Initial Greeting system
             await initializeInitialGreeting();
         } catch (error) {
@@ -22533,6 +22551,127 @@ Key Metrics:
         });
 
         console.log('✅ Initial Greeting system initialized');
+    }
+
+    // 🔊 Load and display voice settings status from database
+    async function loadVoiceSettingsStatus() {
+        const statusContent = document.getElementById('voice-settings-status-content');
+        if (!statusContent) return;
+
+        try {
+            const companyId = getCurrentCompanyId();
+            if (!companyId) {
+                statusContent.innerHTML = `
+                    <div class="flex items-center text-red-600">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <span>Error: Company ID not found</span>
+                    </div>
+                `;
+                return;
+            }
+
+            const token = getUniversalAuthToken();
+            const response = await fetch(`/api/company/${companyId}/v2-voice-settings`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success && result.settings && result.settings.voiceId) {
+                // Voice settings exist in database
+                const settings = result.settings;
+                
+                // Find voice name from availableVoices array
+                const voice = availableVoices.find(v => v.voice_id === settings.voiceId);
+                const voiceName = voice ? voice.name : 'Unknown Voice';
+                const voiceGender = voice?.labels?.gender || 'unknown';
+                const voiceCategory = voice?.labels?.category || 'general';
+
+                statusContent.innerHTML = `
+                    <div class="space-y-3">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 w-32 font-semibold text-blue-900">Voice:</div>
+                            <div class="flex-1 text-gray-800">
+                                <span class="font-bold">${voiceName}</span>
+                                <span class="text-xs ml-2 px-2 py-1 rounded-full ${voiceGender === 'male' ? 'bg-blue-100 text-blue-800' : voiceGender === 'female' ? 'bg-pink-100 text-pink-800' : 'bg-gray-100 text-gray-800'}">${voiceGender}</span>
+                                <span class="text-xs ml-1 px-2 py-1 rounded-full bg-purple-100 text-purple-800">${voiceCategory}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 w-32 font-semibold text-blue-900">Voice ID:</div>
+                            <div class="flex-1 text-gray-700 font-mono text-xs">${settings.voiceId}</div>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 w-32 font-semibold text-blue-900">API Source:</div>
+                            <div class="flex-1">
+                                <span class="px-2 py-1 rounded text-xs font-semibold ${settings.apiSource === 'clientsvia' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}">
+                                    ${settings.apiSource === 'clientsvia' ? '🌐 ClientsVia Global' : '🔑 Your Own API'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 w-32 font-semibold text-blue-900">AI Model:</div>
+                            <div class="flex-1 text-gray-700">${settings.aiModel || 'eleven_turbo_v2_5'}</div>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 w-32 font-semibold text-blue-900">Quality:</div>
+                            <div class="flex-1 text-gray-700">
+                                Stability: ${settings.stability || 0.5} | Similarity: ${settings.similarityBoost || 0.7}
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 w-32 font-semibold text-blue-900">Last Updated:</div>
+                            <div class="flex-1 text-gray-600 text-xs">
+                                ${settings.lastUpdated ? new Date(settings.lastUpdated).toLocaleString() : 'Never'}
+                            </div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-blue-200">
+                            <div class="flex items-center text-green-700">
+                                <i class="fas fa-check-circle mr-2"></i>
+                                <span class="font-semibold">✅ Voice settings are saved and ready for calls!</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // No voice settings in database
+                statusContent.innerHTML = `
+                    <div class="space-y-3">
+                        <div class="flex items-center text-red-600 mb-3">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            <span class="font-bold">❌ No Voice Settings Saved</span>
+                        </div>
+                        <p class="text-gray-700 text-sm">
+                            Voice settings have not been saved to the database yet. 
+                            Calls will use <strong>Twilio's default voice (Alice)</strong> instead of ElevenLabs.
+                        </p>
+                        <div class="mt-4 p-3 bg-yellow-50 border border-yellow-300 rounded">
+                            <p class="text-sm text-yellow-800 font-semibold">
+                                📝 To fix this:
+                            </p>
+                            <ol class="text-sm text-yellow-800 mt-2 ml-4 list-decimal space-y-1">
+                                <li>Go to the <strong>AI Voice Settings</strong> tab</li>
+                                <li>Select a voice from the dropdown</li>
+                                <li>Click <strong>"Save Voice Settings"</strong></li>
+                                <li>Refresh this page to see the status update</li>
+                            </ol>
+                        </div>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('❌ Failed to load voice settings status:', error);
+            statusContent.innerHTML = `
+                <div class="flex items-center text-red-600">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <span>Error loading voice settings: ${error.message}</span>
+                </div>
+            `;
+        }
     }
 
     async function loadInitialGreeting(companyId, input, preview) {
