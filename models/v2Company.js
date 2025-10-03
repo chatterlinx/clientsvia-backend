@@ -1004,8 +1004,7 @@ const companySchema = new mongoose.Schema({
                 avgResponseTime: { type: Number, default: 0 },
                 successRate: { type: Number, default: 0 },
                 lastOptimized: { type: Date, default: Date.now }
-            }
-        },
+            },
 
         // 🎤 V2 VOICE SETTINGS - ELEVENLABS INTEGRATION
         // Migrated from legacy aiSettings.elevenLabs to aiAgentLogic.voiceSettings
@@ -1082,10 +1081,11 @@ const companySchema = new mongoose.Schema({
                 type: String, 
                 default: '2.0' 
             }
-        },
+        }
+    }, // ← End of aiAgentLogic
         
-        // V2 DELETED: Legacy HighLevel integration fields - v2 bloat eliminated
-        // V2 DELETED: Legacy googleOAuth field - using JWT-only authentication system
+    // V2 DELETED: Legacy HighLevel integration fields - v2 bloat eliminated
+    // V2 DELETED: Legacy googleOAuth field - using JWT-only authentication system
     notes: { type: [noteSchema], default: [] },
     
     // Booking Scripts Configuration
