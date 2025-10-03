@@ -7738,9 +7738,21 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
             if (apiToggle) {
                 // FORCE reset to OFF on page load (default to ClientsVia Global API)
                 apiToggle.checked = false;
-                toggleApiKeySource(); // Apply the "off" state
                 
-                apiToggle.addEventListener('change', toggleApiKeySource);
+                // Mark this field as "already initialized" to prevent other scripts from touching it
+                apiToggle.dataset.initialized = 'true';
+                
+                // Apply the "off" state immediately
+                toggleApiKeySource();
+                
+                // Add change listener
+                apiToggle.addEventListener('change', function(e) {
+                    console.log('🔄 API toggle changed by USER:', e.target.checked);
+                    toggleApiKeySource();
+                    
+                    // Prevent event bubbling that might trigger other listeners
+                    e.stopPropagation();
+                });
             }
 
             // Test voice button
