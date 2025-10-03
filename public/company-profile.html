@@ -1179,7 +1179,7 @@
                                     </div>
                                     
                                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                        <div>
+                                        <div id="api-key-section" class="hidden">
                                             <label for="elevenlabsApiKey" class="form-label">
                                                 <span id="api-key-label">Your ElevenLabs API Key</span>
                                                 <span class="text-xs text-orange-600 ml-1" id="api-key-required">(Required when using own API)</span>
@@ -7269,6 +7269,7 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
         function toggleApiKeySource() {
             const checkbox = document.getElementById('useOwnApiKey');
             const apiKeyInput = document.getElementById('elevenlabsApiKey');
+            const apiKeySection = document.getElementById('api-key-section');
             const globalInfo = document.getElementById('global-api-info');
             const ownInfo = document.getElementById('own-api-info');
             const subscriptionInfo = document.getElementById('subscription-info');
@@ -7279,24 +7280,26 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
                 // Switch to own API mode
                 apiKeyInput.disabled = false;
                 apiKeyInput.required = true;
+                apiKeySection.classList.remove('hidden');
                 globalInfo.classList.add('hidden');
                 ownInfo.classList.remove('hidden');
                 subscriptionInfo.classList.remove('hidden');
                 apiSourceDescription.textContent = 'Using your own ElevenLabs API account';
                 toggleLabel.textContent = 'Use ClientsVia API';
-                
+                console.log('🔑 Switched to Own API mode - API key field visible');
 
             } else {
                 // Switch to global API mode
                 apiKeyInput.disabled = true;
                 apiKeyInput.required = false;
                 apiKeyInput.value = ''; // Clear the field
+                apiKeySection.classList.add('hidden');
                 globalInfo.classList.remove('hidden');
                 ownInfo.classList.add('hidden');
                 subscriptionInfo.classList.add('hidden');
                 apiSourceDescription.textContent = 'Using ClientsVia global API (default for all companies)';
                 toggleLabel.textContent = 'Use Own API';
-                
+                console.log('🌍 Switched to Global API mode - API key field hidden');
 
             }
             
