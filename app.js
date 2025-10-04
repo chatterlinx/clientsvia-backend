@@ -166,14 +166,7 @@ try {
     console.error('❌ Failed to load V2 Knowledge Management routes:', error);
 }
 
-// 🚀 V2 INSTANT RESPONSES ROUTES - Priority 0 System
-try {
-    const v2InstantResponsesRoutes = require('./routes/company/v2instantResponses');
-    app.use('/api/v2/company', v2InstantResponsesRoutes);
-    console.log('✅ V2 Instant Responses routes registered at /api/v2/company/:companyId/instant-responses');
-} catch (error) {
-    console.error('❌ Failed to load V2 Instant Responses routes:', error);
-}
+// 🗑️ DELETED: V2 Instant Responses routes - replaced by InstantResponseCategories system in Knowledge Management
 
 // V2 DELETED: Local Company Q&A routes - using main Company Q&A system instead
 // Main Company Q&A system (via v2knowledgeManagement.js) is working perfectly
