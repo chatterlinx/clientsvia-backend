@@ -1254,48 +1254,73 @@ router.get('/company/:companyId/quick-variables', authenticateJWT, async (req, r
     console.log('[QV-GET] Quick Variables GET called! Company ID:', req.params.companyId);
     try {
         const v2Company = require('../models/v2Company');
-        const company = await v2Company.findById(req.params.companyId).select('quickVariables').lean();
+        
+        // 🔍 DIAGNOSTIC: Don't use .lean() to ensure we get fresh data
+        const company = await v2Company.findById(req.params.companyId).select('quickVariables');
         
         if (!company) {
+            console.error('[QV-GET] ❌ Company not found:', req.params.companyId);
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
         
-        console.log('[QV-GET] Returning', (company.quickVariables || []).length, 'variables');
+        const variables = company.quickVariables || [];
+        console.log('[QV-GET] 📊 Found company document');
+        console.log('[QV-GET] 📊 quickVariables field exists:', company.quickVariables !== undefined);
+        console.log('[QV-GET] 📊 quickVariables is array:', Array.isArray(company.quickVariables));
+        console.log('[QV-GET] 📊 Variable count:', variables.length);
+        
+        if (variables.length > 0) {
+            console.log('[QV-GET] 📊 First variable:', variables[0]);
+        }
+        
+        console.log('[QV-GET] ✅ Returning', variables.length, 'variables');
         res.json({
             success: true,
-            data: company.quickVariables || []
+            data: variables
         });
     } catch (error) {
-        console.error('[QV-GET] Error loading quick variables:', error);
+        console.error('[QV-GET] ❌ Error loading quick variables:', error);
         res.status(500).json({ success: false, message: 'Failed to load variables' });
     }
 });
 
 // POST create new quick variable
 router.post('/company/:companyId/quick-variables', authenticateJWT, async (req, res) => {
-    console.log('[QV-POST] Quick Variables POST called! Company ID:', req.params.companyId);
+    console.log('[QV-POST] ==========================================');
+    console.log('[QV-POST] Quick Variables POST called!');
+    console.log('[QV-POST] Company ID:', req.params.companyId);
+    console.log('[QV-POST] Request body:', req.body);
+    
     try {
         const { v4: uuidv4 } = require('uuid');
         const v2Company = require('../models/v2Company');
         const { name, value } = req.body;
         
         if (!name || !value) {
+            console.error('[QV-POST] ❌ Validation failed: Missing name or value');
             return res.status(400).json({ success: false, message: 'Name and value required' });
         }
         
+        console.log('[QV-POST] 📥 Finding company document...');
         const company = await v2Company.findById(req.params.companyId);
         
         if (!company) {
+            console.error('[QV-POST] ❌ Company not found:', req.params.companyId);
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
         
+        console.log('[QV-POST] ✅ Company found');
+        console.log('[QV-POST] 📊 Current quickVariables:', company.quickVariables?.length || 0, 'variables');
+        
         if (!company.quickVariables) {
+            console.log('[QV-POST] 🔧 Initializing quickVariables array');
             company.quickVariables = [];
         }
         
         // Check duplicate
         const exists = company.quickVariables.find(v => v.name.toLowerCase() === name.toLowerCase());
         if (exists) {
+            console.error('[QV-POST] ❌ Duplicate variable name:', name);
             return res.status(409).json({ success: false, message: 'Variable name already exists' });
         }
         
@@ -1306,22 +1331,34 @@ router.post('/company/:companyId/quick-variables', authenticateJWT, async (req, 
             createdAt: new Date()
         };
         
+        console.log('[QV-POST] 💾 Adding new variable:', newVar);
         company.quickVariables.push(newVar);
+        
+        console.log('[QV-POST] 💾 Saving to MongoDB...');
         await company.save();
+        console.log('[QV-POST] ✅ MongoDB save complete');
+        
+        // 🔍 VERIFY: Re-fetch to confirm save
+        console.log('[QV-POST] 🔍 Verifying save by re-fetching...');
+        const verifyCompany = await v2Company.findById(req.params.companyId).select('quickVariables');
+        console.log('[QV-POST] 🔍 Verified quickVariables count:', verifyCompany.quickVariables?.length || 0);
         
         // 🚀 CRITICAL: Clear Redis cache to ensure fresh data on next load
         const cacheKey = `company:${req.params.companyId}`;
         await redisClient.del(cacheKey);
         console.log('[QV-POST] ✅ Cache cleared:', cacheKey);
         
-        console.log('[QV-POST] Variable created:', newVar.id);
+        console.log('[QV-POST] ✅ Variable created successfully:', newVar.id);
+        console.log('[QV-POST] ==========================================');
+        
         res.status(201).json({
             success: true,
             message: 'Variable created',
             data: newVar
         });
     } catch (error) {
-        console.error('[QV-POST] Error creating quick variable:', error);
+        console.error('[QV-POST] ❌ Error creating quick variable:', error);
+        console.error('[QV-POST] ❌ Stack trace:', error.stack);
         res.status(500).json({ success: false, message: 'Failed to create variable' });
     }
 });
