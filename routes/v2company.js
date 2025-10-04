@@ -1309,6 +1309,11 @@ router.post('/company/:companyId/quick-variables', authenticateJWT, async (req, 
         company.quickVariables.push(newVar);
         await company.save();
         
+        // 🚀 CRITICAL: Clear Redis cache to ensure fresh data on next load
+        const cacheKey = `company:${req.params.companyId}`;
+        await redisClient.del(cacheKey);
+        console.log('[QV-POST] ✅ Cache cleared:', cacheKey);
+        
         console.log('[QV-POST] Variable created:', newVar.id);
         res.status(201).json({
             success: true,
@@ -1340,6 +1345,11 @@ router.delete('/company/:companyId/quick-variables/:id', authenticateJWT, async 
         }
         
         await company.save();
+        
+        // 🚀 CRITICAL: Clear Redis cache to ensure fresh data on next load
+        const cacheKey = `company:${req.params.companyId}`;
+        await redisClient.del(cacheKey);
+        console.log('[QV-DELETE] ✅ Cache cleared:', cacheKey);
         
         console.log('[QV-DELETE] Variable deleted');
         res.json({
