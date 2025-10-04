@@ -1247,7 +1247,18 @@ router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
 
 // ============================================================================
 // QUICK VARIABLES - Piggybacking on existing v2company routes!
+// Version: 2.0 - Enterprise Mongoose + Redis Pattern
 // ============================================================================
+
+// 🔍 DIAGNOSTIC: Check Quick Variables version
+router.get('/company/:companyId/quick-variables/version', (req, res) => {
+    res.json({
+        version: '2.0',
+        pattern: 'Enterprise Mongoose + Redis',
+        timestamp: new Date().toISOString(),
+        message: 'Quick Variables using proven enterprise pattern'
+    });
+});
 
 // GET all quick variables for a company
 router.get('/company/:companyId/quick-variables', authenticateJWT, async (req, res) => {
