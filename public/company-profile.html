@@ -8407,122 +8407,7 @@ This error needs to be fixed - not masked!
             // No separate legacy API calls needed - everything is unified in the main company data
         }
 
-        // ⚡ INSTANT RESPONSES MANAGEMENT
-        function renderInstantResponses(instantResponses = []) {
-            const container = document.getElementById('instant-responses-list');
-            if (!container) return;
-
-            if (instantResponses.length === 0) {
-                container.innerHTML = `
-                    <div class="text-center py-8 text-gray-500">
-                        <i class="fas fa-bolt text-4xl mb-4"></i>
-                        <p>No instant responses configured yet.</p>
-                        <p class="text-sm">Add your first instant response for 0ms customer satisfaction!</p>
-                    </div>
-                `;
-                return;
-            }
-
-            container.innerHTML = instantResponses.map(response => `
-                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <div class="flex items-center justify-between">
-                        <div class="flex-1">
-                            <div class="flex items-center space-x-3 mb-2">
-                                <span class="px-2 py-1 bg-${getCategoryColor(response.category)}-100 text-${getCategoryColor(response.category)}-800 text-xs rounded-full font-medium">
-                                    ${response.category}
-                                </span>
-                                <span class="text-xs text-gray-500">Priority: ${response.priority}</span>
-                                <span class="px-2 py-1 ${response.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} text-xs rounded-full">
-                                    ${response.enabled ? 'Enabled' : 'Disabled'}
-                                </span>
-                            </div>
-                            <div class="text-sm text-gray-600 mb-1">
-                                <strong>Triggers:</strong> ${response.trigger.join(', ')}
-                            </div>
-                            <div class="text-sm text-gray-800">
-                                <strong>Response:</strong> "${response.response}"
-                            </div>
-                        </div>
-                        <div class="flex items-center space-x-2 ml-4">
-                            <button onclick="editInstantResponse('${response.id}')" class="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors">
-                                <i class="fas fa-edit mr-1"></i>Edit
-                            </button>
-                            <button onclick="deleteInstantResponse('${response.id}')" class="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors">
-                                <i class="fas fa-trash mr-1"></i>Delete
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function getCategoryColor(category) {
-            const colors = {
-                'greeting': 'green',
-                'emergency': 'red',
-                'common': 'blue',
-                'service': 'blue',
-                'pricing': 'green',
-                'transfer': 'orange',
-                'closing': 'gray'
-            };
-            return colors[category] || 'gray';
-        }
-
-        // 📋 RESPONSE TEMPLATES MANAGEMENT
-        function renderResponseTemplates(responseTemplates = []) {
-            const container = document.getElementById('response-templates-list');
-            if (!container) return;
-
-            if (responseTemplates.length === 0) {
-                container.innerHTML = `
-                    <div class="text-center py-8 text-gray-500">
-                        <i class="fas fa-file-alt text-4xl mb-4"></i>
-                        <p>No response templates configured yet.</p>
-                        <p class="text-sm">Add your first template for intelligent 100ms responses!</p>
-                    </div>
-                `;
-                return;
-            }
-
-            container.innerHTML = responseTemplates.map(template => `
-                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <div class="flex items-center justify-between">
-                        <div class="flex-1">
-                            <div class="flex items-center space-x-3 mb-2">
-                                <h5 class="font-medium text-gray-800">${template.name}</h5>
-                                <span class="px-2 py-1 bg-${getCategoryColor(template.category)}-100 text-${getCategoryColor(template.category)}-800 text-xs rounded-full font-medium">
-                                    ${template.category}
-                                </span>
-                                <span class="text-xs text-gray-500">Confidence: ${template.confidence}</span>
-                                <span class="px-2 py-1 ${template.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} text-xs rounded-full">
-                                    ${template.enabled ? 'Enabled' : 'Disabled'}
-                                </span>
-                            </div>
-                            <div class="text-sm text-gray-600 mb-1">
-                                <strong>Keywords:</strong> ${template.keywords.join(', ')}
-                            </div>
-                            <div class="text-sm text-gray-800">
-                                <strong>Template:</strong> "${template.template.substring(0, 100)}${template.template.length > 100 ? '...' : ''}"
-                            </div>
-                            ${template.variables && template.variables.length > 0 ? `
-                                <div class="text-xs text-gray-500 mt-1">
-                                    <strong>Variables:</strong> ${template.variables.map(v => v.name).join(', ')}
-                                </div>
-                            ` : ''}
-                        </div>
-                        <div class="flex items-center space-x-2 ml-4">
-                            <button onclick="editResponseTemplate('${template.id}')" class="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors">
-                                <i class="fas fa-edit mr-1"></i>Edit
-                            </button>
-                            <button onclick="deleteResponseTemplate('${template.id}')" class="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors">
-                                <i class="fas fa-trash mr-1"></i>Delete
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
+        // 🗑️ DELETED: Legacy renderInstantResponses() and renderResponseTemplates() functions - system replaced by Knowledge Management
 
         // Save unified AI agent configuration (personality + instant responses + templates)
         async function saveAgentPersonalitySettings() {
@@ -8658,14 +8543,7 @@ This error needs to be fixed - not masked!
                     
                     console.log('✅ UNIFIED BRAIN: Agent brain configuration loaded successfully:', data);
                     
-                    // 🎨 RENDER INSTANT RESPONSES AND TEMPLATES
-                    if (data.agentBrain) {
-                        // Render instant responses
-                        renderInstantResponses(data.agentBrain.instantResponses || []);
-                        
-                        // Render response templates  
-                        renderResponseTemplates(data.agentBrain.responseTemplates || []);
-                    }
+                    // 🗑️ DELETED: Instant Responses and Response Templates rendering - legacy system removed
                     
                     // 🎭 POPULATE PERSONALITY FIELDS (backward compatibility)
                     const personality = data.agentPersonality || data.agentBrain?.identity || {};
