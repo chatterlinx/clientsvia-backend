@@ -109,18 +109,41 @@ router.get('/:companyId/v2-voice-settings/status', async (req, res) => {
                 status.checks.elevenLabsApi.details.apiSource = voiceSettings?.apiSource || 'not configured';
                 console.log(`❌ [CHECK 2] API: FAIL - No API key`);
             } else {
-                const userInfo = await getUserInfo({ company });
-                status.checks.elevenLabsApi.passed = true;
-                status.checks.elevenLabsApi.details = {
-                    subscription: userInfo.subscription?.tier || 'unknown',
-                    charactersUsed: userInfo.subscription?.character_count || 0,
-                    charactersLimit: userInfo.subscription?.character_limit || 0,
-                    apiKeySource: voiceSettings?.apiSource === 'own' ? 'Your Own API' : 'ClientsVia Global'
-                };
-                console.log(`✅ [CHECK 2] API: PASS - ${status.checks.elevenLabsApi.details.subscription}`);
+                // 🔧 WORLD-CLASS FIX: Test API with voices endpoint (doesn't require user_read permission)
+                // This is more reliable because TTS uses voices, not user info
+                console.log(`🔍 [CHECK 2] Testing API with voices endpoint...`);
+                const voices = await getAvailableVoices({ company });
+                
+                if (voices && voices.length > 0) {
+                    status.checks.elevenLabsApi.passed = true;
+                    status.checks.elevenLabsApi.details = {
+                        voicesAvailable: voices.length,
+                        apiKeySource: voiceSettings?.apiSource === 'own' ? 'Your Own API' : 'ClientsVia Global',
+                        connection: 'Active',
+                        message: 'API key is valid and voices are accessible'
+                    };
+                    console.log(`✅ [CHECK 2] API: PASS - ${voices.length} voices available`);
+                    
+                    // Try to get user info for additional details (optional, won't fail if missing permissions)
+                    try {
+                        const userInfo = await getUserInfo({ company });
+                        status.checks.elevenLabsApi.details.subscription = userInfo.subscription?.tier || 'unknown';
+                        status.checks.elevenLabsApi.details.charactersUsed = userInfo.subscription?.character_count || 0;
+                        status.checks.elevenLabsApi.details.charactersLimit = userInfo.subscription?.character_limit || 0;
+                        console.log(`✅ [CHECK 2] API: Subscription info added - ${userInfo.subscription?.tier}`);
+                    } catch (userInfoError) {
+                        // Non-critical: User info is just bonus data
+                        console.log(`⚠️ [CHECK 2] API: Could not get subscription info (non-critical): ${userInfoError.message}`);
+                        status.checks.elevenLabsApi.details.note = 'Subscription info unavailable (API key may have limited permissions, but TTS works)';
+                    }
+                } else {
+                    status.checks.elevenLabsApi.details.error = 'No voices returned from API';
+                    console.log(`❌ [CHECK 2] API: FAIL - No voices available`);
+                }
             }
         } catch (error) {
             status.checks.elevenLabsApi.details.error = error.message;
+            status.checks.elevenLabsApi.details.solution = 'Verify ELEVENLABS_API_KEY environment variable is set correctly';
             console.log(`❌ [CHECK 2] API: FAIL - ${error.message}`);
         }
 
