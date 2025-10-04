@@ -1332,11 +1332,21 @@ router.post('/company/:companyId/quick-variables', authenticateJWT, async (req, 
         };
         
         console.log('[QV-POST] 💾 Adding new variable:', newVar);
-        company.quickVariables.push(newVar);
         
-        console.log('[QV-POST] 💾 Saving to MongoDB...');
-        await company.save();
-        console.log('[QV-POST] ✅ MongoDB save complete');
+        // 🔧 CRITICAL FIX: Use MongoDB $push operator for array updates
+        console.log('[QV-POST] 💾 Saving to MongoDB using $push...');
+        const updatedCompany = await v2Company.findByIdAndUpdate(
+            req.params.companyId,
+            { $push: { quickVariables: newVar } },
+            { new: true }
+        );
+        
+        if (!updatedCompany) {
+            console.error('[QV-POST] ❌ Company not found after update');
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+        
+        console.log('[QV-POST] ✅ MongoDB $push complete');
         
         // 🔍 VERIFY: Re-fetch to confirm save
         console.log('[QV-POST] 🔍 Verifying save by re-fetching...');
