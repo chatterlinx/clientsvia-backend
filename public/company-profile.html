@@ -7052,19 +7052,7 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
             const toggleLabel = document.getElementById('toggle-label');
             
             if (checkbox.checked) {
-                // Switch to own API mode
-                apiKeyInput.disabled = false;
-                apiKeyInput.required = true;
-                apiKeySection.classList.remove('hidden');
-                globalInfo.classList.add('hidden');
-                ownInfo.classList.remove('hidden');
-                subscriptionInfo.classList.remove('hidden');
-                apiSourceDescription.textContent = 'Using your own ElevenLabs API account';
-                toggleLabel.textContent = 'Use ClientsVia API';
-                console.log('🔑 Switched to Own API mode - API key field visible');
-
-            } else {
-                // Switch to global API mode
+                // Switch to ClientsVia API mode (toggle is ON = using global API)
                 apiKeyInput.disabled = true;
                 apiKeyInput.required = false;
                 apiKeyInput.value = ''; // Clear the field
@@ -7073,8 +7061,20 @@ ${hasSmartData ? '\n✅ This template was personalized based on your company inf
                 ownInfo.classList.add('hidden');
                 subscriptionInfo.classList.add('hidden');
                 apiSourceDescription.textContent = 'Using ClientsVia global API (default for all companies)';
+                toggleLabel.textContent = 'Use ClientsVia API';
+                console.log('🌍 Using ClientsVia Global API - API key field hidden');
+
+            } else {
+                // Switch to own API mode (toggle is OFF = using own API)
+                apiKeyInput.disabled = false;
+                apiKeyInput.required = true;
+                apiKeySection.classList.remove('hidden');
+                globalInfo.classList.add('hidden');
+                ownInfo.classList.remove('hidden');
+                subscriptionInfo.classList.remove('hidden');
+                apiSourceDescription.textContent = 'Using your own ElevenLabs API account';
                 toggleLabel.textContent = 'Use Own API';
-                console.log('🌍 Switched to Global API mode - API key field hidden');
+                console.log('🔑 Using Own API mode - API key field visible');
 
             }
             
