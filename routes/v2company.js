@@ -1251,20 +1251,27 @@ router.post('/companies/:companyId/agent-priority-config', async (req, res) => {
 
 // GET all quick variables for a company
 router.get('/company/:companyId/quick-variables', authenticateJWT, async (req, res) => {
-    console.log('[QV-GET] Quick Variables GET called! Company ID:', req.params.companyId);
+    const { companyId } = req.params;
+    console.log('[QV-GET] ==========================================');
+    console.log('[QV-GET] Quick Variables GET called! Company ID:', companyId);
+    
     try {
-        const v2Company = require('../models/v2Company');
+        const Company = require('../models/v2Company');
         
-        // 🔍 DIAGNOSTIC: Don't use .lean() to ensure we get fresh data
-        const company = await v2Company.findById(req.params.companyId).select('quickVariables');
+        // 🚀 ENTERPRISE PATTERN: Find company using Mongoose
+        console.log('[QV-GET] 📥 Finding company document...');
+        const company = await Company.findById(companyId).select('quickVariables companyName');
         
         if (!company) {
-            console.error('[QV-GET] ❌ Company not found:', req.params.companyId);
+            console.error('[QV-GET] ❌ Company not found:', companyId);
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
         
+        console.log('[QV-GET] ✅ Found company:', company.companyName);
+        
+        // Ensure quickVariables exists (initialize if needed)
         const variables = company.quickVariables || [];
-        console.log('[QV-GET] 📊 Found company document');
+        
         console.log('[QV-GET] 📊 quickVariables field exists:', company.quickVariables !== undefined);
         console.log('[QV-GET] 📊 quickVariables is array:', Array.isArray(company.quickVariables));
         console.log('[QV-GET] 📊 Variable count:', variables.length);
@@ -1274,26 +1281,30 @@ router.get('/company/:companyId/quick-variables', authenticateJWT, async (req, r
         }
         
         console.log('[QV-GET] ✅ Returning', variables.length, 'variables');
+        console.log('[QV-GET] ==========================================');
+        
         res.json({
             success: true,
             data: variables
         });
     } catch (error) {
         console.error('[QV-GET] ❌ Error loading quick variables:', error);
+        console.error('[QV-GET] ❌ Stack trace:', error.stack);
         res.status(500).json({ success: false, message: 'Failed to load variables' });
     }
 });
 
 // POST create new quick variable
 router.post('/company/:companyId/quick-variables', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
     console.log('[QV-POST] ==========================================');
     console.log('[QV-POST] Quick Variables POST called!');
-    console.log('[QV-POST] Company ID:', req.params.companyId);
+    console.log('[QV-POST] Company ID:', companyId);
     console.log('[QV-POST] Request body:', req.body);
     
     try {
         const { v4: uuidv4 } = require('uuid');
-        const v2Company = require('../models/v2Company');
+        const Company = require('../models/v2Company');
         const { name, value } = req.body;
         
         if (!name || !value) {
@@ -1301,29 +1312,32 @@ router.post('/company/:companyId/quick-variables', authenticateJWT, async (req, 
             return res.status(400).json({ success: false, message: 'Name and value required' });
         }
         
-        console.log('[QV-POST] 📥 Finding company document...');
-        const company = await v2Company.findById(req.params.companyId);
+        // 🚀 ENTERPRISE PATTERN Step 1: Find company document using Mongoose
+        console.log('[QV-POST] 📥 Step 1: Finding company document...');
+        const company = await Company.findById(companyId);
         
         if (!company) {
-            console.error('[QV-POST] ❌ Company not found:', req.params.companyId);
+            console.error('[QV-POST] ❌ Company not found:', companyId);
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
         
-        console.log('[QV-POST] ✅ Company found');
+        console.log('[QV-POST] ✅ Found company:', company.companyName);
         console.log('[QV-POST] 📊 Current quickVariables:', company.quickVariables?.length || 0, 'variables');
         
+        // Initialize array if it doesn't exist
         if (!company.quickVariables) {
             console.log('[QV-POST] 🔧 Initializing quickVariables array');
             company.quickVariables = [];
         }
         
-        // Check duplicate
+        // Check for duplicates
         const exists = company.quickVariables.find(v => v.name.toLowerCase() === name.toLowerCase());
         if (exists) {
             console.error('[QV-POST] ❌ Duplicate variable name:', name);
             return res.status(409).json({ success: false, message: 'Variable name already exists' });
         }
         
+        // 🚀 ENTERPRISE PATTERN Step 2: Modify document directly
         const newVar = {
             id: uuidv4(),
             name: name.trim(),
@@ -1331,32 +1345,32 @@ router.post('/company/:companyId/quick-variables', authenticateJWT, async (req, 
             createdAt: new Date()
         };
         
-        console.log('[QV-POST] 💾 Adding new variable:', newVar);
+        console.log('[QV-POST] 💾 Step 2: Adding new variable:', newVar);
+        company.quickVariables.push(newVar);
         
-        // 🔧 CRITICAL FIX: Use MongoDB $push operator for array updates
-        console.log('[QV-POST] 💾 Saving to MongoDB using $push...');
-        const updatedCompany = await v2Company.findByIdAndUpdate(
-            req.params.companyId,
-            { $push: { quickVariables: newVar } },
-            { new: true }
-        );
-        
-        if (!updatedCompany) {
-            console.error('[QV-POST] ❌ Company not found after update');
-            return res.status(404).json({ success: false, message: 'Company not found' });
-        }
-        
-        console.log('[QV-POST] ✅ MongoDB $push complete');
+        // 🚀 ENTERPRISE PATTERN Step 3: Save using company.save()
+        console.log('[QV-POST] 💾 Step 3: Saving to MongoDB using company.save()...');
+        await company.save();
+        console.log('[QV-POST] ✅ MongoDB save complete');
         
         // 🔍 VERIFY: Re-fetch to confirm save
-        console.log('[QV-POST] 🔍 Verifying save by re-fetching...');
-        const verifyCompany = await v2Company.findById(req.params.companyId).select('quickVariables');
+        console.log('[QV-POST] 🔍 Step 4: Verifying save by re-fetching...');
+        const verifyCompany = await Company.findById(companyId).select('quickVariables');
         console.log('[QV-POST] 🔍 Verified quickVariables count:', verifyCompany.quickVariables?.length || 0);
         
-        // 🚀 CRITICAL: Clear Redis cache to ensure fresh data on next load
-        const cacheKey = `company:${req.params.companyId}`;
-        await redisClient.del(cacheKey);
-        console.log('[QV-POST] ✅ Cache cleared:', cacheKey);
+        // 🚀 ENTERPRISE PATTERN Step 4: Clear Redis cache
+        console.log('[QV-POST] 🗑️ Step 5: Clearing Redis cache...');
+        if (redisClient && redisClient.isReady) {
+            const cacheKeys = [
+                `company:${companyId}`,
+                `company:${companyId}:quickvars`
+            ];
+            
+            await Promise.all(cacheKeys.map(key => redisClient.del(key)));
+            console.log('[QV-POST] ✅ Redis cache cleared:', cacheKeys.join(', '));
+        } else {
+            console.log('[QV-POST] ⚠️ Redis client not available - skipping cache clear');
+        }
         
         console.log('[QV-POST] ✅ Variable created successfully:', newVar.id);
         console.log('[QV-POST] ==========================================');
@@ -1375,36 +1389,66 @@ router.post('/company/:companyId/quick-variables', authenticateJWT, async (req, 
 
 // DELETE quick variable
 router.delete('/company/:companyId/quick-variables/:id', authenticateJWT, async (req, res) => {
-    console.log('[QV-DELETE] Quick Variables DELETE called! Company ID:', req.params.companyId, 'Var ID:', req.params.id);
+    const { companyId, id } = req.params;
+    console.log('[QV-DELETE] ==========================================');
+    console.log('[QV-DELETE] Quick Variables DELETE called!');
+    console.log('[QV-DELETE] Company ID:', companyId, 'Variable ID:', id);
+    
     try {
-        const v2Company = require('../models/v2Company');
-        const company = await v2Company.findById(req.params.companyId);
+        const Company = require('../models/v2Company');
+        
+        // 🚀 ENTERPRISE PATTERN Step 1: Find company document using Mongoose
+        console.log('[QV-DELETE] 📥 Step 1: Finding company document...');
+        const company = await Company.findById(companyId);
         
         if (!company) {
+            console.error('[QV-DELETE] ❌ Company not found:', companyId);
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
         
+        console.log('[QV-DELETE] ✅ Found company:', company.companyName);
+        console.log('[QV-DELETE] 📊 Current quickVariables:', company.quickVariables?.length || 0, 'variables');
+        
+        // 🚀 ENTERPRISE PATTERN Step 2: Modify document directly
         const before = company.quickVariables?.length || 0;
-        company.quickVariables = company.quickVariables?.filter(v => v.id !== req.params.id) || [];
+        company.quickVariables = company.quickVariables?.filter(v => v.id !== id) || [];
         
         if (company.quickVariables.length === before) {
+            console.error('[QV-DELETE] ❌ Variable not found:', id);
             return res.status(404).json({ success: false, message: 'Variable not found' });
         }
         
+        console.log('[QV-DELETE] 💾 Step 2: Variable removed from array. New count:', company.quickVariables.length);
+        
+        // 🚀 ENTERPRISE PATTERN Step 3: Save using company.save()
+        console.log('[QV-DELETE] 💾 Step 3: Saving to MongoDB using company.save()...');
         await company.save();
+        console.log('[QV-DELETE] ✅ MongoDB save complete');
         
-        // 🚀 CRITICAL: Clear Redis cache to ensure fresh data on next load
-        const cacheKey = `company:${req.params.companyId}`;
-        await redisClient.del(cacheKey);
-        console.log('[QV-DELETE] ✅ Cache cleared:', cacheKey);
+        // 🚀 ENTERPRISE PATTERN Step 4: Clear Redis cache
+        console.log('[QV-DELETE] 🗑️ Step 4: Clearing Redis cache...');
+        if (redisClient && redisClient.isReady) {
+            const cacheKeys = [
+                `company:${companyId}`,
+                `company:${companyId}:quickvars`
+            ];
+            
+            await Promise.all(cacheKeys.map(key => redisClient.del(key)));
+            console.log('[QV-DELETE] ✅ Redis cache cleared:', cacheKeys.join(', '));
+        } else {
+            console.log('[QV-DELETE] ⚠️ Redis client not available - skipping cache clear');
+        }
         
-        console.log('[QV-DELETE] Variable deleted');
+        console.log('[QV-DELETE] ✅ Variable deleted successfully');
+        console.log('[QV-DELETE] ==========================================');
+        
         res.json({
             success: true,
             message: 'Variable deleted'
         });
     } catch (error) {
-        console.error('[QV-DELETE] Error deleting quick variable:', error);
+        console.error('[QV-DELETE] ❌ Error deleting quick variable:', error);
+        console.error('[QV-DELETE] ❌ Stack trace:', error.stack);
         res.status(500).json({ success: false, message: 'Failed to delete variable' });
     }
 });
