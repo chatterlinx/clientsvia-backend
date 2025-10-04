@@ -95,6 +95,117 @@ const namedPhoneRecipientSchema = new mongoose.Schema({ name: { type: String, tr
 
 // Legacy personality responses schema removed - using aiAgentLogic.responseCategories instead
 
+// 🔧 CRITICAL FIX: Define aiAgentLogic as a proper Mongoose Schema
+// This ensures Mongoose properly tracks and persists nested changes (especially voice Settings)
+const aiAgentLogicSchema = new mongoose.Schema({
+    // Enable/disable AI Agent Logic system
+    enabled: { type: Boolean, default: true },
+    
+    // Versioning for configuration tracking
+    version: { type: Number, default: 1 },
+    lastUpdated: { type: Date, default: Date.now },
+    
+    // 🎤 INITIAL GREETING (PRIORITY -1: Plays FIRST when call connects)
+    initialGreeting: { 
+        type: String, 
+        default: 'Thank you for calling [Company Name]. How can I help you today?',
+        trim: true,
+        maxlength: 500
+    },
+    
+    // 🎯 IN-HOUSE ONLY: Knowledge Source Thresholds
+    thresholds: {
+        companyQnA: { type: Number, min: 0, max: 1, default: 0.8 },
+        tradeQnA: { type: Number, min: 0, max: 1, default: 0.75 },
+        templates: { type: Number, min: 0, max: 1, default: 0.7 },
+        inHouseFallback: { type: Number, min: 0, max: 1, default: 0.5 }
+    },
+    
+    // Performance metrics
+    metrics: {
+        totalCalls: { type: Number, default: 0 },
+        avgResponseTime: { type: Number, default: 0 },
+        successRate: { type: Number, default: 0 }
+    },
+    
+    // 🎤 V2 VOICE SETTINGS - ELEVENLABS INTEGRATION
+    // Migrated from legacy aiSettings.elevenLabs to aiAgentLogic.voiceSettings
+    voiceSettings: {
+        // API Configuration
+        apiSource: { 
+            type: String, 
+            enum: ['clientsvia', 'own'], 
+            default: 'clientsvia' 
+        },
+        apiKey: { 
+            type: String, 
+            trim: true, 
+            default: null // Only used when apiSource = 'own'
+        },
+        voiceId: { 
+            type: String, 
+            trim: true, 
+            default: null 
+        },
+        
+        // Voice Quality Controls
+        stability: { 
+            type: Number, 
+            min: 0, 
+            max: 1, 
+            default: 0.5 
+        },
+        similarityBoost: { 
+            type: Number, 
+            min: 0, 
+            max: 1, 
+            default: 0.7 
+        },
+        styleExaggeration: { 
+            type: Number, 
+            min: 0, 
+            max: 1, 
+            default: 0.0 
+        },
+        
+        // Performance & Output
+        speakerBoost: { 
+            type: Boolean, 
+            default: true 
+        },
+        aiModel: { 
+            type: String, 
+            enum: ['eleven_turbo_v2_5', 'eleven_multilingual_v2', 'eleven_monolingual_v1'], 
+            default: 'eleven_turbo_v2_5' 
+        },
+        outputFormat: { 
+            type: String, 
+            enum: ['mp3_44100_128', 'mp3_22050_32', 'pcm_16000', 'pcm_22050', 'pcm_24000'], 
+            default: 'mp3_44100_128' 
+        },
+        streamingLatency: { 
+            type: Number, 
+            min: 0, 
+            max: 4, 
+            default: 0 // 0 = best quality, higher = lower latency
+        },
+        
+        // V2 Features
+        enabled: { 
+            type: Boolean, 
+            default: true 
+        },
+        lastUpdated: { 
+            type: Date, 
+            default: Date.now 
+        },
+        version: { 
+            type: String, 
+            default: '2.0' 
+        }
+    }
+}, { _id: false });
+
 const agentSetupSchema = new mongoose.Schema({
     agentMode: { type: String, default: 'full', trim: true },
     categories: { type: [String], default: [] },
@@ -235,7 +346,14 @@ const companySchema = new mongoose.Schema({
     // ☢️ NUCLEAR ELIMINATION: agentPriorityConfig removed - legacy priority system eliminated
     
     // 🤖 AI Agent Logic Configuration
+    // 🔧 CRITICAL FIX: Using proper schema reference instead of inline object  
     aiAgentLogic: {
+        type: aiAgentLogicSchema,
+        default: () => ({})
+    },
+    // OLD INLINE DEFINITIONS BELOW THIS LINE ARE NOW OBSOLETE - TO BE REMOVED
+    // The schema is now properly defined above as aiAgentLogicSchema
+    /*
         // Enable/disable AI Agent Logic system
         enabled: { type: Boolean, default: true },
         
@@ -1082,7 +1200,7 @@ const companySchema = new mongoose.Schema({
                     default: '2.0' 
                 }
             }
-    }, // ← End of aiAgentLogic
+    */ // ← End of OLD inline aiAgentLogic definition (now obsolete)
         
     // V2 DELETED: Legacy HighLevel integration fields - v2 bloat eliminated
     // V2 DELETED: Legacy googleOAuth field - using JWT-only authentication system
