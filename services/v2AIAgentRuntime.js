@@ -135,20 +135,40 @@ class V2AIAgentRuntime {
     }
 
     /**
-     * 🚀 V2 PURE SYSTEM: NO PLACEHOLDERS - Direct string construction only
-     * V2 responses are pre-built and contextual - no legacy placeholder contamination
-     * @param {string} text - Pre-built response text
-     * @param {Object} company - Company document (for context only)
-     * @returns {string} Clean response text
+     * 🚀 V2 PLACEHOLDER REPLACEMENT SYSTEM
+     * Replaces {placeholder} syntax with actual values from company.aiAgentLogic.placeholders
+     * @param {string} text - Response text with placeholders
+     * @param {Object} company - Company document with placeholder definitions
+     * @returns {string} Response with placeholders replaced
      */
     static buildPureResponse(text, company) {
         if (!text) return text;
 
-        // V2 PURE SYSTEM: No placeholders, no string replacement, no legacy contamination
-        // All responses should be pre-built and contextual from the AI Agent Logic system
-        console.log(`[V2 PURE] ✅ Using pre-built response without placeholder contamination`);
+        let processedText = text;
         
-        return text.trim();
+        // Replace placeholders from company.aiAgentLogic.placeholders
+        if (company.aiAgentLogic?.placeholders && Array.isArray(company.aiAgentLogic.placeholders)) {
+            console.log(`🔧 [PLACEHOLDERS] Replacing ${company.aiAgentLogic.placeholders.length} placeholders`);
+            
+            company.aiAgentLogic.placeholders.forEach(placeholder => {
+                // Escape special regex characters in placeholder name
+                const escapedName = placeholder.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                
+                // Match both [Placeholder Name] and {Placeholder Name}, case-insensitive
+                const regex = new RegExp(`[\\[{]\\s*${escapedName}\\s*[\\]}]`, 'gi');
+                
+                const before = processedText;
+                processedText = processedText.replace(regex, placeholder.value);
+                
+                if (before !== processedText) {
+                    console.log(`🔧 [PLACEHOLDERS] Replaced {${placeholder.name}} → ${placeholder.value}`);
+                }
+            });
+        } else {
+            console.log(`[PLACEHOLDERS] ⚠️ No placeholders configured for company ${company._id}`);
+        }
+        
+        return processedText.trim();
     }
 
     /**
@@ -391,23 +411,23 @@ class V2AIAgentRuntime {
         enhancedResponse = enhancedResponse.replace(/\[Company Name\]/gi, companyName);
         enhancedResponse = enhancedResponse.replace(/our company/gi, companyName);
         
-        // 🔧 QUICK VARIABLES: Replace all Quick Variables with their actual values
+        // 🔧 PLACEHOLDERS: Replace all placeholders with their actual values
         // Supports both [brackets] and {braces}, case-insensitive
-        if (company.quickVariables && Array.isArray(company.quickVariables)) {
-            console.log(`🔧 [QUICK-VARS] Replacing ${company.quickVariables.length} Quick Variables`);
-            company.quickVariables.forEach(variable => {
-                // Escape special regex characters in variable name
-                const escapedName = variable.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (company.aiAgentLogic?.placeholders && Array.isArray(company.aiAgentLogic.placeholders)) {
+            console.log(`🔧 [PLACEHOLDERS] Replacing ${company.aiAgentLogic.placeholders.length} placeholders in AI role response`);
+            company.aiAgentLogic.placeholders.forEach(placeholder => {
+                // Escape special regex characters in placeholder name
+                const escapedName = placeholder.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 
-                // Match both [Variable Name] and {Variable Name}, case-insensitive
-                // Pattern: [\[{]variable name[\]}]
+                // Match both [Placeholder Name] and {Placeholder Name}, case-insensitive
+                // Pattern: [\[{]placeholder name[\]}]
                 const regex = new RegExp(`[\\[{]\\s*${escapedName}\\s*[\\]}]`, 'gi');
                 
                 const before = enhancedResponse;
-                enhancedResponse = enhancedResponse.replace(regex, variable.value);
+                enhancedResponse = enhancedResponse.replace(regex, placeholder.value);
                 
                 if (before !== enhancedResponse) {
-                    console.log(`🔧 [QUICK-VARS] Replaced [${variable.name}] or {${variable.name}} → ${variable.value}`);
+                    console.log(`🔧 [PLACEHOLDERS] Replaced {${placeholder.name}} → ${placeholder.value}`);
                 }
             });
         }
