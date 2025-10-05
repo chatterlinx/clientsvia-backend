@@ -491,9 +491,21 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
         // Save company
         await company.save();
         
-        // Clear cache
-        const cacheKey = `company:${companyId}`;
-        await redisClient.del(cacheKey);
+        // Clear ALL cache keys for this company to ensure fresh data
+        const cacheKeys = [
+            `company:${companyId}`,
+            `company:phone:${company.twilioConfig?.phoneNumbers?.[0]?.phoneNumber}`,
+            `companyQnA:${companyId}`,
+            `tradeQnA:${companyId}`
+        ];
+        
+        for (const key of cacheKeys) {
+            if (key && !key.includes('undefined')) {
+                await redisClient.del(key);
+                console.log(`🗑️ Cleared cache key: ${key}`);
+            }
+        }
+        
         console.log(`🚨 Account status changed for company ${company.companyName} (${companyId}): ${status}`);
         console.log(`   Changed by: ${changedBy} at ${historyEntry.changedAt}`);
         console.log(`   Reason: ${reason || 'Not specified'}`);

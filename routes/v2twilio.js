@@ -296,10 +296,11 @@ router.post('/voice', async (req, res) => {
           const companyName = company.companyName || company.businessName || 'us';
           forwardMessage = `Thank you for calling ${companyName}. Please hold while we connect your call.`;
         } else {
-          // Replace {Company Name} placeholder (case-insensitive)
+          // Replace {Company Name} placeholder (case-insensitive, with or without space)
           console.log(`[CALL FORWARD] Using custom message with placeholder replacement`);
           const companyName = company.companyName || company.businessName || 'the company';
-          forwardMessage = forwardMessage.replace(/\{company name\}/gi, companyName);
+          // Match: {company name}, {companyname}, {Company Name}, {CompanyName}, etc.
+          forwardMessage = forwardMessage.replace(/\{company\s*name\}/gi, companyName);
         }
         
         console.log(`[CALL FORWARD] Final message: "${forwardMessage}"`);
