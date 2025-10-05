@@ -266,6 +266,34 @@ router.post('/voice', async (req, res) => {
     }
 
     console.log(`[COMPANY FOUND] [OK] Company: ${company.companyName} (ID: ${company._id})`);
+    
+    // 🚨 CHECK ACCOUNT STATUS - Handle suspended/forwarded accounts
+    if (company.accountStatus && company.accountStatus.status) {
+      const accountStatus = company.accountStatus.status;
+      console.log(`[ACCOUNT STATUS] Company status: ${accountStatus}`);
+      
+      if (accountStatus === 'suspended') {
+        console.log(`[ACCOUNT SUSPENDED] Company ${company.companyName} account is suspended`);
+        const suspensionReason = company.accountStatus.reason || 'This account has been temporarily suspended';
+        twiml.say(escapeTwiML(`We're sorry, but service for this number is temporarily unavailable. ${suspensionReason}. Please contact support for assistance.`));
+        twiml.hangup();
+        res.type('text/xml');
+        res.send(twiml.toString());
+        return;
+      }
+      
+      if (accountStatus === 'call_forward' && company.accountStatus.callForwardNumber) {
+        console.log(`[CALL FORWARD] Forwarding call to ${company.accountStatus.callForwardNumber}`);
+        const forwardNumber = company.accountStatus.callForwardNumber;
+        const forwardReason = company.accountStatus.reason || 'Your call is being forwarded';
+        twiml.say(escapeTwiML(forwardReason));
+        twiml.dial(forwardNumber);
+        res.type('text/xml');
+        res.send(twiml.toString());
+        return;
+      }
+    }
+    
     console.log(`[AI AGENT LOGIC] Using new AI Agent Logic system for company: ${company._id}`);
     
     // 🚀 USE NEW V2 AI AGENT SYSTEM

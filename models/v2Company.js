@@ -305,6 +305,28 @@ const companySchema = new mongoose.Schema({
     // Profile completion tracking
     profileComplete: { type: Boolean, default: false }, // Track if detailed info has been added
     
+    // 🚨 Account Status Management - Critical for billing/service control
+    accountStatus: {
+        status: { 
+            type: String, 
+            enum: ['active', 'call_forward', 'suspended'], 
+            default: 'active',
+            index: true 
+        },
+        callForwardNumber: { type: String, trim: true, default: null }, // Where to forward calls when status is 'call_forward'
+        reason: { type: String, trim: true, default: null }, // Why status was changed (e.g., "Payment pending", "Maintenance")
+        changedBy: { type: String, trim: true, default: null }, // Admin/user who made the change
+        changedAt: { type: Date, default: null }, // When status was changed
+        history: [{
+            status: { type: String, enum: ['active', 'call_forward', 'suspended'], required: true },
+            callForwardNumber: { type: String, trim: true, default: null },
+            reason: { type: String, trim: true, default: null },
+            changedBy: { type: String, trim: true, required: true },
+            changedAt: { type: Date, default: Date.now, required: true }
+        }],
+        notes: { type: String, trim: true, default: null } // Additional notes about account status
+    },
+    
     twilioConfig: { type: twilioConfigSchema, default: () => ({}) },
     smsSettings: { type: smsSettingsSchema, default: () => ({}) },
     // V2 DELETED: Legacy integrations field - HighLevel and Google OAuth eliminated 

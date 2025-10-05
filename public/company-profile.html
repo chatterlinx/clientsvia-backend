@@ -169,6 +169,31 @@
         .status-badge { @apply px-2.5 py-0.5 rounded-full text-xs font-medium; }
         .status-active { @apply bg-green-100 text-green-800; }
         .status-inactive { @apply bg-red-100 text-red-800; }
+        
+        /* Account Status Control Styles */
+        .status-option .status-card {
+            border-color: #D1D5DB;
+            background-color: #F9FAFB;
+        }
+        .status-option .status-radio:checked ~ .status-card {
+            border-width: 3px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .status-option .status-radio:checked[value="active"] ~ .status-card {
+            border-color: #10B981;
+            background-color: #ECFDF5;
+        }
+        .status-option .status-radio:checked[value="call_forward"] ~ .status-card {
+            border-color: #F59E0B;
+            background-color: #FFFBEB;
+        }
+        .status-option .status-radio:checked[value="suspended"] ~ .status-card {
+            border-color: #EF4444;
+            background-color: #FEF2F2;
+        }
+        .status-option .status-radio:checked ~ .status-card .check-indicator {
+            display: inline-block !important;
+        }
 
         
 
@@ -915,6 +940,120 @@
                                         <div>
                                             <label for="twilioAuthToken" class="form-label">Auth Token</label>
                                             <input type="text" id="twilioAuthToken" name="twilioAuthToken" class="form-input wider-textbox" placeholder="Enter Auth Token" style="font-family: monospace;">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- 🚨 Account Status Control -->
+                                <div class="config-block mt-6">
+                                    <div class="flex justify-between items-center mb-3">
+                                        <h3 class="font-semibold text-gray-700">Account Status Control</h3>
+                                        <span id="account-status-badge" class="px-3 py-1 rounded-full text-xs font-bold">
+                                            <!-- Will be populated by JavaScript -->
+                                        </span>
+                                    </div>
+                                    <p class="text-sm text-gray-500 mb-4">Control call routing and account access. All Twilio settings are preserved when changing status.</p>
+                                    
+                                    <!-- Status Selector -->
+                                    <div class="bg-white border-2 border-gray-200 rounded-lg p-5 mb-4">
+                                        <label class="form-label mb-3 flex items-center">
+                                            <i class="fas fa-toggle-on mr-2 text-indigo-600"></i>
+                                            Account Status
+                                        </label>
+                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <!-- Active Status -->
+                                            <label class="status-option cursor-pointer">
+                                                <input type="radio" name="accountStatus" value="active" class="hidden status-radio">
+                                                <div class="status-card border-2 rounded-lg p-4 transition-all hover:shadow-md">
+                                                    <div class="flex items-center justify-between mb-2">
+                                                        <div class="flex items-center">
+                                                            <i class="fas fa-check-circle text-green-600 text-xl mr-2"></i>
+                                                            <span class="font-bold text-gray-900">Active</span>
+                                                        </div>
+                                                        <i class="fas fa-circle hidden check-indicator text-green-600"></i>
+                                                    </div>
+                                                    <p class="text-xs text-gray-600">AI agent handles all calls normally</p>
+                                                </div>
+                                            </label>
+                                            
+                                            <!-- Call Forward Status -->
+                                            <label class="status-option cursor-pointer">
+                                                <input type="radio" name="accountStatus" value="call_forward" class="hidden status-radio">
+                                                <div class="status-card border-2 rounded-lg p-4 transition-all hover:shadow-md">
+                                                    <div class="flex items-center justify-between mb-2">
+                                                        <div class="flex items-center">
+                                                            <i class="fas fa-phone-forward text-yellow-600 text-xl mr-2"></i>
+                                                            <span class="font-bold text-gray-900">Call Forward</span>
+                                                        </div>
+                                                        <i class="fas fa-circle hidden check-indicator text-yellow-600"></i>
+                                                    </div>
+                                                    <p class="text-xs text-gray-600">Forward calls to external number</p>
+                                                </div>
+                                            </label>
+                                            
+                                            <!-- Suspended Status -->
+                                            <label class="status-option cursor-pointer">
+                                                <input type="radio" name="accountStatus" value="suspended" class="hidden status-radio">
+                                                <div class="status-card border-2 rounded-lg p-4 transition-all hover:shadow-md">
+                                                    <div class="flex items-center justify-between mb-2">
+                                                        <div class="flex items-center">
+                                                            <i class="fas fa-ban text-red-600 text-xl mr-2"></i>
+                                                            <span class="font-bold text-gray-900">Suspended</span>
+                                                        </div>
+                                                        <i class="fas fa-circle hidden check-indicator text-red-600"></i>
+                                                    </div>
+                                                    <p class="text-xs text-gray-600">Block all incoming calls</p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Call Forward Number (shown only when Call Forward is selected) -->
+                                    <div id="call-forward-section" class="hidden bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-4">
+                                        <label for="call-forward-number" class="form-label flex items-center text-yellow-900">
+                                            <i class="fas fa-phone mr-2"></i>
+                                            Forward To Phone Number
+                                        </label>
+                                        <input 
+                                            type="tel" 
+                                            id="call-forward-number" 
+                                            class="form-input mt-2" 
+                                            placeholder="+12395551234" 
+                                            pattern="\+?[1-9]\d{1,14}">
+                                        <p class="text-xs text-yellow-700 mt-2">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Enter phone number in E.164 format (e.g., +12395551234)
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Reason for Change -->
+                                    <div class="mb-4">
+                                        <label for="status-change-reason" class="form-label">Reason for Status Change</label>
+                                        <textarea 
+                                            id="status-change-reason" 
+                                            class="form-input" 
+                                            rows="2" 
+                                            placeholder="e.g., Payment pending, Customer request, Maintenance"
+                                            maxlength="200"></textarea>
+                                        <p class="text-xs text-gray-500 mt-1">Optional - helps track why status was changed</p>
+                                    </div>
+                                    
+                                    <!-- Save Button -->
+                                    <button 
+                                        type="button" 
+                                        id="save-account-status-btn"
+                                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
+                                        <i class="fas fa-save mr-2"></i>Update Account Status
+                                    </button>
+                                    
+                                    <!-- Status History -->
+                                    <div id="status-history-section" class="mt-6 hidden">
+                                        <h4 class="font-semibold text-gray-700 mb-3 flex items-center">
+                                            <i class="fas fa-history mr-2 text-gray-600"></i>
+                                            Status Change History
+                                        </h4>
+                                        <div id="status-history-list" class="space-y-2 max-h-60 overflow-y-auto">
+                                            <!-- Will be populated by JavaScript -->
                                         </div>
                                     </div>
                                 </div>

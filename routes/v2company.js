@@ -411,6 +411,109 @@ router.patch('/company/:id', async (req, res) => {
     }
 });
 
+// 🚨 Account Status Management - Critical for billing/service control
+router.patch('/company/:companyId/account-status', authenticateJWT, async (req, res) => {
+    const { companyId } = req.params;
+    const { status, callForwardNumber, reason, notes } = req.body;
+    
+    console.log(`[API PATCH /company/${companyId}/account-status] Status change request:`, { status, callForwardNumber, reason });
+    
+    if (!ObjectId.isValid(companyId)) {
+        return res.status(400).json({ success: false, message: 'Invalid company ID format' });
+    }
+    
+    // Validate status
+    const validStatuses = ['active', 'call_forward', 'suspended'];
+    if (!status || !validStatuses.includes(status)) {
+        return res.status(400).json({ 
+            success: false, 
+            message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+        });
+    }
+    
+    // Validate call forward number if status is call_forward
+    if (status === 'call_forward' && !callForwardNumber) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Call forward number is required when status is "call_forward"' 
+        });
+    }
+    
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+        
+        // Get admin user info from JWT token
+        const changedBy = req.user?.email || req.user?.username || 'Admin';
+        
+        // Initialize accountStatus if it doesn't exist
+        if (!company.accountStatus) {
+            company.accountStatus = {
+                status: 'active',
+                callForwardNumber: null,
+                reason: null,
+                changedBy: null,
+                changedAt: null,
+                history: [],
+                notes: null
+            };
+        }
+        
+        // Create history entry BEFORE updating current status
+        const historyEntry = {
+            status: status,
+            callForwardNumber: status === 'call_forward' ? callForwardNumber : null,
+            reason: reason || null,
+            changedBy: changedBy,
+            changedAt: new Date()
+        };
+        
+        // Update account status
+        company.accountStatus.status = status;
+        company.accountStatus.callForwardNumber = status === 'call_forward' ? callForwardNumber : null;
+        company.accountStatus.reason = reason || null;
+        company.accountStatus.changedBy = changedBy;
+        company.accountStatus.changedAt = new Date();
+        if (notes) {
+            company.accountStatus.notes = notes;
+        }
+        
+        // Add to history
+        if (!company.accountStatus.history) {
+            company.accountStatus.history = [];
+        }
+        company.accountStatus.history.push(historyEntry);
+        
+        // Save company
+        await company.save();
+        
+        // Clear cache
+        const cacheKey = `company:${companyId}`;
+        await redisClient.del(cacheKey);
+        console.log(`🚨 Account status changed for company ${company.companyName} (${companyId}): ${status}`);
+        console.log(`   Changed by: ${changedBy} at ${historyEntry.changedAt}`);
+        console.log(`   Reason: ${reason || 'Not specified'}`);
+        if (status === 'call_forward') {
+            console.log(`   Forward to: ${callForwardNumber}`);
+        }
+        
+        res.json({ 
+            success: true, 
+            message: `Account status updated to "${status}"`,
+            accountStatus: company.accountStatus
+        });
+        
+    } catch (error) {
+        console.error(`[API PATCH /company/${companyId}/account-status] Error:`, error.message, error.stack);
+        res.status(500).json({ 
+            success: false, 
+            message: `Error updating account status: ${error.message}` 
+        });
+    }
+});
+
 router.patch('/company/:companyId/configuration', async (req, res) => {
     const { companyId } = req.params;
     const { twilioConfig, smsSettings } = req.body;
