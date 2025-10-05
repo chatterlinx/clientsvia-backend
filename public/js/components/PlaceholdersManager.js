@@ -413,6 +413,22 @@ class PlaceholdersManager {
         console.log('[PH-UI-26] 📝 Opening modal...');
         console.log('[PH-UI-27] Mode:', placeholder ? 'EDIT' : 'CREATE');
         
+        // CRITICAL FIX: Clear unsaved changes state IMMEDIATELY
+        // This prevents "Leave site?" dialog from blocking modal interaction
+        console.log('[PH-UI-27b] 🔧 Clearing unsaved changes state...');
+        if (window.companyProfileManager && typeof window.companyProfileManager.clearUnsavedChanges === 'function') {
+            window.companyProfileManager.clearUnsavedChanges();
+            console.log('[PH-UI-27c] ✅ Unsaved changes cleared via companyProfileManager');
+        } else {
+            // Fallback: directly set hasUnsavedChanges to false
+            if (window.companyProfileManager) {
+                window.companyProfileManager.hasUnsavedChanges = false;
+                console.log('[PH-UI-27c] ✅ Unsaved changes cleared via direct property');
+            } else {
+                console.warn('[PH-UI-27c] ⚠️ companyProfileManager not found');
+            }
+        }
+        
         const modal = document.getElementById('placeholder-modal');
         const modalTitle = document.getElementById('placeholder-modal-title');
         const nameInput = document.getElementById('placeholder-name');
