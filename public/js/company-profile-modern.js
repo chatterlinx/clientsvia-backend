@@ -1679,6 +1679,91 @@ class CompanyProfileManager {
     }
 
     /**
+     * Collect configuration data from form
+     */
+    collectConfigData(configData) {
+        // Twilio credentials
+        const twilioSidInput = document.getElementById('twilioAccountSid');
+        const twilioTokenInput = document.getElementById('twilioAuthToken');
+        const twilioApiKeyInput = document.getElementById('twilioApiKey');
+        const twilioApiSecretInput = document.getElementById('twilioApiSecret');
+        
+        if (!configData.twilioConfig) {
+            configData.twilioConfig = {};
+        }
+        
+        if (twilioSidInput?.value) {
+            configData.twilioConfig.accountSid = twilioSidInput.value.trim();
+        }
+        
+        if (twilioTokenInput?.value && !twilioTokenInput.value.includes('••••')) {
+            configData.twilioConfig.authToken = twilioTokenInput.value.trim();
+        }
+        
+        if (twilioApiKeyInput?.value && !twilioApiKeyInput.value.includes('••••')) {
+            configData.twilioConfig.apiKey = twilioApiKeyInput.value.trim();
+        }
+        
+        if (twilioApiSecretInput?.value && !twilioApiSecretInput.value.includes('••••')) {
+            configData.twilioConfig.apiSecret = twilioApiSecretInput.value.trim();
+        }
+        
+        // Phone numbers
+        const phoneNumberItems = document.querySelectorAll('.phone-number-item');
+        const phoneNumbers = [];
+        phoneNumberItems.forEach(item => {
+            const phoneNumber = item.querySelector('input[name="phoneNumber"]')?.value?.trim();
+            const friendlyName = item.querySelector('input[name="friendlyName"]')?.value?.trim();
+            const status = item.querySelector('select[name="status"]')?.value;
+            const isPrimary = item.querySelector('.bg-blue-100')?.textContent?.includes('Primary') || false;
+            
+            if (phoneNumber) {
+                phoneNumbers.push({ phoneNumber, friendlyName, status, isPrimary });
+            }
+        });
+        
+        if (phoneNumbers.length > 0) {
+            configData.twilioConfig.phoneNumbers = phoneNumbers;
+        }
+    }
+
+    /**
+     * Collect notes data (stub - notes are handled separately)
+     */
+    collectNotesData(configData) {
+        // Notes are saved separately via their own API
+        // This is just a stub for compatibility
+    }
+
+    /**
+     * Collect AI settings data (stub)
+     */
+    collectAISettingsData(configData) {
+        // AI settings are handled separately
+    }
+
+    /**
+     * Collect voice data (stub)
+     */
+    collectVoiceData(configData) {
+        // Voice settings are handled separately
+    }
+
+    /**
+     * Collect personality data (stub)
+     */
+    collectPersonalityData(configData) {
+        // Personality is handled separately
+    }
+
+    /**
+     * Collect agent logic data (stub)
+     */
+    collectAgentLogicData(configData) {
+        // Agent logic is handled separately
+    }
+
+    /**
      * PRODUCTION: Populate Notes tab with v2-grade note management system
      * Features: Pin/unpin, edit in-place, timestamps, search, categories, auto-save
      */
