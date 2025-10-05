@@ -2708,19 +2708,20 @@ class CompanyProfileManager {
         const baseUrl = this.apiBaseUrl || 'https://clientsvia-backend.onrender.com';
         console.log('🔧 Generating webhooks for company:', this.companyId, 'Base URL:', baseUrl);
         
-        // Define webhooks with companyId parameter
+        // Define webhooks with companyId as path parameter (correct format)
         const webhooks = [
             {
                 title: '🎤 Voice Webhook (Primary)',
                 url: `${baseUrl}/api/twilio/voice?companyId=${this.companyId}`,
                 description: 'Configure this in Twilio Console → Phone Numbers → Voice Configuration',
-                primary: true
+                primary: true,
+                note: 'Use this URL in your Twilio phone number configuration'
             },
             {
                 title: '🗣️ Speech Recognition',
                 url: `${baseUrl}/api/twilio/handle-speech?companyId=${this.companyId}`,
                 description: 'Used internally for AI speech processing',
-                primary: true
+                primary: false
             },
             {
                 title: '📞 Partial Speech',
@@ -2737,24 +2738,45 @@ class CompanyProfileManager {
         ];
 
         webhookPanel.innerHTML = `
-            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
-                <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                    <h5 class="text-sm font-medium text-blue-900 mb-1">🏢 Company: ${this.currentData?.companyName || 'Unknown'}</h5>
-                    <p class="text-xs text-blue-700">Company ID: <code class="bg-white px-1 rounded">${this.companyId}</code></p>
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-6 space-y-4">
+                <!-- Company Header -->
+                <div class="mb-4 p-4 bg-white border-2 border-blue-300 rounded-lg shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h5 class="text-base font-bold text-gray-900 mb-1">
+                                <i class="fas fa-building mr-2 text-blue-600"></i>${this.currentData?.companyName || 'Unknown'}
+                            </h5>
+                            <p class="text-xs text-gray-600">
+                                Company ID: <code class="bg-blue-100 px-2 py-1 rounded font-mono text-blue-800">${this.companyId}</code>
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            <span class="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
+                                <i class="fas fa-check-circle mr-1"></i>Active
+                            </span>
+                        </div>
+                    </div>
                 </div>
                 
+                <!-- Webhooks List -->
                 ${webhooks.map(webhook => `
-                    <div class="webhook-item">
-                        <div class="flex justify-between items-center mb-2">
-                            <h4 class="text-sm font-medium text-gray-900">${webhook.title}</h4>
-                            <button type="button" class="copy-webhook-btn text-xs ${webhook.primary ? 'bg-blue-100 hover:bg-blue-200 text-blue-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'} px-2 py-1 rounded" data-webhook="${webhook.url}">
-                                <i class="fas fa-copy mr-1"></i>Copy
+                    <div class="webhook-item bg-white rounded-lg border-2 ${webhook.primary ? 'border-blue-300 shadow-md' : 'border-gray-200'} p-4 hover:shadow-lg transition-shadow">
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="flex items-center gap-2">
+                                <h4 class="text-sm font-semibold text-gray-900">${webhook.title}</h4>
+                                ${webhook.primary ? '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">Primary</span>' : ''}
+                            </div>
+                            <button type="button" class="copy-webhook-btn text-xs font-medium ${webhook.primary ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-600 hover:bg-gray-700 text-white'} px-3 py-1.5 rounded transition-colors shadow-sm" data-webhook="${webhook.url}">
+                                <i class="fas fa-copy mr-1"></i>Copy URL
                             </button>
                         </div>
-                        <div class="bg-white border rounded p-2 font-mono text-sm text-gray-800 break-all">
+                        <div class="bg-gray-50 border-2 border-gray-300 rounded p-3 font-mono text-xs text-gray-900 break-all hover:bg-gray-100 transition-colors">
                             ${webhook.url}
                         </div>
-                        <p class="text-xs text-gray-600 mt-1">${webhook.description}</p>
+                        <p class="text-xs text-gray-600 mt-2 flex items-start">
+                            <i class="fas fa-info-circle mr-1.5 mt-0.5 text-gray-400"></i>
+                            <span>${webhook.description}</span>
+                        </p>
                     </div>
                 `).join('')}
                 
@@ -2783,6 +2805,8 @@ class CompanyProfileManager {
      */
     setupWebhookCopyButtons() {
         const copyButtons = document.querySelectorAll('.copy-webhook-btn');
+        console.log(`🔧 Setting up ${copyButtons.length} webhook copy buttons`);
+        
         copyButtons.forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.preventDefault();
@@ -2791,27 +2815,28 @@ class CompanyProfileManager {
                     try {
                         await navigator.clipboard.writeText(webhookUrl);
                         const originalText = btn.innerHTML;
-                        btn.innerHTML = '<i class="fas fa-check mr-1"></i>Copied!';
-                        btn.classList.add('bg-green-100', 'text-green-700');
-                        btn.classList.remove('bg-blue-100', 'text-blue-700', 'bg-gray-100', 'text-gray-600');
+                        const originalClasses = btn.className;
                         
+                        // Show success state
+                        btn.innerHTML = '<i class="fas fa-check mr-1"></i>Copied!';
+                        btn.className = 'copy-webhook-btn text-xs font-medium bg-green-600 text-white px-3 py-1.5 rounded transition-colors shadow-sm';
+                        
+                        // Restore original state after 2 seconds
                         setTimeout(() => {
                             btn.innerHTML = originalText;
-                            btn.classList.remove('bg-green-100', 'text-green-700');
-                            // Restore original colors based on webhook type
-                            if (webhookUrl.includes('voice') || webhookUrl.includes('speech')) {
-                                btn.classList.add('bg-blue-100', 'text-blue-700');
-                            } else {
-                                btn.classList.add('bg-gray-100', 'text-gray-600');
-                            }
+                            btn.className = originalClasses;
                         }, 2000);
+                        
+                        console.log(`✅ Copied webhook URL: ${webhookUrl.substring(0, 50)}...`);
                     } catch (err) {
-                        console.error('Failed to copy webhook URL:', err);
+                        console.error('❌ Failed to copy webhook URL:', err);
                         this.showNotification('Failed to copy webhook URL', 'error');
                     }
                 }
             });
         });
+        
+        console.log('✅ Webhook copy buttons setup complete');
     }
 
     /**
