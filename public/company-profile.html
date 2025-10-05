@@ -914,8 +914,8 @@
                                                 <h3 class="font-semibold text-blue-900 text-sm mb-2">How to Use Quick Variables</h3>
                                                 <div class="text-xs text-blue-800 space-y-1">
                                                     <p><strong>1. Create a variable below:</strong> Enter just the name (e.g., "Company Name") and its value (e.g., "Atlas Air")</p>
-                                                    <p><strong>2. Use in Q&A answers:</strong> Type <code class="bg-blue-100 px-1 rounded">[Company Name]</code> or <code class="bg-blue-100 px-1 rounded">{Company Name}</code> in any answer</p>
-                                                    <p><strong>3. Flexible matching:</strong> Works with any case - <code class="bg-blue-100 px-1 rounded">[company name]</code>, <code class="bg-blue-100 px-1 rounded">{COMPANY NAME}</code>, <code class="bg-blue-100 px-1 rounded">[Company Name]</code> all work!</p>
+                                                    <p><strong>2. Use in Q&A answers:</strong> Type <code class="bg-blue-100 px-1 rounded">{Company Name}</code> or <code class="bg-blue-100 px-1 rounded">{companyname}</code> in any answer</p>
+                                                    <p><strong>3. Flexible matching:</strong> Works with any case - <code class="bg-blue-100 px-1 rounded">{company name}</code>, <code class="bg-blue-100 px-1 rounded">{COMPANY NAME}</code>, <code class="bg-blue-100 px-1 rounded">{Company Name}</code> all work!</p>
                                                     <p class="text-blue-700 mt-2">💡 <em>Common variables: Company Name, Business Hours, Phone Number, Email Address, Service Area</em></p>
                                                 </div>
                                             </div>
@@ -2193,7 +2193,7 @@
                                                                     <i class="fas fa-phone-volume mr-2"></i>🎤 Initial Greeting (Plays First!)
                                                                 </h3>
                                                                 <p class="text-sm text-green-700 mb-4">
-                                                                    📞 This greeting plays <strong>immediately</strong> when a customer calls, before any AI processing starts. Use <code class="bg-green-200 px-2 py-1 rounded">[Company Name]</code> to automatically insert your company name.
+                                                                    📞 This greeting plays <strong>immediately</strong> when a customer calls, before any AI processing starts. Use <code class="bg-green-200 px-2 py-1 rounded">{Company Name}</code> to automatically insert your company name.
                                                                 </p>
                                                                 
                                                                 <label for="initial-greeting-input" class="block font-semibold text-gray-800 mb-2">
@@ -2203,7 +2203,7 @@
                                                                     id="initial-greeting-input" 
                                                                     rows="3" 
                                                                     class="w-full px-4 py-3 border-2 border-green-300 rounded-lg font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-vertical"
-                                                                    placeholder="Thank you for calling [Company Name]. How can I help you today?"
+                                                                    placeholder="Thank you for calling {Company Name}. How can I help you today?"
                                                                     maxlength="500"
                                                                     style="font-size: 15px; line-height: 1.6;"
                                                                 ></textarea>
@@ -2215,7 +2215,7 @@
                                                                         <div class="flex-1">
                                                                             <p class="text-xs font-semibold text-green-800 mb-1">PREVIEW (How it will sound):</p>
                                                                             <p id="initial-greeting-preview" class="text-sm text-gray-700 italic">
-                                                                                Thank you for calling [Company Name]. How can I help you today?
+                                                                                Thank you for calling {Company Name}. How can I help you today?
                                                                             </p>
                                                                         </div>
                                                                     </div>
@@ -2750,7 +2750,7 @@
                                                         <!-- 🎯 PLACEHOLDERS TAB - DYNAMIC TEXT REPLACEMENT
                                                              📋 Define reusable placeholders for responses
                                                              🔧 Features: Create, edit, delete, copy-to-clipboard
-                                                             📝 Usage: [Company Name], {Business Hours}, etc.
+                                                             📝 Usage: {Company Name}, {Business Hours}, etc.
                                                              ⚠️  FRESH IMPLEMENTATION: Zero legacy code, checkpoint logging
                                                         -->
                                                         <!-- ========================================== -->
@@ -2765,9 +2765,9 @@
                                                                         <h3 class="text-lg font-semibold text-purple-900 mb-2">🎯 How Placeholders Work</h3>
                                                                         <div class="text-sm text-purple-800 space-y-2">
                                                                             <p><strong>1. Create placeholders below</strong> - Define values you use often (e.g., Company Name, Business Hours)</p>
-                                                                            <p><strong>2. Use in any response</strong> - Type <code class="bg-purple-100 px-2 py-0.5 rounded">[Company Name]</code> or <code class="bg-purple-100 px-2 py-0.5 rounded">{Company Name}</code> in Company Q&A, Trade Q&A, Templates, or Instant Responses</p>
+                                                                            <p><strong>2. Use in any response</strong> - Type <code class="bg-purple-100 px-2 py-0.5 rounded">{Company Name}</code> or <code class="bg-purple-100 px-2 py-0.5 rounded">{companyname}</code> in Company Q&A, Trade Q&A, Templates, or Instant Responses</p>
                                                                             <p><strong>3. AI automatically replaces</strong> - Placeholders are replaced with actual values in real-time during calls</p>
-                                                                            <p class="text-purple-700 mt-3"><i class="fas fa-magic mr-1"></i> <strong>Pro Tip:</strong> Works with any case - <code class="bg-purple-100 px-1 rounded">[company name]</code>, <code class="bg-purple-100 px-1 rounded">{COMPANY NAME}</code>, or <code class="bg-purple-100 px-1 rounded">[Company Name]</code> all work!</p>
+                                                                            <p class="text-purple-700 mt-3"><i class="fas fa-magic mr-1"></i> <strong>Pro Tip:</strong> Works with any case - <code class="bg-purple-100 px-1 rounded">{company name}</code>, <code class="bg-purple-100 px-1 rounded">{COMPANY NAME}</code>, or <code class="bg-purple-100 px-1 rounded">{Company Name}</code> all work!</p>
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -4664,7 +4664,7 @@ This would be a great time to also check..."></textarea>
                                               required></textarea>
                                     <p class="text-xs text-gray-600 mt-2">
                                         <i class="fas fa-info-circle mr-1"></i>
-                                        The response template that will be used. Can include placeholders like [Company Name].
+                                        The response template that will be used. Can include placeholders like {Company Name}.
                                     </p>
                                 </div>
 
@@ -4826,7 +4826,7 @@ This would be a great time to also check..."></textarea>
                                         <i class="fas fa-magic mr-1"></i>Usage Example:
                                     </p>
                                     <p class="text-sm text-purple-800">
-                                        In your Q&A, type: <code class="bg-purple-100 px-2 py-1 rounded">[Company Name]</code> or <code class="bg-purple-100 px-2 py-1 rounded">{Company Name}</code>
+                                        In your Q&A, type: <code class="bg-purple-100 px-2 py-1 rounded">{Company Name}</code> or <code class="bg-purple-100 px-2 py-1 rounded">{companyname}</code>
                                     </p>
                                     <p class="text-sm text-purple-800 mt-2">
                                         AI will say: <span class="font-semibold">"Atlas Air"</span>
@@ -5005,7 +5005,7 @@ This would be a great time to also check..."></textarea>
             const hasSmartData = smartData && smartData.services.length > 0;
             
             // Build ROLE OVERVIEW section (smart or generic)
-            let roleOverview = `You are a professional, friendly, and efficient virtual receptionist for [Company Name], a ${categoryName.toLowerCase()} business`;
+            let roleOverview = `You are a professional, friendly, and efficient virtual receptionist for {Company Name}, a ${categoryName.toLowerCase()} business`;
             if (smartData?.location) {
                 roleOverview += ` serving the ${smartData.location} area`;
             }
@@ -5059,7 +5059,7 @@ ${'='.repeat(60)}
 1. GREETING CUSTOMERS
    • Always start with a warm, professional greeting
    • Include the company name
-   • Example: "Thank you for calling [Company Name]. How can I 
+   • Example: "Thank you for calling {Company Name}. How can I
      help you today?"
 
 2. UNDERSTANDING NEEDS
@@ -5076,7 +5076,7 @@ ${servicesSection}
    • Set clear expectations
 
 4. SCHEDULING & AVAILABILITY
-   • Check [Company Name]'s availability
+   • Check {Company Name}'s availability
    • Business hours: ${hoursSection}
    • Offer available appointment times
    • Confirm date, time, and service details
@@ -5108,7 +5108,7 @@ ${'='.repeat(60)}
 EXAMPLE DIALOGUE:
 ${'='.repeat(60)}
 
-AI: "Good morning! Thank you for calling [Company Name]. 
+AI: "Good morning! Thank you for calling {Company Name}.
      How can I help you today?"
 
 Customer: "I need to schedule a service."
@@ -5137,8 +5137,8 @@ ${'='.repeat(60)}
 IMPORTANT REMINDERS:
 ${'='.repeat(60)}
 
-• Always use [Company Name] placeholder - automatically replaced
-• Use [Business Hours] for hours if not specified above
+• Always use {Company Name} placeholder - automatically replaced
+• Use {Business Hours} for hours if not specified above
 • Adapt responses to customer's tone and urgency
 • When in doubt, offer to have someone call them back
 • Your goal: Professional, helpful, efficient service
@@ -22348,7 +22348,7 @@ Key Metrics:
 
         // Reset button
         resetBtn.addEventListener('click', function() {
-            const defaultGreeting = 'Thank you for calling [Company Name]. How can I help you today?';
+            const defaultGreeting = 'Thank you for calling {Company Name}. How can I help you today?';
             input.value = defaultGreeting;
             updateGreetingPreview(defaultGreeting, preview, companyId);
         });
@@ -22610,7 +22610,7 @@ Key Metrics:
             if (response.ok) {
                 const company = await response.json();
                 const greeting = company.aiAgentLogic?.initialGreeting || 
-                                'Thank you for calling [Company Name]. How can I help you today?';
+                                'Thank you for calling {Company Name}. How can I help you today?';
                 
                 input.value = greeting;
                 updateGreetingPreview(greeting, preview, companyId);
@@ -22622,10 +22622,10 @@ Key Metrics:
     }
 
     function updateGreetingPreview(text, preview, companyId) {
-        // Replace [Company Name] with actual company name for preview
+        // Replace {Company Name} with actual company name for preview
         const companyName = window.currentCompany?.companyName || 'Your Company';
-        const previewText = text.replace(/\[Company Name\]/g, companyName);
-        preview.textContent = previewText || 'Thank you for calling [Company Name]. How can I help you today?';
+        const previewText = text.replace(/\{Company Name\}/g, companyName);
+        preview.textContent = previewText || 'Thank you for calling {Company Name}. How can I help you today?';
     }
 
     async function saveInitialGreeting(companyId, greetingText) {

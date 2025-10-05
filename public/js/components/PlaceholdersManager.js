@@ -383,11 +383,7 @@ class PlaceholdersManager {
                             <p class="text-sm text-gray-600 mb-3">${this.escapeHtml(placeholder.value)}</p>
                             <div class="flex items-center gap-3 flex-wrap">
                                 <div class="text-xs text-gray-500">Usage examples:</div>
-                                <code class="bg-green-50 text-green-700 px-2 py-1 rounded text-xs font-mono cursor-pointer hover:bg-green-100" 
-                                      onclick="navigator.clipboard.writeText('[${placeholder.name}]'); placeholdersManager.showNotification('Copied!', 'success')">
-                                    [${this.escapeHtml(placeholder.name)}]
-                                </code>
-                                <code class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-mono cursor-pointer hover:bg-blue-100" 
+                                <code class="bg-green-50 text-green-700 px-2 py-1 rounded text-xs font-mono cursor-pointer hover:bg-green-100"
                                       onclick="navigator.clipboard.writeText('{${placeholder.name}}'); placeholdersManager.showNotification('Copied!', 'success')">
                                     {${this.escapeHtml(placeholder.name)}}
                                 </code>
