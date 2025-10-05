@@ -499,10 +499,12 @@ class PlaceholdersManager {
      * Get auth token
      */
     getAuthToken() {
-        // Try multiple sources
-        const token = localStorage.getItem('authToken') || 
+        // Try multiple sources - adminToken is PRIMARY for this system
+        const token = localStorage.getItem('adminToken') ||
+                     localStorage.getItem('authToken') || 
                      sessionStorage.getItem('authToken') ||
-                     '';
+                     localStorage.getItem('token') ||
+                     sessionStorage.getItem('token') || '';
         return token;
     }
 
