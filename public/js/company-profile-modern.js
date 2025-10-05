@@ -1107,7 +1107,7 @@ class CompanyProfileManager {
             }
             
             // Save to API
-            const response = await fetch(`${this.apiBaseUrl}/company/${this.companyId}`, {
+            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
