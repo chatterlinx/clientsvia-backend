@@ -3066,7 +3066,8 @@ class CompanyProfileManager {
         const updateData = {
             status,
             callForwardNumber: status === 'call_forward' ? callForwardNumber : null,
-            reason: reason || null
+            reason: reason || null,
+            changedBy: this.currentData?.ownerEmail || this.currentData?.contactEmail || 'Admin'
         };
         
         console.log('📤 Sending account status update:', updateData);

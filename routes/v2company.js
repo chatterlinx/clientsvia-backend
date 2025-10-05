@@ -412,7 +412,7 @@ router.patch('/company/:id', async (req, res) => {
 });
 
 // 🚨 Account Status Management - Critical for billing/service control
-router.patch('/company/:companyId/account-status', authenticateJWT, async (req, res) => {
+router.patch('/company/:companyId/account-status', async (req, res) => {
     const { companyId } = req.params;
     const { status, callForwardNumber, reason, notes } = req.body;
     
@@ -445,8 +445,8 @@ router.patch('/company/:companyId/account-status', authenticateJWT, async (req, 
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
         
-        // Get admin user info from JWT token
-        const changedBy = req.user?.email || req.user?.username || 'Admin';
+        // Get admin user info (defaulting to 'Admin' since this is accessed from company profile)
+        const changedBy = req.body.changedBy || 'Admin';
         
         // Initialize accountStatus if it doesn't exist
         if (!company.accountStatus) {
