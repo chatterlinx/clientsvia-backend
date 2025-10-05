@@ -142,7 +142,7 @@ try {
 // V2 DELETED: Local Company Q&A routes - using main Company Q&A system instead
 // Main Company Q&A system (via v2knowledgeManagement.js) is working perfectly
 
-// Quick Variables piggybacked on v2company.js - no separate route file needed!
+// 🗑️ DELETED: Quick Variables - Replaced by Placeholders in AI Agent Logic tab
 
 // app.use('/api/company', companyRoutes); // MISSING FILE
 // app.use('/api/company', settingsRoutes); // MISSING FILE
