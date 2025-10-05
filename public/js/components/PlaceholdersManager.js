@@ -69,7 +69,9 @@ class PlaceholdersManager {
         // Save button
         const saveBtn = document.getElementById('save-placeholder-btn');
         if (saveBtn) {
-            saveBtn.addEventListener('click', () => {
+            saveBtn.addEventListener('click', (e) => {
+                e.preventDefault(); // Prevent any default form submission
+                e.stopPropagation(); // Stop event bubbling
                 console.log('[PH-UI-11] 💾 Save button clicked');
                 this.savePlaceholder();
             });
@@ -79,7 +81,9 @@ class PlaceholdersManager {
         // Cancel button
         const cancelBtn = document.getElementById('cancel-placeholder-btn');
         if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => {
+            cancelBtn.addEventListener('click', (e) => {
+                e.preventDefault(); // Prevent any default behavior
+                e.stopPropagation(); // Stop event bubbling
                 console.log('[PH-UI-13] ❌ Cancel button clicked');
                 this.closeModal();
             });
@@ -89,7 +93,9 @@ class PlaceholdersManager {
         // Close modal X button
         const closeBtn = document.getElementById('close-placeholder-modal');
         if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
+            closeBtn.addEventListener('click', (e) => {
+                e.preventDefault(); // Prevent any default behavior
+                e.stopPropagation(); // Stop event bubbling
                 console.log('[PH-UI-15] ❌ Close X clicked');
                 this.closeModal();
             });
