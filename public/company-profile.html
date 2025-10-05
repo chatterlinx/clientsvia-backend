@@ -12704,14 +12704,35 @@ Key Metrics:
                 
                 // COLLECT KNOWLEDGE SOURCE PRIORITIES
                 const container = document.getElementById('clientsvia-source-priority-container');
-                let knowledgeSourcePriorities = ['companyQnA', 'tradeQnA', 'vectorSearch', 'inHouseFallback']; // 🚨 FIXED: Removed LLM, added in-house fallback
+                let knowledgeSourcePriorities = {
+                    priorityFlow: [
+                        { source: 'companyQnA', priority: 1, threshold: 0.8, enabled: true },
+                        { source: 'tradeQnA', priority: 2, threshold: 0.75, enabled: true },
+                        { source: 'templates', priority: 3, threshold: 0.7, enabled: true },
+                        { source: 'inHouseFallback', priority: 4, threshold: 0.5, enabled: true }
+                    ]
+                };
+
                 if (container) {
                     const items = container.querySelectorAll('.clientsvia-source-item');
-                    knowledgeSourcePriorities = [];
+                    const sourceOrder = [];
                     items.forEach((item, index) => {
-                        knowledgeSourcePriorities.push(item.dataset.source);
+                        sourceOrder.push(item.dataset.source);
                     });
-                    console.log('PRIORITY ARRAY FOR SAVE:', knowledgeSourcePriorities);
+
+                    // Reorder the priorityFlow based on the DOM order
+                    knowledgeSourcePriorities.priorityFlow.sort((a, b) => {
+                        const aIndex = sourceOrder.indexOf(a.source);
+                        const bIndex = sourceOrder.indexOf(b.source);
+                        return aIndex - bIndex;
+                    });
+
+                    // Update priorities based on new order
+                    knowledgeSourcePriorities.priorityFlow.forEach((item, index) => {
+                        item.priority = index + 1;
+                    });
+
+                    console.log('PRIORITY FLOW FOR SAVE:', knowledgeSourcePriorities);
                 } else {
                     console.log('WARNING: Priority container not found, using default order');
                 }
@@ -13014,11 +13035,34 @@ Key Metrics:
                 const container = document.getElementById('clientsvia-source-priority-container');
                 if (container) {
                     const items = container.querySelectorAll('.clientsvia-source-item');
-                    settings.knowledgeSourcePriorities = []; // Reset array
+                    const sourceOrder = [];
                     items.forEach((item, index) => {
-                        settings.knowledgeSourcePriorities.push(item.dataset.source);
+                        sourceOrder.push(item.dataset.source);
                     });
-                    console.log('🎯 PRIORITY ARRAY FOR SAVE:', settings.knowledgeSourcePriorities);
+
+                    // Create proper priorityFlow structure
+                    settings.knowledgeSourcePriorities = {
+                        priorityFlow: [
+                            { source: 'companyQnA', priority: 1, threshold: 0.8, enabled: true },
+                            { source: 'tradeQnA', priority: 2, threshold: 0.75, enabled: true },
+                            { source: 'templates', priority: 3, threshold: 0.7, enabled: true },
+                            { source: 'inHouseFallback', priority: 4, threshold: 0.5, enabled: true }
+                        ]
+                    };
+
+                    // Reorder based on DOM order
+                    settings.knowledgeSourcePriorities.priorityFlow.sort((a, b) => {
+                        const aIndex = sourceOrder.indexOf(a.source);
+                        const bIndex = sourceOrder.indexOf(b.source);
+                        return aIndex - bIndex;
+                    });
+
+                    // Update priorities based on new order
+                    settings.knowledgeSourcePriorities.priorityFlow.forEach((item, index) => {
+                        item.priority = index + 1;
+                    });
+
+                    console.log('🎯 PRIORITY FLOW FOR SAVE:', settings.knowledgeSourcePriorities);
                 }
                 
                 console.log('🔍 CHECKPOINT 5: Collected settings:', settings);
