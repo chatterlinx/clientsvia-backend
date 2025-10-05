@@ -511,7 +511,9 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
         console.log(`   Reason: ${reason || 'Not specified'}`);
         if (status === 'call_forward') {
             console.log(`   Forward to: ${callForwardNumber}`);
+            console.log(`   Forward message: "${callForwardMessage || '(none - silent forward)'}"`);
         }
+        console.log(`   📝 Saved accountStatus object:`, JSON.stringify(company.accountStatus, null, 2));
         
         res.json({ 
             success: true, 
