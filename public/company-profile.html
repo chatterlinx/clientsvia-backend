@@ -2150,6 +2150,9 @@
                                                                 <button id="km-tab-templates" class="km-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                                                                     <i class="fas fa-file-alt mr-2"></i>Templates
                                                                 </button>
+                                                                <button id="km-tab-placeholders" class="km-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
+                                                                    <i class="fas fa-tags mr-2 text-purple-500"></i>🎯 Placeholders
+                                                                </button>
                                                                 <button id="km-tab-fallback" class="km-tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700">
                                                                     <i class="fas fa-shield-alt mr-2"></i>In-House Fallback
                                                                 </button>
@@ -2793,6 +2796,62 @@
                                                             <!-- Templates List -->
                                                             <div id="templates-list" class="space-y-3">
                                                                 <!-- Template items will be dynamically loaded here -->
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- ========================================== -->
+                                                        <!-- 🎯 PLACEHOLDERS TAB - DYNAMIC TEXT REPLACEMENT
+                                                             📋 Define reusable placeholders for responses
+                                                             🔧 Features: Create, edit, delete, copy-to-clipboard
+                                                             📝 Usage: [Company Name], {Business Hours}, etc.
+                                                             ⚠️  FRESH IMPLEMENTATION: Zero legacy code, checkpoint logging
+                                                        -->
+                                                        <!-- ========================================== -->
+
+                                                        <!-- Placeholders Tab Content -->
+                                                        <div id="km-placeholders-content" class="km-tab-content hidden p-6">
+                                                            <!-- Header Section with Instructions -->
+                                                            <div class="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-5 mb-6">
+                                                                <div class="flex items-start">
+                                                                    <i class="fas fa-lightbulb text-purple-600 text-2xl mr-4 mt-1"></i>
+                                                                    <div class="flex-1">
+                                                                        <h3 class="text-lg font-semibold text-purple-900 mb-2">🎯 How Placeholders Work</h3>
+                                                                        <div class="text-sm text-purple-800 space-y-2">
+                                                                            <p><strong>1. Create placeholders below</strong> - Define values you use often (e.g., Company Name, Business Hours)</p>
+                                                                            <p><strong>2. Use in any response</strong> - Type <code class="bg-purple-100 px-2 py-0.5 rounded">[Company Name]</code> or <code class="bg-purple-100 px-2 py-0.5 rounded">{Company Name}</code> in Company Q&A, Trade Q&A, Templates, or Instant Responses</p>
+                                                                            <p><strong>3. AI automatically replaces</strong> - Placeholders are replaced with actual values in real-time during calls</p>
+                                                                            <p class="text-purple-700 mt-3"><i class="fas fa-magic mr-1"></i> <strong>Pro Tip:</strong> Works with any case - <code class="bg-purple-100 px-1 rounded">[company name]</code>, <code class="bg-purple-100 px-1 rounded">{COMPANY NAME}</code>, or <code class="bg-purple-100 px-1 rounded">[Company Name]</code> all work!</p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Actions Bar -->
+                                                            <div class="flex items-center justify-between mb-6">
+                                                                <div>
+                                                                    <h4 class="text-xl font-bold text-gray-800">Your Placeholders</h4>
+                                                                    <p class="text-sm text-gray-600 mt-1">Reusable values for AI responses</p>
+                                                                </div>
+                                                                <button id="add-placeholder-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-lg flex items-center gap-2">
+                                                                    <i class="fas fa-plus"></i>
+                                                                    <span>Create Placeholder</span>
+                                                                </button>
+                                                            </div>
+
+                                                            <!-- Empty State -->
+                                                            <div id="placeholders-empty" class="text-center py-12 px-4 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg">
+                                                                <i class="fas fa-tags text-gray-400 text-5xl mb-4"></i>
+                                                                <h3 class="text-lg font-semibold text-gray-700 mb-2">No Placeholders Yet</h3>
+                                                                <p class="text-gray-600 mb-4">Create your first placeholder to start using dynamic content in your AI responses</p>
+                                                                <button onclick="document.getElementById('add-placeholder-btn').click()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-medium transition-colors inline-flex items-center gap-2">
+                                                                    <i class="fas fa-plus"></i>
+                                                                    <span>Create Your First Placeholder</span>
+                                                                </button>
+                                                            </div>
+
+                                                            <!-- Placeholders List -->
+                                                            <div id="placeholders-list" class="space-y-4">
+                                                                <!-- Dynamically loaded by PlaceholdersManager.js -->
                                                             </div>
                                                         </div>
 
@@ -4734,6 +4793,105 @@ This would be a great time to also check..."></textarea>
                                     <button type="button" onclick="document.getElementById('response-template-form').requestSubmit()" 
                                             style="padding: 8px 16px; background: linear-gradient(to right, #a855f7, #9333ea); color: white; border-radius: 8px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                                         <i class="fas fa-save" style="margin-right: 8px;"></i><span id="response-template-submit-text">Save</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ============================================================================== -->
+                    <!-- 🎯 PLACEHOLDERS MODAL - CREATE/EDIT PLACEHOLDER                              -->
+                    <!-- ============================================================================== -->
+                    <div id="placeholder-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-xl shadow-2xl max-w-xl w-full">
+                            <!-- Modal Header -->
+                            <div class="rounded-t-xl bg-gradient-to-r from-purple-500 to-pink-500 p-4">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-tags text-white text-xl mr-3"></i>
+                                        <h3 id="placeholder-modal-title" class="text-xl font-bold text-white">Create Placeholder</h3>
+                                    </div>
+                                    <button id="close-placeholder-modal" class="text-white hover:text-gray-200 text-2xl leading-none">
+                                        ✕
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Modal Body -->
+                            <div class="p-6 space-y-5">
+                                <!-- Name Field -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                        <i class="fas fa-signature text-purple-600 mr-2"></i>Placeholder Name *
+                                    </label>
+                                    <input type="text" id="placeholder-name" 
+                                           placeholder="Company Name" 
+                                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
+                                           required>
+                                    <p class="text-xs text-gray-600 mt-2">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Just the name - don't include brackets. Example: "Company Name" or "Business Hours"
+                                    </p>
+                                </div>
+
+                                <!-- Value Field -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                        <i class="fas fa-file-text text-purple-600 mr-2"></i>Replacement Value *
+                                    </label>
+                                    <textarea id="placeholder-value" rows="3" 
+                                              placeholder="Atlas Air" 
+                                              class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
+                                              required></textarea>
+                                    <p class="text-xs text-gray-600 mt-2">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        The actual text that will replace the placeholder in responses
+                                    </p>
+                                </div>
+
+                                <!-- Category Field -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                        <i class="fas fa-folder text-purple-600 mr-2"></i>Category
+                                    </label>
+                                    <select id="placeholder-category" 
+                                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                        <option value="general">General</option>
+                                        <option value="contact">Contact Info</option>
+                                        <option value="business">Business Info</option>
+                                        <option value="hours">Hours & Schedule</option>
+                                        <option value="location">Location</option>
+                                    </select>
+                                    <p class="text-xs text-gray-600 mt-2">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Organize placeholders by category for easier management
+                                    </p>
+                                </div>
+
+                                <!-- Usage Example -->
+                                <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                    <p class="text-sm font-semibold text-purple-900 mb-2">
+                                        <i class="fas fa-magic mr-1"></i>Usage Example:
+                                    </p>
+                                    <p class="text-sm text-purple-800">
+                                        In your Q&A, type: <code class="bg-purple-100 px-2 py-1 rounded">[Company Name]</code> or <code class="bg-purple-100 px-2 py-1 rounded">{Company Name}</code>
+                                    </p>
+                                    <p class="text-sm text-purple-800 mt-2">
+                                        AI will say: <span class="font-semibold">"Atlas Air"</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Modal Footer -->
+                            <div class="p-4 bg-gray-50 border-t rounded-b-xl">
+                                <div class="flex justify-end space-x-3">
+                                    <button id="cancel-placeholder-btn" 
+                                            class="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-400 transition-colors border-2 border-gray-400">
+                                        ✕ Cancel
+                                    </button>
+                                    <button id="save-placeholder-btn" 
+                                            class="px-6 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-bold hover:from-purple-600 hover:to-pink-600 transition-colors shadow-lg">
+                                        <i class="fas fa-save mr-2"></i>Save Placeholder
                                     </button>
                                 </div>
                             </div>
@@ -14326,6 +14484,8 @@ Key Metrics:
     <script src="/js/components/CompanyQnAManager.js"></script>
     <!-- 🗑️ DELETED: InstantResponsesManager.js - legacy system removed -->
     <script src="/js/components/InstantResponseCategoriesManager.js"></script>
+    <!-- 🎯 NEW: PlaceholdersManager.js - Fresh enterprise-grade implementation -->
+    <script src="/js/components/PlaceholdersManager.js"></script>
     
     <!-- Q&A Modal Event Listeners -->
     <script>
@@ -18293,6 +18453,10 @@ Key Metrics:
                 this.switchKnowledgeTab('templates');
             });
 
+            document.getElementById('km-tab-placeholders')?.addEventListener('click', () => {
+                this.switchKnowledgeTab('placeholders');
+            });
+
             document.getElementById('km-tab-variables')?.addEventListener('click', () => {
                 this.switchKnowledgeTab('variables');
             });
@@ -18444,6 +18608,19 @@ Key Metrics:
                         break;
                     case 'templates':
                         tabBtn.classList.add('border-purple-500', 'text-purple-600');
+                        break;
+                    case 'placeholders':
+                        tabBtn.classList.add('border-purple-500', 'text-purple-600');
+                        console.log('[PH-TAB] 🎯 Switched to Placeholders tab');
+                        // Initialize PlaceholdersManager if not already done
+                        if (!window.placeholdersManager) {
+                            console.log('[PH-TAB] Creating new PlaceholdersManager instance');
+                            window.placeholdersManager = new PlaceholdersManager(this.companyId);
+                            window.placeholdersManager.init();
+                        } else {
+                            console.log('[PH-TAB] PlaceholdersManager already exists - reloading data');
+                            window.placeholdersManager.loadPlaceholders();
+                        }
                         break;
                     case 'variables':
                         tabBtn.classList.add('border-purple-500', 'text-purple-600');
