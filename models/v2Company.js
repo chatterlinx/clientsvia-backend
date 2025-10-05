@@ -203,6 +203,22 @@ const aiAgentLogicSchema = new mongoose.Schema({
             type: String, 
             default: '2.0' 
         }
+    },
+    
+    // 🎯 PLACEHOLDERS - Dynamic text replacement in AI responses
+    // Location: AI Agent Logic > Placeholders Tab
+    // Usage: [Company Name], {Business Hours}, etc. are replaced with actual values
+    placeholders: {
+        type: [{
+            id: { type: String, required: true },
+            name: { type: String, required: true, trim: true },
+            value: { type: String, required: true, trim: true },
+            category: { type: String, default: 'general', trim: true },
+            usageCount: { type: Number, default: 0, min: 0 },
+            createdAt: { type: Date, default: Date.now },
+            updatedAt: { type: Date, default: Date.now }
+        }],
+        default: []
     }
 }, { _id: false });
 

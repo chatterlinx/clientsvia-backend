@@ -166,6 +166,15 @@ try {
     console.error('❌ Failed to load V2 Knowledge Management routes:', error);
 }
 
+// 🎯 V2 PLACEHOLDERS ROUTES - Enterprise Grade with Checkpoint Logging
+try {
+    const v2PlaceholdersRoutes = require('./routes/company/v2placeholders');
+    app.use('/api/company', v2PlaceholdersRoutes);
+    console.log('✅ V2 Placeholders routes registered at /api/company - Dynamic placeholder system active');
+} catch (error) {
+    console.error('❌ Failed to load V2 Placeholders routes:', error);
+}
+
 // 🗑️ DELETED: V2 Instant Responses routes - replaced by InstantResponseCategories system in Knowledge Management
 
 // V2 DELETED: Local Company Q&A routes - using main Company Q&A system instead
