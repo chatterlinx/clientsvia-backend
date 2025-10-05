@@ -285,8 +285,10 @@ router.post('/voice', async (req, res) => {
       if (accountStatus === 'call_forward' && company.accountStatus.callForwardNumber) {
         console.log(`[CALL FORWARD] Forwarding call to ${company.accountStatus.callForwardNumber}`);
         const forwardNumber = company.accountStatus.callForwardNumber;
-        const forwardReason = company.accountStatus.reason || 'Your call is being forwarded';
-        twiml.say(escapeTwiML(forwardReason));
+        // Use company name in forward message for professional touch
+        const companyName = company.companyName || company.businessName || 'us';
+        const forwardMessage = `Thank you for calling ${companyName}. Please hold while we connect your call.`;
+        twiml.say(escapeTwiML(forwardMessage));
         twiml.dial(forwardNumber);
         res.type('text/xml');
         res.send(twiml.toString());
