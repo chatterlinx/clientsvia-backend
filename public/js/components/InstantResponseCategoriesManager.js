@@ -371,14 +371,14 @@ class InstantResponseCategoriesManager {
         
         if (category) {
             title.textContent = 'Edit Category';
-            document.getElementById('category-name').value = category.name || '';
-            document.getElementById('category-description').value = category.description || '';
+            document.getElementById('ir-category-name').value = category.name || '';
+            document.getElementById('ir-category-description').value = category.description || '';
             document.getElementById('category-icon').value = category.icon || '⚡';
             document.getElementById('category-color').value = category.color || '#4F46E5';
         } else {
             title.textContent = 'Add Category';
-            document.getElementById('category-name').value = '';
-            document.getElementById('category-description').value = '';
+            document.getElementById('ir-category-name').value = '';
+            document.getElementById('ir-category-description').value = '';
             document.getElementById('category-icon').value = '⚡';
             document.getElementById('category-color').value = '#4F46E5';
         }
@@ -393,8 +393,8 @@ class InstantResponseCategoriesManager {
 
     async saveCategoryModal() {
         const data = {
-            name: document.getElementById('category-name').value.trim(),
-            description: document.getElementById('category-description').value.trim(),
+            name: document.getElementById('ir-category-name').value.trim(),
+            description: document.getElementById('ir-category-description').value.trim(),
             icon: document.getElementById('category-icon').value.trim(),
             color: document.getElementById('category-color').value.trim()
         };

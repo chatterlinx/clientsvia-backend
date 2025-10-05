@@ -1415,20 +1415,20 @@
                             
                             <form onsubmit="event.preventDefault(); instantResponseCategoriesManager.saveCategoryModal();">
                                 <div style="margin-bottom: 20px;">
-                                    <label for="category-name" style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px;">
+                                    <label for="ir-category-name" style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px;">
                                         Category Name <span style="color: #e74c3c;">*</span>
                                     </label>
-                                    <input type="text" id="category-name" required
+                                    <input type="text" id="ir-category-name" required
                                            placeholder="e.g., Empathy, Greetings, Customer Waiting"
                                            style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px;">
                                     <small style="color: #7f8c8d; font-size: 13px;">Short, descriptive name for organizing responses</small>
                                 </div>
                                 
                                 <div style="margin-bottom: 20px;">
-                                    <label for="category-description" style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px;">
+                                    <label for="ir-category-description" style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 8px;">
                                         Description <span style="color: #e74c3c;">*</span>
                                     </label>
-                                    <textarea id="category-description" required rows="4"
+                                    <textarea id="ir-category-description" required rows="4"
                                               placeholder="Describe how AI should behave in this category..."
                                               style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; resize: vertical;"></textarea>
                                     <small style="color: #7f8c8d; font-size: 13px;">This guides AI when generating Q&As for this category</small>
@@ -1482,7 +1482,7 @@
                                 </button>
                             </div>
                             
-                            <form id="qna-form" onsubmit="event.preventDefault(); instantResponseCategoriesManager.saveQnAModal();">
+                            <form id="ir-qna-form" onsubmit="event.preventDefault(); instantResponseCategoriesManager.saveQnAModal();">
                                 <!-- TRIGGER VARIATIONS SECTION -->
                                 <div style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border: 2px solid #667eea40; border-radius: 12px; padding: 25px; margin-bottom: 25px;">
                                     <h4 style="font-size: 18px; font-weight: 700; color: #667eea; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
