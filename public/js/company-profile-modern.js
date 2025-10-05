@@ -822,57 +822,126 @@ class CompanyProfileManager {
     renderV2ContactsSection() {
         console.log('👥 Rendering v2 contacts section...');
         
-        const contactsContainer = document.getElementById('contacts-container');
-        if (!contactsContainer) {
-            console.log('ℹ️ Contacts container not found - skipping contacts rendering (this is normal for some tabs)');
+        // Use contacts-list as per HTML structure
+        const contactsList = document.getElementById('contacts-list');
+        if (!contactsList) {
+            console.log('ℹ️ Contacts list not found - skipping contacts rendering');
             return;
         }
         
-        // Create contacts display section
-        const contactsHTML = `
-            <div class="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">Company Contacts</h3>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Primary Contact -->
-                    <div class="space-y-4">
-                        <h4 class="font-medium text-gray-700">Primary Contact</h4>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Contact Name</label>
-                            <p id="company-contact-name-view" class="mt-1 text-sm text-gray-900">${this.currentData?.contactName || 'No contact provided'}</p>
+        const hasOwner = this.currentData?.ownerName || this.currentData?.ownerEmail || this.currentData?.ownerPhone;
+        const hasContact = this.currentData?.contactName || this.currentData?.contactEmail || this.currentData?.contactPhone;
+        
+        // Build contacts HTML
+        let contactsHTML = '';
+        
+        // Owner Card
+        if (hasOwner) {
+            contactsHTML += `
+                <div class="bg-white rounded-lg border-2 border-indigo-200 p-6 hover:shadow-md transition-shadow">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center">
+                            <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mr-4">
+                                <i class="fas fa-crown text-indigo-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-900">Owner / Primary Contact</h4>
+                                <p class="text-sm text-gray-500">Main company owner</p>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Contact Email</label>
-                            <p id="company-contact-email-view" class="mt-1 text-sm text-gray-900">${this.currentData?.contactEmail || 'No contact email provided'}</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Contact Phone</label>
-                            <p id="company-contact-phone-view" class="mt-1 text-sm text-gray-900">${this.currentData?.contactPhone || 'No contact phone provided'}</p>
-                        </div>
+                        <button onclick="companyProfileManager.editContact('owner')" 
+                                class="text-indigo-600 hover:text-indigo-700 text-sm font-medium">
+                            <i class="fas fa-edit mr-1"></i>Edit
+                        </button>
                     </div>
-                    
-                    <!-- Owner Information -->
-                    <div class="space-y-4">
-                        <h4 class="font-medium text-gray-700">Owner Information</h4>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Owner Name</label>
-                            <p id="company-owner-view" class="mt-1 text-sm text-gray-900">${this.currentData?.ownerName || 'No owner provided'}</p>
+                    <div class="space-y-3">
+                        <div class="flex items-center text-sm">
+                            <i class="fas fa-user w-5 text-gray-400"></i>
+                            <span class="ml-3 text-gray-700">${this.currentData?.ownerName || 'Not set'}</span>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Owner Email</label>
-                            <p id="company-owner-email-view" class="mt-1 text-sm text-gray-900">${this.currentData?.ownerEmail || 'No owner email provided'}</p>
+                        <div class="flex items-center text-sm">
+                            <i class="fas fa-envelope w-5 text-gray-400"></i>
+                            <span class="ml-3 text-gray-700">${this.currentData?.ownerEmail || 'Not set'}</span>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Owner Phone</label>
-                            <p id="company-owner-phone-view" class="mt-1 text-sm text-gray-900">${this.currentData?.ownerPhone || 'No owner phone provided'}</p>
+                        <div class="flex items-center text-sm">
+                            <i class="fas fa-phone w-5 text-gray-400"></i>
+                            <span class="ml-3 text-gray-700">${this.currentData?.ownerPhone || 'Not set'}</span>
                         </div>
                     </div>
                 </div>
-            </div>
-        `;
+            `;
+        }
         
-        contactsContainer.innerHTML = contactsHTML;
-        console.log('✅ V2 contacts section rendered');
+        // Secondary Contact Card
+        if (hasContact) {
+            contactsHTML += `
+                <div class="bg-white rounded-lg border-2 border-gray-200 p-6 hover:shadow-md transition-shadow">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center">
+                            <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mr-4">
+                                <i class="fas fa-user text-gray-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-900">Secondary Contact</h4>
+                                <p class="text-sm text-gray-500">Additional contact person</p>
+                            </div>
+                        </div>
+                        <button onclick="companyProfileManager.editContact('secondary')" 
+                                class="text-indigo-600 hover:text-indigo-700 text-sm font-medium">
+                            <i class="fas fa-edit mr-1"></i>Edit
+                        </button>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex items-center text-sm">
+                            <i class="fas fa-user w-5 text-gray-400"></i>
+                            <span class="ml-3 text-gray-700">${this.currentData?.contactName || 'Not set'}</span>
+                        </div>
+                        <div class="flex items-center text-sm">
+                            <i class="fas fa-envelope w-5 text-gray-400"></i>
+                            <span class="ml-3 text-gray-700">${this.currentData?.contactEmail || 'Not set'}</span>
+                        </div>
+                        <div class="flex items-center text-sm">
+                            <i class="fas fa-phone w-5 text-gray-400"></i>
+                            <span class="ml-3 text-gray-700">${this.currentData?.contactPhone || 'Not set'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Empty state
+        if (!hasOwner && !hasContact) {
+            contactsHTML = `
+                <div class="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                    <i class="fas fa-address-book text-gray-300 text-5xl mb-4"></i>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">No Contacts Yet</h3>
+                    <p class="text-gray-500 mb-4">Add your first contact to get started</p>
+                    <button onclick="companyProfileManager.showContactModal()" 
+                            class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">
+                        <i class="fas fa-plus mr-2"></i>Add First Contact
+                    </button>
+                </div>
+            `;
+        }
+        
+        contactsList.innerHTML = contactsHTML;
+        console.log('✅ V2 contacts section rendered with', (hasOwner ? 1 : 0) + (hasContact ? 1 : 0), 'contact(s)');
+    }
+    
+    /**
+     * Edit existing contact
+     */
+    editContact(contactType) {
+        console.log(`📝 Editing ${contactType} contact`);
+        
+        const contactData = {
+            type: contactType,
+            name: contactType === 'owner' ? this.currentData?.ownerName : this.currentData?.contactName,
+            email: contactType === 'owner' ? this.currentData?.ownerEmail : this.currentData?.contactEmail,
+            phone: contactType === 'owner' ? this.currentData?.ownerPhone : this.currentData?.contactPhone
+        };
+        
+        this.showContactModal(contactData);
     }
     
     /**
@@ -881,10 +950,198 @@ class CompanyProfileManager {
     setupV2ContactsHandlers() {
         console.log('👥 Setting up v2 contacts handlers...');
         
-        // Add any contact-related event listeners here
-        // For now, this is mainly a display section, but we can add edit functionality later
+        const addContactBtn = document.getElementById('add-contact-btn');
+        if (addContactBtn) {
+            addContactBtn.addEventListener('click', () => {
+                console.log('📞 Add Contact button clicked');
+                this.showContactModal();
+            });
+            console.log('✅ Add Contact button handler attached');
+        } else {
+            console.warn('⚠️ Add Contact button not found in DOM');
+        }
         
         console.log('✅ V2 contacts handlers setup complete');
+    }
+    
+    /**
+     * Show contact modal for add/edit
+     */
+    showContactModal(contactData = null) {
+        const isEdit = !!contactData;
+        const modalTitle = isEdit ? 'Edit Contact' : 'Add New Contact';
+        const submitText = isEdit ? 'Update Contact' : 'Add Contact';
+        
+        // Create modal HTML
+        const modalHTML = `
+            <div id="contact-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+                <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+                    <!-- Modal Header -->
+                    <div class="flex items-center justify-between p-5 border-b border-gray-200">
+                        <h3 class="text-xl font-semibold text-gray-900">
+                            <i class="fas fa-user-plus mr-2 text-indigo-600"></i>${modalTitle}
+                        </h3>
+                        <button type="button" onclick="document.getElementById('contact-modal').remove()" class="text-gray-400 hover:text-gray-500 text-2xl">&times;</button>
+                    </div>
+                    
+                    <!-- Modal Body -->
+                    <form id="contact-form" class="p-6">
+                        <div class="space-y-4">
+                            <!-- Contact Type Selection -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Contact Type <span class="text-red-500">*</span>
+                                </label>
+                                <select id="contact-type" name="contactType" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                    <option value="">-- Select Type --</option>
+                                    <option value="owner" ${contactData?.type === 'owner' ? 'selected' : ''}>Owner/Primary Contact</option>
+                                    <option value="secondary" ${contactData?.type === 'secondary' ? 'selected' : ''}>Secondary Contact</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Contact Name -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Full Name <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" id="contact-name" name="name" required
+                                       value="${contactData?.name || ''}"
+                                       placeholder="John Doe"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            
+                            <!-- Contact Email -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Email Address <span class="text-red-500">*</span>
+                                </label>
+                                <input type="email" id="contact-email" name="email" required
+                                       value="${contactData?.email || ''}"
+                                       placeholder="john@example.com"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            
+                            <!-- Contact Phone -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Phone Number <span class="text-red-500">*</span>
+                                </label>
+                                <input type="tel" id="contact-phone" name="phone" required
+                                       value="${contactData?.phone || ''}"
+                                       placeholder="+1 (555) 123-4567"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                        </div>
+                        
+                        <!-- Form Actions -->
+                        <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
+                            <button type="button" onclick="document.getElementById('contact-modal').remove()"
+                                    class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition">
+                                <i class="fas fa-save mr-2"></i>${submitText}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('contact-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add modal to DOM
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Setup form submission handler
+        const form = document.getElementById('contact-form');
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveContact(isEdit);
+        });
+        
+        console.log(`✅ Contact modal displayed (${isEdit ? 'edit' : 'add'} mode)`);
+    }
+    
+    /**
+     * Save contact data
+     */
+    async saveContact(isEdit = false) {
+        const form = document.getElementById('contact-form');
+        const contactType = document.getElementById('contact-type').value;
+        const name = document.getElementById('contact-name').value.trim();
+        const email = document.getElementById('contact-email').value.trim();
+        const phone = document.getElementById('contact-phone').value.trim();
+        
+        // Validation
+        if (!contactType || !name || !email || !phone) {
+            this.showNotification('Please fill in all required fields', 'error');
+            return;
+        }
+        
+        // Email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            this.showNotification('Please enter a valid email address', 'error');
+            return;
+        }
+        
+        console.log('💾 Saving contact...', { contactType, name, email, phone });
+        
+        try {
+            // Prepare update data based on contact type
+            const updateData = {};
+            if (contactType === 'owner') {
+                updateData.ownerName = name;
+                updateData.ownerEmail = email;
+                updateData.ownerPhone = phone;
+            } else {
+                updateData.contactName = name;
+                updateData.contactEmail = email;
+                updateData.contactPhone = phone;
+            }
+            
+            // Save to API
+            const response = await fetch(`${this.apiBaseUrl}/company/${this.companyId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.authToken}`
+                },
+                body: JSON.stringify(updateData)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            console.log('✅ Contact saved successfully:', result);
+            
+            // Update local data
+            Object.assign(this.currentData, updateData);
+            
+            // Close modal
+            document.getElementById('contact-modal').remove();
+            
+            // Re-render contacts section
+            this.renderV2ContactsSection();
+            
+            // Show success notification
+            this.showNotification(
+                isEdit ? 'Contact updated successfully' : 'Contact added successfully',
+                'success'
+            );
+            
+        } catch (error) {
+            console.error('❌ Error saving contact:', error);
+            this.showNotification('Failed to save contact. Please try again.', 'error');
+        }
     }
 
     /* ========================================================================
