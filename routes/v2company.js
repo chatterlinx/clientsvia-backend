@@ -416,7 +416,7 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
     const { companyId } = req.params;
     const { status, callForwardNumber, callForwardMessage, reason, notes } = req.body;
     
-    console.log(`[API PATCH /company/${companyId}/account-status] Status change request:`, { status, callForwardNumber, reason });
+    console.log(`[API PATCH /company/${companyId}/account-status] Status change request:`, { status, callForwardNumber, callForwardMessage, reason });
     
     if (!ObjectId.isValid(companyId)) {
         return res.status(400).json({ success: false, message: 'Invalid company ID format' });

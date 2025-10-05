@@ -284,6 +284,7 @@ router.post('/voice', async (req, res) => {
       
       if (accountStatus === 'call_forward' && company.accountStatus.callForwardNumber) {
         console.log(`[CALL FORWARD] Forwarding call to ${company.accountStatus.callForwardNumber}`);
+        console.log(`[CALL FORWARD DEBUG] Raw callForwardMessage from DB:`, company.accountStatus.callForwardMessage);
         const forwardNumber = company.accountStatus.callForwardNumber;
         
         // Get custom forward message or use default
@@ -291,15 +292,17 @@ router.post('/voice', async (req, res) => {
         
         if (!forwardMessage) {
           // Default message if none is set
+          console.log(`[CALL FORWARD] Using default message (no custom message set)`);
           const companyName = company.companyName || company.businessName || 'us';
           forwardMessage = `Thank you for calling ${companyName}. Please hold while we connect your call.`;
         } else {
           // Replace {Company Name} placeholder (case-insensitive)
+          console.log(`[CALL FORWARD] Using custom message with placeholder replacement`);
           const companyName = company.companyName || company.businessName || 'the company';
           forwardMessage = forwardMessage.replace(/\{company name\}/gi, companyName);
         }
         
-        console.log(`[CALL FORWARD] Message: "${forwardMessage}"`);
+        console.log(`[CALL FORWARD] Final message: "${forwardMessage}"`);
         twiml.say(escapeTwiML(forwardMessage));
         twiml.dial(forwardNumber);
         res.type('text/xml');
