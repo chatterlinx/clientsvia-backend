@@ -2708,32 +2708,44 @@ class CompanyProfileManager {
         const baseUrl = this.apiBaseUrl || 'https://clientsvia-backend.onrender.com';
         console.log('🔧 Generating webhooks for company:', this.companyId, 'Base URL:', baseUrl);
         
-        // Define webhooks with companyId as path parameter (correct format)
+        // Define webhooks - platform uses phone number lookup to find company
         const webhooks = [
             {
-                title: '🎤 Voice Webhook (Primary)',
-                url: `${baseUrl}/api/twilio/voice?companyId=${this.companyId}`,
-                description: 'Configure this in Twilio Console → Phone Numbers → Voice Configuration',
+                title: '🎤 Voice Webhook (Recommended)',
+                url: `${baseUrl}/api/twilio/voice`,
+                description: 'Automatically finds company by phone number - Use this URL in Twilio Console',
                 primary: true,
-                note: 'Use this URL in your Twilio phone number configuration'
+                recommended: true,
+                note: 'This endpoint looks up your company by the phone number that was called'
+            },
+            {
+                title: '🎤 Voice Webhook (Company-Specific)',
+                url: `${baseUrl}/api/twilio/voice/${this.companyId}`,
+                description: 'Alternative: Direct company ID routing (bypasses phone lookup)',
+                primary: false,
+                alternative: true,
+                note: 'Only use if you need to bypass phone number lookup'
             },
             {
                 title: '🗣️ Speech Recognition',
                 url: `${baseUrl}/api/twilio/handle-speech?companyId=${this.companyId}`,
                 description: 'Used internally for AI speech processing',
-                primary: false
+                primary: false,
+                internal: true
             },
             {
                 title: '📞 Partial Speech',
                 url: `${baseUrl}/api/twilio/partial-speech?companyId=${this.companyId}`,
                 description: 'For real-time speech processing',
-                primary: false
+                primary: false,
+                internal: true
             },
             {
                 title: '⏱️ Speech Timing Test',
                 url: `${baseUrl}/api/twilio/speech-timing-test?companyId=${this.companyId}`,
                 description: 'For performance testing and optimization',
-                primary: false
+                primary: false,
+                internal: true
             }
         ];
 
@@ -2760,38 +2772,46 @@ class CompanyProfileManager {
                 
                 <!-- Webhooks List -->
                 ${webhooks.map(webhook => `
-                    <div class="webhook-item bg-white rounded-lg border-2 ${webhook.primary ? 'border-blue-300 shadow-md' : 'border-gray-200'} p-4 hover:shadow-lg transition-shadow">
+                    <div class="webhook-item bg-white rounded-lg border-2 ${webhook.recommended ? 'border-green-400 shadow-lg' : webhook.alternative ? 'border-yellow-300 shadow-md' : webhook.internal ? 'border-gray-200' : 'border-blue-300 shadow-md'} p-4 hover:shadow-lg transition-shadow">
                         <div class="flex justify-between items-center mb-3">
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2 flex-wrap">
                                 <h4 class="text-sm font-semibold text-gray-900">${webhook.title}</h4>
-                                ${webhook.primary ? '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">Primary</span>' : ''}
+                                ${webhook.recommended ? '<span class="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded flex items-center"><i class="fas fa-star mr-1"></i>RECOMMENDED</span>' : ''}
+                                ${webhook.alternative ? '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-medium rounded">Alternative</span>' : ''}
+                                ${webhook.internal ? '<span class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-medium rounded">Internal Use</span>' : ''}
                             </div>
-                            <button type="button" class="copy-webhook-btn text-xs font-medium ${webhook.primary ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-600 hover:bg-gray-700 text-white'} px-3 py-1.5 rounded transition-colors shadow-sm" data-webhook="${webhook.url}">
-                                <i class="fas fa-copy mr-1"></i>Copy URL
+                            <button type="button" class="copy-webhook-btn text-xs font-medium ${webhook.recommended ? 'bg-green-600 hover:bg-green-700 text-white' : webhook.alternative ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : 'bg-gray-600 hover:bg-gray-700 text-white'} px-3 py-1.5 rounded transition-colors shadow-sm" data-webhook="${webhook.url}">
+                                <i class="fas fa-copy mr-1"></i>Copy
                             </button>
                         </div>
-                        <div class="bg-gray-50 border-2 border-gray-300 rounded p-3 font-mono text-xs text-gray-900 break-all hover:bg-gray-100 transition-colors">
+                        <div class="bg-gray-50 border-2 ${webhook.recommended ? 'border-green-300' : 'border-gray-300'} rounded p-3 font-mono text-xs text-gray-900 break-all hover:bg-gray-100 transition-colors">
                             ${webhook.url}
                         </div>
-                        <p class="text-xs text-gray-600 mt-2 flex items-start">
-                            <i class="fas fa-info-circle mr-1.5 mt-0.5 text-gray-400"></i>
+                        <p class="text-xs ${webhook.recommended ? 'text-green-700 font-medium' : 'text-gray-600'} mt-2 flex items-start">
+                            <i class="fas ${webhook.recommended ? 'fa-check-circle text-green-500' : 'fa-info-circle text-gray-400'} mr-1.5 mt-0.5"></i>
                             <span>${webhook.description}</span>
                         </p>
                     </div>
                 `).join('')}
                 
                 <!-- Configuration Instructions -->
-                <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                    <h5 class="text-sm font-medium text-blue-900 mb-2">📋 Quick Setup Instructions:</h5>
-                    <ol class="text-xs text-blue-800 space-y-1">
-                        <li>1. Go to <a href="https://console.twilio.com" target="_blank" class="underline hover:no-underline">Twilio Console</a></li>
-                        <li>2. Navigate to Phone Numbers → Manage → Active Numbers</li>
-                        <li>3. Click on your phone number</li>
-                        <li>4. Set Voice Configuration webhook to the <strong>Voice Webhook URL</strong> above</li>
-                        <li>5. Set HTTP method to <strong>POST</strong></li>
-                        <li>6. Save configuration</li>
-                        <li>7. Test by calling your number - the AI agent will respond with company-specific data</li>
+                <div class="mt-4 p-4 bg-green-50 border-2 border-green-300 rounded-lg">
+                    <h5 class="text-sm font-bold text-green-900 mb-3 flex items-center">
+                        <i class="fas fa-clipboard-check mr-2"></i>Setup Instructions (Recommended Method)
+                    </h5>
+                    <ol class="text-xs text-green-800 space-y-2 ml-4">
+                        <li><strong>1.</strong> Copy the <strong class="text-green-900">Voice Webhook (Recommended)</strong> URL above</li>
+                        <li><strong>2.</strong> Go to <a href="https://console.twilio.com" target="_blank" class="underline hover:no-underline font-medium">Twilio Console</a> → Phone Numbers → Manage → Active Numbers</li>
+                        <li><strong>3.</strong> Click on the phone number configured in the "Configuration" tab above</li>
+                        <li><strong>4.</strong> Under "Voice Configuration", paste the webhook URL: <code class="bg-white px-2 py-0.5 rounded text-green-900 font-mono">https://clientsvia-backend.onrender.com/api/twilio/voice</code></li>
+                        <li><strong>5.</strong> Set HTTP method to <strong class="text-green-900">POST</strong></li>
+                        <li><strong>6.</strong> Click "Save Configuration"</li>
+                        <li><strong>7.</strong> Test by calling your Twilio number - the platform will automatically find this company by phone number lookup!</li>
                     </ol>
+                    <div class="mt-3 p-2 bg-white border border-green-200 rounded text-xs text-green-700">
+                        <i class="fas fa-lightbulb mr-1 text-yellow-500"></i>
+                        <strong>How it works:</strong> When a call comes in, the platform looks up which company owns that phone number and routes the call automatically. No company ID needed!
+                    </div>
                 </div>
             </div>
         `;
