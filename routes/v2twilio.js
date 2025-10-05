@@ -287,24 +287,22 @@ router.post('/voice', async (req, res) => {
         console.log(`[CALL FORWARD DEBUG] Raw callForwardMessage from DB:`, company.accountStatus.callForwardMessage);
         const forwardNumber = company.accountStatus.callForwardNumber;
         
-        // Get custom forward message or use default
+        // Get custom forward message from text box (NO DEFAULT MESSAGE)
         let forwardMessage = company.accountStatus.callForwardMessage;
         
-        if (!forwardMessage) {
-          // Default message if none is set
-          console.log(`[CALL FORWARD] Using default message (no custom message set)`);
-          const companyName = company.companyName || company.businessName || 'us';
-          forwardMessage = `Thank you for calling ${companyName}. Please hold while we connect your call.`;
-        } else {
+        if (forwardMessage && forwardMessage.trim()) {
           // Replace {Company Name} placeholder (case-insensitive, with or without space)
-          console.log(`[CALL FORWARD] Using custom message with placeholder replacement`);
+          console.log(`[CALL FORWARD] Using custom message from text box with placeholder replacement`);
           const companyName = company.companyName || company.businessName || 'the company';
           // Match: {company name}, {companyname}, {Company Name}, {CompanyName}, etc.
           forwardMessage = forwardMessage.replace(/\{company\s*name\}/gi, companyName);
+          console.log(`[CALL FORWARD] Final message: "${forwardMessage}"`);
+          twiml.say(escapeTwiML(forwardMessage));
+        } else {
+          // No message in text box - forward silently (no greeting)
+          console.log(`[CALL FORWARD] No custom message set - forwarding silently (no greeting)`);
         }
         
-        console.log(`[CALL FORWARD] Final message: "${forwardMessage}"`);
-        twiml.say(escapeTwiML(forwardMessage));
         twiml.dial(forwardNumber);
         res.type('text/xml');
         res.send(twiml.toString());
