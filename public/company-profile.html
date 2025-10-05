@@ -1753,59 +1753,6 @@
                         </div>
                     </div>
                     
-                    <!-- Add/Edit Placeholder Modal -->
-                    <div id="placeholder-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
-                        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-                            <div class="mt-3">
-                                <div class="flex items-center justify-between mb-4">
-                                    <h3 class="text-lg font-medium text-gray-900" id="placeholder-modal-title">Add Placeholder</h3>
-                                    <button type="button" class="text-gray-400 hover:text-gray-600" id="close-placeholder-modal">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                </div>
-                                <form id="placeholder-form">
-                                    <div class="mb-4">
-                                        <label for="placeholder-name" class="block text-sm font-medium text-gray-700 mb-2">
-                                            Placeholder Name
-                                        </label>
-                                        <div class="relative">
-                                            <span class="absolute left-3 top-2 text-gray-500">{</span>
-                                            <input type="text" id="placeholder-name" name="placeholder-name" 
-                                                   class="pl-8 pr-8 py-2 w-full border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
-                                                   placeholder="companyname" required>
-                                            <span class="absolute right-3 top-2 text-gray-500">}</span>
-                                        </div>
-                                        <p class="text-xs text-gray-500 mt-1">Use lowercase, no spaces (e.g., companyname, phonenumber)</p>
-                                    </div>
-                                    <div class="mb-4">
-                                        <label for="placeholder-value" class="block text-sm font-medium text-gray-700 mb-2">
-                                            Value
-                                        </label>
-                                        <input type="text" id="placeholder-value" name="placeholder-value" 
-                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
-                                               placeholder="Your Company Name" required>
-                                        <p class="text-xs text-gray-500 mt-1">The text that will replace this placeholder</p>
-                                    </div>
-                                    <div class="mb-6">
-                                        <label for="placeholder-description" class="block text-sm font-medium text-gray-700 mb-2">
-                                            Description (Optional)
-                                        </label>
-                                        <input type="text" id="placeholder-description" name="placeholder-description" 
-                                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
-                                               placeholder="Brief description of this placeholder">
-                                    </div>
-                                    <div class="flex justify-end space-x-3">
-                                        <button type="button" id="cancel-placeholder" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">
-                                            Cancel
-                                        </button>
-                                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700">
-                                            <span id="placeholder-submit-text">Add Placeholder</span>
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
 
                     <!-- Add/Edit Response Category Modal -->
                     <div id="response-category-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
@@ -4819,57 +4766,59 @@ This would be a great time to also check..."></textarea>
 
                             <!-- Modal Body -->
                             <div class="p-6 space-y-5">
-                                <!-- Name Field -->
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
-                                        <i class="fas fa-signature text-purple-600 mr-2"></i>Placeholder Name *
-                                    </label>
-                                    <input type="text" id="placeholder-name" 
-                                           placeholder="Company Name" 
-                                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
-                                           data-no-unsaved-warning
-                                           required>
-                                    <p class="text-xs text-gray-600 mt-2">
-                                        <i class="fas fa-info-circle mr-1"></i>
-                                        Just the name - don't include brackets. Example: "Company Name" or "Business Hours"
-                                    </p>
-                                </div>
+                                <form id="placeholder-form">
+                                    <!-- Name Field -->
+                                    <div>
+                                        <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                            <i class="fas fa-signature text-purple-600 mr-2"></i>Placeholder Name *
+                                        </label>
+                                        <input type="text" id="placeholder-name"
+                                               placeholder="Company Name"
+                                               class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                               data-no-unsaved-warning
+                                               required>
+                                        <p class="text-xs text-gray-600 mt-2">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Just the name - don't include brackets. Example: "Company Name" or "Business Hours"
+                                        </p>
+                                    </div>
 
-                                <!-- Value Field -->
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
-                                        <i class="fas fa-file-text text-purple-600 mr-2"></i>Replacement Value *
-                                    </label>
-                                    <textarea id="placeholder-value" rows="3" 
-                                              placeholder="Atlas Air" 
-                                              class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
-                                              data-no-unsaved-warning
-                                              required></textarea>
-                                    <p class="text-xs text-gray-600 mt-2">
-                                        <i class="fas fa-info-circle mr-1"></i>
-                                        The actual text that will replace the placeholder in responses
-                                    </p>
-                                </div>
+                                    <!-- Value Field -->
+                                    <div>
+                                        <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                            <i class="fas fa-file-text text-purple-600 mr-2"></i>Replacement Value *
+                                        </label>
+                                        <textarea id="placeholder-value" rows="3"
+                                                  placeholder="Atlas Air"
+                                                  class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                                  data-no-unsaved-warning
+                                                  required></textarea>
+                                        <p class="text-xs text-gray-600 mt-2">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            The actual text that will replace the placeholder in responses
+                                        </p>
+                                    </div>
 
-                                <!-- Category Field -->
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-800 mb-2">
-                                        <i class="fas fa-folder text-purple-600 mr-2"></i>Category
-                                    </label>
-                                    <select id="placeholder-category" 
-                                            class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                            data-no-unsaved-warning>
-                                        <option value="general">General</option>
-                                        <option value="contact">Contact Info</option>
-                                        <option value="business">Business Info</option>
-                                        <option value="hours">Hours & Schedule</option>
-                                        <option value="location">Location</option>
-                                    </select>
-                                    <p class="text-xs text-gray-600 mt-2">
-                                        <i class="fas fa-info-circle mr-1"></i>
-                                        Organize placeholders by category for easier management
-                                    </p>
-                                </div>
+                                    <!-- Category Field -->
+                                    <div>
+                                        <label class="block text-sm font-semibold text-gray-800 mb-2">
+                                            <i class="fas fa-folder text-purple-600 mr-2"></i>Category
+                                        </label>
+                                        <select id="placeholder-category"
+                                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                                data-no-unsaved-warning>
+                                            <option value="general">General</option>
+                                            <option value="contact">Contact Info</option>
+                                            <option value="business">Business Info</option>
+                                            <option value="hours">Hours & Schedule</option>
+                                            <option value="location">Location</option>
+                                        </select>
+                                        <p class="text-xs text-gray-600 mt-2">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Organize placeholders by category for easier management
+                                        </p>
+                                    </div>
+                                </form>
 
                                 <!-- Usage Example -->
                                 <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">

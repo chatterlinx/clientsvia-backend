@@ -53,11 +53,25 @@ class PlaceholdersManager {
      */
     attachEventListeners() {
         console.log('[PH-UI-7] 🔗 Attaching event listeners...');
-        
+
+        // CRITICAL FIX: Prevent form submission on the form element itself
+        const placeholderForm = document.getElementById('placeholder-form');
+        if (placeholderForm) {
+            placeholderForm.addEventListener('submit', (e) => {
+                e.preventDefault(); // Prevent form submission
+                e.stopPropagation(); // Stop event bubbling
+                console.log('[PH-UI-7b] 🚫 Form submit prevented');
+                // Don't call savePlaceholder here - let button clicks handle it
+            });
+            console.log('[PH-UI-7c] ✅ Form submit prevention attached');
+        }
+
         // Add Placeholder button
         const addBtn = document.getElementById('add-placeholder-btn');
         if (addBtn) {
-            addBtn.addEventListener('click', () => {
+            addBtn.addEventListener('click', (e) => {
+                e.preventDefault(); // Prevent any default behavior
+                e.stopPropagation(); // Stop event bubbling
                 console.log('[PH-UI-8] 📝 Add button clicked');
                 this.openModal();
             });
@@ -65,7 +79,7 @@ class PlaceholdersManager {
         } else {
             console.warn('[PH-UI-10] ⚠️ Add button not found');
         }
-        
+
         // Save button
         const saveBtn = document.getElementById('save-placeholder-btn');
         if (saveBtn) {
@@ -77,7 +91,7 @@ class PlaceholdersManager {
             });
             console.log('[PH-UI-12] ✅ Save button listener attached');
         }
-        
+
         // Cancel button
         const cancelBtn = document.getElementById('cancel-placeholder-btn');
         if (cancelBtn) {
@@ -89,7 +103,7 @@ class PlaceholdersManager {
             });
             console.log('[PH-UI-14] ✅ Cancel button listener attached');
         }
-        
+
         // Close modal X button
         const closeBtn = document.getElementById('close-placeholder-modal');
         if (closeBtn) {
@@ -101,7 +115,7 @@ class PlaceholdersManager {
             });
             console.log('[PH-UI-16] ✅ Close button listener attached');
         }
-        
+
         console.log('[PH-UI-17] ✅ All event listeners attached');
     }
 
