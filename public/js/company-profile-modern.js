@@ -1273,6 +1273,9 @@ class CompanyProfileManager {
         // Setup phone numbers management
         this.setupPhoneNumbersManagement();
         
+        // Setup account status control
+        this.setupAccountStatusControl();
+        
         // Setup configuration form listeners
         this.setupConfigFormListeners();
         
@@ -2857,6 +2860,278 @@ class CompanyProfileManager {
         });
         
         console.log('✅ Webhook copy buttons setup complete');
+    }
+
+    /* ========================================================================
+       🚨 ACCOUNT STATUS CONTROL - Critical for billing/service management
+       ======================================================================== */
+
+    /**
+     * Setup account status control system
+     */
+    setupAccountStatusControl() {
+        console.log('🚨 Setting up Account Status Control...');
+        
+        try {
+            // Load current status
+            this.loadAccountStatus();
+            
+            // Setup status radio buttons
+            const statusRadios = document.querySelectorAll('input[name="accountStatus"]');
+            statusRadios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    this.handleStatusChange(e.target.value);
+                });
+            });
+            
+            // Setup save button
+            const saveBtn = document.getElementById('save-account-status-btn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', () => {
+                    this.saveAccountStatus();
+                });
+            }
+            
+            console.log('✅ Account Status Control setup complete');
+        } catch (error) {
+            console.error('❌ Error setting up Account Status Control:', error);
+        }
+    }
+
+    /**
+     * Load and display current account status
+     */
+    loadAccountStatus() {
+        console.log('📊 Loading account status...');
+        
+        const accountStatus = this.currentData?.accountStatus || {};
+        const status = accountStatus.status || 'active';
+        
+        console.log('📊 Current account status:', status);
+        
+        // Set radio button
+        const radioBtn = document.querySelector(`input[name="accountStatus"][value="${status}"]`);
+        if (radioBtn) {
+            radioBtn.checked = true;
+            this.handleStatusChange(status, true); // Don't save, just update UI
+        }
+        
+        // Set call forward number if exists
+        if (accountStatus.callForwardNumber) {
+            const forwardInput = document.getElementById('call-forward-number');
+            if (forwardInput) {
+                forwardInput.value = accountStatus.callForwardNumber;
+            }
+        }
+        
+        // Set reason if exists
+        if (accountStatus.reason) {
+            const reasonInput = document.getElementById('status-change-reason');
+            if (reasonInput) {
+                reasonInput.value = accountStatus.reason;
+            }
+        }
+        
+        // Update status badge
+        this.updateStatusBadge(status);
+        
+        // Load history if exists
+        if (accountStatus.history && accountStatus.history.length > 0) {
+            this.renderStatusHistory(accountStatus.history);
+        }
+    }
+
+    /**
+     * Handle status change (show/hide call forward section)
+     */
+    handleStatusChange(status, skipSave = false) {
+        console.log(`🔄 Status changed to: ${status}`);
+        
+        const callForwardSection = document.getElementById('call-forward-section');
+        
+        if (status === 'call_forward') {
+            callForwardSection?.classList.remove('hidden');
+        } else {
+            callForwardSection?.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Save account status
+     */
+    async saveAccountStatus() {
+        console.log('💾 Saving account status...');
+        
+        const selectedStatus = document.querySelector('input[name="accountStatus"]:checked');
+        if (!selectedStatus) {
+            this.showNotification('Please select an account status', 'error');
+            return;
+        }
+        
+        const status = selectedStatus.value;
+        const callForwardNumber = document.getElementById('call-forward-number')?.value.trim();
+        const reason = document.getElementById('status-change-reason')?.value.trim();
+        
+        // Validate call forward number if status is call_forward
+        if (status === 'call_forward' && !callForwardNumber) {
+            this.showNotification('Please enter a phone number for call forwarding', 'error');
+            return;
+        }
+        
+        const updateData = {
+            status,
+            callForwardNumber: status === 'call_forward' ? callForwardNumber : null,
+            reason: reason || null
+        };
+        
+        console.log('📤 Sending account status update:', updateData);
+        
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}/account-status`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.authToken}`
+                },
+                body: JSON.stringify(updateData)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `HTTP ${response.status}`);
+            }
+            
+            const result = await response.json();
+            console.log('✅ Account status updated:', result);
+            
+            // Update current data
+            if (!this.currentData.accountStatus) {
+                this.currentData.accountStatus = {};
+            }
+            this.currentData.accountStatus = result.accountStatus;
+            
+            // Update UI
+            this.updateStatusBadge(status);
+            
+            // Render updated history
+            if (result.accountStatus.history) {
+                this.renderStatusHistory(result.accountStatus.history);
+            }
+            
+            // Show success message
+            let message = `Account status updated to "${this.getStatusDisplayName(status)}"`;
+            if (status === 'call_forward') {
+                message += ` → ${callForwardNumber}`;
+            }
+            this.showNotification(message, 'success');
+            
+        } catch (error) {
+            console.error('❌ Error saving account status:', error);
+            this.showNotification(`Failed to update account status: ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Update status badge in header
+     */
+    updateStatusBadge(status) {
+        const badge = document.getElementById('account-status-badge');
+        if (!badge) return;
+        
+        const statusConfig = {
+            active: {
+                text: '🟢 ACTIVE',
+                classes: 'bg-green-100 text-green-800 border-2 border-green-300'
+            },
+            call_forward: {
+                text: '🟡 CALL FORWARD',
+                classes: 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300'
+            },
+            suspended: {
+                text: '🔴 SUSPENDED',
+                classes: 'bg-red-100 text-red-800 border-2 border-red-300'
+            }
+        };
+        
+        const config = statusConfig[status] || statusConfig.active;
+        badge.textContent = config.text;
+        badge.className = `px-3 py-1 rounded-full text-xs font-bold ${config.classes}`;
+    }
+
+    /**
+     * Render status change history
+     */
+    renderStatusHistory(history) {
+        const historySection = document.getElementById('status-history-section');
+        const historyList = document.getElementById('status-history-list');
+        
+        if (!historyList || !history || history.length === 0) return;
+        
+        historySection?.classList.remove('hidden');
+        
+        // Sort by date descending (most recent first)
+        const sortedHistory = [...history].sort((a, b) => 
+            new Date(b.changedAt) - new Date(a.changedAt)
+        );
+        
+        historyList.innerHTML = sortedHistory.map(entry => {
+            const date = new Date(entry.changedAt);
+            const formattedDate = date.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+            
+            const statusIcon = {
+                active: '🟢',
+                call_forward: '🟡',
+                suspended: '🔴'
+            }[entry.status] || '⚪';
+            
+            const statusName = this.getStatusDisplayName(entry.status);
+            
+            return `
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div class="flex items-start justify-between mb-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg">${statusIcon}</span>
+                            <span class="font-semibold text-gray-900">${statusName}</span>
+                        </div>
+                        <span class="text-xs text-gray-500">${formattedDate}</span>
+                    </div>
+                    ${entry.callForwardNumber ? `
+                        <div class="text-xs text-gray-600 ml-7 mb-1">
+                            <i class="fas fa-phone-forward mr-1"></i>
+                            Forward to: ${entry.callForwardNumber}
+                        </div>
+                    ` : ''}
+                    ${entry.reason ? `
+                        <div class="text-xs text-gray-600 ml-7 mb-1">
+                            <i class="fas fa-comment mr-1"></i>
+                            ${entry.reason}
+                        </div>
+                    ` : ''}
+                    <div class="text-xs text-gray-500 ml-7">
+                        <i class="fas fa-user mr-1"></i>
+                        Changed by: ${entry.changedBy}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    /**
+     * Get display name for status
+     */
+    getStatusDisplayName(status) {
+        const names = {
+            active: 'Active',
+            call_forward: 'Call Forward',
+            suspended: 'Suspended'
+        };
+        return names[status] || status;
     }
 
     /**
