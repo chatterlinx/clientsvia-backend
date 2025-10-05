@@ -28,6 +28,7 @@ const CompanyQnACategory = require('../models/CompanyQnACategory');
 // V2 DELETED: Legacy v2 aiAgentCacheService - using simple Redis directly
 const { redisClient } = require('../clients');
 const logger = require('../utils/logger');
+const { replacePlaceholders } = require('../utils/placeholderReplacer');
 
 class PriorityDrivenKnowledgeRouter {
     constructor() {
@@ -284,9 +285,9 @@ class PriorityDrivenKnowledgeRouter {
                 routingId: context.routingId
             });
 
-            // Get company to access instant responses
+            // Get company to access instant responses and placeholders
             const company = await Company.findById(companyId)
-                .select('instantResponses')
+                .select('instantResponses aiAgentLogic.placeholders')
                 .lean();
 
             if (!company || !company.instantResponses || company.instantResponses.length === 0) {
@@ -315,9 +316,12 @@ class PriorityDrivenKnowledgeRouter {
                     matchTimeMs: match.matchTimeMs
                 });
 
+                // Replace placeholders in response
+                const processedResponse = replacePlaceholders(match.response, company);
+
                 return {
                     confidence: match.score,
-                    response: match.response,
+                    response: processedResponse,
                     metadata: {
                         source: 'instantResponses',
                         trigger: match.trigger,
@@ -398,6 +402,9 @@ class PriorityDrivenKnowledgeRouter {
                 logger.info(`🔍 No Company Q&A categories found for company ${companyId}`, { routingId: context.routingId });
                 return { confidence: 0, response: null, metadata: { source: 'companyQnA', error: 'No company Q&A categories - use Company Q&A tab to create categories and add Q&As' } };
             }
+            
+            // Load company for placeholder replacement
+            const company = await Company.findById(companyId).select('aiAgentLogic.placeholders').lean();
 
             logger.info(`🔍 Found ${categories.length} Company Q&A categories`, { 
                 routingId: context.routingId,
@@ -469,6 +476,11 @@ class PriorityDrivenKnowledgeRouter {
                 });
             }
 
+            // Replace placeholders in response
+            if (bestMatch.response && company) {
+                bestMatch.response = replacePlaceholders(bestMatch.response, company);
+            }
+
             return bestMatch;
 
         } catch (error) {
@@ -517,9 +529,11 @@ class PriorityDrivenKnowledgeRouter {
                 logger.warn(`⚠️ V2 Cache check failed for trade knowledge`, { error: error.message });
             }
             
+            // Load company for knowledge and placeholders
+            let company = null;
             if (!knowledge) {
                 // Cache miss - load from MongoDB and cache
-                const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement');
+                company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement aiAgentLogic.placeholders');
                 if (!company?.aiAgentLogic?.knowledgeManagement) {
                     return { confidence: 0, response: null, metadata: { source: 'tradeQnA', error: 'No knowledge data' } };
                 }
@@ -532,6 +546,8 @@ class PriorityDrivenKnowledgeRouter {
                 console.log(`🔄 Trade Q&A cache miss - loaded from MongoDB (${Date.now() - startTime}ms)`);
             } else {
                 console.log(`⚡ Trade Q&A cache hit - Redis lookup (${Date.now() - startTime}ms)`);
+                // If knowledge was cached, still need to load company for placeholders
+                company = await Company.findById(companyId).select('aiAgentLogic.placeholders').lean();
             }
             
             if (!knowledge?.tradeQnA || knowledge.tradeQnA.length === 0) {
@@ -559,6 +575,11 @@ class PriorityDrivenKnowledgeRouter {
                 }
             }
 
+            // Replace placeholders in response
+            if (bestMatch.response && company) {
+                bestMatch.response = replacePlaceholders(bestMatch.response, company);
+            }
+
             // Add performance metrics
             const responseTime = Date.now() - startTime;
             bestMatch.metadata.responseTime = responseTime;
@@ -580,7 +601,7 @@ class PriorityDrivenKnowledgeRouter {
      */
     async queryTemplates(companyId, query, context) {
         try {
-            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.templates');
+            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.templates aiAgentLogic.placeholders');
             
             if (!company?.aiAgentLogic?.knowledgeManagement?.templates) {
                 return { confidence: 0, response: null, metadata: { source: 'templates', error: 'No templates data' } };
@@ -607,6 +628,11 @@ class PriorityDrivenKnowledgeRouter {
                 }
             }
 
+            // Replace placeholders in response
+            if (bestMatch.response && company) {
+                bestMatch.response = replacePlaceholders(bestMatch.response, company);
+            }
+
             return bestMatch;
 
         } catch (error) {
@@ -622,7 +648,7 @@ class PriorityDrivenKnowledgeRouter {
      */
     async queryInHouseFallback(companyId, query, context) {
         try {
-            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.inHouseFallback agentBrain.identity.businessType companyName quickVariables');
+            const company = await Company.findById(companyId).select('aiAgentLogic.knowledgeManagement.inHouseFallback aiAgentLogic.placeholders agentBrain.identity.businessType companyName');
             
             const businessType = company?.agentBrain?.identity?.businessType || '';
             const companyName = company?.companyName || 'our company';
@@ -639,9 +665,16 @@ class PriorityDrivenKnowledgeRouter {
                 const confidence = this.calculateKeywordMatch(query, categoryConfig.keywords);
                 
                 if (confidence > 0.3) { // Lower threshold for fallback
+                    let response = categoryConfig.response || this.getDefaultResponse(category);
+                    
+                    // Replace placeholders in fallback response
+                    if (company) {
+                        response = replacePlaceholders(response, company);
+                    }
+                    
                     return {
                         confidence: Math.max(confidence, 0.5), // Ensure minimum fallback confidence
-                        response: categoryConfig.response || this.getDefaultResponse(category),
+                        response,
                         metadata: {
                             source: 'inHouseFallback',
                             category,
@@ -652,9 +685,14 @@ class PriorityDrivenKnowledgeRouter {
             }
 
             // Ultimate fallback - always responds
+            let ultimateResponse = "Thank you for contacting us. Let me connect you with someone who can help you right away.";
+            if (company) {
+                ultimateResponse = replacePlaceholders(ultimateResponse, company);
+            }
+            
             return {
                 confidence: 0.5,
-                response: "Thank you for contacting us. Let me connect you with someone who can help you right away.",
+                response: ultimateResponse,
                 metadata: {
                     source: 'inHouseFallback',
                     category: 'ultimate',
