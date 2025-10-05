@@ -6,23 +6,24 @@ require('dotenv').config();
 const bcrypt = require('bcrypt');
 const mongoose = require('mongoose');
 const User = require('./models/v2User');
+const logger = require('./utils/logger');
 
 async function changePassword() {
     try {
-        console.log('🔧 Connecting to MongoDB...');
+        logger.info('🔧 Connecting to MongoDB...');
         await mongoose.connect(process.env.MONGODB_URI);
-        console.log('✅ Connected to MongoDB\n');
+        logger.info('✅ Connected to MongoDB\n');
 
         const email = 'admin@clientsvia.com';
         // Generate a unique, secure password
         const newPassword = `ClientsVia2025!${Math.random().toString(36).substring(7)}`;
 
-        console.log(`🔐 Changing password for: ${email}`);
-        
+        logger.info(`🔐 Changing password for: ${email}`);
+
         const user = await User.findOne({ email });
-        
+
         if (!user) {
-            console.log('❌ User not found!');
+            logger.error('❌ User not found!');
             process.exit(1);
         }
 
@@ -32,15 +33,15 @@ async function changePassword() {
         user.password = hashedPassword;
         await user.save();
 
-        console.log('\n✅ Password changed successfully!\n');
-        console.log('📝 NEW LOGIN CREDENTIALS:');
-        console.log(`   Email: ${email}`);
-        console.log(`   Password: ${newPassword}`);
-        console.log('\n⚠️  SAVE THIS PASSWORD - It won\'t be shown again!\n');
-        console.log('🌐 Login URL: https://clientsvia-backend.onrender.com/login.html');
+        logger.info('\n✅ Password changed successfully!\n');
+        logger.info('📝 NEW LOGIN CREDENTIALS:');
+        logger.info(`   Email: ${email}`);
+        logger.info(`   Password: ${newPassword}`);
+        logger.info('\n⚠️  SAVE THIS PASSWORD - It won\'t be shown again!\n');
+        logger.info('🌐 Login URL: https://clientsvia-backend.onrender.com/login.html');
 
     } catch (error) {
-        console.error('❌ Error:', error);
+        logger.error('❌ Error changing password', { error: error.message });
     } finally {
         await mongoose.connection.close();
         process.exit(0);
