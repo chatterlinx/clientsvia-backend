@@ -3009,6 +3009,14 @@ class CompanyProfileManager {
             }
         }
         
+        // Set call forward message if exists
+        if (accountStatus.callForwardMessage) {
+            const messageInput = document.getElementById('call-forward-message');
+            if (messageInput) {
+                messageInput.value = accountStatus.callForwardMessage;
+            }
+        }
+        
         // Set reason if exists
         if (accountStatus.reason) {
             const reasonInput = document.getElementById('status-change-reason');
@@ -3055,6 +3063,7 @@ class CompanyProfileManager {
         
         const status = selectedStatus.value;
         const callForwardNumber = document.getElementById('call-forward-number')?.value.trim();
+        const callForwardMessage = document.getElementById('call-forward-message')?.value.trim();
         const reason = document.getElementById('status-change-reason')?.value.trim();
         
         // Validate call forward number if status is call_forward
@@ -3066,6 +3075,7 @@ class CompanyProfileManager {
         const updateData = {
             status,
             callForwardNumber: status === 'call_forward' ? callForwardNumber : null,
+            callForwardMessage: status === 'call_forward' ? callForwardMessage : null,
             reason: reason || null,
             changedBy: this.currentData?.ownerEmail || this.currentData?.contactEmail || 'Admin'
         };
@@ -3191,6 +3201,12 @@ class CompanyProfileManager {
                         <div class="text-xs text-gray-600 ml-7 mb-1">
                             <i class="fas fa-phone-forward mr-1"></i>
                             Forward to: ${entry.callForwardNumber}
+                        </div>
+                    ` : ''}
+                    ${entry.callForwardMessage ? `
+                        <div class="text-xs text-gray-600 ml-7 mb-1 italic">
+                            <i class="fas fa-comment-dots mr-1"></i>
+                            Message: "${entry.callForwardMessage}"
                         </div>
                     ` : ''}
                     ${entry.reason ? `

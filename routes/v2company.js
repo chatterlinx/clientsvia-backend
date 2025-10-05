@@ -414,7 +414,7 @@ router.patch('/company/:id', async (req, res) => {
 // 🚨 Account Status Management - Critical for billing/service control
 router.patch('/company/:companyId/account-status', async (req, res) => {
     const { companyId } = req.params;
-    const { status, callForwardNumber, reason, notes } = req.body;
+    const { status, callForwardNumber, callForwardMessage, reason, notes } = req.body;
     
     console.log(`[API PATCH /company/${companyId}/account-status] Status change request:`, { status, callForwardNumber, reason });
     
@@ -465,6 +465,7 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
         const historyEntry = {
             status: status,
             callForwardNumber: status === 'call_forward' ? callForwardNumber : null,
+            callForwardMessage: status === 'call_forward' ? callForwardMessage : null,
             reason: reason || null,
             changedBy: changedBy,
             changedAt: new Date()
@@ -473,6 +474,7 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
         // Update account status
         company.accountStatus.status = status;
         company.accountStatus.callForwardNumber = status === 'call_forward' ? callForwardNumber : null;
+        company.accountStatus.callForwardMessage = status === 'call_forward' ? callForwardMessage : null;
         company.accountStatus.reason = reason || null;
         company.accountStatus.changedBy = changedBy;
         company.accountStatus.changedAt = new Date();

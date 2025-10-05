@@ -1010,20 +1010,39 @@
                                     
                                     <!-- Call Forward Number (shown only when Call Forward is selected) -->
                                     <div id="call-forward-section" class="hidden bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-4">
-                                        <label for="call-forward-number" class="form-label flex items-center text-yellow-900">
-                                            <i class="fas fa-phone mr-2"></i>
-                                            Forward To Phone Number
-                                        </label>
-                                        <input 
-                                            type="tel" 
-                                            id="call-forward-number" 
-                                            class="form-input mt-2" 
-                                            placeholder="+12395551234" 
-                                            pattern="\+?[1-9]\d{1,14}">
-                                        <p class="text-xs text-yellow-700 mt-2">
-                                            <i class="fas fa-info-circle mr-1"></i>
-                                            Enter phone number in E.164 format (e.g., +12395551234)
-                                        </p>
+                                        <div class="mb-4">
+                                            <label for="call-forward-number" class="form-label flex items-center text-yellow-900">
+                                                <i class="fas fa-phone mr-2"></i>
+                                                Forward To Phone Number
+                                            </label>
+                                            <input 
+                                                type="tel" 
+                                                id="call-forward-number" 
+                                                class="form-input mt-2" 
+                                                placeholder="+12395551234" 
+                                                pattern="\+?[1-9]\d{1,14}">
+                                            <p class="text-xs text-yellow-700 mt-2">
+                                                <i class="fas fa-info-circle mr-1"></i>
+                                                Enter phone number in E.164 format (e.g., +12395551234)
+                                            </p>
+                                        </div>
+                                        
+                                        <div>
+                                            <label for="call-forward-message" class="form-label flex items-center text-yellow-900">
+                                                <i class="fas fa-comment-dots mr-2"></i>
+                                                Custom Forward Message (Optional)
+                                            </label>
+                                            <textarea 
+                                                id="call-forward-message" 
+                                                class="form-input mt-2" 
+                                                rows="2" 
+                                                placeholder="Thank you for calling {Company Name}. Please hold while we connect your call."
+                                                maxlength="300"></textarea>
+                                            <p class="text-xs text-yellow-700 mt-2">
+                                                <i class="fas fa-magic mr-1"></i>
+                                                Use <code class="bg-yellow-200 px-1 rounded">{Company Name}</code> placeholder - it will be replaced with your company name. Leave empty for default message.
+                                            </p>
+                                        </div>
                                     </div>
                                     
                                     <!-- Reason for Change -->
