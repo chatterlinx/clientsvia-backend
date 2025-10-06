@@ -91,10 +91,9 @@ router.post('/companies', async (req, res) => {
             // ✨ MODERN FORM - International address format
             console.log('[API POST /api/companies] 🌍 Modern form detected - International address');
             
-            if (!companyName || !companyPhone || !address || !address.street || !address.city || !address.state || !address.zip || !address.country) {
+            if (!companyName || !address || !address.street || !address.city || !address.state || !address.zip || !address.country) {
                 console.warn('[API POST /api/companies] ❌ Modern form validation failed. Missing required fields:', {
                     companyName: !!companyName,
-                    companyPhone: !!companyPhone,
                     address: !!address,
                     'address.street': address?.street,
                     'address.city': address?.city,
@@ -103,13 +102,13 @@ router.post('/companies', async (req, res) => {
                     'address.country': address?.country
                 });
                 return res.status(400).json({ 
-                    message: 'Missing required fields: Company Name, Phone Number, and complete Address are required.' 
+                    message: 'Missing required fields: Company Name and complete Address are required.' 
                 });
             }
 
             newCompanyData = {
                 companyName,
-                companyPhone,
+                companyPhone: companyPhone || null, // Optional - can be added later
                 address: {
                     street: address.street,
                     city: address.city,

@@ -73,7 +73,7 @@
                     <i class="fas fa-building text-4xl text-indigo-600"></i>
                 </div>
                 <h1 class="text-4xl font-bold text-white mb-2">Add New Company</h1>
-                <p class="text-indigo-100 text-lg">Create a company account in seconds. Complete the profile later.</p>
+                <p class="text-indigo-100 text-lg">Just 2 fields to get started. Add phone and details in the profile.</p>
             </div>
 
             <!-- Form Card -->
@@ -84,7 +84,7 @@
                         <i class="fas fa-rocket mr-3"></i>
                         Quick Start Setup
                     </h2>
-                    <p class="text-indigo-100 mt-2">Just 3 fields to get started. Everything else can be added in the company profile.</p>
+                    <p class="text-indigo-100 mt-2">Just 2 fields to get started. Add phone number and other details in the company profile.</p>
                 </div>
 
                 <!-- Form Content -->
@@ -107,25 +107,6 @@
                         <p class="text-xs text-gray-500 mt-2">This will appear on all communications and in the directory</p>
                     </div>
 
-                    <!-- Primary Phone -->
-                    <div>
-                        <label for="companyPhone" class="form-label">
-                            <i class="fas fa-phone text-indigo-600 mr-2"></i>
-                            Primary Phone Number <span class="text-red-500">*</span>
-                        </label>
-                        <input 
-                            type="tel" 
-                            name="companyPhone" 
-                            id="companyPhone" 
-                            class="form-input" 
-                            required 
-                            placeholder="+1 (239) 555-1234"
-                        >
-                        <p class="text-xs text-gray-500 mt-2">
-                            <i class="fas fa-info-circle mr-1"></i>
-                            This will be the main phone number for the company's AI agent
-                        </p>
-                    </div>
 
                     <!-- 🌍 International Address -->
                     <div>
@@ -303,7 +284,6 @@
                 // Collect form data
                 const companyData = {
                     companyName: document.getElementById('companyName').value.trim(),
-                    companyPhone: document.getElementById('companyPhone').value.trim(),
                     address: {
                         street: document.getElementById('addressStreet').value.trim(),
                         city: document.getElementById('addressCity').value.trim(),
@@ -362,42 +342,6 @@
             }
         });
 
-        // Smart phone number formatter - allows deletion
-        const phoneInput = document.getElementById('companyPhone');
-        let lastValue = '';
-        
-        phoneInput.addEventListener('input', function(e) {
-            const currentValue = e.target.value;
-            const isDeleting = currentValue.length < lastValue.length;
-            
-            // If user is deleting, don't reformat - just update lastValue
-            if (isDeleting) {
-                lastValue = currentValue;
-                return;
-            }
-            
-            // Only format when adding characters
-            let digits = currentValue.replace(/\D/g, '');
-            
-            // Limit to 10 digits
-            if (digits.length > 10) {
-                digits = digits.slice(0, 10);
-            }
-            
-            let formatted = '';
-            if (digits.length === 0) {
-                formatted = '';
-            } else if (digits.length <= 3) {
-                formatted = `+1 (${digits}`;
-            } else if (digits.length <= 6) {
-                formatted = `+1 (${digits.slice(0, 3)}) ${digits.slice(3)}`;
-            } else {
-                formatted = `+1 (${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-            }
-            
-            e.target.value = formatted;
-            lastValue = formatted;
-        });
     </script>
 </body>
 </html>
