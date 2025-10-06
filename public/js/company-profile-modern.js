@@ -3189,21 +3189,13 @@ class CompanyProfileManager {
             const statusName = this.getStatusDisplayName(entry.status);
             
             return `
-                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 hover:bg-gray-100 transition-colors group">
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div class="flex items-start justify-between mb-1">
                         <div class="flex items-center gap-2">
                             <span class="text-lg">${statusIcon}</span>
                             <span class="font-semibold text-gray-900">${statusName}</span>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs text-gray-500">${formattedDate}</span>
-                            <button 
-                                onclick="companyProfileManager.deleteStatusHistoryEntry(${index})"
-                                class="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50 rounded p-1"
-                                title="Delete this history entry">
-                                <i class="fas fa-trash-alt text-xs"></i>
-                            </button>
-                        </div>
+                        <span class="text-xs text-gray-500">${formattedDate}</span>
                     </div>
                     ${entry.callForwardNumber ? `
                         <div class="text-xs text-gray-600 ml-7 mb-1">
@@ -3230,65 +3222,6 @@ class CompanyProfileManager {
                 </div>
             `;
         }).join('');
-    }
-
-    /**
-     * Delete a status history entry
-     */
-    async deleteStatusHistoryEntry(index) {
-        console.log(`🗑️ Deleting status history entry at index: ${index}`);
-        
-        // Confirm deletion
-        const confirmed = confirm('Are you sure you want to delete this history entry? This action cannot be undone.');
-        if (!confirmed) {
-            console.log('❌ Deletion cancelled by user');
-            return;
-        }
-        
-        try {
-            // Remove the entry from the history array
-            if (!this.currentData.accountStatus || !this.currentData.accountStatus.history) {
-                this.showNotification('No history found', 'error');
-                return;
-            }
-            
-            const history = [...this.currentData.accountStatus.history];
-            const deletedEntry = history[index];
-            history.splice(index, 1);
-            
-            console.log(`📤 Sending delete request for history entry at index ${index}`);
-            
-            // Send update to backend
-            const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}/account-status/history/${index}`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.authToken}`
-                }
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || `HTTP ${response.status}`);
-            }
-            
-            const result = await response.json();
-            console.log('✅ History entry deleted:', result);
-            
-            // Update local data
-            this.currentData.accountStatus.history = result.history;
-            
-            // Re-render history
-            this.renderStatusHistory(result.history);
-            
-            // Show success message
-            const statusName = this.getStatusDisplayName(deletedEntry.status);
-            this.showNotification(`History entry deleted: ${statusName} from ${new Date(deletedEntry.changedAt).toLocaleString()}`, 'success');
-            
-        } catch (error) {
-            console.error('❌ Error deleting history entry:', error);
-            this.showNotification(`Failed to delete history entry: ${error.message}`, 'error');
-        }
     }
 
     /**
