@@ -166,6 +166,17 @@ router.get('/companies', authenticateJWT, requireRole('admin'), async (req, res)
         console.log(`[ADMIN API GET /api/companies] Found ${companies.length} companies in database`);
         console.log(`[ADMIN API GET /api/companies] Returning ${companies.length} companies to admin`);
         
+        // 🔍 DEBUG: Log first company to see what fields we're actually returning
+        if (companies.length > 0) {
+            console.log('[DEBUG] First company data:', JSON.stringify({
+                companyName: companies[0].companyName,
+                hasStatus: !!companies[0].status,
+                hasAccountStatus: !!companies[0].accountStatus,
+                statusValue: companies[0].status,
+                accountStatusValue: companies[0].accountStatus
+            }, null, 2));
+        }
+        
         res.json({
             success: true,
             data: companies,
