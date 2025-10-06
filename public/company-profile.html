@@ -23606,6 +23606,21 @@ Key Metrics:
 
     <!-- Modern implementation handles all initialization -->
     
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-auto">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-gray-500 text-sm">
+            © <span id="current-year"></span> ClientVia.ai All rights reserved.
+        </div>
+    </footer>
+    
+    <script>
+        // Set current year in footer
+        const yearSpan = document.getElementById('current-year');
+        if (yearSpan) {
+            yearSpan.textContent = new Date().getFullYear();
+        }
+    </script>
+    
 </body>
 
 
