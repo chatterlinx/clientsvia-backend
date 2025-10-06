@@ -1045,16 +1045,36 @@
                                         </div>
                                     </div>
                                     
-                                    <!-- Reason for Change -->
+                                    <!-- Suspended Message (shown only when Suspended is selected) -->
+                                    <div id="suspended-section" class="hidden bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4">
+                                        <div>
+                                            <label for="suspended-message" class="form-label flex items-center text-red-900">
+                                                <i class="fas fa-comment-dots mr-2"></i>
+                                                Custom Suspension Message
+                                            </label>
+                                            <textarea 
+                                                id="suspended-message" 
+                                                class="form-input mt-2" 
+                                                rows="3" 
+                                                placeholder="We're sorry, but service for this number is temporarily unavailable. Please contact support for assistance."
+                                                maxlength="300"></textarea>
+                                            <p class="text-xs text-red-700 mt-2">
+                                                <i class="fas fa-magic mr-1"></i>
+                                                Use <code class="bg-red-200 px-1 rounded">{Company Name}</code> or <code class="bg-red-200 px-1 rounded">{CompanyName}</code> placeholder - it will be replaced with your company name. This message is what callers will hear.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Reason for Change (INTERNAL NOTES ONLY) -->
                                     <div class="mb-4">
-                                        <label for="status-change-reason" class="form-label">Reason for Status Change</label>
+                                        <label for="status-change-reason" class="form-label">Reason for Status Change (Internal Notes Only)</label>
                                         <textarea 
                                             id="status-change-reason" 
                                             class="form-input" 
                                             rows="2" 
                                             placeholder="e.g., Payment pending, Customer request, Maintenance"
                                             maxlength="200"></textarea>
-                                        <p class="text-xs text-gray-500 mt-1">Optional - helps track why status was changed</p>
+                                        <p class="text-xs text-gray-500 mt-1">⚠️ INTERNAL ONLY - This is NOT read to callers. Use the message fields above for caller-facing messages.</p>
                                     </div>
                                     
                                     <!-- Save Button -->

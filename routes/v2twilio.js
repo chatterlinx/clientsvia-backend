@@ -274,8 +274,26 @@ router.post('/voice', async (req, res) => {
       
       if (accountStatus === 'suspended') {
         console.log(`[ACCOUNT SUSPENDED] Company ${company.companyName} account is suspended`);
-        const suspensionReason = company.accountStatus.reason || 'This account has been temporarily suspended';
-        twiml.say(escapeTwiML(`We're sorry, but service for this number is temporarily unavailable. ${suspensionReason}. Please contact support for assistance.`));
+        console.log(`[ACCOUNT SUSPENDED DEBUG] Raw suspendedMessage from DB:`, company.accountStatus.suspendedMessage);
+        
+        // Get custom suspended message from database (NO DEFAULT MESSAGE if empty)
+        let suspendedMessage = company.accountStatus.suspendedMessage;
+        
+        if (suspendedMessage && suspendedMessage.trim()) {
+          // Replace {Company Name} placeholder (case-insensitive, with or without space)
+          console.log(`[ACCOUNT SUSPENDED] Using custom message with placeholder replacement`);
+          const companyName = company.companyName || company.businessName || 'the company';
+          // Match: {company name}, {companyname}, {Company Name}, {CompanyName}, etc.
+          suspendedMessage = suspendedMessage.replace(/\{company\s*name\}/gi, companyName);
+          console.log(`[ACCOUNT SUSPENDED] Final message: "${suspendedMessage}"`);
+          twiml.say(escapeTwiML(suspendedMessage));
+        } else {
+          // No custom message - use default professional message
+          console.log(`[ACCOUNT SUSPENDED] No custom message set - using default`);
+          const defaultMessage = "We're sorry, but service for this number is temporarily unavailable. Please contact support for assistance.";
+          twiml.say(escapeTwiML(defaultMessage));
+        }
+        
         twiml.hangup();
         res.type('text/xml');
         res.send(twiml.toString());

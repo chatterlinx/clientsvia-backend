@@ -3104,6 +3104,14 @@ class CompanyProfileManager {
             }
         }
         
+        // Set suspended message if exists
+        if (accountStatus.suspendedMessage) {
+            const suspendedInput = document.getElementById('suspended-message');
+            if (suspendedInput) {
+                suspendedInput.value = accountStatus.suspendedMessage;
+            }
+        }
+        
         // Set reason if exists
         if (accountStatus.reason) {
             const reasonInput = document.getElementById('status-change-reason');
@@ -3122,17 +3130,26 @@ class CompanyProfileManager {
     }
 
     /**
-     * Handle status change (show/hide call forward section)
+     * Handle status change (show/hide call forward and suspended sections)
      */
     handleStatusChange(status, skipSave = false) {
         console.log(`🔄 Status changed to: ${status}`);
         
         const callForwardSection = document.getElementById('call-forward-section');
+        const suspendedSection = document.getElementById('suspended-section');
         
+        // Show/hide call forward section
         if (status === 'call_forward') {
             callForwardSection?.classList.remove('hidden');
         } else {
             callForwardSection?.classList.add('hidden');
+        }
+        
+        // Show/hide suspended section
+        if (status === 'suspended') {
+            suspendedSection?.classList.remove('hidden');
+        } else {
+            suspendedSection?.classList.add('hidden');
         }
     }
 
@@ -3151,6 +3168,7 @@ class CompanyProfileManager {
         const status = selectedStatus.value;
         const callForwardNumber = document.getElementById('call-forward-number')?.value.trim();
         const callForwardMessage = document.getElementById('call-forward-message')?.value.trim();
+        const suspendedMessage = document.getElementById('suspended-message')?.value.trim();
         const reason = document.getElementById('status-change-reason')?.value.trim();
         
         // Validate call forward number if status is call_forward
@@ -3163,6 +3181,7 @@ class CompanyProfileManager {
             status,
             callForwardNumber: status === 'call_forward' ? callForwardNumber : null,
             callForwardMessage: status === 'call_forward' ? callForwardMessage : null,
+            suspendedMessage: status === 'suspended' ? suspendedMessage : null,
             reason: reason || null,
             changedBy: this.currentData?.ownerEmail || this.currentData?.contactEmail || 'Admin'
         };
