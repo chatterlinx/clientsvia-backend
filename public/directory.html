@@ -227,6 +227,19 @@
                         this.companies = data.data || data;
                         this.filteredCompanies = [...this.companies];
                         console.log(`[Directory] Loaded ${this.companies.length} companies`);
+                        
+                        // 🔍 DEBUG CHECKPOINT: Log first company to see what we received
+                        if (this.companies.length > 0) {
+                            console.log('🔍 [DEBUG CHECKPOINT 1] First company raw data:', {
+                                companyName: this.companies[0].companyName,
+                                hasStatus: !!this.companies[0].status,
+                                hasAccountStatus: !!this.companies[0].accountStatus,
+                                statusValue: this.companies[0].status,
+                                accountStatusObject: this.companies[0].accountStatus,
+                                accountStatusStatus: this.companies[0].accountStatus?.status
+                            });
+                        }
+                        
                         return true; // Success
                         
                     } catch (error) {
@@ -403,6 +416,15 @@
                 renderCompanyCard(company) {
                     // 🚀 V2 SYSTEM: Use Configuration tab accountStatus (NOT legacy status field)
                     const accountStatus = company.accountStatus?.status || 'active';
+                    
+                    // 🔍 DEBUG CHECKPOINT 2: Log what we're reading for each company
+                    console.log(`🔍 [DEBUG CHECKPOINT 2] Rendering ${company.companyName}:`, {
+                        hasAccountStatus: !!company.accountStatus,
+                        accountStatusObject: company.accountStatus,
+                        extractedStatus: accountStatus,
+                        willShowBadge: accountStatus === 'suspended' ? '🔴 SUSPENDED' : accountStatus === 'call_forward' ? '🟡 CALL FORWARD' : '🟢 ACTIVE'
+                    });
+                    
                     let accountStatusBadge = '';
                     let statusIcon = '';
                     
