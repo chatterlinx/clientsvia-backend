@@ -405,6 +405,58 @@ class CompanyProfileManager {
     }
 
     /**
+     * Generate country options for dropdown (international-ready)
+     */
+    generateCountryOptions(selectedCountry = 'USA') {
+        const countries = [
+            'USA', 'Canada', 'United Kingdom', 'Australia', 'New Zealand',
+            'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola',
+            'Argentina', 'Armenia', 'Austria', 'Azerbaijan', 'Bahamas',
+            'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium',
+            'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia and Herzegovina',
+            'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina Faso',
+            'Burundi', 'Cambodia', 'Cameroon', 'Cape Verde', 'Central African Republic',
+            'Chad', 'Chile', 'China', 'Colombia', 'Comoros',
+            'Congo', 'Costa Rica', 'Croatia', 'Cuba', 'Cyprus',
+            'Czech Republic', 'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic',
+            'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea',
+            'Estonia', 'Ethiopia', 'Fiji', 'Finland', 'France',
+            'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana',
+            'Greece', 'Grenada', 'Guatemala', 'Guinea', 'Guinea-Bissau',
+            'Guyana', 'Haiti', 'Honduras', 'Hungary', 'Iceland',
+            'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland',
+            'Israel', 'Italy', 'Jamaica', 'Japan', 'Jordan',
+            'Kazakhstan', 'Kenya', 'Kiribati', 'Kuwait', 'Kyrgyzstan',
+            'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia',
+            'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Madagascar',
+            'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta',
+            'Marshall Islands', 'Mauritania', 'Mauritius', 'Mexico', 'Micronesia',
+            'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco',
+            'Mozambique', 'Myanmar', 'Namibia', 'Nauru', 'Nepal',
+            'Netherlands', 'Nicaragua', 'Niger', 'Nigeria', 'North Korea',
+            'North Macedonia', 'Norway', 'Oman', 'Pakistan', 'Palau',
+            'Palestine', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru',
+            'Philippines', 'Poland', 'Portugal', 'Qatar', 'Romania',
+            'Russia', 'Rwanda', 'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Vincent and the Grenadines',
+            'Samoa', 'San Marino', 'Sao Tome and Principe', 'Saudi Arabia', 'Senegal',
+            'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia',
+            'Slovenia', 'Solomon Islands', 'Somalia', 'South Africa', 'South Korea',
+            'South Sudan', 'Spain', 'Sri Lanka', 'Sudan', 'Suriname',
+            'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan',
+            'Tanzania', 'Thailand', 'Timor-Leste', 'Togo', 'Tonga',
+            'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu',
+            'Uganda', 'Ukraine', 'United Arab Emirates', 'Uruguay', 'Uzbekistan',
+            'Vanuatu', 'Vatican City', 'Venezuela', 'Vietnam', 'Yemen',
+            'Zambia', 'Zimbabwe'
+        ];
+        
+        return countries.map(country => {
+            const selected = country === selectedCountry ? 'selected' : '';
+            return `<option value="${this.escapeHtml(country)}" ${selected}>${this.escapeHtml(country)}</option>`;
+        }).join('');
+    }
+
+    /**
      * GOLD STANDARD: Generate v2 form HTML with validation
      */
     generateV2FormHTML() {
@@ -526,23 +578,81 @@ class CompanyProfileManager {
 
                     <!-- Right Column - Additional Details -->
                     <div class="space-y-6">
+                        <!-- 🌍 INTERNATIONAL ADDRESS SYSTEM -->
                         <div class="form-group">
-                            <label for="edit-business-address" class="form-label">
+                            <label class="form-label flex items-center">
+                                <i class="fas fa-map-marker-alt mr-2 text-blue-600"></i>
                                 Business Address
                             </label>
-                            <textarea 
-                                id="edit-business-address" 
-                                name="businessAddress"
-                                class="form-textarea v2-input" 
-                                rows="3"
-                                placeholder="123 Main Street&#10;Suite 100&#10;City, State 12345"
-                                aria-describedby="business-address-help"
-                                data-validate="address"
-                            >${this.escapeHtml(data.companyAddress || data.businessAddress || '')}</textarea>
-                            <div id="business-address-help" class="form-help">
-                                Physical location of your business
+                            <div class="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                <!-- Street Address -->
+                                <div>
+                                    <label for="edit-address-street" class="text-sm font-medium text-gray-700">Street Address</label>
+                                    <input 
+                                        type="text" 
+                                        id="edit-address-street" 
+                                        name="address.street"
+                                        class="form-input v2-input mt-1" 
+                                        value="${this.escapeHtml(data.address?.street || '')}"
+                                        placeholder="123 Main Street, Suite 100"
+                                    >
+                                </div>
+                                
+                                <!-- City & State/Province -->
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label for="edit-address-city" class="text-sm font-medium text-gray-700">City</label>
+                                        <input 
+                                            type="text" 
+                                            id="edit-address-city" 
+                                            name="address.city"
+                                            class="form-input v2-input mt-1" 
+                                            value="${this.escapeHtml(data.address?.city || '')}"
+                                            placeholder="Naples"
+                                        >
+                                    </div>
+                                    <div>
+                                        <label for="edit-address-state" class="text-sm font-medium text-gray-700">State/Province</label>
+                                        <input 
+                                            type="text" 
+                                            id="edit-address-state" 
+                                            name="address.state"
+                                            class="form-input v2-input mt-1" 
+                                            value="${this.escapeHtml(data.address?.state || '')}"
+                                            placeholder="Florida"
+                                        >
+                                    </div>
+                                </div>
+                                
+                                <!-- Postal Code & Country -->
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label for="edit-address-zip" class="text-sm font-medium text-gray-700">Postal/ZIP Code</label>
+                                        <input 
+                                            type="text" 
+                                            id="edit-address-zip" 
+                                            name="address.zip"
+                                            class="form-input v2-input mt-1" 
+                                            value="${this.escapeHtml(data.address?.zip || '')}"
+                                            placeholder="33966"
+                                        >
+                                    </div>
+                                    <div>
+                                        <label for="edit-address-country" class="text-sm font-medium text-gray-700">Country</label>
+                                        <select 
+                                            id="edit-address-country" 
+                                            name="address.country"
+                                            class="form-input v2-input mt-1"
+                                        >
+                                            ${this.generateCountryOptions(data.address?.country || 'USA')}
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="field-validation hidden"></div>
+                            <div class="form-help mt-2">
+                                <i class="fas fa-globe mr-1"></i>
+                                Physical location of your business (international format)
+                            </div>
                         </div>
 
                         <div class="form-group">
@@ -796,6 +906,76 @@ class CompanyProfileManager {
         });
 
         console.log('💾 Auto-save enabled');
+    }
+
+    /**
+     * Perform auto-save of form data
+     */
+    async performAutoSave() {
+        const formData = this.collectOverviewFormData();
+        if (!formData) {
+            throw new Error('Failed to collect form data');
+        }
+
+        const token = localStorage.getItem('adminToken');
+        if (!token) {
+            throw new Error('No authentication token');
+        }
+
+        const response = await fetch(`${this.apiBaseUrl}/api/company/${this.companyId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(formData)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ Auto-save successful:', result);
+        this.setUnsavedChanges(false);
+        return result;
+    }
+
+    /**
+     * Collect form data from Overview tab (including nested address object)
+     */
+    collectOverviewFormData() {
+        const form = this.domElements.editFormContainer;
+        if (!form) return null;
+
+        const data = {
+            companyName: form.querySelector('#edit-company-name')?.value || '',
+            businessPhone: form.querySelector('#edit-business-phone')?.value || '',
+            businessEmail: form.querySelector('#edit-business-email')?.value || '',
+            businessWebsite: form.querySelector('#edit-business-website')?.value || '',
+            serviceArea: form.querySelector('#edit-service-area')?.value || '',
+            businessHours: form.querySelector('#edit-business-hours')?.value || '',
+            
+            // 🌍 INTERNATIONAL ADDRESS OBJECT
+            address: {
+                street: form.querySelector('#edit-address-street')?.value || '',
+                city: form.querySelector('#edit-address-city')?.value || '',
+                state: form.querySelector('#edit-address-state')?.value || '',
+                zip: form.querySelector('#edit-address-zip')?.value || '',
+                country: form.querySelector('#edit-address-country')?.value || 'USA'
+            }
+        };
+
+        console.log('📋 Collected form data:', data);
+        return data;
+    }
+
+    /**
+     * Set form status indicator
+     */
+    setFormStatus(status, message) {
+        // You can implement a status indicator UI here if needed
+        console.log(`📝 Form status: ${status} - ${message}`);
     }
 
     /* ========================================================================
