@@ -23,17 +23,61 @@
         body {
             font-family: 'Inter', sans-serif;
         }
-        .nav-link.active-tab {
-            border-bottom-width: 2px;
-            border-color: #4F46E5; /* Indigo-600 */
-            color: #4F46E5;
-            font-weight: 600;
-            background-color: #EEF2FF; /* bg-indigo-50 for main nav active tab */
-        }
+        
+        /* ============================================================================ */
+        /* 🎨 MODERN NAVIGATION TABS */
+        /* ============================================================================ */
         .nav-link {
-            @apply px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900;
+            position: relative;
+            padding: 0.75rem 1.25rem;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            color: #6B7280; /* gray-500 */
+            border-radius: 0.5rem;
+            transition: all 0.2s ease-in-out;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
         }
-        /* 🗑️ DELETED: Monitoring link styles - legacy alert system destroyed */
+        
+        .nav-link:hover {
+            color: #111827; /* gray-900 */
+            background-color: #F3F4F6; /* gray-100 */
+            transform: translateY(-1px);
+        }
+        
+        .nav-link.active-tab {
+            color: #4F46E5; /* indigo-600 */
+            background-color: #EEF2FF; /* indigo-50 */
+            font-weight: 600;
+            box-shadow: 0 1px 3px 0 rgba(79, 70, 229, 0.1);
+        }
+        
+        .nav-link.active-tab::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #4F46E5, transparent);
+            border-radius: 2px 2px 0 0;
+        }
+        
+        .nav-link i {
+            font-size: 1.125rem;
+        }
+        
+        /* Logout button special styling */
+        .nav-link.text-red-600 {
+            color: #DC2626 !important;
+        }
+        
+        .nav-link.text-red-600:hover {
+            color: #991B1B !important;
+            background-color: #FEE2E2 !important;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -46,19 +90,24 @@
                             <i class="fas fa-tachometer-alt mr-2"></i>ClientVia.ai
                         </a>
                     </div>
-                    <nav class="hidden md:flex space-x-4 items-center">
+                    <nav class="hidden md:flex items-center gap-2">
                         <a href="/directory.html" class="nav-link" id="nav-directory">
-                            <i class="fas fa-list-alt mr-1"></i>Directory
+                            <i class="fas fa-list-alt"></i>
+                            <span>Directory</span>
                         </a>
                         <a href="/add-company.html" class="nav-link" id="nav-add-company">
-                            <i class="fas fa-plus-circle mr-1"></i>Add Company
+                            <i class="fas fa-plus-circle"></i>
+                            <span>Add Company</span>
                         </a>
                         <a href="/v2global-trade-categories.html" class="nav-link" id="nav-trade-categories">
-                            <i class="fas fa-tags mr-1"></i>V2 Global Trade Categories
+                            <i class="fas fa-tags"></i>
+                            <span>V2 Global Trade Categories</span>
                         </a>
                         <!-- 🗑️ DELETED: Monitoring tab - legacy alert system destroyed -->
+                        <div class="h-6 w-px bg-gray-300 mx-2"></div>
                         <button onclick="logout()" class="nav-link text-red-600 hover:text-red-800" id="nav-logout">
-                            <i class="fas fa-sign-out-alt mr-1"></i>Logout
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Logout</span>
                         </button>
                     </nav>
                     <div class="md:hidden flex items-center">
