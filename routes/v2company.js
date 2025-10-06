@@ -45,33 +45,105 @@ router.get('/company-profile.html', (req, res) => {
 
 // --- API Routes for Company Data ---
 
+/* ============================================================================
+   🏢 CREATE NEW COMPANY - V2 MODERN SYSTEM
+   ============================================================================
+   
+   ENDPOINT: POST /api/companies
+   
+   FEATURES:
+   - Modern quick-start form (3 fields: name, phone, address)
+   - International address format (street, city, state, zip, country)
+   - Backward compatible with legacy forms
+   - Auto-generates default AI agent settings
+   
+   FLOW:
+   1. Validate required fields (name, phone, address object)
+   2. Create company with defaults
+   3. Return company ID for profile completion
+   
+   ============================================================================ */
 router.post('/companies', async (req, res) => {
-    console.log('[API POST /api/companies] Received data:', JSON.stringify(req.body, null, 2));
+    console.log('[API POST /api/companies] 📥 Received data:', JSON.stringify(req.body, null, 2));
     try {
         const {
             companyName,
             companyPhone,
-            companyAddress,
+            companyAddress, // Legacy single-field address
+            address,        // Modern international address object
+            timezone,
             // Legacy fields (optional for backward compatibility)
             ownerName,
             ownerEmail,
             ownerPhone,
             contactName,
             contactEmail,
-            contactPhone,
-            address,
-            timezone
+            contactPhone
         } = req.body;
 
-        // Check for simplified form (new workflow) vs legacy form
-        const isSimplifiedForm = companyPhone && companyAddress && !ownerName && !ownerEmail;
+        // 🎯 Determine form type: Modern (address object) vs Legacy (companyAddress string)
+        const isModernForm = address && address.street && address.city;
+        const isLegacySimplified = companyPhone && companyAddress && !ownerName && !ownerEmail;
         
         let newCompanyData;
         
-        if (isSimplifiedForm) {
-            // New simplified validation - only requires company name, phone, and address
+        if (isModernForm) {
+            // ✨ MODERN FORM - International address format
+            console.log('[API POST /api/companies] 🌍 Modern form detected - International address');
+            
+            if (!companyName || !companyPhone || !address || !address.street || !address.city || !address.state || !address.zip || !address.country) {
+                console.warn('[API POST /api/companies] ❌ Modern form validation failed. Missing required fields:', {
+                    companyName: !!companyName,
+                    companyPhone: !!companyPhone,
+                    address: !!address,
+                    'address.street': address?.street,
+                    'address.city': address?.city,
+                    'address.state': address?.state,
+                    'address.zip': address?.zip,
+                    'address.country': address?.country
+                });
+                return res.status(400).json({ 
+                    message: 'Missing required fields: Company Name, Phone Number, and complete Address are required.' 
+                });
+            }
+
+            newCompanyData = {
+                companyName,
+                companyPhone,
+                address: {
+                    street: address.street,
+                    city: address.city,
+                    state: address.state,
+                    zip: address.zip,
+                    country: address.country
+                },
+                // Set defaults for fields to be completed later
+                tradeTypes: [],
+                tradeCategories: [],
+                ownerName: null,
+                ownerEmail: null,
+                ownerPhone: null,
+                contactName: null,
+                contactEmail: null,
+                contactPhone: null,
+                timezone: timezone || 'America/New_York',
+                status: 'active',
+                profileComplete: false, // Flag to track if additional details have been added
+                // Default account status
+                accountStatus: {
+                    status: 'active',
+                    lastChanged: new Date()
+                }
+            };
+
+            console.log('[API POST /api/companies] ✅ Creating modern company with international address');
+            
+        } else if (isLegacySimplified) {
+            // 📦 LEGACY SIMPLIFIED FORM - Single address field
+            console.log('[API POST /api/companies] 📦 Legacy simplified form detected');
+            
             if (!companyName || !companyPhone || !companyAddress) {
-                console.warn('[API POST /api/companies] Simplified form validation failed. Missing required fields:', {
+                console.warn('[API POST /api/companies] ❌ Simplified form validation failed. Missing required fields:', {
                     companyName: !!companyName,
                     companyPhone: !!companyPhone,
                     companyAddress: !!companyAddress
@@ -85,6 +157,7 @@ router.post('/companies', async (req, res) => {
                 companyAddress,
                 // Set defaults for fields to be completed later
                 tradeTypes: [],
+                tradeCategories: [],
                 ownerName: null,
                 ownerEmail: null,
                 ownerPhone: null,
@@ -100,22 +173,29 @@ router.post('/companies', async (req, res) => {
                 },
                 timezone: timezone || 'America/New_York',
                 status: 'active',
-                profileComplete: false // Flag to track if additional details have been added
+                profileComplete: false,
+                accountStatus: {
+                    status: 'active',
+                    lastChanged: new Date()
+                }
             };
 
-            console.log('[API POST /api/companies] Creating simplified company with data:', newCompanyData);
+            console.log('[API POST /api/companies] ✅ Creating legacy simplified company');
             
         } else {
-            // Legacy validation for backward compatibility
+            // 🗂️ FULL LEGACY FORM - All fields provided
+            console.log('[API POST /api/companies] 🗂️ Full legacy form detected');
+            
             if (!companyName || !ownerName || !ownerEmail || !contactPhone || !timezone ||
                 !address || !address.street || !address.city || !address.state || !address.zip || !address.country) {
-                console.warn('[API POST /api/companies] Legacy form validation failed. Missing or invalid required fields. Data received:', req.body);
+                console.warn('[API POST /api/companies] ❌ Legacy form validation failed. Missing or invalid required fields. Data received:', req.body);
                 return res.status(400).json({ message: 'Missing required fields or timezone is missing.' });
             }
 
             newCompanyData = {
                 companyName,
                 tradeTypes: [],
+                tradeCategories: [],
                 ownerName,
                 ownerEmail,
                 ownerPhone: ownerPhone || null,
@@ -124,18 +204,24 @@ router.post('/companies', async (req, res) => {
                 contactPhone,
                 address,
                 timezone: timezone || 'America/New_York',
-                profileComplete: true
+                profileComplete: true,
+                accountStatus: {
+                    status: 'active',
+                    lastChanged: new Date()
+                }
             };
+            
+            console.log('[API POST /api/companies] ✅ Creating full legacy company');
         }
 
         // Use Mongoose model to create the company with all default values
         const newCompany = new Company(newCompanyData);
         const savedCompany = await newCompany.save();
         
-        console.log('[API POST /api/companies] Company added successfully:', savedCompany.companyName, 'ID:', savedCompany._id);
+        console.log('[API POST /api/companies] 🎉 Company added successfully:', savedCompany.companyName, 'ID:', savedCompany._id);
         res.status(201).json(savedCompany);
     } catch (error) {
-        console.error('[API POST /api/companies] Error:', error.message, error.stack);
+        console.error('[API POST /api/companies] ❌ Error:', error.message, error.stack);
         res.status(500).json({ message: `Error adding company: ${error.message}` });
     }
 });

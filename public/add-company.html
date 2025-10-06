@@ -3,154 +3,381 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Add New Company</title>
+    <title>Add New Company - ClientsVia Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
         }
         .nav-link.active-tab {
-            border-bottom-width: 2px;
-            border-color: #4F46E5; /* Indigo-600 */
+            border-bottom: 2px solid #4F46E5;
             color: #4F46E5;
             font-weight: 600;
-            background-color: #EEF2FF; 
-        }
-        .nav-link {
-            @apply px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900;
+            background-color: #EEF2FF;
         }
         .form-input {
-            @apply mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out;
+            @apply mt-1 block w-full px-4 py-3 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150 ease-in-out;
         }
         .form-label {
-            @apply block text-sm font-medium text-gray-700;
+            @apply block text-sm font-semibold text-gray-700 mb-2;
         }
-        .form-section-title {
-            @apply text-lg font-semibold text-gray-700 border-b border-gray-200 pb-2 mb-4;
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
-        .form-checkbox {
-            @apply h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500;
+        .card-shadow {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .success-animation {
+            animation: successPulse 0.6s ease-in-out;
+        }
+        @keyframes successPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
         }
     </style>
 </head>
-<body class="bg-gray-100">
-    <div id="app" class="flex flex-col min-h-screen">
-        <header class="bg-white shadow-md sticky top-0 z-50">
-            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center justify-between h-16">
-                    <div class="flex-shrink-0">
-                        <a href="/index.html" class="text-2xl font-bold text-indigo-600">
-                            <i class="fas fa-tachometer-alt mr-2"></i>Admin Dashboard
-                        </a>
-                    </div>
-                    <nav class="hidden md:flex space-x-4 items-center">
-                        <a href="/index.html" class="nav-link" id="nav-home">Home</a>
-                        <a href="/directory.html" class="nav-link" id="nav-directory">Directory</a>
-                        <a href="/add-company.html" class="nav-link" id="nav-add-company">Add Company</a>
-                        <a href="/v2global-trade-categories.html" class="nav-link" id="nav-trade-categories">V2 Global Trade Categories</a>
-                    </nav>
-                    <div class="md:hidden flex items-center">
-                        <button id="mobile-menu-button" class="text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500">
-                            <span class="sr-only">Open main menu</span>
-                            <i class="fas fa-bars text-2xl"></i>
-                        </button>
-                    </div>
+<body>
+    <!-- Header -->
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex-shrink-0">
+                    <a href="/index.html" class="text-2xl font-bold text-indigo-600 flex items-center">
+                        <i class="fas fa-robot mr-2"></i>
+                        <span>Admin Dashboard</span>
+                    </a>
                 </div>
+                <nav class="hidden md:flex space-x-4">
+                    <a href="/index.html" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Home</a>
+                    <a href="/directory.html" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">Directory</a>
+                    <a href="/add-company.html" class="nav-link active-tab px-3 py-2 rounded-md text-sm font-medium">Add Company</a>
+                    <a href="/v2global-trade-categories.html" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100">V2 Global Trade Categories</a>
+                    <a href="#" onclick="logout()" class="px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50">
+                        <i class="fas fa-sign-out-alt mr-1"></i>Logout
+                    </a>
+                </nav>
             </div>
-            <div id="mobile-menu" class="md:hidden hidden">
-                <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-                    <a href="/index.html" class="block nav-link text-base" id="mobile-nav-home">Home</a>
-                    <a href="/directory.html" class="block nav-link text-base" id="mobile-nav-directory">Directory</a>
-                    <a href="/add-company.html" class="block nav-link text-base" id="mobile-nav-add-company">Add Company</a>
-                    <a href="/v2global-trade-categories.html" class="block nav-link text-base" id="mobile-nav-trade-categories">V2 Global Trade Categories</a>
-                </div>
-            </div>
-        </header>
+        </div>
+    </header>
 
-        <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div class="bg-white p-6 md:p-8 rounded-lg shadow-lg">
-                <div class="mb-6">
-                    <h1 class="text-3xl font-semibold text-gray-800 mb-2">Add New Company</h1>
-                    <p class="text-gray-600">Create a new company account with essential information. Once created, you can complete the full company profile with owner details, contacts, and service configuration.</p>
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div class="max-w-3xl mx-auto">
+            <!-- Header Card -->
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-20 h-20 bg-white rounded-full shadow-lg mb-4">
+                    <i class="fas fa-building text-4xl text-indigo-600"></i>
                 </div>
-                
-                <form id="add-company-form"> 
-                    <section class="mb-8">
-                        <h2 class="form-section-title"><i class="fas fa-building mr-2 text-indigo-600"></i>Company Information</h2>
-                        <p class="text-gray-600 mb-6">Create a new company account with basic information. Additional details can be added later in the company profile.</p>
-                        
-                        <div class="space-y-6">
+                <h1 class="text-4xl font-bold text-white mb-2">Add New Company</h1>
+                <p class="text-indigo-100 text-lg">Create a company account in seconds. Complete the profile later.</p>
+            </div>
+
+            <!-- Form Card -->
+            <div class="bg-white rounded-2xl card-shadow overflow-hidden">
+                <!-- Card Header -->
+                <div class="gradient-bg px-8 py-6">
+                    <h2 class="text-2xl font-bold text-white flex items-center">
+                        <i class="fas fa-rocket mr-3"></i>
+                        Quick Start Setup
+                    </h2>
+                    <p class="text-indigo-100 mt-2">Just 3 fields to get started. Everything else can be added in the company profile.</p>
+                </div>
+
+                <!-- Form Content -->
+                <form id="add-company-form" class="p-8 space-y-6">
+                    <!-- Company Name -->
+                    <div>
+                        <label for="companyName" class="form-label">
+                            <i class="fas fa-building text-indigo-600 mr-2"></i>
+                            Company Name <span class="text-red-500">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            name="companyName" 
+                            id="companyName" 
+                            class="form-input" 
+                            required 
+                            placeholder="e.g., Atlas Air Conditioning"
+                            maxlength="100"
+                        >
+                        <p class="text-xs text-gray-500 mt-2">This will appear on all communications and in the directory</p>
+                    </div>
+
+                    <!-- Primary Phone -->
+                    <div>
+                        <label for="companyPhone" class="form-label">
+                            <i class="fas fa-phone text-indigo-600 mr-2"></i>
+                            Primary Phone Number <span class="text-red-500">*</span>
+                        </label>
+                        <input 
+                            type="tel" 
+                            name="companyPhone" 
+                            id="companyPhone" 
+                            class="form-input" 
+                            required 
+                            placeholder="+1 (239) 555-1234"
+                        >
+                        <p class="text-xs text-gray-500 mt-2">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            This will be the main phone number for the company's AI agent
+                        </p>
+                    </div>
+
+                    <!-- 🌍 International Address -->
+                    <div>
+                        <label class="form-label">
+                            <i class="fas fa-map-marker-alt text-indigo-600 mr-2"></i>
+                            Business Address <span class="text-red-500">*</span>
+                        </label>
+                        <div class="space-y-4 p-6 bg-gray-50 rounded-lg border-2 border-gray-200">
+                            <!-- Street Address -->
                             <div>
-                                <label for="companyName" class="form-label">Company Name <span class="text-red-500">*</span></label>
-                                <input type="text" name="companyName" id="companyName" class="form-input" required placeholder="Enter the company name">
+                                <label for="addressStreet" class="text-sm font-medium text-gray-700">Street Address</label>
+                                <input 
+                                    type="text" 
+                                    id="addressStreet" 
+                                    name="address.street"
+                                    class="form-input" 
+                                    required
+                                    placeholder="123 Main Street, Suite 100"
+                                >
                             </div>
                             
-                            <div>
-                                <label for="companyPhone" class="form-label">Primary Phone Number <span class="text-red-500">*</span></label>
-                                <input type="tel" name="companyPhone" id="companyPhone" class="form-input" required placeholder="+1 (XXX) XXX-XXXX">
-                                <p class="text-sm text-gray-500 mt-1">This will be the main phone number for the company's AI agent</p>
+                            <!-- City & State -->
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="addressCity" class="text-sm font-medium text-gray-700">City</label>
+                                    <input 
+                                        type="text" 
+                                        id="addressCity" 
+                                        name="address.city"
+                                        class="form-input" 
+                                        required
+                                        placeholder="Naples"
+                                    >
+                                </div>
+                                <div>
+                                    <label for="addressState" class="text-sm font-medium text-gray-700">State/Province</label>
+                                    <input 
+                                        type="text" 
+                                        id="addressState" 
+                                        name="address.state"
+                                        class="form-input" 
+                                        required
+                                        placeholder="Florida"
+                                    >
+                                </div>
                             </div>
                             
-                            <div>
-                                <label for="companyAddress" class="form-label">Company Address <span class="text-red-500">*</span></label>
-                                <textarea name="companyAddress" id="companyAddress" rows="3" class="form-input" required placeholder="Enter the complete company address including street, city, state, and zip code"></textarea>
-                                <p class="text-sm text-gray-500 mt-1">Full address including street, city, state, and zip code</p>
+                            <!-- ZIP & Country -->
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="addressZip" class="text-sm font-medium text-gray-700">Postal/ZIP Code</label>
+                                    <input 
+                                        type="text" 
+                                        id="addressZip" 
+                                        name="address.zip"
+                                        class="form-input" 
+                                        required
+                                        placeholder="33966"
+                                    >
+                                </div>
+                                <div>
+                                    <label for="addressCountry" class="text-sm font-medium text-gray-700">Country</label>
+                                    <select 
+                                        id="addressCountry" 
+                                        name="address.country"
+                                        class="form-input"
+                                        required
+                                    >
+                                        <option value="USA">USA</option>
+                                        <option value="Canada">Canada</option>
+                                        <option value="United Kingdom">United Kingdom</option>
+                                        <option value="Australia">Australia</option>
+                                        <option value="Mexico">Mexico</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
-                    </section>
-                    
-                    <div class="mt-8 pt-6 border-t border-gray-200 flex justify-end gap-4">
-                        <a href="/directory.html" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-6 rounded-lg transition duration-150 ease-in-out">
-                            Cancel
+                        <p class="text-xs text-gray-500 mt-2">
+                            <i class="fas fa-globe mr-1"></i>
+                            International format - additional countries can be selected in company profile
+                        </p>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex gap-4 pt-6 border-t border-gray-200">
+                        <a 
+                            href="/directory.html" 
+                            class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-4 px-6 rounded-xl transition duration-150 ease-in-out text-center"
+                        >
+                            <i class="fas fa-times mr-2"></i>Cancel
                         </a>
-                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center">
-                            <i class="fas fa-plus mr-2"></i>Create Company Account
+                        <button 
+                            type="submit" 
+                            id="submit-btn"
+                            class="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg transition duration-150 ease-in-out flex items-center justify-center"
+                        >
+                            <i class="fas fa-plus-circle mr-2"></i>
+                            <span id="btn-text">Create Company</span>
                         </button>
                     </div>
                 </form>
             </div>
-        </main>
 
-        <footer class="bg-white border-t border-gray-200 mt-auto">
-            <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-gray-500 text-sm">
-                © 2025 Chatterlinx.com All rights reserved.
+            <!-- Info Box -->
+            <div class="mt-8 bg-white/10 backdrop-blur-sm rounded-xl p-6 text-white">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-lightbulb text-yellow-300 text-2xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-semibold mb-2">What happens next?</h3>
+                        <ul class="space-y-2 text-indigo-100">
+                            <li><i class="fas fa-check-circle mr-2 text-green-300"></i>Company account is created instantly</li>
+                            <li><i class="fas fa-check-circle mr-2 text-green-300"></i>You'll be redirected to complete the full profile</li>
+                            <li><i class="fas fa-check-circle mr-2 text-green-300"></i>Add owner details, contacts, and AI agent settings</li>
+                            <li><i class="fas fa-check-circle mr-2 text-green-300"></i>Configure voice, personality, and knowledge base</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
-        </footer>
+        </div>
+    </main>
+
+    <!-- Success Modal -->
+    <div id="success-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-8 max-w-md w-full text-center success-animation">
+            <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-check text-4xl text-green-600"></i>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900 mb-2">Company Created!</h3>
+            <p class="text-gray-600 mb-6">Redirecting to company profile...</p>
+            <div class="flex justify-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            </div>
+        </div>
     </div>
 
     <script>
-        // Mobile Menu Toggle
-        const mobileMenuButton = document.getElementById('mobile-menu-button');
-        const mobileMenu = document.getElementById('mobile-menu');
-        if (mobileMenuButton && mobileMenu) {
-            mobileMenuButton.addEventListener('click', () => {
-                mobileMenu.classList.toggle('hidden');
-            });
+        /* ============================================================================
+           🏢 ADD COMPANY - V2 MODERN SYSTEM
+           ============================================================================
+           
+           FEATURES:
+           - Minimal 3-field quick start (Name, Phone, Address)
+           - International address format (street, city, state, zip, country)
+           - Modern gradient UI matching platform design
+           - Success modal with auto-redirect
+           - Form validation and error handling
+           
+           FLOW:
+           1. User fills 3 essential fields
+           2. Company created in database
+           3. Success modal appears
+           4. Auto-redirect to company profile for full setup
+           
+           ============================================================================ */
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('adminToken');
+            localStorage.removeItem('adminUser');
+            window.location.href = '/login.html';
         }
 
-        // Active Tab Highlighting
-        document.addEventListener('DOMContentLoaded', function() {
-            let currentPath = window.location.pathname.replace(/\/$/, ""); 
-            if (currentPath === "") currentPath = "/index.html"; 
-
-            const navLinks = document.querySelectorAll('header nav a.nav-link, #mobile-menu a.nav-link');
+        // Form submission handler
+        document.getElementById('add-company-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
             
-            navLinks.forEach(link => {
-                let linkPath = link.pathname.replace(/\/$/, "");
-                if (linkPath === "") linkPath = "/index.html"; 
+            const submitBtn = document.getElementById('submit-btn');
+            const btnText = document.getElementById('btn-text');
+            const originalText = btnText.textContent;
+            
+            // Disable button and show loading
+            submitBtn.disabled = true;
+            btnText.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
+            
+            try {
+                // Collect form data
+                const companyData = {
+                    companyName: document.getElementById('companyName').value.trim(),
+                    companyPhone: document.getElementById('companyPhone').value.trim(),
+                    address: {
+                        street: document.getElementById('addressStreet').value.trim(),
+                        city: document.getElementById('addressCity').value.trim(),
+                        state: document.getElementById('addressState').value.trim(),
+                        zip: document.getElementById('addressZip').value.trim(),
+                        country: document.getElementById('addressCountry').value
+                    },
+                    // Default values for required fields
+                    timezone: 'America/New_York',
+                    profileComplete: false
+                };
 
-                link.classList.remove('active-tab');
-                link.classList.add('text-gray-700'); 
+                console.log('[Add Company] Creating company:', companyData.companyName);
 
-                if (linkPath === currentPath || (linkPath === "/add-company.html" && currentPath === "/add-company")) {
-                     link.classList.add('active-tab');
-                     link.classList.remove('text-gray-700');
+                // Get auth token
+                const token = localStorage.getItem('adminToken');
+                if (!token) {
+                    alert('Authentication required. Please log in again.');
+                    window.location.href = '/login.html';
+                    return;
                 }
-            });
+
+                // Submit to API
+                const response = await fetch('/api/companies', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(companyData)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                console.log('[Add Company] ✅ Company created successfully:', result);
+
+                // Show success modal
+                document.getElementById('success-modal').classList.remove('hidden');
+
+                // Redirect to company profile after 2 seconds
+                setTimeout(() => {
+                    window.location.href = `/company-profile.html?id=${result._id}`;
+                }, 2000);
+
+            } catch (error) {
+                console.error('[Add Company] ❌ Error:', error);
+                alert(`Failed to create company: ${error.message}\n\nPlease try again or contact support.`);
+                
+                // Re-enable button
+                submitBtn.disabled = false;
+                btnText.textContent = originalText;
+            }
+        });
+
+        // Auto-format phone number
+        document.getElementById('companyPhone').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 0) {
+                if (value.length <= 3) {
+                    e.target.value = `+1 (${value}`;
+                } else if (value.length <= 6) {
+                    e.target.value = `+1 (${value.slice(0, 3)}) ${value.slice(3)}`;
+                } else {
+                    e.target.value = `+1 (${value.slice(0, 3)}) ${value.slice(3, 6)}-${value.slice(6, 10)}`;
+                }
+            }
         });
     </script>
-    <script src="/js/add-company.js"></script>
 </body>
 </html>
