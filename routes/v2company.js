@@ -494,10 +494,21 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
         // Clear ALL cache keys for this company to ensure fresh data
         const cacheKeys = [
             `company:${companyId}`,
-            `company:phone:${company.twilioConfig?.phoneNumbers?.[0]?.phoneNumber}`,
             `companyQnA:${companyId}`,
             `tradeQnA:${companyId}`
         ];
+        
+        // Add phone-based cache keys (Twilio uses these)
+        if (company.twilioConfig?.phoneNumber) {
+            cacheKeys.push(`company-phone:${company.twilioConfig.phoneNumber}`);
+        }
+        if (company.twilioConfig?.phoneNumbers && Array.isArray(company.twilioConfig.phoneNumbers)) {
+            company.twilioConfig.phoneNumbers.forEach(phone => {
+                if (phone.phoneNumber) {
+                    cacheKeys.push(`company-phone:${phone.phoneNumber}`);
+                }
+            });
+        }
         
         for (const key of cacheKeys) {
             if (key && !key.includes('undefined')) {
