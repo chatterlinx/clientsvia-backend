@@ -334,13 +334,11 @@
                 }
                 
                 renderCompanyCard(company) {
-                    const statusClass = company.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-                    const statusText = company.status === 'active' ? 'Active' : 'Inactive';
-                    
-                    // Account status badge (from Configuration tab)
+                    // 🚀 V2 SYSTEM: Use Configuration tab accountStatus (NOT legacy status field)
                     const accountStatus = company.accountStatus?.status || 'active';
                     let accountStatusBadge = '';
                     
+                    // Status badge with color coding
                     if (accountStatus === 'active') {
                         accountStatusBadge = '<span class="px-2 py-1 text-xs font-bold rounded-full bg-green-100 text-green-700 border border-green-300"><i class="fas fa-check-circle mr-1"></i>Active</span>';
                     } else if (accountStatus === 'call_forward') {
@@ -359,16 +357,19 @@
                                     ${company.tradeTypes ? `<p class="text-sm text-blue-600 mt-2">Trade: ${this.escapeHTML(company.tradeTypes.join(', '))}</p>` : ''}
                                 </div>
                                 <div class="flex flex-col items-end space-y-2">
-                                    <span class="px-2 py-1 text-xs font-medium rounded-full ${statusClass}">${statusText}</span>
                                     ${accountStatusBadge}
-                                    <div class="flex space-x-2 mt-2">
+                                    <div class="flex flex-col space-y-2 mt-2">
                                         <button onclick="window.open('/company-profile.html?id=${company._id}', '_blank')" 
-                                                class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
+                                                class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors">
                                             <i class="fas fa-eye mr-1"></i>View
                                         </button>
                                         <button onclick="directoryManager.editCompany('${company._id}')" 
-                                                class="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700">
+                                                class="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors">
                                             <i class="fas fa-edit mr-1"></i>Edit
+                                        </button>
+                                        <button onclick="directoryManager.deleteCompany('${company._id}', '${this.escapeHTML(company.companyName).replace(/'/g, "\\'")}')" 
+                                                class="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors">
+                                            <i class="fas fa-trash-alt mr-1"></i>Delete
                                         </button>
                                     </div>
                                 </div>
@@ -379,6 +380,105 @@
                 
                 editCompany(companyId) {
                     window.open(`/company-profile.html?id=${companyId}`, '_blank');
+                }
+                
+                /**
+                 * 🗑️ DELETE COMPANY - Complete database cleanup
+                 * 
+                 * CRITICAL: This permanently deletes:
+                 * - Company document from MongoDB
+                 * - All Redis cache keys
+                 * - All related data (Q&A, templates, history)
+                 * 
+                 * SAFETY: Requires double confirmation
+                 */
+                async deleteCompany(companyId, companyName) {
+                    console.log(`🗑️ Delete request for company: ${companyName} (${companyId})`);
+                    
+                    // First confirmation
+                    const confirmed1 = confirm(
+                        `⚠️ WARNING: DELETE COMPANY\n\n` +
+                        `Company: ${companyName}\n` +
+                        `ID: ${companyId}\n\n` +
+                        `This will PERMANENTLY delete:\n` +
+                        `• Company profile and settings\n` +
+                        `• All Q&A and knowledge base\n` +
+                        `• Call history and logs\n` +
+                        `• Redis cache data\n\n` +
+                        `This action CANNOT be undone!\n\n` +
+                        `Are you sure you want to continue?`
+                    );
+                    
+                    if (!confirmed1) {
+                        console.log('❌ Deletion cancelled by user (first confirmation)');
+                        return;
+                    }
+                    
+                    // Second confirmation - type company name
+                    const typedName = prompt(
+                        `⚠️ FINAL CONFIRMATION\n\n` +
+                        `To confirm deletion, please type the company name exactly:\n\n` +
+                        `"${companyName}"`
+                    );
+                    
+                    if (typedName !== companyName) {
+                        alert('❌ Company name does not match. Deletion cancelled for safety.');
+                        console.log('❌ Deletion cancelled - name mismatch');
+                        return;
+                    }
+                    
+                    console.log('✅ Double confirmation passed - proceeding with deletion');
+                    
+                    try {
+                        // Get auth token
+                        const token = localStorage.getItem('adminToken');
+                        if (!token) {
+                            alert('❌ Authentication required. Please log in again.');
+                            window.location.href = '/login.html';
+                            return;
+                        }
+                        
+                        // Show loading state
+                        const deleteButtons = document.querySelectorAll(`button[onclick*="${companyId}"]`);
+                        deleteButtons.forEach(btn => {
+                            if (btn.textContent.includes('Delete')) {
+                                btn.disabled = true;
+                                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Deleting...';
+                            }
+                        });
+                        
+                        // Call delete API
+                        const response = await fetch(`/api/company/${companyId}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.message || `HTTP ${response.status}`);
+                        }
+                        
+                        const result = await response.json();
+                        console.log('✅ Company deleted successfully:', result);
+                        
+                        // Show success message
+                        alert(`✅ SUCCESS!\n\nCompany "${companyName}" has been permanently deleted.\n\nAll data has been removed from the database.`);
+                        
+                        // Reload companies list
+                        await this.loadCompanies();
+                        this.filterAndRender();
+                        
+                    } catch (error) {
+                        console.error('❌ Error deleting company:', error);
+                        alert(`❌ ERROR\n\nFailed to delete company:\n${error.message}\n\nPlease try again or contact support.`);
+                        
+                        // Reload to reset button states
+                        await this.loadCompanies();
+                        this.filterAndRender();
+                    }
                 }
                 
                 escapeHTML(str) {

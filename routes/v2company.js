@@ -257,24 +257,61 @@ router.delete('/company/:id', async (req, res) => {
             throw new Error('Failed to delete company from database');
         }
         
-        // Clear the company from Redis cache
+        // 🗑️ COMPLETE CLEANUP: Clear ALL Redis cache keys for this company
         try {
-            const cacheKey = `company:${companyId}`;
-            await redisClient.del(cacheKey);
-            console.log(`[API DELETE /api/company/:id] Cleared cache: ${cacheKey}`);
+            const cacheKeys = [
+                `company:${companyId}`,
+                `companyQnA:${companyId}`,
+                `tradeQnA:${companyId}`
+            ];
+            
+            // Add phone-based cache keys (Twilio uses these)
+            if (company.twilioConfig?.phoneNumber) {
+                cacheKeys.push(`company-phone:${company.twilioConfig.phoneNumber}`);
+            }
+            if (company.twilioConfig?.phoneNumbers && Array.isArray(company.twilioConfig.phoneNumbers)) {
+                company.twilioConfig.phoneNumbers.forEach(phone => {
+                    if (phone.phoneNumber) {
+                        cacheKeys.push(`company-phone:${phone.phoneNumber}`);
+                    }
+                });
+            }
+            
+            // Clear all cache keys
+            for (const key of cacheKeys) {
+                if (key && !key.includes('undefined')) {
+                    await redisClient.del(key);
+                    console.log(`[API DELETE /api/company/:id] 🗑️ Cleared cache: ${key}`);
+                }
+            }
+            
+            console.log(`[API DELETE /api/company/:id] ✅ Cleared ${cacheKeys.length} cache keys`);
         } catch (cacheError) {
-            console.warn(`[API DELETE /api/company/:id] Failed to clear cache:`, cacheError.message);
+            console.warn(`[API DELETE /api/company/:id] ⚠️ Failed to clear cache:`, cacheError.message);
             // Don't fail the request if cache clearing fails
         }
         
-        // Clear any personality responses cache for this company
+        // 🗑️ Delete related documents from other collections
         try {
-            // Legacy personality cache removed - using modern AI Agent Logic system
-            console.log('Modern AI Agent Logic system - no legacy cache to clear');
-            console.log(`[API DELETE /api/company/:id] Cleared personality responses cache for company: ${companyId}`);
-        } catch (personalityCacheError) {
-            console.warn(`[API DELETE /api/company/:id] Failed to clear personality responses cache:`, personalityCacheError.message);
-            // Don't fail the request if cache clearing fails
+            // Delete Company Q&A categories and entries
+            const CompanyQnACategory = require('../models/CompanyQnACategory');
+            const deletedQnA = await CompanyQnACategory.deleteMany({ companyId: companyId });
+            console.log(`[API DELETE /api/company/:id] 🗑️ Deleted ${deletedQnA.deletedCount} Q&A categories`);
+            
+            // Delete Instant Response categories
+            const InstantResponseCategory = require('../models/InstantResponseCategory');
+            const deletedIR = await InstantResponseCategory.deleteMany({ companyId: companyId });
+            console.log(`[API DELETE /api/company/:id] 🗑️ Deleted ${deletedIR.deletedCount} Instant Response categories`);
+            
+            // Delete call logs (if you have a call log model)
+            // const CallLog = require('../models/v2AIAgentCallLog');
+            // const deletedLogs = await CallLog.deleteMany({ companyId: companyId });
+            // console.log(`[API DELETE /api/company/:id] 🗑️ Deleted ${deletedLogs.deletedCount} call logs`);
+            
+            console.log(`[API DELETE /api/company/:id] ✅ Deleted all related documents`);
+        } catch (relatedDataError) {
+            console.warn(`[API DELETE /api/company/:id] ⚠️ Failed to delete related data:`, relatedDataError.message);
+            // Don't fail the request if related data deletion fails
         }
         
         console.log(`[API DELETE /api/company/:id] Successfully deleted company: ${companyName} (ID: ${companyId})`);
