@@ -168,7 +168,7 @@
 
         <footer class="bg-white border-t border-gray-200 mt-auto">
             <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 text-center text-gray-500 text-sm">
-                © 2025 Chatterlinx.com All rights reserved.
+                © <span id="current-year"></span> ClientVia.ai All rights reserved.
             </div>
         </footer>
     </div>
@@ -217,10 +217,10 @@
                 navDirectory.classList.add('active-tab');
             }
 
-            // const yearSpan = document.getElementById('current-year');
-            // if (yearSpan) {
-            //     yearSpan.textContent = new Date().getFullYear();
-            // }
+            const yearSpan = document.getElementById('current-year');
+            if (yearSpan) {
+                yearSpan.textContent = new Date().getFullYear();
+            }
         });
     </script>
     <script>
