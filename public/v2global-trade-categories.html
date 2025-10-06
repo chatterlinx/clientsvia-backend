@@ -317,10 +317,18 @@
 
     <!-- JavaScript -->
     <script>
+        // ============================================================================
+        // 🏭 V2 GLOBAL TRADE CATEGORIES - PRODUCTION-GRADE JAVASCRIPT
+        // ============================================================================
+        // PURPOSE: Manage global trade categories with AI-powered Q&A generation
+        // ARCHITECTURE: V2 system with Redis caching + Mongoose persistence
+        // ============================================================================
+
+        // 📦 GLOBAL STATE
         let currentCategories = [];
         let currentCompanyId = 'global';
 
-        // Initialize page
+        // 🚀 INITIALIZATION
         document.addEventListener('DOMContentLoaded', function() {
             // V2 GLOBAL TRADE CATEGORIES: Initializing...
             loadTradeCategories();
@@ -328,6 +336,9 @@
             setupQuickSearch();
         });
 
+        // ============================================================================
+        // 🎯 EVENT LISTENERS SETUP
+        // ============================================================================
         function setupEventListeners() {
             // Add category form
             document.getElementById('add-category-form').addEventListener('submit', handleAddCategory);
@@ -342,7 +353,9 @@
             document.getElementById('manual-keywords').addEventListener('input', updateKeywordPreview);
         }
 
-        // Load trade categories using V2 API
+        // ============================================================================
+        // 📡 API CALLS - DATA LOADING
+        // ============================================================================
         async function loadTradeCategories() {
             try {
                 // console.log('🔄 V2 GLOBAL TRADE CATEGORIES: Loading categories from V2 API...');
@@ -396,7 +409,9 @@
             return localStorage.getItem('authToken') || sessionStorage.getItem('authToken') || '';
         }
 
-        // Render categories
+        // ============================================================================
+        // 🎨 RENDERING FUNCTIONS
+        // ============================================================================
         function renderCategories(categories) {
             const container = document.getElementById('categories-container');
             
@@ -523,7 +538,9 @@
             `;
         }
 
-        // Handle add category using V2 API
+        // ============================================================================
+        // 📝 CRUD OPERATIONS - CATEGORIES & Q&A
+        // ============================================================================
         async function handleAddCategory(e) {
             e.preventDefault();
             
@@ -835,6 +852,9 @@
             currentGenerateCategoryId = null;
         }
 
+        // ============================================================================
+        // 🤖 AI GENERATION - Q&A & KEYWORDS
+        // ============================================================================
         async function confirmGenerateQnAs() {
             if (!currentGenerateCategoryId) {
                 showError('No category selected for Q&A generation');
@@ -1120,7 +1140,9 @@
             // console.log('📊 V2 Stats updated:', { totalCategories, totalQnAs, totalKeywords });
         }
 
-        // Helper functions
+        // ============================================================================
+        // 💡 UTILITY FUNCTIONS
+        // ============================================================================
         function formatDate(dateString) {
             if (!dateString) return 'Unknown';
             return new Date(dateString).toLocaleDateString();
@@ -1151,7 +1173,9 @@
             }, 5000);
         }
 
+        // ============================================================================
         // 🔍 QUICK SEARCH & BROWSE FUNCTIONALITY
+        // ============================================================================
         function setupQuickSearch() {
             const quickSearchInput = document.getElementById('quick-search');
             const searchDropdown = document.getElementById('search-dropdown');
