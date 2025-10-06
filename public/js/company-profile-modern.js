@@ -3456,7 +3456,7 @@ class CompanyProfileManager {
             new Date(b.changedAt) - new Date(a.changedAt)
         );
         
-        historyList.innerHTML = sortedHistory.map(entry => {
+        historyList.innerHTML = sortedHistory.map((entry, index) => {
             const date = new Date(entry.changedAt);
             const formattedDate = date.toLocaleString('en-US', {
                 month: 'short',
@@ -3475,13 +3475,21 @@ class CompanyProfileManager {
             const statusName = this.getStatusDisplayName(entry.status);
             
             return `
-                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 relative group">
                     <div class="flex items-start justify-between mb-1">
                         <div class="flex items-center gap-2">
                             <span class="text-lg">${statusIcon}</span>
                             <span class="font-semibold text-gray-900">${statusName}</span>
                         </div>
-                        <span class="text-xs text-gray-500">${formattedDate}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-500">${formattedDate}</span>
+                            <button 
+                                onclick="companyProfileManager.deleteStatusHistoryEntry(${index})" 
+                                class="text-gray-400 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                                title="Delete this history entry">
+                                <i class="fas fa-trash-alt text-xs"></i>
+                            </button>
+                        </div>
                     </div>
                     ${entry.callForwardNumber ? `
                         <div class="text-xs text-gray-600 ml-7 mb-1">
@@ -3520,6 +3528,42 @@ class CompanyProfileManager {
             suspended: 'Suspended'
         };
         return names[status] || status;
+    }
+
+    /**
+     * Delete a status history entry
+     */
+    async deleteStatusHistoryEntry(index) {
+        console.log('🗑️ Deleting status history entry at index:', index);
+        
+        if (!confirm('Are you sure you want to delete this status history entry? This action cannot be undone.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/company/${this.companyId}/account-status/history/${index}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${this.getAuthToken()}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Failed to delete history entry: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            console.log('✅ History entry deleted:', result);
+            
+            // Reload company data to refresh the history list
+            await this.loadCompanyData();
+            
+            this.showNotification('Status history entry deleted successfully', 'success');
+        } catch (error) {
+            console.error('❌ Error deleting history entry:', error);
+            this.showNotification('Failed to delete history entry', 'error');
+        }
     }
 
     /**

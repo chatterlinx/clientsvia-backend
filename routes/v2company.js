@@ -710,6 +710,78 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
     }
 });
 
+// 🗑️ Delete Account Status History Entry
+router.delete('/company/:companyId/account-status/history/:index', async (req, res) => {
+    const { companyId, index } = req.params;
+    const historyIndex = parseInt(index, 10);
+    
+    console.log(`[API DELETE /company/${companyId}/account-status/history/${index}] Delete request`);
+    
+    if (!ObjectId.isValid(companyId)) {
+        return res.status(400).json({ success: false, message: 'Invalid company ID format' });
+    }
+    
+    if (isNaN(historyIndex) || historyIndex < 0) {
+        return res.status(400).json({ success: false, message: 'Invalid history index' });
+    }
+    
+    try {
+        const company = await Company.findById(companyId);
+        
+        if (!company) {
+            return res.status(404).json({ success: false, message: 'Company not found' });
+        }
+        
+        if (!company.accountStatus || !company.accountStatus.history || company.accountStatus.history.length === 0) {
+            return res.status(404).json({ success: false, message: 'No status history found' });
+        }
+        
+        // Sort history by date descending (most recent first) to match frontend display
+        const sortedHistory = [...company.accountStatus.history].sort((a, b) => 
+            new Date(b.changedAt) - new Date(a.changedAt)
+        );
+        
+        if (historyIndex >= sortedHistory.length) {
+            return res.status(404).json({ success: false, message: 'History entry not found' });
+        }
+        
+        // Get the entry to delete
+        const entryToDelete = sortedHistory[historyIndex];
+        
+        // Remove the entry from the original array by matching the changedAt timestamp
+        company.accountStatus.history = company.accountStatus.history.filter(
+            entry => entry.changedAt.getTime() !== entryToDelete.changedAt.getTime()
+        );
+        
+        await company.save();
+        
+        // Clear Redis cache
+        const cacheKeys = [
+            `company:${companyId}`,
+            ...(company.twilioConfig?.phoneNumbers || []).map(phone => `company-phone:${phone}`)
+        ];
+        
+        for (const key of cacheKeys) {
+            await redisClient.del(key);
+            console.log(`🗑️ Cleared cache: ${key}`);
+        }
+        
+        console.log(`✅ Deleted status history entry at index ${historyIndex} for company ${companyId}`);
+        
+        res.json({ 
+            success: true, 
+            message: 'Status history entry deleted successfully',
+            remainingEntries: company.accountStatus.history.length
+        });
+    } catch (error) {
+        console.error(`[API DELETE /company/${companyId}/account-status/history/${index}] Error:`, error.message, error.stack);
+        res.status(500).json({ 
+            success: false, 
+            message: `Error deleting history entry: ${error.message}` 
+        });
+    }
+});
+
 router.patch('/company/:companyId/configuration', async (req, res) => {
     const { companyId } = req.params;
     const { twilioConfig, smsSettings } = req.body;
