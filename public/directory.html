@@ -169,11 +169,36 @@
         });
     </script>
     <script>
+        /* ============================================================================
+           🏢 GLOBAL COMPANY DIRECTORY - V2 PRODUCTION SYSTEM
+           ============================================================================
+           
+           FEATURES:
+           - Real-time search across company name, phone, email, address
+           - Dynamic trade category filtering (synced with Global Trade Categories)
+           - Account status display (synced with Configuration tab)
+           - International address support (city, state, country)
+           - Safe company deletion with double confirmation
+           - Responsive grid layout with modern UI
+           
+           STATUS SYNC:
+           - Reads: company.accountStatus.status from Configuration tab
+           - Displays: 🟢 Active | 🟡 Call Forward | 🔴 Suspended
+           - Matches: company-profile-modern.js updateStatusBadge() styling
+           
+           ARCHITECTURE:
+           - Class-based DirectoryManager for state management
+           - Async/await for API calls
+           - Event-driven filtering and rendering
+           - Modular, maintainable code structure
+           
+           ============================================================================ */
+        
         // Initialize directory with modern system
         document.addEventListener('DOMContentLoaded', function() {
             console.log('[Directory] Initializing modern directory system...');
             
-            // Create a modern directory manager
+            // 🏢 DIRECTORY MANAGER - Main controller class
             class DirectoryManager {
                 constructor() {
                     this.companies = [];
@@ -227,19 +252,6 @@
                         this.companies = data.data || data;
                         this.filteredCompanies = [...this.companies];
                         console.log(`[Directory] Loaded ${this.companies.length} companies`);
-                        
-                        // 🔍 DEBUG CHECKPOINT: Log first company to see what we received
-                        if (this.companies.length > 0) {
-                            console.log('🔍 [DEBUG CHECKPOINT 1] First company raw data:', {
-                                companyName: this.companies[0].companyName,
-                                hasStatus: !!this.companies[0].status,
-                                hasAccountStatus: !!this.companies[0].accountStatus,
-                                statusValue: this.companies[0].status,
-                                accountStatusObject: this.companies[0].accountStatus,
-                                accountStatusStatus: this.companies[0].accountStatus?.status
-                            });
-                        }
-                        
                         return true; // Success
                         
                     } catch (error) {
@@ -414,21 +426,13 @@
                 }
                 
                 renderCompanyCard(company) {
-                    // 🚀 V2 SYSTEM: Use Configuration tab accountStatus (NOT legacy status field)
+                    // 🎯 PRODUCTION-GRADE: Read account status from Configuration tab
+                    // Syncs with company-profile-modern.js updateStatusBadge() function
                     const accountStatus = company.accountStatus?.status || 'active';
-                    
-                    // 🔍 DEBUG CHECKPOINT 2: Log what we're reading for each company
-                    console.log(`🔍 [DEBUG CHECKPOINT 2] Rendering ${company.companyName}:`, {
-                        hasAccountStatus: !!company.accountStatus,
-                        accountStatusObject: company.accountStatus,
-                        extractedStatus: accountStatus,
-                        willShowBadge: accountStatus === 'suspended' ? '🔴 SUSPENDED' : accountStatus === 'call_forward' ? '🟡 CALL FORWARD' : '🟢 ACTIVE'
-                    });
-                    
                     let accountStatusBadge = '';
                     let statusIcon = '';
                     
-                    // Status badge and icon with color coding (synced with Configuration tab)
+                    // 🎨 Status badge styling (matches Configuration tab exactly)
                     if (accountStatus === 'active') {
                         accountStatusBadge = '<span class="px-2 py-1 text-xs font-bold rounded-full bg-green-100 text-green-700 border border-green-300"><i class="fas fa-check-circle mr-1"></i>Active</span>';
                         statusIcon = '<i class="fas fa-circle text-green-500 text-xs mr-2"></i>';

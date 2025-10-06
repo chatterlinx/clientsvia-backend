@@ -147,46 +147,44 @@ router.get('/companies', authenticateJWT, requireRole('admin'), async (req, res)
     try {
         console.log('[ADMIN API GET /api/companies] Admin user requesting all companies:', req.user.email);
         
-        // Use Mongoose model instead of direct collection access for consistency
+        // 📊 PRODUCTION-GRADE: Fetch companies with optimized field projection
+        // Uses lean() for performance (returns plain JavaScript objects)
         const companies = await Company.find({}, {
-            // Include fields needed by the directory
+            // Core company information
             companyName: 1,
             tradeCategories: 1,
             isActive: 1,
-            status: 1,
-            'accountStatus.status': 1, // ✅ Explicitly include nested field
-            'accountStatus.callForwardNumber': 1,
-            'accountStatus.reason': 1,
-            createdAt: 1,
-            updatedAt: 1,
+            
+            // Account status (Configuration tab integration)
+            // NOTE: Nested fields require explicit projection in Mongoose
+            'accountStatus.status': 1,              // active | call_forward | suspended
+            'accountStatus.callForwardNumber': 1,   // Phone number for call forwarding
+            'accountStatus.reason': 1,              // Internal notes for status change
+            
+            // Contact & business details
             businessPhone: 1,
             businessEmail: 1,
             businessWebsite: 1,
-            address: 1
-            // Sensitive fields like API keys, tokens, etc. are excluded
+            
+            // International address structure
+            'address.street': 1,
+            'address.city': 1,
+            'address.state': 1,
+            'address.zip': 1,
+            'address.country': 1,
+            
+            // Metadata
+            createdAt: 1,
+            updatedAt: 1,
+            
+            // Legacy status field (kept for backward compatibility)
+            status: 1
+            
+            // 🔒 SECURITY: Sensitive fields excluded (API keys, tokens, passwords, etc.)
         }).lean();
         
         console.log(`[ADMIN API GET /api/companies] Found ${companies.length} companies in database`);
         console.log(`[ADMIN API GET /api/companies] Returning ${companies.length} companies to admin`);
-        
-        // 🔍 DEBUG: Log first company to see what fields we're actually returning
-        if (companies.length > 0) {
-            console.log('[DEBUG] First company data:', JSON.stringify({
-                companyName: companies[0].companyName,
-                hasStatus: !!companies[0].status,
-                hasAccountStatus: !!companies[0].accountStatus,
-                statusValue: companies[0].status,
-                accountStatusValue: companies[0].accountStatus,
-                allKeys: Object.keys(companies[0])
-            }, null, 2));
-        }
-        
-        // 🔍 DEBUG: Get ONE full company document to see what's ACTUALLY in the database
-        const fullCompany = await Company.findOne({ companyName: 'atlas air' }).lean();
-        if (fullCompany) {
-            console.log('[DEBUG] FULL atlas air document has accountStatus?', !!fullCompany.accountStatus);
-            console.log('[DEBUG] FULL atlas air accountStatus value:', JSON.stringify(fullCompany.accountStatus, null, 2));
-        }
         
         res.json({
             success: true,
