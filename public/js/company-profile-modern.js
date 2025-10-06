@@ -3541,10 +3541,15 @@ class CompanyProfileManager {
         }
         
         try {
+            const token = localStorage.getItem('adminToken');
+            if (!token) {
+                throw new Error('No authentication token');
+            }
+            
             const response = await fetch(`/api/company/${this.companyId}/account-status/history/${index}`, {
                 method: 'DELETE',
                 headers: {
-                    'Authorization': `Bearer ${this.getAuthToken()}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });
