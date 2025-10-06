@@ -246,29 +246,65 @@
            🏢 ADD COMPANY - V2 MODERN SYSTEM
            ============================================================================
            
-           FEATURES:
-           - Minimal 3-field quick start (Name, Phone, Address)
-           - International address format (street, city, state, zip, country)
-           - Modern gradient UI matching platform design
-           - Success modal with auto-redirect
-           - Form validation and error handling
+           PURPOSE:
+           Quick company creation with minimal required fields. Full profile completion
+           happens in the company profile page after creation.
            
-           FLOW:
-           1. User fills 3 essential fields
-           2. Company created in database
-           3. Success modal appears
-           4. Auto-redirect to company profile for full setup
+           ARCHITECTURE:
+           - Frontend: Modern gradient UI with 2-field form (Name + Address)
+           - Backend: POST /api/companies with international address object
+           - Flow: Create → Success Modal → Auto-redirect to Profile
+           
+           FEATURES:
+           ✅ Minimal 2-field quick start (Company Name + International Address)
+           ✅ International address format (street, city, state, zip, country)
+           ✅ Modern gradient UI matching platform design
+           ✅ Success modal with animation and auto-redirect
+           ✅ Comprehensive error handling and validation
+           ✅ JWT authentication required
+           ✅ Phone number added later in Overview tab
+           
+           WORKFLOW:
+           1. Admin fills 2 essential fields (Name + Address breakdown)
+           2. Form submits to POST /api/companies
+           3. Company created with defaults (timezone, status, etc.)
+           4. Success modal appears with checkmark animation
+           5. Auto-redirect to company profile after 2 seconds
+           6. Admin completes full profile (phone, owner, contacts, AI settings)
+           
+           DATA STRUCTURE:
+           {
+               companyName: string (required),
+               address: {
+                   street: string (required),
+                   city: string (required),
+                   state: string (required),
+                   zip: string (required),
+                   country: string (required, default: "USA")
+               },
+               timezone: string (default: "America/New_York"),
+               profileComplete: boolean (default: false)
+           }
            
            ============================================================================ */
 
-        // Logout function
+        /* ----------------------------------------------------------------------------
+           🔐 AUTHENTICATION
+           ---------------------------------------------------------------------------- */
+        
+        /**
+         * Logout function - Clears session and redirects to login
+         */
         function logout() {
             localStorage.removeItem('adminToken');
             localStorage.removeItem('adminUser');
             window.location.href = '/login.html';
         }
 
-        // Form submission handler
+        /* ----------------------------------------------------------------------------
+           📝 FORM SUBMISSION HANDLER
+           ---------------------------------------------------------------------------- */
+        
         document.getElementById('add-company-form').addEventListener('submit', async function(event) {
             event.preventDefault();
             
@@ -276,12 +312,14 @@
             const btnText = document.getElementById('btn-text');
             const originalText = btnText.textContent;
             
-            // Disable button and show loading
+            // Show loading state
             submitBtn.disabled = true;
             btnText.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating...';
             
             try {
-                // Collect form data
+                /* ----------------------------------------------------------------
+                   STEP 1: Collect and validate form data
+                   ---------------------------------------------------------------- */
                 const companyData = {
                     companyName: document.getElementById('companyName').value.trim(),
                     address: {
@@ -289,16 +327,17 @@
                         city: document.getElementById('addressCity').value.trim(),
                         state: document.getElementById('addressState').value.trim(),
                         zip: document.getElementById('addressZip').value.trim(),
-                        country: document.getElementById('addressCountry').value
+                        country: document.getElementById('addressCountry').value.trim() || 'USA'
                     },
-                    // Default values for required fields
                     timezone: 'America/New_York',
                     profileComplete: false
                 };
 
-                console.log('[Add Company] Creating company:', companyData.companyName);
+                console.log('[Add Company] 📤 Creating company:', companyData.companyName);
 
-                // Get auth token
+                /* ----------------------------------------------------------------
+                   STEP 2: Verify authentication
+                   ---------------------------------------------------------------- */
                 const token = localStorage.getItem('adminToken');
                 if (!token) {
                     alert('Authentication required. Please log in again.');
@@ -306,7 +345,9 @@
                     return;
                 }
 
-                // Submit to API
+                /* ----------------------------------------------------------------
+                   STEP 3: Submit to API
+                   ---------------------------------------------------------------- */
                 const response = await fetch('/api/companies', {
                     method: 'POST',
                     headers: {
@@ -324,19 +365,22 @@
                 const result = await response.json();
                 console.log('[Add Company] ✅ Company created successfully:', result);
 
-                // Show success modal
+                /* ----------------------------------------------------------------
+                   STEP 4: Show success modal and redirect
+                   ---------------------------------------------------------------- */
                 document.getElementById('success-modal').classList.remove('hidden');
 
-                // Redirect to company profile after 2 seconds
                 setTimeout(() => {
                     window.location.href = `/company-profile.html?id=${result._id}`;
                 }, 2000);
 
             } catch (error) {
+                /* ----------------------------------------------------------------
+                   ERROR HANDLING: Display error and re-enable form
+                   ---------------------------------------------------------------- */
                 console.error('[Add Company] ❌ Error:', error);
                 alert(`Failed to create company: ${error.message}\n\nPlease try again or contact support.`);
                 
-                // Re-enable button
                 submitBtn.disabled = false;
                 btnText.textContent = originalText;
             }

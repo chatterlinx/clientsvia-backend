@@ -50,17 +50,42 @@ router.get('/company-profile.html', (req, res) => {
    ============================================================================
    
    ENDPOINT: POST /api/companies
+   AUTH: No authentication required (open endpoint for company creation)
+   
+   PURPOSE:
+   Quick company creation with minimal required fields. Supports three form types:
+   1. Modern Form (V2): Name + International Address Object
+   2. Legacy Simplified: Name + Phone + Single Address String
+   3. Legacy Full: Complete company details with owner/contact info
    
    FEATURES:
-   - Modern quick-start form (3 fields: name, phone, address)
-   - International address format (street, city, state, zip, country)
-   - Backward compatible with legacy forms
-   - Auto-generates default AI agent settings
+   ✅ Modern quick-start form (2 fields: name + address object)
+   ✅ International address format (street, city, state, zip, country)
+   ✅ Backward compatible with legacy forms
+   ✅ Auto-generates default AI agent settings
+   ✅ Phone number optional (added later in profile)
+   ✅ Smart form detection based on payload structure
    
-   FLOW:
-   1. Validate required fields (name, phone, address object)
-   2. Create company with defaults
-   3. Return company ID for profile completion
+   MODERN FORM PAYLOAD:
+   {
+       companyName: string (required),
+       address: {
+           street: string (required),
+           city: string (required),
+           state: string (required),
+           zip: string (required),
+           country: string (required)
+       },
+       timezone: string (optional, default: "America/New_York"),
+       profileComplete: boolean (optional, default: false)
+   }
+   
+   WORKFLOW:
+   1. Detect form type (Modern vs Legacy Simplified vs Legacy Full)
+   2. Validate required fields based on form type
+   3. Create company document with defaults
+   4. Auto-generate account status (active)
+   5. Return saved company with _id for profile completion
    
    ============================================================================ */
 router.post('/companies', async (req, res) => {
