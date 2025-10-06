@@ -176,8 +176,16 @@ router.get('/companies', authenticateJWT, requireRole('admin'), async (req, res)
                 hasStatus: !!companies[0].status,
                 hasAccountStatus: !!companies[0].accountStatus,
                 statusValue: companies[0].status,
-                accountStatusValue: companies[0].accountStatus
+                accountStatusValue: companies[0].accountStatus,
+                allKeys: Object.keys(companies[0])
             }, null, 2));
+        }
+        
+        // 🔍 DEBUG: Get ONE full company document to see what's ACTUALLY in the database
+        const fullCompany = await Company.findOne({ companyName: 'atlas air' }).lean();
+        if (fullCompany) {
+            console.log('[DEBUG] FULL atlas air document has accountStatus?', !!fullCompany.accountStatus);
+            console.log('[DEBUG] FULL atlas air accountStatus value:', JSON.stringify(fullCompany.accountStatus, null, 2));
         }
         
         res.json({
