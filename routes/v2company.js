@@ -711,7 +711,7 @@ router.patch('/company/:companyId/account-status', async (req, res) => {
 });
 
 // 🗑️ Delete Account Status History Entry
-router.delete('/company/:companyId/account-status/history/:index', async (req, res) => {
+router.delete('/company/:companyId/account-status/history/:index', authenticateJWT, async (req, res) => {
     const { companyId, index } = req.params;
     const historyIndex = parseInt(index, 10);
     
