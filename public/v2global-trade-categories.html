@@ -94,7 +94,7 @@
                     </a>
                     <a href="/v2global-trade-categories.html" class="nav-link" id="nav-trade-categories">
                         <i class="fas fa-tags"></i>
-                        <span>V2 Global Trade Categories</span>
+                        <span>Global Trade Categories</span>
                     </a>
                     <div class="h-6 w-px bg-gray-300 mx-2"></div>
                     <button onclick="logout()" class="nav-link text-red-600 hover:text-red-800" id="nav-logout">
@@ -1537,6 +1537,21 @@
             browseResults.innerHTML = resultsHTML;
             browseStatus.textContent = `Showing all ${sortedCategories.length} trade categories`;
         }
+        
+        // ============================================================================
+        // 🎯 ACTIVE TAB HIGHLIGHTING
+        // ============================================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('header nav a.nav-link');
+            
+            navLinks.forEach(link => {
+                const linkPath = link.getAttribute('href');
+                if (linkPath && currentPath.includes(linkPath.replace('/', ''))) {
+                    link.classList.add('active-tab');
+                }
+            });
+        });
     </script>
 </body>
 </html>
