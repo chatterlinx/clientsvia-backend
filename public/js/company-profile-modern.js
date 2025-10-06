@@ -290,11 +290,12 @@ class CompanyProfileManager {
 
     /**
      * Load company data from API
+     * @param {boolean} force - Force reload even if data is already loaded
      */
-    async loadCompanyData() {
+    async loadCompanyData(force = false) {
         try {
             // 🔧 [FIXED] - Data Loading Guard (Micro-Surgery #2)
-            if (this.companyDataLoaded) {
+            if (this.companyDataLoaded && !force) {
                 console.log('🛡️ Company data already loaded, skipping...');
                 return this.companyData;
             }
@@ -3561,8 +3562,8 @@ class CompanyProfileManager {
             const result = await response.json();
             console.log('✅ History entry deleted:', result);
             
-            // Reload company data to refresh the history list
-            await this.loadCompanyData();
+            // Force reload company data to refresh the history list
+            await this.loadCompanyData(true);
             
             this.showNotification('Status history entry deleted successfully', 'success');
         } catch (error) {
