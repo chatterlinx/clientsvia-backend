@@ -1146,10 +1146,36 @@ class CompanyProfileManager {
 
     /* ========================================================================
        ⚙️ CONFIGURATION TAB - SETTINGS
+       ========================================================================
+       
+       WORLD-CLASS CONFIGURATION MANAGEMENT SYSTEM
+       
+       This section handles all company configuration settings including:
+       - 🔐 Twilio Credentials (Account SID, Auth Token, API Keys)
+       - 📞 Phone Numbers Management (Add, Remove, Set Primary)
+       - 🚨 Account Status Control (Active, Call Forward, Suspended)
+       - 🔗 Webhook URLs & Integration Settings
+       
+       ARCHITECTURE:
+       - Modular function design for maintainability
+       - Secure credential handling with masking
+       - Real-time validation and error handling
+       - Multi-tenant company isolation
+       - Redis cache invalidation on updates
+       
+       SECURITY:
+       - Sensitive data masked in UI (shows last 4 chars)
+       - No credentials logged to console
+       - Secure HTTPS API communication
+       - JWT authentication required
+       
        ======================================================================== */
 
     /**
      * GOLD STANDARD: Populate Configuration tab with data
+     * 
+     * Entry point for loading all configuration settings when tab is activated.
+     * Orchestrates the initialization of all configuration subsystems.
      */
     populateConfigTab() {
         try {
@@ -1213,7 +1239,6 @@ class CompanyProfileManager {
                 twilioTokenInput.value = '••••••••••••' + savedToken.slice(-4);
                 twilioTokenInput.dataset.hasToken = 'true';
                 console.log('🔧 Loaded Twilio Auth Token (showing last 4):', '••••••••••••' + savedToken.slice(-4));
-                console.log('🔧 Full token for debug:', savedToken);
             } else {
                 twilioTokenInput.value = '••••••••••••••••';
                 twilioTokenInput.dataset.hasToken = 'true';
@@ -1284,10 +1309,34 @@ class CompanyProfileManager {
 
     /* ========================================================================
        📞 PHONE NUMBERS MANAGEMENT
+       ========================================================================
+       
+       Comprehensive phone number management system for Twilio integration.
+       
+       FEATURES:
+       - Add/Remove phone numbers dynamically
+       - Set primary number for incoming calls
+       - Real-time validation (E.164 format)
+       - Friendly names for easy identification
+       - Status management (active/inactive)
+       
+       DATA STRUCTURE:
+       twilioConfig.phoneNumbers = [
+           {
+               phoneNumber: '+12392322030',
+               friendlyName: 'Primary Number',
+               status: 'active',
+               isPrimary: true
+           }
+       ]
+       
        ======================================================================== */
 
     /**
-     * Setup phone numbers management
+     * Setup phone numbers management system
+     * 
+     * Initializes the phone numbers interface, loads existing numbers,
+     * and sets up event listeners for add/remove/primary actions.
      */
     setupPhoneNumbersManagement() {
         try {
@@ -2949,10 +2998,48 @@ class CompanyProfileManager {
 
     /* ========================================================================
        🚨 ACCOUNT STATUS CONTROL - Critical for billing/service management
+       ========================================================================
+       
+       🚨 ACCOUNT STATUS CONTROL SYSTEM
+       ========================================================================
+       
+       Enterprise-grade account status management for billing and service control.
+       
+       STATUS TYPES:
+       - 🟢 ACTIVE: AI agent handles all calls normally
+       - 🟡 CALL FORWARD: Calls forwarded to external number with custom message
+       - 🔴 SUSPENDED: All incoming calls blocked (billing/maintenance)
+       
+       FEATURES:
+       - Real-time status updates with Redis cache clearing
+       - Custom forward messages with {Company Name} placeholder
+       - Complete status change history with audit trail
+       - Reason tracking for compliance
+       - Visual status badges in UI
+       
+       DATA STRUCTURE:
+       accountStatus: {
+           status: 'active' | 'call_forward' | 'suspended',
+           callForwardNumber: '+12395652202',
+           callForwardMessage: 'Thank you for calling {Company Name}...',
+           reason: 'Payment pending',
+           changedBy: 'admin@clientsvia.com',
+           changedAt: Date,
+           history: [...]
+       }
+       
+       SECURITY:
+       - All status changes logged with timestamp and user
+       - Twilio settings preserved across status changes
+       - Multi-tenant isolation enforced
+       
        ======================================================================== */
 
     /**
      * Setup account status control system
+     * 
+     * Initializes the account status interface, loads current status,
+     * and sets up event listeners for status changes and save actions.
      */
     setupAccountStatusControl() {
         console.log('🚨 Setting up Account Status Control...');
