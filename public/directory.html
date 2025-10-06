@@ -178,15 +178,18 @@
                 constructor() {
                     this.companies = [];
                     this.filteredCompanies = [];
+                    this.tradeCategories = [];
                     this.init();
                 }
                 
                 async init() {
-                    const loadSuccess = await this.loadCompanies();
+                    console.log('[Directory] Initializing directory manager...');
+                    await Promise.all([
+                        this.loadCompanies(),
+                        this.loadTradeCategories()
+                    ]);
                     this.setupEventListeners();
-                    if (loadSuccess) {
-                        this.renderCompanies();
-                    }
+                    this.filterAndRender();
                 }
                 
                 async loadCompanies() {
@@ -274,6 +277,61 @@
                     }
                 }
                 
+                /**
+                 * Load trade categories from Global Trade Categories
+                 */
+                async loadTradeCategories() {
+                    try {
+                        const token = localStorage.getItem('adminToken');
+                        const headers = { 'Content-Type': 'application/json' };
+                        if (token) {
+                            headers['Authorization'] = `Bearer ${token}`;
+                        }
+                        
+                        const response = await fetch('/api/v2global/trade-categories/categories?includeQnAs=false&includeStats=false', {
+                            headers: headers
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}`);
+                        }
+                        
+                        const result = await response.json();
+                        if (result.success) {
+                            this.tradeCategories = result.data || [];
+                            console.log(`[Directory] Loaded ${this.tradeCategories.length} trade categories`);
+                            this.populateTradeFilter();
+                        }
+                    } catch (error) {
+                        console.error('[Directory] Error loading trade categories:', error);
+                    }
+                }
+                
+                /**
+                 * Populate trade categories dropdown
+                 */
+                populateTradeFilter() {
+                    const filterSelect = document.getElementById('filter-trade-type');
+                    if (!filterSelect) return;
+                    
+                    // Clear existing options except "All Trade Types"
+                    filterSelect.innerHTML = '<option value="">All Trade Types</option>';
+                    
+                    // Add trade categories sorted alphabetically
+                    const sortedCategories = [...this.tradeCategories].sort((a, b) => 
+                        a.name.localeCompare(b.name)
+                    );
+                    
+                    sortedCategories.forEach(category => {
+                        const option = document.createElement('option');
+                        option.value = category.name;
+                        option.textContent = category.name;
+                        filterSelect.appendChild(option);
+                    });
+                    
+                    console.log(`[Directory] Populated ${sortedCategories.length} trade categories in filter`);
+                }
+                
                 setupEventListeners() {
                     const searchInput = document.getElementById('search-company-input');
                     const filterSelect = document.getElementById('filter-trade-type');
@@ -297,20 +355,29 @@
                     const tradeFilter = document.getElementById('filter-trade-type')?.value || '';
                     const showInactive = document.getElementById('show-inactive-checkbox')?.checked || false;
                     
+                    console.log(`[Directory] Filtering - Search: "${searchTerm}", Trade: "${tradeFilter}", ShowInactive: ${showInactive}`);
+                    
                     this.filteredCompanies = this.companies.filter(company => {
+                        // Search filter (company name, phone, email, address)
                         const matchesSearch = !searchTerm || 
                             company.companyName?.toLowerCase().includes(searchTerm) ||
-                            company.companyPhone?.includes(searchTerm);
+                            company.businessPhone?.toLowerCase().includes(searchTerm) ||
+                            company.businessEmail?.toLowerCase().includes(searchTerm) ||
+                            company.businessAddress?.toLowerCase().includes(searchTerm);
                         
+                        // Trade category filter (check tradeCategories array)
                         const matchesTrade = !tradeFilter || 
-                            (company.tradeTypes && company.tradeTypes.includes(tradeFilter));
+                            (company.tradeCategories && Array.isArray(company.tradeCategories) && 
+                             company.tradeCategories.includes(tradeFilter));
                         
-                        const matchesStatus = showInactive || 
-                            company.status !== 'inactive';
+                        // Status filter (based on accountStatus from Configuration tab)
+                        const accountStatus = company.accountStatus?.status || 'active';
+                        const matchesStatus = showInactive || accountStatus !== 'suspended';
                         
                         return matchesSearch && matchesTrade && matchesStatus;
                     });
                     
+                    console.log(`[Directory] Filtered ${this.filteredCompanies.length} of ${this.companies.length} companies`);
                     this.renderCompanies();
                 }
                 
@@ -351,6 +418,12 @@
                         statusIcon = '<i class="fas fa-circle text-red-500 text-xs"></i>';
                     }
                     
+                    // Trade categories display
+                    let tradeDisplay = '';
+                    if (company.tradeCategories && Array.isArray(company.tradeCategories) && company.tradeCategories.length > 0) {
+                        tradeDisplay = `<p class="text-sm text-blue-600 mt-2"><i class="fas fa-briefcase mr-1"></i>Trade: ${this.escapeHTML(company.tradeCategories.join(', '))}</p>`;
+                    }
+                    
                     return `
                         <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
                             <div class="flex items-start justify-between">
@@ -359,9 +432,9 @@
                                         ${statusIcon}
                                         <h3 class="text-lg font-semibold text-gray-900">${this.escapeHTML(company.companyName || 'Unknown Company')}</h3>
                                     </div>
-                                    <p class="text-sm text-gray-600 mt-1">${this.escapeHTML(company.companyPhone || 'No phone')}</p>
-                                    <p class="text-sm text-gray-600">${this.escapeHTML(company.companyAddress || 'No address')}</p>
-                                    ${company.tradeTypes ? `<p class="text-sm text-blue-600 mt-2">Trade: ${this.escapeHTML(company.tradeTypes.join(', '))}</p>` : ''}
+                                    <p class="text-sm text-gray-600 mt-1"><i class="fas fa-phone mr-1"></i>${this.escapeHTML(company.businessPhone || company.companyPhone || 'No phone')}</p>
+                                    <p class="text-sm text-gray-600"><i class="fas fa-map-marker-alt mr-1"></i>${this.escapeHTML(company.businessAddress || company.companyAddress || 'No address')}</p>
+                                    ${tradeDisplay}
                                 </div>
                                 <div class="flex flex-col items-end space-y-2">
                                     ${accountStatusBadge}
