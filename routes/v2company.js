@@ -154,6 +154,9 @@ router.get('/companies', authenticateJWT, requireRole('admin'), async (req, res)
             tradeCategories: 1,
             isActive: 1,
             status: 1,
+            'accountStatus.status': 1, // ✅ Explicitly include nested field
+            'accountStatus.callForwardNumber': 1,
+            'accountStatus.reason': 1,
             createdAt: 1,
             updatedAt: 1,
             businessPhone: 1,
