@@ -132,21 +132,68 @@
                     </button>
                 </div>
             </div>
+
+            <!-- Sub Tabs -->
+            <div class="mt-6 border-b border-gray-200">
+                <nav class="flex gap-2">
+                    <button id="tab-overview" onclick="switchTab('overview')" class="px-6 py-3 font-semibold text-blue-600 border-b-2 border-blue-600 transition-colors">
+                        <i class="fas fa-layer-group mr-2"></i>
+                        Overview
+                    </button>
+                    <button id="tab-behaviors" onclick="switchTab('behaviors')" class="px-6 py-3 font-semibold text-gray-500 hover:text-blue-600 border-b-2 border-transparent hover:border-blue-300 transition-colors">
+                        <i class="fas fa-theater-masks mr-2"></i>
+                        Behaviors
+                    </button>
+                    <button id="tab-settings" onclick="switchTab('settings')" class="px-6 py-3 font-semibold text-gray-400 border-b-2 border-transparent cursor-not-allowed" disabled title="Coming soon">
+                        <i class="fas fa-cog mr-2"></i>
+                        Settings
+                    </button>
+                </nav>
+            </div>
         </div>
 
-        <!-- Statistics Cards -->
-        <div id="stats-container" class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <!-- Dynamic stats will be loaded here -->
+        <!-- Overview Tab Content -->
+        <div id="overview-tab" class="tab-content">
+            <!-- Statistics Cards -->
+            <div id="stats-container" class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <!-- Dynamic stats will be loaded here -->
+            </div>
+
+            <!-- Active Template Display -->
+            <div id="active-template-container" class="mb-8">
+                <!-- Active template details will be loaded here -->
+            </div>
+
+            <!-- Categories List -->
+            <div id="categories-container" class="space-y-4">
+                <!-- Categories will be loaded here -->
+            </div>
         </div>
 
-        <!-- Active Template Display -->
-        <div id="active-template-container" class="mb-8">
-            <!-- Active template details will be loaded here -->
+        <!-- Behaviors Tab Content -->
+        <div id="behaviors-tab" class="tab-content hidden">
+            <div class="bg-white rounded-lg border-2 border-gray-200 p-6">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">
+                    <i class="fas fa-theater-masks text-purple-600 mr-2"></i>
+                    AI Behavior Templates
+                </h2>
+                <p class="text-gray-600 mb-6">
+                    Pre-defined behavior instructions that guide how the AI responds in different situations. 
+                    Categories inherit one of these behaviors to ensure consistent, appropriate responses.
+                </p>
+                
+                <div id="behaviors-list" class="space-y-4">
+                    <!-- Behaviors will be rendered here -->
+                </div>
+            </div>
         </div>
 
-        <!-- Categories List -->
-        <div id="categories-container" class="space-y-4">
-            <!-- Categories will be loaded here -->
+        <!-- Settings Tab Content -->
+        <div id="settings-tab" class="tab-content hidden">
+            <div class="bg-white rounded-lg border-2 border-gray-200 p-6">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Settings</h2>
+                <p class="text-gray-600">Coming soon...</p>
+            </div>
         </div>
 
     </main>
@@ -1650,6 +1697,149 @@
             setTimeout(() => {
                 notification.remove();
             }, 3000);
+        }
+
+        // ============================================
+        // TAB SWITCHING
+        // ============================================
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+            
+            // Show selected tab
+            document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+            
+            // Update tab button styles
+            document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+                btn.classList.remove('text-blue-600', 'border-blue-600');
+                btn.classList.add('text-gray-500', 'border-transparent');
+            });
+            document.getElementById(`tab-${tabName}`).classList.remove('text-gray-500', 'border-transparent');
+            document.getElementById(`tab-${tabName}`).classList.add('text-blue-600', 'border-blue-600');
+            
+            // Load behaviors if switching to behaviors tab
+            if (tabName === 'behaviors') {
+                renderBehaviors();
+            }
+        }
+
+        // ============================================
+        // BEHAVIOR TEMPLATES
+        // ============================================
+        const BEHAVIOR_TEMPLATES = [
+            {
+                id: 1,
+                name: "Empathetic Guardian",
+                icon: "🤝",
+                description: "Calm, slow pace, validating feelings, brief reassurance then practical next step. Avoid platitudes; be specific and human.",
+                tone: "empathetic",
+                pace: "slow",
+                useFor: "Upset, grief, distressed, crying"
+            },
+            {
+                id: 2,
+                name: "Urgent Responder",
+                icon: "🚨",
+                description: "Fast pace, short sentences, decisive verbs, immediate action. Use 'right away', 'immediately', 'I'll connect you now'.",
+                tone: "urgent",
+                pace: "fast",
+                useFor: "Emergencies, ASAP requests, urgent needs"
+            },
+            {
+                id: 3,
+                name: "De-escalation Expert",
+                icon: "😤",
+                description: "Short empathy + ownership + immediate corrective steps. Avoid defensiveness. Use calming, solution-focused language.",
+                tone: "apologetic",
+                pace: "normal",
+                useFor: "Angry, frustrated, complaints"
+            },
+            {
+                id: 4,
+                name: "Professional Informer",
+                icon: "💼",
+                description: "Clear, concise, confident tone. State facts, provide options, set expectations. Neutral pace.",
+                tone: "professional",
+                pace: "normal",
+                useFor: "General inquiries, pricing, hours, policies"
+            },
+            {
+                id: 5,
+                name: "Friendly Guide",
+                icon: "😊",
+                description: "Warm, upbeat, welcoming. Match caller energy but remain professional. Good for positive interactions.",
+                tone: "friendly",
+                pace: "normal",
+                useFor: "Happy customers, new customers, confirmations"
+            },
+            {
+                id: 6,
+                name: "Patient Educator",
+                icon: "🎓",
+                description: "Slow pace, simple language, confirm understanding, offer to repeat. Break complex info into steps.",
+                tone: "professional",
+                pace: "slow",
+                useFor: "Confused callers, technical questions, elderly"
+            },
+            {
+                id: 7,
+                name: "Efficient Processor",
+                icon: "⚡",
+                description: "Quick, streamlined, get to the point. Minimize small talk, focus on task completion.",
+                tone: "professional",
+                pace: "fast",
+                useFor: "Rushed callers, busy people, transactional calls"
+            },
+            {
+                id: 8,
+                name: "Apologetic Restorer",
+                icon: "🙏",
+                description: "Clear apology + brief reason + corrective action + timeline. Own the mistake, focus on solution.",
+                tone: "apologetic",
+                pace: "normal",
+                useFor: "Missed appointments, errors, service failures"
+            },
+            {
+                id: 9,
+                name: "Safety Coordinator",
+                icon: "🛡️",
+                description: "Serious, measured, clear instructions. Verify information, prioritize safety, escalate appropriately.",
+                tone: "professional",
+                pace: "slow",
+                useFor: "Safety concerns, emergencies, liability issues"
+            },
+            {
+                id: 10,
+                name: "Relationship Builder",
+                icon: "💬",
+                description: "Conversational, personable, brief small talk allowed. Build rapport while maintaining professionalism.",
+                tone: "friendly",
+                pace: "normal",
+                useFor: "VIP customers, repeat callers, long-term relationships"
+            }
+        ];
+
+        function renderBehaviors() {
+            const container = document.getElementById('behaviors-list');
+            container.innerHTML = BEHAVIOR_TEMPLATES.map(behavior => `
+                <div class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-3">
+                                <span class="text-4xl">${behavior.icon}</span>
+                                <div>
+                                    <h3 class="text-xl font-bold text-gray-900">${behavior.id}. ${behavior.name}</h3>
+                                    <p class="text-sm text-purple-600 font-semibold">Tone: ${behavior.tone} • Pace: ${behavior.pace}</p>
+                                </div>
+                            </div>
+                            <p class="text-gray-800 mb-3 italic">"${behavior.description}"</p>
+                            <p class="text-sm text-gray-600">
+                                <strong>Best for:</strong> ${behavior.useFor}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
         }
 
         // ============================================
