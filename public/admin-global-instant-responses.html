@@ -274,7 +274,10 @@
         // ============================================
         async function fetchActiveTemplate() {
             try {
+                console.log('🔍 [DEBUG] Fetching active template...');
                 const token = getAuthToken();
+                console.log('🔍 [DEBUG] Auth token:', token ? 'Present' : 'Missing');
+                
                 const response = await fetch('/api/admin/global-instant-responses/active', {
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -282,7 +285,11 @@
                     }
                 });
 
+                console.log('🔍 [DEBUG] Response status:', response.status);
+                console.log('🔍 [DEBUG] Response ok:', response.ok);
+
                 if (response.status === 404) {
+                    console.log('⚠️ [DEBUG] 404 - No template found');
                     renderNoTemplateMessage();
                     return null;
                 }
@@ -292,13 +299,14 @@
                 }
 
                 const result = await response.json();
+                console.log('✅ [DEBUG] Template data received:', result);
                 activeTemplate = result.data;
                 renderActiveTemplate();
                 renderStatistics();
                 renderCategories();
                 return activeTemplate;
             } catch (error) {
-                console.error('Error fetching active template:', error);
+                console.error('❌ [DEBUG] Error fetching active template:', error);
                 showNotification('Failed to load active template', 'error');
                 return null;
             }
