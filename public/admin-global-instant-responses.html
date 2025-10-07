@@ -254,6 +254,124 @@
     </div>
 
     <!-- ============================================ -->
+    <!-- EDIT SCENARIO MODAL -->
+    <!-- ============================================ -->
+    <div id="edit-scenario-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            <div style="display: flex; align-items: center; justify-between; margin-bottom: 20px;">
+                <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                    <i class="fas fa-edit text-blue-600 mr-2"></i>
+                    Edit Scenario
+                </h2>
+                <button onclick="closeEditScenarioModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                    &times;
+                </button>
+            </div>
+
+            <form id="edit-scenario-form" class="space-y-4">
+                <input type="hidden" id="edit-scenario-category-index">
+                <input type="hidden" id="edit-scenario-index">
+
+                <!-- Scenario Name -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Scenario Name</label>
+                    <input type="text" id="edit-scenario-name" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <!-- Triggers -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">
+                        Triggers (one per line)
+                        <span class="text-xs text-gray-500 font-normal">- Phrases that activate this scenario</span>
+                    </label>
+                    <textarea id="edit-scenario-triggers" rows="5" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="i'm so upset&#10;this is terrible&#10;i'm crying"></textarea>
+                </div>
+
+                <!-- Quick Reply -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Quick Reply (1 sentence)</label>
+                    <input type="text" id="edit-scenario-quick-reply" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <!-- Full Reply -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Full Reply (detailed response)</label>
+                    <textarea id="edit-scenario-full-reply" rows="4" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+
+                <!-- Tone & Pace -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Tone</label>
+                        <select id="edit-scenario-tone" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="professional">Professional</option>
+                            <option value="empathetic">Empathetic</option>
+                            <option value="urgent">Urgent</option>
+                            <option value="apologetic">Apologetic</option>
+                            <option value="enthusiastic">Enthusiastic</option>
+                            <option value="friendly">Friendly</option>
+                            <option value="reassuring">Reassuring</option>
+                            <option value="neutral">Neutral</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Pace</label>
+                        <select id="edit-scenario-pace" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="normal">Normal</option>
+                            <option value="slow">Slow</option>
+                            <option value="fast">Fast</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Priority & Confidence -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Priority (1-10)</label>
+                        <input type="number" id="edit-scenario-priority" min="1" max="10" value="5" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Confidence Threshold (0-100%)</label>
+                        <input type="number" id="edit-scenario-confidence" min="0" max="100" value="75" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <!-- Escalation Flags -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">
+                        Escalation Flags (comma separated)
+                        <span class="text-xs text-gray-500 font-normal">- e.g., immediate_transfer, log_incident</span>
+                    </label>
+                    <input type="text" id="edit-scenario-escalation" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="immediate_transfer, log_incident">
+                </div>
+
+                <!-- Active Toggle -->
+                <div class="flex items-center">
+                    <input type="checkbox" id="edit-scenario-active" checked class="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mr-2">
+                    <label class="text-sm font-bold text-gray-700">Active</label>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex items-center justify-between pt-6 border-t border-gray-200">
+                    <button type="button" onclick="regenerateKeywordsQnA()" class="px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors flex items-center gap-2">
+                        <i class="fas fa-magic"></i>
+                        Regenerate Keywords & Q&A
+                    </button>
+                    <div class="flex gap-3">
+                        <button type="button" onclick="closeEditScenarioModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
+                            <i class="fas fa-save"></i>
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
     <!-- JAVASCRIPT -->
     <!-- ============================================ -->
     <script>
@@ -565,10 +683,10 @@
                             </div>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="editScenario(${scenarioIndex}); event.stopPropagation();" class="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
+                            <button onclick="editScenario(${index}, ${scenarioIndex}); event.stopPropagation();" class="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
                                 <i class="fas fa-edit mr-1"></i>Edit
                             </button>
-                            <button onclick="deleteScenario(${scenarioIndex}); event.stopPropagation();" class="px-3 py-1 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors">
+                            <button onclick="deleteScenario(${index}, ${scenarioIndex}); event.stopPropagation();" class="px-3 py-1 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -791,6 +909,149 @@
         function deleteCategory(index) {
             if (!confirm('Are you sure you want to delete this category?')) return;
             alert(`Delete category ${index} functionality coming soon!`);
+        }
+
+        // ============================================
+        // EDIT SCENARIO MODAL
+        // ============================================
+        let currentEditingCategory = null;
+        let currentEditingScenario = null;
+
+        function editScenario(categoryIndex, scenarioIndex) {
+            const category = activeTemplate.categories[categoryIndex];
+            const scenario = category.scenarios[scenarioIndex];
+            
+            currentEditingCategory = categoryIndex;
+            currentEditingScenario = scenarioIndex;
+
+            // Populate form
+            document.getElementById('edit-scenario-category-index').value = categoryIndex;
+            document.getElementById('edit-scenario-index').value = scenarioIndex;
+            document.getElementById('edit-scenario-name').value = scenario.name;
+            document.getElementById('edit-scenario-triggers').value = (scenario.triggers || []).join('\n');
+            document.getElementById('edit-scenario-quick-reply').value = scenario.quickReply || '';
+            document.getElementById('edit-scenario-full-reply').value = scenario.fullReply || '';
+            document.getElementById('edit-scenario-tone').value = scenario.tone || 'professional';
+            document.getElementById('edit-scenario-pace').value = scenario.pace || 'normal';
+            document.getElementById('edit-scenario-priority').value = scenario.priority || 5;
+            document.getElementById('edit-scenario-confidence').value = (scenario.confidenceThreshold || 0.75) * 100;
+            document.getElementById('edit-scenario-escalation').value = (scenario.escalationFlags || []).join(', ');
+            document.getElementById('edit-scenario-active').checked = scenario.isActive !== false;
+
+            // Show modal
+            document.getElementById('edit-scenario-modal').style.display = 'flex';
+        }
+
+        function closeEditScenarioModal() {
+            document.getElementById('edit-scenario-modal').style.display = 'none';
+            currentEditingCategory = null;
+            currentEditingScenario = null;
+        }
+
+        document.getElementById('edit-scenario-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (currentEditingCategory === null || currentEditingScenario === null) return;
+
+            try {
+                showNotification('⏳ Saving changes...', 'info');
+
+                // Collect form data
+                const triggers = document.getElementById('edit-scenario-triggers').value
+                    .split('\n')
+                    .map(t => t.trim().toLowerCase())
+                    .filter(t => t.length > 0);
+
+                const escalationFlags = document.getElementById('edit-scenario-escalation').value
+                    .split(',')
+                    .map(f => f.trim())
+                    .filter(f => f.length > 0);
+
+                const updatedScenario = {
+                    ...activeTemplate.categories[currentEditingCategory].scenarios[currentEditingScenario],
+                    name: document.getElementById('edit-scenario-name').value,
+                    triggers,
+                    quickReply: document.getElementById('edit-scenario-quick-reply').value,
+                    fullReply: document.getElementById('edit-scenario-full-reply').value,
+                    tone: document.getElementById('edit-scenario-tone').value,
+                    pace: document.getElementById('edit-scenario-pace').value,
+                    priority: parseInt(document.getElementById('edit-scenario-priority').value),
+                    confidenceThreshold: parseFloat(document.getElementById('edit-scenario-confidence').value) / 100,
+                    escalationFlags,
+                    isActive: document.getElementById('edit-scenario-active').checked,
+                    lastUpdated: new Date(),
+                    version: (parseFloat(activeTemplate.categories[currentEditingCategory].scenarios[currentEditingScenario].version || '1.0') + 0.1).toFixed(1)
+                };
+
+                // Update in activeTemplate
+                activeTemplate.categories[currentEditingCategory].scenarios[currentEditingScenario] = updatedScenario;
+
+                // Save to backend
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        categories: activeTemplate.categories,
+                        changeLogEntry: `Updated scenario: ${updatedScenario.name}`
+                    })
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const result = await response.json();
+                console.log('✅ Scenario updated:', result);
+
+                showNotification('✅ Scenario updated successfully!', 'success');
+                closeEditScenarioModal();
+                
+                // Refresh display
+                await fetchActiveTemplate();
+            } catch (error) {
+                console.error('❌ Error updating scenario:', error);
+                showNotification('❌ Failed to update scenario: ' + error.message, 'error');
+            }
+        });
+
+        async function regenerateKeywordsQnA() {
+            if (!confirm('This will regenerate keywords and Q&A pairs for this scenario based on current triggers.\n\nContinue?')) {
+                return;
+            }
+
+            try {
+                showNotification('⏳ Regenerating keywords & Q&A...', 'info');
+                
+                // Trigger enhancement for just this scenario
+                // For now, we'll enhance the whole template (can optimize later)
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}/enhance`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                showNotification('✅ Keywords & Q&A regenerated!', 'success');
+                await fetchActiveTemplate();
+            } catch (error) {
+                console.error('❌ Error regenerating:', error);
+                showNotification('❌ Failed to regenerate', 'error');
+            }
+        }
+
+        function deleteScenario(categoryIndex, scenarioIndex) {
+            if (!confirm('Are you sure you want to delete this scenario?\n\nThis action cannot be undone.')) {
+                return;
+            }
+
+            // Will implement deletion in next phase
+            showNotification('Delete functionality coming in next update!', 'info');
         }
 
         function closeCategoryModal() {
