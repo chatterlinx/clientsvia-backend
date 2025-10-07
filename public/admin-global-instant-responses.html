@@ -2091,77 +2091,117 @@
             }
         }
 
-        function editBehavior(behaviorId) {
-            const behavior = BEHAVIOR_TEMPLATES.find(b => b.id === behaviorId);
-            if (!behavior) {
-                showNotification('❌ Behavior not found', 'error');
-                return;
+        async function editBehavior(behaviorId) {
+            try {
+                // Find behavior in our loaded array
+                const behavior = availableBehaviors.find(b => b._id === behaviorId);
+                if (!behavior) {
+                    showNotification('Behavior not found', 'error');
+                    return;
+                }
+
+                // Populate edit form
+                document.getElementById('edit-behavior-id').value = behavior._id;
+                document.getElementById('edit-behavior-name').value = behavior.name;
+                document.getElementById('edit-behavior-icon').value = behavior.icon;
+                document.getElementById('edit-behavior-description').value = behavior.instructions;
+                document.getElementById('edit-behavior-usefor').value = behavior.bestFor || '';
+
+                document.getElementById('edit-behavior-modal').style.display = 'flex';
+            } catch (error) {
+                console.error('Error loading behavior for edit:', error);
+                showNotification('Error loading behavior', 'error');
             }
-
-            // Populate edit form
-            document.getElementById('edit-behavior-id').value = behavior.id;
-            document.getElementById('edit-behavior-name').value = behavior.name;
-            document.getElementById('edit-behavior-icon').value = behavior.icon;
-            document.getElementById('edit-behavior-description').value = behavior.description;
-            document.getElementById('edit-behavior-tone').value = behavior.tone;
-            document.getElementById('edit-behavior-pace').value = behavior.pace;
-            document.getElementById('edit-behavior-usefor').value = behavior.useFor;
-
-            document.getElementById('edit-behavior-modal').style.display = 'flex';
         }
 
         function closeEditBehaviorModal() {
             document.getElementById('edit-behavior-modal').style.display = 'none';
         }
 
-        function handleEditBehavior(event) {
+        async function handleEditBehavior(event) {
             event.preventDefault();
             
-            const behaviorId = parseInt(document.getElementById('edit-behavior-id').value);
-            const behaviorIndex = BEHAVIOR_TEMPLATES.findIndex(b => b.id === behaviorId);
-            
-            if (behaviorIndex === -1) {
-                showNotification('❌ Behavior not found', 'error');
-                return;
+            try {
+                showNotification('Updating behavior...', 'info');
+                
+                const behaviorId = document.getElementById('edit-behavior-id').value;
+                const name = document.getElementById('edit-behavior-name').value.trim();
+                const icon = document.getElementById('edit-behavior-icon').value.trim();
+                const instructions = document.getElementById('edit-behavior-description').value.trim();
+                const bestFor = document.getElementById('edit-behavior-usefor').value.trim();
+                
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-behaviors/${behaviorId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name,
+                        icon,
+                        instructions,
+                        bestFor
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification(`Behavior "${name}" updated successfully!`, 'success');
+                    closeEditBehaviorModal();
+                    // Refresh behaviors list
+                    await renderBehaviors();
+                } else {
+                    showNotification('Failed to update behavior: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error updating behavior:', error);
+                showNotification('Error updating behavior: ' + error.message, 'error');
             }
-
-            BEHAVIOR_TEMPLATES[behaviorIndex] = {
-                id: behaviorId,
-                name: document.getElementById('edit-behavior-name').value,
-                icon: document.getElementById('edit-behavior-icon').value,
-                description: document.getElementById('edit-behavior-description').value,
-                tone: document.getElementById('edit-behavior-tone').value,
-                pace: document.getElementById('edit-behavior-pace').value,
-                useFor: document.getElementById('edit-behavior-usefor').value
-            };
-
-            renderBehaviors();
-            closeEditBehaviorModal();
-            showNotification(`✅ Behavior "${BEHAVIOR_TEMPLATES[behaviorIndex].name}" updated successfully!`, 'success');
-            
-            // TODO: Save to backend API when ready
-            console.log('🎭 [BEHAVIOR] Updated:', BEHAVIOR_TEMPLATES[behaviorIndex]);
         }
 
-        function deleteBehavior(behaviorId) {
-            const behavior = BEHAVIOR_TEMPLATES.find(b => b.id === behaviorId);
+        async function deleteBehavior(behaviorId, isSystemDefault) {
+            if (isSystemDefault) {
+                showNotification('Cannot delete system default behaviors', 'error');
+                return;
+            }
+
+            const behavior = availableBehaviors.find(b => b._id === behaviorId);
             if (!behavior) {
-                showNotification('❌ Behavior not found', 'error');
+                showNotification('Behavior not found', 'error');
                 return;
             }
 
-            if (!confirm(`Are you sure you want to delete "${behavior.name}"?\n\n⚠️ WARNING: This will affect any categories using this behavior!`)) {
+            if (!confirm(`Are you sure you want to delete "${behavior.name}"?\n\nWARNING: This will affect any categories using this behavior!`)) {
                 return;
             }
 
-            const index = BEHAVIOR_TEMPLATES.findIndex(b => b.id === behaviorId);
-            BEHAVIOR_TEMPLATES.splice(index, 1);
-            
-            renderBehaviors();
-            showNotification(`✅ Behavior "${behavior.name}" deleted successfully!`, 'success');
-            
-            // TODO: Save to backend API when ready
-            console.log('🎭 [BEHAVIOR] Deleted:', behavior);
+            try {
+                showNotification('Deleting behavior...', 'info');
+                
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-behaviors/${behaviorId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification(`Behavior "${behavior.name}" deleted successfully!`, 'success');
+                    // Refresh behaviors list
+                    await renderBehaviors();
+                } else {
+                    showNotification('Failed to delete behavior: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting behavior:', error);
+                showNotification('Error deleting behavior: ' + error.message, 'error');
+            }
         }
 
         // ============================================
