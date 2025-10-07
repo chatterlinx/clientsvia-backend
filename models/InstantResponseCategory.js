@@ -60,12 +60,26 @@ const QnASchema = new mongoose.Schema({
     }
   },
 
+  // 🎭 BEHAVIOR - AI's instruction manual for this scenario
+  behavior: {
+    type: String,
+    trim: true,
+    maxlength: 500
+  },
+
   // ⚡ QUICK REPLY - Short, immediate response (1-2 sentences)
   quickReply: {
     type: String,
     trim: true,
     maxlength: 200
   },
+
+  // 🔄 QUICK REPLIES - Multiple variations to avoid sounding robotic
+  quickReplies: [{
+    type: String,
+    trim: true,
+    maxlength: 200
+  }],
 
   // 💬 FULL REPLY - Complete, detailed response
   fullReply: {
@@ -74,7 +88,14 @@ const QnASchema = new mongoose.Schema({
     maxlength: 1000
   },
 
-  // 🔄 ROTATION MODE - How to select response variation
+  // 🔄 FULL REPLIES - Multiple variations for natural conversation
+  fullReplies: [{
+    type: String,
+    trim: true,
+    maxlength: 1000
+  }],
+
+  // 🎲 ROTATION MODE - How to select response variations
   rotationMode: {
     type: String,
     enum: ['random', 'sequential', 'weighted'],

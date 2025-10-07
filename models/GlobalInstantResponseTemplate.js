@@ -89,18 +89,47 @@ const scenarioSchema = new Schema({
         confidence: { type: Number, default: 0.85, min: 0, max: 1 }
     }],
     
+    // 🎭 BEHAVIOR: AI's instruction manual for this scenario
+    // Tells the AI HOW to respond (e.g., "Short apology, explain policy, offer alternatives")
+    behavior: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    
     // Quick reply (1 sentence) for fast response
     quickReply: {
         type: String,
-        required: true,
+        required: false, // Made optional since we now use quickReplies array
         trim: true
     },
+    
+    // 🔄 QUICK REPLIES: Multiple variations to avoid sounding robotic
+    // AI randomly selects from this array
+    quickReplies: [{
+        type: String,
+        trim: true
+    }],
     
     // Full conversational reply (TTS/detailed)
     fullReply: {
         type: String,
-        required: true,
+        required: false, // Made optional since we now use fullReplies array
         trim: true
+    },
+    
+    // 🔄 FULL REPLIES: Multiple variations for natural conversation
+    // AI randomly selects from this array
+    fullReplies: [{
+        type: String,
+        trim: true
+    }],
+    
+    // 🎲 ROTATION MODE: How to select response variations
+    rotationMode: {
+        type: String,
+        enum: ['random', 'sequential', 'weighted'],
+        default: 'random'
     },
     
     // Tone indicators for TTS and behavior
