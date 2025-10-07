@@ -724,15 +724,16 @@
             }
 
             container.innerHTML = categories.map((category, index) => `
-                <div class="category-card" id="category-${index}">
+                <div class="category-card" id="category-${index}" onclick="toggleCategory(${index})">
                     <div class="flex items-start justify-between">
-                        <div class="flex-1" onclick="toggleCategory(${index})">
+                        <div class="flex-1">
                             <div class="flex items-center gap-3 mb-2">
                                 <span class="text-3xl">${category.icon}</span>
-                                <div>
+                                <div class="flex-1">
                                     <h3 class="text-lg font-bold text-gray-900">${category.name}</h3>
                                     <p class="text-sm text-gray-600">${category.description}</p>
                                 </div>
+                                <i id="chevron-${index}" class="fas fa-chevron-down text-gray-400 text-xl transition-transform"></i>
                             </div>
                             <div class="flex items-center gap-2 mt-3">
                                 <span class="badge badge-active">
@@ -748,10 +749,10 @@
                             </div>
                         </div>
                         <div class="flex gap-2 ml-4">
-                            <button onclick="editCategory(${index}); event.stopPropagation();" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                            <button onclick="editCategory(${index}); event.stopPropagation();" class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors" title="Edit Category">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <button onclick="deleteCategory(${index}); event.stopPropagation();" class="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                            <button onclick="deleteCategory(${index}); event.stopPropagation();" class="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" title="Delete Category">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -913,9 +914,17 @@
         function toggleCategory(index) {
             const categoryCard = document.getElementById(`category-${index}`);
             const scenariosDiv = document.getElementById(`scenarios-${index}`);
+            const chevron = document.getElementById(`chevron-${index}`);
             
             categoryCard.classList.toggle('expanded');
             scenariosDiv.classList.toggle('hidden');
+            
+            // Rotate chevron icon
+            if (scenariosDiv.classList.contains('hidden')) {
+                chevron.classList.remove('rotate-180');
+            } else {
+                chevron.classList.add('rotate-180');
+            }
         }
 
         function createNewTemplate() {
