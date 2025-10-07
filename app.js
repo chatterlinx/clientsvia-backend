@@ -208,6 +208,15 @@ app.use('/api', aiAgentLogicRoutes); // Also mount for direct API access (includ
 //     logger.error('❌ Failed to load admin routes', { error: error.message });
 // }
 
+// 🌐 GLOBAL INSTANT RESPONSE TEMPLATES - World-Class AI Agent Brain
+try {
+    const globalInstantResponsesRoutes = require('./routes/admin/globalInstantResponses');
+    app.use('/api/admin/global-instant-responses', globalInstantResponsesRoutes);
+    logger.info('✅ Global Instant Response Templates routes registered - AI Agent brain management active');
+} catch (error) {
+    logger.error('❌ Failed to load Global Instant Response Templates routes', { error: error.message });
+}
+
 // Add simplified AI Agent Logic routes as fallback (no auth required for basic functionality)
 // try {
 //     const aiAgentLogicSimpleRoutes = require('./routes/aiAgentLogicSimple'); // MISSING FILE
