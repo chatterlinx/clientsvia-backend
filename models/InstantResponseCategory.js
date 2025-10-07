@@ -27,6 +27,13 @@ const QnASchema = new mongoose.Schema({
     default: () => new mongoose.Types.ObjectId().toString()
   },
 
+  // 📝 SCENARIO NAME - Descriptive name for this scenario
+  name: {
+    type: String,
+    trim: true,
+    maxlength: 100
+  },
+
   // ⚡ TRIGGER VARIATIONS - Array of phrases that trigger this response
   triggers: {
     type: [String],
@@ -43,14 +50,28 @@ const QnASchema = new mongoose.Schema({
   // AI will rotate/randomize between these for natural conversation
   responses: {
     type: [String],
-    required: true,
+    required: false, // Made optional since we now use quickReply/fullReply
     validate: {
       validator: function(arr) {
-        return arr && arr.length > 0 && arr.length <= 10 &&
-               arr.every(r => r && r.trim().length >= 5 && r.trim().length <= 500);
+        return !arr || arr.length === 0 || (arr.length > 0 && arr.length <= 10 &&
+               arr.every(r => r && r.trim().length >= 5 && r.trim().length <= 500));
       },
       message: 'Must have 1-10 responses, each 5-500 characters'
     }
+  },
+
+  // ⚡ QUICK REPLY - Short, immediate response (1-2 sentences)
+  quickReply: {
+    type: String,
+    trim: true,
+    maxlength: 200
+  },
+
+  // 💬 FULL REPLY - Complete, detailed response
+  fullReply: {
+    type: String,
+    trim: true,
+    maxlength: 1000
   },
 
   // 🔄 ROTATION MODE - How to select response variation
@@ -64,6 +85,46 @@ const QnASchema = new mongoose.Schema({
   keywords: {
     type: [String],
     default: []
+  },
+
+  // 💬 Q&A PAIRS - Auto-generated from triggers for AI matching
+  qnaPairs: [{
+    question: { type: String, required: true, trim: true },
+    answer: { type: String, required: true, trim: true },
+    confidence: { type: Number, min: 0, max: 1, default: 0.85 }
+  }],
+
+  // 🎭 TONE & PACE - How the AI should deliver this response
+  tone: {
+    type: String,
+    enum: ['empathetic', 'professional', 'friendly', 'urgent', 'apologetic', 'enthusiastic', 'reassuring'],
+    default: 'professional'
+  },
+
+  pace: {
+    type: String,
+    enum: ['slow', 'normal', 'fast'],
+    default: 'normal'
+  },
+
+  // 🚨 ESCALATION FLAGS - When to escalate to human
+  escalationFlags: {
+    type: [String],
+    default: []
+  },
+
+  // 📝 EXAMPLES - Sample conversations for training
+  examples: [{
+    caller: { type: String, trim: true },
+    ai: { type: String, trim: true }
+  }],
+
+  // 🎯 CONFIDENCE THRESHOLD - Minimum confidence to match this scenario
+  confidenceThreshold: {
+    type: Number,
+    min: 0,
+    max: 1,
+    default: 0.85
   },
 
   // ⏱️ TIMING & FOLLOW-UP BEHAVIOR
