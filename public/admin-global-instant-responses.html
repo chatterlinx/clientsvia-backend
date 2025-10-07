@@ -117,10 +117,16 @@
                         World-class instant response library with 100+ human-like conversation scenarios
                     </p>
                 </div>
-                <button onclick="createNewTemplate()" class="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
-                    <i class="fas fa-plus-circle"></i>
-                    Create New Template
-                </button>
+                <div class="flex gap-4">
+                    <button onclick="createNewTemplate()" class="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+                        <i class="fas fa-plus-circle"></i>
+                        Create New Template
+                    </button>
+                    <button onclick="seedTemplate()" class="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+                        <i class="fas fa-seedling"></i>
+                        🌱 Seed 8 Categories Now!
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -570,6 +576,38 @@
 
         function createNewTemplate() {
             alert('Create new template functionality coming soon!\nFor now, use the database seeding script to populate the first template.');
+        }
+
+        async function seedTemplate() {
+            if (!confirm('🌱 This will create a new Global AI Brain template with 8 categories.\n\nContinue?')) {
+                return;
+            }
+
+            try {
+                console.log('🌱 Starting seed process...');
+                const token = getAuthToken();
+                
+                const response = await fetch('/api/admin/global-instant-responses/seed', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+                console.log('🌱 Seed result:', result);
+
+                if (result.success) {
+                    showNotification('✅ Successfully seeded 8 categories! Refreshing...', 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showNotification('❌ Seeding failed: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('❌ Seed error:', error);
+                showNotification('❌ Error seeding template: ' + error.message, 'error');
+            }
         }
 
         function editTemplate() {
