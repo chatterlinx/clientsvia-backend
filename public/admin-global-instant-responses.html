@@ -122,13 +122,17 @@
                         <i class="fas fa-plus-circle"></i>
                         Create New Template
                     </button>
+                    <button onclick="seedBehaviors()" class="px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+                        <i class="fas fa-theater-masks"></i>
+                        Seed 15 Behaviors
+                    </button>
                     <button onclick="seedTemplate()" class="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
                         <i class="fas fa-seedling"></i>
-                        🌱 Seed 8 Categories Now!
+                        Seed 8 Categories
                     </button>
                     <button onclick="enhanceActiveTemplate()" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
                         <i class="fas fa-magic"></i>
-                        ✨ Enhance with Keywords & Q&A
+                        Enhance with Keywords & Q&A
                     </button>
                 </div>
             </div>
@@ -1376,13 +1380,47 @@
             }
         }
 
-        async function seedTemplate() {
-            if (!confirm('🌱 This will create a new Global AI Brain template with 8 categories.\n\nContinue?')) {
+        async function seedBehaviors() {
+            if (!confirm('This will seed 15 default AI behavior templates into the database.\n\nContinue?')) {
                 return;
             }
 
             try {
-                console.log('🌱 Starting seed process...');
+                showNotification('Seeding 15 behavior templates...', 'info');
+                const token = getAuthToken();
+                
+                const response = await fetch('/api/admin/global-behaviors/seed', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+                console.log('Seed behaviors result:', result);
+
+                if (result.success) {
+                    showNotification(`Successfully seeded ${result.count} behavior templates!`, 'success');
+                    // Reload behaviors into memory
+                    await fetchBehaviors();
+                    console.log(`Reloaded ${availableBehaviors.length} behaviors`);
+                } else {
+                    showNotification('Seeding failed: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Seed behaviors error:', error);
+                showNotification('Error seeding behaviors: ' + error.message, 'error');
+            }
+        }
+
+        async function seedTemplate() {
+            if (!confirm('This will create a new Global AI Brain template with 8 categories.\n\nContinue?')) {
+                return;
+            }
+
+            try {
+                console.log('Starting seed process...');
                 const token = getAuthToken();
                 
                 const response = await fetch('/api/admin/global-instant-responses/seed', {
@@ -1394,17 +1432,17 @@
                 });
 
                 const result = await response.json();
-                console.log('🌱 Seed result:', result);
+                console.log('Seed result:', result);
 
                 if (result.success) {
-                    showNotification('✅ Successfully seeded 8 categories! Refreshing...', 'success');
+                    showNotification('Successfully seeded 8 categories! Refreshing...', 'success');
                     setTimeout(() => location.reload(), 1500);
                 } else {
-                    showNotification('❌ Seeding failed: ' + result.message, 'error');
+                    showNotification('Seeding failed: ' + result.message, 'error');
                 }
             } catch (error) {
-                console.error('❌ Seed error:', error);
-                showNotification('❌ Error seeding template: ' + error.message, 'error');
+                console.error('Seed error:', error);
+                showNotification('Error seeding template: ' + error.message, 'error');
             }
         }
 
