@@ -654,13 +654,13 @@
                     
                     <!-- Scenarios (hidden by default) -->
                     <div id="scenarios-${index}" class="hidden mt-4 pt-4 border-t border-gray-200 space-y-3">
-                        ${renderScenarios(category.scenarios || [])}
+                        ${renderScenarios(category.scenarios || [], index)}
                     </div>
                 </div>
             `).join('');
         }
 
-        function renderScenarios(scenarios) {
+        function renderScenarios(scenarios, categoryIndex) {
             if (!scenarios || scenarios.length === 0) {
                 return '<p class="text-gray-500 text-center py-4">No scenarios in this category</p>';
             }
@@ -683,10 +683,10 @@
                             </div>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="editScenario(${index}, ${scenarioIndex}); event.stopPropagation();" class="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
+                            <button onclick="editScenario(${categoryIndex}, ${scenarioIndex}); event.stopPropagation();" class="px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
                                 <i class="fas fa-edit mr-1"></i>Edit
                             </button>
-                            <button onclick="deleteScenario(${index}, ${scenarioIndex}); event.stopPropagation();" class="px-3 py-1 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors">
+                            <button onclick="deleteScenario(${categoryIndex}, ${scenarioIndex}); event.stopPropagation();" class="px-3 py-1 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
