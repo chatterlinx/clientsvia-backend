@@ -81,6 +81,8 @@ async function loadAllRoutes() {
         routes.v2KnowledgeSourcePrioritiesRoutes = await loadRouteWithTimeout('./routes/company/v2knowledgeSourcePriorities', 'v2KnowledgeSourcePrioritiesRoutes');
         // 🎯 V2 PLACEHOLDERS ROUTES - Enterprise Grade with Checkpoint Logging
         routes.v2PlaceholdersRoutes = await loadRouteWithTimeout('./routes/company/v2placeholders', 'v2PlaceholdersRoutes');
+        // 🧠 GLOBAL AI BRAIN SYNC ROUTES - Sync company instant responses with global template
+        routes.v2GlobalAIBrainSyncRoutes = await loadRouteWithTimeout('./routes/company/v2globalAIBrainSync', 'v2GlobalAIBrainSyncRoutes');
         // 🗑️ DELETED: v2InstantResponses - replaced by v2InstantResponseCategories system
         // V2 DELETED: Legacy v2 testing routes - using V2 AI Agent Logic system
         // routes.priorityFlowTestingRoutes = await loadRouteWithTimeout('./routes/company/priorityFlowTesting', 'priorityFlowTestingRoutes');
@@ -221,6 +223,8 @@ function registerRoutes(routes) {
     app.use('/api/company', routes.v2KnowledgeManagementRoutes); // V2: Pure V2 Knowledge Management System (Company Q&A, Trade Q&A, Templates)
     app.use('/api/company', routes.v2KnowledgeSourcePrioritiesRoutes); // V2: Knowledge Source Priorities Management
     app.use('/api/company', routes.v2PlaceholdersRoutes); // V2: Placeholders system with enterprise-grade checkpoint logging
+    // 🧠 GLOBAL AI BRAIN SYNC SYSTEM - Sync company instant responses with platform-wide template
+    app.use('/api/company/:companyId/sync-global-brain', routes.v2GlobalAIBrainSyncRoutes); // V2: Compare & import from Global AI Brain
     // 🗑️ DELETED: v2InstantResponses routes - replaced by v2InstantResponseCategories system
     // ⚡ V2 INSTANT RESPONSE CATEGORIES SYSTEM - Priority 0 Knowledge Tier (Category-based organization with Q&As)
     app.use('/api/company', routes.v2InstantResponseCategoriesRoutes); // V2: Category CRUD, Q&A management, AI generation
