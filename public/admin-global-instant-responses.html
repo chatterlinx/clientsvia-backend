@@ -263,26 +263,11 @@
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">🎭 Behavior Template *</label>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Behavior Template *</label>
                             <select id="category-behavior" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                                <option value="">Select behavior...</option>
-                                <option value="empathetic_reassuring">😊 Empathetic & Reassuring</option>
-                                <option value="professional_efficient">👔 Professional & Efficient</option>
-                                <option value="friendly_warm">🤗 Friendly & Warm</option>
-                                <option value="urgent_action">🚨 Urgent & Action-Oriented</option>
-                                <option value="apologetic_solution">🙏 Apologetic & Solution-Focused</option>
-                                <option value="calm_patient">🧘 Calm & Patient</option>
-                                <option value="enthusiastic_positive">🎉 Enthusiastic & Positive</option>
-                                <option value="firm_clear">💪 Firm & Clear Boundaries</option>
-                                <option value="educational_informative">📚 Educational & Informative</option>
-                                <option value="consultative_advisory">🤝 Consultative & Advisory</option>
-                                <option value="safety_emergency">🚨 Safety & Emergency Protocol</option>
-                                <option value="accessibility_adaptive">♿ Accessibility & Adaptive</option>
-                                <option value="casual_conversational">💬 Casual & Conversational</option>
-                                <option value="formal_respectful">🎩 Formal & Respectful</option>
-                                <option value="nurturing_supportive">🌱 Nurturing & Supportive</option>
+                                <option value="">Loading behaviors...</option>
                             </select>
-                            <p class="text-xs text-gray-500 mt-1">This behavior controls tone, pace, and structure for ALL scenarios in this category</p>
+                            <p class="text-xs text-gray-500 mt-1">This behavior controls tone, pace, and structure for ALL scenarios in this category. Manage behaviors from the Behaviors tab.</p>
                         </div>
                         
                         <div class="flex items-end">
@@ -518,24 +503,9 @@
                         <input type="text" id="edit-category-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-center text-3xl">
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">🎭 Behavior Template *</label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Behavior Template *</label>
                         <select id="edit-category-behavior" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                            <option value="">Select behavior...</option>
-                            <option value="empathetic_reassuring">😊 Empathetic & Reassuring</option>
-                            <option value="professional_efficient">👔 Professional & Efficient</option>
-                            <option value="friendly_warm">🤗 Friendly & Warm</option>
-                            <option value="urgent_action">🚨 Urgent & Action-Oriented</option>
-                            <option value="apologetic_solution">🙏 Apologetic & Solution-Focused</option>
-                            <option value="calm_patient">🧘 Calm & Patient</option>
-                            <option value="enthusiastic_positive">🎉 Enthusiastic & Positive</option>
-                            <option value="firm_clear">💪 Firm & Clear Boundaries</option>
-                            <option value="educational_informative">📚 Educational & Informative</option>
-                            <option value="consultative_advisory">🤝 Consultative & Advisory</option>
-                            <option value="safety_emergency">🚨 Safety & Emergency Protocol</option>
-                            <option value="accessibility_adaptive">♿ Accessibility & Adaptive</option>
-                            <option value="casual_conversational">💬 Casual & Conversational</option>
-                            <option value="formal_respectful">🎩 Formal & Respectful</option>
-                            <option value="nurturing_supportive">🌱 Nurturing & Supportive</option>
+                            <option value="">Loading behaviors...</option>
                         </select>
                     </div>
                 </div>
@@ -640,12 +610,62 @@
         // ============================================
         let activeTemplate = null;
         let currentScenarioCount = 0;
+        let availableBehaviors = []; // Loaded dynamically from database
 
         // ============================================
         // AUTHENTICATION
         // ============================================
         function getAuthToken() {
             return localStorage.getItem('adminToken');
+        }
+
+        // ============================================
+        // FETCH BEHAVIORS FROM DATABASE
+        // ============================================
+        async function fetchBehaviors() {
+            try {
+                const token = getAuthToken();
+                const response = await fetch('/api/admin/global-behaviors', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                availableBehaviors = result.data || [];
+                console.log(`Loaded ${availableBehaviors.length} behaviors from database`);
+                return availableBehaviors;
+            } catch (error) {
+                console.error('Error fetching behaviors:', error);
+                return [];
+            }
+        }
+
+        // ============================================
+        // POPULATE BEHAVIOR DROPDOWN
+        // ============================================
+        function populateBehaviorDropdown(selectElementId) {
+            const selectElement = document.getElementById(selectElementId);
+            if (!selectElement) {
+                console.error(`Dropdown element ${selectElementId} not found`);
+                return;
+            }
+
+            // Clear existing options except the first "Select behavior..."
+            selectElement.innerHTML = '<option value="">Select behavior...</option>';
+
+            // Add behaviors from database
+            availableBehaviors.forEach(behavior => {
+                const option = document.createElement('option');
+                option.value = behavior.behaviorId;
+                option.textContent = `${behavior.icon} ${behavior.name}`;
+                selectElement.appendChild(option);
+            });
         }
 
         function handleLogout(event) {
@@ -1097,16 +1117,19 @@
         // ============================================
         let currentEditingCategoryIndex = null;
 
-        function editCategory(categoryIndex) {
+        async function editCategory(categoryIndex) {
             currentEditingCategoryIndex = categoryIndex;
             const category = activeTemplate.categories[categoryIndex];
+            
+            // Populate behavior dropdown dynamically from database
+            await fetchBehaviors(); // Refresh from DB
+            populateBehaviorDropdown('edit-category-behavior');
             
             // Populate form
             document.getElementById('edit-category-name').value = category.name;
             document.getElementById('edit-category-description').value = category.description;
             document.getElementById('edit-category-icon').value = category.icon;
-            document.getElementById('edit-category-priority').value = category.priority;
-            document.getElementById('edit-category-type').value = category.type;
+            document.getElementById('edit-category-behavior').value = category.behavior || '';
             
             // Show modal
             document.getElementById('edit-category-modal').style.display = 'flex';
@@ -1708,9 +1731,9 @@
             showNotification('Delete functionality coming in next update!', 'info');
         }
 
-        function openAddCategoryModal() {
+        async function openAddCategoryModal() {
             if (!activeTemplate) {
-                showNotification('❌ No active template found. Please create or seed a template first.', 'error');
+                showNotification('No active template found. Please create or seed a template first.', 'error');
                 return;
             }
             
@@ -1718,6 +1741,10 @@
             document.getElementById('category-form').reset();
             document.getElementById('category-id').value = '';
             document.getElementById('category-modal-title').textContent = 'Add Category';
+            
+            // Populate behavior dropdown dynamically from database
+            await fetchBehaviors(); // Refresh from DB
+            populateBehaviorDropdown('category-behavior');
             
             // Show modal
             document.getElementById('category-modal').classList.remove('hidden');
@@ -2056,7 +2083,7 @@
         // INITIALIZATION
         // ============================================
         document.addEventListener('DOMContentLoaded', async function() {
-            console.log('🚀 Global AI Brain Management - Initializing...');
+            console.log('Global AI Brain Management - Initializing...');
             
             // Check authentication
             const token = getAuthToken();
@@ -2064,6 +2091,10 @@
                 window.location.href = '/login.html';
                 return;
             }
+            
+            // Load behaviors first (needed for dropdowns)
+            await fetchBehaviors();
+            console.log(`Loaded ${availableBehaviors.length} behavior templates`);
             
             // Load active template
             await fetchActiveTemplate();
