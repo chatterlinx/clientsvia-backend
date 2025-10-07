@@ -72,6 +72,23 @@ const scenarioSchema = new Schema({
         lowercase: true
     }],
     
+    // 🆕 KEYWORDS: Extracted from triggers for fast matching
+    // Auto-generated from triggers using KeywordGenerationService
+    keywords: [{
+        type: String,
+        trim: true,
+        lowercase: true,
+        index: true
+    }],
+    
+    // 🆕 Q&A PAIRS: Pre-generated question-answer pairs for training
+    // Each trigger becomes a question, fullReply becomes the answer
+    qnaPairs: [{
+        question: { type: String, trim: true, lowercase: true },
+        answer: { type: String, trim: true },
+        confidence: { type: Number, default: 0.85, min: 0, max: 1 }
+    }],
+    
     // Quick reply (1 sentence) for fast response
     quickReply: {
         type: String,
@@ -134,6 +151,26 @@ const scenarioSchema = new Schema({
     isActive: {
         type: Boolean,
         default: true
+    },
+    
+    // 🆕 VERSION TRACKING: For sync comparison
+    version: {
+        type: String,
+        default: '1.0'
+    },
+    
+    // 🆕 LAST UPDATED: Track when scenario was modified
+    lastUpdated: {
+        type: Date,
+        default: Date.now
+    },
+    
+    // 🆕 CONFIDENCE THRESHOLD: Minimum confidence for matching
+    confidenceThreshold: {
+        type: Number,
+        default: 0.75,
+        min: 0,
+        max: 1
     }
 }, { _id: false });
 

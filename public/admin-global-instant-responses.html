@@ -126,6 +126,10 @@
                         <i class="fas fa-seedling"></i>
                         🌱 Seed 8 Categories Now!
                     </button>
+                    <button onclick="enhanceActiveTemplate()" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+                        <i class="fas fa-magic"></i>
+                        ✨ Enhance with Keywords & Q&A
+                    </button>
                 </div>
             </div>
         </div>
@@ -607,6 +611,45 @@
             } catch (error) {
                 console.error('❌ Seed error:', error);
                 showNotification('❌ Error seeding template: ' + error.message, 'error');
+            }
+        }
+
+        async function enhanceActiveTemplate() {
+            if (!activeTemplate) {
+                showNotification('❌ No active template found to enhance', 'error');
+                return;
+            }
+
+            if (!confirm('✨ This will enhance the active template with:\n\n• Auto-generated keywords from triggers\n• Q&A pairs for training\n• Confidence scores\n\nThis will make matching faster and more accurate!\n\nContinue?')) {
+                return;
+            }
+
+            try {
+                console.log('✨ Starting enhancement process...');
+                showNotification('⏳ Enhancing template...', 'info');
+                
+                const token = getAuthToken();
+                
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}/enhance`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+                console.log('✨ Enhancement result:', result);
+
+                if (result.success) {
+                    showNotification(`✅ Enhanced! ${result.data.stats.totalKeywords} keywords, ${result.data.stats.totalQnAPairs} Q&A pairs generated!`, 'success');
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showNotification('❌ Enhancement failed: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('❌ Enhancement error:', error);
+                showNotification('❌ Error enhancing template: ' + error.message, 'error');
             }
         }
 

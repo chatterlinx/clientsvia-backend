@@ -38,6 +38,8 @@ const express = require('express');
 const router = express.Router();
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const { authenticateJWT } = require('../../middleware/auth');
+const { enhanceTemplate } = require('../../services/globalAIBrainEnhancer');
+const logger = require('../../utils/logger');
 
 // ============================================================================
 // MIDDLEWARE
@@ -744,6 +746,71 @@ router.post('/seed', authenticateJWT, async (req, res) => {
         res.status(500).json({
             success: false,
             message: `Error seeding template: ${error.message}`
+        });
+    }
+});
+
+/**
+ * POST /api/admin/global-instant-responses/:id/enhance
+ * Enhance a template with keywords and Q&A pairs
+ */
+router.post('/:id/enhance', async (req, res) => {
+    const { id } = req.params;
+    const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
+    
+    logger.info(`🧠 [ENHANCE] POST /api/admin/global-instant-responses/${id}/enhance by ${adminUser}`);
+    
+    try {
+        // Find the template
+        const template = await GlobalInstantResponseTemplate.findById(id);
+        
+        if (!template) {
+            logger.warn(`🧠 [ENHANCE] Template not found: ${id}`);
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+        
+        logger.info(`🧠 [ENHANCE] Enhancing template: ${template.name} (${template.version})`);
+        
+        // Enhance the template with keywords and Q&A pairs
+        const enhancedData = enhanceTemplate(template.toObject());
+        
+        // Update the template
+        template.categories = enhancedData.categories;
+        template.stats = enhancedData.stats;
+        template.updatedAt = Date.now();
+        
+        // Add to change log
+        template.changeLog.push({
+            changes: `Enhanced with keywords and Q&A pairs: ${enhancedData.stats.totalKeywords} keywords, ${enhancedData.stats.totalQnAPairs} Q&A pairs`,
+            changedBy: adminUser,
+            date: Date.now()
+        });
+        
+        await template.save();
+        
+        logger.info(`✅ [ENHANCE] Template enhanced successfully: ${template._id}`);
+        logger.info(`📊 [ENHANCE] Stats: ${enhancedData.stats.totalKeywords} keywords, ${enhancedData.stats.totalQnAPairs} Q&A pairs`);
+        
+        res.status(200).json({
+            success: true,
+            message: 'Template enhanced successfully with keywords and Q&A pairs',
+            data: {
+                templateId: template._id,
+                version: template.version,
+                stats: template.stats
+            }
+        });
+    } catch (error) {
+        logger.error(`❌ [ENHANCE] Error enhancing template ${id}`, { 
+            error: error.message, 
+            stack: error.stack 
+        });
+        res.status(500).json({
+            success: false,
+            message: `Error enhancing template: ${error.message}`
         });
     }
 });
