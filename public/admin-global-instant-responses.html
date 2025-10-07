@@ -1977,30 +1977,53 @@
             }
         ];
 
-        function renderBehaviors() {
+        async function renderBehaviors() {
             const container = document.getElementById('behaviors-list');
-            container.innerHTML = BEHAVIOR_TEMPLATES.map(behavior => `
+            
+            // Show loading state
+            container.innerHTML = '<div class="text-center py-8 text-gray-500">Loading behaviors...</div>';
+            
+            // Fetch fresh behaviors from database
+            await fetchBehaviors();
+            
+            // Check if we have behaviors
+            if (availableBehaviors.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-theater-masks text-gray-300 text-6xl mb-4"></i>
+                        <p class="text-gray-600 mb-4">No behavior templates found</p>
+                        <button onclick="seedBehaviors()" class="px-6 py-3 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 transition-colors">
+                            <i class="fas fa-seedling mr-2"></i>
+                            Seed 15 Default Behaviors
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Render behaviors from database
+            container.innerHTML = availableBehaviors.map((behavior, index) => `
                 <div class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
                     <div class="flex items-start justify-between">
                         <div class="flex-1">
                             <div class="flex items-center gap-3 mb-3">
-                                <span class="text-4xl">${behavior.icon}</span>
+                                <span class="text-4xl">${behavior.icon || '🎭'}</span>
                                 <div>
-                                    <h3 class="text-xl font-bold text-gray-900">${behavior.id}. ${behavior.name}</h3>
+                                    <h3 class="text-xl font-bold text-gray-900">${index + 1}. ${behavior.name}</h3>
                                     <p class="text-sm text-purple-600 font-semibold">Tone: ${behavior.tone} • Pace: ${behavior.pace}</p>
                                 </div>
                             </div>
-                            <p class="text-gray-800 mb-3 italic">"${behavior.description}"</p>
+                            <p class="text-gray-800 mb-3 italic">"${behavior.instructions}"</p>
                             <p class="text-sm text-gray-600">
-                                <strong>Best for:</strong> ${behavior.useFor}
+                                <strong>Best for:</strong> ${behavior.bestFor || 'Various situations'}
                             </p>
                         </div>
                         <div class="flex flex-col gap-2 ml-4">
-                            <button onclick="editBehavior(${behavior.id})" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm">
+                            <button onclick="editBehavior('${behavior._id}')" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm">
                                 <i class="fas fa-edit"></i>
                                 Edit
                             </button>
-                            <button onclick="deleteBehavior(${behavior.id})" class="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors flex items-center gap-2 text-sm">
+                            <button onclick="deleteBehavior('${behavior._id}', ${behavior.isSystemDefault})" class="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors flex items-center gap-2 text-sm ${behavior.isSystemDefault ? 'opacity-50 cursor-not-allowed' : ''}">
                                 <i class="fas fa-trash"></i>
                                 Delete
                             </button>
