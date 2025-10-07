@@ -165,8 +165,20 @@
             </div>
 
             <!-- Categories List -->
-            <div id="categories-container" class="space-y-4">
-                <!-- Categories will be loaded here -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-2xl font-bold text-gray-900">
+                        <i class="fas fa-folder-open text-blue-600 mr-2"></i>
+                        Categories
+                    </h2>
+                    <button onclick="openAddCategoryModal()" class="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+                        <i class="fas fa-plus-circle"></i>
+                        Add Category
+                    </button>
+                </div>
+                <div id="categories-container" class="space-y-4">
+                    <!-- Categories will be loaded here -->
+                </div>
             </div>
         </div>
 
@@ -1197,6 +1209,72 @@
         });
 
         // ============================================
+        // ADD CATEGORY FORM HANDLER
+        // ============================================
+        document.getElementById('category-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!activeTemplate) {
+                showNotification('❌ No active template found', 'error');
+                return;
+            }
+
+            try {
+                showNotification('⏳ Adding new category...', 'info');
+
+                // Create new category object
+                const newCategory = {
+                    id: `cat_${Date.now()}`,
+                    name: document.getElementById('category-name').value.trim(),
+                    description: document.getElementById('category-description').value.trim(),
+                    icon: document.getElementById('category-icon').value.trim() || '📁',
+                    priority: parseInt(document.getElementById('category-priority').value) || 5,
+                    type: document.getElementById('category-type').value,
+                    active: document.getElementById('category-active').checked,
+                    scenarios: []
+                };
+
+                // Add to activeTemplate
+                activeTemplate.categories.push(newCategory);
+
+                // Save to backend
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    },
+                    body: JSON.stringify({
+                        categories: activeTemplate.categories,
+                        changeLog: [
+                            ...activeTemplate.changeLog,
+                            {
+                                changes: `Added new category: ${newCategory.name}`,
+                                changedBy: 'Admin',
+                                date: new Date()
+                            }
+                        ]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                showNotification(`✅ Category "${newCategory.name}" added successfully!`, 'success');
+                closeCategoryModal();
+                
+                // Refresh the UI
+                await fetchActiveTemplate();
+                renderCategories();
+            } catch (error) {
+                console.error('❌ Error adding category:', error);
+                showNotification('❌ Failed to add category: ' + error.message, 'error');
+            }
+        });
+
+        // ============================================
         // EDIT TEMPLATE MODAL
         // ============================================
         function editTemplate() {
@@ -1682,6 +1760,22 @@
 
             // Will implement deletion in next phase
             showNotification('Delete functionality coming in next update!', 'info');
+        }
+
+        function openAddCategoryModal() {
+            if (!activeTemplate) {
+                showNotification('❌ No active template found. Please create or seed a template first.', 'error');
+                return;
+            }
+            
+            // Reset form
+            document.getElementById('category-form').reset();
+            document.getElementById('category-id').value = '';
+            document.getElementById('category-modal-title').textContent = 'Add Category';
+            
+            // Show modal
+            document.getElementById('category-modal').classList.remove('hidden');
+            document.getElementById('category-modal').classList.add('flex');
         }
 
         function closeCategoryModal() {
