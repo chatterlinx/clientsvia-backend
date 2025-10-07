@@ -498,15 +498,23 @@ router.delete('/:id', async (req, res) => {
 router.post('/seed', authenticateJWT, async (req, res) => {
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
     
+    console.log('🌱 [SEED CHECKPOINT 1] Seed endpoint called by:', adminUser);
+    
     try {
+        console.log('🌱 [SEED CHECKPOINT 2] Checking for existing template...');
         // Check if template already exists
         const existing = await GlobalInstantResponseTemplate.findOne({ version: 'v1.0.0-test' });
+        console.log('🌱 [SEED CHECKPOINT 3] Existing template found:', existing ? 'YES' : 'NO');
+        
         if (existing) {
+            console.log('🌱 [SEED CHECKPOINT 4] Template already exists, returning 409');
             return res.status(409).json({
                 success: false,
                 message: 'Test template already exists. Delete it first if you want to re-seed.'
             });
         }
+        
+        console.log('🌱 [SEED CHECKPOINT 5] No existing template, proceeding to create...');
         
         // 8 essential categories
         const eightCategories = [
@@ -691,7 +699,10 @@ router.post('/seed', authenticateJWT, async (req, res) => {
             }
         ];
         
+        console.log('🌱 [SEED CHECKPOINT 6] Categories array created, total:', eightCategories.length);
+        
         // Create the template
+        console.log('🌱 [SEED CHECKPOINT 7] Creating new GlobalInstantResponseTemplate document...');
         const template = new GlobalInstantResponseTemplate({
             version: 'v1.0.0-test',
             name: 'ClientVia.ai Global AI Brain (Testing)',
@@ -705,10 +716,15 @@ router.post('/seed', authenticateJWT, async (req, res) => {
             }]
         });
         
+        console.log('🌱 [SEED CHECKPOINT 8] Template document created, attempting to save to MongoDB...');
         await template.save();
+        console.log('🌱 [SEED CHECKPOINT 9] ✅ Template saved successfully to database!');
+        console.log('🌱 [SEED CHECKPOINT 10] Template ID:', template._id);
+        console.log('🌱 [SEED CHECKPOINT 11] Stats - Categories:', template.stats.totalCategories, 'Scenarios:', template.stats.totalScenarios, 'Triggers:', template.stats.totalTriggers);
         
         console.log(`✅ Seeded 8-category template by ${adminUser}`);
         
+        console.log('🌱 [SEED CHECKPOINT 12] Sending success response to client...');
         res.status(201).json({
             success: true,
             message: 'Global AI Brain seeded successfully!',
@@ -719,8 +735,12 @@ router.post('/seed', authenticateJWT, async (req, res) => {
                 triggers: template.stats.totalTriggers
             }
         });
+        console.log('🌱 [SEED CHECKPOINT 13] ✅ Success response sent!');
     } catch (error) {
-        console.error('❌ Error seeding template:', error.message, error.stack);
+        console.error('❌ [SEED CHECKPOINT ERROR] Seeding failed at some point!');
+        console.error('❌ [SEED ERROR DETAILS] Message:', error.message);
+        console.error('❌ [SEED ERROR DETAILS] Stack:', error.stack);
+        console.error('❌ [SEED ERROR DETAILS] Full error object:', JSON.stringify(error, null, 2));
         res.status(500).json({
             success: false,
             message: `Error seeding template: ${error.message}`
