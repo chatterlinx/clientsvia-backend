@@ -78,7 +78,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
     try {
-        const { behaviorId, name, icon, tone, pace, instructions, bestFor, examples } = req.body;
+        const { behaviorId, name, icon, instructions, bestFor, examples } = req.body;
         
         // Check if behaviorId already exists
         const existing = await GlobalAIBehaviorTemplate.findOne({ behaviorId });
@@ -93,8 +93,6 @@ router.post('/', async (req, res) => {
             behaviorId,
             name,
             icon: icon || '🎭',
-            tone,
-            pace: pace || 'normal',
             instructions,
             bestFor: bestFor || '',
             examples: examples || [],
@@ -136,12 +134,10 @@ router.put('/:id', async (req, res) => {
         }
         
         // Update fields
-        const { name, icon, tone, pace, instructions, bestFor, examples, isActive, sortOrder } = req.body;
+        const { name, icon, instructions, bestFor, examples, isActive, sortOrder } = req.body;
         
         if (name) behavior.name = name;
         if (icon) behavior.icon = icon;
-        if (tone) behavior.tone = tone;
-        if (pace) behavior.pace = pace;
         if (instructions) behavior.instructions = instructions;
         if (bestFor !== undefined) behavior.bestFor = bestFor;
         if (examples) behavior.examples = examples;
@@ -224,8 +220,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'empathetic_reassuring',
                 name: 'Empathetic & Reassuring',
                 icon: '😊',
-                tone: 'empathetic',
-                pace: 'slow',
                 instructions: 'Calm, slow pace, validating feelings, brief reassurance then practical next step. Avoid platitudes; be specific and human.',
                 bestFor: 'Upset, grief, distressed, crying',
                 examples: ['Caller is upset', 'Caller is grieving', 'Caller is distressed'],
@@ -236,8 +230,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'professional_efficient',
                 name: 'Professional & Efficient',
                 icon: '👔',
-                tone: 'professional',
-                pace: 'normal',
                 instructions: 'Clear, direct, efficient communication. Get to the point quickly while maintaining courtesy. Focus on facts and solutions.',
                 bestFor: 'Business calls, routine inquiries, professional contexts',
                 examples: ['Business inquiry', 'Service request', 'Information lookup'],
@@ -248,8 +240,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'friendly_warm',
                 name: 'Friendly & Warm',
                 icon: '🤗',
-                tone: 'friendly',
-                pace: 'normal',
                 instructions: 'Warm, welcoming, personable approach. Use conversational language, show genuine interest, create a comfortable atmosphere.',
                 bestFor: 'New customers, general inquiries, relationship building',
                 examples: ['First time caller', 'General questions', 'Friendly conversation'],
@@ -260,8 +250,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'urgent_action',
                 name: 'Urgent & Action-Oriented',
                 icon: '🚨',
-                tone: 'urgent',
-                pace: 'fast',
                 instructions: 'Fast pace, short sentences, decisive verbs, immediate action. Use "right away," "immediately," "I will connect you now."',
                 bestFor: 'Emergencies, ASAP requests, urgent needs',
                 examples: ['Emergency situation', 'Urgent request', 'Time-sensitive issue'],
@@ -272,8 +260,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'apologetic_solution',
                 name: 'Apologetic & Solution-Focused',
                 icon: '🙏',
-                tone: 'apologetic',
-                pace: 'normal',
                 instructions: 'Acknowledge the issue, sincere apology, then pivot to solution. Focus on what you can do, not what went wrong.',
                 bestFor: 'Complaints, service failures, mistakes',
                 examples: ['Service complaint', 'Billing error', 'Missed appointment'],
@@ -284,8 +270,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'calm_patient',
                 name: 'Calm & Patient',
                 icon: '🧘',
-                tone: 'calm',
-                pace: 'slow',
                 instructions: 'Slow, patient, never rushed. Repeat information clearly, give time for understanding, accommodate confusion.',
                 bestFor: 'Elderly callers, confused callers, language barriers',
                 examples: ['Elderly caller', 'Confused customer', 'Multiple questions'],
@@ -296,8 +280,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'enthusiastic_positive',
                 name: 'Enthusiastic & Positive',
                 icon: '🎉',
-                tone: 'enthusiastic',
-                pace: 'normal',
                 instructions: 'High energy, positive language, celebrate good news, express genuine excitement. Use exclamation points sparingly but meaningfully.',
                 bestFor: 'Good news, celebrations, positive interactions',
                 examples: ['Booking confirmation', 'Special occasion', 'Positive feedback'],
@@ -308,8 +290,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'firm_clear',
                 name: 'Firm & Clear Boundaries',
                 icon: '💪',
-                tone: 'firm',
-                pace: 'normal',
                 instructions: 'Professional but firm. State boundaries clearly, no room for negotiation. Polite but assertive.',
                 bestFor: 'Policy enforcement, inappropriate requests, boundary setting',
                 examples: ['Inappropriate request', 'Policy violation', 'Boundary needed'],
@@ -320,8 +300,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'educational_informative',
                 name: 'Educational & Informative',
                 icon: '📚',
-                tone: 'educational',
-                pace: 'normal',
                 instructions: 'Teach and explain clearly. Break down complex topics, use examples, check for understanding. Be patient and thorough.',
                 bestFor: 'How-to questions, explanations, first-time users',
                 examples: ['Process explanation', 'Feature walkthrough', 'Educational inquiry'],
@@ -332,8 +310,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'consultative_advisory',
                 name: 'Consultative & Advisory',
                 icon: '🤝',
-                tone: 'consultative',
-                pace: 'normal',
                 instructions: 'Act as trusted advisor. Ask clarifying questions, understand needs, provide recommendations. Guide decision-making.',
                 bestFor: 'Complex decisions, recommendations, guidance needed',
                 examples: ['Service selection', 'Expert advice', 'Recommendation request'],
@@ -344,8 +320,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'safety_emergency',
                 name: 'Safety & Emergency Protocol',
                 icon: '🚨',
-                tone: 'urgent',
-                pace: 'fast',
                 instructions: 'Immediate action protocol. Stay calm, get critical info fast, escalate immediately. Safety first, everything else second.',
                 bestFor: 'Medical emergencies, safety hazards, critical situations',
                 examples: ['Medical emergency', 'Safety hazard', 'Critical issue'],
@@ -356,8 +330,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'accessibility_adaptive',
                 name: 'Accessibility & Adaptive',
                 icon: '♿',
-                tone: 'calm',
-                pace: 'slow',
                 instructions: 'Adapt to accessibility needs. Speak clearly, offer alternative formats, accommodate special requirements without making caller feel different.',
                 bestFor: 'Hearing impaired, vision impaired, special needs',
                 examples: ['Hearing difficulty', 'Vision impairment', 'Special accommodation'],
@@ -368,8 +340,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'casual_conversational',
                 name: 'Casual & Conversational',
                 icon: '💬',
-                tone: 'casual',
-                pace: 'normal',
                 instructions: 'Relaxed, conversational, like talking to a friend. Use contractions, casual language, be relatable.',
                 bestFor: 'Small talk, off-topic, casual interactions',
                 examples: ['Small talk', 'Weather chat', 'Casual conversation'],
@@ -380,8 +350,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'formal_respectful',
                 name: 'Formal & Respectful',
                 icon: '🎩',
-                tone: 'formal',
-                pace: 'normal',
                 instructions: 'Formal language, respectful address, professional distance. Use titles, avoid contractions, maintain decorum.',
                 bestFor: 'VIP clients, formal contexts, professional settings',
                 examples: ['VIP caller', 'Formal inquiry', 'Executive contact'],
@@ -392,8 +360,6 @@ router.post('/seed', async (req, res) => {
                 behaviorId: 'nurturing_supportive',
                 name: 'Nurturing & Supportive',
                 icon: '🌱',
-                tone: 'nurturing',
-                pace: 'slow',
                 instructions: 'Supportive, encouraging, builds confidence. Acknowledge efforts, provide positive reinforcement, be patient and understanding.',
                 bestFor: 'Nervous callers, first attempts, learning situations',
                 examples: ['Nervous caller', 'First time user', 'Learning process'],

@@ -50,37 +50,9 @@ const globalAIBehaviorTemplateSchema = new Schema({
         default: '🎭'
     },
     
-    // Tone of voice (affects TTS and text generation)
-    tone: {
-        type: String,
-        enum: [
-            'empathetic',
-            'professional',
-            'friendly',
-            'urgent',
-            'apologetic',
-            'calm',
-            'enthusiastic',
-            'firm',
-            'casual',
-            'formal',
-            'nurturing',
-            'educational',
-            'consultative',
-            'reassuring'
-        ],
-        required: true
-    },
-    
-    // Speaking pace (affects TTS)
-    pace: {
-        type: String,
-        enum: ['slow', 'normal', 'fast'],
-        required: true,
-        default: 'normal'
-    },
-    
-    // Detailed behavior instructions for AI
+    // Detailed behavior instructions for AI (ONLY source of truth)
+    // This is plain English instructions that tell the AI exactly how to behave
+    // Example: "Calm, slow pace, validating feelings, brief reassurance then practical next step"
     instructions: {
         type: String,
         required: true,

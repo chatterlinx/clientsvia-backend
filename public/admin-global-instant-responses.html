@@ -2010,7 +2010,6 @@
                                 <span class="text-4xl">${behavior.icon || '🎭'}</span>
                                 <div>
                                     <h3 class="text-xl font-bold text-gray-900">${index + 1}. ${behavior.name}</h3>
-                                    <p class="text-sm text-purple-600 font-semibold">Tone: ${behavior.tone} • Pace: ${behavior.pace}</p>
                                 </div>
                             </div>
                             <p class="text-gray-800 mb-3 italic">"${behavior.instructions}"</p>
@@ -2045,26 +2044,51 @@
             document.getElementById('add-behavior-modal').style.display = 'none';
         }
 
-        function handleAddBehavior(event) {
+        async function handleAddBehavior(event) {
             event.preventDefault();
             
-            const newBehavior = {
-                id: BEHAVIOR_TEMPLATES.length + 1,
-                name: document.getElementById('add-behavior-name').value,
-                icon: document.getElementById('add-behavior-icon').value || '🎭',
-                description: document.getElementById('add-behavior-description').value,
-                tone: document.getElementById('add-behavior-tone').value,
-                pace: document.getElementById('add-behavior-pace').value,
-                useFor: document.getElementById('add-behavior-usefor').value
-            };
+            try {
+                showNotification('Adding behavior...', 'info');
+                
+                const name = document.getElementById('add-behavior-name').value.trim();
+                const icon = document.getElementById('add-behavior-icon').value.trim() || '🎭';
+                const instructions = document.getElementById('add-behavior-description').value.trim();
+                const bestFor = document.getElementById('add-behavior-usefor').value.trim();
+                
+                // Generate behaviorId from name
+                const behaviorId = name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+                
+                const token = getAuthToken();
+                const response = await fetch('/api/admin/global-behaviors', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        behaviorId,
+                        name,
+                        icon,
+                        instructions,
+                        bestFor,
+                        examples: []
+                    })
+                });
 
-            BEHAVIOR_TEMPLATES.push(newBehavior);
-            renderBehaviors();
-            closeAddBehaviorModal();
-            showNotification(`✅ Behavior "${newBehavior.name}" added successfully!`, 'success');
-            
-            // TODO: Save to backend API when ready
-            console.log('🎭 [BEHAVIOR] Added:', newBehavior);
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification(`Behavior "${name}" added successfully!`, 'success');
+                    closeAddBehaviorModal();
+                    // Refresh behaviors list
+                    await renderBehaviors();
+                } else {
+                    showNotification('Failed to add behavior: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error adding behavior:', error);
+                showNotification('Error adding behavior: ' + error.message, 'error');
+            }
         }
 
         function editBehavior(behaviorId) {
@@ -2191,11 +2215,12 @@
                 </div>
 
                 <div class="mb-4">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Description * <span class="text-xs font-normal text-gray-500">(This is what the AI follows)</span></label>
-                    <textarea id="add-behavior-description" required rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="e.g., Efficient, friendly, collect details systematically. Confirm date/time/location clearly."></textarea>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Instructions * <span class="text-xs font-normal text-gray-500">(This is what the AI follows - ONE source of truth)</span></label>
+                    <textarea id="add-behavior-description" required rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="e.g., Calm, slow pace, validating feelings, brief reassurance then practical next step. Avoid platitudes; be specific and human."></textarea>
+                    <p class="text-xs text-gray-500 mt-1">Write in plain English how the AI should behave. Include tone, pace, structure - everything in this one field.</p>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="mb-4 hidden">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Tone</label>
                         <select id="add-behavior-tone" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
