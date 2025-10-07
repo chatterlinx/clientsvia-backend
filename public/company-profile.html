@@ -2350,9 +2350,12 @@
                                                             </div>
                                                             
                                                             <!-- ⚡ ACTION BUTTONS -->
-                                                            <div class="mb-6">
+                                                            <div class="mb-6" style="display: flex; gap: 12px; flex-wrap: wrap;">
                                                                 <button id="add-category-btn" class="btn btn-primary" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; padding: 12px 24px; font-weight: 600;">
                                                                     <i class="fas fa-plus mr-2"></i>Add Category
+                                                                </button>
+                                                                <button id="sync-global-brain-btn" class="btn btn-info" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border: none; padding: 12px 24px; font-weight: 600; color: white;">
+                                                                    <i class="fas fa-sync-alt mr-2"></i>🧠 Update from Global AI Brain
                                                                 </button>
                                                             </div>
                                                             
@@ -14546,6 +14549,8 @@ Key Metrics:
     <script src="/js/components/CompanyQnAManager.js"></script>
     <!-- 🗑️ DELETED: InstantResponsesManager.js - legacy system removed -->
     <script src="/js/components/InstantResponseCategoriesManager.js"></script>
+    <!-- 🧠 Global AI Brain Sync Module -->
+    <script src="/js/components/GlobalAIBrainSync.js"></script>
     <!-- 🎯 NEW: PlaceholdersManager.js - Fresh enterprise-grade implementation -->
     <script src="/js/components/PlaceholdersManager.js"></script>
     

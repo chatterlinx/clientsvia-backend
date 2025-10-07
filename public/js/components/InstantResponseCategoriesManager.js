@@ -20,6 +20,9 @@ class InstantResponseCategoriesManager {
         this.currentCategory = null;
         this.currentQnA = null;
         
+        // 🧠 Initialize Global AI Brain Sync
+        this.globalAIBrainSync = null;
+        
         console.log(`⚡ Initializing InstantResponseCategoriesManager for company: ${companyId}`);
     }
 
@@ -32,6 +35,14 @@ class InstantResponseCategoriesManager {
         await this.loadCategories();
         this.attachEventListeners();
         this.render();
+        
+        // 🧠 Initialize Global AI Brain Sync
+        if (typeof GlobalAIBrainSync !== 'undefined') {
+            this.globalAIBrainSync = new GlobalAIBrainSync(this.companyId, this);
+            window.globalAIBrainSync = this.globalAIBrainSync; // Make globally accessible
+            console.log('🧠 [Categories] Global AI Brain Sync initialized');
+        }
+        
         console.log('✅ [Categories] Initialized successfully');
     }
 
@@ -360,6 +371,15 @@ class InstantResponseCategoriesManager {
         // Category modal save
         document.getElementById('save-category-btn')?.addEventListener('click', () => {
             this.saveCategoryModal();
+        });
+        
+        // 🧠 Sync with Global AI Brain button
+        document.getElementById('sync-global-brain-btn')?.addEventListener('click', () => {
+            if (this.globalAIBrainSync) {
+                this.globalAIBrainSync.openSyncModal();
+            } else {
+                this.showError('Global AI Brain Sync not initialized');
+            }
         });
     }
 
