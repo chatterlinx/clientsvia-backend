@@ -1182,8 +1182,61 @@
             }
         });
 
+        // ============================================
+        // CREATE NEW TEMPLATE
+        // ============================================
         function createNewTemplate() {
-            alert('Create new template functionality coming soon!\nFor now, use the database seeding script to populate the first template.');
+            const name = prompt('Enter template name:', 'ClientVia.ai Global AI Brain v2.0');
+            if (!name) return;
+            
+            const description = prompt('Enter template description:', 'Enhanced AI agent instant response library');
+            if (!description) return;
+            
+            const version = prompt('Enter version:', 'v2.0.0');
+            if (!version) return;
+            
+            if (!confirm(`Create new template:\n\nName: ${name}\nVersion: ${version}\n\nThis will create an empty template. Continue?`)) {
+                return;
+            }
+            
+            createTemplateAPI(name, description, version);
+        }
+
+        async function createTemplateAPI(name, description, version) {
+            try {
+                showNotification('⏳ Creating new template...', 'info');
+
+                const token = getAuthToken();
+                const response = await fetch('/api/admin/global-instant-responses', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    },
+                    body: JSON.stringify({
+                        name,
+                        description,
+                        version,
+                        categories: [],
+                        isActive: false,
+                        createdBy: 'Admin'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                showNotification('✅ Template created successfully!', 'success');
+                
+                // Refresh to show new template
+                await fetchActiveTemplate();
+                renderCategories();
+            } catch (error) {
+                console.error('❌ Error creating template:', error);
+                showNotification('❌ Failed to create template: ' + error.message, 'error');
+            }
         }
 
         async function seedTemplate() {
