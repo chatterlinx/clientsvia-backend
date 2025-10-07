@@ -642,7 +642,9 @@
                 console.log('✨ Enhancement result:', result);
 
                 if (result.success) {
-                    showNotification(`✅ Enhanced! ${result.data.stats.totalKeywords} keywords, ${result.data.stats.totalQnAPairs} Q&A pairs generated!`, 'success');
+                    const keywords = result.data?.stats?.totalKeywords || 'many';
+                    const qnaPairs = result.data?.stats?.totalQnAPairs || 'many';
+                    showNotification(`✅ Enhanced! ${keywords} keywords, ${qnaPairs} Q&A pairs generated!`, 'success');
                     setTimeout(() => location.reload(), 2000);
                 } else {
                     showNotification('❌ Enhancement failed: ' + result.message, 'error');
