@@ -122,14 +122,6 @@
                         <i class="fas fa-plus-circle"></i>
                         Create New Template
                     </button>
-                    <button onclick="seedBehaviors()" class="px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
-                        <i class="fas fa-theater-masks"></i>
-                        Seed 15 Behaviors
-                    </button>
-                    <button onclick="seedTemplate()" class="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
-                        <i class="fas fa-seedling"></i>
-                        Seed 8 Categories
-                    </button>
                     <button onclick="enhanceActiveTemplate()" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
                         <i class="fas fa-magic"></i>
                         Enhance with Keywords & Q&A
@@ -148,7 +140,7 @@
                         <i class="fas fa-theater-masks mr-2"></i>
                         Behaviors
                     </button>
-                    <button id="tab-settings" onclick="switchTab('settings')" class="px-6 py-3 font-semibold text-gray-400 border-b-2 border-transparent cursor-not-allowed" disabled title="Coming soon">
+                    <button id="tab-settings" onclick="switchTab('settings')" class="px-6 py-3 font-semibold text-gray-500 hover:text-blue-600 border-b-2 border-transparent hover:border-blue-300 transition-colors">
                         <i class="fas fa-cog mr-2"></i>
                         Settings
                     </button>
@@ -214,9 +206,147 @@
 
         <!-- Settings Tab Content -->
         <div id="settings-tab" class="tab-content hidden">
-            <div class="bg-white rounded-lg border-2 border-gray-200 p-6">
-                <h2 class="text-2xl font-bold text-gray-900 mb-4">Settings</h2>
-                <p class="text-gray-600">Coming soon...</p>
+            <div class="max-w-5xl mx-auto space-y-8">
+                
+                <!-- Page Header -->
+                <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-8 text-white">
+                    <h2 class="text-3xl font-bold mb-2 flex items-center gap-3">
+                        <i class="fas fa-cog"></i>
+                        Platform Settings
+                    </h2>
+                    <p class="text-blue-100">
+                        Administrative controls for initializing and managing the Global AI Brain system
+                    </p>
+                </div>
+
+                <!-- Database Seeding Section -->
+                <div class="bg-white rounded-xl shadow-lg border-2 border-gray-200 overflow-hidden">
+                    <div class="bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                            <i class="fas fa-seedling text-green-600"></i>
+                            Database Initialization
+                        </h3>
+                        <p class="text-sm text-gray-600 mt-1">
+                            Seed initial data into the platform (only needed on first setup or after database wipe)
+                        </p>
+                    </div>
+                    
+                    <div class="p-6 space-y-6">
+                        
+                        <!-- Seed Behaviors Card -->
+                        <div class="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-200 rounded-lg p-6">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <div class="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-theater-masks text-white text-xl"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-lg font-bold text-gray-900">Seed 15 AI Behavior Templates</h4>
+                                            <p class="text-sm text-gray-600">Empathetic, Professional, Urgent, Friendly, etc.</p>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-2 text-sm text-gray-700">
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Creates platform-wide behavior library</p>
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Used by categories to control AI tone & pace</p>
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Safe to run - checks if behaviors already exist</p>
+                                        <p class="text-orange-700 font-semibold mt-3">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Run this FIRST before creating categories
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <button onclick="seedBehaviors()" class="px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                        <i class="fas fa-play-circle"></i>
+                                        Seed Behaviors
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Seed Categories Card -->
+                        <div class="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg p-6">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <div class="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-brain text-white text-xl"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-lg font-bold text-gray-900">Seed 8 Global AI Brain Categories</h4>
+                                            <p class="text-sm text-gray-600">Greeting, Scheduling, Emergency, Pricing, Hours, etc.</p>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-2 text-sm text-gray-700">
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Creates complete Global AI Brain template</p>
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Includes 8 categories with scenarios & triggers</p>
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Ready to sync to company accounts</p>
+                                        <p class="text-green-700 font-semibold mt-3">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Run this SECOND after seeding behaviors
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <button onclick="seedTemplate()" class="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                        <i class="fas fa-play-circle"></i>
+                                        Seed Categories
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- System Information Section -->
+                <div class="bg-white rounded-xl shadow-lg border-2 border-gray-200 overflow-hidden">
+                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                            <i class="fas fa-info-circle text-blue-600"></i>
+                            System Information
+                        </h3>
+                    </div>
+                    
+                    <div class="p-6 space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <p class="text-sm text-gray-600 mb-1">Platform Version</p>
+                                <p class="text-2xl font-bold text-gray-900">v1.0.0</p>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <p class="text-sm text-gray-600 mb-1">Database</p>
+                                <p class="text-2xl font-bold text-gray-900">MongoDB</p>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <p class="text-sm text-blue-800">
+                                <i class="fas fa-lightbulb mr-2"></i>
+                                <strong>Pro Tip:</strong> After seeding, go to the Overview tab to view your categories. 
+                                You can then enhance them with keywords & Q&A pairs for better AI matching.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Danger Zone (Future) -->
+                <div class="bg-white rounded-xl shadow-lg border-2 border-red-200 overflow-hidden">
+                    <div class="bg-gradient-to-r from-red-50 to-orange-50 px-6 py-4 border-b border-red-200">
+                        <h3 class="text-xl font-bold text-red-700 flex items-center gap-2">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Danger Zone
+                        </h3>
+                    </div>
+                    
+                    <div class="p-6">
+                        <p class="text-gray-600 text-sm">
+                            Destructive operations like database reset will be available here in future updates.
+                        </p>
+                    </div>
+                </div>
+
             </div>
         </div>
 
