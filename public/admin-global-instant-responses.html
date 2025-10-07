@@ -261,27 +261,28 @@
                         <textarea id="category-description" required rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
                     </div>
                     
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Priority (1-10)</label>
-                            <input type="number" id="category-priority" min="1" max="10" value="5" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">Type</label>
-                            <select id="category-type" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                                <option value="emotional_intelligence">Emotional Intelligence</option>
-                                <option value="call_flow">Call Flow</option>
-                                <option value="scheduling">Scheduling</option>
-                                <option value="payment">Payment</option>
-                                <option value="problem_resolution">Problem Resolution</option>
-                                <option value="safety_emergency">Safety & Emergency</option>
-                                <option value="accessibility">Accessibility</option>
-                                <option value="customer_types">Customer Types</option>
-                                <option value="small_talk">Small Talk</option>
-                                <option value="edge_cases">Edge Cases</option>
-                                <option value="outbound">Outbound</option>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">🎭 Behavior Template *</label>
+                            <select id="category-behavior" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">Select behavior...</option>
+                                <option value="empathetic_reassuring">😊 Empathetic & Reassuring</option>
+                                <option value="professional_efficient">👔 Professional & Efficient</option>
+                                <option value="friendly_warm">🤗 Friendly & Warm</option>
+                                <option value="urgent_action">🚨 Urgent & Action-Oriented</option>
+                                <option value="apologetic_solution">🙏 Apologetic & Solution-Focused</option>
+                                <option value="calm_patient">🧘 Calm & Patient</option>
+                                <option value="enthusiastic_positive">🎉 Enthusiastic & Positive</option>
+                                <option value="firm_clear">💪 Firm & Clear Boundaries</option>
+                                <option value="educational_informative">📚 Educational & Informative</option>
+                                <option value="consultative_advisory">🤝 Consultative & Advisory</option>
+                                <option value="safety_emergency">🚨 Safety & Emergency Protocol</option>
+                                <option value="accessibility_adaptive">♿ Accessibility & Adaptive</option>
+                                <option value="casual_conversational">💬 Casual & Conversational</option>
+                                <option value="formal_respectful">🎩 Formal & Respectful</option>
+                                <option value="nurturing_supportive">🌱 Nurturing & Supportive</option>
                             </select>
+                            <p class="text-xs text-gray-500 mt-1">This behavior controls tone, pace, and structure for ALL scenarios in this category</p>
                         </div>
                         
                         <div class="flex items-end">
@@ -510,33 +511,33 @@
                     <textarea id="edit-category-description" required rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
                 </div>
 
-                <!-- Icon & Priority -->
+                <!-- Icon & Behavior -->
                 <div class="grid grid-cols-2 gap-4 mb-4">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Icon (Emoji)</label>
                         <input type="text" id="edit-category-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-center text-3xl">
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Priority (1-10)</label>
-                        <input type="number" id="edit-category-priority" min="1" max="10" value="5" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">🎭 Behavior Template *</label>
+                        <select id="edit-category-behavior" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="">Select behavior...</option>
+                            <option value="empathetic_reassuring">😊 Empathetic & Reassuring</option>
+                            <option value="professional_efficient">👔 Professional & Efficient</option>
+                            <option value="friendly_warm">🤗 Friendly & Warm</option>
+                            <option value="urgent_action">🚨 Urgent & Action-Oriented</option>
+                            <option value="apologetic_solution">🙏 Apologetic & Solution-Focused</option>
+                            <option value="calm_patient">🧘 Calm & Patient</option>
+                            <option value="enthusiastic_positive">🎉 Enthusiastic & Positive</option>
+                            <option value="firm_clear">💪 Firm & Clear Boundaries</option>
+                            <option value="educational_informative">📚 Educational & Informative</option>
+                            <option value="consultative_advisory">🤝 Consultative & Advisory</option>
+                            <option value="safety_emergency">🚨 Safety & Emergency Protocol</option>
+                            <option value="accessibility_adaptive">♿ Accessibility & Adaptive</option>
+                            <option value="casual_conversational">💬 Casual & Conversational</option>
+                            <option value="formal_respectful">🎩 Formal & Respectful</option>
+                            <option value="nurturing_supportive">🌱 Nurturing & Supportive</option>
+                        </select>
                     </div>
-                </div>
-
-                <!-- Type -->
-                <div class="mb-6">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Type</label>
-                    <select id="edit-category-type" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                        <option value="emotional_intelligence">Emotional Intelligence</option>
-                        <option value="call_flow">Call Flow Management</option>
-                        <option value="scheduling">Scheduling & Appointments</option>
-                        <option value="payment">Payment & Billing</option>
-                        <option value="problem_resolution">Problem Resolution</option>
-                        <option value="safety">Safety & Emergencies</option>
-                        <option value="accessibility">Accessibility & Communication</option>
-                        <option value="customer_types">Customer Types</option>
-                        <option value="small_talk">Small Talk & Off-topic</option>
-                        <option value="edge_cases">Edge Cases & Abuse</option>
-                    </select>
                 </div>
 
                 <!-- Actions -->
@@ -569,17 +570,19 @@
             </div>
 
             <form id="add-scenario-form">
+                <!-- 🎯 SIMPLIFIED SCENARIO FORM -->
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <p class="text-sm text-blue-800">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        <strong>Note:</strong> Tone, pace, and behavior are inherited from the parent category. 
+                        Just define triggers and response variations here.
+                    </p>
+                </div>
+
                 <!-- Scenario Name -->
                 <div class="mb-4">
                     <label class="block text-sm font-bold text-gray-700 mb-2">Scenario Name *</label>
                     <input type="text" id="add-scenario-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="e.g., Upset / Distressed">
-                </div>
-
-                <!-- Behavior -->
-                <div class="mb-4">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Behavior (AI Instructions)</label>
-                    <textarea id="add-scenario-behavior" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="e.g., Short apology, explain policy, offer alternatives"></textarea>
-                    <p class="text-xs text-gray-500 mt-1">Tell the AI HOW to respond (tone, structure, what to include)</p>
                 </div>
 
                 <!-- Triggers -->
@@ -601,48 +604,6 @@
                     <label class="block text-sm font-bold text-gray-700 mb-2">Full Replies (2-3 variations, one per line) *</label>
                     <textarea id="add-scenario-full-replies" required rows="5" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="I'm really sorry you're going through that. I hear how upsetting this is — I'll stay with you and get this sorted.&#10;I completely understand your frustration. Let me help you resolve this right away.&#10;I can hear this is really difficult. I'm here to help — let's fix this together."></textarea>
                     <p class="text-xs text-gray-500 mt-1">Add 2-3 variations for natural, human-like responses</p>
-                </div>
-
-                <!-- Tone & Pace -->
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Tone</label>
-                        <select id="add-scenario-tone" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                            <option value="professional">Professional</option>
-                            <option value="empathetic">Empathetic</option>
-                            <option value="friendly">Friendly</option>
-                            <option value="urgent">Urgent</option>
-                            <option value="apologetic">Apologetic</option>
-                            <option value="enthusiastic">Enthusiastic</option>
-                            <option value="reassuring">Reassuring</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Pace</label>
-                        <select id="add-scenario-pace" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                            <option value="normal">Normal</option>
-                            <option value="slow">Slow</option>
-                            <option value="fast">Fast</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Priority & Confidence -->
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Priority (1-10)</label>
-                        <input type="number" id="add-scenario-priority" min="1" max="10" value="5" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Confidence Threshold (%)</label>
-                        <input type="number" id="add-scenario-confidence" min="50" max="100" value="85" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                    </div>
-                </div>
-
-                <!-- Escalation Flags -->
-                <div class="mb-4">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Escalation Flags (comma-separated)</label>
-                    <input type="text" id="add-scenario-escalation" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500" placeholder="immediate_human_transfer_if_requested, log_empathy_tag">
                 </div>
 
                 <!-- Active Status -->
@@ -1164,12 +1125,11 @@
             try {
                 showNotification('⏳ Saving category changes...', 'info');
 
-                // Update category in activeTemplate
+                // 🎯 SIMPLIFIED CATEGORY UPDATE - Behavior-driven, no priority/type
                 activeTemplate.categories[currentEditingCategoryIndex].name = document.getElementById('edit-category-name').value.trim();
                 activeTemplate.categories[currentEditingCategoryIndex].description = document.getElementById('edit-category-description').value.trim();
                 activeTemplate.categories[currentEditingCategoryIndex].icon = document.getElementById('edit-category-icon').value.trim();
-                activeTemplate.categories[currentEditingCategoryIndex].priority = parseInt(document.getElementById('edit-category-priority').value);
-                activeTemplate.categories[currentEditingCategoryIndex].type = document.getElementById('edit-category-type').value;
+                activeTemplate.categories[currentEditingCategoryIndex].behavior = document.getElementById('edit-category-behavior').value; // NEW: Behavior template
 
                 // Save to backend
                 const token = getAuthToken();
@@ -1222,15 +1182,14 @@
             try {
                 showNotification('⏳ Adding new category...', 'info');
 
-                // Create new category object
+                // 🎯 SIMPLIFIED CATEGORY OBJECT - Behavior-driven, no priority/type
                 const newCategory = {
                     id: `cat_${Date.now()}`,
                     name: document.getElementById('category-name').value.trim(),
                     description: document.getElementById('category-description').value.trim(),
                     icon: document.getElementById('category-icon').value.trim() || '📁',
-                    priority: parseInt(document.getElementById('category-priority').value) || 5,
-                    type: document.getElementById('category-type').value,
-                    active: document.getElementById('category-active').checked,
+                    behavior: document.getElementById('category-behavior').value, // NEW: Behavior template
+                    isActive: document.getElementById('category-active').checked,
                     scenarios: []
                 };
 
@@ -1564,16 +1523,11 @@
             try {
                 showNotification('⏳ Adding new scenario...', 'info');
 
-                // Collect form data
+                // 🎯 SIMPLIFIED FORM DATA - Pure trigger → response mapping
                 const triggers = document.getElementById('add-scenario-triggers').value
                     .split('\n')
                     .map(t => t.trim().toLowerCase())
                     .filter(t => t.length > 0);
-
-                const escalationFlags = document.getElementById('add-scenario-escalation').value
-                    .split(',')
-                    .map(f => f.trim())
-                    .filter(f => f.length > 0);
 
                 // Parse quick and full replies (one per line)
                 const quickReplies = document.getElementById('add-scenario-quick-replies').value
@@ -1589,22 +1543,14 @@
                 const newScenario = {
                     id: new Date().getTime().toString(),
                     name: document.getElementById('add-scenario-name').value.trim(),
-                    behavior: document.getElementById('add-scenario-behavior').value.trim(),
                     triggers: triggers,
-                    quickReply: quickReplies[0] || '', // First one for backward compatibility
                     quickReplies: quickReplies,
-                    fullReply: fullReplies[0] || '', // First one for backward compatibility
                     fullReplies: fullReplies,
-                    rotationMode: 'random',
-                    tone: document.getElementById('add-scenario-tone').value,
-                    pace: document.getElementById('add-scenario-pace').value,
-                    priority: parseInt(document.getElementById('add-scenario-priority').value),
-                    confidenceThreshold: parseInt(document.getElementById('add-scenario-confidence').value) / 100,
-                    escalationFlags: escalationFlags,
                     isActive: document.getElementById('add-scenario-active').checked,
-                    keywords: [],
-                    qnaPairs: [],
-                    examples: []
+                    keywords: [], // Will be auto-generated by enhancement service
+                    qnaPairs: [], // Will be auto-generated by enhancement service
+                    version: '1.0',
+                    lastUpdated: new Date().toISOString()
                 };
 
                 // Add to active template

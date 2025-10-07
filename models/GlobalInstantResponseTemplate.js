@@ -44,8 +44,14 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 /**
- * SCENARIO SCHEMA
- * Individual conversation scenario with triggers, responses, and escalation rules
+ * SCENARIO SCHEMA - SIMPLIFIED FOR MAXIMUM CLARITY
+ * Individual conversation scenario with triggers and multiple response variations
+ * 
+ * DESIGN PHILOSOPHY:
+ * - Scenarios are PURE trigger → response mappings
+ * - Behavior is inherited from the parent Category
+ * - No priority/tone/pace conflicts - category behavior controls all
+ * - Multiple response variations prevent robotic repetition
  */
 const scenarioSchema = new Schema({
     // Unique identifier for this scenario
@@ -89,92 +95,21 @@ const scenarioSchema = new Schema({
         confidence: { type: Number, default: 0.85, min: 0, max: 1 }
     }],
     
-    // 🎭 BEHAVIOR: AI's instruction manual for this scenario
-    // Tells the AI HOW to respond (e.g., "Short apology, explain policy, offer alternatives")
-    behavior: {
-        type: String,
-        trim: true,
-        default: ''
-    },
-    
-    // Quick reply (1 sentence) for fast response
-    quickReply: {
-        type: String,
-        required: false, // Made optional since we now use quickReplies array
-        trim: true
-    },
-    
-    // 🔄 QUICK REPLIES: Multiple variations to avoid sounding robotic
+    // 🔄 QUICK REPLIES: Multiple variations to avoid sounding robotic (2-3 variations)
     // AI randomly selects from this array
     quickReplies: [{
         type: String,
-        trim: true
+        trim: true,
+        required: true
     }],
     
-    // Full conversational reply (TTS/detailed)
-    fullReply: {
-        type: String,
-        required: false, // Made optional since we now use fullReplies array
-        trim: true
-    },
-    
-    // 🔄 FULL REPLIES: Multiple variations for natural conversation
+    // 🔄 FULL REPLIES: Multiple variations for natural conversation (2-3 variations)
     // AI randomly selects from this array
     fullReplies: [{
         type: String,
-        trim: true
+        trim: true,
+        required: true
     }],
-    
-    // 🎲 ROTATION MODE: How to select response variations
-    rotationMode: {
-        type: String,
-        enum: ['random', 'sequential', 'weighted'],
-        default: 'random'
-    },
-    
-    // Tone indicators for TTS and behavior
-    tone: {
-        type: String,
-        enum: [
-            'empathetic',
-            'urgent',
-            'calm',
-            'professional',
-            'friendly',
-            'apologetic',
-            'firm',
-            'reassuring',
-            'enthusiastic'
-        ],
-        default: 'professional'
-    },
-    
-    // Speaking pace for TTS
-    pace: {
-        type: String,
-        enum: ['slow', 'normal', 'fast'],
-        default: 'normal'
-    },
-    
-    // Escalation rules and flags
-    escalationFlags: [{
-        type: String,
-        trim: true
-    }],
-    
-    // Example conversations for training/reference
-    examples: [{
-        caller: { type: String, trim: true },
-        ai: { type: String, trim: true }
-    }],
-    
-    // Priority level (higher = checked first)
-    priority: {
-        type: Number,
-        default: 5,
-        min: 1,
-        max: 10
-    },
     
     // Is this scenario active?
     isActive: {
@@ -192,20 +127,18 @@ const scenarioSchema = new Schema({
     lastUpdated: {
         type: Date,
         default: Date.now
-    },
-    
-    // 🆕 CONFIDENCE THRESHOLD: Minimum confidence for matching
-    confidenceThreshold: {
-        type: Number,
-        default: 0.75,
-        min: 0,
-        max: 1
     }
 }, { _id: false });
 
 /**
- * CATEGORY SCHEMA
+ * CATEGORY SCHEMA - SIMPLIFIED FOR MAXIMUM CLARITY
  * Grouping of related scenarios (e.g., "Empathy", "Scheduling", "Safety")
+ * 
+ * DESIGN PHILOSOPHY:
+ * - Categories define ONE behavior template that ALL scenarios inherit
+ * - No priority scale - behavior template controls matching importance
+ * - No type field - behavior template IS the type
+ * - Clean, simple, world-class structure
  */
 const categorySchema = new Schema({
     // Unique identifier for this category
@@ -237,13 +170,13 @@ const categorySchema = new Schema({
         trim: true
     },
     
-    // Priority level for matching (higher = checked first)
-    // Safety and emergency categories should have priority 10
-    priority: {
-        type: Number,
-        default: 5,
-        min: 1,
-        max: 10
+    // 🎭 BEHAVIOR: AI instruction template inherited by all scenarios
+    // Selected from 15 pre-defined behavior templates (e.g., "Empathetic & Reassuring")
+    // This controls tone, pace, structure - ONE source of truth
+    behavior: {
+        type: String,
+        required: true,
+        trim: true
     },
     
     // All scenarios within this category
@@ -253,25 +186,6 @@ const categorySchema = new Schema({
     isActive: {
         type: Boolean,
         default: true
-    },
-    
-    // Category type for filtering
-    type: {
-        type: String,
-        enum: [
-            'emotional_intelligence',
-            'call_flow',
-            'scheduling',
-            'payment',
-            'problem_resolution',
-            'safety_emergency',
-            'accessibility',
-            'customer_types',
-            'small_talk',
-            'edge_cases',
-            'outbound'
-        ],
-        default: 'emotional_intelligence'
     }
 }, { _id: false });
 
