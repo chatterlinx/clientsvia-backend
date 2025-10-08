@@ -233,6 +233,39 @@
                     
                     <div class="p-6 space-y-6">
                         
+                        <!-- ⚠️ FORCE DELETE SPECIFIC OLD TEMPLATE -->
+                        <div class="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-400 rounded-lg p-6">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <div class="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-wrench text-white text-xl"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-lg font-bold text-gray-900">🔧 Force Delete Old Template (Quick Fix)</h4>
+                                            <p class="text-sm text-gray-600">One-click removal of template ID: 68e5033ab02424067d056f0a</p>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-2 text-sm text-gray-700">
+                                        <p><i class="fas fa-bolt text-yellow-600 mr-2"></i><strong>Quick fix for:</strong> HTTP 500 errors with old template schema</p>
+                                        <p><i class="fas fa-magic text-yellow-600 mr-2"></i><strong>What it does:</strong> Deactivates & deletes the specific old template (no typing required)</p>
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i><strong>After deletion:</strong> Refresh page and click "Seed 8 Categories"</p>
+                                        <p class="text-yellow-700 font-semibold mt-3 bg-yellow-100 px-3 py-2 rounded border border-yellow-300">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Safe for migration - targets only the problematic old template
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <button onclick="forceDeleteOldTemplate()" class="px-6 py-3 bg-gradient-to-r from-yellow-600 to-orange-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap hover:from-yellow-700 hover:to-orange-700">
+                                        <i class="fas fa-bolt"></i>
+                                        Force Delete Old
+                                    </button>
+                                    <p class="text-xs text-yellow-700 mt-2 text-center font-medium">One click - no typing</p>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- ⚠️ DELETE OLD TEMPLATE (Migration Tool) -->
                         <div class="bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-300 rounded-lg p-6">
                             <div class="flex items-start justify-between">
@@ -242,12 +275,12 @@
                                             <i class="fas fa-trash-alt text-white text-xl"></i>
                                         </div>
                                         <div>
-                                            <h4 class="text-lg font-bold text-gray-900">🔧 Delete All Templates (Schema Migration)</h4>
-                                            <p class="text-sm text-gray-600">Nuclear option - remove ALL templates from database</p>
+                                            <h4 class="text-lg font-bold text-gray-900">🔧 Delete All Templates (Nuclear Option)</h4>
+                                            <p class="text-sm text-gray-600">Remove ALL templates from database (with typed confirmation)</p>
                                         </div>
                                     </div>
                                     <div class="space-y-2 text-sm text-gray-700">
-                                        <p><i class="fas fa-exclamation-triangle text-red-600 mr-2"></i><strong>Use this if:</strong> HTTP 500 errors when adding categories (old schema conflict)</p>
+                                        <p><i class="fas fa-exclamation-triangle text-red-600 mr-2"></i><strong>Use this if:</strong> Multiple templates exist or unknown template IDs</p>
                                         <p><i class="fas fa-exclamation-triangle text-red-600 mr-2"></i><strong>What it does:</strong> Permanently deletes ALL global templates from database</p>
                                         <p><i class="fas fa-shield-alt text-blue-600 mr-2"></i><strong>Safety:</strong> Requires typing "DELETE" to confirm (prevents accidents)</p>
                                         <p><i class="fas fa-redo text-green-600 mr-2"></i><strong>After deletion:</strong> Click "Seed 8 Categories" to rebuild with new schema</p>
@@ -1529,6 +1562,64 @@
             } catch (error) {
                 console.error('Seed behaviors error:', error);
                 showNotification('Error seeding behaviors: ' + error.message, 'error');
+            }
+        }
+
+        async function forceDeleteOldTemplate() {
+            // Simple confirmation for the specific old template
+            if (!confirm('🔧 Force Delete Old Template\n\nThis will delete template ID: 68e5033ab02424067d056f0a\n\nThis is the old template causing HTTP 500 errors.\n\nAfter deletion, you\'ll need to click "Seed 8 Categories".\n\nProceed?')) {
+                return;
+            }
+
+            try {
+                console.log('🔧 Force deleting old template: 68e5033ab02424067d056f0a');
+                showNotification('⏳ Deleting old template...', 'info');
+                const token = getAuthToken();
+                const oldTemplateId = '68e5033ab02424067d056f0a';
+                
+                // Step 1: Deactivate the template first
+                console.log('Step 1: Deactivating template...');
+                const deactivateResponse = await fetch(`/api/admin/global-instant-responses/${oldTemplateId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ isActive: false })
+                });
+
+                if (deactivateResponse.ok) {
+                    console.log('✅ Template deactivated');
+                } else {
+                    console.warn('⚠️ Deactivate returned:', deactivateResponse.status, '- continuing with delete...');
+                }
+
+                // Step 2: Delete the template
+                console.log('Step 2: Deleting template...');
+                const deleteResponse = await fetch(`/api/admin/global-instant-responses/${oldTemplateId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const deleteResult = await deleteResponse.json();
+                console.log('Delete result:', deleteResult);
+
+                if (deleteResult.success) {
+                    showNotification('✅ Old template deleted! Now refresh and click "Seed 8 Categories"', 'success');
+                    setTimeout(() => {
+                        if (confirm('Template deleted successfully!\n\nRefresh the page now to see changes?')) {
+                            location.reload();
+                        }
+                    }, 1500);
+                } else {
+                    showNotification('⚠️ Delete response: ' + deleteResult.message + ' - Try the "Delete All Templates" button below if this persists', 'error');
+                }
+            } catch (error) {
+                console.error('❌ Error force deleting template:', error);
+                showNotification('❌ Error: ' + error.message + ' - Try the "Delete All Templates" button below', 'error');
             }
         }
 
