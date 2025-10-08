@@ -3007,12 +3007,12 @@
                             </div>
                             
                             <div class="flex gap-2 ml-4">
-                                <button onclick='editCategory(${JSON.stringify(cat).replace(/'/g, "&apos;")})' class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
+                                <button onclick='editActionHookCategory(${JSON.stringify(cat).replace(/'/g, "&apos;")})' class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
                                     <i class="fas fa-edit"></i>
                                     Edit
                                 </button>
                                 ${!isSystemDefault ? `
-                                    <button onclick='deleteCategory(${JSON.stringify(cat).replace(/'/g, "&apos;")})' class="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors">
+                                    <button onclick='deleteActionHookCategory(${JSON.stringify(cat).replace(/'/g, "&apos;")})' class="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 ` : ''}
@@ -3101,8 +3101,8 @@
             }
         }
 
-        // Edit category
-        function editCategory(cat) {
+        // Edit action hook category
+        function editActionHookCategory(cat) {
             document.getElementById('edit-category-id-original').value = cat._id;
             document.getElementById('edit-category-id').value = cat.categoryId;
             document.getElementById('edit-category-name').value = cat.name;
@@ -3163,8 +3163,8 @@
             }
         }
 
-        // Delete category
-        async function deleteCategory(cat) {
+        // Delete action hook category
+        async function deleteActionHookCategory(cat) {
             if (!confirm(`Are you sure you want to delete the category "${cat.name}"?\n\nThis action cannot be undone.`)) {
                 return;
             }
