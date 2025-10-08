@@ -2819,13 +2819,16 @@
 
         // Render action hooks list
         async function renderActionHooks() {
+            console.log('🟡 [CHECKPOINT 14] renderActionHooks() called');
             const container = document.getElementById('action-hooks-list');
             
             // Show loading state
             container.innerHTML = '<div class="text-center py-8 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Loading action hooks...</div>';
+            console.log('🟡 [CHECKPOINT 15] Loading state displayed, fetching data...');
             
             // Fetch fresh data
             await fetchActionHooks();
+            console.log('🟡 [CHECKPOINT 16] Data fetched successfully');
             
             // Apply filters
             const searchTerm = document.getElementById('action-hooks-search')?.value.toLowerCase() || '';
@@ -2913,6 +2916,7 @@
                     </div>
                 `;
             }).join('');
+            console.log('🟡 [CHECKPOINT 17] ✅ Rendering complete! Displayed', filtered.length, 'action hooks');
         }
 
         // Open add action hook modal
@@ -2971,6 +2975,7 @@
 
         // Edit action hook
         function editActionHook(hook) {
+            console.log('🔵 [CHECKPOINT 1] editActionHook() called with hook:', hook);
             document.getElementById('edit-hook-id-original').value = hook._id;  // Store MongoDB _id for API call
             document.getElementById('edit-hook-id').value = hook.hookId;  // Display hookId (read-only)
             document.getElementById('edit-hook-name').value = hook.name;
@@ -2980,7 +2985,9 @@
             document.getElementById('edit-hook-function').value = hook.functionName || '';
             document.getElementById('edit-hook-active').checked = hook.isActive !== false;
             
+            console.log('🔵 [CHECKPOINT 2] Form fields populated, opening modal...');
             document.getElementById('edit-action-hook-modal').style.display = 'flex';
+            console.log('🔵 [CHECKPOINT 3] Modal opened successfully');
         }
 
         // Close edit action hook modal
@@ -2990,7 +2997,9 @@
 
         // Handle edit action hook form submission
         document.getElementById('edit-action-hook-form')?.addEventListener('submit', async function(e) {
+            console.log('🟢 [CHECKPOINT 4] Form submit event triggered');
             e.preventDefault();
+            console.log('🟢 [CHECKPOINT 5] Default form action prevented');
             
             try {
                 showNotification('⏳ Updating action hook...', 'info');
@@ -3005,7 +3014,12 @@
                     isActive: document.getElementById('edit-hook-active').checked
                 };
 
+                console.log('🟢 [CHECKPOINT 6] Collected form data:', hookData);
+                console.log('🟢 [CHECKPOINT 7] Using MongoDB ID:', hookId);
+
                 const token = getAuthToken();
+                console.log('🟢 [CHECKPOINT 8] Sending PUT request to:', `/api/admin/global-action-hooks/${hookId}`);
+                
                 const response = await fetch(`/api/admin/global-action-hooks/${hookId}`, {
                     method: 'PUT',
                     headers: {
@@ -3015,17 +3029,23 @@
                     body: JSON.stringify(hookData)
                 });
 
+                console.log('🟢 [CHECKPOINT 9] Response received. Status:', response.status, 'OK:', response.ok);
                 const result = await response.json();
+                console.log('🟢 [CHECKPOINT 10] Response JSON:', result);
 
                 if (response.ok && result.success) {
+                    console.log('🟢 [CHECKPOINT 11] Update successful! Closing modal...');
                     showNotification(`✅ Action hook "${hookData.name}" updated successfully!`, 'success');
                     closeEditActionHookModal();
+                    console.log('🟢 [CHECKPOINT 12] Modal closed. Rendering action hooks...');
                     await renderActionHooks();
+                    console.log('🟢 [CHECKPOINT 13] ✅ Action hooks re-rendered successfully!');
                 } else {
+                    console.error('🔴 [CHECKPOINT 11-ERROR] Update failed:', result.message);
                     showNotification('Failed to update action hook: ' + result.message, 'error');
                 }
             } catch (error) {
-                console.error('Error updating action hook:', error);
+                console.error('🔴 [CHECKPOINT ERROR] Exception caught:', error);
                 showNotification('Error updating action hook: ' + error.message, 'error');
             }
         });
@@ -3067,7 +3087,7 @@
         // INITIALIZATION
         // ============================================
         document.addEventListener('DOMContentLoaded', async function() {
-            console.log('Global AI Brain Management - Initializing...');
+            console.log('🚀 [PAGE INIT] DOMContentLoaded event fired - Global AI Brain Management - Initializing...');
             
             // Check authentication
             const token = getAuthToken();
