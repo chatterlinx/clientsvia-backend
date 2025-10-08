@@ -452,7 +452,39 @@
                             </div>
                         </div>
 
-                        <!-- Seed Categories Card -->
+                        <!-- Seed Action Hook Categories Card -->
+                        <div class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-6">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-folder-open text-white text-xl"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-lg font-bold text-gray-900">Seed 7 Action Hook Categories</h4>
+                                            <p class="text-sm text-gray-600">Escalation, Scheduling, Communication, Payment, etc.</p>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-2 text-sm text-gray-700">
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Creates default categories for organizing hooks</p>
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Required for dynamic hook categorization</p>
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Safe to run - checks if categories already exist</p>
+                                        <p class="text-purple-700 font-semibold mt-3">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Run this BEFORE seeding action hooks
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <button onclick="seedCategories()" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                        <i class="fas fa-play-circle"></i>
+                                        Seed Categories
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Seed AI Brain Categories Card -->
                         <div class="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg p-6">
                             <div class="flex items-start justify-between">
                                 <div class="flex-1">
@@ -471,14 +503,14 @@
                                         <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Ready to sync to company accounts</p>
                                         <p class="text-green-700 font-semibold mt-3">
                                             <i class="fas fa-info-circle mr-1"></i>
-                                            Run this SECOND after seeding behaviors
+                                            Run this AFTER seeding behaviors
                                         </p>
                                     </div>
                                 </div>
                                 <div class="ml-4">
                                     <button onclick="seedTemplate()" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
                                         <i class="fas fa-play-circle"></i>
-                                        Seed Categories
+                                        Seed AI Brain
                                     </button>
                                 </div>
                             </div>
@@ -3496,6 +3528,10 @@
             // Load behaviors first (needed for dropdowns)
             await fetchBehaviors();
             console.log(`Loaded ${availableBehaviors.length} behavior templates`);
+            
+            // Load categories (needed for action hooks dropdowns)
+            await loadCategoriesIntoDropdowns();
+            console.log(`Loaded ${availableCategories.length} action hook categories`);
             
             // Load active template
             await fetchActiveTemplate();
