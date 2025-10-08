@@ -140,6 +140,10 @@
                         <i class="fas fa-theater-masks mr-2"></i>
                         Behaviors
                     </button>
+                    <button id="tab-action-hooks" onclick="switchTab('action-hooks')" class="px-6 py-3 font-semibold text-gray-500 hover:text-blue-600 border-b-2 border-transparent hover:border-blue-300 transition-colors">
+                        <i class="fas fa-bolt mr-2"></i>
+                        Action Hooks
+                    </button>
                     <button id="tab-settings" onclick="switchTab('settings')" class="px-6 py-3 font-semibold text-gray-500 hover:text-blue-600 border-b-2 border-transparent hover:border-blue-300 transition-colors">
                         <i class="fas fa-cog mr-2"></i>
                         Settings
@@ -200,6 +204,51 @@
                 
                 <div id="behaviors-list" class="space-y-4">
                     <!-- Behaviors will be rendered here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- ACTION HOOKS TAB CONTENT -->
+        <!-- ============================================ -->
+        <div id="action-hooks-tab" class="tab-content hidden">
+            <div class="bg-white rounded-lg border-2 border-gray-200 p-6">
+                <!-- Header -->
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                            <i class="fas fa-bolt text-yellow-500"></i>
+                            Action Hooks
+                        </h2>
+                        <p class="text-gray-600 mt-1">
+                            Define actions the AI should take after responding (escalate, schedule, offer callback, etc.)
+                        </p>
+                    </div>
+                    <button onclick="openAddActionHookModal()" class="px-6 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                        <i class="fas fa-plus-circle"></i>
+                        Add New Action Hook
+                    </button>
+                </div>
+
+                <!-- Filter/Search -->
+                <div class="mb-6 flex gap-4">
+                    <div class="flex-1">
+                        <input type="text" id="action-hooks-search" placeholder="Search action hooks..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                    </div>
+                    <select id="action-hooks-category-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                        <option value="">All Categories</option>
+                        <option value="escalation">Escalation</option>
+                        <option value="scheduling">Scheduling</option>
+                        <option value="communication">Communication</option>
+                        <option value="payment">Payment</option>
+                        <option value="information">Information</option>
+                        <option value="call_flow">Call Flow</option>
+                        <option value="system">System</option>
+                    </select>
+                </div>
+                
+                <div id="action-hooks-list" class="space-y-4">
+                    <!-- Action hooks will be rendered here -->
                 </div>
             </div>
         </div>
@@ -2285,6 +2334,11 @@
             if (tabName === 'behaviors') {
                 renderBehaviors();
             }
+            
+            // Load action hooks if switching to action hooks tab
+            if (tabName === 'action-hooks') {
+                renderActionHooks();
+            }
         }
 
         // ============================================
@@ -2656,6 +2710,278 @@
         }
 
         // ============================================
+        // ACTION HOOKS MANAGEMENT
+        // ============================================
+        let availableActionHooks = [];
+
+        // Fetch all action hooks
+        async function fetchActionHooks() {
+            try {
+                const token = getAuthToken();
+                const response = await fetch('/api/admin/global-action-hooks', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const result = await response.json();
+                availableActionHooks = result.data || [];
+                console.log(`Loaded ${availableActionHooks.length} action hooks from database`);
+                return availableActionHooks;
+            } catch (error) {
+                console.error('Error fetching action hooks:', error);
+                showNotification('Failed to load action hooks', 'error');
+                return [];
+            }
+        }
+
+        // Render action hooks list
+        async function renderActionHooks() {
+            const container = document.getElementById('action-hooks-list');
+            
+            // Show loading state
+            container.innerHTML = '<div class="text-center py-8 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Loading action hooks...</div>';
+            
+            // Fetch fresh data
+            await fetchActionHooks();
+            
+            // Apply filters
+            const searchTerm = document.getElementById('action-hooks-search')?.value.toLowerCase() || '';
+            const categoryFilter = document.getElementById('action-hooks-category-filter')?.value || '';
+            
+            let filtered = availableActionHooks.filter(hook => {
+                const matchesSearch = !searchTerm || 
+                    hook.name.toLowerCase().includes(searchTerm) ||
+                    hook.hookId.toLowerCase().includes(searchTerm) ||
+                    (hook.description && hook.description.toLowerCase().includes(searchTerm));
+                
+                const matchesCategory = !categoryFilter || hook.category === categoryFilter;
+                
+                return matchesSearch && matchesCategory;
+            });
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                        <i class="fas fa-bolt text-gray-400 text-4xl mb-3"></i>
+                        <p class="text-gray-600 font-semibold">No action hooks found</p>
+                        <button onclick="openAddActionHookModal()" class="mt-4 px-4 py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-lg font-semibold hover:shadow-lg transition-all">
+                            <i class="fas fa-plus-circle mr-2"></i>Add Your First Action Hook
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Render hook cards
+            container.innerHTML = filtered.map(hook => {
+                const categoryColors = {
+                    escalation: 'bg-red-100 text-red-700',
+                    scheduling: 'bg-blue-100 text-blue-700',
+                    communication: 'bg-green-100 text-green-700',
+                    payment: 'bg-purple-100 text-purple-700',
+                    information: 'bg-cyan-100 text-cyan-700',
+                    call_flow: 'bg-indigo-100 text-indigo-700',
+                    system: 'bg-gray-100 text-gray-700'
+                };
+                
+                const categoryColor = categoryColors[hook.category] || 'bg-gray-100 text-gray-700';
+                const isSystemDefault = hook.isSystemDefault;
+                
+                return `
+                    <div class="bg-gradient-to-r from-gray-50 to-white border-2 border-gray-200 rounded-xl p-5 hover:shadow-lg transition-all hover:border-yellow-400">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <span class="text-2xl">${hook.icon || '⚡'}</span>
+                                    <div>
+                                        <h3 class="text-lg font-bold text-gray-900">${hook.name}</h3>
+                                        <code class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">${hook.hookId}</code>
+                                    </div>
+                                </div>
+                                
+                                ${hook.description ? `<p class="text-sm text-gray-600 mb-3">${hook.description}</p>` : ''}
+                                
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="text-xs font-semibold px-3 py-1 rounded-full ${categoryColor}">
+                                        ${hook.category.replace('_', ' ').toUpperCase()}
+                                    </span>
+                                    ${hook.isActive ? 
+                                        '<span class="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700">Active</span>' :
+                                        '<span class="text-xs font-semibold px-3 py-1 rounded-full bg-gray-100 text-gray-500">Inactive</span>'
+                                    }
+                                    ${isSystemDefault ? 
+                                        '<span class="text-xs font-semibold px-3 py-1 rounded-full bg-blue-100 text-blue-700"><i class="fas fa-shield-alt mr-1"></i>System Default</span>' : ''
+                                    }
+                                </div>
+                            </div>
+                            
+                            <div class="flex gap-2 ml-4">
+                                <button onclick='editActionHook(${JSON.stringify(hook).replace(/'/g, "&apos;")})' class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
+                                    <i class="fas fa-edit"></i>
+                                    Edit
+                                </button>
+                                ${!isSystemDefault ? `
+                                    <button onclick='deleteActionHook(${JSON.stringify(hook).replace(/'/g, "&apos;")})' class="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Open add action hook modal
+        function openAddActionHookModal() {
+            document.getElementById('add-action-hook-modal').style.display = 'flex';
+            document.getElementById('add-action-hook-form').reset();
+            document.getElementById('add-hook-active').checked = true;
+        }
+
+        // Close add action hook modal
+        function closeAddActionHookModal() {
+            document.getElementById('add-action-hook-modal').style.display = 'none';
+        }
+
+        // Handle add action hook form submission
+        document.getElementById('add-action-hook-form')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            try {
+                showNotification('⏳ Adding action hook...', 'info');
+
+                const hookData = {
+                    hookId: document.getElementById('add-hook-id').value.trim(),
+                    name: document.getElementById('add-hook-name').value.trim(),
+                    description: document.getElementById('add-hook-description').value.trim(),
+                    category: document.getElementById('add-hook-category').value,
+                    icon: document.getElementById('add-hook-icon').value.trim(),
+                    functionName: document.getElementById('add-hook-function').value.trim(),
+                    isActive: document.getElementById('add-hook-active').checked
+                };
+
+                const token = getAuthToken();
+                const response = await fetch('/api/admin/global-action-hooks', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(hookData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showNotification(`✅ Action hook "${hookData.name}" added successfully!`, 'success');
+                    closeAddActionHookModal();
+                    await renderActionHooks();
+                } else {
+                    showNotification('Failed to add action hook: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error adding action hook:', error);
+                showNotification('Error adding action hook: ' + error.message, 'error');
+            }
+        });
+
+        // Edit action hook
+        function editActionHook(hook) {
+            document.getElementById('edit-hook-id-original').value = hook.hookId;
+            document.getElementById('edit-hook-id').value = hook.hookId;
+            document.getElementById('edit-hook-name').value = hook.name;
+            document.getElementById('edit-hook-description').value = hook.description || '';
+            document.getElementById('edit-hook-category').value = hook.category;
+            document.getElementById('edit-hook-icon').value = hook.icon || '';
+            document.getElementById('edit-hook-function').value = hook.functionName || '';
+            document.getElementById('edit-hook-active').checked = hook.isActive !== false;
+            
+            document.getElementById('edit-action-hook-modal').style.display = 'flex';
+        }
+
+        // Close edit action hook modal
+        function closeEditActionHookModal() {
+            document.getElementById('edit-action-hook-modal').style.display = 'none';
+        }
+
+        // Handle edit action hook form submission
+        document.getElementById('edit-action-hook-form')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            try {
+                showNotification('⏳ Updating action hook...', 'info');
+
+                const hookId = document.getElementById('edit-hook-id-original').value;
+                const hookData = {
+                    name: document.getElementById('edit-hook-name').value.trim(),
+                    description: document.getElementById('edit-hook-description').value.trim(),
+                    category: document.getElementById('edit-hook-category').value,
+                    icon: document.getElementById('edit-hook-icon').value.trim(),
+                    functionName: document.getElementById('edit-hook-function').value.trim(),
+                    isActive: document.getElementById('edit-hook-active').checked
+                };
+
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-action-hooks/${hookId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(hookData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showNotification(`✅ Action hook "${hookData.name}" updated successfully!`, 'success');
+                    closeEditActionHookModal();
+                    await renderActionHooks();
+                } else {
+                    showNotification('Failed to update action hook: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error updating action hook:', error);
+                showNotification('Error updating action hook: ' + error.message, 'error');
+            }
+        });
+
+        // Delete action hook
+        async function deleteActionHook(hook) {
+            if (!confirm(`Are you sure you want to delete the action hook "${hook.name}"?\n\nThis action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                showNotification('⏳ Deleting action hook...', 'info');
+
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-action-hooks/${hook.hookId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showNotification(`✅ Action hook "${hook.name}" deleted successfully!`, 'success');
+                    await renderActionHooks();
+                } else {
+                    showNotification('Failed to delete action hook: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting action hook:', error);
+                showNotification('Error deleting action hook: ' + error.message, 'error');
+            }
+        }
+
+        // Search and filter action hooks
+        document.getElementById('action-hooks-search')?.addEventListener('input', renderActionHooks);
+        document.getElementById('action-hooks-category-filter')?.addEventListener('change', renderActionHooks);
+
+        // ============================================
         // INITIALIZATION
         // ============================================
         document.addEventListener('DOMContentLoaded', async function() {
@@ -2769,6 +3095,157 @@
 
                 <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
                     <button type="button" onclick="closeEditBehaviorModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-all flex items-center gap-2">
+                        <i class="fas fa-save"></i>
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- ADD ACTION HOOK MODAL -->
+    <!-- ============================================ -->
+    <div id="add-action-hook-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 700px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            <div style="display: flex; align-items: center; justify-between; margin-bottom: 20px;">
+                <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                    <i class="fas fa-bolt text-yellow-500 mr-2"></i>
+                    Add Action Hook
+                </h2>
+                <button onclick="closeAddActionHookModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                    &times;
+                </button>
+            </div>
+
+            <form id="add-action-hook-form" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Hook ID *</label>
+                        <input type="text" id="add-hook-id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="escalate_to_human">
+                        <p class="text-xs text-gray-500 mt-1">Unique identifier (snake_case)</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Category *</label>
+                        <select id="add-hook-category" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                            <option value="escalation">Escalation</option>
+                            <option value="scheduling">Scheduling</option>
+                            <option value="communication">Communication</option>
+                            <option value="payment">Payment</option>
+                            <option value="information">Information</option>
+                            <option value="call_flow">Call Flow</option>
+                            <option value="system">System</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Display Name *</label>
+                    <input type="text" id="add-hook-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="Escalate to Human Agent">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Description</label>
+                    <textarea id="add-hook-description" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="Transfer call to live agent when AI cannot help"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Icon (emoji)</label>
+                    <input type="text" id="add-hook-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="📞">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Function Name</label>
+                    <input type="text" id="add-hook-function" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="escalateToHuman">
+                    <p class="text-xs text-gray-500 mt-1">Backend function to execute (camelCase)</p>
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" id="add-hook-active" checked class="w-5 h-5 text-yellow-500 border-gray-300 rounded focus:ring-yellow-500 mr-2">
+                    <label class="text-sm font-bold text-gray-700">Active</label>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+                    <button type="button" onclick="closeAddActionHookModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-lg font-semibold hover:shadow-lg transition-all flex items-center gap-2">
+                        <i class="fas fa-plus-circle"></i>
+                        Add Action Hook
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- EDIT ACTION HOOK MODAL -->
+    <!-- ============================================ -->
+    <div id="edit-action-hook-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; max-width: 700px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
+            <div style="display: flex; align-items: center; justify-between; margin-bottom: 20px;">
+                <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
+                    <i class="fas fa-edit text-yellow-500 mr-2"></i>
+                    Edit Action Hook
+                </h2>
+                <button onclick="closeEditActionHookModal()" style="background: none; border: none; font-size: 32px; color: #95a5a6; cursor: pointer;">
+                    &times;
+                </button>
+            </div>
+
+            <form id="edit-action-hook-form" class="space-y-4">
+                <input type="hidden" id="edit-hook-id-original">
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Hook ID *</label>
+                        <input type="text" id="edit-hook-id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-gray-100" readonly>
+                        <p class="text-xs text-gray-500 mt-1">Cannot be changed</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Category *</label>
+                        <select id="edit-hook-category" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                            <option value="escalation">Escalation</option>
+                            <option value="scheduling">Scheduling</option>
+                            <option value="communication">Communication</option>
+                            <option value="payment">Payment</option>
+                            <option value="information">Information</option>
+                            <option value="call_flow">Call Flow</option>
+                            <option value="system">System</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Display Name *</label>
+                    <input type="text" id="edit-hook-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Description</label>
+                    <textarea id="edit-hook-description" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Icon (emoji)</label>
+                    <input type="text" id="edit-hook-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Function Name</label>
+                    <input type="text" id="edit-hook-function" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" id="edit-hook-active" class="w-5 h-5 text-yellow-500 border-gray-300 rounded focus:ring-yellow-500 mr-2">
+                    <label class="text-sm font-bold text-gray-700">Active</label>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+                    <button type="button" onclick="closeEditActionHookModal()" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
                         Cancel
                     </button>
                     <button type="submit" class="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-all flex items-center gap-2">
