@@ -1621,13 +1621,43 @@
         }
 
         async function seedTemplate() {
-            if (!confirm('This will create a new Global AI Brain template with 8 categories.\n\nContinue?')) {
-                return;
-            }
-
             try {
-                console.log('Starting seed process...');
+                // First check if template already exists
                 const token = getAuthToken();
+                const checkResponse = await fetch('/api/admin/global-instant-responses/active', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const checkResult = await checkResponse.json();
+                
+                if (checkResult.success && checkResult.data) {
+                    // Template already exists
+                    const proceed = confirm(
+                        '⚠️ Template Already Exists!\n\n' +
+                        `Current Template: ${checkResult.data.version}\n` +
+                        `Categories: ${checkResult.data.stats?.totalCategories || 0}\n` +
+                        `Scenarios: ${checkResult.data.stats?.totalScenarios || 0}\n\n` +
+                        'If you want to re-seed, you must first delete the existing template using the "Delete All Templates" button above.\n\n' +
+                        'Click OK to refresh and view the existing template, or Cancel to stay here.'
+                    );
+                    
+                    if (proceed) {
+                        location.reload();
+                    }
+                    return;
+                }
+
+                // No template exists, proceed with seeding
+                if (!confirm('This will create a new Global AI Brain template with 8 categories.\n\nContinue?')) {
+                    return;
+                }
+
+                console.log('Starting seed process...');
+                showNotification('⏳ Seeding 8 categories...', 'info');
                 
                 const response = await fetch('/api/admin/global-instant-responses/seed', {
                     method: 'POST',
@@ -1641,14 +1671,14 @@
                 console.log('Seed result:', result);
 
                 if (result.success) {
-                    showNotification('Successfully seeded 8 categories! Refreshing...', 'success');
+                    showNotification('✅ Successfully seeded 8 categories! Refreshing...', 'success');
                     setTimeout(() => location.reload(), 1500);
                 } else {
-                    showNotification('Seeding failed: ' + result.message, 'error');
+                    showNotification('❌ Seeding failed: ' + result.message, 'error');
                 }
             } catch (error) {
                 console.error('Seed error:', error);
-                showNotification('Error seeding template: ' + error.message, 'error');
+                showNotification('❌ Error seeding template: ' + error.message, 'error');
             }
         }
 
