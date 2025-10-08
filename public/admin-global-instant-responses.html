@@ -2995,9 +2995,9 @@
             document.getElementById('edit-action-hook-modal').style.display = 'none';
         }
 
-        // Handle edit action hook form submission
-        document.getElementById('edit-action-hook-form')?.addEventListener('submit', async function(e) {
-            console.log('🟢 [CHECKPOINT 4] Form submit event triggered');
+        // Handle edit action hook form submission (named function for onsubmit)
+        async function handleEditActionHookSubmit(e) {
+            console.log('🟢 [CHECKPOINT 4] Form submit event triggered via onsubmit handler');
             e.preventDefault();
             console.log('🟢 [CHECKPOINT 5] Default form action prevented');
             
@@ -3048,7 +3048,7 @@
                 console.error('🔴 [CHECKPOINT ERROR] Exception caught:', error);
                 showNotification('Error updating action hook: ' + error.message, 'error');
             }
-        });
+        }
 
         // Delete action hook
         async function deleteActionHook(hook) {
@@ -3522,7 +3522,7 @@
                 </button>
             </div>
 
-            <form id="edit-action-hook-form" class="space-y-4">
+            <form id="edit-action-hook-form" class="space-y-4" onsubmit="handleEditActionHookSubmit(event); return false;">
                 <input type="hidden" id="edit-hook-id-original">
                 
                 <div class="grid grid-cols-2 gap-4">
