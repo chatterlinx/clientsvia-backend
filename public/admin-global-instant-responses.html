@@ -2971,8 +2971,8 @@
 
         // Edit action hook
         function editActionHook(hook) {
-            document.getElementById('edit-hook-id-original').value = hook.hookId;
-            document.getElementById('edit-hook-id').value = hook.hookId;
+            document.getElementById('edit-hook-id-original').value = hook._id;  // Store MongoDB _id for API call
+            document.getElementById('edit-hook-id').value = hook.hookId;  // Display hookId (read-only)
             document.getElementById('edit-hook-name').value = hook.name;
             document.getElementById('edit-hook-description').value = hook.description || '';
             document.getElementById('edit-hook-category').value = hook.category;
@@ -3040,7 +3040,7 @@
                 showNotification('⏳ Deleting action hook...', 'info');
 
                 const token = getAuthToken();
-                const response = await fetch(`/api/admin/global-action-hooks/${hook.hookId}`, {
+                const response = await fetch(`/api/admin/global-action-hooks/${hook._id}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
