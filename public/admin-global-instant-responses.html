@@ -3110,7 +3110,7 @@
             document.getElementById('edit-category-icon').value = cat.icon || '';
             document.getElementById('edit-category-color').value = cat.color || 'gray';
             document.getElementById('edit-category-sort').value = cat.sortOrder || 0;
-            document.getElementById('edit-category-active').value = cat.isActive !== false;
+            document.getElementById('edit-category-active').checked = cat.isActive !== false;
             
             document.getElementById('edit-action-hook-category-modal').style.display = 'flex';
         }
