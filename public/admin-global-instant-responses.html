@@ -2931,8 +2931,8 @@
             document.getElementById('add-action-hook-modal').style.display = 'none';
         }
 
-        // Handle add action hook form submission
-        document.getElementById('add-action-hook-form')?.addEventListener('submit', async function(e) {
+        // Handle add action hook form submission (named function for onsubmit)
+        async function handleAddActionHookSubmit(e) {
             e.preventDefault();
             
             try {
@@ -2971,7 +2971,7 @@
                 console.error('Error adding action hook:', error);
                 showNotification('Error adding action hook: ' + error.message, 'error');
             }
-        });
+        }
 
         // Edit action hook
         function editActionHook(hook) {
@@ -3447,7 +3447,7 @@
                 </button>
             </div>
 
-            <form id="add-action-hook-form" class="space-y-4">
+            <form id="add-action-hook-form" class="space-y-4" onsubmit="handleAddActionHookSubmit(event); return false;">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Hook ID *</label>
