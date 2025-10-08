@@ -3092,6 +3092,7 @@
                     await renderCategories();
                     await loadCategoriesIntoDropdowns();
                 } else {
+                    console.error('❌ Add category failed:', result);
                     showNotification('Failed to add category: ' + result.message, 'error');
                 }
             } catch (error) {
