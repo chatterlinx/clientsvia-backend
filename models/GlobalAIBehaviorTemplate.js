@@ -54,25 +54,40 @@ const globalAIBehaviorTemplateSchema = new Schema({
     // VOCAL CHARACTERISTICS (for non-LLM AI voice synthesis)
     // ============================================
     
-    // Tone: How the AI should sound emotionally
+    // Tone: How the AI should sound emotionally (38 options organized by category)
     tone: {
         type: String,
-        enum: ['calm', 'empathetic', 'urgent', 'cheerful', 'professional', 'reassuring', 'apologetic', 'friendly', 'firm', 'neutral'],
-        default: 'professional',
+        enum: [
+            // Professional & Business
+            'professional', 'authoritative', 'business_casual', 'confident', 'executive',
+            // Warm & Supportive
+            'warm', 'empathetic', 'compassionate', 'reassuring', 'nurturing', 'caring',
+            // Friendly & Upbeat
+            'friendly', 'cheerful', 'enthusiastic', 'energetic', 'upbeat', 'playful',
+            // Calm & Steady
+            'calm', 'soothing', 'gentle', 'patient', 'relaxed', 'steady',
+            // Urgent & Direct
+            'urgent', 'firm', 'direct', 'assertive', 'serious',
+            // Apologetic & Humble
+            'apologetic', 'humble', 'regretful', 'sincere',
+            // Neutral
+            'neutral', 'matter_of_fact'
+        ],
+        default: 'calm',
         index: true
     },
     
-    // Pace: Speed of speech
+    // Pace: Speed of speech (8 granular levels from 0.75x to 1.75x)
     pace: {
         type: String,
-        enum: ['very_slow', 'slow', 'normal', 'fast', 'very_fast'],
+        enum: ['very_slow', 'slow', 'slightly_slow', 'normal', 'slightly_fast', 'fast', 'very_fast', 'rapid'],
         default: 'normal'
     },
     
-    // Volume: Loudness/intensity of voice
+    // Volume: Loudness/intensity of voice (11 levels from whisper to commanding)
     volume: {
         type: String,
-        enum: ['soft', 'gentle', 'normal', 'firm', 'strong'],
+        enum: ['whisper', 'very_soft', 'soft', 'slightly_soft', 'normal', 'slightly_above_normal', 'moderate', 'firm', 'strong', 'loud', 'very_loud'],
         default: 'normal'
     },
     

@@ -670,6 +670,17 @@
             
             // Initialize the directory manager
             window.directoryManager = new DirectoryManager();
+            
+            // ✅ AUTO-HIGHLIGHT ACTIVE NAVIGATION LINK
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('header nav a.nav-link');
+            
+            navLinks.forEach(link => {
+                const linkPath = link.getAttribute('href');
+                if (linkPath && currentPath.includes(linkPath.replace('/', ''))) {
+                    link.classList.add('active-tab');
+                }
+            });
         });
     </script>
 </body>
