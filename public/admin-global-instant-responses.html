@@ -242,25 +242,27 @@
                                             <i class="fas fa-trash-alt text-white text-xl"></i>
                                         </div>
                                         <div>
-                                            <h4 class="text-lg font-bold text-gray-900">🔧 Delete Old Template (Migration Tool)</h4>
-                                            <p class="text-sm text-gray-600">Remove old template with incompatible schema</p>
+                                            <h4 class="text-lg font-bold text-gray-900">🔧 Delete All Templates (Schema Migration)</h4>
+                                            <p class="text-sm text-gray-600">Nuclear option - remove ALL templates from database</p>
                                         </div>
                                     </div>
                                     <div class="space-y-2 text-sm text-gray-700">
-                                        <p><i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>Use this if you have schema errors (priority, type, tone, pace fields)</p>
-                                        <p><i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>This will delete ALL global templates</p>
-                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>After deletion, reseed with "Seed 8 Categories" button</p>
-                                        <p class="text-red-700 font-semibold mt-3">
+                                        <p><i class="fas fa-exclamation-triangle text-red-600 mr-2"></i><strong>Use this if:</strong> HTTP 500 errors when adding categories (old schema conflict)</p>
+                                        <p><i class="fas fa-exclamation-triangle text-red-600 mr-2"></i><strong>What it does:</strong> Permanently deletes ALL global templates from database</p>
+                                        <p><i class="fas fa-shield-alt text-blue-600 mr-2"></i><strong>Safety:</strong> Requires typing "DELETE" to confirm (prevents accidents)</p>
+                                        <p><i class="fas fa-redo text-green-600 mr-2"></i><strong>After deletion:</strong> Click "Seed 8 Categories" to rebuild with new schema</p>
+                                        <p class="text-red-700 font-semibold mt-3 bg-red-100 px-3 py-2 rounded border border-red-300">
                                             <i class="fas fa-skull-crossbones mr-1"></i>
-                                            DANGEROUS: Only use during migration from old to new schema
+                                            DANGEROUS: Only for schema migration or fixing corrupted templates
                                         </p>
                                     </div>
                                 </div>
                                 <div class="ml-4">
-                                    <button onclick="deleteAllTemplates()" class="px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                    <button onclick="deleteAllTemplates()" class="px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap hover:from-red-700 hover:to-pink-700">
                                         <i class="fas fa-trash-alt"></i>
                                         Delete All Templates
                                     </button>
+                                    <p class="text-xs text-red-600 mt-2 text-center font-medium">Must type "DELETE"</p>
                                 </div>
                             </div>
                         </div>
@@ -1531,11 +1533,26 @@
         }
 
         async function deleteAllTemplates() {
-            if (!confirm('⚠️ DANGER: This will DELETE ALL global templates!\n\nThis is only needed if you have schema errors from old templates.\n\nAfter deletion, you MUST reseed with the "Seed 8 Categories" button.\n\nAre you ABSOLUTELY SURE?')) {
+            // First confirmation with typed input
+            const typedConfirmation = prompt(
+                '⚠️ DANGER: DELETE ALL GLOBAL TEMPLATES\n\n' +
+                'This will permanently delete ALL global AI Brain templates.\n' +
+                'Only use this during schema migration or if you have template errors.\n\n' +
+                'After deletion, you MUST click "Seed 8 Categories" to rebuild.\n\n' +
+                '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+                'Type DELETE (in capital letters) to confirm:'
+            );
+
+            if (typedConfirmation !== 'DELETE') {
+                if (typedConfirmation !== null) {
+                    showNotification('❌ Deletion cancelled - confirmation text did not match', 'error');
+                }
                 return;
             }
 
-            if (!confirm('Last chance! This action CANNOT be undone.\n\nProceed with deletion?')) {
+            // Second confirmation
+            if (!confirm('⚠️ FINAL CONFIRMATION\n\nYou typed DELETE correctly.\n\nThis will now permanently delete all templates.\n\nProceed?')) {
+                showNotification('❌ Deletion cancelled by user', 'info');
                 return;
             }
 
