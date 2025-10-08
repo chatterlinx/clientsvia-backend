@@ -486,52 +486,6 @@
                     <textarea id="edit-scenario-full-reply" rows="4" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
                 </div>
 
-                <!-- Tone & Pace -->
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Tone</label>
-                        <select id="edit-scenario-tone" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                            <option value="professional">Professional</option>
-                            <option value="empathetic">Empathetic</option>
-                            <option value="urgent">Urgent</option>
-                            <option value="apologetic">Apologetic</option>
-                            <option value="enthusiastic">Enthusiastic</option>
-                            <option value="friendly">Friendly</option>
-                            <option value="reassuring">Reassuring</option>
-                            <option value="neutral">Neutral</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Pace</label>
-                        <select id="edit-scenario-pace" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                            <option value="normal">Normal</option>
-                            <option value="slow">Slow</option>
-                            <option value="fast">Fast</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Priority & Confidence -->
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Priority (1-10)</label>
-                        <input type="number" id="edit-scenario-priority" min="1" max="10" value="5" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Confidence Threshold (0-100%)</label>
-                        <input type="number" id="edit-scenario-confidence" min="0" max="100" value="75" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    </div>
-                </div>
-
-                <!-- Escalation Flags -->
-                <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">
-                        Escalation Flags (comma separated)
-                        <span class="text-xs text-gray-500 font-normal">- e.g., immediate_transfer, log_incident</span>
-                    </label>
-                    <input type="text" id="edit-scenario-escalation" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="immediate_transfer, log_incident">
-                </div>
-
                 <!-- Active Toggle -->
                 <div class="flex items-center">
                     <input type="checkbox" id="edit-scenario-active" checked class="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mr-2">
@@ -1291,7 +1245,7 @@
                 // Save to backend
                 const token = getAuthToken();
                 const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}`, {
-                    method: 'PUT',
+                    method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -1356,7 +1310,7 @@
                 // Save to backend
                 const token = getAuthToken();
                 const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}`, {
-                    method: 'PUT',
+                    method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -1417,7 +1371,7 @@
 
                 const token = getAuthToken();
                 const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}`, {
-                    method: 'PUT',
+                    method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -1746,7 +1700,7 @@
                 // Save to backend
                 const token = getAuthToken();
                 const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}`, {
-                    method: 'PUT',
+                    method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -1826,7 +1780,7 @@
                 // Save to backend
                 const token = getAuthToken();
                 const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}`, {
-                    method: 'PUT',
+                    method: 'PATCH',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
@@ -2254,7 +2208,7 @@
                 
                 const token = getAuthToken();
                 const response = await fetch(`/api/admin/global-behaviors/${behaviorId}`, {
-                    method: 'PUT',
+                    method: 'PATCH',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
