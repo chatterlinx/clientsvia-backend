@@ -28,11 +28,14 @@ const GlobalActionHookCategory = require('../../models/GlobalActionHookCategory'
 
 /**
  * GET /api/admin/global-action-hook-categories
- * List all action hook categories
+ * List all action hook categories (including inactive for admin management)
  */
 router.get('/', async (req, res) => {
     try {
-        const categories = await GlobalActionHookCategory.getActiveCategories();
+        // Get ALL categories (not just active) so admins can manage inactive ones
+        const categories = await GlobalActionHookCategory.find()
+            .sort({ sortOrder: 1, name: 1 })
+            .lean();
         res.json({
             success: true,
             count: categories.length,

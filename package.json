@@ -10,7 +10,8 @@
     "build-css": "tailwindcss -i ./public/css/input.css -o ./public/css/output.css --watch",
     "build-css-prod": "tailwindcss -i ./public/css/input.css -o ./public/css/output.css --minify",
     "force-delete-template": "node scripts/force-delete-old-template.js",
-    "fix-templates": "node scripts/diagnose-and-fix-template.js"
+    "fix-templates": "node scripts/diagnose-and-fix-template.js",
+    "check-categories": "node scripts/check-action-hook-categories.js"
   },
   "keywords": [],
   "author": "",
