@@ -117,6 +117,50 @@ const scenarioSchema = new Schema({
         default: true
     },
     
+    // ============================================
+    // SMART HOLD CONFIGURATION (optional)
+    // ============================================
+    
+    // Enable smart hold for this scenario (customer says "hold on", "let me check", etc.)
+    enableSmartHold: {
+        type: Boolean,
+        default: false
+    },
+    
+    // Smart hold settings (only applies if enableSmartHold = true)
+    smartHoldConfig: {
+        // Timeout intervals in seconds (when to check in with customer)
+        timeoutIntervals: {
+            type: [Number],
+            default: [60, 120, 180]  // Check at 1min, 2min, 3min
+        },
+        
+        // Maximum hold duration in seconds (after this, offer callback)
+        maxDuration: {
+            type: Number,
+            default: 300  // 5 minutes max
+        },
+        
+        // Enable active listening (monitor for customer speech during hold)
+        activeListening: {
+            type: Boolean,
+            default: true
+        },
+        
+        // Custom check-in messages (what AI says at each timeout)
+        checkInMessages: [{
+            type: String,
+            trim: true
+        }],
+        
+        // What to say if max duration exceeded
+        maxDurationMessage: {
+            type: String,
+            trim: true,
+            default: "I want to make sure I'm still helping — would you like me to call you back when you're ready?"
+        }
+    },
+    
     // 🆕 VERSION TRACKING: For sync comparison
     version: {
         type: String,

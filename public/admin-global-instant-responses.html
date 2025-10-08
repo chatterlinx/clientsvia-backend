@@ -559,6 +559,85 @@
                     <label class="text-sm font-bold text-gray-700">Active</label>
                 </div>
 
+                <!-- ============================================ -->
+                <!-- SMART HOLD CONFIGURATION -->
+                <!-- ============================================ -->
+                <div class="border-t border-gray-200 pt-6 mt-6">
+                    <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 mb-4">
+                        <div class="flex items-start gap-3">
+                            <div class="flex items-center">
+                                <input type="checkbox" id="edit-scenario-smart-hold-enabled" class="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500" onchange="toggleSmartHoldOptions()">
+                            </div>
+                            <div class="flex-1">
+                                <label for="edit-scenario-smart-hold-enabled" class="text-sm font-bold text-gray-900 cursor-pointer flex items-center gap-2">
+                                    <i class="fas fa-robot text-purple-600"></i>
+                                    Enable Smart Hold (Active Listening)
+                                </label>
+                                <p class="text-xs text-gray-600 mt-1">
+                                    AI will actively listen during hold, check in at intervals, and respond if customer speaks. Perfect for "let me check my calendar" scenarios.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Smart Hold Options (shown when enabled) -->
+                    <div id="smart-hold-options" style="display: none;" class="space-y-4 bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        
+                        <!-- Timeout Intervals -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                <i class="fas fa-clock text-blue-500 mr-1"></i>
+                                Check-in Intervals (seconds)
+                            </label>
+                            <div class="grid grid-cols-3 gap-3">
+                                <input type="number" id="edit-smart-hold-interval-1" value="60" min="30" max="600" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-center" placeholder="60">
+                                <input type="number" id="edit-smart-hold-interval-2" value="120" min="30" max="600" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-center" placeholder="120">
+                                <input type="number" id="edit-smart-hold-interval-3" value="180" min="30" max="600" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-center" placeholder="180">
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">AI will say "I'm still here..." at these intervals</p>
+                        </div>
+
+                        <!-- Max Duration -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                <i class="fas fa-hourglass-end text-red-500 mr-1"></i>
+                                Max Hold Duration (seconds)
+                            </label>
+                            <input type="number" id="edit-smart-hold-max-duration" value="300" min="60" max="900" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="300">
+                            <p class="text-xs text-gray-500 mt-1">After this time, AI offers callback option</p>
+                        </div>
+
+                        <!-- Check-in Messages -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                <i class="fas fa-comments text-green-500 mr-1"></i>
+                                Check-in Messages (one per line)
+                            </label>
+                            <textarea id="edit-smart-hold-checkin-messages" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="I'm still here — take your time.&#10;No rush — I'm right here when you're ready.&#10;Still here for you — let me know when you're set."></textarea>
+                            <p class="text-xs text-gray-500 mt-1">AI randomly picks from these at each interval</p>
+                        </div>
+
+                        <!-- Max Duration Message -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                <i class="fas fa-phone-slash text-orange-500 mr-1"></i>
+                                Max Duration Message
+                            </label>
+                            <textarea id="edit-smart-hold-max-message" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="I want to make sure I'm still helping — would you like me to call you back when you're ready?"></textarea>
+                            <p class="text-xs text-gray-500 mt-1">What AI says when max hold time is reached</p>
+                        </div>
+
+                        <!-- Active Listening Toggle -->
+                        <div class="flex items-center bg-white rounded-lg p-3 border border-gray-200">
+                            <input type="checkbox" id="edit-smart-hold-active-listening" checked class="w-5 h-5 text-purple-600 border-gray-300 rounded focus:ring-purple-500 mr-3">
+                            <div>
+                                <label for="edit-smart-hold-active-listening" class="text-sm font-bold text-gray-900 cursor-pointer">Active Listening Mode</label>
+                                <p class="text-xs text-gray-600">AI monitors for customer speech and exits hold immediately if detected</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Action Buttons -->
                 <div class="flex items-center justify-between pt-6 border-t border-gray-200">
                     <button type="button" onclick="regenerateKeywordsQnA()" class="px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors flex items-center gap-2">
@@ -1848,22 +1927,62 @@
             currentEditingCategory = categoryIndex;
             currentEditingScenario = scenarioIndex;
 
-            // Populate form
+            // Populate basic form fields
             document.getElementById('edit-scenario-category-index').value = categoryIndex;
             document.getElementById('edit-scenario-index').value = scenarioIndex;
             document.getElementById('edit-scenario-name').value = scenario.name;
             document.getElementById('edit-scenario-triggers').value = (scenario.triggers || []).join('\n');
             document.getElementById('edit-scenario-quick-reply').value = scenario.quickReply || '';
             document.getElementById('edit-scenario-full-reply').value = scenario.fullReply || '';
-            document.getElementById('edit-scenario-tone').value = scenario.tone || 'professional';
-            document.getElementById('edit-scenario-pace').value = scenario.pace || 'normal';
-            document.getElementById('edit-scenario-priority').value = scenario.priority || 5;
-            document.getElementById('edit-scenario-confidence').value = (scenario.confidenceThreshold || 0.75) * 100;
-            document.getElementById('edit-scenario-escalation').value = (scenario.escalationFlags || []).join(', ');
             document.getElementById('edit-scenario-active').checked = scenario.isActive !== false;
+
+            // Populate Smart Hold fields
+            const smartHoldEnabled = scenario.enableSmartHold || false;
+            document.getElementById('edit-scenario-smart-hold-enabled').checked = smartHoldEnabled;
+            
+            if (smartHoldEnabled && scenario.smartHoldConfig) {
+                const config = scenario.smartHoldConfig;
+                
+                // Timeout intervals
+                const intervals = config.timeoutIntervals || [60, 120, 180];
+                document.getElementById('edit-smart-hold-interval-1').value = intervals[0] || 60;
+                document.getElementById('edit-smart-hold-interval-2').value = intervals[1] || 120;
+                document.getElementById('edit-smart-hold-interval-3').value = intervals[2] || 180;
+                
+                // Max duration
+                document.getElementById('edit-smart-hold-max-duration').value = config.maxDuration || 300;
+                
+                // Check-in messages
+                document.getElementById('edit-smart-hold-checkin-messages').value = (config.checkInMessages || []).join('\n');
+                
+                // Max duration message
+                document.getElementById('edit-smart-hold-max-message').value = config.maxDurationMessage || '';
+                
+                // Active listening
+                document.getElementById('edit-smart-hold-active-listening').checked = config.activeListening !== false;
+            } else {
+                // Set defaults
+                document.getElementById('edit-smart-hold-interval-1').value = 60;
+                document.getElementById('edit-smart-hold-interval-2').value = 120;
+                document.getElementById('edit-smart-hold-interval-3').value = 180;
+                document.getElementById('edit-smart-hold-max-duration').value = 300;
+                document.getElementById('edit-smart-hold-checkin-messages').value = "I'm still here — take your time.\nNo rush — I'm right here when you're ready.\nStill here for you — let me know when you're set.";
+                document.getElementById('edit-smart-hold-max-message').value = "I want to make sure I'm still helping — would you like me to call you back when you're ready?";
+                document.getElementById('edit-smart-hold-active-listening').checked = true;
+            }
+            
+            // Show/hide smart hold options based on toggle
+            toggleSmartHoldOptions();
 
             // Show modal
             document.getElementById('edit-scenario-modal').style.display = 'flex';
+        }
+        
+        // Toggle Smart Hold options visibility
+        function toggleSmartHoldOptions() {
+            const enabled = document.getElementById('edit-scenario-smart-hold-enabled').checked;
+            const optionsDiv = document.getElementById('smart-hold-options');
+            optionsDiv.style.display = enabled ? 'block' : 'none';
         }
 
         function closeEditScenarioModal() {
@@ -1994,26 +2113,41 @@
                     .map(t => t.trim().toLowerCase())
                     .filter(t => t.length > 0);
 
-                const escalationFlags = document.getElementById('edit-scenario-escalation').value
-                    .split(',')
-                    .map(f => f.trim())
-                    .filter(f => f.length > 0);
-
                 const updatedScenario = {
                     ...activeTemplate.categories[currentEditingCategory].scenarios[currentEditingScenario],
                     name: document.getElementById('edit-scenario-name').value,
                     triggers,
-                    quickReply: document.getElementById('edit-scenario-quick-reply').value,
-                    fullReply: document.getElementById('edit-scenario-full-reply').value,
-                    tone: document.getElementById('edit-scenario-tone').value,
-                    pace: document.getElementById('edit-scenario-pace').value,
-                    priority: parseInt(document.getElementById('edit-scenario-priority').value),
-                    confidenceThreshold: parseFloat(document.getElementById('edit-scenario-confidence').value) / 100,
-                    escalationFlags,
+                    quickReplies: [document.getElementById('edit-scenario-quick-reply').value],
+                    fullReplies: [document.getElementById('edit-scenario-full-reply').value],
                     isActive: document.getElementById('edit-scenario-active').checked,
                     lastUpdated: new Date(),
                     version: (parseFloat(activeTemplate.categories[currentEditingCategory].scenarios[currentEditingScenario].version || '1.0') + 0.1).toFixed(1)
                 };
+                
+                // Collect Smart Hold configuration
+                const smartHoldEnabled = document.getElementById('edit-scenario-smart-hold-enabled').checked;
+                updatedScenario.enableSmartHold = smartHoldEnabled;
+                
+                if (smartHoldEnabled) {
+                    const checkInMessages = document.getElementById('edit-smart-hold-checkin-messages').value
+                        .split('\n')
+                        .map(m => m.trim())
+                        .filter(m => m.length > 0);
+                    
+                    updatedScenario.smartHoldConfig = {
+                        timeoutIntervals: [
+                            parseInt(document.getElementById('edit-smart-hold-interval-1').value) || 60,
+                            parseInt(document.getElementById('edit-smart-hold-interval-2').value) || 120,
+                            parseInt(document.getElementById('edit-smart-hold-interval-3').value) || 180
+                        ],
+                        maxDuration: parseInt(document.getElementById('edit-smart-hold-max-duration').value) || 300,
+                        activeListening: document.getElementById('edit-smart-hold-active-listening').checked,
+                        checkInMessages,
+                        maxDurationMessage: document.getElementById('edit-smart-hold-max-message').value || ''
+                    };
+                } else {
+                    updatedScenario.smartHoldConfig = undefined;
+                }
 
                 // Update in activeTemplate
                 activeTemplate.categories[currentEditingCategory].scenarios[currentEditingScenario] = updatedScenario;

@@ -629,19 +629,34 @@ router.post('/seed', authenticateJWT, async (req, res) => {
                 scenarios: [{
                     id: 'check-calendar',
                     name: 'Checking Calendar / Need Moment',
-                    triggers: ["hold on", "let me check", "hang on", "one moment", "let me see", "hmm that day", "checking my calendar"],
+                    triggers: ["hold on", "let me check", "hang on", "one moment", "let me see", "hmm that day", "checking my calendar", "give me a second", "let me look that up"],
                     quickReplies: [
                         "No problem — take your time.",
                         "Of course — I'll wait.",
                         "Sure thing — I'm here when you're ready."
                     ],
                     fullReplies: [
-                        "Sure — take your time. I can hold or call you back at a time you choose. Which would you prefer?",
-                        "No rush at all. I can stay on the line or set up a callback. What works better for you?"
+                        "Sure — take your time. I'll stay on the line.",
+                        "No rush at all. I'll be right here when you're ready.",
+                        "Absolutely — take all the time you need."
                     ],
                     keywords: [],
                     qnaPairs: [],
-                    isActive: true
+                    isActive: true,
+                    
+                    // ✅ SMART HOLD ENABLED for this scenario
+                    enableSmartHold: true,
+                    smartHoldConfig: {
+                        timeoutIntervals: [60, 120, 180],  // Check in at 1min, 2min, 3min
+                        maxDuration: 300,  // 5 minute max
+                        activeListening: true,  // Monitor for customer return
+                        checkInMessages: [
+                            "I'm still here — take your time.",
+                            "No rush — I'm right here when you're ready.",
+                            "Still here for you — let me know when you're set."
+                        ],
+                        maxDurationMessage: "I want to make sure I'm still helping — would you like me to call you back when you're ready?"
+                    }
                 }],
                 isActive: true
             },

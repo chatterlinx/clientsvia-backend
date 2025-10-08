@@ -261,8 +261,9 @@ router.post('/seed', async (req, res) => {
             { hookId: 'check_availability', name: 'Check Availability', icon: '🔍', description: 'Check technician/service availability in real-time', category: 'information', functionName: 'checkAvailability', triggerTiming: 'immediately', sortOrder: 13, isSystemDefault: true },
             
             // CALL FLOW CATEGORY
-            { hookId: 'end_call_positive', name: 'End Call (Positive)', icon: '👋', description: 'Gracefully end call after successful resolution', category: 'call_flow', functionName: 'endCallPositive', triggerTiming: 'after_response', sortOrder: 14, isSystemDefault: true },
-            { hookId: 'hold_for_info', name: 'Hold for Information', icon: '⏸️', description: 'Put caller on brief hold while retrieving information', category: 'call_flow', functionName: 'holdForInfo', triggerTiming: 'immediately', sortOrder: 15, isSystemDefault: true }
+            { hookId: 'smart_hold', name: 'Smart Hold (Active Listening)', icon: '⏸️', description: 'Intelligent hold with active listening - monitors for customer return, prompts at intervals, max timeout protection', category: 'call_flow', functionName: 'smartHold', parameters: { activeListening: true, timeoutIntervals: [60, 120, 180], maxDuration: 300, exitOnSpeech: true }, triggerTiming: 'immediately', sortOrder: 14, isSystemDefault: true },
+            { hookId: 'end_call_positive', name: 'End Call (Positive)', icon: '👋', description: 'Gracefully end call after successful resolution', category: 'call_flow', functionName: 'endCallPositive', triggerTiming: 'after_response', sortOrder: 15, isSystemDefault: true },
+            { hookId: 'hold_for_info', name: 'Hold for Information', icon: '⏸️', description: 'Put caller on brief hold while retrieving information (simple hold, no smart features)', category: 'call_flow', functionName: 'holdForInfo', triggerTiming: 'immediately', sortOrder: 16, isSystemDefault: true }
         ];
         
         await GlobalActionHook.insertMany(defaultHooks);
