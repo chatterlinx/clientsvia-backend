@@ -50,7 +50,56 @@ const globalAIBehaviorTemplateSchema = new Schema({
         default: '🎭'
     },
     
-    // Detailed behavior instructions for AI (ONLY source of truth)
+    // ============================================
+    // VOCAL CHARACTERISTICS (for non-LLM AI voice synthesis)
+    // ============================================
+    
+    // Tone: How the AI should sound emotionally
+    tone: {
+        type: String,
+        enum: ['calm', 'empathetic', 'urgent', 'cheerful', 'professional', 'reassuring', 'apologetic', 'friendly', 'firm', 'neutral'],
+        default: 'professional',
+        index: true
+    },
+    
+    // Pace: Speed of speech
+    pace: {
+        type: String,
+        enum: ['very_slow', 'slow', 'normal', 'fast', 'very_fast'],
+        default: 'normal'
+    },
+    
+    // Volume: Loudness/intensity of voice
+    volume: {
+        type: String,
+        enum: ['soft', 'gentle', 'normal', 'firm', 'strong'],
+        default: 'normal'
+    },
+    
+    // Emotion Intensity: How strong is the emotional context (1=mild, 5=severe)
+    emotionIntensity: {
+        type: Number,
+        min: 1,
+        max: 5,
+        default: 3
+    },
+    
+    // ============================================
+    // ACTION HOOKS (what AI should do after responding)
+    // ============================================
+    
+    // Array of action hook IDs that apply to this behavior
+    // Example: ['escalate_to_human', 'offer_scheduling']
+    actionHooks: [{
+        type: String,
+        trim: true
+    }],
+    
+    // ============================================
+    // INSTRUCTIONS & GUIDANCE
+    // ============================================
+    
+    // Detailed behavior instructions for AI (human-readable guidance)
     // This is plain English instructions that tell the AI exactly how to behave
     // Example: "Calm, slow pace, validating feelings, brief reassurance then practical next step"
     instructions: {
