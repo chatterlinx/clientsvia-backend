@@ -209,42 +209,85 @@
         <!-- ============================================ -->
         <div id="action-hooks-tab" class="tab-content hidden">
             <div class="bg-white rounded-lg border-2 border-gray-200 p-6">
-                <!-- Header -->
+                <!-- Main Header -->
                 <div class="flex items-center justify-between mb-6">
                     <div>
                         <h2 class="text-2xl font-bold text-gray-900 flex items-center gap-2">
                             <i class="fas fa-bolt text-yellow-500"></i>
-                            Action Hooks
+                            Action Hooks System
                         </h2>
                         <p class="text-gray-600 mt-1">
-                            Define actions the AI should take after responding (escalate, schedule, offer callback, etc.)
+                            Manage categories and hooks that define AI post-response actions
                         </p>
                     </div>
-                    <button onclick="openAddActionHookModal()" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
-                        <i class="fas fa-plus-circle"></i>
-                        Add New Action Hook
-                    </button>
                 </div>
 
-                <!-- Filter/Search -->
-                <div class="mb-6 flex gap-4">
-                    <div class="flex-1">
-                        <input type="text" id="action-hooks-search" placeholder="Search action hooks..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
-                    </div>
-                    <select id="action-hooks-category-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
-                        <option value="">All Categories</option>
-                        <option value="escalation">Escalation</option>
-                        <option value="scheduling">Scheduling</option>
-                        <option value="communication">Communication</option>
-                        <option value="payment">Payment</option>
-                        <option value="information">Information</option>
-                        <option value="call_flow">Call Flow</option>
-                        <option value="system">System</option>
-                    </select>
+                <!-- Nested Sub-Tabs -->
+                <div class="border-b border-gray-200 mb-6">
+                    <nav class="flex space-x-4">
+                        <button id="subtab-hooks" onclick="switchActionHooksSubTab('hooks')" class="px-4 py-2 font-semibold text-yellow-600 border-b-2 border-yellow-600 transition-colors">
+                            <i class="fas fa-bolt mr-2"></i>
+                            Hooks
+                        </button>
+                        <button id="subtab-categories" onclick="switchActionHooksSubTab('categories')" class="px-4 py-2 font-semibold text-gray-500 hover:text-yellow-600 border-b-2 border-transparent hover:border-yellow-300 transition-colors">
+                            <i class="fas fa-folder-open mr-2"></i>
+                            Categories
+                        </button>
+                    </nav>
                 </div>
-                
-                <div id="action-hooks-list" class="space-y-4">
-                    <!-- Action hooks will be rendered here -->
+
+                <!-- Hooks Sub-Tab Content -->
+                <div id="action-hooks-subtab-content" class="action-hooks-subtab-content">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900">Action Hooks</h3>
+                            <p class="text-gray-600 text-sm mt-1">Define actions the AI should take after responding</p>
+                        </div>
+                        <button onclick="openAddActionHookModal()" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                            <i class="fas fa-plus-circle"></i>
+                            Add New Action Hook
+                        </button>
+                    </div>
+
+                    <!-- Filter/Search -->
+                    <div class="mb-6 flex gap-4">
+                        <div class="flex-1">
+                            <input type="text" id="action-hooks-search" placeholder="Search action hooks..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                        </div>
+                        <select id="action-hooks-category-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                            <option value="">All Categories</option>
+                            <!-- Categories will be loaded dynamically -->
+                        </select>
+                    </div>
+                    
+                    <div id="action-hooks-list" class="space-y-4">
+                        <!-- Action hooks will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- Categories Sub-Tab Content -->
+                <div id="action-hooks-categories-subtab-content" class="action-hooks-subtab-content hidden">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900">Hook Categories</h3>
+                            <p class="text-gray-600 text-sm mt-1">Organize action hooks into logical groups</p>
+                        </div>
+                        <button onclick="openAddCategoryModal()" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                            <i class="fas fa-plus-circle"></i>
+                            Add New Category
+                        </button>
+                    </div>
+
+                    <!-- Filter/Search -->
+                    <div class="mb-6">
+                        <input type="text" id="categories-search" placeholder="Search categories..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                    </div>
+                    
+                    <div id="categories-list" class="space-y-4">
+                        <!-- Categories will be rendered here -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -2399,8 +2442,35 @@
             
             // Load action hooks if switching to action hooks tab
             if (tabName === 'action-hooks') {
-                renderActionHooks();
+                // Default to "hooks" sub-tab when entering Action Hooks
+                switchActionHooksSubTab('hooks');
             }
+        }
+
+        // Switch between nested sub-tabs in Action Hooks tab
+        function switchActionHooksSubTab(subTabName) {
+            // Hide all sub-tab contents
+            document.querySelectorAll('.action-hooks-subtab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // Show selected sub-tab content
+            if (subTabName === 'hooks') {
+                document.getElementById('action-hooks-subtab-content').classList.remove('hidden');
+                renderActionHooks();
+                loadCategoriesIntoDropdowns(); // Load categories for filter dropdown
+            } else if (subTabName === 'categories') {
+                document.getElementById('action-hooks-categories-subtab-content').classList.remove('hidden');
+                renderCategories();
+            }
+            
+            // Update sub-tab button styles
+            document.querySelectorAll('[id^="subtab-"]').forEach(btn => {
+                btn.classList.remove('text-yellow-600', 'border-yellow-600');
+                btn.classList.add('text-gray-500', 'border-transparent');
+            });
+            document.getElementById(`subtab-${subTabName}`).classList.remove('text-gray-500', 'border-transparent');
+            document.getElementById(`subtab-${subTabName}`).classList.add('text-yellow-600', 'border-yellow-600');
         }
 
         // ============================================
