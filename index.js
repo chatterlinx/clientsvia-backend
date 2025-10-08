@@ -105,6 +105,7 @@ async function loadAllRoutes() {
         routes.globalInstantResponsesRoutes = await loadRouteWithTimeout('./routes/admin/globalInstantResponses', 'globalInstantResponsesRoutes');
         routes.globalAIBehaviorsRoutes = await loadRouteWithTimeout('./routes/admin/globalAIBehaviors', 'globalAIBehaviorsRoutes');
         routes.globalActionHooksRoutes = await loadRouteWithTimeout('./routes/admin/globalActionHooks', 'globalActionHooksRoutes');
+        routes.globalActionHookCategoriesRoutes = await loadRouteWithTimeout('./routes/admin/globalActionHookCategories', 'globalActionHookCategoriesRoutes');
         routes.v2GlobalAdminRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-admin', 'v2GlobalAdminRoutes');
         routes.v2GlobalDirectoryRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-directory', 'v2GlobalDirectoryRoutes');
         routes.v2GlobalAddCompanyRoutes = await loadRouteWithTimeout('./routes/v2global/v2global-addcompany', 'v2GlobalAddCompanyRoutes');
@@ -218,6 +219,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/global-instant-responses', routes.globalInstantResponsesRoutes); // Global AI Brain Management
     app.use('/api/admin/global-behaviors', routes.globalAIBehaviorsRoutes); // Global AI Behavior Templates
     app.use('/api/admin/global-action-hooks', routes.globalActionHooksRoutes); // Global Action Hooks
+    app.use('/api/admin/global-action-hook-categories', routes.globalActionHookCategoriesRoutes); // Global Action Hook Categories
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
     app.use('/api/v2global/directory', routes.v2GlobalDirectoryRoutes); // V2 Global Company Directory
     app.use('/api/v2global/addcompany', routes.v2GlobalAddCompanyRoutes); // V2 Global Add Company
