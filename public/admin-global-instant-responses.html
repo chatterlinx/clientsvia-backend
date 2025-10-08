@@ -381,6 +381,38 @@
                             </div>
                         </div>
 
+                        <!-- Seed Action Hooks Card -->
+                        <div class="bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-200 rounded-lg p-6">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <div class="w-12 h-12 bg-gradient-to-br from-yellow-500 to-amber-500 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-bolt text-white text-xl"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-lg font-bold text-gray-900">Seed 16 Global Action Hooks</h4>
+                                            <p class="text-sm text-gray-600">Escalate, Schedule, Callback, Payment, etc.</p>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-2 text-sm text-gray-700">
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Creates platform-wide action hooks library</p>
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Defines what AI should do after responding</p>
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i>Safe to run - checks if hooks already exist</p>
+                                        <p class="text-yellow-700 font-semibold mt-3">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Run this SECOND after seeding behaviors
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <button onclick="seedActionHooks()" class="px-6 py-3 bg-gradient-to-r from-yellow-600 to-amber-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                        <i class="fas fa-play-circle"></i>
+                                        Seed Action Hooks
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Seed Categories Card -->
                         <div class="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg p-6">
                             <div class="flex items-start justify-between">
@@ -1690,6 +1722,40 @@
             } catch (error) {
                 console.error('Seed behaviors error:', error);
                 showNotification('Error seeding behaviors: ' + error.message, 'error');
+            }
+        }
+
+        async function seedActionHooks() {
+            if (!confirm('This will seed 16 default action hooks into the database.\n\nThese define what actions the AI should take after responding (escalate, schedule, callback, etc.).\n\nContinue?')) {
+                return;
+            }
+
+            try {
+                showNotification('⏳ Seeding 16 action hooks...', 'info');
+                const token = getAuthToken();
+                
+                const response = await fetch('/api/admin/global-action-hooks/seed', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+                console.log('Seed action hooks result:', result);
+
+                if (result.success) {
+                    showNotification(`✅ Successfully seeded ${result.count} action hooks!`, 'success');
+                    // Reload action hooks into memory
+                    await fetchActionHooks();
+                    console.log(`Reloaded ${availableActionHooks.length} action hooks`);
+                } else {
+                    showNotification('Seeding failed: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Seed action hooks error:', error);
+                showNotification('Error seeding action hooks: ' + error.message, 'error');
             }
         }
 
