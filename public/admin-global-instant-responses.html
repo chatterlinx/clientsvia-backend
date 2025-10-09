@@ -3235,7 +3235,7 @@
                     // Switch to Overview Dashboard
                     switchTab('overview');
                     switchOverviewSubTab('dashboard');
-                    renderOverviewDashboard();
+                    // Dashboard content is static HTML, no render function needed
                     
                     showNotification(`✅ Loaded: ${result.data.name}`, 'success');
                 } else {

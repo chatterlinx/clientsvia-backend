@@ -12,7 +12,8 @@
     "force-delete-template": "node scripts/force-delete-old-template.js",
     "fix-templates": "node scripts/diagnose-and-fix-template.js",
     "check-directories": "node scripts/check-action-hook-directories.js",
-    "fix-directories": "node scripts/fix-inactive-directories.js"
+    "fix-directories": "node scripts/fix-inactive-directories.js",
+    "fix-universal": "node scripts/fix-universal-template-published.js"
   },
   "keywords": [],
   "author": "",
