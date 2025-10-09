@@ -3168,17 +3168,61 @@
             return colors[type] || colors['universal'];
         }
 
-        function viewTemplate(templateId) {
-            // Switch to Overview tab and load this template
-            switchTab('overview');
-            switchOverviewSubTab('dashboard');
-            // TODO: Load specific template details
-            showNotification('View template functionality coming soon', 'info');
+        async function viewTemplate(templateId) {
+            console.log('👁️ [VIEW TEMPLATE] Loading template:', templateId);
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    activeTemplate = result.data;
+                    activeTemplateId = result.data._id;
+                    
+                    // Switch to Overview Dashboard
+                    switchTab('overview');
+                    switchOverviewSubTab('dashboard');
+                    renderOverviewDashboard();
+                    
+                    showNotification(`✅ Loaded: ${result.data.name}`, 'success');
+                } else {
+                    showNotification('❌ Failed to load template', 'error');
+                }
+            } catch (error) {
+                console.error('❌ [VIEW TEMPLATE] Error:', error);
+                showNotification('❌ Error: ' + error.message, 'error');
+            }
         }
 
-        function editTemplate(templateId) {
-            // TODO: Implement edit template
-            showNotification('Edit template functionality coming soon', 'info');
+        async function editTemplate(templateId) {
+            console.log('✏️ [EDIT TEMPLATE] Loading template for editing:', templateId);
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    activeTemplate = result.data;
+                    activeTemplateId = result.data._id;
+                    
+                    // Switch to Behaviors tab to edit categories
+                    switchTab('behaviors');
+                    renderCategories();
+                    
+                    showNotification(`✏️ Now editing: ${result.data.name}`, 'info');
+                } else {
+                    showNotification('❌ Failed to load template', 'error');
+                }
+            } catch (error) {
+                console.error('❌ [EDIT TEMPLATE] Error:', error);
+                showNotification('❌ Error: ' + error.message, 'error');
+            }
         }
 
         async function setAsDefault(templateId) {
