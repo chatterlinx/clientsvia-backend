@@ -3362,20 +3362,45 @@
             document.getElementById('industry-form').reset();
         }
 
-        async function editIndustry(industry) {
-            console.log('✏️ [EDIT INDUSTRY] Opening modal for:', industry);
-            document.getElementById('industry-modal-title').textContent = 'Edit Industry Type';
-            document.getElementById('industry-edit-id').value = industry._id;
-            document.getElementById('industry-id').value = industry.industryId;
-            document.getElementById('industry-id').disabled = true; // Cannot change ID after creation
-            document.getElementById('industry-name').value = industry.name;
-            document.getElementById('industry-label').value = industry.displayLabel;
-            document.getElementById('industry-icon').value = industry.icon || '🏢';
-            document.getElementById('industry-description').value = industry.description || '';
-            document.getElementById('industry-color').value = industry.color || 'orange';
-            document.getElementById('industry-active').checked = industry.isActive !== false;
-            document.getElementById('industry-modal').classList.remove('hidden');
-            document.getElementById('industry-modal').classList.add('flex');
+        async function editIndustry(industryId) {
+            console.log('✏️ [EDIT INDUSTRY] Fetching industry:', industryId);
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-industry-types`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    const industry = result.data.find(ind => ind._id === industryId);
+                    
+                    if (!industry) {
+                        showNotification('❌ Industry type not found', 'error');
+                        return;
+                    }
+                    
+                    console.log('✏️ [EDIT INDUSTRY] Found industry:', industry);
+                    document.getElementById('industry-modal-title').textContent = 'Edit Industry Type';
+                    document.getElementById('industry-edit-id').value = industry._id;
+                    document.getElementById('industry-id').value = industry.industryId;
+                    document.getElementById('industry-id').disabled = true; // Cannot change ID after creation
+                    document.getElementById('industry-name').value = industry.name;
+                    document.getElementById('industry-label').value = industry.displayLabel;
+                    document.getElementById('industry-icon').value = industry.icon || '🏢';
+                    document.getElementById('industry-description').value = industry.description || '';
+                    document.getElementById('industry-color').value = industry.color || 'orange';
+                    document.getElementById('industry-active').checked = industry.isActive !== false;
+                    document.getElementById('industry-modal').classList.remove('hidden');
+                    document.getElementById('industry-modal').classList.add('flex');
+                } else {
+                    showNotification('❌ Failed to load industry types', 'error');
+                }
+            } catch (error) {
+                console.error('❌ [EDIT INDUSTRY] Error:', error);
+                showNotification('❌ Error: ' + error.message, 'error');
+            }
         }
 
         async function handleIndustrySubmit(e) {
