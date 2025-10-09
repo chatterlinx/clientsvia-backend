@@ -537,11 +537,11 @@ router.delete('/:id', async (req, res) => {
             });
         }
         
-        // Prevent deletion of active template
-        if (template.isActive) {
+        // Prevent deletion of default template only
+        if (template.isDefaultTemplate) {
             return res.status(400).json({
                 success: false,
-                message: 'Cannot delete active template. Please activate another template first.'
+                message: 'Cannot delete the default template. Please set another template as default first.'
             });
         }
         
