@@ -141,19 +141,19 @@
         <!-- Overview Tab Content -->
         <div id="overview-tab" class="tab-content">
             
-            <!-- Overview Sub-Tabs -->
-            <div class="bg-white border-b-2 border-gray-200 mb-6">
-                <div class="flex gap-2">
-                    <button id="overview-subtab-dashboard" onclick="switchOverviewSubTab('dashboard')" class="px-6 py-3 font-semibold text-gray-700 border-b-4 border-blue-600 bg-blue-50">
-                        <i class="fas fa-chart-line mr-2"></i>
+            <!-- Overview Sub-Tabs (Compact Design) -->
+            <div class="bg-gray-50 border-b border-gray-300 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-6">
+                <div class="flex gap-1 pt-2">
+                    <button id="overview-subtab-dashboard" onclick="switchOverviewSubTab('dashboard')" class="px-4 py-2 text-sm font-medium text-blue-700 border-b-2 border-blue-600 bg-white rounded-t">
+                        <i class="fas fa-chart-line mr-1.5 text-xs"></i>
                         Dashboard
                     </button>
-                    <button id="overview-subtab-templates" onclick="switchOverviewSubTab('templates')" class="px-6 py-3 font-semibold text-gray-500 hover:text-gray-700 hover:bg-gray-50 border-b-4 border-transparent">
-                        <i class="fas fa-copy mr-2"></i>
+                    <button id="overview-subtab-templates" onclick="switchOverviewSubTab('templates')" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border-b-2 border-transparent rounded-t">
+                        <i class="fas fa-copy mr-1.5 text-xs"></i>
                         Templates
                     </button>
-                    <button id="overview-subtab-maintenance" onclick="switchOverviewSubTab('maintenance')" class="px-6 py-3 font-semibold text-gray-500 hover:text-gray-700 hover:bg-gray-50 border-b-4 border-transparent">
-                        <i class="fas fa-tools mr-2"></i>
+                    <button id="overview-subtab-maintenance" onclick="switchOverviewSubTab('maintenance')" class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border-b-2 border-transparent rounded-t">
+                        <i class="fas fa-tools mr-1.5 text-xs"></i>
                         Maintenance
                     </button>
                 </div>
@@ -2864,15 +2864,14 @@
             // Show selected sub-tab content
             document.getElementById(`overview-${subTabName}-content`).classList.remove('hidden');
             
-            // Update sub-tab button styles
+            // Update sub-tab button styles (new compact design)
             document.querySelectorAll('[id^="overview-subtab-"]').forEach(btn => {
-                btn.classList.remove('text-gray-700', 'border-blue-600', 'bg-blue-50');
-                btn.classList.add('text-gray-500', 'border-transparent');
-                btn.classList.remove('bg-blue-50');
+                btn.classList.remove('text-blue-700', 'border-blue-600', 'bg-white');
+                btn.classList.add('text-gray-600', 'border-transparent', 'hover:bg-gray-100');
             });
             const activeBtn = document.getElementById(`overview-subtab-${subTabName}`);
-            activeBtn.classList.remove('text-gray-500', 'border-transparent');
-            activeBtn.classList.add('text-gray-700', 'border-blue-600', 'bg-blue-50');
+            activeBtn.classList.remove('text-gray-600', 'border-transparent', 'hover:bg-gray-100');
+            activeBtn.classList.add('text-blue-700', 'border-blue-600', 'bg-white');
             
             // Load content for specific sub-tabs
             if (subTabName === 'templates') {
