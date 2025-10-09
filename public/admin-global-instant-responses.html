@@ -3530,9 +3530,9 @@
             await fetchBehaviors();
             console.log(`Loaded ${availableBehaviors.length} behavior templates`);
             
-            // Load categories (needed for action hooks dropdowns)
+            // Load directories (needed for action hooks dropdowns)
             await loadDirectoriesIntoDropdowns();
-            console.log(`Loaded ${availableCategories.length} action hook categories`);
+            console.log(`Loaded ${availableDirectories.length} action hook directories`);
             
             // Load active template
             await fetchActiveTemplate();
