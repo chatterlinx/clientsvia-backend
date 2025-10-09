@@ -3214,7 +3214,7 @@
                     
                     // Switch to Behaviors tab to edit categories
                     switchTab('behaviors');
-                    renderCategories();
+                    // renderBehaviors() is already called by switchTab(), no need to call again
                     
                     showNotification(`✏️ Now editing: ${result.data.name}`, 'info');
                 } else {
