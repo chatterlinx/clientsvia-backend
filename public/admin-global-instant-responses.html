@@ -2491,7 +2491,7 @@
                 document.getElementById('action-hooks-subtab-content').classList.remove('hidden');
                 renderActionHooks();
                 loadDirectoriesIntoDropdowns(); // Load categories for filter dropdown
-            } else if (subTabName === 'categories') {
+            } else if (subTabName === 'directories') {
                 document.getElementById('action-hooks-directories-subtab-content').classList.remove('hidden');
                 renderDirectories();
             }
@@ -3224,7 +3224,7 @@
         }
 
         // Search categories
-        document.getElementById('directories-search')?.addEventListener('input', renderCategories);
+        document.getElementById('directories-search')?.addEventListener('input', renderDirectories);
 
         // Fetch all action hooks
         async function fetchActionHooks() {
