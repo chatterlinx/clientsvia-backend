@@ -122,6 +122,29 @@ router.get('/active', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/global-instant-responses/published
+ * Get all published templates (for selection dropdowns)
+ * NOTE: This MUST come BEFORE /:id route to avoid "published" being treated as an ID
+ */
+router.get('/published', async (req, res) => {
+    try {
+        const templates = await GlobalInstantResponseTemplate.getPublishedTemplates();
+        
+        res.json({
+            success: true,
+            count: templates.length,
+            data: templates
+        });
+    } catch (error) {
+        console.error('❌ Error fetching published templates:', error.message);
+        res.status(500).json({
+            success: false,
+            message: `Error fetching published templates: ${error.message}`
+        });
+    }
+});
+
+/**
  * GET /api/admin/global-instant-responses/:id
  * Get a specific template by ID
  */
@@ -322,28 +345,6 @@ router.post('/:id/clone', async (req, res) => {
         res.status(500).json({
             success: false,
             message: `Error cloning template: ${error.message}`
-        });
-    }
-});
-
-/**
- * GET /api/admin/global-instant-responses/published
- * Get all published templates (for selection dropdowns)
- */
-router.get('/published', async (req, res) => {
-    try {
-        const templates = await GlobalInstantResponseTemplate.getPublishedTemplates();
-        
-        res.json({
-            success: true,
-            count: templates.length,
-            data: templates
-        });
-    } catch (error) {
-        console.error('❌ Error fetching published templates:', error.message);
-        res.status(500).json({
-            success: false,
-            message: `Error fetching published templates: ${error.message}`
         });
     }
 });
