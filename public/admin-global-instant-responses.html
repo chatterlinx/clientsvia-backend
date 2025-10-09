@@ -3049,13 +3049,13 @@
 
         // Open add hook directory modal
         function openAddHookDirectoryModal() {
-            document.getElementById('add-hook-dir-modal').style.display = 'flex';
-            document.getElementById('add-hook-dir-form').reset();
+            document.getElementById('add-hook-directory-modal').style.display = 'flex';
+            document.getElementById('add-hook-directory-form').reset();
         }
 
-        // Close add category modal
-        function closeAddDirectoryModal() {
-            document.getElementById('add-hook-dir-modal').style.display = 'none';
+        // Close add hook directory modal
+        function closeAddHookDirectoryModal() {
+            document.getElementById('add-hook-directory-modal').style.display = 'none';
         }
 
         // Handle add category form submission
@@ -3088,7 +3088,7 @@
 
                 if (response.ok && result.success) {
                     showNotification(`✅ Directory "${directoryData.name}" added successfully!`, 'success');
-                    closeAddDirectoryModal();
+                    closeAddHookDirectoryModal();
                     await renderDirectories();
                     await loadDirectoriesIntoDropdowns();
                 } else {
