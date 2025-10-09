@@ -98,7 +98,6 @@ const globalActionHookDirectorySchema = new Schema({
 
 // Indexes for performance
 globalActionHookDirectorySchema.index({ isActive: 1, sortOrder: 1 });
-globalActionHookDirectorySchema.index({ directoryId: 1 });
 
 // Static method: Get all active directories sorted by sortOrder
 globalActionHookDirectorySchema.statics.getActiveDirectories = async function() {

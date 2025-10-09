@@ -127,7 +127,6 @@ const globalActionHookSchema = new Schema({
 
 // Indexes for performance
 globalActionHookSchema.index({ isActive: 1, sortOrder: 1 });
-globalActionHookSchema.index({ hookId: 1 });
 globalActionHookSchema.index({ category: 1 });
 
 // Static method: Get all active action hooks sorted by category and sortOrder

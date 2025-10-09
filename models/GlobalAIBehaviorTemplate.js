@@ -178,7 +178,6 @@ const globalAIBehaviorTemplateSchema = new Schema({
 
 // Indexes for performance
 globalAIBehaviorTemplateSchema.index({ isActive: 1, sortOrder: 1 });
-globalAIBehaviorTemplateSchema.index({ behaviorId: 1 });
 
 // Static method: Get all active behaviors sorted by sortOrder
 globalAIBehaviorTemplateSchema.statics.getActiveBehaviors = async function() {

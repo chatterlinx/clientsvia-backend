@@ -105,7 +105,6 @@ const globalIndustryTypeSchema = new Schema({
 
 // Indexes
 globalIndustryTypeSchema.index({ isActive: 1, sortOrder: 1 });
-globalIndustryTypeSchema.index({ industryId: 1 });
 
 /**
  * Get all active industry types sorted by order
