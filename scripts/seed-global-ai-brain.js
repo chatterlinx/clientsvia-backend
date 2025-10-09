@@ -79,6 +79,7 @@ const emotionalIntelligenceCategories = [
         description: 'Calm, slow pace, validating feelings, brief reassurance then practical next step. Avoid platitudes; be specific and human.',
         priority: 10,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'upset-crying',
@@ -147,6 +148,7 @@ const emotionalIntelligenceCategories = [
         description: 'Confident, low-intensity voice; outline steps and timeline. Use words like "I\'ll take care of this" and give expectations.',
         priority: 7,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'worried-anxious',
@@ -182,6 +184,7 @@ const emotionalIntelligenceCategories = [
         description: 'Short sentences, decisive verbs, immediate next actions, escalate if needed. Use "right away", "I\'ll connect you now".',
         priority: 9,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'urgent-asap',
@@ -218,6 +221,7 @@ const emotionalIntelligenceCategories = [
         description: 'Short empathy + ownership language + immediate corrective steps. Avoid defensiveness or "it\'s not our fault". Use calming phrasing.',
         priority: 9,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'angry-frustrated',
@@ -254,6 +258,7 @@ const emotionalIntelligenceCategories = [
         description: 'Warm, upbeat, brief; match energy but remain professional. Good for confirmations, welcoming new customers.',
         priority: 5,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'happy-excited',
@@ -290,6 +295,7 @@ const emotionalIntelligenceCategories = [
         description: 'Clear apology + brief reason (if known) + corrective action + timeframe. Avoid long excuses.',
         priority: 8,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'disappointed-letdown',
@@ -324,6 +330,7 @@ const emotionalIntelligenceCategories = [
         description: 'Patient, clear explanations; confirm understanding; offer to repeat or simplify.',
         priority: 6,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'confused-unclear',
@@ -359,6 +366,7 @@ const emotionalIntelligenceCategories = [
         description: 'Quick, efficient responses; get to the point fast; offer immediate next steps.',
         priority: 7,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'in-hurry',
@@ -394,6 +402,7 @@ const emotionalIntelligenceCategories = [
         description: 'Patient, offer options, don\'t pressure; provide clear paths forward.',
         priority: 5,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'maybe-thinking',
@@ -428,6 +437,7 @@ const emotionalIntelligenceCategories = [
         description: 'Light, friendly response; acknowledge humor briefly then redirect to task professionally.',
         priority: 4,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'making-joke',
@@ -461,6 +471,7 @@ const emotionalIntelligenceCategories = [
         description: 'Professional, transparent; provide verification info; build trust through clarity.',
         priority: 7,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'is-this-scam',
@@ -494,6 +505,7 @@ const emotionalIntelligenceCategories = [
         description: 'Discreet, non-judgmental; maintain privacy and professionalism; normalize the situation.',
         priority: 6,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'awkward-embarrassing',
@@ -526,6 +538,7 @@ const emotionalIntelligenceCategories = [
         description: 'Warm, congratulatory; share in their excitement briefly then help with their need.',
         priority: 4,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'good-news-celebration',
@@ -559,6 +572,7 @@ const emotionalIntelligenceCategories = [
         description: 'Empathetic, take burden off them; simplify process; do the heavy lifting.',
         priority: 7,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'tired-overwhelmed',
@@ -592,6 +606,7 @@ const emotionalIntelligenceCategories = [
         description: 'Informative, patient; encourage questions; provide clear, helpful answers.',
         priority: 5,
         type: 'emotional_intelligence',
+        behavior: 'empathetic',
         scenarios: [
             {
                 id: 'lots-of-questions',
