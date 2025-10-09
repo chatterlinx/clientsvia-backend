@@ -3231,14 +3231,15 @@
                                                         title="Edit">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
-                                                ${!template.isDefaultTemplate ? `<button onclick="setAsDefault('${template._id}')" 
-                                                        style="background-color: #9333ea; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem;"
-                                                        title="Set as Default">
+                                                <button onclick="setAsDefault('${template._id}')" 
+                                                        style="background-color: ${template.isDefaultTemplate ? '#6b7280' : '#9333ea'}; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; ${template.isDefaultTemplate ? 'opacity: 0.5; cursor: not-allowed;' : ''}"
+                                                        title="${template.isDefaultTemplate ? 'Already Default' : 'Set as Default'}"
+                                                        ${template.isDefaultTemplate ? 'disabled' : ''}>
                                                     <i class="fas fa-star"></i>
-                                                </button>` : ''}
+                                                </button>
                                                 <button onclick="deleteTemplate('${template._id}')" 
                                                         style="background-color: #dc2626; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem;"
-                                                        title="Delete">
+                                                        title="Delete ${template.isDefaultTemplate ? '(Protected - Default Template)' : ''}">
                                                     <i class="fas fa-trash"></i>
                                                 </button>
                                             </div>
