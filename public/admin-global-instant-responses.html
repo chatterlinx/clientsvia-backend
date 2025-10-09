@@ -616,6 +616,107 @@
     <!-- MODALS -->
     <!-- ============================================ -->
     
+    <!-- Create Industry Template Modal -->
+    <div id="create-template-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4">
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
+                <h2 class="text-2xl font-bold text-white">✨ Create Industry-Specific Template</h2>
+                <button onclick="closeCreateTemplateModal()" class="text-white hover:text-gray-200">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <form id="create-template-form" onsubmit="handleCreateTemplate(event); return false;" class="space-y-5">
+                    
+                    <!-- Template Name -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Template Name *</label>
+                        <input type="text" id="new-template-name" required 
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               placeholder="e.g., Healthcare AI Brain">
+                    </div>
+
+                    <!-- Industry Type -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Industry Type *</label>
+                        <select id="new-template-type" required 
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">-- Select Industry --</option>
+                            <option value="healthcare">Healthcare (Doctors, Dentists, Clinics)</option>
+                            <option value="homeservices">Home Services (HVAC, Plumbing, Electrical)</option>
+                            <option value="retail">Retail (Stores, E-commerce)</option>
+                            <option value="professional">Professional Services (Law, Accounting)</option>
+                            <option value="custom">Custom (Build from scratch)</option>
+                        </select>
+                    </div>
+
+                    <!-- Industry Label -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Display Label (for UI) *</label>
+                        <input type="text" id="new-template-label" required 
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               placeholder="e.g., Healthcare & Medical">
+                    </div>
+
+                    <!-- Version -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Version *</label>
+                        <input type="text" id="new-template-version" required 
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               placeholder="e.g., healthcare-v1.0">
+                    </div>
+
+                    <!-- Description -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                        <textarea id="new-template-description" rows="3" 
+                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  placeholder="Describe this industry-specific template..."></textarea>
+                    </div>
+
+                    <!-- Clone From -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Clone From *</label>
+                        <select id="clone-from-template" required 
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">Loading templates...</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            All 103 categories and scenarios will be copied from the selected template
+                        </p>
+                    </div>
+
+                    <!-- Publish Option -->
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="new-template-publish" class="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                            <span class="ml-3 text-sm font-medium text-gray-700">
+                                📢 Publish immediately (make available for companies to select)
+                            </span>
+                        </label>
+                        <p class="text-xs text-gray-600 mt-2 ml-8">
+                            Uncheck to keep as draft for editing before publishing
+                        </p>
+                    </div>
+
+                    <!-- Buttons -->
+                    <div class="flex justify-end gap-3 pt-4 border-t">
+                        <button type="button" onclick="closeCreateTemplateModal()" 
+                                class="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold transition-colors">
+                            Cancel
+                        </button>
+                        <button type="submit" 
+                                class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+                            <i class="fas fa-copy"></i>
+                            Clone & Create Template
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
     <!-- Add/Edit Category Modal -->
     <div id="category-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
         <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -1919,6 +2020,130 @@
                 showNotification('❌ Error: ' + error.message + ' - Try the "Delete All Templates" button below', 'error');
             }
         }
+
+        // ============================================================================
+        // CREATE INDUSTRY TEMPLATE FUNCTIONS
+        // ============================================================================
+
+        async function openCreateTemplateModal() {
+            console.log('🔵 [CREATE TEMPLATE] Opening modal...');
+            
+            // Load available templates to clone from
+            await loadTemplatesForCloning();
+            
+            // Show modal
+            const modal = document.getElementById('create-template-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+            }
+        }
+
+        function closeCreateTemplateModal() {
+            console.log('🔵 [CREATE TEMPLATE] Closing modal...');
+            const modal = document.getElementById('create-template-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+            
+            // Reset form
+            const form = document.getElementById('create-template-form');
+            if (form) {
+                form.reset();
+            }
+        }
+
+        async function loadTemplatesForCloning() {
+            try {
+                const token = getAuthToken();
+                const response = await fetch('/api/admin/global-instant-responses/published', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    const dropdown = document.getElementById('clone-from-template');
+                    dropdown.innerHTML = '<option value="">-- Select Template to Clone --</option>';
+                    
+                    result.data.forEach(template => {
+                        const option = document.createElement('option');
+                        option.value = template._id;
+                        option.textContent = `${template.name} (${template.industryLabel || template.templateType})`;
+                        dropdown.appendChild(option);
+                    });
+                    
+                    console.log(`✅ Loaded ${result.data.length} templates for cloning`);
+                } else {
+                    console.error('Failed to load templates:', result.message);
+                }
+            } catch (error) {
+                console.error('Error loading templates:', error);
+                showNotification('❌ Failed to load templates', 'error');
+            }
+        }
+
+        async function handleCreateTemplate(event) {
+            event.preventDefault();
+            
+            console.log('🔵 [CREATE TEMPLATE] Form submitted');
+            
+            const name = document.getElementById('new-template-name').value.trim();
+            const templateType = document.getElementById('new-template-type').value;
+            const industryLabel = document.getElementById('new-template-label').value.trim();
+            const version = document.getElementById('new-template-version').value.trim();
+            const description = document.getElementById('new-template-description').value.trim();
+            const cloneFromId = document.getElementById('clone-from-template').value;
+            const isPublished = document.getElementById('new-template-publish').checked;
+            
+            // Validation
+            if (!name || !templateType || !industryLabel || !version || !cloneFromId) {
+                showNotification('❌ Please fill in all required fields', 'error');
+                return;
+            }
+            
+            try {
+                showNotification('⏳ Creating industry template...', 'info');
+                
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${cloneFromId}/clone-industry`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name,
+                        templateType,
+                        industryLabel,
+                        version,
+                        description: description || `${name} - Industry-specific AI receptionist brain`,
+                        isPublished
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('✅ Template created:', result.data);
+                    showNotification(`✅ Successfully created ${name}! ${isPublished ? 'Published' : 'Saved as draft'}.`, 'success');
+                    closeCreateTemplateModal();
+                    
+                    // Reload the page to show new template
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showNotification(`❌ Failed to create template: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                console.error('❌ Error creating template:', error);
+                showNotification(`❌ Error creating template: ${error.message}`, 'error');
+            }
+        }
+
+        // ============================================================================
+        // DELETE ALL TEMPLATES (DANGEROUS)
+        // ============================================================================
 
         async function deleteAllTemplates() {
             // First confirmation with typed input
