@@ -191,25 +191,67 @@
 
             <!-- Templates Sub-Tab Content -->
             <div id="overview-templates-content" class="overview-subtab-content hidden">
-                <div class="flex items-center justify-between mb-6">
-                    <div>
-                        <h2 class="text-2xl font-bold text-gray-900 mb-2">
-                            <i class="fas fa-copy text-blue-600 mr-2"></i>
-                            Global AI Brain Templates
-                        </h2>
-                        <p class="text-gray-600">
-                            Manage all industry-specific AI agent templates. Clone from Universal for new industries.
-                        </p>
+                
+                <!-- Templates Nested Sub-Tabs -->
+                <div class="bg-gray-100 border-b border-gray-300 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-6">
+                    <div class="flex gap-1 pt-1">
+                        <button id="templates-nested-alltemplates" onclick="switchTemplatesNestedTab('alltemplates')" class="px-3 py-1.5 text-xs font-medium text-blue-700 border-b-2 border-blue-600 bg-white rounded-t">
+                            <i class="fas fa-list mr-1 text-xs"></i>
+                            All Templates
+                        </button>
+                        <button id="templates-nested-industrysetup" onclick="switchTemplatesNestedTab('industrysetup')" class="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-200 border-b-2 border-transparent rounded-t">
+                            <i class="fas fa-industry mr-1 text-xs"></i>
+                            Industry Setup
+                        </button>
                     </div>
-                    <button onclick="openCreateTemplateModal()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
-                        <i class="fas fa-plus-circle"></i>
-                        Create New Template
-                    </button>
                 </div>
 
-                <!-- Templates Table -->
-                <div id="templates-table-container" class="bg-white rounded-lg border-2 border-gray-200 overflow-hidden">
-                    <!-- Templates table will be loaded here -->
+                <!-- All Templates Nested Content -->
+                <div id="templates-alltemplates-content" class="templates-nested-content">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-900 mb-2">
+                                <i class="fas fa-copy text-blue-600 mr-2"></i>
+                                Global AI Brain Templates
+                            </h2>
+                            <p class="text-gray-600">
+                                Manage all industry-specific AI agent templates. Clone from Universal for new industries.
+                            </p>
+                        </div>
+                        <button onclick="openCreateTemplateModal()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+                            <i class="fas fa-plus-circle"></i>
+                            Create New Template
+                        </button>
+                    </div>
+
+                    <!-- Templates Table -->
+                    <div id="templates-table-container" class="bg-white rounded-lg border-2 border-gray-200 overflow-hidden">
+                        <!-- Templates table will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Industry Setup Nested Content -->
+                <div id="templates-industrysetup-content" class="templates-nested-content hidden">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-900 mb-2">
+                                <i class="fas fa-industry text-orange-600 mr-2"></i>
+                                Industry Types Management
+                            </h2>
+                            <p class="text-gray-600">
+                                Define available industries for AI Brain templates. These appear in the "Create Template" dropdown.
+                            </p>
+                        </div>
+                        <button onclick="openAddIndustryModal()" class="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+                            <i class="fas fa-plus-circle"></i>
+                            Add Industry Type
+                        </button>
+                    </div>
+
+                    <!-- Industry Types Table -->
+                    <div id="industry-types-table-container" class="bg-white rounded-lg border-2 border-gray-200 overflow-hidden">
+                        <!-- Industry types table will be loaded here -->
+                    </div>
                 </div>
             </div>
 
@@ -3046,6 +3088,183 @@
                 }
             } catch (error) {
                 console.error('Error deleting template:', error);
+                showNotification('❌ Error: ' + error.message, 'error');
+            }
+        }
+
+        // ============================================================================
+        // TEMPLATES NESTED TAB SWITCHING & INDUSTRY SETUP
+        // ============================================================================
+        function switchTemplatesNestedTab(subTabName) {
+            console.log(`🔵 [TEMPLATES] Switching to nested tab: ${subTabName}`);
+            
+            // Hide all nested contents
+            document.querySelectorAll('.templates-nested-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // Show selected content
+            document.getElementById(`templates-${subTabName}-content`).classList.remove('hidden');
+            
+            // Update button styles
+            document.querySelectorAll('[id^="templates-nested-"]').forEach(btn => {
+                btn.classList.remove('text-blue-700', 'border-blue-600', 'bg-white');
+                btn.classList.add('text-gray-600', 'border-transparent', 'hover:bg-gray-200');
+            });
+            const activeBtn = document.getElementById(`templates-nested-${subTabName}`);
+            activeBtn.classList.remove('text-gray-600', 'border-transparent', 'hover:bg-gray-200');
+            activeBtn.classList.add('text-blue-700', 'border-blue-600', 'bg-white');
+            
+            // Load content
+            if (subTabName === 'industrysetup') {
+                renderIndustryTypesTable();
+            }
+        }
+
+        async function renderIndustryTypesTable() {
+            console.log('🔵 [INDUSTRIES] Rendering industry types table...');
+            
+            const container = document.getElementById('industry-types-table-container');
+            container.innerHTML = '<div class="p-8 text-center text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Loading industry types...</div>';
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch('/api/admin/global-industry-types', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success && result.data && result.data.length > 0) {
+                    const industries = result.data;
+                    
+                    container.innerHTML = `
+                        <table class="w-full">
+                            <thead class="bg-gray-50 border-b-2 border-gray-200">
+                                <tr>
+                                    <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Icon</th>
+                                    <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Industry ID</th>
+                                    <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Name</th>
+                                    <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Display Label</th>
+                                    <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Status</th>
+                                    <th class="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                ${industries.map(industry => `
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 text-2xl">${industry.icon}</td>
+                                        <td class="px-6 py-4">
+                                            <code class="text-xs bg-gray-100 px-2 py-1 rounded">${industry.industryId}</code>
+                                        </td>
+                                        <td class="px-6 py-4 font-semibold text-gray-900">${industry.name}</td>
+                                        <td class="px-6 py-4 text-sm text-gray-700">${industry.displayLabel}</td>
+                                        <td class="px-6 py-4">
+                                            <div class="flex flex-col gap-1">
+                                                ${industry.isSystemDefault ? '<span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded">System Default</span>' : ''}
+                                                ${industry.isActive ? '<span class="px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded">Active</span>' : '<span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-semibold rounded">Inactive</span>'}
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 text-right">
+                                            <div class="flex justify-end gap-2">
+                                                <button onclick="editIndustry('${industry._id}')" class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded font-semibold" title="Edit">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                ${!industry.isSystemDefault ? `<button onclick="deleteIndustry('${industry._id}')" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded font-semibold" title="Delete">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>` : ''}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                    
+                    console.log(`✅ Rendered ${industries.length} industry types`);
+                } else {
+                    container.innerHTML = `
+                        <div class="p-12 text-center">
+                            <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
+                            <h3 class="text-xl font-bold text-gray-700 mb-2">No Industry Types Found</h3>
+                            <p class="text-gray-500 mb-6">Seed default industries to get started</p>
+                            <button onclick="seedIndustries()" class="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-semibold">
+                                <i class="fas fa-seedling mr-2"></i>
+                                Seed Default Industries
+                            </button>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ Error loading industry types:', error);
+                container.innerHTML = `
+                    <div class="p-12 text-center text-red-600">
+                        <i class="fas fa-exclamation-triangle text-5xl mb-4"></i>
+                        <p class="font-semibold">Error loading industry types</p>
+                        <p class="text-sm">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function openAddIndustryModal() {
+            showNotification('Add Industry modal coming soon!', 'info');
+            // TODO: Build modal
+        }
+
+        function editIndustry(id) {
+            showNotification('Edit Industry functionality coming soon!', 'info');
+            // TODO: Implement
+        }
+
+        async function deleteIndustry(id) {
+            if (!confirm('Delete this industry type?\n\nThis cannot be undone!')) {
+                return;
+            }
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-industry-types/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification('✅ Industry type deleted', 'success');
+                    renderIndustryTypesTable();
+                } else {
+                    showNotification('❌ ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting industry:', error);
+                showNotification('❌ Error: ' + error.message, 'error');
+            }
+        }
+
+        async function seedIndustries() {
+            if (!confirm('Seed default industry types?\n\n6 industries will be created.')) {
+                return;
+            }
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch('/api/admin/global-industry-types/seed', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification(`✅ Seeded ${result.count} industries!`, 'success');
+                    renderIndustryTypesTable();
+                } else {
+                    showNotification('❌ ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error seeding industries:', error);
                 showNotification('❌ Error: ' + error.message, 'error');
             }
         }
