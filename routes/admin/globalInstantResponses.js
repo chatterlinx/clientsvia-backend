@@ -327,6 +327,75 @@ router.post('/:id/clone', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/global-instant-responses/published
+ * Get all published templates (for selection dropdowns)
+ */
+router.get('/published', async (req, res) => {
+    try {
+        const templates = await GlobalInstantResponseTemplate.getPublishedTemplates();
+        
+        res.json({
+            success: true,
+            count: templates.length,
+            data: templates
+        });
+    } catch (error) {
+        console.error('❌ Error fetching published templates:', error.message);
+        res.status(500).json({
+            success: false,
+            message: `Error fetching published templates: ${error.message}`
+        });
+    }
+});
+
+/**
+ * POST /api/admin/global-instant-responses/:id/clone-industry
+ * Clone template for a new industry
+ */
+router.post('/:id/clone-industry', async (req, res) => {
+    const { id } = req.params;
+    const { version, name, description, templateType, industryLabel, isPublished } = req.body;
+    const adminUser = req.user?.email || req.user?.username || 'Platform Admin';
+    
+    try {
+        // Validate required fields
+        if (!name || !templateType || !version) {
+            return res.status(400).json({
+                success: false,
+                message: 'Name, version, and templateType are required'
+            });
+        }
+        
+        const clonedTemplate = await GlobalInstantResponseTemplate.cloneTemplate(
+            id,
+            {
+                version,
+                name,
+                description: description || `${name} - Industry-specific AI receptionist brain`,
+                templateType,
+                industryLabel: industryLabel || name,
+                isPublished: isPublished !== undefined ? isPublished : false
+            },
+            adminUser
+        );
+        
+        console.log(`✅ Cloned template ${id} for industry ${templateType}`);
+        
+        res.status(201).json({
+            success: true,
+            message: `Template cloned successfully for ${templateType}`,
+            data: clonedTemplate
+        });
+    } catch (error) {
+        console.error('❌ Error cloning template for industry:', error.message, error.stack);
+        res.status(500).json({
+            success: false,
+            message: `Error cloning template: ${error.message}`
+        });
+    }
+});
+
+/**
  * POST /api/admin/global-instant-responses/import
  * Import a template from JSON backup
  */

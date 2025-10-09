@@ -261,8 +261,37 @@ const globalInstantResponseTemplateSchema = new Schema({
         default: 'World-class AI agent instant response library with 100+ human-like conversation scenarios'
     },
     
-    // Is this the active template?
-    // Only ONE template can be active at a time
+    // Template type / industry specialization
+    templateType: {
+        type: String,
+        enum: ['universal', 'healthcare', 'homeservices', 'retail', 'professional', 'custom'],
+        default: 'universal',
+        index: true
+    },
+    
+    // Industry-specific label (for UI display)
+    industryLabel: {
+        type: String,
+        trim: true,
+        default: 'Universal (All Industries)'
+    },
+    
+    // Is this template available for companies to select?
+    isPublished: {
+        type: Boolean,
+        default: true,
+        index: true
+    },
+    
+    // Is this the default template for new companies?
+    isDefaultTemplate: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+    
+    // Is this the active template? (LEGACY - kept for backwards compatibility)
+    // Note: Now we use isDefaultTemplate instead
     isActive: {
         type: Boolean,
         default: false,
@@ -350,11 +379,39 @@ globalInstantResponseTemplateSchema.pre('save', function(next) {
  */
 
 /**
- * Get the current active global template
+ * Get the current active global template (LEGACY - use getDefaultTemplate instead)
  */
 globalInstantResponseTemplateSchema.statics.getActiveTemplate = async function() {
     return await this.findOne({ isActive: true })
         .sort({ createdAt: -1 })
+        .lean();
+};
+
+/**
+ * Get the default template for new companies
+ */
+globalInstantResponseTemplateSchema.statics.getDefaultTemplate = async function() {
+    return await this.findOne({ isDefaultTemplate: true, isPublished: true })
+        .sort({ createdAt: -1 })
+        .lean();
+};
+
+/**
+ * Get all published templates (for selection dropdown)
+ */
+globalInstantResponseTemplateSchema.statics.getPublishedTemplates = async function() {
+    return await this.find({ isPublished: true })
+        .sort({ templateType: 1, name: 1 })
+        .select('_id version name description templateType industryLabel isDefaultTemplate')
+        .lean();
+};
+
+/**
+ * Get templates by type
+ */
+globalInstantResponseTemplateSchema.statics.getTemplatesByType = async function(templateType) {
+    return await this.find({ templateType, isPublished: true })
+        .sort({ name: 1 })
         .lean();
 };
 
@@ -387,12 +444,45 @@ globalInstantResponseTemplateSchema.statics.createNewVersion = async function(so
         version: newVersionName,
         name: sourceTemplate.name,
         description: sourceTemplate.description,
+        templateType: sourceTemplate.templateType,
+        industryLabel: sourceTemplate.industryLabel,
         categories: sourceTemplate.categories,
         previousVersion: sourceTemplateId,
         createdBy: changedBy,
         changeLog: [{
             changes: `Created from version ${sourceTemplate.version}`,
             changedBy: changedBy
+        }]
+    });
+    
+    return await newTemplate.save();
+};
+
+/**
+ * Clone template for new industry
+ */
+globalInstantResponseTemplateSchema.statics.cloneTemplate = async function(sourceTemplateId, newData, createdBy) {
+    const sourceTemplate = await this.findById(sourceTemplateId).lean();
+    
+    if (!sourceTemplate) {
+        throw new Error('Source template not found');
+    }
+    
+    const newTemplate = new this({
+        version: newData.version || `${sourceTemplate.version}-${newData.templateType}`,
+        name: newData.name,
+        description: newData.description,
+        templateType: newData.templateType,
+        industryLabel: newData.industryLabel,
+        isPublished: newData.isPublished !== undefined ? newData.isPublished : false,
+        isDefaultTemplate: false,
+        isActive: false,
+        categories: sourceTemplate.categories, // Clone all categories
+        previousVersion: sourceTemplateId,
+        createdBy: createdBy || 'Platform Admin',
+        changeLog: [{
+            changes: `Cloned from ${sourceTemplate.name} (${sourceTemplate.templateType})`,
+            changedBy: createdBy || 'Platform Admin'
         }]
     });
     
