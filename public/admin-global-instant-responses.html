@@ -3152,16 +3152,24 @@
                                         </td>
                                         <td class="px-6 py-4 text-right">
                                             <div class="flex justify-end gap-2">
-                                                <button onclick="viewTemplate('${template._id}')" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded font-semibold transition-colors" title="View">
+                                                <button onclick="viewTemplate('${template._id}')" 
+                                                        style="background-color: #2563eb; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem;"
+                                                        title="View">
                                                     <i class="fas fa-eye"></i>
                                                 </button>
-                                                <button onclick="editTemplate('${template._id}')" class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded font-semibold transition-colors" title="Edit">
+                                                <button onclick="editTemplate('${template._id}')" 
+                                                        style="background-color: #16a34a; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem;"
+                                                        title="Edit">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
-                                                ${!template.isDefaultTemplate ? `<button onclick="setAsDefault('${template._id}')" class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded font-semibold transition-colors" title="Set as Default">
+                                                ${!template.isDefaultTemplate ? `<button onclick="setAsDefault('${template._id}')" 
+                                                        style="background-color: #9333ea; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem;"
+                                                        title="Set as Default">
                                                     <i class="fas fa-star"></i>
                                                 </button>` : ''}
-                                                <button onclick="deleteTemplate('${template._id}')" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded font-semibold transition-colors" title="Delete">
+                                                <button onclick="deleteTemplate('${template._id}')" 
+                                                        style="background-color: #dc2626; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem;"
+                                                        title="Delete">
                                                     <i class="fas fa-trash"></i>
                                                 </button>
                                             </div>
