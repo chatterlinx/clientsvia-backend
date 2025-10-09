@@ -650,9 +650,13 @@ async function seedGlobalAIBrain() {
         // The full 103 categories will be added in subsequent updates
         const templateData = {
             version: 'v1.0.0',
-            name: 'ClientVia.ai Global AI Receptionist Brain',
-            description: 'World-class AI agent instant response library with 100+ human-like conversation scenarios. Covers emotional intelligence, call flow, scheduling, safety, accessibility, and edge cases.',
-            isActive: true,
+            name: 'Universal AI Brain (All Industries)',
+            description: 'World-class AI agent instant response library with 100+ human-like conversation scenarios. Covers emotional intelligence, call flow, scheduling, safety, accessibility, and edge cases. Universal template suitable for all industries.',
+            templateType: 'universal',
+            industryLabel: 'Universal (All Industries)',
+            isPublished: true,
+            isDefaultTemplate: true,
+            isActive: true, // Legacy field for backwards compatibility
             categories: [
                 ...emotionalIntelligenceCategories
                 // Additional categories will be added here
@@ -671,20 +675,25 @@ async function seedGlobalAIBrain() {
         
         console.log('');
         console.log('✅ ============================================================================');
-        console.log('✅ GLOBAL AI BRAIN SUCCESSFULLY CREATED!');
+        console.log('✅ UNIVERSAL AI BRAIN SUCCESSFULLY CREATED!');
         console.log('✅ ============================================================================');
         console.log('');
         console.log(`📊 Template Stats:`);
         console.log(`   - Version: ${newTemplate.version}`);
+        console.log(`   - Name: ${newTemplate.name}`);
+        console.log(`   - Type: ${newTemplate.templateType} (${newTemplate.industryLabel})`);
         console.log(`   - Categories: ${newTemplate.stats.totalCategories}`);
         console.log(`   - Scenarios: ${newTemplate.stats.totalScenarios}`);
         console.log(`   - Triggers: ${newTemplate.stats.totalTriggers}`);
-        console.log(`   - Active: ${newTemplate.isActive ? 'YES ✅' : 'NO'}`);
+        console.log(`   - Published: ${newTemplate.isPublished ? 'YES ✅' : 'NO'}`);
+        console.log(`   - Default Template: ${newTemplate.isDefaultTemplate ? 'YES ✅' : 'NO'}`);
+        console.log(`   - Active (Legacy): ${newTemplate.isActive ? 'YES ✅' : 'NO'}`);
         console.log('');
         console.log('🎯 Next Steps:');
         console.log('   1. Visit /admin-global-instant-responses.html to view the AI brain');
-        console.log('   2. New companies will automatically inherit this template');
-        console.log('   3. Companies can customize their copy in the AI Agent Logic tab');
+        console.log('   2. Use "Create Industry Template" to clone for specific industries');
+        console.log('   3. New companies will automatically inherit the default template');
+        console.log('   4. Companies can customize their copy in the AI Agent Logic tab');
         console.log('');
         console.log('🚀 Your AI agent is now ready to handle human conversations like a pro!');
         console.log('');
