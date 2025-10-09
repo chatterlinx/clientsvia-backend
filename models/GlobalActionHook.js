@@ -55,10 +55,10 @@ const globalActionHookSchema = new Schema({
         trim: true
     },
     
-    // Category for organization
-    category: {
+    // Directory for organization (references GlobalActionHookDirectory.directoryId)
+    directory: {
         type: String,
-        enum: ['escalation', 'scheduling', 'payment', 'communication', 'information', 'call_flow', 'other'],
+        trim: true,
         default: 'other',
         index: true
     },

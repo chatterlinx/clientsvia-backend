@@ -1,22 +1,22 @@
 /**
  * ============================================================================
- * GLOBAL ACTION HOOK CATEGORY MODEL
+ * GLOBAL ACTION HOOK DIRECTORY MODEL
  * ============================================================================
  * 
  * PURPOSE:
- * Defines categories for organizing action hooks (e.g., Escalation, Scheduling,
- * Communication, Payment, etc.). Categories are dynamic and admin-manageable.
+ * Defines directories for organizing action hooks (e.g., Escalation, Scheduling,
+ * Communication, Payment, etc.). Directories are dynamic and admin-manageable.
  * 
  * ARCHITECTURE:
- * - Platform-wide category library
- * - Action hooks reference categories by categoryId
- * - Admins can add/edit/delete categories from UI
+ * - Platform-wide directory library
+ * - Action hooks reference directories by directoryId
+ * - Admins can add/edit/delete directories from UI
  * - Displayed in dropdowns when creating/editing hooks
  * 
  * DESIGN PHILOSOPHY:
  * - Dynamic, not hardcoded
  * - Future-proof for industry-specific needs
- * - Clean separation: categories define organization, hooks define actions
+ * - Clean separation: directories define organization, hooks define actions
  * 
  * ============================================================================
  */
@@ -24,9 +24,9 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
-const globalActionHookCategorySchema = new Schema({
-    // Unique identifier (used in hook.category field)
-    categoryId: {
+const globalActionHookDirectorySchema = new Schema({
+    // Unique identifier (used in hook.directory field)
+    directoryId: {
         type: String,
         required: true,
         unique: true,
@@ -48,7 +48,7 @@ const globalActionHookCategorySchema = new Schema({
         default: '⚡'
     },
     
-    // Description of what this category is for
+    // Description of what this directory is for
     description: {
         type: String,
         trim: true,
@@ -62,7 +62,7 @@ const globalActionHookCategorySchema = new Schema({
         default: 'gray'
     },
     
-    // Is this category active and available for selection?
+    // Is this directory active and available for selection?
     isActive: {
         type: Boolean,
         default: true,
@@ -75,7 +75,7 @@ const globalActionHookCategorySchema = new Schema({
         default: 0
     },
     
-    // Is this a system-default category (cannot be deleted)
+    // Is this a system-default directory (cannot be deleted)
     isSystemDefault: {
         type: Boolean,
         default: false
@@ -94,26 +94,25 @@ const globalActionHookCategorySchema = new Schema({
     }
 }, {
     timestamps: true,
-    collection: 'globalactionhookcategories'
+    collection: 'globalactionhookdirectories'
 });
 
 // Indexes for performance
-globalActionHookCategorySchema.index({ isActive: 1, sortOrder: 1 });
-globalActionHookCategorySchema.index({ categoryId: 1 });
+globalActionHookDirectorySchema.index({ isActive: 1, sortOrder: 1 });
+globalActionHookDirectorySchema.index({ directoryId: 1 });
 
-// Static method: Get all active categories sorted by sortOrder
-globalActionHookCategorySchema.statics.getActiveCategories = async function() {
+// Static method: Get all active directories sorted by sortOrder
+globalActionHookDirectorySchema.statics.getActiveDirectories = async function() {
     return await this.find({ isActive: true })
         .sort({ sortOrder: 1, name: 1 })
         .lean();
 };
 
-// Static method: Get category by ID
-globalActionHookCategorySchema.statics.getByCategoryId = async function(categoryId) {
-    return await this.findOne({ categoryId, isActive: true }).lean();
+// Static method: Get directory by ID
+globalActionHookDirectorySchema.statics.getByDirectoryId = async function(directoryId) {
+    return await this.findOne({ directoryId, isActive: true }).lean();
 };
 
-const GlobalActionHookCategory = mongoose.model('GlobalActionHookCategory', globalActionHookCategorySchema);
+const GlobalActionHookDirectory = mongoose.model('GlobalActionHookDirectory', globalActionHookDirectorySchema);
 
-module.exports = GlobalActionHookCategory;
-
+module.exports = GlobalActionHookDirectory;

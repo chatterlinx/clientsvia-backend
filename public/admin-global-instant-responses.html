@@ -167,7 +167,7 @@
                         <i class="fas fa-folder-open text-blue-600 mr-2"></i>
                         Categories
                     </h2>
-                    <button onclick="openAddCategoryModal()" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
+                    <button onclick="openAddDirectoryModal()" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2">
                         <i class="fas fa-plus-circle"></i>
                         Add Category
                     </button>
@@ -229,9 +229,9 @@
                             <i class="fas fa-bolt mr-2"></i>
                             Hooks
                         </button>
-                        <button id="subtab-categories" onclick="switchActionHooksSubTab('categories')" class="px-4 py-2 font-semibold text-gray-500 hover:text-yellow-600 border-b-2 border-transparent hover:border-yellow-300 transition-colors">
+                        <button id="subtab-directories" onclick="switchActionHooksSubTab('directories')" class="px-4 py-2 font-semibold text-gray-500 hover:text-yellow-600 border-b-2 border-transparent hover:border-yellow-300 transition-colors">
                             <i class="fas fa-folder-open mr-2"></i>
-                            Categories
+                            Directories
                         </button>
                     </nav>
                 </div>
@@ -255,8 +255,8 @@
                         <div class="flex-1">
                             <input type="text" id="action-hooks-search" placeholder="Search action hooks..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
                         </div>
-                        <select id="action-hooks-category-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
-                            <option value="">All Categories</option>
+                        <select id="action-hooks-directory-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                            <option value="">All Directories</option>
                             <!-- Categories will be loaded dynamically -->
                         </select>
                     </div>
@@ -267,14 +267,14 @@
                 </div>
 
                 <!-- Categories Sub-Tab Content -->
-                <div id="action-hooks-categories-subtab-content" class="action-hooks-subtab-content hidden">
+                <div id="action-hooks-directories-subtab-content" class="action-hooks-subtab-content hidden">
                     <!-- Header -->
                     <div class="flex items-center justify-between mb-6">
                         <div>
-                            <h3 class="text-xl font-bold text-gray-900">Hook Categories</h3>
+                            <h3 class="text-xl font-bold text-gray-900">Hook Directories</h3>
                             <p class="text-gray-600 text-sm mt-1">Organize action hooks into logical groups</p>
                         </div>
-                        <button onclick="openAddCategoryModal()" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                        <button onclick="openAddDirectoryModal()" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
                             <i class="fas fa-plus-circle"></i>
                             Add New Category
                         </button>
@@ -282,10 +282,10 @@
 
                     <!-- Filter/Search -->
                     <div class="mb-6">
-                        <input type="text" id="categories-search" placeholder="Search categories..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                        <input type="text" id="directories-search" placeholder="Search directories..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
                     </div>
                     
-                    <div id="categories-list" class="space-y-4">
+                    <div id="directories-list" class="space-y-4">
                         <!-- Categories will be rendered here -->
                     </div>
                 </div>
@@ -461,7 +461,7 @@
                                             <i class="fas fa-folder-open text-white text-xl"></i>
                                         </div>
                                         <div>
-                                            <h4 class="text-lg font-bold text-gray-900">Seed 7 Action Hook Categories</h4>
+                                            <h4 class="text-lg font-bold text-gray-900">Seed 7 Action Hook Directories</h4>
                                             <p class="text-sm text-gray-600">Escalation, Scheduling, Communication, Payment, etc.</p>
                                         </div>
                                     </div>
@@ -476,7 +476,7 @@
                                     </div>
                                 </div>
                                 <div class="ml-4">
-                                    <button onclick="seedCategories()" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                    <button onclick="seedDirectories()" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
                                         <i class="fas fa-play-circle"></i>
                                         Seed Categories
                                     </button>
@@ -1094,7 +1094,7 @@
                 activeTemplate = result.data;
                 renderActiveTemplate();
                 renderStatistics();
-                renderCategories();
+                renderDirectories();
                 return activeTemplate;
             } catch (error) {
                 console.error('❌ [DEBUG] Error fetching active template:', error);
@@ -1265,7 +1265,7 @@
             `;
         }
 
-        function renderCategories() {
+        function renderDirectories() {
             if (!activeTemplate || !activeTemplate.categories) return;
 
             const container = document.getElementById('categories-container');
@@ -1570,7 +1570,7 @@
                 
                 // Refresh the UI
                 await fetchActiveTemplate();
-                renderCategories();
+                renderDirectories();
             } catch (error) {
                 console.error('❌ Error updating category:', error);
                 showNotification('❌ Failed to update category: ' + error.message, 'error');
@@ -1635,7 +1635,7 @@
                 
                 // Refresh the UI
                 await fetchActiveTemplate();
-                renderCategories();
+                renderDirectories();
             } catch (error) {
                 console.error('❌ Error adding category:', error);
                 showNotification('❌ Failed to add category: ' + error.message, 'error');
@@ -1698,7 +1698,7 @@
                 
                 // Refresh
                 await fetchActiveTemplate();
-                renderCategories();
+                renderDirectories();
             } catch (error) {
                 console.error('❌ Error updating template:', error);
                 showNotification('❌ Failed to update template: ' + error.message, 'error');
@@ -1755,7 +1755,7 @@
                 
                 // Refresh to show new template
                 await fetchActiveTemplate();
-                renderCategories();
+                renderDirectories();
             } catch (error) {
                 console.error('❌ Error creating template:', error);
                 showNotification('❌ Failed to create template: ' + error.message, 'error');
@@ -2274,7 +2274,7 @@
                 
                 // Refresh the UI
                 await fetchActiveTemplate();
-                renderCategories();
+                renderDirectories();
                 
                 // Auto-expand the category to show the new scenario
                 const scenariosDiv = document.getElementById(`scenarios-${currentAddingCategory}`);
@@ -2406,7 +2406,7 @@
             showNotification('Delete functionality coming in next update!', 'info');
         }
 
-        async function openAddCategoryModal() {
+        async function openAddDirectoryModal() {
             if (!activeTemplate) {
                 showNotification('No active template found. Please create or seed a template first.', 'error');
                 return;
@@ -2490,10 +2490,10 @@
             if (subTabName === 'hooks') {
                 document.getElementById('action-hooks-subtab-content').classList.remove('hidden');
                 renderActionHooks();
-                loadCategoriesIntoDropdowns(); // Load categories for filter dropdown
+                loadDirectoriesIntoDropdowns(); // Load categories for filter dropdown
             } else if (subTabName === 'categories') {
-                document.getElementById('action-hooks-categories-subtab-content').classList.remove('hidden');
-                renderCategories();
+                document.getElementById('action-hooks-directories-subtab-content').classList.remove('hidden');
+                renderDirectories();
             }
             
             // Update sub-tab button styles
@@ -2897,17 +2897,17 @@
         // ACTION HOOKS MANAGEMENT
         // ============================================
         let availableActionHooks = [];
-        let availableCategories = [];
+        let availableDirectories = [];
 
         // ============================================
         // CATEGORIES MANAGEMENT
         // ============================================
 
         // Fetch all categories
-        async function fetchCategories() {
+        async function fetchDirectories() {
             try {
                 const token = getAuthToken();
-                const response = await fetch('/api/admin/global-action-hook-categories', {
+                const response = await fetch('/api/admin/global-action-hook-directories', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -2915,34 +2915,34 @@
                 
                 const result = await response.json();
                 if (result.success) {
-                    availableCategories = result.data;
-                    console.log('Loaded', availableCategories.length, 'categories from database');
+                    availableDirectories = result.data;
+                    console.log('Loaded', availableDirectories.length, 'directories from database');
                 }
-                return availableCategories;
+                return availableDirectories;
             } catch (error) {
-                console.error('Error fetching categories:', error);
+                console.error('Error fetching directories:', error);
                 return [];
             }
         }
 
         // Render categories list
-        async function renderCategories() {
-            const container = document.getElementById('categories-list');
+        async function renderDirectories() {
+            const container = document.getElementById('directories-list');
             
             // Show loading state
             container.innerHTML = '<div class="text-center py-8 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>Loading categories...</div>';
             
             // Fetch fresh data
-            await fetchCategories();
+            await fetchDirectories();
             
             // Apply search filter
-            const searchTerm = document.getElementById('categories-search')?.value.toLowerCase() || '';
+            const searchTerm = document.getElementById('directories-search')?.value.toLowerCase() || '';
             
-            let filtered = availableCategories.filter(cat => {
+            let filtered = availableDirectories.filter(dir => {
                 const matchesSearch = !searchTerm || 
-                    cat.name.toLowerCase().includes(searchTerm) ||
-                    cat.categoryId.toLowerCase().includes(searchTerm) ||
-                    (cat.description && cat.description.toLowerCase().includes(searchTerm));
+                    dir.name.toLowerCase().includes(searchTerm) ||
+                    dir.directoryId.toLowerCase().includes(searchTerm) ||
+                    (dir.description && dir.description.toLowerCase().includes(searchTerm));
                 return matchesSearch;
             });
             
@@ -2951,7 +2951,7 @@
                     <div class="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                         <i class="fas fa-folder-open text-gray-400 text-4xl mb-3"></i>
                         <p class="text-gray-600 font-semibold">No categories found</p>
-                        <button onclick="openAddCategoryModal()" class="mt-4 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all">
+                        <button onclick="openAddDirectoryModal()" class="mt-4 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all">
                             <i class="fas fa-plus-circle mr-2"></i>Add Your First Category
                         </button>
                     </div>
@@ -2959,8 +2959,8 @@
                 return;
             }
             
-            // Render category cards
-            container.innerHTML = filtered.map(cat => {
+            // Render directory cards
+            container.innerHTML = filtered.map(dir => {
                 const colorClasses = {
                     red: 'bg-red-100 text-red-700',
                     blue: 'bg-blue-100 text-blue-700',
@@ -2974,45 +2974,45 @@
                     orange: 'bg-orange-100 text-orange-700'
                 };
                 
-                const badgeColor = colorClasses[cat.color] || 'bg-gray-100 text-gray-700';
-                const isSystemDefault = cat.isSystemDefault;
+                const badgeColor = colorClasses[dir.color] || 'bg-gray-100 text-gray-700';
+                const isSystemDefault = dir.isSystemDefault;
                 
                 return `
                     <div class="bg-white border-2 border-gray-200 rounded-xl p-5 hover:shadow-lg transition-all hover:border-yellow-400">
                         <div class="flex items-start justify-between">
                             <div class="flex-1">
                                 <div class="flex items-center gap-3 mb-2">
-                                    <span class="text-2xl">${cat.icon || '⚡'}</span>
+                                    <span class="text-2xl">${dir.icon || '⚡'}</span>
                                     <div>
-                                        <h3 class="text-lg font-bold text-gray-900">${cat.name}</h3>
-                                        <code class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">${cat.categoryId}</code>
+                                        <h3 class="text-lg font-bold text-gray-900">${dir.name}</h3>
+                                        <code class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">${dir.directoryId}</code>
                                     </div>
                                 </div>
                                 
-                                ${cat.description ? `<p class="text-sm text-gray-600 mb-3">${cat.description}</p>` : ''}
+                                ${dir.description ? `<p class="text-sm text-gray-600 mb-3">${dir.description}</p>` : ''}
                                 
                                 <div class="flex items-center gap-2 flex-wrap">
                                     <span class="text-xs font-semibold px-3 py-1 rounded-full ${badgeColor}">
-                                        ${cat.color.toUpperCase()}
+                                        ${dir.color.toUpperCase()}
                                     </span>
-                                    ${cat.isActive ? 
+                                    ${dir.isActive ? 
                                         '<span class="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700">Active</span>' :
                                         '<span class="text-xs font-semibold px-3 py-1 rounded-full bg-gray-100 text-gray-500">Inactive</span>'
                                     }
                                     ${isSystemDefault ? 
                                         '<span class="text-xs font-semibold px-3 py-1 rounded-full bg-blue-100 text-blue-700"><i class="fas fa-shield-alt mr-1"></i>System Default</span>' : ''
                                     }
-                                    <span class="text-xs text-gray-500">Order: ${cat.sortOrder}</span>
+                                    <span class="text-xs text-gray-500">Order: ${dir.sortOrder}</span>
                                 </div>
                             </div>
                             
                             <div class="flex gap-2 ml-4">
-                                <button onclick='editActionHookCategory(${JSON.stringify(cat).replace(/'/g, "&apos;")})' class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
+                                <button onclick='editHookDirectory(${JSON.stringify(dir).replace(/'/g, "&apos;")})' class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
                                     <i class="fas fa-edit"></i>
                                     Edit
                                 </button>
                                 ${!isSystemDefault ? `
-                                    <button onclick='deleteActionHookCategory(${JSON.stringify(cat).replace(/'/g, "&apos;")})' class="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors">
+                                    <button onclick='deleteHookDirectory(${JSON.stringify(dir).replace(/'/g, "&apos;")})' class="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 ` : ''}
@@ -3024,58 +3024,58 @@
         }
 
         // Load categories into dropdowns
-        async function loadCategoriesIntoDropdowns() {
-            await fetchCategories();
+        async function loadDirectoriesIntoDropdowns() {
+            await fetchDirectories();
             
             // Update hook category filter dropdown
-            const filterDropdown = document.getElementById('action-hooks-category-filter');
+            const filterDropdown = document.getElementById('action-hooks-directory-filter');
             if (filterDropdown) {
-                filterDropdown.innerHTML = '<option value="">All Categories</option>' +
-                    availableCategories.map(cat => 
-                        `<option value="${cat.categoryId}">${cat.icon} ${cat.name}</option>`
+                filterDropdown.innerHTML = '<option value="">All Directories</option>' +
+                    availableDirectories.map(dir => 
+                        `<option value="${dir.directoryId}">${dir.icon} ${dir.name}</option>`
                     ).join('');
             }
             
             // Update add/edit hook category dropdowns
             const addDropdown = document.getElementById('add-hook-category');
             const editDropdown = document.getElementById('edit-hook-category');
-            const categoryOptions = availableCategories.map(cat => 
-                `<option value="${cat.categoryId}">${cat.icon} ${cat.name}</option>`
+            const directoryOptions = availableDirectories.map(dir => 
+                `<option value="${dir.directoryId}">${dir.icon} ${dir.name}</option>`
             ).join('');
             
-            if (addDropdown) addDropdown.innerHTML = categoryOptions;
-            if (editDropdown) editDropdown.innerHTML = categoryOptions;
+            if (addDropdown) addDropdown.innerHTML = directoryOptions;
+            if (editDropdown) editDropdown.innerHTML = directoryOptions;
         }
 
         // Open add category modal
-        function openAddCategoryModal() {
-            document.getElementById('add-category-modal').style.display = 'flex';
-            document.getElementById('add-category-form').reset();
+        function openAddDirectoryModal() {
+            document.getElementById('add-hook-dir-modal').style.display = 'flex';
+            document.getElementById('add-hook-dir-form').reset();
         }
 
         // Close add category modal
-        function closeAddCategoryModal() {
-            document.getElementById('add-category-modal').style.display = 'none';
+        function closeAddDirectoryModal() {
+            document.getElementById('add-hook-dir-modal').style.display = 'none';
         }
 
         // Handle add category form submission
-        async function handleAddCategorySubmit(e) {
+        async function handleAddDirectorySubmit(e) {
             e.preventDefault();
             
             try {
                 showNotification('⏳ Adding category...', 'info');
 
                 const categoryData = {
-                    categoryId: document.getElementById('add-category-id').value.trim(),
-                    name: document.getElementById('add-category-name').value.trim(),
-                    description: document.getElementById('add-category-description').value.trim(),
-                    icon: document.getElementById('add-category-icon').value.trim(),
-                    color: document.getElementById('add-category-color').value,
-                    sortOrder: parseInt(document.getElementById('add-category-sort').value) || 999
+                    directoryId: document.getElementById('add-hook-dir-id').value.trim(),
+                    name: document.getElementById('add-hook-dir-name').value.trim(),
+                    description: document.getElementById('add-hook-dir-description').value.trim(),
+                    icon: document.getElementById('add-hook-dir-icon').value.trim(),
+                    color: document.getElementById('add-hook-dir-color').value,
+                    sortOrder: parseInt(document.getElementById('add-hook-dir-sort').value) || 999
                 };
 
                 const token = getAuthToken();
-                const response = await fetch('/api/admin/global-action-hook-categories', {
+                const response = await fetch('/api/admin/global-action-hook-directories', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -3088,9 +3088,9 @@
 
                 if (response.ok && result.success) {
                     showNotification(`✅ Category "${categoryData.name}" added successfully!`, 'success');
-                    closeAddCategoryModal();
-                    await renderCategories();
-                    await loadCategoriesIntoDropdowns();
+                    closeAddDirectoryModal();
+                    await renderDirectories();
+                    await loadDirectoriesIntoDropdowns();
                 } else {
                     console.error('❌ Add category failed:', result);
                     showNotification('Failed to add category: ' + result.message, 'error');
@@ -3101,44 +3101,44 @@
             }
         }
 
-        // Edit action hook category
-        function editActionHookCategory(cat) {
-            document.getElementById('edit-ahc-category-id-original').value = cat._id;
-            document.getElementById('edit-ahc-category-id').value = cat.categoryId;
-            document.getElementById('edit-ahc-category-name').value = cat.name;
-            document.getElementById('edit-ahc-category-description').value = cat.description || '';
-            document.getElementById('edit-ahc-category-icon').value = cat.icon || '';
-            document.getElementById('edit-ahc-category-color').value = cat.color || 'gray';
-            document.getElementById('edit-ahc-category-sort').value = cat.sortOrder || 0;
-            document.getElementById('edit-ahc-category-active').checked = cat.isActive !== false;
+        // Edit action hook directory
+        function editHookDirectory(dir) {
+            document.getElementById('edit-hook-dir-id-original').value = dir._id;
+            document.getElementById('edit-hook-dir-id').value = dir.directoryId;
+            document.getElementById('edit-hook-dir-name').value = dir.name;
+            document.getElementById('edit-hook-dir-description').value = dir.description || '';
+            document.getElementById('edit-hook-dir-icon').value = dir.icon || '';
+            document.getElementById('edit-hook-dir-color').value = dir.color || 'gray';
+            document.getElementById('edit-hook-dir-sort').value = dir.sortOrder || 0;
+            document.getElementById('edit-hook-dir-active').checked = dir.isActive !== false;
             
-            document.getElementById('edit-action-hook-category-modal').style.display = 'flex';
+            document.getElementById('edit-hook-directory-modal').style.display = 'flex';
         }
 
-        // Close edit action hook category modal
-        function closeEditActionHookCategoryModal() {
-            document.getElementById('edit-action-hook-category-modal').style.display = 'none';
+        // Close edit action hook directory modal
+        function closeEditHookDirectoryModal() {
+            document.getElementById('edit-hook-directory-modal').style.display = 'none';
         }
 
         // Handle edit action hook category form submission
-        async function handleEditActionHookCategorySubmit(e) {
+        async function handleEditHookDirectorySubmit(e) {
             e.preventDefault();
             
             try {
                 showNotification('⏳ Updating category...', 'info');
 
-                const categoryId = document.getElementById('edit-ahc-category-id-original').value;
+                const directoryId = document.getElementById('edit-hook-dir-id-original').value;
                 const categoryData = {
-                    name: document.getElementById('edit-ahc-category-name').value.trim(),
-                    description: document.getElementById('edit-ahc-category-description').value.trim(),
-                    icon: document.getElementById('edit-ahc-category-icon').value.trim(),
-                    color: document.getElementById('edit-ahc-category-color').value,
-                    sortOrder: parseInt(document.getElementById('edit-ahc-category-sort').value) || 0,
-                    isActive: document.getElementById('edit-ahc-category-active').checked
+                    name: document.getElementById('edit-hook-dir-name').value.trim(),
+                    description: document.getElementById('edit-hook-dir-description').value.trim(),
+                    icon: document.getElementById('edit-hook-dir-icon').value.trim(),
+                    color: document.getElementById('edit-hook-dir-color').value,
+                    sortOrder: parseInt(document.getElementById('edit-hook-dir-sort').value) || 0,
+                    isActive: document.getElementById('edit-hook-dir-active').checked
                 };
 
                 const token = getAuthToken();
-                const response = await fetch(`/api/admin/global-action-hook-categories/${categoryId}`, {
+                const response = await fetch(`/api/admin/global-action-hook-directories/${directoryId}`, {
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -3151,9 +3151,9 @@
 
                 if (response.ok && result.success) {
                     showNotification(`✅ Category "${categoryData.name}" updated successfully!`, 'success');
-                    closeEditActionHookCategoryModal();
-                    await renderCategories();
-                    await loadCategoriesIntoDropdowns();
+                    closeEditHookDirectoryModal();
+                    await renderDirectories();
+                    await loadDirectoriesIntoDropdowns();
                 } else {
                     showNotification('Failed to update category: ' + result.message, 'error');
                 }
@@ -3164,16 +3164,16 @@
         }
 
         // Delete action hook category
-        async function deleteActionHookCategory(cat) {
-            if (!confirm(`Are you sure you want to delete the category "${cat.name}"?\n\nThis action cannot be undone.`)) {
+        async function deleteHookDirectory(dir) {
+            if (!confirm(`Are you sure you want to delete the directory "${dir.name}"?\n\nThis action cannot be undone.`)) {
                 return;
             }
 
             try {
-                showNotification('⏳ Deleting category...', 'info');
+                showNotification('⏳ Deleting directory...', 'info');
 
                 const token = getAuthToken();
-                const response = await fetch(`/api/admin/global-action-hook-categories/${cat._id}`, {
+                const response = await fetch(`/api/admin/global-action-hook-directories/${dir._id}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -3181,9 +3181,9 @@
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    showNotification(`✅ Category "${cat.name}" deleted successfully!`, 'success');
-                    await renderCategories();
-                    await loadCategoriesIntoDropdowns();
+                    showNotification(`✅ Directory "${dir.name}" deleted successfully!`, 'success');
+                    await renderDirectories();
+                    await loadDirectoriesIntoDropdowns();
                 } else {
                     showNotification('Failed to delete category: ' + result.message, 'error');
                 }
@@ -3194,7 +3194,7 @@
         }
 
         // Seed categories
-        async function seedCategories() {
+        async function seedDirectories() {
             if (!confirm('This will seed 7 default categories (Escalation, Scheduling, Communication, Payment, Information, Call Flow, System).\n\nContinue?')) {
                 return;
             }
@@ -3203,7 +3203,7 @@
                 showNotification('⏳ Seeding categories...', 'info');
 
                 const token = getAuthToken();
-                const response = await fetch('/api/admin/global-action-hook-categories/seed', {
+                const response = await fetch('/api/admin/global-action-hook-directories/seed', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -3212,8 +3212,8 @@
 
                 if (response.ok && result.success) {
                     showNotification(`✅ Successfully seeded ${result.count} categories!`, 'success');
-                    await renderCategories();
-                    await loadCategoriesIntoDropdowns();
+                    await renderDirectories();
+                    await loadDirectoriesIntoDropdowns();
                 } else {
                     showNotification('Seeding failed: ' + result.message, 'error');
                 }
@@ -3224,7 +3224,7 @@
         }
 
         // Search categories
-        document.getElementById('categories-search')?.addEventListener('input', renderCategories);
+        document.getElementById('directories-search')?.addEventListener('input', renderCategories);
 
         // Fetch all action hooks
         async function fetchActionHooks() {
@@ -3262,7 +3262,7 @@
             
             // Apply filters
             const searchTerm = document.getElementById('action-hooks-search')?.value.toLowerCase() || '';
-            const categoryFilter = document.getElementById('action-hooks-category-filter')?.value || '';
+            const categoryFilter = document.getElementById('action-hooks-directory-filter')?.value || '';
             
             let filtered = availableActionHooks.filter(hook => {
                 const matchesSearch = !searchTerm || 
@@ -3511,7 +3511,7 @@
 
         // Search and filter action hooks
         document.getElementById('action-hooks-search')?.addEventListener('input', renderActionHooks);
-        document.getElementById('action-hooks-category-filter')?.addEventListener('change', renderActionHooks);
+        document.getElementById('action-hooks-directory-filter')?.addEventListener('change', renderActionHooks);
 
         // ============================================
         // INITIALIZATION
@@ -3531,7 +3531,7 @@
             console.log(`Loaded ${availableBehaviors.length} behavior templates`);
             
             // Load categories (needed for action hooks dropdowns)
-            await loadCategoriesIntoDropdowns();
+            await loadDirectoriesIntoDropdowns();
             console.log(`Loaded ${availableCategories.length} action hook categories`);
             
             // Load active template
@@ -4020,7 +4020,7 @@
     <!-- ============================================ -->
     <!-- ADD CATEGORY MODAL (Action Hooks → Categories Tab) -->
     <!-- ============================================ -->
-    <div id="add-category-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+    <div id="add-hook-directory-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
         <div style="background: white; border-radius: 16px; max-width: 600px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                 <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
@@ -4032,32 +4032,32 @@
                 </button>
             </div>
 
-            <form id="add-category-form" class="space-y-4" onsubmit="handleAddCategorySubmit(event); return false;">
+            <form id="add-hook-directory-form" class="space-y-4" onsubmit="handleAddDirectorySubmit(event); return false;">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Category ID *</label>
-                        <input type="text" id="add-category-id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="phone_transfer">
+                        <input type="text" id="add-hook-dir-id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="phone_transfer">
                         <p class="text-xs text-gray-500 mt-1">Unique identifier (snake_case)</p>
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Display Name *</label>
-                        <input type="text" id="add-category-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="Phone Transfer">
+                        <input type="text" id="add-hook-dir-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="Phone Transfer">
                     </div>
                 </div>
 
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-2">Description</label>
-                    <textarea id="add-category-description" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="What hooks in this category do..."></textarea>
+                    <textarea id="add-hook-dir-description" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500" placeholder="What hooks in this category do..."></textarea>
                 </div>
 
                 <div class="grid grid-cols-3 gap-4">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Icon (emoji)</label>
-                        <input type="text" id="add-category-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-center text-3xl" placeholder="📞">
+                        <input type="text" id="add-hook-dir-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-center text-3xl" placeholder="📞">
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Badge Color *</label>
-                        <select id="add-category-color" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                        <select id="add-hook-dir-color" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
                             <option value="red">Red</option>
                             <option value="blue">Blue</option>
                             <option value="green">Green</option>
@@ -4072,7 +4072,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Sort Order</label>
-                        <input type="number" id="add-category-sort" value="999" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                        <input type="number" id="add-hook-dir-sort" value="999" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
                     </div>
                 </div>
 
@@ -4092,7 +4092,7 @@
     <!-- ============================================ -->
     <!-- EDIT CATEGORY MODAL (Action Hooks → Categories Tab) -->
     <!-- ============================================ -->
-    <div id="edit-action-hook-category-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+    <div id="edit-hook-directory-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
         <div style="background: white; border-radius: 16px; max-width: 600px; width: 95%; max-height: 90vh; overflow-y: auto; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                 <h2 style="font-size: 28px; font-weight: 700; color: #2c3e50; margin: 0;">
@@ -4104,34 +4104,34 @@
                 </button>
             </div>
 
-            <form id="edit-action-hook-category-form" class="space-y-4" onsubmit="handleEditActionHookCategorySubmit(event); return false;">
-                <input type="hidden" id="edit-ahc-category-id-original">
+            <form id="edit-hook-directory-form" class="space-y-4" onsubmit="handleEditHookDirectorySubmit(event); return false;">
+                <input type="hidden" id="edit-hook-dir-id-original">
 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Category ID *</label>
-                        <input type="text" id="edit-ahc-category-id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-gray-100" readonly>
+                        <input type="text" id="edit-hook-dir-id" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 bg-gray-100" readonly>
                         <p class="text-xs text-gray-500 mt-1">Cannot be changed</p>
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Display Name *</label>
-                        <input type="text" id="edit-ahc-category-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                        <input type="text" id="edit-hook-dir-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
                     </div>
                 </div>
 
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-2">Description</label>
-                    <textarea id="edit-ahc-category-description" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500"></textarea>
+                    <textarea id="edit-hook-dir-description" rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500"></textarea>
                 </div>
 
                 <div class="grid grid-cols-3 gap-4">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Icon (emoji)</label>
-                        <input type="text" id="edit-ahc-category-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-center text-3xl">
+                        <input type="text" id="edit-hook-dir-icon" maxlength="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 text-center text-3xl">
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Badge Color *</label>
-                        <select id="edit-ahc-category-color" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                        <select id="edit-hook-dir-color" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
                             <option value="red">Red</option>
                             <option value="blue">Blue</option>
                             <option value="green">Green</option>
@@ -4146,12 +4146,12 @@
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Sort Order</label>
-                        <input type="number" id="edit-ahc-category-sort" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
+                        <input type="number" id="edit-hook-dir-sort" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500">
                     </div>
                 </div>
 
                 <div class="flex items-center">
-                    <input type="checkbox" id="edit-ahc-category-active" class="w-5 h-5 text-yellow-500 border-gray-300 rounded focus:ring-yellow-500 mr-2">
+                    <input type="checkbox" id="edit-hook-dir-active" class="w-5 h-5 text-yellow-500 border-gray-300 rounded focus:ring-yellow-500 mr-2">
                     <label class="text-sm font-bold text-gray-700">Active</label>
                 </div>
 

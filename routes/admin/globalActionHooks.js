@@ -85,7 +85,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
     try {
-        const { hookId, name, icon, description, category, functionName, parameters, triggerTiming } = req.body;
+        const { hookId, name, icon, description, directory, functionName, parameters, triggerTiming } = req.body;
         
         // Check if hook ID already exists
         const existing = await GlobalActionHook.findOne({ hookId });
@@ -101,7 +101,7 @@ router.post('/', async (req, res) => {
             name,
             icon: icon || '⚡',
             description,
-            category: category || 'other',
+            directory: directory || 'other',
             functionName: functionName || '',
             parameters: parameters || {},
             triggerTiming: triggerTiming || 'after_response',
@@ -146,12 +146,12 @@ router.put('/:id', async (req, res) => {
             });
         }
         
-        const { name, icon, description, category, functionName, parameters, triggerTiming, isActive, sortOrder } = req.body;
+        const { name, icon, description, directory, functionName, parameters, triggerTiming, isActive, sortOrder } = req.body;
         
         if (name) hook.name = name;
         if (icon) hook.icon = icon;
         if (description) hook.description = description;
-        if (category) hook.category = category;
+        if (directory) hook.directory = directory;
         if (functionName !== undefined) hook.functionName = functionName;
         if (parameters !== undefined) hook.parameters = parameters;
         if (triggerTiming) hook.triggerTiming = triggerTiming;
@@ -237,33 +237,33 @@ router.post('/seed', async (req, res) => {
         }
         
         const defaultHooks = [
-            // ESCALATION CATEGORY
-            { hookId: 'escalate_to_human', name: 'Escalate to Human', icon: '🚨', description: 'Transfer call to human representative immediately', category: 'escalation', functionName: 'escalateToHuman', triggerTiming: 'immediately', sortOrder: 1, isSystemDefault: true },
-            { hookId: 'escalate_to_manager', name: 'Escalate to Manager', icon: '👔', description: 'Transfer call to manager or supervisor', category: 'escalation', functionName: 'escalateToManager', triggerTiming: 'immediately', sortOrder: 2, isSystemDefault: true },
-            { hookId: 'flag_for_followup', name: 'Flag for Follow-up', icon: '🏴', description: 'Mark conversation for manual review and follow-up', category: 'escalation', functionName: 'flagForFollowup', triggerTiming: 'after_response', sortOrder: 3, isSystemDefault: true },
+            // ESCALATION DIRECTORY
+            { hookId: 'escalate_to_human', name: 'Escalate to Human', icon: '🚨', description: 'Transfer call to human representative immediately', directory: 'escalation', functionName: 'escalateToHuman', triggerTiming: 'immediately', sortOrder: 1, isSystemDefault: true },
+            { hookId: 'escalate_to_manager', name: 'Escalate to Manager', icon: '👔', description: 'Transfer call to manager or supervisor', directory: 'escalation', functionName: 'escalateToManager', triggerTiming: 'immediately', sortOrder: 2, isSystemDefault: true },
+            { hookId: 'flag_for_followup', name: 'Flag for Follow-up', icon: '🏴', description: 'Mark conversation for manual review and follow-up', directory: 'escalation', functionName: 'flagForFollowup', triggerTiming: 'after_response', sortOrder: 3, isSystemDefault: true },
             
-            // SCHEDULING CATEGORY
-            { hookId: 'offer_scheduling', name: 'Offer Scheduling', icon: '📅', description: 'Present available appointment slots to caller', category: 'scheduling', functionName: 'offerScheduling', triggerTiming: 'after_response', sortOrder: 4, isSystemDefault: true },
-            { hookId: 'confirm_appointment', name: 'Confirm Appointment', icon: '✅', description: 'Confirm and book the selected appointment time', category: 'scheduling', functionName: 'confirmAppointment', triggerTiming: 'on_confirmation', sortOrder: 5, isSystemDefault: true },
-            { hookId: 'offer_reschedule', name: 'Offer Reschedule', icon: '🔄', description: 'Provide options to reschedule existing appointment', category: 'scheduling', functionName: 'offerReschedule', triggerTiming: 'after_response', sortOrder: 6, isSystemDefault: true },
+            // SCHEDULING DIRECTORY
+            { hookId: 'offer_scheduling', name: 'Offer Scheduling', icon: '📅', description: 'Present available appointment slots to caller', directory: 'scheduling', functionName: 'offerScheduling', triggerTiming: 'after_response', sortOrder: 4, isSystemDefault: true },
+            { hookId: 'confirm_appointment', name: 'Confirm Appointment', icon: '✅', description: 'Confirm and book the selected appointment time', directory: 'scheduling', functionName: 'confirmAppointment', triggerTiming: 'on_confirmation', sortOrder: 5, isSystemDefault: true },
+            { hookId: 'offer_reschedule', name: 'Offer Reschedule', icon: '🔄', description: 'Provide options to reschedule existing appointment', directory: 'scheduling', functionName: 'offerReschedule', triggerTiming: 'after_response', sortOrder: 6, isSystemDefault: true },
             
-            // PAYMENT CATEGORY
-            { hookId: 'send_payment_link', name: 'Send Payment Link', icon: '💳', description: 'Send secure payment link via SMS or email', category: 'payment', functionName: 'sendPaymentLink', triggerTiming: 'after_response', sortOrder: 7, isSystemDefault: true },
-            { hookId: 'send_invoice', name: 'Send Invoice', icon: '🧾', description: 'Generate and send invoice to customer', category: 'payment', functionName: 'sendInvoice', triggerTiming: 'after_response', sortOrder: 8, isSystemDefault: true },
+            // PAYMENT DIRECTORY
+            { hookId: 'send_payment_link', name: 'Send Payment Link', icon: '💳', description: 'Send secure payment link via SMS or email', directory: 'payment', functionName: 'sendPaymentLink', triggerTiming: 'after_response', sortOrder: 7, isSystemDefault: true },
+            { hookId: 'send_invoice', name: 'Send Invoice', icon: '🧾', description: 'Generate and send invoice to customer', directory: 'payment', functionName: 'sendInvoice', triggerTiming: 'after_response', sortOrder: 8, isSystemDefault: true },
             
-            // COMMUNICATION CATEGORY
-            { hookId: 'send_info_sms', name: 'Send Info via SMS', icon: '📱', description: 'Send detailed information or links via text message', category: 'communication', functionName: 'sendInfoSMS', triggerTiming: 'after_response', sortOrder: 9, isSystemDefault: true },
-            { hookId: 'send_info_email', name: 'Send Info via Email', icon: '📧', description: 'Send detailed information or documents via email', category: 'communication', functionName: 'sendInfoEmail', triggerTiming: 'after_response', sortOrder: 10, isSystemDefault: true },
-            { hookId: 'offer_callback', name: 'Offer Callback', icon: '📞', description: 'Schedule callback at customer\'s preferred time', category: 'communication', functionName: 'offerCallback', triggerTiming: 'after_response', sortOrder: 11, isSystemDefault: true },
+            // COMMUNICATION DIRECTORY
+            { hookId: 'send_info_sms', name: 'Send Info via SMS', icon: '📱', description: 'Send detailed information or links via text message', directory: 'communication', functionName: 'sendInfoSMS', triggerTiming: 'after_response', sortOrder: 9, isSystemDefault: true },
+            { hookId: 'send_info_email', name: 'Send Info via Email', icon: '📧', description: 'Send detailed information or documents via email', directory: 'communication', functionName: 'sendInfoEmail', triggerTiming: 'after_response', sortOrder: 10, isSystemDefault: true },
+            { hookId: 'offer_callback', name: 'Offer Callback', icon: '📞', description: 'Schedule callback at customer\'s preferred time', directory: 'communication', functionName: 'offerCallback', triggerTiming: 'after_response', sortOrder: 11, isSystemDefault: true },
             
-            // INFORMATION CATEGORY
-            { hookId: 'provide_quote', name: 'Provide Quote', icon: '💰', description: 'Generate and present price quote based on service details', category: 'information', functionName: 'provideQuote', triggerTiming: 'after_response', sortOrder: 12, isSystemDefault: true },
-            { hookId: 'check_availability', name: 'Check Availability', icon: '🔍', description: 'Check technician/service availability in real-time', category: 'information', functionName: 'checkAvailability', triggerTiming: 'immediately', sortOrder: 13, isSystemDefault: true },
+            // INFORMATION DIRECTORY
+            { hookId: 'provide_quote', name: 'Provide Quote', icon: '💰', description: 'Generate and present price quote based on service details', directory: 'information', functionName: 'provideQuote', triggerTiming: 'after_response', sortOrder: 12, isSystemDefault: true },
+            { hookId: 'check_availability', name: 'Check Availability', icon: '🔍', description: 'Check technician/service availability in real-time', directory: 'information', functionName: 'checkAvailability', triggerTiming: 'immediately', sortOrder: 13, isSystemDefault: true },
             
-            // CALL FLOW CATEGORY
-            { hookId: 'smart_hold', name: 'Smart Hold (Active Listening)', icon: '⏸️', description: 'Intelligent hold with active listening - monitors for customer return, prompts at intervals, max timeout protection', category: 'call_flow', functionName: 'smartHold', parameters: { activeListening: true, timeoutIntervals: [60, 120, 180], maxDuration: 300, exitOnSpeech: true }, triggerTiming: 'immediately', sortOrder: 14, isSystemDefault: true },
-            { hookId: 'end_call_positive', name: 'End Call (Positive)', icon: '👋', description: 'Gracefully end call after successful resolution', category: 'call_flow', functionName: 'endCallPositive', triggerTiming: 'after_response', sortOrder: 15, isSystemDefault: true },
-            { hookId: 'hold_for_info', name: 'Hold for Information', icon: '⏸️', description: 'Put caller on brief hold while retrieving information (simple hold, no smart features)', category: 'call_flow', functionName: 'holdForInfo', triggerTiming: 'immediately', sortOrder: 16, isSystemDefault: true }
+            // CALL FLOW DIRECTORY
+            { hookId: 'smart_hold', name: 'Smart Hold (Active Listening)', icon: '⏸️', description: 'Intelligent hold with active listening - monitors for customer return, prompts at intervals, max timeout protection', directory: 'call_flow', functionName: 'smartHold', parameters: { activeListening: true, timeoutIntervals: [60, 120, 180], maxDuration: 300, exitOnSpeech: true }, triggerTiming: 'immediately', sortOrder: 14, isSystemDefault: true },
+            { hookId: 'end_call_positive', name: 'End Call (Positive)', icon: '👋', description: 'Gracefully end call after successful resolution', directory: 'call_flow', functionName: 'endCallPositive', triggerTiming: 'after_response', sortOrder: 15, isSystemDefault: true },
+            { hookId: 'hold_for_info', name: 'Hold for Information', icon: '⏸️', description: 'Put caller on brief hold while retrieving information (simple hold, no smart features)', directory: 'call_flow', functionName: 'holdForInfo', triggerTiming: 'immediately', sortOrder: 16, isSystemDefault: true }
         ];
         
         await GlobalActionHook.insertMany(defaultHooks);
