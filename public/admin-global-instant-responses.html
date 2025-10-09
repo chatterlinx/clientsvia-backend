@@ -274,9 +274,9 @@
                             <h3 class="text-xl font-bold text-gray-900">Hook Directories</h3>
                             <p class="text-gray-600 text-sm mt-1">Organize action hooks into logical groups</p>
                         </div>
-                        <button onclick="openAddDirectoryModal()" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                        <button onclick="openAddHookDirectoryModal()" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
                             <i class="fas fa-plus-circle"></i>
-                            Add New Category
+                            Add New Directory
                         </button>
                     </div>
 
@@ -2950,9 +2950,9 @@
                 container.innerHTML = `
                     <div class="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                         <i class="fas fa-folder-open text-gray-400 text-4xl mb-3"></i>
-                        <p class="text-gray-600 font-semibold">No categories found</p>
-                        <button onclick="openAddDirectoryModal()" class="mt-4 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all">
-                            <i class="fas fa-plus-circle mr-2"></i>Add Your First Category
+                        <p class="text-gray-600 font-semibold">No directories found</p>
+                        <button onclick="openAddHookDirectoryModal()" class="mt-4 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all">
+                            <i class="fas fa-plus-circle mr-2"></i>Add Your First Directory
                         </button>
                     </div>
                 `;
@@ -3047,8 +3047,8 @@
             if (editDropdown) editDropdown.innerHTML = directoryOptions;
         }
 
-        // Open add category modal
-        function openAddDirectoryModal() {
+        // Open add hook directory modal
+        function openAddHookDirectoryModal() {
             document.getElementById('add-hook-dir-modal').style.display = 'flex';
             document.getElementById('add-hook-dir-form').reset();
         }
