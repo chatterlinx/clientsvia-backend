@@ -452,8 +452,8 @@
                             </div>
                         </div>
 
-                        <!-- Seed Action Hook Categories Card -->
-                        <div class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-6">
+                        <!-- Seed Action Hook Directories Card -->
+                        <div class="bg-purple-50 border-2 border-purple-200 rounded-lg p-6">
                             <div class="flex items-start justify-between">
                                 <div class="flex-1">
                                     <div class="flex items-center gap-3 mb-3">
@@ -478,7 +478,7 @@
                                 <div class="ml-4">
                                     <button onclick="seedDirectories()" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
                                         <i class="fas fa-play-circle"></i>
-                                        Seed Categories
+                                        Seed Directories
                                     </button>
                                 </div>
                             </div>
@@ -3063,9 +3063,9 @@
             e.preventDefault();
             
             try {
-                showNotification('⏳ Adding category...', 'info');
+                showNotification('⏳ Adding directory...', 'info');
 
-                const categoryData = {
+                const directoryData = {
                     directoryId: document.getElementById('add-hook-dir-id').value.trim(),
                     name: document.getElementById('add-hook-dir-name').value.trim(),
                     description: document.getElementById('add-hook-dir-description').value.trim(),
@@ -3081,23 +3081,23 @@
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(categoryData)
+                    body: JSON.stringify(directoryData)
                 });
 
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    showNotification(`✅ Category "${categoryData.name}" added successfully!`, 'success');
+                    showNotification(`✅ Directory "${directoryData.name}" added successfully!`, 'success');
                     closeAddDirectoryModal();
                     await renderDirectories();
                     await loadDirectoriesIntoDropdowns();
                 } else {
-                    console.error('❌ Add category failed:', result);
-                    showNotification('Failed to add category: ' + result.message, 'error');
+                    console.error('❌ Add directory failed:', result);
+                    showNotification('Failed to add directory: ' + result.message, 'error');
                 }
             } catch (error) {
-                console.error('Error adding category:', error);
-                showNotification('Error adding category: ' + error.message, 'error');
+                console.error('Error adding directory:', error);
+                showNotification('Error adding directory: ' + error.message, 'error');
             }
         }
 
@@ -3125,10 +3125,10 @@
             e.preventDefault();
             
             try {
-                showNotification('⏳ Updating category...', 'info');
+                showNotification('⏳ Updating directory...', 'info');
 
                 const directoryId = document.getElementById('edit-hook-dir-id-original').value;
-                const categoryData = {
+                const directoryData = {
                     name: document.getElementById('edit-hook-dir-name').value.trim(),
                     description: document.getElementById('edit-hook-dir-description').value.trim(),
                     icon: document.getElementById('edit-hook-dir-icon').value.trim(),
@@ -3144,22 +3144,22 @@
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(categoryData)
+                    body: JSON.stringify(directoryData)
                 });
 
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    showNotification(`✅ Category "${categoryData.name}" updated successfully!`, 'success');
+                    showNotification(`✅ Directory "${directoryData.name}" updated successfully!`, 'success');
                     closeEditHookDirectoryModal();
                     await renderDirectories();
                     await loadDirectoriesIntoDropdowns();
                 } else {
-                    showNotification('Failed to update category: ' + result.message, 'error');
+                    showNotification('Failed to update directory: ' + result.message, 'error');
                 }
             } catch (error) {
-                console.error('Error updating category:', error);
-                showNotification('Error updating category: ' + error.message, 'error');
+                console.error('Error updating directory:', error);
+                showNotification('Error updating directory: ' + error.message, 'error');
             }
         }
 
@@ -3185,22 +3185,22 @@
                     await renderDirectories();
                     await loadDirectoriesIntoDropdowns();
                 } else {
-                    showNotification('Failed to delete category: ' + result.message, 'error');
+                    showNotification('Failed to delete directory: ' + result.message, 'error');
                 }
             } catch (error) {
-                console.error('Error deleting category:', error);
-                showNotification('Error deleting category: ' + error.message, 'error');
+                console.error('Error deleting directory:', error);
+                showNotification('Error deleting directory: ' + error.message, 'error');
             }
         }
 
-        // Seed categories
+        // Seed directories
         async function seedDirectories() {
-            if (!confirm('This will seed 7 default categories (Escalation, Scheduling, Communication, Payment, Information, Call Flow, System).\n\nContinue?')) {
+            if (!confirm('This will seed 7 default directories (Escalation, Scheduling, Communication, Payment, Information, Call Flow, System).\n\nContinue?')) {
                 return;
             }
 
             try {
-                showNotification('⏳ Seeding categories...', 'info');
+                showNotification('⏳ Seeding directories...', 'info');
 
                 const token = getAuthToken();
                 const response = await fetch('/api/admin/global-action-hook-directories/seed', {
@@ -3211,15 +3211,15 @@
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    showNotification(`✅ Successfully seeded ${result.count} categories!`, 'success');
+                    showNotification(`✅ Successfully seeded ${result.count} directories!`, 'success');
                     await renderDirectories();
                     await loadDirectoriesIntoDropdowns();
                 } else {
                     showNotification('Seeding failed: ' + result.message, 'error');
                 }
             } catch (error) {
-                console.error('Error seeding categories:', error);
-                showNotification('Error seeding categories: ' + error.message, 'error');
+                console.error('Error seeding directories:', error);
+                showNotification('Error seeding directories: ' + error.message, 'error');
             }
         }
 
