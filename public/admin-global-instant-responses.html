@@ -869,8 +869,8 @@
     </div>
     
     <!-- Add/Edit Industry Type Modal - Updated 2025-10-09 10:50 AM -->
-    <div id="industry-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="bg-white rounded-xl shadow-2xl max-w-xl w-full mx-4 max-h-[90vh] flex flex-col">
+    <div id="industry-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 overflow-y-auto">
+        <div class="bg-white rounded-xl shadow-2xl max-w-xl w-full mx-4 my-8 flex flex-col" style="max-height: calc(100vh - 4rem);">
             <!-- Header (Fixed) -->
             <div class="bg-orange-600 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
                 <h2 class="text-2xl font-bold text-white" id="industry-modal-title">Add Industry Type</h2>
@@ -880,7 +880,7 @@
             </div>
             
             <!-- Scrollable Content -->
-            <div class="overflow-y-auto flex-1 p-6">
+            <div class="overflow-y-auto flex-1 p-6" style="min-height: 0;">
                 <form id="industry-form" onsubmit="handleIndustrySubmit(event); return false;" class="space-y-5">
                     <input type="hidden" id="industry-edit-id">
                     
