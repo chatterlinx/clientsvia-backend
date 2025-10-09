@@ -30,8 +30,7 @@ const globalIndustryTypeSchema = new Schema({
         required: true,
         unique: true,
         trim: true,
-        lowercase: true,
-        index: true
+        lowercase: true
     },
     
     // Display name for UI

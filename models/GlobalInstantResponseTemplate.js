@@ -58,8 +58,7 @@ const scenarioSchema = new Schema({
     id: {
         type: String,
         required: true,
-        trim: true,
-        index: true
+        trim: true
     },
     
     // Display name
@@ -189,8 +188,7 @@ const categorySchema = new Schema({
     id: {
         type: String,
         required: true,
-        trim: true,
-        index: true
+        trim: true
     },
     
     // Display name

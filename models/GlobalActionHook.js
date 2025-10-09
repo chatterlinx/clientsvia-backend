@@ -30,8 +30,7 @@ const globalActionHookSchema = new Schema({
         type: String,
         required: true,
         unique: true,
-        trim: true,
-        index: true
+        trim: true
     },
     
     // Display name
