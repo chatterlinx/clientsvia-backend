@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global AI Brain - ClientVia.ai v2.3-TOGGLE</title>
+    <title>Global AI Brain - ClientVia.ai v2.4-CATEGORY-FIX</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <!-- FORCE BROWSER RELOAD: v2.3.0 - 2025-10-10 Toggle UI -->
+    <!-- FORCE BROWSER RELOAD: v2.4.0 - 2025-10-10 Category Template Tracking -->
     <script>
-        // VERSION 2.3.1 - Force complete reload
-        console.log('🔥 VERSION 2.3.1 LOADED - TOGGLE UI + AUTO-REFRESH');
-        console.log('📅 Build Time:', '2025-10-10 12:15:00');
+        // VERSION 2.4.0 - Enhanced Category Save Logging
+        console.log('🔥 VERSION 2.4.0 LOADED - CATEGORY TEMPLATE TRACKING');
+        console.log('📅 Build Time:', '2025-10-10 14:30:00');
         console.log('🔄 Cache-Buster:', Date.now());
     </script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
@@ -2927,6 +2927,13 @@
                 return;
             }
             
+            console.log('📁 [ADD CATEGORY] Opening modal for template:', {
+                id: activeTemplate._id,
+                name: activeTemplate.name,
+                version: activeTemplate.version,
+                currentCategories: activeTemplate.categories?.length || 0
+            });
+            
             // Reset form
             document.getElementById('category-form').reset();
             document.getElementById('category-id').value = '';
@@ -2958,6 +2965,12 @@
             }
 
             try {
+                console.log('💾 [SAVE CATEGORY] Starting save to template:', {
+                    templateId: activeTemplate._id,
+                    templateName: activeTemplate.name,
+                    templateVersion: activeTemplate.version
+                });
+
                 showNotification('⏳ Saving category...', 'info');
 
                 const categoryId = document.getElementById('category-id').value;
@@ -2973,6 +2986,9 @@
                     scenarios: [] // Start with empty scenarios, user will add via "Add Scenario" button
                 };
 
+                console.log('📝 [SAVE CATEGORY] Category data:', categoryData);
+                console.log('📊 [SAVE CATEGORY] Before save - Categories count:', activeTemplate.categories?.length || 0);
+
                 if (isEditMode) {
                     // Update existing category
                     const categoryIndex = activeTemplate.categories.findIndex(c => c.id === categoryId);
@@ -2980,15 +2996,20 @@
                         // Preserve existing scenarios
                         categoryData.scenarios = activeTemplate.categories[categoryIndex].scenarios || [];
                         activeTemplate.categories[categoryIndex] = categoryData;
+                        console.log(`✏️ [SAVE CATEGORY] Updated category at index ${categoryIndex}`);
                     }
                 } else {
                     // Add new category
                     activeTemplate.categories.push(categoryData);
+                    console.log(`➕ [SAVE CATEGORY] Added new category. Total categories now: ${activeTemplate.categories.length}`);
                 }
 
                 // Save to backend
                 const token = getAuthToken();
-                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}`, {
+                const apiUrl = `/api/admin/global-instant-responses/${activeTemplate._id}`;
+                console.log(`🚀 [SAVE CATEGORY] Sending PATCH to: ${apiUrl}`);
+                
+                const response = await fetch(apiUrl, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
@@ -3002,17 +3023,19 @@
                 const result = await response.json();
 
                 if (result.success) {
+                    console.log('✅ [SAVE CATEGORY] Backend confirmed save:', result.data);
                     showNotification(`✅ Category ${isEditMode ? 'updated' : 'created'} successfully!`, 'success');
                     closeCategoryModal();
                     
-                    // Refresh the active template and re-render
-                    await fetchActiveTemplate();
-                    renderDirectories();
+                    // Refresh the current template (not the default one)
+                    console.log(`🔄 [SAVE CATEGORY] Refreshing template: ${activeTemplate._id}`);
+                    await switchDashboardTemplate(activeTemplate._id);
                 } else {
+                    console.error('❌ [SAVE CATEGORY] Backend error:', result.message);
                     showNotification(`❌ Failed to save: ${result.message}`, 'error');
                 }
             } catch (error) {
-                console.error('❌ Error saving category:', error);
+                console.error('❌ [SAVE CATEGORY] Exception:', error);
                 showNotification('❌ Error: ' + error.message, 'error');
             }
         });
@@ -5383,7 +5406,7 @@
             if (!templateId) return;
             
             try {
-                console.log(`🔄 Switching dashboard to template: ${templateId}`);
+                console.log(`🔄 [SWITCH TEMPLATE] Switching to template ID: ${templateId}`);
                 showNotification('⏳ Loading template...', 'info');
                 
                 const token = getAuthToken();
@@ -5394,6 +5417,13 @@
                 const result = await response.json();
                 
                 if (result.success && result.data) {
+                    console.log(`✅ [SWITCH TEMPLATE] Loaded template:`, {
+                        id: result.data._id,
+                        name: result.data.name,
+                        version: result.data.version,
+                        categories: result.data.categories?.length || 0
+                    });
+                    
                     activeTemplate = result.data;
                     activeTemplateId = result.data._id;
                     
@@ -5405,10 +5435,11 @@
                     
                     showNotification(`✅ Loaded: ${result.data.name}`, 'success');
                 } else {
+                    console.error('❌ [SWITCH TEMPLATE] Failed to load:', result.message);
                     showNotification('❌ Failed to load template', 'error');
                 }
             } catch (error) {
-                console.error('❌ Error switching template:', error);
+                console.error('❌ [SWITCH TEMPLATE] Exception:', error);
                 showNotification('❌ Error: ' + error.message, 'error');
             }
         }
