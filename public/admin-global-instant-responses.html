@@ -3155,12 +3155,22 @@
                         editBtn.innerHTML = '<i class="fas fa-edit"></i>';
                         editBtn.onclick = () => editTemplate(template._id);
                         
-                        // Set Default Button
+                        // Set Default Button - Dynamic icon and color based on isDefaultTemplate
                         const defaultBtn = document.createElement('button');
-                        defaultBtn.style.cssText = 'background-color: #9333ea; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; flex-shrink: 0; display: inline-block;';
-                        defaultBtn.title = 'Set as Default';
-                        defaultBtn.innerHTML = '<i class="fas fa-star"></i>';
-                        defaultBtn.onclick = () => setAsDefault(template._id);
+                        if (template.isDefaultTemplate) {
+                            // Already default - show badge icon with green color
+                            defaultBtn.style.cssText = 'background-color: #16a34a; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; flex-shrink: 0; display: inline-block;';
+                            defaultBtn.title = 'Current Default Template';
+                            defaultBtn.innerHTML = '<i class="fas fa-badge-check"></i>';
+                            defaultBtn.disabled = true;
+                            defaultBtn.style.opacity = '0.7';
+                        } else {
+                            // Not default - show star icon with purple color
+                            defaultBtn.style.cssText = 'background-color: #9333ea; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; flex-shrink: 0; display: inline-block;';
+                            defaultBtn.title = 'Set as Default';
+                            defaultBtn.innerHTML = '<i class="fas fa-star"></i>';
+                            defaultBtn.onclick = () => setAsDefault(template._id, template.name);
+                        }
                         
                         // Delete Button
                         const deleteBtn = document.createElement('button');
@@ -3360,17 +3370,56 @@
             }
         }
 
-        async function setAsDefault(templateId) {
-            if (!confirm('Set this template as the default for new companies?')) {
-                return;
-            }
-            
+        async function setAsDefault(templateId, templateName) {
             try {
+                // First, fetch all templates to find current default
                 const token = getAuthToken();
-                // TODO: Implement set as default API call
-                showNotification('Set as default functionality coming soon', 'info');
+                const response = await fetch('/api/admin/global-instant-responses', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const result = await response.json();
+                const currentDefault = result.data.find(t => t.isDefaultTemplate);
+                
+                // Build dynamic confirmation message
+                let confirmMessage = '';
+                if (currentDefault) {
+                    confirmMessage = `📢 Change Default Template?\n\n` +
+                                   `Current Default: ${currentDefault.name}\n` +
+                                   `New Default: ${templateName}\n\n` +
+                                   `All new companies will inherit "${templateName}" as their starting AI Brain.\n\n` +
+                                   `Continue?`;
+                } else {
+                    confirmMessage = `📢 Set Default Template?\n\n` +
+                                   `Set "${templateName}" as the default template for new companies?\n\n` +
+                                   `All new companies will inherit this as their starting AI Brain.`;
+                }
+                
+                if (!confirm(confirmMessage)) {
+                    return;
+                }
+                
+                // Make API call to set as default
+                showNotification('⏳ Setting default template...', 'info');
+                
+                const setDefaultResponse = await fetch(`/api/admin/global-instant-responses/${templateId}/set-default`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const setDefaultResult = await setDefaultResponse.json();
+                
+                if (setDefaultResult.success) {
+                    showNotification(`✅ "${templateName}" is now the default template!`, 'success');
+                    renderTemplatesTable(); // Refresh to show updated icons
+                } else {
+                    showNotification(`❌ Failed: ${setDefaultResult.message}`, 'error');
+                }
             } catch (error) {
-                console.error('Error setting default:', error);
+                console.error('❌ Error setting default:', error);
                 showNotification('❌ Error: ' + error.message, 'error');
             }
         }
