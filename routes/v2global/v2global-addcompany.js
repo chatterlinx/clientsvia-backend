@@ -285,24 +285,28 @@ router.post('/companies', authenticateJWT, requireRole('admin'), async (req, res
                 for (const globalCategory of defaultTemplate.categories) {
                     const newCategory = new InstantResponseCategory({
                         companyId: savedCompany._id,
-                        categoryName: globalCategory.categoryName,
-                        behavior: globalCategory.behavior,
-                        isActive: globalCategory.isActive,
-                        scenarios: globalCategory.scenarios.map(scenario => ({
-                            scenarioId: scenario.scenarioId,
-                            title: scenario.title,
+                        name: globalCategory.name,
+                        description: globalCategory.description || `${globalCategory.name} scenarios from ${defaultTemplate.name}`,
+                        icon: globalCategory.icon || '🧠',
+                        color: globalCategory.color || '#4F46E5',
+                        qnas: globalCategory.scenarios.map(scenario => ({
+                            id: scenario.id,
+                            name: scenario.name,
                             triggers: [...scenario.triggers],
                             keywords: [...scenario.keywords],
                             quickReplies: [...scenario.quickReplies],
                             fullReplies: [...scenario.fullReplies],
-                            escalateAfterAttempts: scenario.escalateAfterAttempts,
+                            behavior: globalCategory.behavior || 'empathetic',
+                            escalateAfterAttempts: scenario.escalateAfterAttempts || 2,
+                            isActive: scenario.isActive !== false,
                             metadata: {
                                 source: 'global_template',
                                 templateName: defaultTemplate.name,
                                 templateVersion: defaultTemplate.version,
                                 clonedAt: new Date()
                             }
-                        }))
+                        })),
+                        isActive: globalCategory.isActive !== false
                     });
 
                     await newCategory.save();
