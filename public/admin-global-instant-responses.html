@@ -8,7 +8,12 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <!-- FORCE BROWSER RELOAD: v2.3.0 - 2025-10-10 Toggle UI -->
-    <script>console.log('🔥 VERSION 2.3.0 LOADED - TOGGLE UI FOR DEFAULT TEMPLATE');</script>
+    <script>
+        // VERSION 2.3.1 - Force complete reload
+        console.log('🔥 VERSION 2.3.1 LOADED - TOGGLE UI + AUTO-REFRESH');
+        console.log('📅 Build Time:', '2025-10-10 12:15:00');
+        console.log('🔄 Cache-Buster:', Date.now());
+    </script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -3457,8 +3462,15 @@
                 const setDefaultResult = await setDefaultResponse.json();
                 
                 if (setDefaultResult.success) {
+                    console.log('✅ [SET DEFAULT] API call succeeded, now refreshing table...');
                     showNotification(`✅ "${newTemplate.name}" is now the default template!`, 'success');
-                    await renderTemplatesTable(); // Reload table to show updated default status with green badge
+                    
+                    // Force table refresh with a slight delay to ensure state is updated
+                    setTimeout(async () => {
+                        console.log('🔄 [SET DEFAULT] Calling renderTemplatesTable()...');
+                        await renderTemplatesTable();
+                        console.log('✅ [SET DEFAULT] Table refreshed!');
+                    }, 300);
                 } else {
                     showNotification(`❌ Failed: ${setDefaultResult.message}`, 'error');
                 }
