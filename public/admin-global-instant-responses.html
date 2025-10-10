@@ -3635,8 +3635,26 @@
             }
         }
 
+        // Global state for comparison
+        let currentComparisonState = {
+            templateId: null,
+            templateName: null,
+            parentName: null,
+            details: null,
+            selectedToSync: new Set(),
+            conflictResolutions: new Map()
+        };
+
         function renderComparisonView(templateId, templateName, comparisonData) {
             console.log('🎨 [COMPARE] Rendering full comparison view');
+            
+            // Store state globally
+            currentComparisonState.templateId = templateId;
+            currentComparisonState.templateName = templateName;
+            currentComparisonState.parentName = comparisonData.parentName;
+            currentComparisonState.details = comparisonData.comparison.details;
+            currentComparisonState.selectedToSync = new Set();
+            currentComparisonState.conflictResolutions = new Map();
             
             // Hide templates table, show comparison view
             document.getElementById('templates-table-container').classList.add('hidden');
@@ -3645,6 +3663,9 @@
             const container = document.getElementById('comparison-view-container');
             const summary = comparisonData.comparison.summary;
             const details = comparisonData.comparison.details;
+            
+            // Count actionable items (available + conflicts)
+            const actionableCount = summary.availableToSync + summary.modified;
             
             container.innerHTML = `
                 <!-- Header with Back Button -->
@@ -3661,6 +3682,12 @@
                                 <p class="text-purple-100 mt-1">${templateName} vs ${comparisonData.parentName}</p>
                             </div>
                         </div>
+                        ${actionableCount > 0 ? `
+                        <div class="text-right">
+                            <div class="text-sm text-purple-100">Actionable Items</div>
+                            <div class="text-3xl font-bold">${actionableCount}</div>
+                        </div>
+                        ` : ''}
                     </div>
                 </div>
 
@@ -3688,25 +3715,63 @@
                     </div>
                 </div>
 
+                <!-- Sync Instructions -->
+                ${actionableCount > 0 ? `
+                <div class="mx-6 mb-4 bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-info-circle text-blue-600 text-xl mt-0.5"></i>
+                        <div class="flex-1">
+                            <div class="font-bold text-blue-900 mb-1">How to Sync</div>
+                            <div class="text-sm text-blue-800">
+                                • <strong>📥 Available scenarios</strong>: Check the box to import from parent template<br>
+                                • <strong>✏️ Modified scenarios</strong>: Click to resolve conflicts (choose parent version or keep yours)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+
                 <!-- Detailed Comparison -->
                 <div class="p-6">
-                    <h3 class="text-xl font-bold text-gray-900 mb-4">📋 Detailed Comparison</h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold text-gray-900">📋 Detailed Comparison</h3>
+                        ${actionableCount > 0 ? `
+                        <div class="text-sm text-gray-600">
+                            <span id="selected-count" class="font-bold text-purple-600">0</span> selected
+                        </div>
+                        ` : ''}
+                    </div>
                     
                     ${renderComparisonDetails(details)}
                 </div>
 
                 <!-- Action Buttons -->
-                <div class="bg-gray-50 p-6 border-t-2 border-gray-200 flex justify-end gap-3">
+                <div class="bg-gray-50 p-6 border-t-2 border-gray-200 flex justify-between items-center">
                     <button onclick="backToTemplatesList()" 
                             style="background-color: #6b7280; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; border: none; cursor: pointer;">
                         <i class="fas fa-times-circle mr-2"></i>
                         Cancel
                     </button>
-                    <button onclick="syncSelected()" 
-                            style="background-color: #9333ea; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; border: none; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                        <i class="fas fa-sync mr-2"></i>
-                        Sync Selected (Coming Soon)
-                    </button>
+                    ${actionableCount > 0 ? `
+                    <div class="flex gap-3">
+                        <button onclick="selectAllAvailable()" 
+                                style="background-color: #3b82f6; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; border: none; cursor: pointer;">
+                            <i class="fas fa-check-double mr-2"></i>
+                            Select All Available
+                        </button>
+                        <button id="sync-btn" onclick="executeSyncSelected()" 
+                                disabled
+                                style="background-color: #d1d5db; color: #9ca3af; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; border: none; cursor: not-allowed; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                            <i class="fas fa-sync mr-2"></i>
+                            Sync Selected (0)
+                        </button>
+                    </div>
+                    ` : `
+                    <div class="text-green-600 font-semibold">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        All scenarios are in sync!
+                    </div>
+                    `}
                 </div>
             `;
         }
@@ -3749,8 +3814,9 @@
         function renderScenarioRow(scenario, details) {
             let statusBadge = '';
             let statusColor = '';
+            let actionButton = '';
             
-            // Determine status
+            // Determine status and action
             if (details.unchanged.includes(scenario)) {
                 statusBadge = '✅ Unchanged';
                 statusColor = 'bg-green-100 text-green-800';
@@ -3760,12 +3826,39 @@
             } else if (details.removed.includes(scenario)) {
                 statusBadge = '📥 Available to Sync';
                 statusColor = 'bg-blue-100 text-blue-800';
+                // Add checkbox for available scenarios
+                actionButton = `
+                    <label class="flex items-center gap-2 cursor-pointer mr-3">
+                        <input type="checkbox" 
+                               class="sync-checkbox w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+                               data-scenario-id="${scenario.scenarioId}"
+                               data-category-id="${scenario.categoryId}"
+                               onchange="toggleScenarioSelection('${scenario.scenarioId}', '${scenario.categoryId}', this.checked)">
+                        <span class="text-sm font-medium text-gray-700">Sync</span>
+                    </label>
+                `;
             } else if (details.modified.includes(scenario)) {
                 statusBadge = '✏️ Modified';
                 statusColor = 'bg-yellow-100 text-yellow-800';
+                // Add conflict resolution button
+                actionButton = `
+                    <button onclick="resolveConflict('${scenario.scenarioId}', '${scenario.categoryId}')"
+                            style="background-color: #f59e0b; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.75rem; border: none; cursor: pointer; margin-right: 0.75rem;">
+                        <i class="fas fa-code-merge mr-1"></i>
+                        Resolve
+                    </button>
+                `;
             } else if (details.conflicts.includes(scenario)) {
                 statusBadge = '⚠️ CONFLICT';
                 statusColor = 'bg-red-100 text-red-800';
+                // Add conflict resolution button
+                actionButton = `
+                    <button onclick="resolveConflict('${scenario.scenarioId}', '${scenario.categoryId}')"
+                            style="background-color: #ef4444; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.75rem; border: none; cursor: pointer; margin-right: 0.75rem;">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        Resolve
+                    </button>
+                `;
             }
             
             return `
@@ -3774,7 +3867,8 @@
                         <div class="font-semibold text-gray-900">${scenario.scenarioName}</div>
                         <div class="text-sm text-gray-500">ID: ${scenario.scenarioId}</div>
                     </div>
-                    <div>
+                    <div class="flex items-center gap-2">
+                        ${actionButton}
                         <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">
                             ${statusBadge}
                         </span>
@@ -3789,8 +3883,247 @@
             document.getElementById('templates-table-container').classList.remove('hidden');
         }
 
-        function syncSelected() {
-            showNotification('🚀 Sync functionality coming soon!', 'info');
+        function toggleScenarioSelection(scenarioId, categoryId, isChecked) {
+            const key = `${categoryId}::${scenarioId}`;
+            
+            if (isChecked) {
+                currentComparisonState.selectedToSync.add(key);
+                console.log(`✅ [SYNC] Selected: ${scenarioId}`);
+            } else {
+                currentComparisonState.selectedToSync.delete(key);
+                console.log(`❌ [SYNC] Deselected: ${scenarioId}`);
+            }
+            
+            updateSyncButtonState();
+        }
+
+        function selectAllAvailable() {
+            console.log('✅ [SYNC] Selecting all available scenarios');
+            
+            // Find all checkboxes and check them
+            const checkboxes = document.querySelectorAll('.sync-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = true;
+                const scenarioId = checkbox.dataset.scenarioId;
+                const categoryId = checkbox.dataset.categoryId;
+                currentComparisonState.selectedToSync.add(`${categoryId}::${scenarioId}`);
+            });
+            
+            updateSyncButtonState();
+            showNotification('✅ All available scenarios selected', 'success');
+        }
+
+        function updateSyncButtonState() {
+            const selectedCount = currentComparisonState.selectedToSync.size;
+            const countDisplay = document.getElementById('selected-count');
+            const syncBtn = document.getElementById('sync-btn');
+            
+            if (countDisplay) {
+                countDisplay.textContent = selectedCount;
+            }
+            
+            if (syncBtn) {
+                if (selectedCount > 0) {
+                    // Enable button
+                    syncBtn.disabled = false;
+                    syncBtn.style.backgroundColor = '#9333ea';
+                    syncBtn.style.color = 'white';
+                    syncBtn.style.cursor = 'pointer';
+                    syncBtn.innerHTML = `<i class="fas fa-sync mr-2"></i>Sync Selected (${selectedCount})`;
+                } else {
+                    // Disable button
+                    syncBtn.disabled = true;
+                    syncBtn.style.backgroundColor = '#d1d5db';
+                    syncBtn.style.color = '#9ca3af';
+                    syncBtn.style.cursor = 'not-allowed';
+                    syncBtn.innerHTML = `<i class="fas fa-sync mr-2"></i>Sync Selected (0)`;
+                }
+            }
+        }
+
+        async function executeSyncSelected() {
+            const selectedCount = currentComparisonState.selectedToSync.size;
+            
+            if (selectedCount === 0) {
+                showNotification('⚠️ No scenarios selected', 'warning');
+                return;
+            }
+            
+            const confirmMsg = `🔄 Sync ${selectedCount} scenario${selectedCount > 1 ? 's' : ''} from "${currentComparisonState.parentName}" to "${currentComparisonState.templateName}"?\n\nThis will add these scenarios to your template.`;
+            
+            if (!confirm(confirmMsg)) {
+                console.log('❌ [SYNC] User cancelled sync');
+                return;
+            }
+            
+            console.log(`🚀 [SYNC] Executing sync for ${selectedCount} scenarios`);
+            
+            try {
+                const token = getAuthToken();
+                
+                // Prepare sync payload
+                const syncPayload = {
+                    scenariosToSync: Array.from(currentComparisonState.selectedToSync).map(key => {
+                        const [categoryId, scenarioId] = key.split('::');
+                        return { categoryId, scenarioId };
+                    })
+                };
+                
+                console.log('📤 [SYNC] Payload:', syncPayload);
+                
+                const response = await fetch(`/api/admin/global-instant-responses/${currentComparisonState.templateId}/sync-from-parent`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(syncPayload)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification(`✅ Successfully synced ${result.syncedCount} scenario${result.syncedCount > 1 ? 's' : ''}!`, 'success');
+                    
+                    // Refresh comparison view
+                    setTimeout(() => {
+                        compareWithParent(currentComparisonState.templateId, currentComparisonState.templateName);
+                    }, 1000);
+                } else {
+                    showNotification(`❌ Sync failed: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                console.error('❌ [SYNC] Error:', error);
+                showNotification('❌ Error syncing scenarios: ' + error.message, 'error');
+            }
+        }
+
+        function resolveConflict(scenarioId, categoryId) {
+            console.log(`⚠️ [CONFLICT] Resolving conflict for: ${scenarioId}`);
+            
+            // Find the scenario in details
+            const scenario = [...currentComparisonState.details.modified, ...currentComparisonState.details.conflicts]
+                .find(s => s.scenarioId === scenarioId && s.categoryId === categoryId);
+            
+            if (!scenario) {
+                showNotification('❌ Scenario not found', 'error');
+                return;
+            }
+            
+            // Create conflict resolution modal
+            const modalHTML = `
+                <div id="conflict-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="z-index: 9999;">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+                        <!-- Fixed Header -->
+                        <div class="bg-gradient-to-r from-red-600 to-orange-600 text-white p-6 rounded-t-lg flex-shrink-0">
+                            <h2 class="text-2xl font-bold">
+                                <i class="fas fa-code-merge mr-2"></i>
+                                Resolve Conflict
+                            </h2>
+                            <p class="text-red-100 mt-1">${scenario.scenarioName}</p>
+                        </div>
+
+                        <!-- Scrollable Content -->
+                        <div class="flex-1 overflow-y-auto p-6" style="min-height: 0;">
+                            <div class="mb-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
+                                <div class="flex items-start gap-2">
+                                    <i class="fas fa-exclamation-triangle text-yellow-600 text-xl mt-0.5"></i>
+                                    <div class="text-sm text-yellow-800">
+                                        <strong>Conflict Detected:</strong> This scenario exists in both templates with different content. 
+                                        Choose which version to keep.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <!-- Parent Version -->
+                                <div class="border-2 border-blue-300 rounded-lg p-4 bg-blue-50">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h3 class="font-bold text-blue-900">📥 Parent Version</h3>
+                                        <span class="text-xs text-blue-700">${currentComparisonState.parentName}</span>
+                                    </div>
+                                    <div class="text-sm text-gray-700">
+                                        <div class="font-semibold mb-1">Triggers:</div>
+                                        <div class="bg-white p-2 rounded mb-3 text-xs">${scenario.parentVersion?.triggers?.join(', ') || 'N/A'}</div>
+                                        
+                                        <div class="font-semibold mb-1">Quick Reply:</div>
+                                        <div class="bg-white p-2 rounded mb-3 text-xs">${scenario.parentVersion?.quickReply || 'N/A'}</div>
+                                        
+                                        <div class="font-semibold mb-1">Full Reply:</div>
+                                        <div class="bg-white p-2 rounded text-xs">${scenario.parentVersion?.fullReply || 'N/A'}</div>
+                                    </div>
+                                    <button onclick="selectParentVersion('${scenarioId}', '${categoryId}')"
+                                            style="background-color: #3b82f6; color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; border: none; cursor: pointer; width: 100%; margin-top: 1rem;">
+                                        <i class="fas fa-check mr-2"></i>
+                                        Use Parent Version
+                                    </button>
+                                </div>
+
+                                <!-- Current Version -->
+                                <div class="border-2 border-purple-300 rounded-lg p-4 bg-purple-50">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h3 class="font-bold text-purple-900">📝 Your Version</h3>
+                                        <span class="text-xs text-purple-700">${currentComparisonState.templateName}</span>
+                                    </div>
+                                    <div class="text-sm text-gray-700">
+                                        <div class="font-semibold mb-1">Triggers:</div>
+                                        <div class="bg-white p-2 rounded mb-3 text-xs">${scenario.currentVersion?.triggers?.join(', ') || 'N/A'}</div>
+                                        
+                                        <div class="font-semibold mb-1">Quick Reply:</div>
+                                        <div class="bg-white p-2 rounded mb-3 text-xs">${scenario.currentVersion?.quickReply || 'N/A'}</div>
+                                        
+                                        <div class="font-semibold mb-1">Full Reply:</div>
+                                        <div class="bg-white p-2 rounded text-xs">${scenario.currentVersion?.fullReply || 'N/A'}</div>
+                                    </div>
+                                    <button onclick="keepCurrentVersion('${scenarioId}', '${categoryId}')"
+                                            style="background-color: #9333ea; color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; border: none; cursor: pointer; width: 100%; margin-top: 1rem;">
+                                        <i class="fas fa-shield-alt mr-2"></i>
+                                        Keep My Version
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Fixed Footer -->
+                        <div class="bg-gray-50 p-4 border-t-2 border-gray-200 flex justify-end flex-shrink-0">
+                            <button onclick="closeConflictModal()"
+                                    style="background-color: #6b7280; color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; border: none; cursor: pointer;">
+                                <i class="fas fa-times-circle mr-2"></i>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Append modal to body
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        }
+
+        function closeConflictModal() {
+            const modal = document.getElementById('conflict-modal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function selectParentVersion(scenarioId, categoryId) {
+            console.log(`✅ [CONFLICT] Selected parent version for: ${scenarioId}`);
+            currentComparisonState.conflictResolutions.set(`${categoryId}::${scenarioId}`, 'parent');
+            closeConflictModal();
+            showNotification('✅ Parent version selected. Click "Sync Selected" to apply.', 'success');
+            
+            // Auto-add to sync list
+            currentComparisonState.selectedToSync.add(`${categoryId}::${scenarioId}`);
+            updateSyncButtonState();
+        }
+
+        function keepCurrentVersion(scenarioId, categoryId) {
+            console.log(`✅ [CONFLICT] Keeping current version for: ${scenarioId}`);
+            currentComparisonState.conflictResolutions.set(`${categoryId}::${scenarioId}`, 'current');
+            closeConflictModal();
+            showNotification('✅ Your version will be kept. No action needed.', 'info');
         }
 
         // ============================================================================

@@ -1164,5 +1164,149 @@ router.get('/:id/lineage', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/admin/global-instant-responses/:id/sync-from-parent
+ * Sync selected scenarios from parent template to child template
+ */
+router.post('/:id/sync-from-parent', async (req, res) => {
+    const { id } = req.params;
+    const { scenariosToSync } = req.body; // Array of { categoryId, scenarioId }
+    const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
+
+    try {
+        console.log(`🔄 [SYNC] Starting sync for template ${id} by ${adminUser}`);
+        console.log(`📥 [SYNC] Scenarios to sync:`, scenariosToSync);
+
+        // Get child template
+        const childTemplate = await GlobalInstantResponseTemplate.findById(id);
+
+        if (!childTemplate) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+
+        // Check if it has a parent
+        if (!childTemplate.lineage || !childTemplate.lineage.isClone || !childTemplate.lineage.clonedFrom) {
+            return res.status(400).json({
+                success: false,
+                message: 'Template is not a clone, cannot sync from parent'
+            });
+        }
+
+        // Get parent template
+        const parentTemplate = await GlobalInstantResponseTemplate.findById(childTemplate.lineage.clonedFrom);
+
+        if (!parentTemplate) {
+            return res.status(404).json({
+                success: false,
+                message: 'Parent template not found'
+            });
+        }
+
+        let syncedCount = 0;
+        const syncedItems = [];
+
+        // Process each scenario to sync
+        for (const item of scenariosToSync) {
+            const { categoryId, scenarioId } = item;
+
+            // Find scenario in parent template
+            let parentScenario = null;
+            let parentCategory = null;
+
+            for (const cat of parentTemplate.categories) {
+                const scenario = cat.scenarios.find(s => s.id === scenarioId);
+                if (scenario) {
+                    parentScenario = scenario;
+                    parentCategory = cat;
+                    break;
+                }
+            }
+
+            if (!parentScenario || !parentCategory) {
+                console.log(`⚠️ [SYNC] Scenario ${scenarioId} not found in parent template, skipping`);
+                continue;
+            }
+
+            // Find matching category in child template
+            let childCategory = childTemplate.categories.find(c => c.id === categoryId);
+
+            if (!childCategory) {
+                // Category doesn't exist in child, create it
+                console.log(`➕ [SYNC] Creating new category: ${parentCategory.name}`);
+                childCategory = {
+                    id: parentCategory.id,
+                    name: parentCategory.name,
+                    description: parentCategory.description,
+                    behavior: parentCategory.behavior,
+                    scenarios: []
+                };
+                childTemplate.categories.push(childCategory);
+            }
+
+            // Check if scenario already exists in child
+            const existingScenarioIndex = childCategory.scenarios.findIndex(s => s.id === scenarioId);
+
+            if (existingScenarioIndex >= 0) {
+                // Replace existing scenario
+                console.log(`🔄 [SYNC] Replacing existing scenario: ${parentScenario.name}`);
+                childCategory.scenarios[existingScenarioIndex] = JSON.parse(JSON.stringify(parentScenario));
+            } else {
+                // Add new scenario
+                console.log(`➕ [SYNC] Adding new scenario: ${parentScenario.name}`);
+                childCategory.scenarios.push(JSON.parse(JSON.stringify(parentScenario)));
+            }
+
+            syncedCount++;
+            syncedItems.push({
+                categoryName: parentCategory.name,
+                scenarioName: parentScenario.name
+            });
+
+            // Record modification in lineage
+            childTemplate.lineage.modifications.push({
+                type: existingScenarioIndex >= 0 ? 'scenario_modified' : 'scenario_added',
+                categoryId: categoryId,
+                categoryName: parentCategory.name,
+                scenarioId: scenarioId,
+                scenarioName: parentScenario.name,
+                description: `Synced from parent template`,
+                modifiedBy: adminUser,
+                modifiedAt: new Date()
+            });
+        }
+
+        // Update sync metadata
+        childTemplate.lineage.lastSyncCheck = new Date();
+        childTemplate.lineage.parentLastUpdatedAt = parentTemplate.updatedAt;
+
+        // Add changelog entry
+        childTemplate.addChangeLog(
+            `Synced ${syncedCount} scenario${syncedCount > 1 ? 's' : ''} from parent template "${parentTemplate.name}"`,
+            adminUser
+        );
+
+        await childTemplate.save();
+
+        console.log(`✅ [SYNC] Successfully synced ${syncedCount} scenarios`);
+
+        res.json({
+            success: true,
+            message: `Successfully synced ${syncedCount} scenario${syncedCount > 1 ? 's' : ''}`,
+            syncedCount,
+            syncedItems
+        });
+
+    } catch (error) {
+        console.error('❌ Error syncing scenarios:', error.message, error.stack);
+        res.status(500).json({
+            success: false,
+            message: `Error syncing scenarios: ${error.message}`
+        });
+    }
+});
+
 module.exports = router;
 
