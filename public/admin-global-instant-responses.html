@@ -3381,22 +3381,43 @@
                 
                 const result = await response.json();
                 const currentDefault = result.data.find(t => t.isDefaultTemplate);
+                const newTemplate = result.data.find(t => t._id === templateId);
                 
-                // Build dynamic confirmation message
+                // Build dynamic confirmation message with proper HTML formatting
                 let confirmMessage = '';
                 if (currentDefault) {
-                    confirmMessage = `📢 Change Default Template?\n\n` +
-                                   `Current Default: ${currentDefault.name}\n` +
-                                   `New Default: ${templateName}\n\n` +
-                                   `All new companies will inherit "${templateName}" as their starting AI Brain.\n\n` +
-                                   `Continue?`;
+                    confirmMessage = `
+                        <div style="text-align: left;">
+                            <div style="margin-bottom: 16px;">
+                                <strong style="color: #dc2626;">Current Default:</strong><br>
+                                <span style="font-size: 15px;">${currentDefault.name} (${currentDefault.version})</span>
+                            </div>
+                            <div style="margin-bottom: 16px;">
+                                <strong style="color: #16a34a;">New Default:</strong><br>
+                                <span style="font-size: 15px;">${newTemplate.name} (${newTemplate.version})</span>
+                            </div>
+                            <div style="margin-top: 20px; padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                                <strong>📢 Note:</strong> All new companies will inherit <strong>"${newTemplate.name}"</strong> as their starting AI Brain.
+                            </div>
+                        </div>
+                    `;
                 } else {
-                    confirmMessage = `📢 Set Default Template?\n\n` +
-                                   `Set "${templateName}" as the default template for new companies?\n\n` +
-                                   `All new companies will inherit this as their starting AI Brain.`;
+                    confirmMessage = `
+                        <div style="text-align: left;">
+                            <div style="margin-bottom: 16px;">
+                                <strong style="color: #16a34a;">Set as Default:</strong><br>
+                                <span style="font-size: 15px;">${newTemplate.name} (${newTemplate.version})</span>
+                            </div>
+                            <div style="margin-top: 20px; padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                                <strong>📢 Note:</strong> All new companies will inherit this as their starting AI Brain.
+                            </div>
+                        </div>
+                    `;
                 }
                 
-                if (!confirm(confirmMessage)) {
+                // Show custom confirmation modal
+                const confirmed = await showCustomConfirm('Set Default Template?', confirmMessage);
+                if (!confirmed) {
                     return;
                 }
                 
@@ -3414,8 +3435,8 @@
                 const setDefaultResult = await setDefaultResponse.json();
                 
                 if (setDefaultResult.success) {
-                    showNotification(`✅ "${templateName}" is now the default template!`, 'success');
-                    renderTemplatesTable(); // Refresh to show updated icons
+                    showNotification(`✅ "${newTemplate.name}" is now the default template!`, 'success');
+                    await renderTemplatesTable(); // Reload table to show updated default status with green badge
                 } else {
                     showNotification(`❌ Failed: ${setDefaultResult.message}`, 'error');
                 }
@@ -3423,6 +3444,56 @@
                 console.error('❌ Error setting default:', error);
                 showNotification('❌ Error: ' + error.message, 'error');
             }
+        }
+
+        // Custom confirmation modal helper
+        function showCustomConfirm(title, message) {
+            return new Promise((resolve) => {
+                // Create modal backdrop
+                const backdrop = document.createElement('div');
+                backdrop.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;';
+                
+                // Create modal
+                const modal = document.createElement('div');
+                modal.style.cssText = 'background: white; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); max-width: 500px; width: 90%; overflow: hidden;';
+                
+                modal.innerHTML = `
+                    <div style="background: linear-gradient(to right, #9333ea, #7c3aed); padding: 20px; color: white;">
+                        <h2 style="margin: 0; font-size: 20px; font-weight: 700;">${title}</h2>
+                    </div>
+                    <div style="padding: 24px; max-height: 400px; overflow-y: auto;">
+                        ${message}
+                    </div>
+                    <div style="background: #f9fafb; padding: 16px; display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid #e5e7eb;">
+                        <button id="custom-confirm-cancel" style="background: #6b7280; color: white; padding: 10px 24px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer;">
+                            <i class="fas fa-times-circle"></i> Cancel
+                        </button>
+                        <button id="custom-confirm-ok" style="background: #9333ea; color: white; padding: 10px 24px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                            <i class="fas fa-check-circle"></i> Confirm
+                        </button>
+                    </div>
+                `;
+                
+                backdrop.appendChild(modal);
+                document.body.appendChild(backdrop);
+                
+                // Event handlers
+                const handleCancel = () => {
+                    document.body.removeChild(backdrop);
+                    resolve(false);
+                };
+                
+                const handleOk = () => {
+                    document.body.removeChild(backdrop);
+                    resolve(true);
+                };
+                
+                document.getElementById('custom-confirm-cancel').onclick = handleCancel;
+                document.getElementById('custom-confirm-ok').onclick = handleOk;
+                backdrop.onclick = (e) => {
+                    if (e.target === backdrop) handleCancel();
+                };
+            });
         }
 
         async function deleteTemplate(templateId) {
