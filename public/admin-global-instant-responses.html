@@ -2919,6 +2919,77 @@
         }
 
         // ============================================
+        // CATEGORY FORM SUBMISSION
+        // ============================================
+        document.getElementById('category-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!activeTemplate) {
+                showNotification('❌ No active template loaded', 'error');
+                return;
+            }
+
+            try {
+                showNotification('⏳ Saving category...', 'info');
+
+                const categoryId = document.getElementById('category-id').value;
+                const isEditMode = categoryId !== '';
+
+                const categoryData = {
+                    id: isEditMode ? categoryId : `cat-${Date.now()}`,
+                    name: document.getElementById('category-name').value.trim(),
+                    icon: document.getElementById('category-icon').value.trim() || '📁',
+                    description: document.getElementById('category-description').value.trim(),
+                    behavior: document.getElementById('category-behavior').value,
+                    isActive: document.getElementById('category-active').checked,
+                    scenarios: [] // Start with empty scenarios, user will add via "Add Scenario" button
+                };
+
+                if (isEditMode) {
+                    // Update existing category
+                    const categoryIndex = activeTemplate.categories.findIndex(c => c.id === categoryId);
+                    if (categoryIndex >= 0) {
+                        // Preserve existing scenarios
+                        categoryData.scenarios = activeTemplate.categories[categoryIndex].scenarios || [];
+                        activeTemplate.categories[categoryIndex] = categoryData;
+                    }
+                } else {
+                    // Add new category
+                    activeTemplate.categories.push(categoryData);
+                }
+
+                // Save to backend
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        categories: activeTemplate.categories
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification(`✅ Category ${isEditMode ? 'updated' : 'created'} successfully!`, 'success');
+                    closeCategoryModal();
+                    
+                    // Refresh the active template and re-render
+                    await fetchActiveTemplate();
+                    renderDirectories();
+                } else {
+                    showNotification(`❌ Failed to save: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                console.error('❌ Error saving category:', error);
+                showNotification('❌ Error: ' + error.message, 'error');
+            }
+        });
+
+        // ============================================
         // NOTIFICATIONS
         // ============================================
         function showNotification(message, type = 'info') {
