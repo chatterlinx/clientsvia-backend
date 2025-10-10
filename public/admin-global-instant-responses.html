@@ -238,6 +238,11 @@
                     <div id="templates-table-container" class="bg-white rounded-lg border-2 border-gray-200 overflow-hidden">
                         <!-- Templates table will be loaded here -->
                     </div>
+
+                    <!-- 🔍 COMPARISON VIEW - Full Page -->
+                    <div id="comparison-view-container" class="hidden">
+                        <!-- Comparison view will be loaded here -->
+                    </div>
                 </div>
 
                 <!-- Industry Setup Nested Content -->
@@ -3621,26 +3626,171 @@
                 
                 console.log(`📊 [COMPARE] Comparison results:`, result.comparison.summary);
                 
-                // Build comparison summary for display
-                const summary = result.comparison.summary;
-                let message = `📊 Comparison: ${templateName} vs ${result.parentName}\n\n`;
-                message += `✅ Unchanged: ${summary.unchanged}\n`;
-                message += `➕ Custom additions: ${summary.custom}\n`;
-                message += `📥 Available to sync: ${summary.availableToSync}\n`;
-                message += `✏️  Modified: ${summary.modified}\n`;
-                
-                if (summary.conflicts > 0) {
-                    message += `\n⚠️  CONFLICTS: ${summary.conflicts} scenarios modified in both templates!\n`;
-                }
-                
-                message += `\n\nFull comparison UI coming in Step 3! 🚀`;
-                
-                alert(message);
+                // Render full comparison view
+                renderComparisonView(templateId, templateName, result);
                 
             } catch (error) {
                 console.error('❌ [COMPARE] Error:', error);
                 showNotification('❌ Error comparing templates: ' + error.message, 'error');
             }
+        }
+
+        function renderComparisonView(templateId, templateName, comparisonData) {
+            console.log('🎨 [COMPARE] Rendering full comparison view');
+            
+            // Hide templates table, show comparison view
+            document.getElementById('templates-table-container').classList.add('hidden');
+            document.getElementById('comparison-view-container').classList.remove('hidden');
+            
+            const container = document.getElementById('comparison-view-container');
+            const summary = comparisonData.comparison.summary;
+            const details = comparisonData.comparison.details;
+            
+            container.innerHTML = `
+                <!-- Header with Back Button -->
+                <div class="bg-gradient-to-r from-purple-600 to-purple-800 text-white p-6 rounded-t-lg">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <button onclick="backToTemplatesList()" 
+                                    style="background-color: rgba(255,255,255,0.2); color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s;">
+                                <i class="fas fa-arrow-left mr-2"></i>
+                                Back to Templates
+                            </button>
+                            <div>
+                                <h2 class="text-3xl font-bold">🔍 Template Comparison</h2>
+                                <p class="text-purple-100 mt-1">${templateName} vs ${comparisonData.parentName}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-5 gap-4 p-6 bg-gray-50">
+                    <div class="bg-white p-4 rounded-lg border-2 border-gray-200 text-center">
+                        <div class="text-3xl font-bold text-blue-600">${summary.total}</div>
+                        <div class="text-sm text-gray-600 mt-1">Total Scenarios</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border-2 border-green-200 text-center">
+                        <div class="text-3xl font-bold text-green-600">${summary.unchanged}</div>
+                        <div class="text-sm text-gray-600 mt-1">✅ Unchanged</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border-2 border-purple-200 text-center">
+                        <div class="text-3xl font-bold text-purple-600">${summary.custom}</div>
+                        <div class="text-sm text-gray-600 mt-1">➕ Custom</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border-2 border-blue-200 text-center">
+                        <div class="text-3xl font-bold text-blue-600">${summary.availableToSync}</div>
+                        <div class="text-sm text-gray-600 mt-1">📥 Available</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border-2 border-yellow-200 text-center">
+                        <div class="text-3xl font-bold text-yellow-600">${summary.modified}</div>
+                        <div class="text-sm text-gray-600 mt-1">✏️ Modified</div>
+                    </div>
+                </div>
+
+                <!-- Detailed Comparison -->
+                <div class="p-6">
+                    <h3 class="text-xl font-bold text-gray-900 mb-4">📋 Detailed Comparison</h3>
+                    
+                    ${renderComparisonDetails(details)}
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="bg-gray-50 p-6 border-t-2 border-gray-200 flex justify-end gap-3">
+                    <button onclick="backToTemplatesList()" 
+                            style="background-color: #6b7280; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; border: none; cursor: pointer;">
+                        <i class="fas fa-times-circle mr-2"></i>
+                        Cancel
+                    </button>
+                    <button onclick="syncSelected()" 
+                            style="background-color: #9333ea; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; border: none; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        <i class="fas fa-sync mr-2"></i>
+                        Sync Selected (Coming Soon)
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderComparisonDetails(details) {
+            let html = '';
+            
+            // Group scenarios by category
+            const categoriesMap = new Map();
+            
+            // Add all scenarios to their categories
+            [...details.unchanged, ...details.added, ...details.removed, ...details.modified, ...details.conflicts].forEach(item => {
+                if (!categoriesMap.has(item.categoryId)) {
+                    categoriesMap.set(item.categoryId, {
+                        id: item.categoryId,
+                        name: item.categoryName,
+                        scenarios: []
+                    });
+                }
+                categoriesMap.get(item.categoryId).scenarios.push(item);
+            });
+            
+            // Render each category
+            categoriesMap.forEach((category, categoryId) => {
+                html += `
+                    <div class="mb-4 bg-white rounded-lg border-2 border-gray-200 overflow-hidden">
+                        <div class="bg-gray-100 px-6 py-3 font-bold text-gray-900 border-b-2 border-gray-200">
+                            📁 ${category.name} (${category.scenarios.length} scenarios)
+                        </div>
+                        <div class="p-4">
+                            ${category.scenarios.map(scenario => renderScenarioRow(scenario, details)).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            return html || '<div class="text-center text-gray-500 py-8">No scenarios to compare</div>';
+        }
+
+        function renderScenarioRow(scenario, details) {
+            let statusBadge = '';
+            let statusColor = '';
+            
+            // Determine status
+            if (details.unchanged.includes(scenario)) {
+                statusBadge = '✅ Unchanged';
+                statusColor = 'bg-green-100 text-green-800';
+            } else if (details.added.includes(scenario)) {
+                statusBadge = '➕ Custom Addition';
+                statusColor = 'bg-purple-100 text-purple-800';
+            } else if (details.removed.includes(scenario)) {
+                statusBadge = '📥 Available to Sync';
+                statusColor = 'bg-blue-100 text-blue-800';
+            } else if (details.modified.includes(scenario)) {
+                statusBadge = '✏️ Modified';
+                statusColor = 'bg-yellow-100 text-yellow-800';
+            } else if (details.conflicts.includes(scenario)) {
+                statusBadge = '⚠️ CONFLICT';
+                statusColor = 'bg-red-100 text-red-800';
+            }
+            
+            return `
+                <div class="flex items-center justify-between p-3 hover:bg-gray-50 rounded border-b border-gray-100 last:border-0">
+                    <div class="flex-1">
+                        <div class="font-semibold text-gray-900">${scenario.scenarioName}</div>
+                        <div class="text-sm text-gray-500">ID: ${scenario.scenarioId}</div>
+                    </div>
+                    <div>
+                        <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusColor}">
+                            ${statusBadge}
+                        </span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function backToTemplatesList() {
+            console.log('⬅️ [COMPARE] Returning to templates list');
+            document.getElementById('comparison-view-container').classList.add('hidden');
+            document.getElementById('templates-table-container').classList.remove('hidden');
+        }
+
+        function syncSelected() {
+            showNotification('🚀 Sync functionality coming soon!', 'info');
         }
 
         // ============================================================================
