@@ -71,7 +71,7 @@ router.use((req, res, next) => {
 router.get('/', async (req, res) => {
     try {
         const templates = await GlobalInstantResponseTemplate.find()
-            .select('version name description templateType industryLabel isActive isPublished isDefaultTemplate stats createdAt updatedAt createdBy lastUpdatedBy')
+            .select('version name description templateType industryLabel isActive isPublished isDefaultTemplate stats createdAt updatedAt createdBy lastUpdatedBy lineage')
             .sort({ createdAt: -1 })
             .lean();
         
@@ -989,6 +989,177 @@ router.post('/:id/enhance', async (req, res) => {
         res.status(500).json({
             success: false,
             message: `Error enhancing template: ${error.message}`
+        });
+    }
+});
+
+// ============================================================================
+// 🌳 LINEAGE & COMPARISON ROUTES
+// ============================================================================
+
+/**
+ * GET /api/admin/global-instant-responses/:id/parent-updates
+ * Check if parent template has updates since this template was cloned
+ */
+router.get('/:id/parent-updates', async (req, res) => {
+    const { id } = req.params;
+    
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(id);
+        
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+        
+        if (!template.hasParent()) {
+            return res.json({
+                success: true,
+                hasParent: false,
+                message: 'This template is not a clone'
+            });
+        }
+        
+        const updateInfo = await template.checkParentUpdates();
+        
+        console.log(`🔍 Checked parent updates for ${template.name}: ${updateInfo.hasUpdates ? 'YES' : 'NO'}`);
+        
+        res.json({
+            success: true,
+            hasParent: true,
+            ...updateInfo
+        });
+    } catch (error) {
+        console.error('❌ Error checking parent updates:', error.message);
+        res.status(500).json({
+            success: false,
+            message: `Error checking parent updates: ${error.message}`
+        });
+    }
+});
+
+/**
+ * GET /api/admin/global-instant-responses/:id/compare-with-parent
+ * Compare this template with its parent to see differences
+ */
+router.get('/:id/compare-with-parent', async (req, res) => {
+    const { id } = req.params;
+    
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(id);
+        
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+        
+        if (!template.hasParent()) {
+            return res.json({
+                success: true,
+                hasParent: false,
+                message: 'This template is not a clone, nothing to compare'
+            });
+        }
+        
+        const comparison = await template.compareWithParent();
+        
+        if (!comparison) {
+            return res.status(404).json({
+                success: false,
+                message: 'Parent template not found'
+            });
+        }
+        
+        console.log(`🔍 Compared ${template.name} with parent:`, {
+            added: comparison.added.length,
+            removed: comparison.removed.length,
+            modified: comparison.modified.length,
+            conflicts: comparison.conflicts.length
+        });
+        
+        res.json({
+            success: true,
+            hasParent: true,
+            parentName: template.lineage.clonedFromName,
+            parentVersion: template.lineage.clonedFromVersion,
+            clonedAt: template.lineage.clonedAt,
+            comparison: {
+                summary: {
+                    total: comparison.added.length + comparison.removed.length + 
+                           comparison.modified.length + comparison.unchanged.length,
+                    custom: comparison.added.length,
+                    availableToSync: comparison.removed.length,
+                    modified: comparison.modified.length,
+                    conflicts: comparison.conflicts.length,
+                    unchanged: comparison.unchanged.length
+                },
+                details: comparison
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error comparing with parent:', error.message);
+        res.status(500).json({
+            success: false,
+            message: `Error comparing with parent: ${error.message}`
+        });
+    }
+});
+
+/**
+ * GET /api/admin/global-instant-responses/:id/lineage
+ * Get full lineage information for a template
+ */
+router.get('/:id/lineage', async (req, res) => {
+    const { id } = req.params;
+    
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(id)
+            .select('name version lineage')
+            .lean();
+        
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+        
+        let parentInfo = null;
+        if (template.lineage && template.lineage.clonedFrom) {
+            const parent = await GlobalInstantResponseTemplate.findById(template.lineage.clonedFrom)
+                .select('name version updatedAt')
+                .lean();
+            
+            if (parent) {
+                parentInfo = {
+                    id: parent._id,
+                    name: parent.name,
+                    version: parent.version,
+                    updatedAt: parent.updatedAt,
+                    hasUpdates: parent.updatedAt > template.lineage.clonedAt
+                };
+            }
+        }
+        
+        res.json({
+            success: true,
+            template: {
+                id: template._id,
+                name: template.name,
+                version: template.version
+            },
+            lineage: template.lineage || { isClone: false },
+            parent: parentInfo
+        });
+    } catch (error) {
+        console.error('❌ Error fetching lineage:', error.message);
+        res.status(500).json({
+            success: false,
+            message: `Error fetching lineage: ${error.message}`
         });
     }
 });

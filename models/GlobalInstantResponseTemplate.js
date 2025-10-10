@@ -319,6 +319,78 @@ const globalInstantResponseTemplateSchema = new Schema({
         changedBy: { type: String, trim: true }
     }],
     
+    // 🌳 LINEAGE TRACKING - Template Family Tree
+    // Tracks parent-child relationships when templates are cloned
+    lineage: {
+        // Was this template cloned from another?
+        isClone: {
+            type: Boolean,
+            default: false
+        },
+        
+        // Parent template ID (if cloned)
+        clonedFrom: {
+            type: Schema.Types.ObjectId,
+            ref: 'GlobalInstantResponseTemplate'
+        },
+        
+        // Parent template name at time of cloning
+        clonedFromName: {
+            type: String,
+            trim: true
+        },
+        
+        // Parent template version at time of cloning
+        clonedFromVersion: {
+            type: String,
+            trim: true
+        },
+        
+        // When was this template cloned?
+        clonedAt: {
+            type: Date
+        },
+        
+        // Who cloned this template?
+        clonedBy: {
+            type: String,
+            trim: true
+        },
+        
+        // Parent's last update date at time of cloning
+        parentLastUpdatedAt: {
+            type: Date
+        },
+        
+        // Track custom modifications made after cloning
+        modifications: [{
+            type: {
+                type: String,
+                enum: ['category_added', 'category_removed', 'category_modified',
+                       'scenario_added', 'scenario_removed', 'scenario_modified'],
+                required: true
+            },
+            categoryId: { type: String, trim: true },
+            categoryName: { type: String, trim: true },
+            scenarioId: { type: String, trim: true },
+            scenarioName: { type: String, trim: true },
+            description: { type: String, trim: true },
+            modifiedBy: { type: String, trim: true },
+            modifiedAt: { type: Date, default: Date.now }
+        }],
+        
+        // Cached count of how many updates parent has since cloning
+        parentUpdateCount: {
+            type: Number,
+            default: 0
+        },
+        
+        // Last time we checked for parent updates
+        lastSyncCheck: {
+            type: Date
+        }
+    },
+    
     // Creation tracking
     createdBy: {
         type: String,
@@ -481,7 +553,21 @@ globalInstantResponseTemplateSchema.statics.cloneTemplate = async function(sourc
         changeLog: [{
             changes: `Cloned from ${sourceTemplate.name} (${sourceTemplate.templateType})`,
             changedBy: createdBy || 'Platform Admin'
-        }]
+        }],
+        
+        // 🌳 LINEAGE TRACKING - Record parent relationship
+        lineage: {
+            isClone: true,
+            clonedFrom: sourceTemplateId,
+            clonedFromName: sourceTemplate.name,
+            clonedFromVersion: sourceTemplate.version,
+            clonedAt: new Date(),
+            clonedBy: createdBy || 'Platform Admin',
+            parentLastUpdatedAt: sourceTemplate.updatedAt,
+            modifications: [], // Start with empty modifications array
+            parentUpdateCount: 0,
+            lastSyncCheck: new Date()
+        }
     });
     
     return await newTemplate.save();
@@ -517,6 +603,193 @@ globalInstantResponseTemplateSchema.methods.addChangeLog = function(changes, cha
         changedBy
     });
     this.lastUpdatedBy = changedBy;
+};
+
+/**
+ * 🌳 LINEAGE METHODS
+ */
+
+/**
+ * Check if this template has a parent (was cloned)
+ */
+globalInstantResponseTemplateSchema.methods.hasParent = function() {
+    return this.lineage && this.lineage.isClone && this.lineage.clonedFrom;
+};
+
+/**
+ * Get parent template
+ */
+globalInstantResponseTemplateSchema.methods.getParent = async function() {
+    if (!this.hasParent()) return null;
+    return await this.constructor.findById(this.lineage.clonedFrom);
+};
+
+/**
+ * Check if parent has updates since cloning
+ */
+globalInstantResponseTemplateSchema.methods.checkParentUpdates = async function() {
+    if (!this.hasParent()) return { hasUpdates: false };
+    
+    const parent = await this.getParent();
+    if (!parent) return { hasUpdates: false, error: 'Parent template not found' };
+    
+    // Compare parent's updatedAt with our clonedAt
+    const hasUpdates = parent.updatedAt > this.lineage.clonedAt;
+    
+    // Count parent's changelog entries since cloning
+    const newChanges = parent.changeLog.filter(log => 
+        log.date > this.lineage.clonedAt
+    );
+    
+    return {
+        hasUpdates,
+        parentUpdatedAt: parent.updatedAt,
+        clonedAt: this.lineage.clonedAt,
+        newChangeCount: newChanges.length,
+        changes: newChanges
+    };
+};
+
+/**
+ * Compare scenarios with parent template
+ * Returns: { added, removed, modified, unchanged }
+ */
+globalInstantResponseTemplateSchema.methods.compareWithParent = async function() {
+    if (!this.hasParent()) return null;
+    
+    const parent = await this.getParent();
+    if (!parent) return null;
+    
+    const comparison = {
+        added: [],      // Scenarios in child but not in parent
+        removed: [],    // Scenarios in parent but not in child
+        modified: [],   // Scenarios that exist in both but differ
+        unchanged: [],  // Scenarios that are identical
+        conflicts: []   // Scenarios modified in both child and parent
+    };
+    
+    // Build maps for easy lookup
+    const parentScenarios = new Map();
+    const childScenarios = new Map();
+    
+    parent.categories.forEach(cat => {
+        cat.scenarios.forEach(scenario => {
+            const key = `${cat.id}:${scenario.id}`;
+            parentScenarios.set(key, { category: cat, scenario });
+        });
+    });
+    
+    this.categories.forEach(cat => {
+        cat.scenarios.forEach(scenario => {
+            const key = `${cat.id}:${scenario.id}`;
+            childScenarios.set(key, { category: cat, scenario });
+        });
+    });
+    
+    // Find scenarios in parent but not in child (removed or not inherited)
+    parentScenarios.forEach((value, key) => {
+        if (!childScenarios.has(key)) {
+            comparison.removed.push({
+                categoryId: value.category.id,
+                categoryName: value.category.name,
+                scenarioId: value.scenario.id,
+                scenarioName: value.scenario.name,
+                action: 'available_to_add'
+            });
+        }
+    });
+    
+    // Find scenarios in child but not in parent (custom additions)
+    childScenarios.forEach((value, key) => {
+        if (!parentScenarios.has(key)) {
+            comparison.added.push({
+                categoryId: value.category.id,
+                categoryName: value.category.name,
+                scenarioId: value.scenario.id,
+                scenarioName: value.scenario.name,
+                action: 'custom'
+            });
+        }
+    });
+    
+    // Compare common scenarios
+    childScenarios.forEach((childValue, key) => {
+        if (parentScenarios.has(key)) {
+            const parentValue = parentScenarios.get(key);
+            const childScenario = childValue.scenario;
+            const parentScenario = parentValue.scenario;
+            
+            // Simple comparison: check if triggers or replies changed
+            const triggersChanged = JSON.stringify(childScenario.triggers) !== JSON.stringify(parentScenario.triggers);
+            const quickRepliesChanged = JSON.stringify(childScenario.quickReplies) !== JSON.stringify(parentScenario.quickReplies);
+            const fullRepliesChanged = JSON.stringify(childScenario.fullReplies) !== JSON.stringify(parentScenario.fullReplies);
+            
+            const isModified = triggersChanged || quickRepliesChanged || fullRepliesChanged;
+            
+            // Check if parent scenario was updated after cloning
+            const parentUpdatedAfterClone = parentScenario.lastUpdated && 
+                                           parentScenario.lastUpdated > this.lineage.clonedAt;
+            
+            // Check if this scenario was modified in child
+            const childModified = this.lineage.modifications.some(mod => 
+                mod.scenarioId === childScenario.id && mod.categoryId === childValue.category.id
+            );
+            
+            if (isModified) {
+                if (childModified && parentUpdatedAfterClone) {
+                    // CONFLICT: Modified in both parent and child
+                    comparison.conflicts.push({
+                        categoryId: childValue.category.id,
+                        categoryName: childValue.category.name,
+                        scenarioId: childScenario.id,
+                        scenarioName: childScenario.name,
+                        childVersion: childScenario,
+                        parentVersion: parentScenario,
+                        action: 'resolve_conflict'
+                    });
+                } else {
+                    comparison.modified.push({
+                        categoryId: childValue.category.id,
+                        categoryName: childValue.category.name,
+                        scenarioId: childScenario.id,
+                        scenarioName: childScenario.name,
+                        modifiedInParent: parentUpdatedAfterClone,
+                        modifiedInChild: childModified,
+                        action: childModified ? 'keep_custom' : 'sync_available'
+                    });
+                }
+            } else {
+                comparison.unchanged.push({
+                    categoryId: childValue.category.id,
+                    categoryName: childValue.category.name,
+                    scenarioId: childScenario.id,
+                    scenarioName: childScenario.name
+                });
+            }
+        }
+    });
+    
+    return comparison;
+};
+
+/**
+ * Record a modification for lineage tracking
+ */
+globalInstantResponseTemplateSchema.methods.recordModification = function(type, details, modifiedBy) {
+    if (!this.lineage) {
+        this.lineage = { modifications: [] };
+    }
+    
+    this.lineage.modifications.push({
+        type,
+        categoryId: details.categoryId,
+        categoryName: details.categoryName,
+        scenarioId: details.scenarioId,
+        scenarioName: details.scenarioName,
+        description: details.description,
+        modifiedBy,
+        modifiedAt: new Date()
+    });
 };
 
 const GlobalInstantResponseTemplate = mongoose.model('GlobalInstantResponseTemplate', globalInstantResponseTemplateSchema);
