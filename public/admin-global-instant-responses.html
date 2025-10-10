@@ -2658,9 +2658,47 @@
             showNotification('Template exported successfully!', 'success');
         }
 
-        function deleteCategory(index) {
-            if (!confirm('Are you sure you want to delete this category?')) return;
-            alert(`Delete category ${index} functionality coming soon!`);
+        async function deleteCategory(index) {
+            const category = activeTemplate.categories[index];
+            
+            if (!confirm(`🗑️ Delete category "${category.name}"?\n\nThis will permanently remove:\n- The category\n- ${category.scenarios?.length || 0} scenario(s)\n- All triggers and replies\n\nThis action cannot be undone!`)) {
+                return;
+            }
+            
+            try {
+                showNotification('⏳ Deleting category...', 'info');
+                
+                // Remove category from array
+                activeTemplate.categories.splice(index, 1);
+                
+                // Save to backend
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        categories: activeTemplate.categories
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification(`✅ Category "${category.name}" deleted successfully!`, 'success');
+                    
+                    // Refresh the active template and re-render
+                    await fetchActiveTemplate();
+                    renderDirectories();
+                } else {
+                    showNotification(`❌ Failed to delete: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                console.error('❌ Error deleting category:', error);
+                showNotification('❌ Error: ' + error.message, 'error');
+            }
         }
 
         // ============================================
