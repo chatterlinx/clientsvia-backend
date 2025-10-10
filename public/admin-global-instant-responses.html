@@ -3203,7 +3203,7 @@
                                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Version</th>
                                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Categories</th>
                                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                                <th class="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
+                                <th class="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider" style="min-width: 220px;">Actions</th>
                             </tr>
                         </thead>
                     `;
@@ -3241,32 +3241,32 @@
                         actionsCell.className = 'px-6 py-4 text-right';
                         
                         const actionsDiv = document.createElement('div');
-                        actionsDiv.style.cssText = 'display: flex; justify-content: flex-end; gap: 0.5rem;';
+                        actionsDiv.style.cssText = 'display: flex; justify-content: flex-end; gap: 0.5rem; flex-wrap: nowrap; min-width: 200px;';
                         
                         // View Button
                         const viewBtn = document.createElement('button');
-                        viewBtn.style.cssText = 'background-color: #2563eb; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer;';
+                        viewBtn.style.cssText = 'background-color: #2563eb; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; flex-shrink: 0; display: inline-block;';
                         viewBtn.title = 'View';
                         viewBtn.innerHTML = '<i class="fas fa-eye"></i>';
                         viewBtn.onclick = () => viewTemplate(template._id);
                         
                         // Edit Button
                         const editBtn = document.createElement('button');
-                        editBtn.style.cssText = 'background-color: #16a34a; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer;';
+                        editBtn.style.cssText = 'background-color: #16a34a; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; flex-shrink: 0; display: inline-block;';
                         editBtn.title = 'Edit';
                         editBtn.innerHTML = '<i class="fas fa-edit"></i>';
                         editBtn.onclick = () => editTemplate(template._id);
                         
                         // Set Default Button
                         const defaultBtn = document.createElement('button');
-                        defaultBtn.style.cssText = 'background-color: #9333ea; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer;';
+                        defaultBtn.style.cssText = 'background-color: #9333ea; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; flex-shrink: 0; display: inline-block;';
                         defaultBtn.title = 'Set as Default';
                         defaultBtn.innerHTML = '<i class="fas fa-star"></i>';
                         defaultBtn.onclick = () => setAsDefault(template._id);
                         
                         // Delete Button
                         const deleteBtn = document.createElement('button');
-                        deleteBtn.style.cssText = 'background-color: #dc2626; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer;';
+                        deleteBtn.style.cssText = 'background-color: #dc2626; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; flex-shrink: 0; display: inline-block;';
                         deleteBtn.title = 'Delete';
                         deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
                         deleteBtn.onclick = () => deleteTemplate(template._id);
