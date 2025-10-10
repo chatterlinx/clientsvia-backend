@@ -487,6 +487,21 @@ router.patch('/:id', async (req, res) => {
             changes.push('Updated description');
         }
         
+        if (updates.templateType !== undefined) {
+            template.templateType = updates.templateType;
+            changes.push('Updated template type');
+        }
+        
+        if (updates.industryLabel !== undefined) {
+            template.industryLabel = updates.industryLabel;
+            changes.push('Updated industry label');
+        }
+        
+        if (updates.isPublished !== undefined) {
+            template.isPublished = updates.isPublished;
+            changes.push(`Set published: ${updates.isPublished}`);
+        }
+        
         if (updates.categories !== undefined) {
             template.categories = updates.categories;
             changes.push(`Updated categories (${updates.categories.length} total)`);
