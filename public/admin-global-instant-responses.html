@@ -171,14 +171,41 @@
 
             <!-- Dashboard Sub-Tab Content -->
             <div id="overview-dashboard-content" class="overview-subtab-content">
-                <!-- Statistics Cards -->
-                <div id="stats-container" class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <!-- Dynamic stats will be loaded here -->
-                </div>
-
-                <!-- Active Template Display -->
-                <div id="active-template-container" class="mb-8">
-                    <!-- Active template details will be loaded here -->
+                <!-- Template Selector Section -->
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-6 mb-8 shadow-sm">
+                    <div class="mb-4">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">
+                            📋 Currently Editing Template:
+                        </label>
+                        <select id="dashboard-template-selector" onchange="switchDashboardTemplate(this.value)" 
+                                class="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-semibold bg-white shadow-sm">
+                            <option value="">Loading templates...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Template Stats -->
+                    <div id="dashboard-template-stats" class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-blue-200">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-blue-600" id="dash-stat-categories">0</div>
+                            <div class="text-xs text-gray-600 mt-1">📁 Categories</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-green-600" id="dash-stat-scenarios">0</div>
+                            <div class="text-xs text-gray-600 mt-1">💬 Scenarios</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-purple-600" id="dash-stat-triggers">0</div>
+                            <div class="text-xs text-gray-600 mt-1">⚡ Triggers</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-indigo-600" id="dash-stat-version">v0.0.0</div>
+                            <div class="text-xs text-gray-600 mt-1">🔢 Version</div>
+                        </div>
+                    </div>
+                    
+                    <div id="dashboard-template-updated" class="text-xs text-gray-500 mt-3 text-center">
+                        🕒 Last updated: --
+                    </div>
                 </div>
 
                 <!-- Categories List -->
@@ -5319,6 +5346,94 @@
         // ============================================
         // INITIALIZATION
         // ============================================
+        // ============================================
+        // DASHBOARD TEMPLATE SELECTOR
+        // ============================================
+        async function loadTemplatesIntoSelector() {
+            try {
+                const token = getAuthToken();
+                const response = await fetch('/api/admin/global-instant-responses', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    const selector = document.getElementById('dashboard-template-selector');
+                    selector.innerHTML = result.data.map(template => 
+                        `<option value="${template._id}" ${template._id === activeTemplateId ? 'selected' : ''}>
+                            ${template.name} (${template.version})
+                        </option>`
+                    ).join('');
+                    
+                    console.log(`✅ Loaded ${result.data.length} templates into selector`);
+                    
+                    // Update stats for current template
+                    if (activeTemplate) {
+                        updateDashboardStats();
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Error loading templates into selector:', error);
+            }
+        }
+
+        async function switchDashboardTemplate(templateId) {
+            if (!templateId) return;
+            
+            try {
+                console.log(`🔄 Switching dashboard to template: ${templateId}`);
+                showNotification('⏳ Loading template...', 'info');
+                
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    activeTemplate = result.data;
+                    activeTemplateId = result.data._id;
+                    
+                    // Update stats
+                    updateDashboardStats();
+                    
+                    // Refresh categories list
+                    renderDirectories();
+                    
+                    showNotification(`✅ Loaded: ${result.data.name}`, 'success');
+                } else {
+                    showNotification('❌ Failed to load template', 'error');
+                }
+            } catch (error) {
+                console.error('❌ Error switching template:', error);
+                showNotification('❌ Error: ' + error.message, 'error');
+            }
+        }
+
+        function updateDashboardStats() {
+            if (!activeTemplate) return;
+            
+            const stats = activeTemplate.stats || {};
+            
+            // Update stat numbers
+            document.getElementById('dash-stat-categories').textContent = stats.totalCategories || activeTemplate.categories?.length || 0;
+            document.getElementById('dash-stat-scenarios').textContent = stats.totalScenarios || 0;
+            document.getElementById('dash-stat-triggers').textContent = stats.totalTriggers || 0;
+            document.getElementById('dash-stat-version').textContent = activeTemplate.version || 'v0.0.0';
+            
+            // Update last updated date
+            if (activeTemplate.updatedAt) {
+                const date = new Date(activeTemplate.updatedAt).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                document.getElementById('dashboard-template-updated').textContent = `🕒 Last updated: ${date}`;
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('🚀 [PAGE INIT] DOMContentLoaded event fired - Global AI Brain Management - Initializing...');
             
@@ -5339,6 +5454,9 @@
             
             // Load active template
             await fetchActiveTemplate();
+            
+            // Load templates into dashboard selector
+            await loadTemplatesIntoSelector();
             
             console.log('✅ Global AI Brain Management - Initialized');
         });
