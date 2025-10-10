@@ -450,6 +450,62 @@ router.post('/import', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/admin/global-instant-responses/:id/set-default
+ * Set a template as the default for new companies
+ */
+router.post('/:id/set-default', async (req, res) => {
+    const { id } = req.params;
+    const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
+    
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(id);
+        
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+        
+        // Unset current default
+        await GlobalInstantResponseTemplate.updateMany(
+            { isDefaultTemplate: true },
+            { isDefaultTemplate: false }
+        );
+        
+        // Set new default
+        template.isDefaultTemplate = true;
+        template.isPublished = true; // Default template must be published
+        template.lastUpdatedBy = adminUser;
+        
+        if (!template.changeLog) {
+            template.changeLog = [];
+        }
+        template.changeLog.push({
+            changes: 'Set as default template for new companies',
+            changedBy: adminUser,
+            date: new Date()
+        });
+        
+        await template.save();
+        
+        console.log(`✅ Set default template: ${template.name} (${template.version}) by ${adminUser}`);
+        
+        res.json({
+            success: true,
+            message: `Template "${template.name}" set as default successfully`,
+            data: template
+        });
+    } catch (error) {
+        console.error('❌ Error setting default template:', error.message, error.stack);
+        res.status(500).json({
+            success: false,
+            message: `Error setting default template: ${error.message}`
+        });
+    }
+});
+
 // ============================================================================
 // PATCH ROUTES - UPDATE OPERATIONS
 // ============================================================================
