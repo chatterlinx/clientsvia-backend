@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global AI Brain - ClientVia.ai v2.2-FORCE-RELOAD</title>
+    <title>Global AI Brain - ClientVia.ai v2.3-TOGGLE</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <!-- FORCE BROWSER RELOAD: v2.2.0 - 2025-10-10 11:56 AM -->
-    <script>console.log('🔥 VERSION 2.2.0 LOADED - DEFAULT BUTTON LOGIC ACTIVE');</script>
+    <!-- FORCE BROWSER RELOAD: v2.3.0 - 2025-10-10 Toggle UI -->
+    <script>console.log('🔥 VERSION 2.3.0 LOADED - TOGGLE UI FOR DEFAULT TEMPLATE');</script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -3111,7 +3111,7 @@
                                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Version</th>
                                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Categories</th>
                                 <th class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
-                                <th class="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider" style="min-width: 220px;">Actions</th>
+                                <th class="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider" style="min-width: 320px;">Actions</th>
                             </tr>
                         </thead>
                     `;
@@ -3148,7 +3148,7 @@
                         actionsCell.className = 'px-6 py-4 text-right';
                         
                         const actionsDiv = document.createElement('div');
-                        actionsDiv.style.cssText = 'display: flex; justify-content: flex-end; gap: 0.5rem; flex-wrap: nowrap; min-width: 200px;';
+                        actionsDiv.style.cssText = 'display: flex; justify-content: flex-end; gap: 0.5rem; flex-wrap: nowrap; min-width: 300px;';
                         
                         // View Button
                         const viewBtn = document.createElement('button');
@@ -3164,25 +3164,35 @@
                         editBtn.innerHTML = '<i class="fas fa-edit"></i>';
                         editBtn.onclick = () => editTemplate(template._id);
                         
-                        // Set Default Button - Dynamic icon and color based on isDefaultTemplate
+                        // Set Default Toggle - Radio button style for clear ON/OFF state
                         const defaultBtn = document.createElement('button');
-                        console.log(`🔍 [BUTTON] Template "${template.name}" isDefaultTemplate:`, template.isDefaultTemplate);
+                        console.log(`🔍 [TOGGLE] Template "${template.name}" isDefaultTemplate:`, template.isDefaultTemplate);
                         
                         if (template.isDefaultTemplate) {
-                            // Already default - show badge icon with green color
-                            defaultBtn.style.cssText = 'background-color: #16a34a; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; flex-shrink: 0; display: inline-block;';
-                            defaultBtn.title = 'Current Default Template';
-                            defaultBtn.innerHTML = '<i class="fas fa-badge-check"></i>';
+                            // IS DEFAULT - Show green ON state (disabled)
+                            defaultBtn.style.cssText = 'background-color: #16a34a; color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 700; font-size: 0.75rem; border: 2px solid #16a34a; cursor: not-allowed; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.5rem;';
+                            defaultBtn.title = 'This is the current default template';
+                            defaultBtn.innerHTML = '<i class="fas fa-check-circle"></i> DEFAULT';
                             defaultBtn.disabled = true;
-                            defaultBtn.style.opacity = '0.7';
-                            console.log(`  ✅ Rendering GREEN BADGE for: ${template.name}`);
+                            console.log(`  ✅ Rendering GREEN DEFAULT for: ${template.name}`);
                         } else {
-                            // Not default - show star icon with purple color
-                            defaultBtn.style.cssText = 'background-color: #9333ea; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; flex-shrink: 0; display: inline-block;';
-                            defaultBtn.title = 'Set as Default';
-                            defaultBtn.innerHTML = '<i class="fas fa-star"></i>';
+                            // NOT DEFAULT - Show gray OFF state (clickable)
+                            defaultBtn.style.cssText = 'background-color: #f3f4f6; color: #6b7280; padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; font-size: 0.75rem; border: 2px solid #e5e7eb; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.2s;';
+                            defaultBtn.title = 'Click to set as default template';
+                            defaultBtn.innerHTML = '<i class="far fa-circle"></i> SET DEFAULT';
                             defaultBtn.onclick = () => setAsDefault(template._id, template.name);
-                            console.log(`  ⭐ Rendering PURPLE STAR for: ${template.name}`);
+                            // Hover effect
+                            defaultBtn.onmouseover = () => {
+                                defaultBtn.style.backgroundColor = '#9333ea';
+                                defaultBtn.style.color = 'white';
+                                defaultBtn.style.borderColor = '#9333ea';
+                            };
+                            defaultBtn.onmouseout = () => {
+                                defaultBtn.style.backgroundColor = '#f3f4f6';
+                                defaultBtn.style.color = '#6b7280';
+                                defaultBtn.style.borderColor = '#e5e7eb';
+                            };
+                            console.log(`  ○ Rendering GRAY OFF for: ${template.name}`);
                         }
                         
                         // Delete Button
