@@ -28,6 +28,8 @@ const express = require('express');
 const router = express.Router();
 const Company = require('../../models/v2Company');
 const TradeCategory = require('../../models/v2TradeCategory');
+const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+const InstantResponseCategory = require('../../models/InstantResponseCategory');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const { redisClient } = require('../../clients');
 const logger = require('../../utils/logger');
@@ -268,11 +270,60 @@ router.post('/companies', authenticateJWT, requireRole('admin'), async (req, res
             logger.warn('⚠️ Cache clear failed:', cacheError.message);
         }
 
+        // 🧠 CLONE DEFAULT GLOBAL AI BRAIN TEMPLATE
+        let scenariosCloned = 0;
+        try {
+            const defaultTemplate = await GlobalInstantResponseTemplate.findOne({ 
+                isDefaultTemplate: true,
+                isPublished: true 
+            });
+
+            if (defaultTemplate) {
+                logger.info(`📚 Cloning default template "${defaultTemplate.name}" (${defaultTemplate.version}) to company ${savedCompany._id}`);
+
+                // Clone each category from the template
+                for (const globalCategory of defaultTemplate.categories) {
+                    const newCategory = new InstantResponseCategory({
+                        companyId: savedCompany._id,
+                        categoryName: globalCategory.categoryName,
+                        behavior: globalCategory.behavior,
+                        isActive: globalCategory.isActive,
+                        scenarios: globalCategory.scenarios.map(scenario => ({
+                            scenarioId: scenario.scenarioId,
+                            title: scenario.title,
+                            triggers: [...scenario.triggers],
+                            keywords: [...scenario.keywords],
+                            quickReplies: [...scenario.quickReplies],
+                            fullReplies: [...scenario.fullReplies],
+                            escalateAfterAttempts: scenario.escalateAfterAttempts,
+                            metadata: {
+                                source: 'global_template',
+                                templateName: defaultTemplate.name,
+                                templateVersion: defaultTemplate.version,
+                                clonedAt: new Date()
+                            }
+                        }))
+                    });
+
+                    await newCategory.save();
+                    scenariosCloned += globalCategory.scenarios.length;
+                }
+
+                logger.info(`✅ Cloned ${scenariosCloned} scenarios from default template to company ${savedCompany._id}`);
+            } else {
+                logger.warn(`⚠️  No default template found - company ${savedCompany._id} starts with zero scenarios`);
+            }
+        } catch (templateError) {
+            logger.error(`❌ Error cloning default template to company ${savedCompany._id}:`, templateError);
+            // Don't fail company creation if template cloning fails
+        }
+
         const responseTime = Date.now() - startTime;
         
         logger.info(`✅ V2 GLOBAL ADD COMPANY: Company created successfully in ${responseTime}ms`, {
             companyId: savedCompany._id,
             companyName: savedCompany.companyName,
+            scenariosCloned,
             adminUser: req.user.email
         });
 
@@ -297,9 +348,10 @@ router.post('/companies', authenticateJWT, requireRole('admin'), async (req, res
                 responseTime,
                 source: 'v2-global-addcompany',
                 aiAgentLogicInitialized: true,
+                scenariosCloned,
                 profileCompletionUrl: `/company-profile.html?id=${savedCompany._id}`
             },
-            message: `Company "${savedCompany.companyName}" created successfully with v2 AI Agent Logic defaults`
+            message: `Company "${savedCompany.companyName}" created successfully with ${scenariosCloned} AI scenarios from default template`
         });
 
     } catch (error) {
