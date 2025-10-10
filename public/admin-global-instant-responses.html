@@ -3078,13 +3078,21 @@
             
             try {
                 const token = getAuthToken();
-                const response = await fetch('/api/admin/global-instant-responses', {
+                // Add cache-busting timestamp to force fresh data
+                const cacheBuster = `?_=${Date.now()}`;
+                const response = await fetch(`/api/admin/global-instant-responses${cacheBuster}`, {
                     headers: {
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${token}`,
+                        'Cache-Control': 'no-cache'
                     }
                 });
                 
                 const result = await response.json();
+                console.log('🔍 [TEMPLATES] API Response:', result.data.map(t => ({
+                    name: t.name,
+                    isDefault: t.isDefaultTemplate,
+                    isPublished: t.isPublished
+                })));
                 
                 if (result.success && result.data && result.data.length > 0) {
                     const templates = result.data;
@@ -3158,6 +3166,8 @@
                         
                         // Set Default Button - Dynamic icon and color based on isDefaultTemplate
                         const defaultBtn = document.createElement('button');
+                        console.log(`🔍 [BUTTON] Template "${template.name}" isDefaultTemplate:`, template.isDefaultTemplate);
+                        
                         if (template.isDefaultTemplate) {
                             // Already default - show badge icon with green color
                             defaultBtn.style.cssText = 'background-color: #16a34a; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; flex-shrink: 0; display: inline-block;';
@@ -3165,12 +3175,14 @@
                             defaultBtn.innerHTML = '<i class="fas fa-badge-check"></i>';
                             defaultBtn.disabled = true;
                             defaultBtn.style.opacity = '0.7';
+                            console.log(`  ✅ Rendering GREEN BADGE for: ${template.name}`);
                         } else {
                             // Not default - show star icon with purple color
                             defaultBtn.style.cssText = 'background-color: #9333ea; color: white; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; flex-shrink: 0; display: inline-block;';
                             defaultBtn.title = 'Set as Default';
                             defaultBtn.innerHTML = '<i class="fas fa-star"></i>';
                             defaultBtn.onclick = () => setAsDefault(template._id, template.name);
+                            console.log(`  ⭐ Rendering PURPLE STAR for: ${template.name}`);
                         }
                         
                         // Delete Button
