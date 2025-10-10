@@ -912,6 +912,15 @@
                                   placeholder="Describe this template..."></textarea>
                     </div>
 
+                    <!-- Industry Type -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Industry Type *</label>
+                        <select id="edit-template-type" required 
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                            <option value="">Loading industries...</option>
+                        </select>
+                    </div>
+
                     <!-- Industry Label -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Display Label (for UI) *</label>
@@ -3248,14 +3257,33 @@
             
             try {
                 const token = getAuthToken();
-                const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
                 
-                const result = await response.json();
+                // Load both template and industry types
+                const [templateResponse, industriesResponse] = await Promise.all([
+                    fetch(`/api/admin/global-instant-responses/${templateId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch('/api/admin/global-industry-types', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                ]);
                 
-                if (result.success && result.data) {
-                    const template = result.data;
+                const templateResult = await templateResponse.json();
+                const industriesResult = await industriesResponse.json();
+                
+                if (templateResult.success && templateResult.data) {
+                    const template = templateResult.data;
+                    
+                    // Populate industry types dropdown
+                    const industrySelect = document.getElementById('edit-template-type');
+                    if (industriesResult.success && industriesResult.data) {
+                        industrySelect.innerHTML = industriesResult.data.map(industry => 
+                            `<option value="${industry.industryId}">${industry.displayLabel}</option>`
+                        ).join('');
+                        
+                        // Select the template's current industry type
+                        industrySelect.value = template.templateType || '';
+                    }
                     
                     // Populate the Edit Template Metadata modal
                     document.getElementById('edit-template-id').value = template._id;
@@ -3289,11 +3317,12 @@
             const templateId = document.getElementById('edit-template-id').value;
             const name = document.getElementById('edit-template-name').value.trim();
             const description = document.getElementById('edit-template-description').value.trim();
+            const templateType = document.getElementById('edit-template-type').value;
             const industryLabel = document.getElementById('edit-template-label').value.trim();
             const isPublished = document.getElementById('edit-template-publish').checked;
             
-            if (!name || !industryLabel) {
-                showNotification('❌ Name and Display Label are required', 'error');
+            if (!name || !templateType || !industryLabel) {
+                showNotification('❌ Name, Industry Type, and Display Label are required', 'error');
                 return;
             }
             
@@ -3310,6 +3339,7 @@
                     body: JSON.stringify({
                         name,
                         description,
+                        templateType,
                         industryLabel,
                         isPublished
                     })
