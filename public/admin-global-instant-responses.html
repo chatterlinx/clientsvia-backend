@@ -3357,9 +3357,6 @@
         async function editTemplate(templateId) {
             console.log('✏️ [EDIT TEMPLATE] Loading template for editing:', templateId);
             
-            // TODO: Build proper template metadata editor modal
-            // For now, load the template and switch to Behaviors tab to edit categories
-            
             try {
                 const token = getAuthToken();
                 const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
@@ -3369,19 +3366,78 @@
                 const result = await response.json();
                 
                 if (result.success && result.data) {
-                    activeTemplate = result.data;
-                    activeTemplateId = result.data._id;
+                    const template = result.data;
                     
-                    // Switch to Behaviors tab to edit categories and scenarios
-                    switchTab('behaviors');
+                    // Populate the Edit Template Metadata modal
+                    document.getElementById('edit-template-id').value = template._id;
+                    document.getElementById('edit-template-name').value = template.name || '';
+                    document.getElementById('edit-template-description').value = template.description || '';
+                    document.getElementById('edit-template-label').value = template.industryLabel || '';
+                    document.getElementById('edit-template-publish').checked = template.isPublished || false;
                     
-                    showNotification(`✏️ Now editing categories for: ${result.data.name}. To edit template metadata, use the templates table.`, 'info');
+                    // Show the modal
+                    document.getElementById('edit-template-metadata-modal').classList.remove('hidden');
+                    document.getElementById('edit-template-metadata-modal').classList.add('flex');
+                    
+                    console.log('✅ [EDIT TEMPLATE] Modal opened for:', template.name);
                 } else {
                     showNotification('❌ Failed to load template', 'error');
                 }
             } catch (error) {
                 console.error('❌ [EDIT TEMPLATE] Error:', error);
                 showNotification('❌ Error: ' + error.message, 'error');
+            }
+        }
+
+        function closeEditTemplateMetadataModal() {
+            document.getElementById('edit-template-metadata-modal').classList.add('hidden');
+            document.getElementById('edit-template-metadata-modal').classList.remove('flex');
+        }
+
+        async function handleEditTemplateMetadata(event) {
+            event.preventDefault();
+            
+            const templateId = document.getElementById('edit-template-id').value;
+            const name = document.getElementById('edit-template-name').value.trim();
+            const description = document.getElementById('edit-template-description').value.trim();
+            const industryLabel = document.getElementById('edit-template-label').value.trim();
+            const isPublished = document.getElementById('edit-template-publish').checked;
+            
+            if (!name || !industryLabel) {
+                showNotification('❌ Name and Display Label are required', 'error');
+                return;
+            }
+            
+            try {
+                showNotification('⏳ Updating template...', 'info');
+                
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        name,
+                        description,
+                        industryLabel,
+                        isPublished
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showNotification('✅ Template updated successfully!', 'success');
+                    closeEditTemplateMetadataModal();
+                    renderTemplatesTable(); // Refresh the table
+                } else {
+                    showNotification(`❌ Failed to update: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                console.error('❌ Error updating template:', error);
+                showNotification(`❌ Error: ${error.message}`, 'error');
             }
         }
 
