@@ -71,11 +71,12 @@ router.use((req, res, next) => {
 router.get('/', async (req, res) => {
     try {
         const templates = await GlobalInstantResponseTemplate.find()
-            .select('version name description isActive stats createdAt updatedAt createdBy lastUpdatedBy')
+            .select('version name description templateType industryLabel isActive isPublished isDefaultTemplate stats createdAt updatedAt createdBy lastUpdatedBy')
             .sort({ createdAt: -1 })
             .lean();
         
         console.log(`✅ Retrieved ${templates.length} global templates`);
+        console.log(`   Default template: ${templates.find(t => t.isDefaultTemplate)?.name || 'NONE'}`);
         
         res.json({
             success: true,
