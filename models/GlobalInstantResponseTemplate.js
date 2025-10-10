@@ -259,11 +259,11 @@ const globalInstantResponseTemplateSchema = new Schema({
         default: 'World-class AI agent instant response library with 100+ human-like conversation scenarios'
     },
     
-    // Template type / industry specialization
+    // Template type / industry specialization (references GlobalIndustryType.industryId)
     templateType: {
         type: String,
-        enum: ['universal', 'healthcare', 'homeservices', 'retail', 'professional', 'custom'],
         default: 'universal',
+        trim: true,
         index: true
     },
     
