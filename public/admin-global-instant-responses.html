@@ -295,6 +295,34 @@
                                         <i class="fas fa-lock mr-1"></i>
                                         These credentials are encrypted and stored securely per template.
                                     </p>
+                                    
+                                    <!-- Test Call Greeting -->
+                                    <div class="mt-4 pt-4 border-t-2 border-blue-200">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <label class="block text-xs font-bold text-gray-800 flex items-center gap-2">
+                                                <i class="fas fa-microphone text-blue-600"></i>
+                                                Test Call Greeting
+                                            </label>
+                                            <button type="button" onclick="resetGreetingToDefault()" 
+                                                    class="text-xs px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg font-semibold transition-colors">
+                                                <i class="fas fa-undo mr-1"></i>
+                                                Reset to Default
+                                            </button>
+                                        </div>
+                                        <p class="text-xs text-gray-600 mb-2">
+                                            This message will be spoken when someone calls the test number. Use <code class="bg-blue-100 px-1 rounded text-blue-800">{template_name}</code> to dynamically insert the template name.
+                                        </p>
+                                        <textarea id="twilio-test-greeting" rows="3" 
+                                                  class="w-full px-3 py-2 border-2 border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white resize-none"
+                                                  placeholder="Enter custom greeting message..."></textarea>
+                                        <div class="flex justify-between items-center mt-1">
+                                            <p class="text-xs text-gray-500">
+                                                <i class="fas fa-info-circle mr-1"></i>
+                                                Template name updates automatically in the greeting
+                                            </p>
+                                            <span id="greeting-char-count" class="text-xs text-gray-500">0 / 500 chars</span>
+                                        </div>
+                                    </div>
                                 </div>
                                 
                                 <!-- Test Notes -->
@@ -3151,7 +3179,11 @@ Just checking in..."></textarea>
                 document.getElementById('twilio-test-phone').value = template.twilioTest?.phoneNumber || '';
                 document.getElementById('twilio-test-account-sid').value = template.twilioTest?.accountSid || '';
                 document.getElementById('twilio-test-auth-token').value = template.twilioTest?.authToken || '';
+                document.getElementById('twilio-test-greeting').value = template.twilioTest?.greeting || DEFAULT_GREETING;
                 document.getElementById('twilio-test-notes').value = template.twilioTest?.notes || '';
+                
+                // Update character count for greeting
+                updateGreetingCharCount();
                 
                 // Set toggle state - use explicit boolean check (not ||) to handle false correctly
                 const enabled = template.twilioTest?.enabled === true;
@@ -3196,6 +3228,41 @@ Just checking in..."></textarea>
         }
 
         /**
+         * Default greeting message
+         */
+        const DEFAULT_GREETING = 'Welcome to the ClientsVia Global AI Brain Testing Center. You are currently testing the {template_name} template. Please ask questions or make statements to test the AI scenarios now.';
+        
+        /**
+         * Reset greeting to default
+         */
+        function resetGreetingToDefault() {
+            const greetingTextarea = document.getElementById('twilio-test-greeting');
+            greetingTextarea.value = DEFAULT_GREETING;
+            updateGreetingCharCount();
+            showNotification('✅ Greeting reset to default', 'success');
+        }
+        
+        /**
+         * Update character count for greeting
+         */
+        function updateGreetingCharCount() {
+            const greetingTextarea = document.getElementById('twilio-test-greeting');
+            const charCount = document.getElementById('greeting-char-count');
+            const length = greetingTextarea.value.length;
+            charCount.textContent = `${length} / 500 chars`;
+            
+            // Change color if approaching limit
+            if (length > 450) {
+                charCount.classList.add('text-red-600', 'font-bold');
+            } else if (length > 400) {
+                charCount.classList.remove('text-red-600', 'font-bold');
+                charCount.classList.add('text-orange-600', 'font-semibold');
+            } else {
+                charCount.classList.remove('text-red-600', 'text-orange-600', 'font-bold', 'font-semibold');
+            }
+        }
+        
+        /**
          * Save Twilio test configuration
          */
         async function saveTwilioTestConfig() {
@@ -3208,6 +3275,7 @@ Just checking in..."></textarea>
             const enabled = document.getElementById('twilio-test-enabled').checked;
             const accountSid = document.getElementById('twilio-test-account-sid').value.trim();
             const authToken = document.getElementById('twilio-test-auth-token').value.trim();
+            const greeting = document.getElementById('twilio-test-greeting').value.trim();
             const notes = document.getElementById('twilio-test-notes').value.trim();
 
             // Validate phone number format if provided
@@ -3243,6 +3311,7 @@ Just checking in..."></textarea>
                             enabled,
                             accountSid,
                             authToken,
+                            greeting,
                             notes
                         }
                     })
@@ -6299,6 +6368,12 @@ Just checking in..."></textarea>
             
             // Load Twilio test config for the active template
             await loadTwilioTestConfig();
+            
+            // Set up event listener for greeting character counter
+            const greetingTextarea = document.getElementById('twilio-test-greeting');
+            if (greetingTextarea) {
+                greetingTextarea.addEventListener('input', updateGreetingCharCount);
+            }
             
             console.log('✅ Global AI Brain Management - Initialized');
         });

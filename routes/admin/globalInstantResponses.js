@@ -572,6 +572,7 @@ router.patch('/:id', async (req, res) => {
                 'twilioTest.phoneNumber': updates.twilioTest.phoneNumber?.trim() || null,
                 'twilioTest.accountSid': updates.twilioTest.accountSid?.trim() || null,
                 'twilioTest.authToken': updates.twilioTest.authToken?.trim() || null,
+                'twilioTest.greeting': updates.twilioTest.greeting?.trim() || 'Welcome to the ClientsVia Global AI Brain Testing Center. You are currently testing the {template_name} template. Please ask questions or make statements to test the AI scenarios now.',
                 'twilioTest.notes': updates.twilioTest.notes?.trim() || ''
             };
             
@@ -580,6 +581,7 @@ router.patch('/:id', async (req, res) => {
                 phoneNumber: twilioUpdate['twilioTest.phoneNumber'] ? twilioUpdate['twilioTest.phoneNumber'] : 'NULL',
                 accountSid: twilioUpdate['twilioTest.accountSid'] ? twilioUpdate['twilioTest.accountSid'].substring(0, 10) + '...' : 'NULL',
                 authToken: twilioUpdate['twilioTest.authToken'] ? '***' : 'NULL',
+                greeting: twilioUpdate['twilioTest.greeting'] ? twilioUpdate['twilioTest.greeting'].substring(0, 50) + '...' : 'DEFAULT',
                 notes: twilioUpdate['twilioTest.notes']
             });
             

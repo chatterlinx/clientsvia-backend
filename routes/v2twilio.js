@@ -294,8 +294,12 @@ router.post('/voice', async (req, res) => {
       // Initialize selector with template scenarios
       const selector = new HybridScenarioSelector(company.template.categories);
       
-      // Greet the tester
-      const greeting = `Welcome to Global AI Brain testing. You are testing the ${company.template.name} template with ${company.template.stats?.totalScenarios || 0} scenarios. Please say something to test scenario matching.`;
+      // Greet the tester with custom greeting (replace {template_name} placeholder)
+      const rawGreeting = company.template.twilioTest?.greeting || 
+        'Welcome to the ClientsVia Global AI Brain Testing Center. You are currently testing the {template_name} template. Please ask questions or make statements to test the AI scenarios now.';
+      const greeting = rawGreeting.replace('{template_name}', company.template.name);
+      
+      console.log(`🎙️ [GLOBAL BRAIN] Using greeting: "${greeting.substring(0, 80)}..."`);
       
       const gather = twiml.gather({
         input: 'speech',

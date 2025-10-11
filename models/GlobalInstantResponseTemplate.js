@@ -574,6 +574,13 @@ const globalInstantResponseTemplateSchema = new Schema({
             trim: true
             // Twilio Auth Token (store encrypted in production)
         },
+        greeting: {
+            type: String,
+            trim: true,
+            default: 'Welcome to the ClientsVia Global AI Brain Testing Center. You are currently testing the {template_name} template. Please ask questions or make statements to test the AI scenarios now.'
+            // Custom greeting spoken when test calls connect
+            // Use {template_name} placeholder for dynamic template name
+        },
         lastTestedAt: {
             type: Date
             // Track when last tested
