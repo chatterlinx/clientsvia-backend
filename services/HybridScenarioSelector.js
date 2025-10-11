@@ -569,6 +569,6 @@ class HybridScenarioSelector {
     }
 }
 
-// Export singleton instance
-module.exports = new HybridScenarioSelector();
+// Export the class (not an instance) so it can be instantiated per request
+module.exports = HybridScenarioSelector;
 
