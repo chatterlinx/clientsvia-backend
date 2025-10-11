@@ -107,10 +107,10 @@ const scenarioSchema = new Schema({
     priority: {
         type: Number,
         default: 0,
-        min: 0,
+        min: -10,
         max: 100
         // Tie-breaker when multiple scenarios match with same score
-        // Higher = more priority (e.g., emergency=100, smalltalk=10)
+        // Higher = more priority (e.g., emergency=100, neutral=0, smalltalk=-5)
     },
     
     cooldownSeconds: {
