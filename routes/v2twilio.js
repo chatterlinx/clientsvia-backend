@@ -8,6 +8,8 @@
 const express = require('express');
 const twilio = require('twilio');
 const Company = require('../models/v2Company');
+const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
+const HybridScenarioSelector = require('../services/HybridScenarioSelector');
 // 🚀 V2 SYSTEM: Using V2 AI Agent Runtime instead of legacy agent.js
 const { initializeCall, processUserInput } = require('../services/v2AIAgentRuntime');
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
@@ -125,11 +127,31 @@ function escapeTwiML(text) {
 }
 
 // Helper function to get company data, with caching
+// NOW ALSO CHECKS: Global AI Brain Test Templates (for admin testing)
 async function getCompanyByPhoneNumber(phoneNumber) {
   const cacheKey = `company-phone:${phoneNumber}`;
   let company = null;
 
   try {
+    // 🧠 CHECK 1: Is this a Global AI Brain test number?
+    console.log(`[GLOBAL BRAIN CHECK] Checking if ${phoneNumber} is a test template...`);
+    const testTemplate = await GlobalInstantResponseTemplate.findOne({
+      'twilioTest.phoneNumber': phoneNumber,
+      'twilioTest.enabled': true
+    });
+    
+    if (testTemplate) {
+      console.log(`🧠 [GLOBAL BRAIN] Test template found: ${testTemplate.name}`);
+      // Return a special "company" object that signals this is a test template
+      return {
+        isGlobalTestTemplate: true,
+        template: testTemplate,
+        _id: testTemplate._id,
+        name: testTemplate.name
+      };
+    }
+    
+    // 🏢 CHECK 2: Regular company lookup
     const cacheStartTime = Date.now();
     const cachedCompany = await redisClient.get(cacheKey);
     if (cachedCompany) {
@@ -260,6 +282,30 @@ router.post('/voice', async (req, res) => {
       const msg = 'Configuration error: Company must configure AI Agent Logic responses';
       twiml.say(escapeTwiML(msg));
       twiml.hangup();
+      res.type('text/xml');
+      res.send(twiml.toString());
+      return;
+    }
+
+    // 🧠 GLOBAL AI BRAIN TEST MODE
+    if (company.isGlobalTestTemplate) {
+      console.log(`🧠 [GLOBAL BRAIN] Test mode activated for template: ${company.template.name}`);
+      
+      // Initialize selector with template scenarios
+      const selector = new HybridScenarioSelector(company.template.categories);
+      
+      // Greet the tester
+      const greeting = `Welcome to Global AI Brain testing. You are testing the ${company.template.name} template with ${company.template.stats?.totalScenarios || 0} scenarios. Please say something to test scenario matching.`;
+      
+      const gather = twiml.gather({
+        input: 'speech',
+        action: `/api/twilio/test-respond/${company.template._id}`,
+        method: 'POST',
+        timeout: 5,
+        speechTimeout: 'auto'
+      });
+      gather.say(greeting);
+      
       res.type('text/xml');
       res.send(twiml.toString());
       return;
@@ -1290,6 +1336,96 @@ router.all('*', (req, res) => {
     ],
     requestedUrl: req.originalUrl
   });
+});
+
+// ============================================
+// 🧠 GLOBAL AI BRAIN TEST RESPONSE HANDLER
+// ============================================
+router.post('/test-respond/:templateId', async (req, res) => {
+  console.log(`🧠 [GLOBAL BRAIN TEST] Processing speech for template: ${req.params.templateId}`);
+  
+  try {
+    const { templateId } = req.params;
+    const speechText = req.body.SpeechResult || '';
+    
+    console.log(`🧠 [TEST INPUT] "${speechText}"`);
+    
+    // Load template
+    const template = await GlobalInstantResponseTemplate.findById(templateId);
+    if (!template || !template.twilioTest?.enabled) {
+      const twiml = new twilio.twiml.VoiceResponse();
+      twiml.say('Test template not found or testing is disabled.');
+      twiml.hangup();
+      res.type('text/xml');
+      return res.send(twiml.toString());
+    }
+    
+    // Initialize selector
+    const selector = new HybridScenarioSelector(template.categories);
+    
+    // Match scenario
+    const result = selector.selectScenario(speechText);
+    
+    const twiml = new twilio.twiml.VoiceResponse();
+    
+    if (result.match) {
+      console.log(`🧠 [MATCH FOUND] Scenario: ${result.match.name}, Confidence: ${(result.confidence * 100).toFixed(1)}%`);
+      
+      // Pick a random reply
+      const replies = result.match.fullReplies && result.match.fullReplies.length > 0 
+        ? result.match.fullReplies 
+        : result.match.quickReplies || [];
+      
+      const reply = replies[Math.floor(Math.random() * replies.length)] || 'I understand.';
+      
+      // Say the matched reply + debug info
+      twiml.say(reply);
+      twiml.pause({ length: 1 });
+      twiml.say(`You triggered the scenario: ${result.match.name}. Confidence: ${(result.confidence * 100).toFixed(0)} percent. Score: ${(result.score * 100).toFixed(0)} percent.`);
+      
+      // Continue conversation
+      const gather = twiml.gather({
+        input: 'speech',
+        action: `/api/twilio/test-respond/${templateId}`,
+        method: 'POST',
+        timeout: 5,
+        speechTimeout: 'auto'
+      });
+      gather.say('Say something else to test another scenario, or hang up to end the test.');
+      
+    } else {
+      console.log(`🧠 [NO MATCH] Confidence too low: ${(result.confidence * 100).toFixed(1)}%`);
+      twiml.say(`No scenario matched your input. Confidence was ${(result.confidence * 100).toFixed(0)} percent, which is below the threshold.`);
+      twiml.pause({ length: 1 });
+      
+      // Continue conversation
+      const gather = twiml.gather({
+        input: 'speech',
+        action: `/api/twilio/test-respond/${templateId}`,
+        method: 'POST',
+        timeout: 5,
+        speechTimeout: 'auto'
+      });
+      gather.say('Try saying something else.');
+    }
+    
+    // Update test stats
+    await GlobalInstantResponseTemplate.findByIdAndUpdate(templateId, {
+      $inc: { 'twilioTest.testCallCount': 1 },
+      $set: { 'twilioTest.lastTestedAt': new Date() }
+    });
+    
+    res.type('text/xml');
+    res.send(twiml.toString());
+    
+  } catch (error) {
+    console.error(`🧠 [TEST ERROR]`, error);
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.say('An error occurred during testing.');
+    twiml.hangup();
+    res.type('text/xml');
+    res.send(twiml.toString());
+  }
 });
 
 module.exports = router;
