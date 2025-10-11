@@ -564,6 +564,16 @@ const globalInstantResponseTemplateSchema = new Schema({
             // Unique test phone number (e.g., +15551234567)
             // Twilio routes this number → this template's scenarios
         },
+        accountSid: {
+            type: String,
+            trim: true
+            // Twilio Account SID for this test number
+        },
+        authToken: {
+            type: String,
+            trim: true
+            // Twilio Auth Token (store encrypted in production)
+        },
         lastTestedAt: {
             type: Date
             // Track when last tested

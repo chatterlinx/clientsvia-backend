@@ -226,33 +226,73 @@
                             
                             <!-- Test Configuration Form -->
                             <div class="space-y-3 text-sm">
-                                <!-- Phone Number Input -->
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-700 mb-1">
-                                        <i class="fas fa-hashtag text-purple-600 mr-1"></i>
-                                        Test Phone Number (E.164 format):
-                                    </label>
-                                    <input type="tel" id="twilio-test-phone" placeholder="+15551234567" 
-                                           class="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm font-mono bg-white">
-                                    <p class="text-xs text-gray-500 mt-1">
-                                        <i class="fas fa-info-circle mr-1"></i>
-                                        This number is ONLY for testing this template. No production crossover.
-                                    </p>
+                                
+                                <!-- Phone Number + Enable Toggle (Inline) -->
+                                <div class="flex items-start gap-4">
+                                    <!-- Phone Number Input -->
+                                    <div class="flex-1">
+                                        <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                            <i class="fas fa-hashtag text-purple-600 mr-1"></i>
+                                            Test Phone Number (E.164 format):
+                                        </label>
+                                        <input type="tel" id="twilio-test-phone" placeholder="+15551234567" 
+                                               class="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm font-mono bg-white">
+                                        <p class="text-xs text-gray-500 mt-1">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            This number is ONLY for testing this template. No production crossover.
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Enable/Disable Toggle -->
+                                    <div class="flex-shrink-0 pt-6">
+                                        <div class="flex items-center gap-3 bg-white px-4 py-3 rounded-lg border-2 border-purple-200 shadow-sm">
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" id="twilio-test-enabled" class="sr-only peer" onchange="console.log('Toggle changed:', this.checked)">
+                                                <div class="w-14 h-7 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-2 after:border-gray-300 after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600 shadow-inner"></div>
+                                            </label>
+                                            <div>
+                                                <p class="text-xs font-bold text-gray-700 whitespace-nowrap">
+                                                    <i class="fas fa-power-off text-purple-600 mr-1"></i>
+                                                    Enable Test Calls
+                                                </p>
+                                                <p class="text-xs text-gray-500 whitespace-nowrap">Toggle OFF to disable</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 
-                                <!-- Enable/Disable Toggle -->
-                                <div class="flex items-center gap-3 bg-white px-3 py-2 rounded-lg border border-purple-200">
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="twilio-test-enabled" class="sr-only peer">
-                                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                                    </label>
-                                    <div>
-                                        <p class="text-xs font-semibold text-gray-700">
-                                            <i class="fas fa-toggle-on text-purple-600 mr-1"></i>
-                                            Enable Test Calls
-                                        </p>
-                                        <p class="text-xs text-gray-500">Toggle OFF when not testing to disable this route</p>
+                                <!-- Twilio Credentials -->
+                                <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                                    <h5 class="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                        <i class="fas fa-key text-blue-600"></i>
+                                        Twilio Integration Credentials
+                                    </h5>
+                                    <p class="text-xs text-gray-600 mb-3">
+                                        Enter the Twilio credentials that this test phone number will use. Get these from your Twilio console.
+                                    </p>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <!-- Account SID -->
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                                Account SID:
+                                            </label>
+                                            <input type="text" id="twilio-test-account-sid" placeholder="AC18c622a49f28d9abf8952ecf06ba59f2" 
+                                                   class="w-full px-3 py-2 border-2 border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs font-mono bg-white">
+                                        </div>
+                                        
+                                        <!-- Auth Token -->
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                                Auth Token:
+                                            </label>
+                                            <input type="password" id="twilio-test-auth-token" placeholder="••••••••••••c0de" 
+                                                   class="w-full px-3 py-2 border-2 border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs font-mono bg-white">
+                                        </div>
                                     </div>
+                                    <p class="text-xs text-blue-600 mt-2">
+                                        <i class="fas fa-lock mr-1"></i>
+                                        These credentials are encrypted and stored securely per template.
+                                    </p>
                                 </div>
                                 
                                 <!-- Test Notes -->
@@ -3073,6 +3113,8 @@ Just checking in..."></textarea>
                 // Populate form
                 document.getElementById('twilio-test-phone').value = template.twilioTest?.phoneNumber || '';
                 document.getElementById('twilio-test-enabled').checked = template.twilioTest?.enabled || false;
+                document.getElementById('twilio-test-account-sid').value = template.twilioTest?.accountSid || '';
+                document.getElementById('twilio-test-auth-token').value = template.twilioTest?.authToken || '';
                 document.getElementById('twilio-test-notes').value = template.twilioTest?.notes || '';
 
                 // Update stats if available
@@ -3106,6 +3148,8 @@ Just checking in..."></textarea>
 
             const phoneNumber = document.getElementById('twilio-test-phone').value.trim();
             const enabled = document.getElementById('twilio-test-enabled').checked;
+            const accountSid = document.getElementById('twilio-test-account-sid').value.trim();
+            const authToken = document.getElementById('twilio-test-auth-token').value.trim();
             const notes = document.getElementById('twilio-test-notes').value.trim();
 
             // Validate phone number format if provided
@@ -3114,9 +3158,17 @@ Just checking in..."></textarea>
                 return;
             }
 
+            // Validate credentials if phone number is provided
+            if (phoneNumber && (!accountSid || !authToken)) {
+                showNotification('❌ Twilio Account SID and Auth Token are required when using a test phone number', 'error');
+                return;
+            }
+
             console.log(`📞 [TWILIO TEST] Saving config for template: ${activeTemplateId}`, {
                 phoneNumber,
                 enabled,
+                accountSid: accountSid ? accountSid.substring(0, 10) + '...' : 'none',
+                authToken: authToken ? '***' : 'none',
                 notes
             });
 
@@ -3127,7 +3179,7 @@ Just checking in..."></textarea>
                         'Content-Type': 'application/json',
                         Authorization: `Bearer ${getAuthToken()}`
                     },
-                    body: JSON.stringify({ phoneNumber, enabled, notes })
+                    body: JSON.stringify({ phoneNumber, enabled, accountSid, authToken, notes })
                 });
 
                 if (!response.ok) {

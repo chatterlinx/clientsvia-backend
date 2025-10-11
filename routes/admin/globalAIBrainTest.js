@@ -40,11 +40,13 @@ const logger = require('../../utils/logger');
 router.post('/:templateId/config', authenticateJWT, async (req, res) => {
     try {
         const { templateId } = req.params;
-        const { enabled, phoneNumber, notes } = req.body;
+        const { enabled, phoneNumber, accountSid, authToken, notes } = req.body;
         
         logger.info(`📞 [TEST CONFIG] Updating test config for template ${templateId}`, {
             enabled,
             phoneNumber,
+            accountSid: accountSid ? accountSid.substring(0, 10) + '...' : 'none',
+            authToken: authToken ? '***' : 'none',
             user: req.user?.email
         });
         
@@ -71,6 +73,22 @@ router.post('/:templateId/config', authenticateJWT, async (req, res) => {
             }
         }
         
+        // Validate Twilio credentials if phone number provided
+        if (phoneNumber && phoneNumber.trim()) {
+            if (!accountSid || !accountSid.trim()) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Twilio Account SID is required when using a test phone number'
+                });
+            }
+            if (!authToken || !authToken.trim()) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Twilio Auth Token is required when using a test phone number'
+                });
+            }
+        }
+        
         // Update template
         const template = await GlobalInstantResponseTemplate.findByIdAndUpdate(
             templateId,
@@ -78,6 +96,8 @@ router.post('/:templateId/config', authenticateJWT, async (req, res) => {
                 $set: {
                     'twilioTest.enabled': enabled || false,
                     'twilioTest.phoneNumber': phoneNumber?.trim() || null,
+                    'twilioTest.accountSid': accountSid?.trim() || null,
+                    'twilioTest.authToken': authToken?.trim() || null,
                     'twilioTest.notes': notes || ''
                 }
             },
