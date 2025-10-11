@@ -3153,9 +3153,9 @@ Just checking in..."></textarea>
                 document.getElementById('twilio-test-auth-token').value = template.twilioTest?.authToken || '';
                 document.getElementById('twilio-test-notes').value = template.twilioTest?.notes || '';
                 
-                // Set toggle state
-                const enabled = template.twilioTest?.enabled || false;
-                console.log('📞 [TWILIO TEST] Setting enabled to:', enabled);
+                // Set toggle state - use explicit boolean check (not ||) to handle false correctly
+                const enabled = template.twilioTest?.enabled === true;
+                console.log('📞 [TWILIO TEST] Setting enabled to:', enabled, '(from DB:', template.twilioTest?.enabled, ')');
                 document.getElementById('twilio-test-enabled').checked = enabled;
                 
                 // Update toggle UI

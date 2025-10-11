@@ -566,17 +566,26 @@ router.patch('/:id', async (req, res) => {
         
         // Update Twilio test configuration (direct DB update to skip validation)
         if (updates.twilioTest !== undefined) {
+            // Build update object with proper null handling
+            const twilioUpdate = {
+                'twilioTest.enabled': updates.twilioTest.enabled === true, // Explicit boolean check
+                'twilioTest.phoneNumber': updates.twilioTest.phoneNumber?.trim() || null,
+                'twilioTest.accountSid': updates.twilioTest.accountSid?.trim() || null,
+                'twilioTest.authToken': updates.twilioTest.authToken?.trim() || null,
+                'twilioTest.notes': updates.twilioTest.notes?.trim() || ''
+            };
+            
+            console.log(`🔧 [TWILIO UPDATE] Saving:`, {
+                enabled: twilioUpdate['twilioTest.enabled'],
+                phoneNumber: twilioUpdate['twilioTest.phoneNumber'] ? twilioUpdate['twilioTest.phoneNumber'] : 'NULL',
+                accountSid: twilioUpdate['twilioTest.accountSid'] ? twilioUpdate['twilioTest.accountSid'].substring(0, 10) + '...' : 'NULL',
+                authToken: twilioUpdate['twilioTest.authToken'] ? '***' : 'NULL',
+                notes: twilioUpdate['twilioTest.notes']
+            });
+            
             const updatedTemplate = await GlobalInstantResponseTemplate.findByIdAndUpdate(
                 id,
-                {
-                    $set: {
-                        'twilioTest.enabled': updates.twilioTest.enabled || false,
-                        'twilioTest.phoneNumber': updates.twilioTest.phoneNumber || null,
-                        'twilioTest.accountSid': updates.twilioTest.accountSid || null,
-                        'twilioTest.authToken': updates.twilioTest.authToken || null,
-                        'twilioTest.notes': updates.twilioTest.notes || ''
-                    }
-                },
+                { $set: twilioUpdate },
                 { new: true }
             );
             
