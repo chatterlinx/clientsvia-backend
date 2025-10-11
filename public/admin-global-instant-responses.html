@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global AI Brain - ClientVia.ai v2.4-CATEGORY-FIX</title>
+    <title>Global AI Brain - ClientVia.ai v2.5-FIXED</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <!-- FORCE BROWSER RELOAD: v2.4.0 - 2025-10-10 Category Template Tracking -->
+    <!-- FORCE BROWSER RELOAD: v2.5.0 - 2025-10-11 Duplicate Listener Fixed -->
     <script>
-        // VERSION 2.4.0 - Enhanced Category Save Logging
-        console.log('🔥 VERSION 2.4.0 LOADED - CATEGORY TEMPLATE TRACKING');
-        console.log('📅 Build Time:', '2025-10-10 14:30:00');
+        // VERSION 2.5.0 - Fixed Duplicate Event Listener Conflict
+        console.log('🔥 VERSION 2.5.0 LOADED - DUPLICATE LISTENER REMOVED ✅');
+        console.log('📅 Build Time:', '2025-10-11 09:00:00');
         console.log('🔄 Cache-Buster:', Date.now());
+        console.log('✅ Category save now uses single event listener with add+edit support');
     </script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
@@ -1938,69 +1939,10 @@
         });
 
         // ============================================
-        // ADD CATEGORY FORM HANDLER
+        // DEPRECATED: OLD CATEGORY FORM HANDLER (2025-10-10)
+        // Removed to prevent duplicate event listener conflict
+        // New enhanced handler with edit support is at line ~2959
         // ============================================
-        document.getElementById('category-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            if (!activeTemplate) {
-                showNotification('❌ No active template found', 'error');
-                return;
-            }
-
-            try {
-                showNotification('⏳ Adding new category...', 'info');
-
-                // 🎯 SIMPLIFIED CATEGORY OBJECT - Behavior-driven, no priority/type
-                const newCategory = {
-                    id: `cat_${Date.now()}`,
-                    name: document.getElementById('category-name').value.trim(),
-                    description: document.getElementById('category-description').value.trim(),
-                    icon: document.getElementById('category-icon').value.trim() || '📁',
-                    behavior: document.getElementById('category-behavior').value, // NEW: Behavior template
-                    isActive: document.getElementById('category-active').checked,
-                    scenarios: []
-                };
-
-                // Add to activeTemplate
-                activeTemplate.categories.push(newCategory);
-
-                // Save to backend
-                const token = getAuthToken();
-                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplate._id}`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                    },
-                    body: JSON.stringify({
-                        categories: activeTemplate.categories,
-                        changeLog: [
-                            ...activeTemplate.changeLog,
-                            {
-                                changes: `Added new category: ${newCategory.name}`,
-                                changedBy: 'Admin',
-                                date: new Date()
-                            }
-                        ]
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                showNotification(`✅ Category "${newCategory.name}" added successfully!`, 'success');
-                closeCategoryModal();
-                
-                // Refresh the UI
-                await fetchActiveTemplate();
-                renderDirectories();
-            } catch (error) {
-                console.error('❌ Error adding category:', error);
-                showNotification('❌ Failed to add category: ' + error.message, 'error');
-            }
-        });
 
         // ============================================
         // EDIT TEMPLATE MODAL
