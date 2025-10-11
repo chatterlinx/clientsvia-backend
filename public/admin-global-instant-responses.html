@@ -246,14 +246,16 @@
                                     <!-- Enable/Disable Toggle -->
                                     <div class="flex-shrink-0 pt-6">
                                         <div class="flex items-center gap-3 bg-white px-4 py-3 rounded-lg border-2 border-purple-200 shadow-sm">
-                                            <label class="relative inline-flex items-center cursor-pointer">
-                                                <input type="checkbox" id="twilio-test-enabled" class="sr-only peer" onchange="console.log('Toggle changed:', this.checked)">
-                                                <div class="w-14 h-7 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-2 after:border-gray-300 after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-purple-600 shadow-inner"></div>
+                                            <label class="relative inline-flex items-center cursor-pointer" onclick="toggleTestEnabled()">
+                                                <input type="checkbox" id="twilio-test-enabled" class="hidden">
+                                                <div id="toggle-switch" class="w-14 h-7 bg-gray-300 rounded-full relative transition-all duration-300 shadow-inner">
+                                                    <div id="toggle-circle" class="absolute top-0.5 left-0.5 bg-white w-6 h-6 rounded-full shadow-md transition-all duration-300 transform"></div>
+                                                </div>
                                             </label>
                                             <div>
                                                 <p class="text-xs font-bold text-gray-700 whitespace-nowrap">
                                                     <i class="fas fa-power-off text-purple-600 mr-1"></i>
-                                                    Enable Test Calls
+                                                    <span id="toggle-status-text">Enable Test Calls</span>
                                                 </p>
                                                 <p class="text-xs text-gray-500 whitespace-nowrap">Toggle OFF to disable</p>
                                             </div>
@@ -3089,6 +3091,36 @@ Just checking in..."></textarea>
         // =============================================
 
         /**
+         * Toggle the test enabled checkbox
+         */
+        function toggleTestEnabled() {
+            const checkbox = document.getElementById('twilio-test-enabled');
+            const toggleSwitch = document.getElementById('toggle-switch');
+            const toggleCircle = document.getElementById('toggle-circle');
+            const statusText = document.getElementById('toggle-status-text');
+            
+            // Toggle checkbox
+            checkbox.checked = !checkbox.checked;
+            
+            // Update UI
+            if (checkbox.checked) {
+                // ON state
+                toggleSwitch.classList.remove('bg-gray-300');
+                toggleSwitch.classList.add('bg-purple-600');
+                toggleCircle.classList.add('translate-x-7');
+                statusText.textContent = 'Test Calls Enabled ✓';
+                console.log('🟢 Test calls ENABLED');
+            } else {
+                // OFF state
+                toggleSwitch.classList.remove('bg-purple-600');
+                toggleSwitch.classList.add('bg-gray-300');
+                toggleCircle.classList.remove('translate-x-7');
+                statusText.textContent = 'Enable Test Calls';
+                console.log('⚫ Test calls DISABLED');
+            }
+        }
+
+        /**
          * Load Twilio test configuration for active template
          */
         async function loadTwilioTestConfig() {
@@ -3112,10 +3144,30 @@ Just checking in..."></textarea>
 
                 // Populate form
                 document.getElementById('twilio-test-phone').value = template.twilioTest?.phoneNumber || '';
-                document.getElementById('twilio-test-enabled').checked = template.twilioTest?.enabled || false;
                 document.getElementById('twilio-test-account-sid').value = template.twilioTest?.accountSid || '';
                 document.getElementById('twilio-test-auth-token').value = template.twilioTest?.authToken || '';
                 document.getElementById('twilio-test-notes').value = template.twilioTest?.notes || '';
+                
+                // Set toggle state
+                const enabled = template.twilioTest?.enabled || false;
+                document.getElementById('twilio-test-enabled').checked = enabled;
+                
+                // Update toggle UI
+                const toggleSwitch = document.getElementById('toggle-switch');
+                const toggleCircle = document.getElementById('toggle-circle');
+                const statusText = document.getElementById('toggle-status-text');
+                
+                if (enabled) {
+                    toggleSwitch.classList.remove('bg-gray-300');
+                    toggleSwitch.classList.add('bg-purple-600');
+                    toggleCircle.classList.add('translate-x-7');
+                    statusText.textContent = 'Test Calls Enabled ✓';
+                } else {
+                    toggleSwitch.classList.remove('bg-purple-600');
+                    toggleSwitch.classList.add('bg-gray-300');
+                    toggleCircle.classList.remove('translate-x-7');
+                    statusText.textContent = 'Enable Test Calls';
+                }
 
                 // Update stats if available
                 if (template.twilioTest?.testCallCount > 0) {
