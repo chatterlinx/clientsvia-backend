@@ -547,6 +547,39 @@ const globalInstantResponseTemplateSchema = new Schema({
         totalTriggers: { type: Number, default: 0 }
     },
     
+    // 📞 TWILIO TEST CONFIGURATION
+    // Allows admin to test this template via dedicated test phone number
+    // ISOLATED from production company phone numbers
+    twilioTest: {
+        enabled: {
+            type: Boolean,
+            default: false
+            // Toggle ON to enable test calls, OFF to disable
+        },
+        phoneNumber: {
+            type: String,
+            trim: true,
+            sparse: true,
+            unique: true
+            // Unique test phone number (e.g., +15551234567)
+            // Twilio routes this number → this template's scenarios
+        },
+        lastTestedAt: {
+            type: Date
+            // Track when last tested
+        },
+        testCallCount: {
+            type: Number,
+            default: 0
+            // Track how many test calls made
+        },
+        notes: {
+            type: String,
+            trim: true
+            // Admin notes about testing
+        }
+    },
+    
     // 🌳 LINEAGE TRACKING - Template Family Tree
     lineage: {
         isClone: { type: Boolean, default: false },

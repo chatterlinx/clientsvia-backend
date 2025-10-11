@@ -272,26 +272,28 @@ class PriorityDrivenKnowledgeRouter {
     }
 
     /**
-     * ⚡ INSTANT RESPONSES QUERY ENGINE (PRIORITY 0)
-     * 📋 Ultra-fast matching for instant responses (sub-5ms target)
-     * 🎯 Purpose: Provide immediate answers to common queries without LLM overhead
-     * ⚠️  CRITICAL: Must be fastest source - no DB queries, uses in-memory matching
+     * ⚡ INSTANT RESPONSES QUERY ENGINE (PRIORITY 0) - V3 HYBRID BRAIN
+     * 📋 Ultra-fast matching using HybridScenarioSelector (sub-10ms target)
+     * 🎯 Purpose: Provide immediate answers using Global AI Brain with hybrid matching
+     * 🧠 NEW: Uses BM25 + Regex + Context + Negative Triggers for world-class intelligence
+     * ⚠️  CRITICAL: Must be fastest source - uses in-memory matching with cached templates
      */
     async queryInstantResponses(companyId, query, context) {
         try {
-            const instantResponseMatcher = require('./v2InstantResponseMatcher');
+            const HybridScenarioSelector = require('./HybridScenarioSelector');
+            const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
             
-            logger.info(`⚡ Querying instant responses for "${query.substring(0, 50)}..."`, {
+            logger.info(`⚡ [V3 HYBRID BRAIN] Querying instant responses for "${query.substring(0, 50)}..."`, {
                 routingId: context.routingId
             });
 
-            // Get company to access instant responses and placeholders
+            // Get company to access template ID and placeholders
             const company = await Company.findById(companyId)
-                .select('instantResponses aiAgentLogic.placeholders')
+                .select('globalInstantResponseTemplate aiAgentLogic.placeholders')
                 .lean();
 
-            if (!company || !company.instantResponses || company.instantResponses.length === 0) {
-                logger.info(`ℹ️ No instant responses configured for company`, {
+            if (!company || !company.globalInstantResponseTemplate) {
+                logger.info(`ℹ️ [V3 HYBRID BRAIN] No Global AI Brain template assigned to company`, {
                     routingId: context.routingId,
                     companyId
                 });
@@ -300,40 +302,118 @@ class PriorityDrivenKnowledgeRouter {
                     response: null,
                     metadata: {
                         source: 'instantResponses',
-                        reason: 'No instant responses configured'
+                        reason: 'No Global AI Brain template assigned'
                     }
                 };
             }
 
-            // Perform matching using instant response matcher
-            const match = instantResponseMatcher.match(query, company.instantResponses);
+            // Fetch Global AI Brain template with all scenarios
+            const template = await GlobalInstantResponseTemplate.findById(company.globalInstantResponseTemplate)
+                .select('categories')
+                .lean();
 
-            if (match) {
-                logger.info(`✅ Instant response match found`, {
+            if (!template || !template.categories || template.categories.length === 0) {
+                logger.info(`ℹ️ [V3 HYBRID BRAIN] Template has no categories`, {
                     routingId: context.routingId,
-                    confidence: match.score,
-                    trigger: match.trigger,
-                    matchTimeMs: match.matchTimeMs
+                    templateId: company.globalInstantResponseTemplate
+                });
+                return {
+                    confidence: 0,
+                    response: null,
+                    metadata: {
+                        source: 'instantResponses',
+                        reason: 'Template has no categories or scenarios'
+                    }
+                };
+            }
+
+            // Flatten all scenarios from all categories
+            let allScenarios = [];
+            for (const category of template.categories) {
+                if (category.scenarios && category.scenarios.length > 0) {
+                    allScenarios = allScenarios.concat(category.scenarios);
+                }
+            }
+
+            if (allScenarios.length === 0) {
+                logger.info(`ℹ️ [V3 HYBRID BRAIN] No scenarios found in template`, {
+                    routingId: context.routingId,
+                    templateId: company.globalInstantResponseTemplate
+                });
+                return {
+                    confidence: 0,
+                    response: null,
+                    metadata: {
+                        source: 'instantResponses',
+                        reason: 'No scenarios configured in template'
+                    }
+                };
+            }
+
+            logger.info(`🧠 [V3 HYBRID BRAIN] Found ${allScenarios.length} scenarios across ${template.categories.length} categories`);
+
+            // Use HybridScenarioSelector for intelligent matching
+            const matchContext = {
+                channel: context.channel || 'voice',
+                language: context.language || 'auto',
+                conversationState: context.callState || {},
+                recentScenarios: {}, // TODO: Track recently used scenarios in Redis
+                lastIntent: context.callState?.lastIntent || null,
+                callerProfile: null // TODO: Load caller preferences from DB
+            };
+
+            const result = await HybridScenarioSelector.selectScenario(
+                query,
+                allScenarios,
+                matchContext
+            );
+
+            if (result.scenario && result.confidence > 0) {
+                logger.info(`✅ [V3 HYBRID BRAIN] Scenario matched!`, {
+                    routingId: context.routingId,
+                    scenarioId: result.scenario.scenarioId,
+                    name: result.scenario.name,
+                    confidence: result.confidence.toFixed(3),
+                    score: result.score.toFixed(3),
+                    timeMs: result.trace.timingMs.total
                 });
 
+                // Select a reply variant (quick or full)
+                const useQuickReply = Math.random() < 0.3; // 30% chance for quick reply
+                let replyVariants = useQuickReply ? result.scenario.quickReplies : result.scenario.fullReplies;
+                
+                // Fallback to full replies if quick replies empty
+                if (!replyVariants || replyVariants.length === 0) {
+                    replyVariants = result.scenario.fullReplies || result.scenario.quickReplies || [];
+                }
+
+                // Select random variant (TODO: Use bandit algorithm for optimization)
+                const selectedReply = replyVariants[Math.floor(Math.random() * replyVariants.length)] || 
+                                     "I'm here to help!";
+
                 // Replace placeholders in response
-                const processedResponse = replacePlaceholders(match.response, company);
+                const processedResponse = replacePlaceholders(selectedReply, company);
 
                 return {
-                    confidence: match.score,
+                    confidence: result.confidence,
                     response: processedResponse,
                     metadata: {
                         source: 'instantResponses',
-                        trigger: match.trigger,
-                        category: match.category,
-                        matchTimeMs: match.matchTimeMs,
-                        responseId: match.responseId
+                        scenarioId: result.scenario.scenarioId,
+                        scenarioName: result.scenario.name,
+                        replyType: useQuickReply ? 'quick' : 'full',
+                        matchScore: result.score,
+                        breakdown: result.breakdown,
+                        timeMs: result.trace.timingMs.total,
+                        trace: result.trace // Full trace for debugging
                     }
                 };
             }
 
-            logger.info(`ℹ️ No instant response match found`, {
-                routingId: context.routingId
+            logger.info(`ℹ️ [V3 HYBRID BRAIN] No scenario matched above confidence threshold`, {
+                routingId: context.routingId,
+                bestScore: result.score || 0,
+                bestConfidence: result.confidence || 0
             });
 
             return {
@@ -341,12 +421,13 @@ class PriorityDrivenKnowledgeRouter {
                 response: null,
                 metadata: {
                     source: 'instantResponses',
-                    reason: 'No match above confidence threshold'
+                    reason: 'No scenario matched above confidence threshold',
+                    trace: result.trace // Include trace even on no-match for debugging
                 }
             };
 
         } catch (error) {
-            logger.error(`❌ Error querying instant responses`, {
+            logger.error(`❌ [V3 HYBRID BRAIN] Error querying instant responses`, {
                 routingId: context.routingId,
                 error: error.message,
                 stack: error.stack

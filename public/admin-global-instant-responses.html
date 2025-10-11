@@ -210,6 +210,99 @@
                     </div>
                 </div>
 
+                <!-- 📞 TWILIO TEST CONFIGURATION -->
+                <div class="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-6 mb-8">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-3">
+                                <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-phone-alt text-white text-xl"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-lg font-bold text-gray-900">📞 Live Twilio Testing</h4>
+                                    <p class="text-sm text-gray-600">Call in and test this template's scenarios with real Twilio voice calls</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Test Configuration Form -->
+                            <div class="space-y-3 text-sm">
+                                <!-- Phone Number Input -->
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                        <i class="fas fa-hashtag text-purple-600 mr-1"></i>
+                                        Test Phone Number (E.164 format):
+                                    </label>
+                                    <input type="tel" id="twilio-test-phone" placeholder="+15551234567" 
+                                           class="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm font-mono bg-white">
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        This number is ONLY for testing this template. No production crossover.
+                                    </p>
+                                </div>
+                                
+                                <!-- Enable/Disable Toggle -->
+                                <div class="flex items-center gap-3 bg-white px-3 py-2 rounded-lg border border-purple-200">
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="twilio-test-enabled" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                                    </label>
+                                    <div>
+                                        <p class="text-xs font-semibold text-gray-700">
+                                            <i class="fas fa-toggle-on text-purple-600 mr-1"></i>
+                                            Enable Test Calls
+                                        </p>
+                                        <p class="text-xs text-gray-500">Toggle OFF when not testing to disable this route</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Test Notes -->
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-700 mb-1">
+                                        <i class="fas fa-sticky-note text-purple-600 mr-1"></i>
+                                        Testing Notes (Optional):
+                                    </label>
+                                    <textarea id="twilio-test-notes" rows="2" placeholder="e.g., Testing hold scenarios, appointment booking flow, etc."
+                                              class="w-full px-3 py-2 border-2 border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm bg-white resize-none"></textarea>
+                                </div>
+                                
+                                <!-- Test Stats (if available) -->
+                                <div id="twilio-test-stats" class="hidden grid grid-cols-2 gap-3 pt-3 border-t border-purple-200">
+                                    <div class="text-center bg-white px-3 py-2 rounded border border-purple-100">
+                                        <div class="text-lg font-bold text-purple-600" id="test-call-count">0</div>
+                                        <div class="text-xs text-gray-600">Test Calls Made</div>
+                                    </div>
+                                    <div class="text-center bg-white px-3 py-2 rounded border border-purple-100">
+                                        <div class="text-xs text-gray-600" id="test-last-called">Never</div>
+                                        <div class="text-xs text-gray-500">Last Tested</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-purple-100 px-3 py-2 rounded border border-purple-300 mt-3">
+                                    <p class="text-xs text-purple-800 font-semibold">
+                                        <i class="fas fa-shield-alt mr-1"></i>
+                                        <strong>Isolated Testing:</strong> This phone number routes ONLY to this template's scenarios.
+                                        <br>
+                                        <i class="fas fa-check-circle mr-1 mt-1 inline-block"></i>
+                                        Zero crossover with production company phone numbers.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="ml-6 flex flex-col gap-2">
+                            <button onclick="saveTwilioTestConfig()" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                <i class="fas fa-save"></i>
+                                Save Config
+                            </button>
+                            <button onclick="loadTwilioTestConfig()" class="px-6 py-2 bg-white hover:bg-gray-50 text-purple-600 border-2 border-purple-300 rounded-lg font-medium transition-all flex items-center gap-2 whitespace-nowrap text-sm">
+                                <i class="fas fa-sync"></i>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Categories List -->
                 <div class="mb-6">
                     <div class="flex items-center justify-between mb-4">
@@ -2950,6 +3043,123 @@ Just checking in..."></textarea>
                 showNotification('❌ Error seeding template: ' + error.message, 'error');
             }
         }
+
+        // =============================================
+        // TWILIO TEST CONFIGURATION FUNCTIONS
+        // =============================================
+
+        /**
+         * Load Twilio test configuration for active template
+         */
+        async function loadTwilioTestConfig() {
+            if (!activeTemplateId) {
+                console.warn('⚠️ No active template to load test config');
+                return;
+            }
+
+            console.log(`📞 [TWILIO TEST] Loading config for template: ${activeTemplateId}`);
+
+            try {
+                // Fetch template with twilioTest config
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}`, {
+                    headers: { Authorization: `Bearer ${getAuthToken()}` }
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const result = await response.json();
+                const template = result.data;
+
+                // Populate form
+                document.getElementById('twilio-test-phone').value = template.twilioTest?.phoneNumber || '';
+                document.getElementById('twilio-test-enabled').checked = template.twilioTest?.enabled || false;
+                document.getElementById('twilio-test-notes').value = template.twilioTest?.notes || '';
+
+                // Update stats if available
+                if (template.twilioTest?.testCallCount > 0) {
+                    document.getElementById('twilio-test-stats').classList.remove('hidden');
+                    document.getElementById('test-call-count').textContent = template.twilioTest.testCallCount || 0;
+                    
+                    const lastTested = template.twilioTest.lastTestedAt ? 
+                        new Date(template.twilioTest.lastTestedAt).toLocaleString() : 
+                        'Never';
+                    document.getElementById('test-last-called').textContent = lastTested;
+                } else {
+                    document.getElementById('twilio-test-stats').classList.add('hidden');
+                }
+
+                console.log(`✅ [TWILIO TEST] Config loaded`, template.twilioTest);
+
+            } catch (error) {
+                console.error('❌ [TWILIO TEST] Error loading config:', error);
+            }
+        }
+
+        /**
+         * Save Twilio test configuration
+         */
+        async function saveTwilioTestConfig() {
+            if (!activeTemplateId) {
+                showNotification('❌ No active template selected', 'error');
+                return;
+            }
+
+            const phoneNumber = document.getElementById('twilio-test-phone').value.trim();
+            const enabled = document.getElementById('twilio-test-enabled').checked;
+            const notes = document.getElementById('twilio-test-notes').value.trim();
+
+            // Validate phone number format if provided
+            if (phoneNumber && !phoneNumber.match(/^\+\d{10,15}$/)) {
+                showNotification('❌ Invalid phone number format. Use E.164 format: +15551234567', 'error');
+                return;
+            }
+
+            console.log(`📞 [TWILIO TEST] Saving config for template: ${activeTemplateId}`, {
+                phoneNumber,
+                enabled,
+                notes
+            });
+
+            try {
+                const response = await fetch(`/api/admin/global-ai-brain-test/${activeTemplateId}/config`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({ phoneNumber, enabled, notes })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                console.log('✅ [TWILIO TEST] Config saved:', result);
+
+                showNotification('✅ Twilio test configuration saved successfully!', 'success');
+
+                // Reload config to show updated stats
+                await loadTwilioTestConfig();
+
+            } catch (error) {
+                console.error('❌ [TWILIO TEST] Error saving config:', error);
+                showNotification(`❌ Failed to save: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-load Twilio config when switching templates
+        const originalSwitchDashboardTemplate = switchDashboardTemplate;
+        switchDashboardTemplate = async function(templateId) {
+            await originalSwitchDashboardTemplate(templateId);
+            // Load Twilio config after template switch
+            setTimeout(() => loadTwilioTestConfig(), 500);
+        };
+
+        // =============================================
+        // END TWILIO TEST FUNCTIONS
+        // =============================================
 
         async function enhanceActiveTemplate() {
             if (!activeTemplate) {

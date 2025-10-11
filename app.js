@@ -214,6 +214,15 @@ try {
     app.use('/api/admin/global-instant-responses', globalInstantResponsesRoutes);
     logger.info('✅ Global Instant Response Templates routes registered - AI Agent brain management active');
 } catch (error) {
+    logger.error('❌ Failed to load Global Instant Response routes:', error);
+}
+
+// Global AI Brain - Twilio Test Routes
+try {
+    const globalAIBrainTestRoutes = require('./routes/admin/globalAIBrainTest');
+    app.use('/api/admin/global-ai-brain-test', globalAIBrainTestRoutes);
+    logger.info('✅ Global AI Brain Test routes registered - Twilio testing enabled');
+} catch (error) {
     logger.error('❌ Failed to load Global Instant Response Templates routes', { error: error.message });
 }
 
