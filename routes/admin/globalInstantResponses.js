@@ -1685,5 +1685,94 @@ router.get('/:templateId/scenarios', async (req, res) => {
     }
 });
 
+// ============================================================================
+// TWILIO TEST CONFIGURATION
+// ============================================================================
+
+/**
+ * POST /api/admin/global-instant-responses/:templateId/twilio-test-config
+ * Save Twilio test configuration for a template
+ */
+router.post('/:templateId/twilio-test-config', async (req, res) => {
+    logger.info('🧠 [TWILIO TEST CONFIG] Route handler started');
+    
+    try {
+        const { templateId } = req.params;
+        const { enabled, phoneNumber, accountSid, authToken, notes } = req.body;
+        
+        logger.info(`📞 [TEST CONFIG] Saving config for template ${templateId}`, {
+            enabled,
+            phoneNumber,
+            hasAccountSid: !!accountSid,
+            hasAuthToken: !!authToken,
+            user: req.user?.email
+        });
+        
+        // Validate phone number format if provided
+        if (phoneNumber && phoneNumber.trim()) {
+            if (!phoneNumber.match(/^\+\d{10,15}$/)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid phone number format. Must be E.164 format (e.g., +15551234567)'
+                });
+            }
+            
+            // Check if phone number already in use by another template
+            const existing = await GlobalInstantResponseTemplate.findOne({
+                'twilioTest.phoneNumber': phoneNumber,
+                _id: { $ne: templateId }
+            });
+            
+            if (existing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Phone number already in use by template: ${existing.name}`
+                });
+            }
+        }
+        
+        // Update template
+        const template = await GlobalInstantResponseTemplate.findByIdAndUpdate(
+            templateId,
+            {
+                $set: {
+                    'twilioTest.enabled': enabled || false,
+                    'twilioTest.phoneNumber': phoneNumber?.trim() || null,
+                    'twilioTest.accountSid': accountSid?.trim() || null,
+                    'twilioTest.authToken': authToken?.trim() || null,
+                    'twilioTest.notes': notes || ''
+                }
+            },
+            { new: true }
+        ).select('name version twilioTest');
+        
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+        
+        logger.info(`✅ [TEST CONFIG] Updated successfully for ${template.name}`);
+        
+        res.json({
+            success: true,
+            message: 'Test configuration saved successfully',
+            template: {
+                id: template._id,
+                name: template.name,
+                twilioTest: template.twilioTest
+            }
+        });
+        
+    } catch (error) {
+        logger.error('❌ [TEST CONFIG] Error saving config:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to save configuration'
+        });
+    }
+});
+
 module.exports = router;
 
