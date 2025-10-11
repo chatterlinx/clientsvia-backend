@@ -1361,12 +1361,19 @@
                                     <option value="archived">📦 Archived</option>
                                 </select>
                             </div>
-                            <div>
-                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
-                                    <i class="fas fa-flag text-orange-600 mr-2"></i>Priority
+                            <div style="border: 2px solid #fef3c7; background: #fef3c7; border-radius: 10px; padding: 18px;">
+                                <label style="display: block; font-weight: 600; color: #92400e; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-flag mr-2"></i>Priority Level ⚡
                                 </label>
-                                <input type="number" id="scenario-priority" value="0" min="-10" max="10" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
-                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Tie-breaker (-10 to 10, higher = more priority)</p>
+                                <input type="number" id="scenario-priority" value="0" min="-10" max="10" style="width: 100%; padding: 14px 18px; border: 2px solid #fcd34d; border-radius: 10px; font-size: 18px; font-weight: 700; text-align: center; background: white;">
+                                <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+                                    <span style="font-size: 11px; color: #92400e;">-10 (Low)</span>
+                                    <span style="font-size: 11px; color: #92400e;">0 (Normal)</span>
+                                    <span style="font-size: 11px; color: #92400e;">+10 (Critical)</span>
+                                </div>
+                                <p style="margin: 12px 0 0; font-size: 13px; color: #92400e; font-weight: 500;">
+                                    ⚡ Tie-breaker when multiple scenarios match. Emergency=10, Normal=0, Chitchat=-5
+                                </p>
                             </div>
                         </div>
 
@@ -1383,23 +1390,49 @@ give me a second"></textarea>
                             <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Natural phrases callers might say (one per line)</p>
                         </div>
 
-                        <!-- Negative Triggers (Collapsible) -->
-                        <details style="border: 2px solid #e9ecef; border-radius: 10px; padding: 18px;">
-                            <summary style="cursor: pointer; font-weight: 600; color: #2c3e50; font-size: 15px;">
-                                <i class="fas fa-ban text-red-600 mr-2"></i>Negative Triggers (Optional)
+                        <!-- Negative Triggers (CRITICAL FOR ACCURACY) -->
+                        <div style="border: 2px solid #fef2f2; background: #fef2f2; border-radius: 10px; padding: 18px;">
+                            <label style="display: block; font-weight: 600; color: #991b1b; margin-bottom: 10px; font-size: 15px;">
+                                <i class="fas fa-ban mr-2"></i>Negative Triggers 🚫 (PREVENTS False Matches)
+                            </label>
+                            <textarea id="scenario-negative-triggers" rows="3" style="width: 100%; padding: 14px 18px; border: 2px solid #fca5a5; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical; background: white;" placeholder="One phrase per line (prevents this scenario from firing):
+don't hold
+no hold
+can't hold"></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #991b1b; font-weight: 500;">
+                                ⚠️ IMPORTANT: If caller says these phrases, this scenario will NOT match (prevents "don't hold" from triggering "Hold Request")
+                            </p>
+                        </div>
+
+                        <!-- Regex Triggers (POWER USER) -->
+                        <details style="border: 2px solid #eff6ff; background: #eff6ff; border-radius: 10px; padding: 18px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #1e40af; font-size: 15px;">
+                                <i class="fas fa-code mr-2"></i>Regex Triggers 🔧 (Advanced - Optional)
                             </summary>
-                            <textarea id="scenario-negative-triggers" rows="3" style="width: 100%; margin-top: 15px; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical;" placeholder="Phrases that PREVENT this scenario (one per line)"></textarea>
-                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Avoid false triggers (e.g., "don't hold" won't fire "Hold Request")</p>
+                            <textarea id="scenario-regex-triggers" rows="3" style="width: 100%; margin-top: 15px; padding: 14px 18px; border: 2px solid #93c5fd; border-radius: 10px; font-size: 14px; font-family: 'Courier New', monospace; resize: vertical; background: white;" placeholder="One regex pattern per line (JavaScript regex):
+\\b(hold|wait)\\s*(on|up)?\\b
+^schedule.*appointment$
+\\d{3}-\\d{3}-\\d{4}"></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #1e40af;">
+                                💡 Advanced matching with regular expressions. Use for complex patterns (e.g., phone numbers, dates, exact word boundaries).
+                            </p>
                         </details>
 
-                        <!-- Context Weight & Tone -->
+                        <!-- Min Confidence & Priority -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                            <div>
-                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
-                                    <i class="fas fa-chart-line text-blue-600 mr-2"></i>Context Weight
+                            <div style="border: 2px solid #ecfdf5; background: #ecfdf5; border-radius: 10px; padding: 18px;">
+                                <label style="display: block; font-weight: 600; color: #065f46; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-chart-line mr-2"></i>Min Confidence 🎯
                                 </label>
-                                <input type="number" id="scenario-context-weight" value="0.7" min="0" max="1" step="0.05" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
-                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Confidence threshold (0.0 - 1.0)</p>
+                                <input type="range" id="scenario-context-weight" value="0.7" min="0" max="1" step="0.05" style="width: 100%; margin-bottom: 10px;" oninput="document.getElementById('confidence-value').textContent = (parseFloat(this.value) * 100).toFixed(0) + '%'">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 13px; color: #065f46;">0% (Any match)</span>
+                                    <span id="confidence-value" style="font-size: 20px; font-weight: 700; color: #065f46;">70%</span>
+                                    <span style="font-size: 13px; color: #065f46;">100% (Perfect)</span>
+                                </div>
+                                <p style="margin: 12px 0 0; font-size: 13px; color: #065f46; font-weight: 500;">
+                                    💡 How confident the AI must be before using this scenario. Higher = more selective (emergency=95%, chitchat=50%)
+                                </p>
                             </div>
                             <div>
                                 <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
@@ -5929,7 +5962,13 @@ Just checking in..."></textarea>
             document.getElementById('scenario-priority').value = data.priority || 0;
             document.getElementById('scenario-triggers').value = (data.triggers || []).join('\n');
             document.getElementById('scenario-negative-triggers').value = (data.negativeTriggers || []).join('\n');
+            document.getElementById('scenario-regex-triggers').value = (data.regexTriggers || []).join('\n'); // NEW: Load regex patterns
             document.getElementById('scenario-context-weight').value = data.contextWeight || 0.7;
+            
+            // Update confidence display
+            const confidencePercent = ((data.contextWeight || 0.7) * 100).toFixed(0);
+            document.getElementById('confidence-value').textContent = confidencePercent + '%';
+            
             document.getElementById('scenario-tone-level').value = data.toneLevel || 2;
             document.getElementById('scenario-channel').value = data.channel || 'any';
             document.getElementById('scenario-language').value = data.language || 'auto';
@@ -6065,6 +6104,7 @@ Just checking in..."></textarea>
                 priority: parseInt(document.getElementById('scenario-priority').value) || 0,
                 triggers: triggers.split('\n').filter(t => t.trim()),
                 negativeTriggers: document.getElementById('scenario-negative-triggers').value.split('\n').filter(t => t.trim()),
+                regexTriggers: document.getElementById('scenario-regex-triggers').value.split('\n').filter(t => t.trim()), // NEW: Regex patterns
                 contextWeight: parseFloat(document.getElementById('scenario-context-weight').value) || 0.7,
                 toneLevel: parseInt(document.getElementById('scenario-tone-level').value) || 2,
                 channel: document.getElementById('scenario-channel').value || 'any',
