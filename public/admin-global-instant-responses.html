@@ -3248,12 +3248,13 @@ Just checking in..."></textarea>
             }
             
             try {
+                const token = getAuthToken();
                 const url = `/api/admin/global-instant-responses/${activeTemplateId}/categories/${category.id}/scenarios/${scenario.scenarioId || scenario.id}`;
                 console.log(`🗑️ [DELETE] Sending DELETE to: ${url}`);
                 
                 const response = await fetch(url, {
                     method: 'DELETE',
-                    headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+                    headers: { Authorization: `Bearer ${token}` }
                 });
                 
                 if (!response.ok) {
@@ -5894,8 +5895,9 @@ Just checking in..."></textarea>
             
             // Fetch scenario data
             try {
+                const token = getAuthToken();
                 const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/categories/${categoryId}/scenarios/${scenarioId}`, {
-                    headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+                    headers: { Authorization: `Bearer ${token}` }
                 });
                 
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -6109,6 +6111,8 @@ Just checking in..."></textarea>
             try {
                 let response;
                 
+                const token = getAuthToken();
+                
                 if (currentScenarioEditMode === 'add') {
                     // CREATE new scenario
                     const url = `/api/admin/global-instant-responses/${activeTemplateId}/categories/${currentScenarioData.categoryId}/scenarios`;
@@ -6118,7 +6122,7 @@ Just checking in..."></textarea>
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            Authorization: `Bearer ${localStorage.getItem('authToken')}`
+                            Authorization: `Bearer ${token}`
                         },
                         body: JSON.stringify(scenarioData)
                     });
@@ -6132,7 +6136,7 @@ Just checking in..."></textarea>
                         method: 'PATCH',
                         headers: {
                             'Content-Type': 'application/json',
-                            Authorization: `Bearer ${localStorage.getItem('authToken')}`
+                            Authorization: `Bearer ${token}`
                         },
                         body: JSON.stringify(scenarioData)
                     });
