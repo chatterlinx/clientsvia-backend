@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global AI Brain - ClientVia.ai v2.5-FIXED</title>
+    <title>Global AI Brain - ClientVia.ai v2.6-DEBUG</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <!-- FORCE BROWSER RELOAD: v2.5.0 - 2025-10-11 Duplicate Listener Fixed -->
+    <!-- FORCE BROWSER RELOAD: v2.6.0 - 2025-10-11 Enhanced Category Render Logging -->
     <script>
-        // VERSION 2.5.0 - Fixed Duplicate Event Listener Conflict
-        console.log('🔥 VERSION 2.5.0 LOADED - DUPLICATE LISTENER REMOVED ✅');
-        console.log('📅 Build Time:', '2025-10-11 09:00:00');
+        // VERSION 2.6.0 - Debug category visibility issue
+        console.log('🔥 VERSION 2.6.0 LOADED - CATEGORY RENDER DEBUG 🔍');
+        console.log('📅 Build Time:', '2025-10-11 09:30:00');
         console.log('🔄 Cache-Buster:', Date.now());
-        console.log('✅ Category save now uses single event listener with add+edit support');
+        console.log('🔍 Enhanced logging for category save and render');
     </script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
@@ -1627,10 +1627,24 @@
         }
 
         function renderDirectories() {
-            if (!activeTemplate || !activeTemplate.categories) return;
+            console.log('🎨 [RENDER] renderDirectories() called');
+            console.log('🎨 [RENDER] activeTemplate:', activeTemplate?._id, activeTemplate?.name);
+            console.log('🎨 [RENDER] Total categories in template:', activeTemplate?.categories?.length || 0);
+            
+            if (!activeTemplate || !activeTemplate.categories) {
+                console.log('⚠️ [RENDER] No active template or categories found');
+                return;
+            }
 
             const container = document.getElementById('categories-container');
             const categories = activeTemplate.categories.filter(cat => cat.isActive);
+            
+            console.log('🎨 [RENDER] Active categories to display:', categories.length);
+            console.log('🎨 [RENDER] Categories detail:', categories.map(c => ({
+                id: c.id,
+                name: c.name,
+                isActive: c.isActive
+            })));
 
             if (categories.length === 0) {
                 container.innerHTML = `
@@ -2929,6 +2943,8 @@
                 };
 
                 console.log('📝 [SAVE CATEGORY] Category data:', categoryData);
+                console.log('🔍 [SAVE CATEGORY] isActive checkbox value:', document.getElementById('category-active').checked);
+                console.log('🔍 [SAVE CATEGORY] Full category object:', JSON.stringify(categoryData, null, 2));
                 console.log('📊 [SAVE CATEGORY] Before save - Categories count:', activeTemplate.categories?.length || 0);
 
                 if (isEditMode) {
