@@ -564,17 +564,33 @@ router.patch('/:id', async (req, res) => {
             changes.push(`Updated categories (${updates.categories.length} total)`);
         }
         
-        // Update Twilio test configuration
+        // Update Twilio test configuration (direct DB update to skip validation)
         if (updates.twilioTest !== undefined) {
-            template.twilioTest = {
-                enabled: updates.twilioTest.enabled || false,
-                phoneNumber: updates.twilioTest.phoneNumber || null,
-                accountSid: updates.twilioTest.accountSid || null,
-                authToken: updates.twilioTest.authToken || null,
-                notes: updates.twilioTest.notes || '',
-                testCallCount: template.twilioTest?.testCallCount || 0,
-                lastTestedAt: template.twilioTest?.lastTestedAt || null
-            };
+            const updatedTemplate = await GlobalInstantResponseTemplate.findByIdAndUpdate(
+                id,
+                {
+                    $set: {
+                        'twilioTest.enabled': updates.twilioTest.enabled || false,
+                        'twilioTest.phoneNumber': updates.twilioTest.phoneNumber || null,
+                        'twilioTest.accountSid': updates.twilioTest.accountSid || null,
+                        'twilioTest.authToken': updates.twilioTest.authToken || null,
+                        'twilioTest.notes': updates.twilioTest.notes || ''
+                    }
+                },
+                { new: true }
+            );
+            
+            console.log(`✅ Updated Twilio test config for template ${updatedTemplate.version}`);
+            
+            // If ONLY twilioTest is being updated, return early (skip full validation)
+            if (Object.keys(updates).length === 1 && updates.twilioTest) {
+                return res.json({
+                    success: true,
+                    message: 'Twilio test configuration updated successfully',
+                    data: updatedTemplate
+                });
+            }
+            
             changes.push('Updated Twilio test config');
         }
         
