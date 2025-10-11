@@ -3124,6 +3124,9 @@ Just checking in..."></textarea>
          * Load Twilio test configuration for active template
          */
         async function loadTwilioTestConfig() {
+            console.log('📞 [TWILIO TEST] loadTwilioTestConfig() CALLED');
+            console.log('📞 [TWILIO TEST] activeTemplateId:', activeTemplateId);
+            
             if (!activeTemplateId) {
                 console.warn('⚠️ No active template to load test config');
                 return;
@@ -6293,6 +6296,9 @@ Just checking in..."></textarea>
             
             // Load templates into dashboard selector
             await loadTemplatesIntoSelector();
+            
+            // Load Twilio test config for the active template
+            await loadTwilioTestConfig();
             
             console.log('✅ Global AI Brain Management - Initialized');
         });
