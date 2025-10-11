@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global AI Brain - ClientVia.ai v2.6-DEBUG</title>
+    <title>Global AI Brain - ClientVia.ai v2.7-NAMING-FIX</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <!-- FORCE BROWSER RELOAD: v2.6.0 - 2025-10-11 Enhanced Category Render Logging -->
+    <!-- FORCE BROWSER RELOAD: v2.7.0 - 2025-10-11 Function Naming Conflict Fixed -->
     <script>
-        // VERSION 2.6.0 - Debug category visibility issue
-        console.log('🔥 VERSION 2.6.0 LOADED - CATEGORY RENDER DEBUG 🔍');
-        console.log('📅 Build Time:', '2025-10-11 09:30:00');
+        // VERSION 2.7.0 - CRITICAL FIX: Function name conflict resolved
+        console.log('🔥 VERSION 2.7.0 LOADED - FUNCTION NAMING CONFLICT FIXED! ✅');
+        console.log('📅 Build Time:', '2025-10-11 10:00:00');
         console.log('🔄 Cache-Buster:', Date.now());
-        console.log('🔍 Enhanced logging for category save and render');
+        console.log('✅ renderDirectories() → renderCategories() for AI Brain categories');
+        console.log('✅ renderDirectories() kept for Action Hook directories');
     </script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
@@ -1546,7 +1547,7 @@
                 activeTemplate = result.data;
                 activeTemplateId = result.data._id;
                 updateDashboardStats();
-                renderDirectories();
+                renderCategories();
                 return activeTemplate;
             } catch (error) {
                 console.error('❌ [DEBUG] Error fetching active template:', error);
@@ -1626,21 +1627,21 @@
             `;
         }
 
-        function renderDirectories() {
-            console.log('🎨 [RENDER] renderDirectories() called');
-            console.log('🎨 [RENDER] activeTemplate:', activeTemplate?._id, activeTemplate?.name);
-            console.log('🎨 [RENDER] Total categories in template:', activeTemplate?.categories?.length || 0);
+        function renderCategories() {
+            console.log('🎨 [RENDER CATEGORIES] renderCategories() called');
+            console.log('🎨 [RENDER CATEGORIES] activeTemplate:', activeTemplate?._id, activeTemplate?.name);
+            console.log('🎨 [RENDER CATEGORIES] Total categories in template:', activeTemplate?.categories?.length || 0);
             
             if (!activeTemplate || !activeTemplate.categories) {
-                console.log('⚠️ [RENDER] No active template or categories found');
+                console.log('⚠️ [RENDER CATEGORIES] No active template or categories found');
                 return;
             }
 
             const container = document.getElementById('categories-container');
             const categories = activeTemplate.categories.filter(cat => cat.isActive);
             
-            console.log('🎨 [RENDER] Active categories to display:', categories.length);
-            console.log('🎨 [RENDER] Categories detail:', categories.map(c => ({
+            console.log('🎨 [RENDER CATEGORIES] Active categories to display:', categories.length);
+            console.log('🎨 [RENDER CATEGORIES] Categories detail:', categories.map(c => ({
                 id: c.id,
                 name: c.name,
                 isActive: c.isActive
@@ -1945,7 +1946,7 @@
                 
                 // Refresh the UI
                 await fetchActiveTemplate();
-                renderDirectories();
+                renderCategories();
             } catch (error) {
                 console.error('❌ Error updating category:', error);
                 showNotification('❌ Failed to update category: ' + error.message, 'error');
@@ -1996,7 +1997,7 @@
                 
                 // Refresh to show new template
                 await fetchActiveTemplate();
-                renderDirectories();
+                renderCategories();
             } catch (error) {
                 console.error('❌ Error creating template:', error);
                 showNotification('❌ Failed to create template: ' + error.message, 'error');
@@ -2561,7 +2562,7 @@
                     
                     // Refresh the active template and re-render
                     await fetchActiveTemplate();
-                    renderDirectories();
+                    renderCategories();
                 } else {
                     showNotification(`❌ Failed to delete: ${result.message}`, 'error');
                 }
@@ -2745,7 +2746,7 @@
                 
                 // Refresh the UI
                 await fetchActiveTemplate();
-                renderDirectories();
+                renderCategories();
                 
                 // Auto-expand the category to show the new scenario
                 const scenariosDiv = document.getElementById(`scenarios-${currentAddingCategory}`);
@@ -5389,7 +5390,7 @@
                     updateDashboardStats();
                     
                     // Refresh categories list
-                    renderDirectories();
+                    renderCategories();
                     
                     showNotification(`✅ Loaded: ${result.data.name}`, 'success');
                 } else {
