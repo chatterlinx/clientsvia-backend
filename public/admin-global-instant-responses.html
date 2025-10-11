@@ -1299,6 +1299,409 @@
     </div>
 
     <!-- ============================================ -->
+    <!-- WORLD-CLASS SCENARIO MODAL (V2.0 - 4 TABS) -->
+    <!-- ============================================ -->
+    <div id="scenario-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 10001; align-items: center; justify-content: center; overflow-y: auto; padding: 20px 0;">
+        <div style="background: white; border-radius: 20px; max-width: 1200px; width: 95%; margin: 40px auto; box-shadow: 0 25px 80px rgba(0,0,0,0.5);">
+            
+            <!-- FIXED HEADER -->
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 28px 40px; border-radius: 20px 20px 0 0; display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                    <h2 id="scenario-modal-title" style="font-size: 32px; font-weight: 700; margin: 0 0 8px 0;">
+                        <i class="fas fa-robot mr-3"></i><span id="scenario-modal-action">Add</span> AI Scenario
+                    </h2>
+                    <p id="scenario-modal-subtitle" style="margin: 0; opacity: 0.9; font-size: 16px;">Category: <strong id="scenario-category-name">Loading...</strong></p>
+                </div>
+                <button onclick="closeScenarioModal()" style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 32px; cursor: pointer; width: 50px; height: 50px; border-radius: 50%; transition: all 0.3s; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- TAB NAVIGATION -->
+            <div style="background: #f8f9fa; border-bottom: 2px solid #e9ecef; padding: 0 40px; display: flex; gap: 8px;">
+                <button id="tab-basic" class="scenario-tab active" onclick="switchScenarioTab('basic')" style="padding: 16px 28px; border: none; background: white; color: #667eea; font-weight: 600; font-size: 15px; cursor: pointer; border-radius: 12px 12px 0 0; transition: all 0.3s; border-bottom: 3px solid #667eea;">
+                    <i class="fas fa-info-circle mr-2"></i>Basic Info
+                </button>
+                <button id="tab-replies" class="scenario-tab" onclick="switchScenarioTab('replies')" style="padding: 16px 28px; border: none; background: transparent; color: #6c757d; font-weight: 600; font-size: 15px; cursor: pointer; border-radius: 12px 12px 0 0; transition: all 0.3s; border-bottom: 3px solid transparent;">
+                    <i class="fas fa-comments mr-2"></i>Replies & Flow
+                </button>
+                <button id="tab-entities" class="scenario-tab" onclick="switchScenarioTab('entities')" style="padding: 16px 28px; border: none; background: transparent; color: #6c757d; font-weight: 600; font-size: 15px; cursor: pointer; border-radius: 12px 12px 0 0; transition: all 0.3s; border-bottom: 3px solid transparent;">
+                    <i class="fas fa-tag mr-2"></i>Entities & Variables
+                </button>
+                <button id="tab-advanced" class="scenario-tab" onclick="switchScenarioTab('advanced')" style="padding: 16px 28px; border: none; background: transparent; color: #6c757d; font-weight: 600; font-size: 15px; cursor: pointer; border-radius: 12px 12px 0 0; transition: all 0.3s; border-bottom: 3px solid transparent;">
+                    <i class="fas fa-cog mr-2"></i>Advanced Settings
+                </button>
+            </div>
+
+            <!-- SCROLLABLE CONTENT -->
+            <form id="scenario-form" style="max-height: 600px; overflow-y: auto; padding: 40px;">
+                
+                <!-- TAB 1: BASIC INFO -->
+                <div id="content-basic" class="scenario-tab-content" style="display: block;">
+                    <div style="display: grid; gap: 28px;">
+                        
+                        <!-- Scenario Name -->
+                        <div>
+                            <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                <i class="fas fa-heading text-purple-600 mr-2"></i>Scenario Name <span style="color: #e74c3c;">*</span>
+                            </label>
+                            <input type="text" id="scenario-name" required style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; transition: all 0.3s;" onfocus="this.style.borderColor='#667eea'" onblur="this.style.borderColor='#e9ecef'" placeholder="e.g., Hold Request, Appointment Inquiry, Pricing Question">
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Short, clear descriptor of this conversation type</p>
+                        </div>
+
+                        <!-- Status & Priority (Side by Side) -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-toggle-on text-green-600 mr-2"></i>Status
+                                </label>
+                                <select id="scenario-status" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                    <option value="draft">📝 Draft</option>
+                                    <option value="live">✅ Live</option>
+                                    <option value="archived">📦 Archived</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-flag text-orange-600 mr-2"></i>Priority
+                                </label>
+                                <input type="number" id="scenario-priority" value="0" min="-10" max="10" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Tie-breaker (-10 to 10, higher = more priority)</p>
+                            </div>
+                        </div>
+
+                        <!-- Triggers -->
+                        <div>
+                            <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                <i class="fas fa-bolt text-yellow-600 mr-2"></i>Trigger Phrases <span style="color: #e74c3c;">*</span>
+                            </label>
+                            <textarea id="scenario-triggers" required rows="5" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical;" placeholder="One phrase per line, e.g.:
+can you hold
+please hold on
+wait a moment
+give me a second"></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Natural phrases callers might say (one per line)</p>
+                        </div>
+
+                        <!-- Negative Triggers (Collapsible) -->
+                        <details style="border: 2px solid #e9ecef; border-radius: 10px; padding: 18px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #2c3e50; font-size: 15px;">
+                                <i class="fas fa-ban text-red-600 mr-2"></i>Negative Triggers (Optional)
+                            </summary>
+                            <textarea id="scenario-negative-triggers" rows="3" style="width: 100%; margin-top: 15px; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical;" placeholder="Phrases that PREVENT this scenario (one per line)"></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Avoid false triggers (e.g., "don't hold" won't fire "Hold Request")</p>
+                        </details>
+
+                        <!-- Context Weight & Tone -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-chart-line text-blue-600 mr-2"></i>Context Weight
+                                </label>
+                                <input type="number" id="scenario-context-weight" value="0.7" min="0" max="1" step="0.05" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Confidence threshold (0.0 - 1.0)</p>
+                            </div>
+                            <div>
+                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-smile text-pink-600 mr-2"></i>Tone Level
+                                </label>
+                                <select id="scenario-tone-level" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                    <option value="1">1 – Formal / Reserved</option>
+                                    <option value="2" selected>2 – Calm / Polite</option>
+                                    <option value="3">3 – Warm / Friendly</option>
+                                    <option value="4">4 – Enthusiastic</option>
+                                    <option value="5">5 – Excited / Urgent</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Channel & Language -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-mobile-alt text-indigo-600 mr-2"></i>Channel
+                                </label>
+                                <select id="scenario-channel" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                    <option value="any" selected>Any Channel</option>
+                                    <option value="voice">📞 Voice Only</option>
+                                    <option value="sms">💬 SMS Only</option>
+                                    <option value="chat">💻 Chat Only</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-globe text-teal-600 mr-2"></i>Language
+                                </label>
+                                <select id="scenario-language" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                    <option value="auto" selected>🌐 Auto-Detect</option>
+                                    <option value="en">🇺🇸 English</option>
+                                    <option value="es">🇪🇸 Spanish</option>
+                                    <option value="fr">🇫🇷 French</option>
+                                </select>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- TAB 2: REPLIES & FLOW -->
+                <div id="content-replies" class="scenario-tab-content" style="display: none;">
+                    <div style="display: grid; gap: 28px;">
+                        
+                        <!-- Quick Replies -->
+                        <div>
+                            <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                <i class="fas fa-forward text-green-600 mr-2"></i>Quick Replies (2-3 variations) <span style="color: #e74c3c;">*</span>
+                            </label>
+                            <textarea id="scenario-quick-replies" required rows="4" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; resize: vertical;" placeholder="One per line, e.g.:
+Sure, I can hold.
+No problem, take your time.
+Of course, I'll wait."></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Short acknowledgments (rotated randomly)</p>
+                        </div>
+
+                        <!-- Full Replies -->
+                        <div>
+                            <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                <i class="fas fa-comment-dots text-blue-600 mr-2"></i>Full Replies (2-3 variations) <span style="color: #e74c3c;">*</span>
+                            </label>
+                            <textarea id="scenario-full-replies" required rows="6" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; resize: vertical;" placeholder="One per line, e.g.:
+Absolutely! I'll hold while you check on that.
+No problem at all, take all the time you need.
+Of course! I'm happy to wait while you look into it."></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Expanded, warm, natural replies</p>
+                        </div>
+
+                        <!-- Follow-Up Funnel -->
+                        <div>
+                            <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                <i class="fas fa-arrow-right text-orange-600 mr-2"></i>Follow-Up Funnel
+                            </label>
+                            <textarea id="scenario-followup-funnel" rows="3" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; resize: vertical;" placeholder="e.g., Is there anything else I can help you with today?"></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Steer caller back to purpose after response</p>
+                        </div>
+
+                        <!-- Reply Selection Strategy -->
+                        <div>
+                            <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                <i class="fas fa-random text-purple-600 mr-2"></i>Reply Selection Strategy
+                            </label>
+                            <select id="scenario-reply-selection" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                <option value="random" selected>🎲 Random (Natural Variety)</option>
+                                <option value="sequential">📋 Sequential (Order)</option>
+                                <option value="bandit">🎯 Bandit (Learn Best)</option>
+                            </select>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">How to pick from multiple replies</p>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- TAB 3: ENTITIES & VARIABLES -->
+                <div id="content-entities" class="scenario-tab-content" style="display: none;">
+                    <div style="display: grid; gap: 28px;">
+                        
+                        <!-- Entity Capture -->
+                        <div>
+                            <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                <i class="fas fa-tag text-indigo-600 mr-2"></i>Entity Capture (Optional)
+                            </label>
+                            <textarea id="scenario-entity-capture" rows="4" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical;" placeholder="One entity type per line, e.g.:
+name
+phone
+email
+time
+location
+technician"></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Variable "slots" AI can detect from caller speech</p>
+                        </div>
+
+                        <!-- Dynamic Variables -->
+                        <div>
+                            <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                <i class="fas fa-code text-green-600 mr-2"></i>Dynamic Template Variables
+                            </label>
+                            <textarea id="scenario-dynamic-variables" rows="5" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical;" placeholder='One per line in format: key=fallback
+Example:
+name=valued customer
+technician=our team member
+time=shortly
+location=your location'></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Placeholders for entity-based personalization (use {name}, {time} in replies)</p>
+                        </div>
+
+                        <!-- Entity Validation (JSON) -->
+                        <details style="border: 2px solid #e9ecef; border-radius: 10px; padding: 18px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #2c3e50; font-size: 15px;">
+                                <i class="fas fa-check-circle text-teal-600 mr-2"></i>Entity Validation Rules (Advanced)
+                            </summary>
+                            <textarea id="scenario-entity-validation" rows="6" style="width: 100%; margin-top: 15px; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 14px; font-family: 'Courier New', monospace; resize: vertical;" placeholder='JSON format, e.g.:
+{
+  "phone": {"pattern": "^[0-9]{10}$", "prompt": "Please provide a 10-digit phone number"},
+  "email": {"pattern": "@", "prompt": "Please provide a valid email address"}
+}'></textarea>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Validation patterns and prompts (JSON format)</p>
+                        </details>
+
+                    </div>
+                </div>
+
+                <!-- TAB 4: ADVANCED SETTINGS -->
+                <div id="content-advanced" class="scenario-tab-content" style="display: none;">
+                    <div style="display: grid; gap: 28px;">
+                        
+                        <!-- Cooldown & Max Turns -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-clock text-blue-600 mr-2"></i>Cooldown (seconds)
+                                </label>
+                                <input type="number" id="scenario-cooldown" value="0" min="0" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Prevent spam (0 = no cooldown)</p>
+                            </div>
+                            <div>
+                                <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-redo text-orange-600 mr-2"></i>Handoff Policy
+                                </label>
+                                <select id="scenario-handoff-policy" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
+                                    <option value="never">Never Handoff</option>
+                                    <option value="low_confidence" selected>Low Confidence Only</option>
+                                    <option value="always_on_keyword">Always on Keyword</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Timed Follow-Up -->
+                        <details open style="border: 2px solid #667eea; border-radius: 10px; padding: 18px; background: #f8f9ff;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #667eea; font-size: 15px;">
+                                <i class="fas fa-stopwatch mr-2"></i>Timed Follow-Up (Auto-Prompt)
+                            </summary>
+                            <div style="margin-top: 20px; display: grid; gap: 18px;">
+                                <label style="display: flex; align-items: center; font-weight: 500; cursor: pointer;">
+                                    <input type="checkbox" id="scenario-timed-enabled" style="width: 20px; height: 20px; margin-right: 10px; cursor: pointer;">
+                                    <span>Enable automatic prompts after idle time</span>
+                                </label>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <div>
+                                        <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Delay (seconds)</label>
+                                        <input type="number" id="scenario-timed-delay" value="50" min="10" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px;">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Extension (seconds)</label>
+                                        <input type="number" id="scenario-timed-extension" value="30" min="10" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px;">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Follow-Up Messages (one per line)</label>
+                                    <textarea id="scenario-timed-messages" rows="3" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; resize: vertical;" placeholder="Are you still there?
+Just checking in..."></textarea>
+                                </div>
+                            </div>
+                        </details>
+
+                        <!-- Silence Policy -->
+                        <details style="border: 2px solid #e9ecef; border-radius: 10px; padding: 18px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #2c3e50; font-size: 15px;">
+                                <i class="fas fa-volume-mute text-gray-600 mr-2"></i>Silence Policy
+                            </summary>
+                            <div style="margin-top: 20px; display: grid; gap: 18px;">
+                                <div>
+                                    <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Max Consecutive Silence</label>
+                                    <input type="number" id="scenario-silence-max" value="2" min="1" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Final Warning Message</label>
+                                    <input type="text" id="scenario-silence-warning" value="Hello? Did I lose you?" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px;">
+                                </div>
+                            </div>
+                        </details>
+
+                        <!-- TTS Override -->
+                        <details style="border: 2px solid #e9ecef; border-radius: 10px; padding: 18px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #2c3e50; font-size: 15px;">
+                                <i class="fas fa-microphone text-red-600 mr-2"></i>TTS Voice Override (Optional)
+                            </summary>
+                            <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                                <div>
+                                    <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Pitch</label>
+                                    <select id="scenario-tts-pitch" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px;">
+                                        <option value="">Default</option>
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Rate</label>
+                                    <select id="scenario-tts-rate" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px;">
+                                        <option value="">Default</option>
+                                        <option value="slow">Slow</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="fast">Fast</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Volume</label>
+                                    <select id="scenario-tts-volume" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px;">
+                                        <option value="">Default</option>
+                                        <option value="soft">Soft</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="loud">Loud</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </details>
+
+                        <!-- Preconditions & Effects (JSON) -->
+                        <details style="border: 2px solid #e9ecef; border-radius: 10px; padding: 18px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #2c3e50; font-size: 15px;">
+                                <i class="fas fa-project-diagram text-purple-600 mr-2"></i>State Machine (Preconditions & Effects)
+                            </summary>
+                            <div style="margin-top: 20px; display: grid; gap: 18px;">
+                                <div>
+                                    <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Preconditions (JSON)</label>
+                                    <textarea id="scenario-preconditions" rows="3" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-family: 'Courier New', monospace; resize: vertical;" placeholder='{"state": "collecting_phone", "hasEntity": ["name"]}'></textarea>
+                                </div>
+                                <div>
+                                    <label style="display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px;">Effects (JSON)</label>
+                                    <textarea id="scenario-effects" rows="3" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-family: 'Courier New', monospace; resize: vertical;" placeholder='{"setState": "confirming", "increment": {"holdCount": 1}}'></textarea>
+                                </div>
+                            </div>
+                        </details>
+
+                        <!-- Action Hooks -->
+                        <div>
+                            <label style="display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 15px;">
+                                <i class="fas fa-bolt text-yellow-600 mr-2"></i>Action Hooks (comma-separated)
+                            </label>
+                            <input type="text" id="scenario-action-hooks" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;" placeholder="e.g., escalate_to_human, offer_scheduling, log_complaint">
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Actions to trigger after this response</p>
+                        </div>
+
+                    </div>
+                </div>
+
+            </form>
+
+            <!-- FIXED FOOTER -->
+            <div style="background: #f8f9fa; padding: 24px 40px; border-radius: 0 0 20px 20px; display: flex; align-items: center; justify-content: space-between; border-top: 2px solid #e9ecef;">
+                <button type="button" onclick="closeScenarioModal()" style="background: white; color: #6c757d; border: 2px solid #dee2e6; padding: 14px 32px; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.3s;">
+                    <i class="fas fa-times mr-2"></i>Cancel
+                </button>
+                <div style="display: flex; gap: 12px;">
+                    <button type="button" onclick="saveScenarioAsDraft()" style="background: #ffc107; color: #000; border: none; padding: 14px 28px; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 12px rgba(255,193,7,0.3);">
+                        <i class="fas fa-save mr-2"></i>Save as Draft
+                    </button>
+                    <button type="button" onclick="saveScenarioAsLive()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 14px 32px; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 12px rgba(102,126,234,0.4);">
+                        <i class="fas fa-rocket mr-2"></i>Save & Publish Live
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ============================================ -->
     <!-- EDIT TEMPLATE MODAL -->
     <!-- ============================================ -->
     <!-- ================================================ -->
@@ -2608,14 +3011,17 @@
         let currentAddingCategory = null;
 
         function addScenario(categoryIndex) {
-            currentAddingCategory = categoryIndex;
+            console.log(`🔥 [ADD SCENARIO] Opening V2.0 modal for category index: ${categoryIndex}`);
             
-            // Reset form
-            document.getElementById('add-scenario-form').reset();
-            document.getElementById('add-scenario-active').checked = true;
+            // Get category details from activeTemplate
+            const category = activeTemplate.categories[categoryIndex];
+            if (!category) {
+                console.error('❌ Category not found at index:', categoryIndex);
+                return;
+            }
             
-            // Show modal
-            document.getElementById('add-scenario-modal').style.display = 'flex';
+            // Call the new world-class modal
+            openAddScenarioModal(category.id, category.name);
         }
 
         function closeAddScenarioModal() {
@@ -5404,6 +5810,348 @@
             
             console.log('✅ Global AI Brain Management - Initialized');
         });
+
+        // =============================================
+        // WORLD-CLASS SCENARIO MODAL FUNCTIONS (V2.0)
+        // =============================================
+
+        let currentScenarioEditMode = 'add'; // 'add' or 'edit'
+        let currentScenarioData = null; // For edit mode
+
+        /**
+         * Open scenario modal for adding a new scenario
+         */
+        function openAddScenarioModal(categoryId, categoryName) {
+            console.log(`🎨 [ADD SCENARIO] Opening modal for category: ${categoryName} (${categoryId})`);
+            
+            currentScenarioEditMode = 'add';
+            currentScenarioData = { categoryId, categoryName };
+            
+            // Update modal title
+            document.getElementById('scenario-modal-action').textContent = 'Add';
+            document.getElementById('scenario-category-name').textContent = categoryName;
+            
+            // Reset form
+            document.getElementById('scenario-form').reset();
+            
+            // Switch to first tab
+            switchScenarioTab('basic');
+            
+            // Show modal
+            document.getElementById('scenario-modal').style.display = 'flex';
+        }
+
+        /**
+         * Open scenario modal for editing an existing scenario
+         */
+        async function openEditScenarioModal(categoryId, categoryName, scenarioId) {
+            console.log(`✏️ [EDIT SCENARIO] Opening modal for: ${scenarioId} in ${categoryName}`);
+            
+            currentScenarioEditMode = 'edit';
+            currentScenarioData = { categoryId, categoryName, scenarioId };
+            
+            // Update modal title
+            document.getElementById('scenario-modal-action').textContent = 'Edit';
+            document.getElementById('scenario-category-name').textContent = categoryName;
+            
+            // Fetch scenario data
+            try {
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/categories/${categoryId}/scenarios/${scenarioId}`, {
+                    headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const { data } = await response.json();
+                populateScenarioForm(data);
+                
+                // Switch to first tab
+                switchScenarioTab('basic');
+                
+                // Show modal
+                document.getElementById('scenario-modal').style.display = 'flex';
+                
+            } catch (error) {
+                console.error('❌ [EDIT SCENARIO] Error:', error);
+                alert('Failed to load scenario data: ' + error.message);
+            }
+        }
+
+        /**
+         * Populate form with scenario data (for edit mode)
+         */
+        function populateScenarioForm(data) {
+            console.log('📝 [POPULATE FORM] Loading scenario data:', data);
+            
+            // Basic Info Tab
+            document.getElementById('scenario-name').value = data.name || '';
+            document.getElementById('scenario-status').value = data.status || 'draft';
+            document.getElementById('scenario-priority').value = data.priority || 0;
+            document.getElementById('scenario-triggers').value = (data.triggers || []).join('\n');
+            document.getElementById('scenario-negative-triggers').value = (data.negativeTriggers || []).join('\n');
+            document.getElementById('scenario-context-weight').value = data.contextWeight || 0.7;
+            document.getElementById('scenario-tone-level').value = data.toneLevel || 2;
+            document.getElementById('scenario-channel').value = data.channel || 'any';
+            document.getElementById('scenario-language').value = data.language || 'auto';
+            
+            // Replies & Flow Tab
+            document.getElementById('scenario-quick-replies').value = (data.quickReplies || []).join('\n');
+            document.getElementById('scenario-full-replies').value = (data.fullReplies || []).join('\n');
+            document.getElementById('scenario-followup-funnel').value = data.followUpFunnel || '';
+            document.getElementById('scenario-reply-selection').value = data.replySelection || 'random';
+            
+            // Entities & Variables Tab
+            document.getElementById('scenario-entity-capture').value = (data.entityCapture || []).join('\n');
+            
+            // Dynamic variables (Map to key=value format)
+            if (data.dynamicVariables && typeof data.dynamicVariables === 'object') {
+                const varLines = Object.entries(data.dynamicVariables).map(([k, v]) => `${k}=${v}`);
+                document.getElementById('scenario-dynamic-variables').value = varLines.join('\n');
+            }
+            
+            document.getElementById('scenario-entity-validation').value = 
+                data.entityValidation ? JSON.stringify(Object.fromEntries(data.entityValidation), null, 2) : '';
+            
+            // Advanced Settings Tab
+            document.getElementById('scenario-cooldown').value = data.cooldownSeconds || 0;
+            document.getElementById('scenario-handoff-policy').value = data.handoffPolicy || 'low_confidence';
+            
+            // Timed Follow-Up
+            if (data.timedFollowUp) {
+                document.getElementById('scenario-timed-enabled').checked = data.timedFollowUp.enabled || false;
+                document.getElementById('scenario-timed-delay').value = data.timedFollowUp.delaySeconds || 50;
+                document.getElementById('scenario-timed-extension').value = data.timedFollowUp.extensionSeconds || 30;
+                document.getElementById('scenario-timed-messages').value = (data.timedFollowUp.messages || []).join('\n');
+            }
+            
+            // Silence Policy
+            if (data.silencePolicy) {
+                document.getElementById('scenario-silence-max').value = data.silencePolicy.maxConsecutive || 2;
+                document.getElementById('scenario-silence-warning').value = data.silencePolicy.finalWarning || 'Hello? Did I lose you?';
+            }
+            
+            // TTS Override
+            if (data.ttsOverride) {
+                document.getElementById('scenario-tts-pitch').value = data.ttsOverride.pitch || '';
+                document.getElementById('scenario-tts-rate').value = data.ttsOverride.rate || '';
+                document.getElementById('scenario-tts-volume').value = data.ttsOverride.volume || '';
+            }
+            
+            // Preconditions & Effects (JSON)
+            document.getElementById('scenario-preconditions').value = 
+                data.preconditions ? JSON.stringify(Object.fromEntries(data.preconditions), null, 2) : '';
+            document.getElementById('scenario-effects').value = 
+                data.effects ? JSON.stringify(Object.fromEntries(data.effects), null, 2) : '';
+            
+            // Action Hooks
+            document.getElementById('scenario-action-hooks').value = (data.actionHooks || []).join(', ');
+        }
+
+        /**
+         * Switch between tabs in scenario modal
+         */
+        function switchScenarioTab(tabName) {
+            console.log(`🔄 [SCENARIO TAB] Switching to: ${tabName}`);
+            
+            // Hide all tab contents
+            document.querySelectorAll('.scenario-tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Reset all tab buttons
+            document.querySelectorAll('.scenario-tab').forEach(btn => {
+                btn.style.background = 'transparent';
+                btn.style.color = '#6c757d';
+                btn.style.borderBottom = '3px solid transparent';
+            });
+            
+            // Show selected tab content
+            document.getElementById(`content-${tabName}`).style.display = 'block';
+            
+            // Highlight selected tab button
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            activeBtn.style.background = 'white';
+            activeBtn.style.color = '#667eea';
+            activeBtn.style.borderBottom = '3px solid #667eea';
+        }
+
+        /**
+         * Close scenario modal
+         */
+        function closeScenarioModal() {
+            console.log('❌ [SCENARIO MODAL] Closing...');
+            document.getElementById('scenario-modal').style.display = 'none';
+            document.getElementById('scenario-form').reset();
+            currentScenarioData = null;
+        }
+
+        /**
+         * Save scenario as DRAFT
+         */
+        async function saveScenarioAsDraft() {
+            console.log('💾 [SAVE DRAFT] Saving scenario as draft...');
+            await saveScenario('draft');
+        }
+
+        /**
+         * Save scenario as LIVE (Published)
+         */
+        async function saveScenarioAsLive() {
+            console.log('🚀 [SAVE LIVE] Publishing scenario as live...');
+            await saveScenario('live');
+        }
+
+        /**
+         * Core save logic for scenarios
+         */
+        async function saveScenario(status) {
+            console.log(`💾 [SAVE SCENARIO] Mode: ${currentScenarioEditMode}, Status: ${status}`);
+            
+            // Validate required fields
+            const name = document.getElementById('scenario-name').value.trim();
+            const triggers = document.getElementById('scenario-triggers').value.trim();
+            const quickReplies = document.getElementById('scenario-quick-replies').value.trim();
+            const fullReplies = document.getElementById('scenario-full-replies').value.trim();
+            
+            if (!name || !triggers || !quickReplies || !fullReplies) {
+                alert('Please fill all required fields: Scenario Name, Triggers, Quick Replies, Full Replies');
+                return;
+            }
+            
+            // Build scenario data object
+            const scenarioData = {
+                name,
+                status,
+                priority: parseInt(document.getElementById('scenario-priority').value) || 0,
+                triggers: triggers.split('\n').filter(t => t.trim()),
+                negativeTriggers: document.getElementById('scenario-negative-triggers').value.split('\n').filter(t => t.trim()),
+                contextWeight: parseFloat(document.getElementById('scenario-context-weight').value) || 0.7,
+                toneLevel: parseInt(document.getElementById('scenario-tone-level').value) || 2,
+                channel: document.getElementById('scenario-channel').value || 'any',
+                language: document.getElementById('scenario-language').value || 'auto',
+                
+                quickReplies: quickReplies.split('\n').filter(r => r.trim()),
+                fullReplies: fullReplies.split('\n').filter(r => r.trim()),
+                followUpFunnel: document.getElementById('scenario-followup-funnel').value.trim(),
+                replySelection: document.getElementById('scenario-reply-selection').value || 'random',
+                
+                entityCapture: document.getElementById('scenario-entity-capture').value.split('\n').filter(e => e.trim()),
+                dynamicVariables: parseDynamicVariables(document.getElementById('scenario-dynamic-variables').value),
+                entityValidation: tryParseJSON(document.getElementById('scenario-entity-validation').value),
+                
+                cooldownSeconds: parseInt(document.getElementById('scenario-cooldown').value) || 0,
+                handoffPolicy: document.getElementById('scenario-handoff-policy').value || 'low_confidence',
+                
+                timedFollowUp: {
+                    enabled: document.getElementById('scenario-timed-enabled').checked,
+                    delaySeconds: parseInt(document.getElementById('scenario-timed-delay').value) || 50,
+                    extensionSeconds: parseInt(document.getElementById('scenario-timed-extension').value) || 30,
+                    messages: document.getElementById('scenario-timed-messages').value.split('\n').filter(m => m.trim())
+                },
+                
+                silencePolicy: {
+                    maxConsecutive: parseInt(document.getElementById('scenario-silence-max').value) || 2,
+                    finalWarning: document.getElementById('scenario-silence-warning').value.trim() || 'Hello? Did I lose you?'
+                },
+                
+                ttsOverride: {
+                    pitch: document.getElementById('scenario-tts-pitch').value || undefined,
+                    rate: document.getElementById('scenario-tts-rate').value || undefined,
+                    volume: document.getElementById('scenario-tts-volume').value || undefined
+                },
+                
+                preconditions: tryParseJSON(document.getElementById('scenario-preconditions').value),
+                effects: tryParseJSON(document.getElementById('scenario-effects').value),
+                
+                actionHooks: document.getElementById('scenario-action-hooks').value.split(',').map(h => h.trim()).filter(Boolean)
+            };
+            
+            console.log('📦 [SAVE SCENARIO] Built data:', scenarioData);
+            
+            try {
+                let response;
+                
+                if (currentScenarioEditMode === 'add') {
+                    // CREATE new scenario
+                    const url = `/api/admin/global-instant-responses/${activeTemplateId}/categories/${currentScenarioData.categoryId}/scenarios`;
+                    console.log(`🚀 [CREATE] POST to: ${url}`);
+                    
+                    response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${localStorage.getItem('authToken')}`
+                        },
+                        body: JSON.stringify(scenarioData)
+                    });
+                    
+                } else {
+                    // UPDATE existing scenario
+                    const url = `/api/admin/global-instant-responses/${activeTemplateId}/categories/${currentScenarioData.categoryId}/scenarios/${currentScenarioData.scenarioId}`;
+                    console.log(`🔧 [UPDATE] PATCH to: ${url}`);
+                    
+                    response = await fetch(url, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${localStorage.getItem('authToken')}`
+                        },
+                        body: JSON.stringify(scenarioData)
+                    });
+                }
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                console.log('✅ [SAVE SCENARIO] Success:', result);
+                
+                alert(`✅ Scenario "${name}" ${status === 'live' ? 'published' : 'saved as draft'} successfully!`);
+                
+                // Close modal
+                closeScenarioModal();
+                
+                // Refresh the active template to show new/updated scenario
+                await switchDashboardTemplate(activeTemplateId);
+                
+            } catch (error) {
+                console.error('❌ [SAVE SCENARIO] Error:', error);
+                alert('Failed to save scenario: ' + error.message);
+            }
+        }
+
+        /**
+         * Parse dynamic variables from key=value format to object
+         */
+        function parseDynamicVariables(text) {
+            const lines = text.split('\n').filter(l => l.trim() && l.includes('='));
+            const obj = {};
+            lines.forEach(line => {
+                const [key, ...valueParts] = line.split('=');
+                obj[key.trim()] = valueParts.join('=').trim();
+            });
+            return obj;
+        }
+
+        /**
+         * Try to parse JSON, return null if invalid
+         */
+        function tryParseJSON(text) {
+            if (!text || !text.trim()) return null;
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.warn('⚠️ Invalid JSON, returning null:', text);
+                return null;
+            }
+        }
+
+        // =============================================
+        // END WORLD-CLASS SCENARIO MODAL FUNCTIONS
+        // =============================================
+
     </script>
 
     <!-- ============================================ -->
