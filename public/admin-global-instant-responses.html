@@ -2113,23 +2113,27 @@ Just checking in..."></textarea>
 
         function renderScenarios(scenarios, categoryIndex) {
             if (!scenarios || scenarios.length === 0) {
-                return '<p class="text-gray-500 text-center py-4">No scenarios in this category</p>';
+                return '<p class="text-gray-500 text-center py-4">No scenarios in this category yet. Click "+ Add Scenario" to create one!</p>';
             }
 
             return scenarios.map((scenario, scenarioIndex) => `
                 <div class="scenario-item">
                     <div class="flex items-start justify-between mb-3">
                         <div class="flex-1">
-                            <h4 class="font-bold text-gray-900 text-lg mb-1">${scenario.name}</h4>
+                            <div class="flex items-center gap-3 mb-2">
+                                <h4 class="font-bold text-gray-900 text-lg">${scenario.name}</h4>
+                                ${scenario.status ? `<span class="badge ${
+                                    scenario.status === 'live' ? 'bg-green-100 text-green-700 border-green-300' : 
+                                    scenario.status === 'draft' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 
+                                    'bg-gray-100 text-gray-700 border-gray-300'
+                                }">${scenario.status === 'live' ? '✅ Live' : scenario.status === 'draft' ? '📝 Draft' : '📦 Archived'}</span>` : ''}
+                                ${scenario.version ? `<span class="badge bg-indigo-100 text-indigo-700 border-indigo-300">v${scenario.version}</span>` : ''}
+                            </div>
                             <div class="flex items-center gap-2 flex-wrap">
-                                <span class="badge badge-${scenario.isActive ? 'active' : 'inactive'}">
-                                    ${scenario.isActive ? '✅ Active' : '❌ Inactive'}
-                                </span>
-                                <span class="badge badge-priority">
-                                    Priority: ${scenario.priority || 5}
-                                </span>
-                                ${scenario.tone ? `<span class="badge bg-purple-100 text-purple-700 border-purple-300">${scenario.tone}</span>` : ''}
-                                ${scenario.pace ? `<span class="badge bg-green-100 text-green-700 border-green-300">${scenario.pace} pace</span>` : ''}
+                                ${scenario.priority !== undefined ? `<span class="badge badge-priority">Priority: ${scenario.priority}</span>` : ''}
+                                ${scenario.toneLevel ? `<span class="badge bg-pink-100 text-pink-700 border-pink-300">Tone ${scenario.toneLevel}/5</span>` : ''}
+                                ${scenario.channel && scenario.channel !== 'any' ? `<span class="badge bg-blue-100 text-blue-700 border-blue-300">${scenario.channel}</span>` : ''}
+                                ${scenario.language && scenario.language !== 'auto' ? `<span class="badge bg-purple-100 text-purple-700 border-purple-300">${scenario.language}</span>` : ''}
                                 ${scenario.confidenceThreshold ? `<span class="badge bg-blue-100 text-blue-700 border-blue-300">Confidence: ${(scenario.confidenceThreshold * 100).toFixed(0)}%</span>` : ''}
                             </div>
                         </div>
@@ -2935,20 +2939,19 @@ Just checking in..."></textarea>
         let currentEditingScenario = null;
 
         function editScenario(categoryIndex, scenarioIndex) {
+            console.log(`✏️ [EDIT SCENARIO] Opening V2.0 modal for category ${categoryIndex}, scenario ${scenarioIndex}`);
+            
+            // Get category and scenario from activeTemplate
             const category = activeTemplate.categories[categoryIndex];
             const scenario = category.scenarios[scenarioIndex];
             
-            currentEditingCategory = categoryIndex;
-            currentEditingScenario = scenarioIndex;
-
-            // Populate basic form fields
-            document.getElementById('edit-scenario-category-index').value = categoryIndex;
-            document.getElementById('edit-scenario-index').value = scenarioIndex;
-            document.getElementById('edit-scenario-name').value = scenario.name;
-            document.getElementById('edit-scenario-triggers').value = (scenario.triggers || []).join('\n');
-            document.getElementById('edit-scenario-quick-reply').value = scenario.quickReply || '';
-            document.getElementById('edit-scenario-full-reply').value = scenario.fullReply || '';
-            document.getElementById('edit-scenario-active').checked = scenario.isActive !== false;
+            if (!category || !scenario) {
+                console.error('❌ Category or scenario not found');
+                return;
+            }
+            
+            // Call the new world-class modal in edit mode
+            openEditScenarioModal(category.id, category.name, scenario.scenarioId || scenario.id);
 
             // Populate Smart Hold fields
             const smartHoldEnabled = scenario.enableSmartHold || false;
@@ -3228,13 +3231,48 @@ Just checking in..."></textarea>
             }
         }
 
-        function deleteScenario(categoryIndex, scenarioIndex) {
-            if (!confirm('Are you sure you want to delete this scenario?\n\nThis action cannot be undone.')) {
+        async function deleteScenario(categoryIndex, scenarioIndex) {
+            console.log(`🗑️ [DELETE SCENARIO] Deleting scenario at category ${categoryIndex}, scenario ${scenarioIndex}`);
+            
+            // Get category and scenario from activeTemplate
+            const category = activeTemplate.categories[categoryIndex];
+            const scenario = category.scenarios[scenarioIndex];
+            
+            if (!category || !scenario) {
+                console.error('❌ Category or scenario not found');
                 return;
             }
-
-            // Will implement deletion in next phase
-            showNotification('Delete functionality coming in next update!', 'info');
+            
+            if (!confirm(`Are you sure you want to delete "${scenario.name}"?\n\nThis action cannot be undone.`)) {
+                return;
+            }
+            
+            try {
+                const url = `/api/admin/global-instant-responses/${activeTemplateId}/categories/${category.id}/scenarios/${scenario.scenarioId || scenario.id}`;
+                console.log(`🗑️ [DELETE] Sending DELETE to: ${url}`);
+                
+                const response = await fetch(url, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                console.log('✅ [DELETE SCENARIO] Success:', result);
+                
+                showNotification(`✅ Scenario "${scenario.name}" deleted successfully!`, 'success');
+                
+                // Refresh the active template
+                await switchDashboardTemplate(activeTemplateId);
+                
+            } catch (error) {
+                console.error('❌ [DELETE SCENARIO] Error:', error);
+                alert('Failed to delete scenario: ' + error.message);
+            }
         }
 
         async function openAddDirectoryModal() {
