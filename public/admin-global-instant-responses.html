@@ -1331,6 +1331,9 @@
                 <button id="tab-advanced" class="scenario-tab" onclick="switchScenarioTab('advanced')" style="padding: 16px 28px; border: none; background: transparent; color: #6c757d; font-weight: 600; font-size: 15px; cursor: pointer; border-radius: 12px 12px 0 0; transition: all 0.3s; border-bottom: 3px solid transparent;">
                     <i class="fas fa-cog mr-2"></i>Advanced Settings
                 </button>
+                <button id="tab-test" class="scenario-tab" onclick="switchScenarioTab('test')" style="padding: 16px 28px; border: none; background: transparent; color: #6c757d; font-weight: 600; font-size: 15px; cursor: pointer; border-radius: 12px 12px 0 0; transition: all 0.3s; border-bottom: 3px solid transparent;">
+                    <i class="fas fa-flask mr-2"></i>🔥 Test & Preview
+                </button>
             </div>
 
             <!-- SCROLLABLE CONTENT -->
@@ -1710,6 +1713,89 @@ Just checking in..."></textarea>
                             <input type="text" id="scenario-action-hooks" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;" placeholder="e.g., escalate_to_human, offer_scheduling, log_complaint">
                             <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Actions to trigger after this response</p>
                         </div>
+
+                    </div>
+                </div>
+
+                <!-- TAB 5: TEST & PREVIEW (LIVE MATCH TRACE) -->
+                <div id="content-test" class="scenario-tab-content" style="display: none;">
+                    <div style="display: grid; gap: 28px;">
+                        
+                        <!-- Live Test Panel -->
+                        <div style="border: 3px solid #7c3aed; background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-radius: 16px; padding: 24px;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                                <i class="fas fa-flask" style="font-size: 32px; color: #7c3aed;"></i>
+                                <div>
+                                    <h3 style="margin: 0; font-size: 22px; font-weight: 700; color: #5b21b6;">Live Trigger Testing</h3>
+                                    <p style="margin: 4px 0 0; color: #6b21a8; font-size: 14px;">Test if this scenario would match a caller's phrase</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Test Input -->
+                            <div style="margin-bottom: 20px;">
+                                <label style="display: block; font-weight: 600; color: #5b21b6; margin-bottom: 10px; font-size: 15px;">
+                                    <i class="fas fa-keyboard mr-2"></i>Test Phrase (what caller would say):
+                                </label>
+                                <input type="text" id="test-phrase-input" placeholder='Try: "can you hold for a moment" or "I need to schedule an appointment"' style="width: 100%; padding: 16px 20px; border: 3px solid #a78bfa; border-radius: 12px; font-size: 16px; background: white; font-weight: 500;" onkeypress="if(event.key==='Enter'){event.preventDefault();testScenarioMatch();}">
+                                <button type="button" onclick="testScenarioMatch()" style="margin-top: 12px; background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); color: white; border: none; padding: 14px 28px; border-radius: 10px; font-weight: 700; font-size: 16px; cursor: pointer; box-shadow: 0 4px 12px rgba(124,58,237,0.4); transition: all 0.3s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                                    <i class="fas fa-play mr-2"></i>Test Match
+                                </button>
+                            </div>
+                            
+                            <!-- Results Area -->
+                            <div id="test-results" style="display: none; margin-top: 24px;">
+                                <!-- Results will be injected here by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Current Scenario Preview -->
+                        <div style="border: 2px solid #e9ecef; background: #f8f9fa; border-radius: 12px; padding: 20px;">
+                            <h4 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 700; color: #2c3e50;">
+                                <i class="fas fa-eye text-blue-600 mr-2"></i>Current Scenario Configuration
+                            </h4>
+                            <div id="scenario-preview" style="display: grid; gap: 12px; font-size: 14px;">
+                                <!-- Preview will be dynamically generated -->
+                            </div>
+                            <button type="button" onclick="updateScenarioPreview()" style="margin-top: 16px; background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                                <i class="fas fa-sync mr-2"></i>Refresh Preview
+                            </button>
+                        </div>
+
+                        <!-- Help / Tips -->
+                        <details style="border: 2px solid #dbeafe; background: #eff6ff; border-radius: 10px; padding: 18px;">
+                            <summary style="cursor: pointer; font-weight: 600; color: #1e40af; font-size: 15px;">
+                                <i class="fas fa-lightbulb mr-2"></i>💡 Testing Tips & Best Practices
+                            </summary>
+                            <div style="margin-top: 16px; color: #1e40af; font-size: 14px; line-height: 1.8;">
+                                <p style="margin: 0 0 12px 0;"><strong>🎯 Trigger Matching:</strong></p>
+                                <ul style="margin: 0 0 16px 20px; padding: 0;">
+                                    <li>Triggers are matched using <strong>keyword matching</strong> (not exact phrases)</li>
+                                    <li>Order doesn't matter: "hold please" = "please hold"</li>
+                                    <li>Case-insensitive: "HOLD" = "hold" = "Hold"</li>
+                                </ul>
+                                
+                                <p style="margin: 0 0 12px 0;"><strong>🚫 Negative Triggers:</strong></p>
+                                <ul style="margin: 0 0 16px 20px; padding: 0;">
+                                    <li>If ANY negative trigger appears, scenario will NOT match</li>
+                                    <li>Use to prevent false positives: "don't hold" should NOT trigger "Hold Request"</li>
+                                </ul>
+                                
+                                <p style="margin: 0 0 12px 0;"><strong>🔧 Regex Triggers:</strong></p>
+                                <ul style="margin: 0 0 16px 20px; padding: 0;">
+                                    <li>Advanced pattern matching for power users</li>
+                                    <li>Example: <code>\b(hold|wait)\s*(on|up)?\b</code> matches "hold", "wait", "hold on", "wait up"</li>
+                                    <li>Use for phone numbers, dates, specific patterns</li>
+                                </ul>
+                                
+                                <p style="margin: 0 0 12px 0;"><strong>📊 Confidence & Priority:</strong></p>
+                                <ul style="margin: 0 0 0 20px; padding: 0;">
+                                    <li><strong>Min Confidence:</strong> How sure the AI must be (0.7 = 70% confident)</li>
+                                    <li><strong>Priority:</strong> Tie-breaker if multiple scenarios match at same confidence</li>
+                                    <li>Emergency scenarios: high confidence (0.9+) and high priority (8-10)</li>
+                                    <li>Chitchat scenarios: low confidence (0.5) and low priority (-3 to 0)</li>
+                                </ul>
+                            </div>
+                        </details>
 
                     </div>
                 </div>
@@ -6232,6 +6318,253 @@ Just checking in..."></textarea>
 
         // =============================================
         // END WORLD-CLASS SCENARIO MODAL FUNCTIONS
+        // =============================================
+
+        // =============================================
+        // TEST & PREVIEW TAB FUNCTIONS
+        // =============================================
+
+        /**
+         * Test if current scenario configuration would match a test phrase
+         */
+        function testScenarioMatch() {
+            console.log('🧪 [TEST] Testing scenario match...');
+            
+            const testPhrase = document.getElementById('test-phrase-input').value.trim().toLowerCase();
+            
+            if (!testPhrase) {
+                alert('Please enter a test phrase first!');
+                return;
+            }
+            
+            // Get current form values
+            const triggers = document.getElementById('scenario-triggers').value.split('\n').filter(t => t.trim()).map(t => t.toLowerCase());
+            const negativeTriggers = document.getElementById('scenario-negative-triggers').value.split('\n').filter(t => t.trim()).map(t => t.toLowerCase());
+            const regexTriggers = document.getElementById('scenario-regex-triggers').value.split('\n').filter(t => t.trim());
+            const minConfidence = parseFloat(document.getElementById('scenario-context-weight').value) || 0.7;
+            const priority = parseInt(document.getElementById('scenario-priority').value) || 0;
+            
+            // Simple keyword matching (real system would use BM25/semantic)
+            let matchScore = 0;
+            let matchedTriggers = [];
+            let matchType = '';
+            
+            // Check negative triggers FIRST (instant reject)
+            for (const negTrigger of negativeTriggers) {
+                if (testPhrase.includes(negTrigger)) {
+                    showTestResults(false, 'BLOCKED', {
+                        reason: `❌ Negative trigger matched: "${negTrigger}"`,
+                        phrase: testPhrase,
+                        negTrigger,
+                        score: 0
+                    });
+                    return;
+                }
+            }
+            
+            // Check regex triggers
+            for (const regexPattern of regexTriggers) {
+                try {
+                    const regex = new RegExp(regexPattern, 'i');
+                    if (regex.test(testPhrase)) {
+                        matchedTriggers.push(`REGEX: ${regexPattern}`);
+                        matchScore = Math.max(matchScore, 0.95); // Regex = high confidence
+                        matchType = 'regex';
+                    }
+                } catch (e) {
+                    console.warn('Invalid regex:', regexPattern, e);
+                }
+            }
+            
+            // Check keyword triggers (simple word matching)
+            for (const trigger of triggers) {
+                const triggerWords = trigger.split(' ').filter(w => w.length > 2);
+                let wordsMatched = 0;
+                
+                for (const word of triggerWords) {
+                    if (testPhrase.includes(word)) {
+                        wordsMatched++;
+                    }
+                }
+                
+                if (wordsMatched > 0) {
+                    const wordScore = wordsMatched / triggerWords.length;
+                    if (wordScore > matchScore) {
+                        matchScore = wordScore;
+                        matchedTriggers = [trigger];
+                        matchType = 'keyword';
+                    } else if (wordScore === matchScore) {
+                        matchedTriggers.push(trigger);
+                    }
+                }
+            }
+            
+            // Apply confidence threshold
+            const wouldMatch = matchScore >= minConfidence;
+            
+            showTestResults(wouldMatch, wouldMatch ? 'MATCH' : 'NO MATCH', {
+                phrase: testPhrase,
+                matchScore,
+                minConfidence,
+                priority,
+                matchedTriggers,
+                matchType,
+                triggers,
+                negativeTriggers,
+                regexTriggers
+            });
+        }
+
+        /**
+         * Display test results
+         */
+        function showTestResults(matched, status, details) {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.style.display = 'block';
+            
+            const statusColor = matched ? '#10b981' : (status === 'BLOCKED' ? '#ef4444' : '#f59e0b');
+            const statusIcon = matched ? 'check-circle' : (status === 'BLOCKED' ? 'ban' : 'times-circle');
+            
+            let html = `
+                <div style="border: 3px solid ${statusColor}; background: white; border-radius: 12px; padding: 20px;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                        <i class="fas fa-${statusIcon}" style="font-size: 36px; color: ${statusColor};"></i>
+                        <div>
+                            <h3 style="margin: 0; font-size: 24px; font-weight: 700; color: ${statusColor};">${status}</h3>
+                            <p style="margin: 4px 0 0; color: #6b7280; font-size: 14px;">Test Phrase: <strong>"${details.phrase}"</strong></p>
+                        </div>
+                    </div>
+            `;
+            
+            if (status === 'BLOCKED') {
+                html += `
+                    <div style="background: #fef2f2; border: 2px solid #fca5a5; border-radius: 8px; padding: 16px;">
+                        <p style="margin: 0; color: #991b1b; font-weight: 600;">${details.reason}</p>
+                        <p style="margin: 8px 0 0; color: #991b1b; font-size: 14px;">This phrase contains a negative trigger and will NEVER match this scenario.</p>
+                    </div>
+                `;
+            } else if (matched) {
+                html += `
+                    <div style="background: #f0fdf4; border: 2px solid #86efac; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                        <p style="margin: 0 0 8px 0; color: #166534; font-weight: 600;">✅ This scenario WOULD match!</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+                            <div>
+                                <span style="font-size: 12px; color: #166534; font-weight: 600;">Match Score:</span>
+                                <div style="background: #166534; height: 24px; border-radius: 6px; position: relative; overflow: hidden;">
+                                    <div style="background: #22c55e; height: 100%; width: ${(details.matchScore * 100).toFixed(0)}%; display: flex; align-items: center; justify-content: center;">
+                                        <span style="color: white; font-weight: 700; font-size: 14px; position: absolute; left: 50%; transform: translateX(-50%);">${(details.matchScore * 100).toFixed(0)}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <span style="font-size: 12px; color: #166534; font-weight: 600;">Min Required:</span>
+                                <div style="background: #d1d5db; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                                    <span style="color: #374151; font-weight: 700; font-size: 14px;">${(details.minConfidence * 100).toFixed(0)}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: #eff6ff; border: 2px solid #93c5fd; border-radius: 8px; padding: 16px;">
+                        <p style="margin: 0 0 8px 0; color: #1e40af; font-weight: 600;">📊 Match Details:</p>
+                        <ul style="margin: 0; padding-left: 20px; color: #1e40af; font-size: 14px;">
+                            <li><strong>Match Type:</strong> ${details.matchType.toUpperCase()}</li>
+                            <li><strong>Priority:</strong> ${details.priority} ${details.priority > 5 ? '(High)' : details.priority < 0 ? '(Low)' : '(Normal)'}</li>
+                            <li><strong>Matched Triggers:</strong> ${details.matchedTriggers.join(', ') || 'None'}</li>
+                        </ul>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div style="background: #fffbeb; border: 2px solid #fcd34d; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                        <p style="margin: 0 0 8px 0; color: #92400e; font-weight: 600;">⚠️ This scenario would NOT match.</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+                            <div>
+                                <span style="font-size: 12px; color: #92400e; font-weight: 600;">Match Score:</span>
+                                <div style="background: #d1d5db; height: 24px; border-radius: 6px; position: relative;">
+                                    <div style="background: #f59e0b; height: 100%; width: ${(details.matchScore * 100).toFixed(0)}%; display: flex; align-items: center; justify-content: center;">
+                                        <span style="color: white; font-weight: 700; font-size: 14px; position: absolute; left: 50%; transform: translateX(-50%);">${(details.matchScore * 100).toFixed(0)}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <span style="font-size: 12px; color: #92400e; font-weight: 600;">Min Required:</span>
+                                <div style="background: #d1d5db; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                                    <span style="color: #374151; font-weight: 700; font-size: 14px;">${(details.minConfidence * 100).toFixed(0)}%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p style="margin: 12px 0 0; color: #92400e; font-size: 14px;">💡 Score too low! Try adding more trigger phrases or lowering min confidence.</p>
+                    </div>
+                `;
+            }
+            
+            html += `</div>`;
+            resultsDiv.innerHTML = html;
+            
+            // Scroll to results
+            resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        /**
+         * Update scenario preview
+         */
+        function updateScenarioPreview() {
+            const previewDiv = document.getElementById('scenario-preview');
+            
+            const name = document.getElementById('scenario-name').value || '(Unnamed Scenario)';
+            const status = document.getElementById('scenario-status').value;
+            const priority = document.getElementById('scenario-priority').value || 0;
+            const triggers = document.getElementById('scenario-triggers').value.split('\n').filter(t => t.trim()).length;
+            const negativeTriggers = document.getElementById('scenario-negative-triggers').value.split('\n').filter(t => t.trim()).length;
+            const regexTriggers = document.getElementById('scenario-regex-triggers').value.split('\n').filter(t => t.trim()).length;
+            const confidence = ((parseFloat(document.getElementById('scenario-context-weight').value) || 0.7) * 100).toFixed(0);
+            const quickReplies = document.getElementById('scenario-quick-replies').value.split('\n').filter(t => t.trim()).length;
+            const fullReplies = document.getElementById('scenario-full-replies').value.split('\n').filter(t => t.trim()).length;
+            
+            const statusColor = status === 'live' ? '#10b981' : status === 'draft' ? '#f59e0b' : '#6b7280';
+            const statusIcon = status === 'live' ? '✅' : status === 'draft' ? '📝' : '📦';
+            
+            previewDiv.innerHTML = `
+                <div style="background: white; padding: 16px; border-radius: 8px; border: 2px solid #e5e7eb;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <span style="font-size: 18px; font-weight: 700; color: #111827;">${name}</span>
+                        <span style="background: ${statusColor}; color: white; padding: 4px 12px; border-radius: 6px; font-size: 13px; font-weight: 600;">${statusIcon} ${status.toUpperCase()}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                        <div style="background: #fef3c7; padding: 12px; border-radius: 6px;">
+                            <div style="font-size: 20px; font-weight: 700; color: #92400e;">Priority: ${priority}</div>
+                            <div style="font-size: 12px; color: #92400e;">${priority > 5 ? 'High' : priority < 0 ? 'Low' : 'Normal'}</div>
+                        </div>
+                        <div style="background: #ecfdf5; padding: 12px; border-radius: 6px;">
+                            <div style="font-size: 20px; font-weight: 700; color: #065f46;">Confidence: ${confidence}%</div>
+                            <div style="font-size: 12px; color: #065f46;">Minimum required</div>
+                        </div>
+                        <div style="background: #eff6ff; padding: 12px; border-radius: 6px;">
+                            <div style="font-size: 20px; font-weight: 700; color: #1e40af;">${triggers} Triggers</div>
+                            <div style="font-size: 12px; color: #1e40af;">${negativeTriggers} negative, ${regexTriggers} regex</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+                        <span style="font-size: 13px; color: #6b7280;">
+                            💬 ${quickReplies} quick replies, ${fullReplies} full replies
+                        </span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Auto-update preview when switching to Test tab
+        const originalSwitchTab = switchScenarioTab;
+        switchScenarioTab = function(tabName) {
+            originalSwitchTab(tabName);
+            if (tabName === 'test') {
+                updateScenarioPreview();
+            }
+        };
+
+        // =============================================
+        // END TEST & PREVIEW FUNCTIONS
         // =============================================
 
     </script>
