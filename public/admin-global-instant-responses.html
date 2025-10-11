@@ -3225,13 +3225,21 @@ Just checking in..."></textarea>
             });
 
             try {
-                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}/twilio-test-config`, {
-                    method: 'POST',
+                const response = await fetch(`/api/admin/global-instant-responses/${activeTemplateId}`, {
+                    method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         Authorization: `Bearer ${getAuthToken()}`
                     },
-                    body: JSON.stringify({ phoneNumber, enabled, accountSid, authToken, notes })
+                    body: JSON.stringify({ 
+                        twilioTest: {
+                            phoneNumber,
+                            enabled,
+                            accountSid,
+                            authToken,
+                            notes
+                        }
+                    })
                 });
 
                 if (!response.ok) {
