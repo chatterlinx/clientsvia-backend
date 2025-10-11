@@ -21,9 +21,21 @@ const logger = require('../../utils/logger');
  * Save Twilio test configuration for a template
  */
 router.post('/:templateId/config', authenticateJWT, async (req, res) => {
+    console.log('🧠 [GLOBAL BRAIN CONFIG] Route handler started');
+    console.log('🧠 [GLOBAL BRAIN CONFIG] Template ID:', req.params.templateId);
+    console.log('🧠 [GLOBAL BRAIN CONFIG] Request body keys:', Object.keys(req.body));
+    
     try {
         const { templateId } = req.params;
         const { enabled, phoneNumber, accountSid, authToken, notes } = req.body;
+        
+        console.log('🧠 [GLOBAL BRAIN CONFIG] Parsed params:', {
+            templateId,
+            enabled,
+            phoneNumber,
+            hasAccountSid: !!accountSid,
+            hasAuthToken: !!authToken
+        });
         
         logger.info(`📞 [TEST CONFIG] Updating test config for template ${templateId}`, {
             enabled,
@@ -94,9 +106,10 @@ router.post('/:templateId/config', authenticateJWT, async (req, res) => {
             });
         }
         
+        console.log('🧠 [GLOBAL BRAIN CONFIG] Template updated successfully:', template.name);
         logger.info(`✅ [TEST CONFIG] Updated successfully for ${template.name}`);
         
-        res.json({
+        const response = {
             success: true,
             message: 'Test configuration saved successfully',
             template: {
@@ -104,9 +117,13 @@ router.post('/:templateId/config', authenticateJWT, async (req, res) => {
                 name: template.name,
                 twilioTest: template.twilioTest
             }
-        });
+        };
+        
+        console.log('🧠 [GLOBAL BRAIN CONFIG] Sending response:', JSON.stringify(response, null, 2));
+        res.json(response);
         
     } catch (error) {
+        console.error('🧠 [GLOBAL BRAIN CONFIG] ERROR:', error);
         logger.error('❌ [TEST CONFIG] Error saving config:', error);
         res.status(500).json({
             success: false,
