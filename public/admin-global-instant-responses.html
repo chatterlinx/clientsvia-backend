@@ -3912,6 +3912,9 @@ Just checking in..."></textarea>
             // Load content for specific sub-tabs
             if (subTabName === 'templates') {
                 renderTemplatesTable();
+            } else if (subTabName === 'dashboard') {
+                // Load Twilio test config when viewing dashboard
+                loadTwilioTestConfig();
             }
         }
 
