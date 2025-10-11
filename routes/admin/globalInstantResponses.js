@@ -1308,5 +1308,382 @@ router.post('/:id/sync-from-parent', async (req, res) => {
     }
 });
 
+// ============================================================================
+// SCENARIO CRUD ROUTES - V2.0 WORLD-CLASS AI
+// ============================================================================
+
+/**
+ * POST /api/admin/global-instant-responses/:templateId/categories/:categoryId/scenarios
+ * Create a new scenario within a category
+ */
+router.post('/:templateId/categories/:categoryId/scenarios', async (req, res) => {
+    const { templateId, categoryId } = req.params;
+    const scenarioData = req.body;
+    const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
+
+    try {
+        console.log(`➕ [SCENARIO CREATE] Template: ${templateId}, Category: ${categoryId}`);
+        
+        const template = await GlobalInstantResponseTemplate.findById(templateId);
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+
+        // Find the category
+        const category = template.categories.find(c => c.id === categoryId);
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                message: 'Category not found'
+            });
+        }
+
+        // Generate unique scenario ID if not provided
+        if (!scenarioData.scenarioId) {
+            scenarioData.scenarioId = `scenario-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        }
+
+        // Set defaults for V2.0 fields
+        const newScenario = {
+            scenarioId: scenarioData.scenarioId,
+            version: 1,
+            status: scenarioData.status || 'live',
+            name: scenarioData.name,
+            isActive: scenarioData.isActive !== undefined ? scenarioData.isActive : true,
+            categories: [categoryId],
+            priority: scenarioData.priority || 0,
+            cooldownSeconds: scenarioData.cooldownSeconds || 0,
+            language: scenarioData.language || 'auto',
+            channel: scenarioData.channel || 'any',
+            
+            // Matching
+            triggers: scenarioData.triggers || [],
+            regexTriggers: scenarioData.regexTriggers || [],
+            negativeTriggers: scenarioData.negativeTriggers || [],
+            contextWeight: scenarioData.contextWeight !== undefined ? scenarioData.contextWeight : 0.7,
+            preconditions: scenarioData.preconditions || {},
+            effects: scenarioData.effects || {},
+            
+            // Replies
+            quickReplies: scenarioData.quickReplies || [],
+            fullReplies: scenarioData.fullReplies || [],
+            followUpFunnel: scenarioData.followUpFunnel || '',
+            replySelection: scenarioData.replySelection || 'bandit',
+            
+            // Entities
+            entityCapture: scenarioData.entityCapture || [],
+            entityValidation: scenarioData.entityValidation || {},
+            dynamicVariables: scenarioData.dynamicVariables || {},
+            
+            // Actions & Safety
+            actionHooks: scenarioData.actionHooks || [],
+            handoffPolicy: scenarioData.handoffPolicy || 'low_confidence',
+            sensitiveInfoRule: scenarioData.sensitiveInfoRule || 'platform_default',
+            customMasking: scenarioData.customMasking || {},
+            
+            // Timing
+            timedFollowUp: scenarioData.timedFollowUp || {
+                enabled: false,
+                delaySeconds: 50,
+                messages: [],
+                extensionSeconds: 30
+            },
+            silencePolicy: scenarioData.silencePolicy || {
+                maxConsecutive: 2,
+                finalWarning: 'Hello? Did I lose you?'
+            },
+            
+            // Voice
+            toneLevel: scenarioData.toneLevel || 2,
+            ttsOverride: scenarioData.ttsOverride || {},
+            
+            // Metadata
+            createdBy: adminUser,
+            updatedBy: adminUser,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            legacyMigrated: false
+        };
+
+        // Add to category
+        category.scenarios.push(newScenario);
+
+        // Update template stats
+        template.stats.totalScenarios = (template.stats.totalScenarios || 0) + 1;
+        template.stats.totalTriggers = (template.stats.totalTriggers || 0) + (scenarioData.triggers?.length || 0);
+        
+        // Add changelog
+        template.addChangeLog(
+            `Added scenario "${newScenario.name}" to category "${category.name}"`,
+            adminUser
+        );
+
+        await template.save();
+
+        console.log(`✅ [SCENARIO CREATE] Created: ${newScenario.name} (${newScenario.scenarioId})`);
+
+        res.json({
+            success: true,
+            message: 'Scenario created successfully',
+            data: newScenario
+        });
+
+    } catch (error) {
+        console.error('❌ [SCENARIO CREATE] Error:', error.message, error.stack);
+        res.status(500).json({
+            success: false,
+            message: `Error creating scenario: ${error.message}`
+        });
+    }
+});
+
+/**
+ * PATCH /api/admin/global-instant-responses/:templateId/categories/:categoryId/scenarios/:scenarioId
+ * Update an existing scenario
+ */
+router.patch('/:templateId/categories/:categoryId/scenarios/:scenarioId', async (req, res) => {
+    const { templateId, categoryId, scenarioId } = req.params;
+    const updates = req.body;
+    const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
+
+    try {
+        console.log(`✏️ [SCENARIO UPDATE] Scenario: ${scenarioId}`);
+        
+        const template = await GlobalInstantResponseTemplate.findById(templateId);
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+
+        // Find the category
+        const category = template.categories.find(c => c.id === categoryId);
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                message: 'Category not found'
+            });
+        }
+
+        // Find the scenario
+        const scenarioIndex = category.scenarios.findIndex(s => s.scenarioId === scenarioId || s.id === scenarioId);
+        if (scenarioIndex === -1) {
+            return res.status(404).json({
+                success: false,
+                message: 'Scenario not found'
+            });
+        }
+
+        const scenario = category.scenarios[scenarioIndex];
+        const changes = [];
+
+        // Track what changed
+        if (updates.name && updates.name !== scenario.name) {
+            changes.push(`name: "${scenario.name}" → "${updates.name}"`);
+            scenario.name = updates.name;
+        }
+
+        if (updates.triggers) {
+            scenario.triggers = updates.triggers;
+            changes.push('updated triggers');
+        }
+
+        if (updates.quickReplies) {
+            scenario.quickReplies = updates.quickReplies;
+            changes.push('updated quick replies');
+        }
+
+        if (updates.fullReplies) {
+            scenario.fullReplies = updates.fullReplies;
+            changes.push('updated full replies');
+        }
+
+        // Update all other fields
+        const updatableFields = [
+            'status', 'isActive', 'priority', 'cooldownSeconds', 'language', 'channel',
+            'regexTriggers', 'negativeTriggers', 'contextWeight', 'preconditions', 'effects',
+            'followUpFunnel', 'replySelection', 'entityCapture', 'entityValidation',
+            'dynamicVariables', 'actionHooks', 'handoffPolicy', 'sensitiveInfoRule',
+            'customMasking', 'timedFollowUp', 'silencePolicy', 'toneLevel', 'ttsOverride'
+        ];
+
+        updatableFields.forEach(field => {
+            if (updates[field] !== undefined) {
+                scenario[field] = updates[field];
+                if (changes.length < 10) { // Limit change log verbosity
+                    changes.push(`updated ${field}`);
+                }
+            }
+        });
+
+        // Increment version if moving from draft to live
+        if (updates.status === 'live' && scenario.status === 'draft') {
+            scenario.version = (scenario.version || 1) + 1;
+            changes.push(`published v${scenario.version}`);
+        }
+
+        // Update metadata
+        scenario.updatedBy = adminUser;
+        scenario.updatedAt = new Date();
+
+        // Update template changelog
+        template.addChangeLog(
+            `Updated scenario "${scenario.name}": ${changes.join(', ')}`,
+            adminUser
+        );
+
+        await template.save();
+
+        console.log(`✅ [SCENARIO UPDATE] Updated: ${scenario.name}`);
+
+        res.json({
+            success: true,
+            message: 'Scenario updated successfully',
+            data: scenario
+        });
+
+    } catch (error) {
+        console.error('❌ [SCENARIO UPDATE] Error:', error.message, error.stack);
+        res.status(500).json({
+            success: false,
+            message: `Error updating scenario: ${error.message}`
+        });
+    }
+});
+
+/**
+ * DELETE /api/admin/global-instant-responses/:templateId/categories/:categoryId/scenarios/:scenarioId
+ * Delete a scenario
+ */
+router.delete('/:templateId/categories/:categoryId/scenarios/:scenarioId', async (req, res) => {
+    const { templateId, categoryId, scenarioId } = req.params;
+    const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
+
+    try {
+        console.log(`🗑️ [SCENARIO DELETE] Scenario: ${scenarioId}`);
+        
+        const template = await GlobalInstantResponseTemplate.findById(templateId);
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+
+        // Find the category
+        const category = template.categories.find(c => c.id === categoryId);
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                message: 'Category not found'
+            });
+        }
+
+        // Find the scenario
+        const scenarioIndex = category.scenarios.findIndex(s => s.scenarioId === scenarioId || s.id === scenarioId);
+        if (scenarioIndex === -1) {
+            return res.status(404).json({
+                success: false,
+                message: 'Scenario not found'
+            });
+        }
+
+        const scenario = category.scenarios[scenarioIndex];
+        const scenarioName = scenario.name;
+        const triggerCount = scenario.triggers?.length || 0;
+
+        // Remove scenario
+        category.scenarios.splice(scenarioIndex, 1);
+
+        // Update template stats
+        template.stats.totalScenarios = Math.max(0, (template.stats.totalScenarios || 0) - 1);
+        template.stats.totalTriggers = Math.max(0, (template.stats.totalTriggers || 0) - triggerCount);
+
+        // Add changelog
+        template.addChangeLog(
+            `Deleted scenario "${scenarioName}" from category "${category.name}"`,
+            adminUser
+        );
+
+        await template.save();
+
+        console.log(`✅ [SCENARIO DELETE] Deleted: ${scenarioName}`);
+
+        res.json({
+            success: true,
+            message: 'Scenario deleted successfully'
+        });
+
+    } catch (error) {
+        console.error('❌ [SCENARIO DELETE] Error:', error.message, error.stack);
+        res.status(500).json({
+            success: false,
+            message: `Error deleting scenario: ${error.message}`
+        });
+    }
+});
+
+/**
+ * GET /api/admin/global-instant-responses/:templateId/scenarios
+ * Get all scenarios across all categories (for search/filter)
+ */
+router.get('/:templateId/scenarios', async (req, res) => {
+    const { templateId } = req.params;
+    const { status, language, channel, categoryId } = req.query;
+
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(templateId);
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+
+        // Collect all scenarios from all categories
+        let allScenarios = [];
+        template.categories.forEach(category => {
+            category.scenarios.forEach(scenario => {
+                allScenarios.push({
+                    ...scenario.toObject(),
+                    categoryId: category.id,
+                    categoryName: category.name
+                });
+            });
+        });
+
+        // Apply filters
+        if (status) {
+            allScenarios = allScenarios.filter(s => s.status === status);
+        }
+        if (language) {
+            allScenarios = allScenarios.filter(s => s.language === language || s.language === 'auto');
+        }
+        if (channel) {
+            allScenarios = allScenarios.filter(s => s.channel === channel || s.channel === 'any');
+        }
+        if (categoryId) {
+            allScenarios = allScenarios.filter(s => s.categoryId === categoryId);
+        }
+
+        res.json({
+            success: true,
+            count: allScenarios.length,
+            data: allScenarios
+        });
+
+    } catch (error) {
+        console.error('❌ Error fetching scenarios:', error.message, error.stack);
+        res.status(500).json({
+            success: false,
+            message: `Error fetching scenarios: ${error.message}`
+        });
+    }
+});
+
 module.exports = router;
 
