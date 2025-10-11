@@ -3141,6 +3141,8 @@ Just checking in..."></textarea>
 
                 const result = await response.json();
                 const template = result.data;
+                
+                console.log('📞 [TWILIO TEST] twilioTest data from DB:', template.twilioTest);
 
                 // Populate form
                 document.getElementById('twilio-test-phone').value = template.twilioTest?.phoneNumber || '';
@@ -3150,6 +3152,7 @@ Just checking in..."></textarea>
                 
                 // Set toggle state
                 const enabled = template.twilioTest?.enabled || false;
+                console.log('📞 [TWILIO TEST] Setting enabled to:', enabled);
                 document.getElementById('twilio-test-enabled').checked = enabled;
                 
                 // Update toggle UI
