@@ -218,12 +218,16 @@ try {
 }
 
 // Global AI Brain - Twilio Test Routes
+console.log('🔍 [APP.JS] Attempting to load Global AI Brain Test routes...');
 try {
     const globalAIBrainTestRoutes = require('./routes/admin/globalAIBrainTest');
+    console.log('🔍 [APP.JS] Route file loaded successfully');
     app.use('/api/admin/global-ai-brain-test', globalAIBrainTestRoutes);
+    console.log('✅ [APP.JS] Global AI Brain Test routes registered at /api/admin/global-ai-brain-test');
     logger.info('✅ Global AI Brain Test routes registered - Twilio testing enabled');
 } catch (error) {
-    logger.error('❌ Failed to load Global Instant Response Templates routes', { error: error.message });
+    console.error('❌ [APP.JS] Failed to load Global AI Brain Test routes:', error);
+    logger.error('❌ Failed to load Global AI Brain Test routes', { error: error.message, stack: error.stack });
 }
 
 // Add simplified AI Agent Logic routes as fallback (no auth required for basic functionality)
