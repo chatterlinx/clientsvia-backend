@@ -5,6 +5,7 @@
 // NEVER hardcode company IDs or special treatment for any single company
 // ALWAYS design for global platform scalability
 // TEST: "Would this work for company #1000 tomorrow?" If NO, fix it!
+console.log('🚀 [V2TWILIO] ========== LOADING v2twilio.js FILE ==========');
 const express = require('express');
 const twilio = require('twilio');
 const Company = require('../models/v2Company');
@@ -25,6 +26,7 @@ const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
 // Legacy personality system removed - using modern AI Agent Logic responseCategories
 
 const router = express.Router();
+console.log('🚀 [V2TWILIO] ========== EXPRESS ROUTER CREATED ==========');
 
 // 🚨 GLOBAL CHECKPOINT: Log ALL requests to ANY Twilio endpoint
 router.use((req, res, next) => {
@@ -1447,4 +1449,5 @@ router.all('*', (req, res) => {
   res.status(404).send('Route not found in v2twilio.js');
 });
 
+console.log('🚀 [V2TWILIO] ========== EXPORTING ROUTER (FILE LOADED SUCCESSFULLY) ==========');
 module.exports = router;
