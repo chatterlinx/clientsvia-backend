@@ -7067,8 +7067,25 @@ Continue?`;
                 document.getElementById('scenario-dynamic-variables').value = varLines.join('\n');
             }
             
-            document.getElementById('scenario-entity-validation').value = 
-                data.entityValidation ? JSON.stringify(Object.fromEntries(data.entityValidation), null, 2) : '';
+            // Entity validation - handle both Map and Object
+            if (data.entityValidation) {
+                try {
+                    let entityValObj;
+                    if (data.entityValidation instanceof Map) {
+                        entityValObj = Object.fromEntries(data.entityValidation);
+                    } else if (typeof data.entityValidation === 'object') {
+                        entityValObj = data.entityValidation;
+                    } else {
+                        entityValObj = {};
+                    }
+                    document.getElementById('scenario-entity-validation').value = JSON.stringify(entityValObj, null, 2);
+                } catch (e) {
+                    console.error('⚠️ [POPULATE] entityValidation error:', e);
+                    document.getElementById('scenario-entity-validation').value = '';
+                }
+            } else {
+                document.getElementById('scenario-entity-validation').value = '';
+            }
             
             // Advanced Settings Tab
             document.getElementById('scenario-cooldown').value = data.cooldownSeconds || 0;
@@ -7095,11 +7112,45 @@ Continue?`;
                 document.getElementById('scenario-tts-volume').value = data.ttsOverride.volume || '';
             }
             
-            // Preconditions & Effects (JSON)
-            document.getElementById('scenario-preconditions').value = 
-                data.preconditions ? JSON.stringify(Object.fromEntries(data.preconditions), null, 2) : '';
-            document.getElementById('scenario-effects').value = 
-                data.effects ? JSON.stringify(Object.fromEntries(data.effects), null, 2) : '';
+            // Preconditions - handle both Map and Object
+            if (data.preconditions) {
+                try {
+                    let precondObj;
+                    if (data.preconditions instanceof Map) {
+                        precondObj = Object.fromEntries(data.preconditions);
+                    } else if (typeof data.preconditions === 'object') {
+                        precondObj = data.preconditions;
+                    } else {
+                        precondObj = {};
+                    }
+                    document.getElementById('scenario-preconditions').value = JSON.stringify(precondObj, null, 2);
+                } catch (e) {
+                    console.error('⚠️ [POPULATE] preconditions error:', e);
+                    document.getElementById('scenario-preconditions').value = '';
+                }
+            } else {
+                document.getElementById('scenario-preconditions').value = '';
+            }
+            
+            // Effects - handle both Map and Object
+            if (data.effects) {
+                try {
+                    let effectsObj;
+                    if (data.effects instanceof Map) {
+                        effectsObj = Object.fromEntries(data.effects);
+                    } else if (typeof data.effects === 'object') {
+                        effectsObj = data.effects;
+                    } else {
+                        effectsObj = {};
+                    }
+                    document.getElementById('scenario-effects').value = JSON.stringify(effectsObj, null, 2);
+                } catch (e) {
+                    console.error('⚠️ [POPULATE] effects error:', e);
+                    document.getElementById('scenario-effects').value = '';
+                }
+            } else {
+                document.getElementById('scenario-effects').value = '';
+            }
             
             // Action Hooks
             document.getElementById('scenario-action-hooks').value = (data.actionHooks || []).join(', ');
