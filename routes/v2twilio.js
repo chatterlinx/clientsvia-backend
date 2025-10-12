@@ -1323,31 +1323,6 @@ router.all('/webhook-test', (req, res) => {
   }
 });
 
-// 🚨 CATCH-ALL ENDPOINT to log any unmatched Twilio requests
-router.all('*', (req, res) => {
-  console.log('❌ UNMATCHED TWILIO REQUEST:', {
-    timestamp: new Date().toISOString(),
-    method: req.method,
-    url: req.url,
-    fullUrl: req.originalUrl,
-    headers: req.headers,
-    body: req.body,
-    query: req.query,
-    ip: req.ip || req.connection.remoteAddress
-  });
-  
-  res.status(404).json({
-    error: 'Twilio endpoint not found',
-    availableEndpoints: [
-      '/api/twilio/voice',
-      '/api/twilio/voice/:companyID',
-      '/api/twilio/handle-speech',
-      '/api/twilio/webhook-test'
-    ],
-    requestedUrl: req.originalUrl
-  });
-});
-
 // ============================================
 // 🧠 GLOBAL AI BRAIN TEST RESPONSE HANDLER
 // ============================================
@@ -1479,14 +1454,29 @@ router.post('/test-respond/:templateId', async (req, res) => {
   }
 });
 
-// 🔍 DEBUG: Catch-all to see what routes are being hit
+// 🚨 CATCH-ALL ENDPOINT - Must be LAST to log any unmatched Twilio requests
 router.all('*', (req, res) => {
-  console.log(`🚨 [404 CATCH-ALL] Unmatched Twilio route:`);
-  console.log(`   Method: ${req.method}`);
-  console.log(`   Path: ${req.path}`);
-  console.log(`   Original URL: ${req.originalUrl}`);
-  console.log(`   Params:`, req.params);
-  res.status(404).send('Route not found in v2twilio.js');
+  console.log('❌ UNMATCHED TWILIO REQUEST:', {
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    url: req.url,
+    fullUrl: req.originalUrl,
+    path: req.path,
+    params: req.params,
+    hasCallSid: !!(req.body?.CallSid)
+  });
+  
+  res.status(404).json({
+    error: 'Twilio endpoint not found',
+    availableEndpoints: [
+      '/api/twilio/voice',
+      '/api/twilio/voice/:companyID',
+      '/api/twilio/handle-speech',
+      '/api/twilio/test-respond/:templateId',
+      '/api/twilio/webhook-test'
+    ],
+    requestedUrl: req.originalUrl
+  });
 });
 
 console.log('🚀 [V2TWILIO] ========== EXPORTING ROUTER (FILE LOADED SUCCESSFULLY) ==========');
