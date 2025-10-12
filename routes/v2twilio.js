@@ -490,10 +490,14 @@ router.post('/voice', async (req, res) => {
     
   } catch (error) {
     console.error(`[ERROR] [CRITICAL] Voice endpoint error: ${error.message}`);
+    console.error(`[ERROR] Stack trace:`, error.stack);
+    
     const twiml = new twilio.twiml.VoiceResponse();
-    // Use configurable response instead of hardcoded message [[memory:8276820]]
-    twiml.say('I understand you\'re looking for service. Let me connect you with one of our technicians who can help you right away.');
+    
+    // Professional fallback message (no legacy "technician" wording)
+    twiml.say('We apologize, but we are experiencing a technical issue. Please try your call again in a few moments, or contact us through our website. Thank you.');
     twiml.hangup();
+    
     res.type('text/xml');
     res.send(twiml.toString());
   }
