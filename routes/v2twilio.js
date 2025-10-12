@@ -1359,11 +1359,22 @@ router.post('/test-respond/:templateId', async (req, res) => {
     
     console.log(`🧠 [CHECKPOINT 4] Initializing HybridScenarioSelector...`);
     console.log(`🧠 [CHECKPOINT 4] Categories count: ${template.categories?.length || 0}`);
-    const selector = new HybridScenarioSelector(template.categories);
+    const selector = new HybridScenarioSelector();
     console.log(`🧠 [CHECKPOINT 4] ✅ Selector initialized`);
     
     console.log(`🧠 [CHECKPOINT 5] Running scenario matching...`);
-    const result = selector.selectScenario(speechText);
+    console.log(`🧠 [CHECKPOINT 5] Extracting scenarios from ${template.categories.length} categories...`);
+    
+    // Extract all scenarios from categories
+    const allScenarios = [];
+    template.categories.forEach(category => {
+      if (category.scenarios && Array.isArray(category.scenarios)) {
+        allScenarios.push(...category.scenarios);
+      }
+    });
+    
+    console.log(`🧠 [CHECKPOINT 5] Total scenarios to match: ${allScenarios.length}`);
+    const result = await selector.selectScenario(speechText, allScenarios);
     console.log(`🧠 [CHECKPOINT 5] ✅ Matching complete`);
     console.log(`🧠 [CHECKPOINT 5] Match found: ${!!result.match}`);
     console.log(`🧠 [CHECKPOINT 5] Confidence: ${(result.confidence * 100).toFixed(1)}%`);
