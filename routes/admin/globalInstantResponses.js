@@ -1866,10 +1866,31 @@ router.post('/seed-template', async (req, res) => {
                 
                 // ✅ UPDATE categories and scenarios (core content)
                 existingTemplate.categories = templateData.categories;
-                existingTemplate.stats = templateData.stats;
                 existingTemplate.version = templateData.version;
                 existingTemplate.description = templateData.description;
                 existingTemplate.updatedAt = new Date();
+                
+                // ✅ CALCULATE stats from actual data (don't rely on templateData.stats)
+                let totalScenarios = 0;
+                let totalTriggers = 0;
+                existingTemplate.categories.forEach(category => {
+                    if (category.scenarios && Array.isArray(category.scenarios)) {
+                        totalScenarios += category.scenarios.length;
+                        category.scenarios.forEach(scenario => {
+                            if (scenario.triggers && Array.isArray(scenario.triggers)) {
+                                totalTriggers += scenario.triggers.length;
+                            }
+                        });
+                    }
+                });
+                
+                existingTemplate.stats = {
+                    totalCategories: existingTemplate.categories.length,
+                    totalScenarios,
+                    totalTriggers
+                };
+                
+                console.log(`📊 [SEED API] Calculated stats: ${totalScenarios} scenarios, ${totalTriggers} triggers`);
                 
                 // ✅ RESTORE Twilio config (preserve user settings)
                 if (twilioBackup) {
