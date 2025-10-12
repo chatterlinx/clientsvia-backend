@@ -1781,23 +1781,68 @@ router.post('/seed-template', async (req, res) => {
         const templateData = buildUniversalTestTemplate(ulid);
         
         // Check if existing template needs to be replaced
+        let template;
         if (replaceExisting) {
             const existingTemplate = await GlobalInstantResponseTemplate.findOne({ 
                 name: templateInfo.name 
             });
             
             if (existingTemplate) {
-                console.log(`🗑️  [SEED API] Found existing template: ${existingTemplate._id}`);
-                console.log(`🗑️  [SEED API] Deleting existing template...`);
-                await GlobalInstantResponseTemplate.deleteOne({ _id: existingTemplate._id });
-                console.log(`✅ [SEED API] Existing template deleted`);
+                console.log(`🔄 [SEED API] Found existing template: ${existingTemplate._id}`);
+                console.log(`💾 [SEED API] PRESERVING Twilio configuration...`);
+                
+                // ✅ WORLD-CLASS: Backup Twilio config before updating
+                const twilioBackup = existingTemplate.twilioTest ? {
+                    enabled: existingTemplate.twilioTest.enabled,
+                    phoneNumber: existingTemplate.twilioTest.phoneNumber,
+                    accountSid: existingTemplate.twilioTest.accountSid,
+                    authToken: existingTemplate.twilioTest.authToken,
+                    greeting: existingTemplate.twilioTest.greeting,
+                    lastTestedAt: existingTemplate.twilioTest.lastTestedAt,
+                    testCallCount: existingTemplate.twilioTest.testCallCount,
+                    notes: existingTemplate.twilioTest.notes
+                } : null;
+                
+                if (twilioBackup) {
+                    console.log(`📞 [SEED API] Twilio config backed up:`);
+                    console.log(`   - Enabled: ${twilioBackup.enabled}`);
+                    console.log(`   - Phone: ${twilioBackup.phoneNumber || 'Not set'}`);
+                    console.log(`   - Account SID: ${twilioBackup.accountSid || 'Not set'}`);
+                }
+                
+                // ✅ UPDATE categories and scenarios (core content)
+                existingTemplate.categories = templateData.categories;
+                existingTemplate.stats = templateData.stats;
+                existingTemplate.version = templateData.version;
+                existingTemplate.description = templateData.description;
+                existingTemplate.updatedAt = new Date();
+                
+                // ✅ RESTORE Twilio config (preserve user settings)
+                if (twilioBackup) {
+                    existingTemplate.twilioTest = twilioBackup;
+                    console.log(`✅ [SEED API] Twilio config RESTORED`);
+                } else {
+                    console.log(`ℹ️  [SEED API] No Twilio config to restore (was empty)`);
+                }
+                
+                await existingTemplate.save();
+                template = existingTemplate;
+                
+                console.log(`✅ [SEED API] Template UPDATED (categories/scenarios refreshed, Twilio preserved)`);
+            } else {
+                // No existing template found, create fresh
+                console.log(`📝 [SEED API] No existing template found, creating fresh...`);
+                template = new GlobalInstantResponseTemplate(templateData);
+                await template.save();
+                console.log(`✅ [SEED API] Template CREATED from scratch`);
             }
+        } else {
+            // replaceExisting = false, always create new
+            console.log(`📝 [SEED API] Creating new template (replaceExisting=false)...`);
+            template = new GlobalInstantResponseTemplate(templateData);
+            await template.save();
+            console.log(`✅ [SEED API] Template CREATED`);
         }
-        
-        // Create new template
-        console.log(`📝 [SEED API] Creating new template...`);
-        const template = new GlobalInstantResponseTemplate(templateData);
-        await template.save();
         
         console.log(`✅ [SEED API] Template created successfully!`);
         console.log(`📊 [SEED API] Template ID: ${template._id}`);
