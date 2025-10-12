@@ -28,6 +28,33 @@ const { stripMarkdown, cleanTextForTTS } = require('../utils/textUtils');
 const router = express.Router();
 console.log('🚀 [V2TWILIO] ========== EXPRESS ROUTER CREATED ==========');
 
+// ============================================
+// 🧪 TEST RESULTS STORAGE (In-Memory)
+// ============================================
+// Store last 50 test results per template (circular buffer)
+const testResultsStore = new Map(); // templateId -> array of results
+
+function saveTestResult(templateId, testData) {
+  if (!testResultsStore.has(templateId)) {
+    testResultsStore.set(templateId, []);
+  }
+  
+  const results = testResultsStore.get(templateId);
+  results.unshift(testData); // Add to front
+  
+  // Keep only last 50
+  if (results.length > 50) {
+    results.pop();
+  }
+  
+  console.log(`🧪 [TEST STORE] Saved test result for template ${templateId}. Total: ${results.length}`);
+}
+
+function getTestResults(templateId, limit = 20) {
+  const results = testResultsStore.get(templateId) || [];
+  return results.slice(0, limit);
+}
+
 // 🚨 GLOBAL CHECKPOINT: Log ALL requests to ANY Twilio endpoint
 router.use((req, res, next) => {
   console.log('🔍 TWILIO ENDPOINT HIT:', {
@@ -1444,6 +1471,28 @@ router.post('/test-respond/:templateId', async (req, res) => {
     });
     console.log(`🧠 [CHECKPOINT 11] ✅ Stats updated`);
     
+    // ============================================
+    // 🧪 SAVE TEST RESULT TO MEMORY
+    // ============================================
+    const testResult = {
+      timestamp: new Date().toISOString(),
+      phrase: speechText,
+      matched: !!result.match,
+      confidence: result.confidence || 0,
+      threshold: 0.45,
+      scenario: result.match ? {
+        id: result.match.scenarioId || result.match._id,
+        name: result.match.name,
+        category: result.match.category
+      } : null,
+      topCandidates: result.trace?.topCandidates || [],
+      timing: result.trace?.timingMs || {},
+      callSid: req.body.CallSid
+    };
+    
+    saveTestResult(templateId, testResult);
+    console.log(`🧪 [CHECKPOINT 11.5] Test result saved to memory`);
+    
     console.log(`🧠 [CHECKPOINT 12] Sending TwiML response to Twilio...`);
     res.type('text/xml').status(200).send(twiml.toString());
     console.log(`🧠 [CHECKPOINT 12] ✅ Response sent successfully`);
@@ -1461,6 +1510,25 @@ router.post('/test-respond/:templateId', async (req, res) => {
     twiml.hangup();
     res.type('text/xml').status(200).send(twiml.toString());
   }
+});
+
+// ============================================
+// 🧪 GET TEST RESULTS FOR TEMPLATE
+// ============================================
+router.get('/test-results/:templateId', (req, res) => {
+  const { templateId } = req.params;
+  const limit = parseInt(req.query.limit) || 20;
+  
+  console.log(`🧪 [TEST RESULTS] Fetching last ${limit} results for template ${templateId}`);
+  
+  const results = getTestResults(templateId, limit);
+  
+  res.json({
+    success: true,
+    templateId,
+    count: results.length,
+    results
+  });
 });
 
 // 🚨 CATCH-ALL ENDPOINT - Must be LAST to log any unmatched Twilio requests
