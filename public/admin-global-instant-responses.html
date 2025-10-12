@@ -3504,8 +3504,10 @@ Continue?`;
          */
         async function loadTestPhrases() {
             console.log('📋 [TEST PHRASES] Loading phrases from active template...');
+            console.log('📋 [TEST PHRASES] activeTemplateId:', activeTemplateId);
+            console.log('📋 [TEST PHRASES] activeTemplate:', activeTemplate);
             
-            if (!activeTemplateId || !activeTemplateData) {
+            if (!activeTemplateId || !activeTemplate) {
                 console.error('❌ [TEST PHRASES] No active template found');
                 document.getElementById('test-phrase-categories').innerHTML = `
                     <div class="text-center py-8 text-red-500">
@@ -3521,7 +3523,7 @@ Continue?`;
                 let totalPhrases = 0;
                 
                 // Extract all triggers from all scenarios in all categories
-                activeTemplateData.categories.forEach(category => {
+                activeTemplate.categories.forEach(category => {
                     const categoryData = {
                         id: category.id,
                         name: category.name,
