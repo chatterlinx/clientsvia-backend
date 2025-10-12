@@ -36,6 +36,9 @@ class HybridScenarioSelector {
         // CONFIGURATION
         // ============================================
         
+        // 🛡️ SAFETY HELPER: Convert any value to safe array
+        this.toArr = (v) => Array.isArray(v) ? v : (v ? [v] : []);
+        
         this.config = {
             // Match strategy weights (must sum to 1.0)
             weights: {
@@ -46,7 +49,7 @@ class HybridScenarioSelector {
             },
             
             // Scoring thresholds
-            minConfidenceDefault: 0.65,  // Default if scenario doesn't specify
+            minConfidenceDefault: 0.45,  // 45% threshold - relaxed for real-world usage
             negativeTriggerPenalty: -1.0, // Instant disqualify
             
             // BM25 parameters
@@ -85,8 +88,37 @@ class HybridScenarioSelector {
      */
     async selectScenario(phrase, scenarios, context = {}) {
         const startTime = Date.now();
+        
+        // ============================================
+        // 🛡️ BULLETPROOF INPUT VALIDATION
+        // ============================================
+        const safePhrase = String(phrase || '').trim();
+        const safeScenarios = Array.isArray(scenarios) ? scenarios : [];
+        
+        if (!safePhrase) {
+            logger.error('❌ [SCENARIO SELECTOR] Empty phrase provided');
+            return { 
+                match: null, 
+                scenario: null, 
+                score: 0, 
+                confidence: 0, 
+                trace: { selectionReason: 'empty_phrase' }
+            };
+        }
+        
+        if (safeScenarios.length === 0) {
+            logger.error('❌ [SCENARIO SELECTOR] No scenarios provided');
+            return { 
+                match: null, 
+                scenario: null, 
+                score: 0, 
+                confidence: 0, 
+                trace: { selectionReason: 'no_scenarios' }
+            };
+        }
+        
         const trace = {
-            phrase,
+            phrase: safePhrase,
             normalizedPhrase: '',
             scenariosEvaluated: 0,
             scenariosBlocked: 0,
@@ -116,7 +148,13 @@ class HybridScenarioSelector {
             // STEP 2: FILTER ELIGIBLE SCENARIOS
             // ============================================
             const filterStart = Date.now();
-            const eligibleScenarios = scenarios.filter(s => {
+            const eligibleScenarios = safeScenarios.filter(s => {
+                // 🛡️ SAFETY: Skip malformed scenarios
+                if (!s || typeof s !== 'object') {
+                    logger.error('❌ [SCENARIO SELECTOR] Malformed scenario (not an object)', { scenario: s });
+                    return false;
+                }
+                
                 // Only live and active scenarios
                 if (s.status !== 'live' || s.isActive === false) {
                     return false;
@@ -297,11 +335,28 @@ class HybridScenarioSelector {
         let blocked = false;
         
         // ============================================
+        // 🛡️ SAFETY: Bulletproof array access
+        // ============================================
+        const safeTriggers = this.toArr(scenario.triggers);
+        const safeNegativeTriggers = this.toArr(scenario.negativeTriggers);
+        const safeRegexTriggers = this.toArr(scenario.regexTriggers);
+        
+        // Skip scenario if it has NO triggers at all
+        if (safeTriggers.length === 0 && safeRegexTriggers.length === 0) {
+            logger.warn('⚠️ [SCENARIO SELECTOR] Scenario has no triggers', {
+                scenarioId: scenario.scenarioId || scenario._id,
+                name: scenario.name
+            });
+            return { totalScore: 0, breakdown, confidence: 0, blocked: false };
+        }
+        
+        // ============================================
         // CHECK NEGATIVE TRIGGERS FIRST
         // ============================================
-        if (scenario.negativeTriggers && scenario.negativeTriggers.length > 0) {
-            for (const negTrigger of scenario.negativeTriggers) {
-                if (normalizedPhrase.includes(negTrigger.toLowerCase().trim())) {
+        if (safeNegativeTriggers.length > 0) {
+            for (const negTrigger of safeNegativeTriggers) {
+                const safeTriggerStr = String(negTrigger || '').toLowerCase().trim();
+                if (safeTriggerStr && normalizedPhrase.includes(safeTriggerStr)) {
                     blocked = true;
                     return { totalScore: 0, breakdown, confidence: 0, blocked: true };
                 }
@@ -311,13 +366,21 @@ class HybridScenarioSelector {
         // ============================================
         // 1. BM25 KEYWORD SCORING
         // ============================================
-        if (scenario.triggers && scenario.triggers.length > 0) {
-            breakdown.bm25 = this.calculateBM25Score(
-                phraseTerms,
-                scenario.triggers,
-                this.config.bm25.k1,
-                this.config.bm25.b
-            );
+        if (safeTriggers.length > 0) {
+            try {
+                breakdown.bm25 = this.calculateBM25Score(
+                    phraseTerms,
+                    safeTriggers,
+                    this.config.bm25.k1,
+                    this.config.bm25.b
+                );
+            } catch (err) {
+                logger.error('❌ [SCENARIO SELECTOR] BM25 scoring error', {
+                    scenarioId: scenario.scenarioId || scenario._id,
+                    error: String(err)
+                });
+                breakdown.bm25 = 0;
+            }
         }
         
         // ============================================
@@ -330,14 +393,22 @@ class HybridScenarioSelector {
         // ============================================
         // 3. REGEX PATTERN MATCHING
         // ============================================
-        if (scenario.regexTriggers && scenario.regexTriggers.length > 0) {
-            const regexScore = this.calculateRegexScore(
-                normalizedPhrase,
-                scenario.regexTriggers
-            );
-            // Regex match = high confidence boost
-            if (regexScore > 0) {
-                breakdown.regex = 1.0; // Full regex match = 100%
+        if (safeRegexTriggers.length > 0) {
+            try {
+                const regexScore = this.calculateRegexScore(
+                    normalizedPhrase,
+                    safeRegexTriggers
+                );
+                // Regex match = high confidence boost
+                if (regexScore > 0) {
+                    breakdown.regex = 1.0; // Full regex match = 100%
+                }
+            } catch (err) {
+                logger.error('❌ [SCENARIO SELECTOR] Regex scoring error', {
+                    scenarioId: scenario.scenarioId || scenario._id,
+                    error: String(err)
+                });
+                breakdown.regex = 0;
             }
         }
         
@@ -357,10 +428,21 @@ class HybridScenarioSelector {
             (breakdown.regex * this.config.weights.regex) +
             (breakdown.context * this.config.weights.context);
         
-        // Confidence = total score (0-1 range)
-        const confidence = Math.min(Math.max(totalScore, 0), 1);
+        // 🛡️ SAFETY: NEVER allow NaN or Infinity
+        const safeScore = Number.isFinite(totalScore) ? totalScore : 0;
+        const confidence = Math.min(Math.max(safeScore, 0), 1);
         
-        return { totalScore, breakdown, confidence, blocked: false };
+        // Final validation
+        if (!Number.isFinite(confidence)) {
+            logger.error('❌ [SCENARIO SELECTOR] Non-finite confidence', {
+                totalScore,
+                breakdown,
+                scenarioId: scenario.scenarioId || scenario._id
+            });
+            return { totalScore: 0, breakdown, confidence: 0, blocked: false };
+        }
+        
+        return { totalScore: safeScore, breakdown, confidence, blocked: false };
     }
     
     // ============================================
