@@ -1349,8 +1349,9 @@ router.all('*', (req, res) => {
 // ============================================
 // 🧠 GLOBAL AI BRAIN TEST RESPONSE HANDLER
 // ============================================
+console.log('🔍 [ROUTE REGISTRATION] Registering /test-respond/:templateId route...');
 router.post('/test-respond/:templateId', async (req, res) => {
-  console.log(`🧠 [GLOBAL BRAIN TEST] Processing speech for template: ${req.params.templateId}`);
+  console.log(`🧠 [GLOBAL BRAIN TEST] ===== ROUTE HIT ===== Processing speech for template: ${req.params.templateId}`);
   
   try {
     const { templateId } = req.params;
@@ -1434,6 +1435,16 @@ router.post('/test-respond/:templateId', async (req, res) => {
     res.type('text/xml');
     res.send(twiml.toString());
   }
+});
+
+// 🔍 DEBUG: Catch-all to see what routes are being hit
+router.all('*', (req, res) => {
+  console.log(`🚨 [404 CATCH-ALL] Unmatched Twilio route:`);
+  console.log(`   Method: ${req.method}`);
+  console.log(`   Path: ${req.path}`);
+  console.log(`   Original URL: ${req.originalUrl}`);
+  console.log(`   Params:`, req.params);
+  res.status(404).send('Route not found in v2twilio.js');
 });
 
 module.exports = router;
