@@ -1353,17 +1353,28 @@ router.all('*', (req, res) => {
 // ============================================
 console.log('🔍 [ROUTE REGISTRATION] Registering /test-respond/:templateId route...');
 router.post('/test-respond/:templateId', async (req, res) => {
-  console.log(`🧠 [GLOBAL BRAIN TEST] ===== ROUTE HIT ===== Processing speech for template: ${req.params.templateId}`);
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`🧠 [CHECKPOINT 1] ===== ROUTE HIT ===== test-respond endpoint triggered`);
+  console.log(`🧠 [CHECKPOINT 1] Template ID: ${req.params.templateId}`);
+  console.log(`🧠 [CHECKPOINT 1] Request Method: ${req.method}`);
+  console.log(`🧠 [CHECKPOINT 1] Request Path: ${req.path}`);
+  console.log(`${'='.repeat(80)}\n`);
   
   try {
+    console.log(`🧠 [CHECKPOINT 2] Extracting parameters...`);
     const { templateId } = req.params;
     const speechText = req.body.SpeechResult || '';
+    console.log(`🧠 [CHECKPOINT 2] ✅ Template ID: ${templateId}`);
+    console.log(`🧠 [CHECKPOINT 2] ✅ Speech Input: "${speechText}"`);
     
-    console.log(`🧠 [TEST INPUT] "${speechText}"`);
-    
-    // Load template
+    console.log(`🧠 [CHECKPOINT 3] Loading template from database...`);
     const template = await GlobalInstantResponseTemplate.findById(templateId);
+    console.log(`🧠 [CHECKPOINT 3] ✅ Template loaded: ${template ? template.name : 'NOT FOUND'}`);
+    
     if (!template || !template.twilioTest?.enabled) {
+      console.log(`🧠 [CHECKPOINT 3] ❌ Template not found or testing disabled`);
+      console.log(`🧠 [CHECKPOINT 3] Template exists: ${!!template}`);
+      console.log(`🧠 [CHECKPOINT 3] Testing enabled: ${template?.twilioTest?.enabled}`);
       const twiml = new twilio.twiml.VoiceResponse();
       twiml.say('Test template not found or testing is disabled.');
       twiml.hangup();
@@ -1371,29 +1382,44 @@ router.post('/test-respond/:templateId', async (req, res) => {
       return res.send(twiml.toString());
     }
     
-    // Initialize selector
+    console.log(`🧠 [CHECKPOINT 4] Initializing HybridScenarioSelector...`);
+    console.log(`🧠 [CHECKPOINT 4] Categories count: ${template.categories?.length || 0}`);
     const selector = new HybridScenarioSelector(template.categories);
+    console.log(`🧠 [CHECKPOINT 4] ✅ Selector initialized`);
     
-    // Match scenario
+    console.log(`🧠 [CHECKPOINT 5] Running scenario matching...`);
     const result = selector.selectScenario(speechText);
+    console.log(`🧠 [CHECKPOINT 5] ✅ Matching complete`);
+    console.log(`🧠 [CHECKPOINT 5] Match found: ${!!result.match}`);
+    console.log(`🧠 [CHECKPOINT 5] Confidence: ${(result.confidence * 100).toFixed(1)}%`);
     
+    console.log(`🧠 [CHECKPOINT 6] Building TwiML response...`);
     const twiml = new twilio.twiml.VoiceResponse();
+    console.log(`🧠 [CHECKPOINT 6] ✅ TwiML response object created`);
     
     if (result.match) {
-      console.log(`🧠 [MATCH FOUND] Scenario: ${result.match.name}, Confidence: ${(result.confidence * 100).toFixed(1)}%`);
+      console.log(`🧠 [CHECKPOINT 7] ✅ MATCH FOUND!`);
+      console.log(`🧠 [CHECKPOINT 7] Scenario: ${result.match.name}`);
+      console.log(`🧠 [CHECKPOINT 7] Confidence: ${(result.confidence * 100).toFixed(1)}%`);
       
+      console.log(`🧠 [CHECKPOINT 8] Selecting random reply...`);
       // Pick a random reply
       const replies = result.match.fullReplies && result.match.fullReplies.length > 0 
         ? result.match.fullReplies 
         : result.match.quickReplies || [];
       
+      console.log(`🧠 [CHECKPOINT 8] Available replies: ${replies.length}`);
       const reply = replies[Math.floor(Math.random() * replies.length)] || 'I understand.';
+      console.log(`🧠 [CHECKPOINT 8] ✅ Selected reply: "${reply.substring(0, 50)}..."`);
       
+      console.log(`🧠 [CHECKPOINT 9] Adding reply to TwiML...`);
       // Say the matched reply + debug info
       twiml.say(reply);
       twiml.pause({ length: 1 });
       twiml.say(`You triggered the scenario: ${result.match.name}. Confidence: ${(result.confidence * 100).toFixed(0)} percent. Score: ${(result.score * 100).toFixed(0)} percent.`);
+      console.log(`🧠 [CHECKPOINT 9] ✅ TwiML reply added`);
       
+      console.log(`🧠 [CHECKPOINT 10] Creating gather for continuation...`);
       // Continue conversation
       const gather = twiml.gather({
         input: 'speech',
@@ -1403,12 +1429,15 @@ router.post('/test-respond/:templateId', async (req, res) => {
         speechTimeout: 'auto'
       });
       gather.say('Say something else to test another scenario, or hang up to end the test.');
+      console.log(`🧠 [CHECKPOINT 10] ✅ Gather created`);
       
     } else {
-      console.log(`🧠 [NO MATCH] Confidence too low: ${(result.confidence * 100).toFixed(1)}%`);
+      console.log(`🧠 [CHECKPOINT 7] ❌ NO MATCH`);
+      console.log(`🧠 [CHECKPOINT 7] Confidence too low: ${(result.confidence * 100).toFixed(1)}%`);
       twiml.say(`No scenario matched your input. Confidence was ${(result.confidence * 100).toFixed(0)} percent, which is below the threshold.`);
       twiml.pause({ length: 1 });
       
+      console.log(`🧠 [CHECKPOINT 8] Creating gather for retry...`);
       // Continue conversation
       const gather = twiml.gather({
         input: 'speech',
@@ -1418,21 +1447,32 @@ router.post('/test-respond/:templateId', async (req, res) => {
         speechTimeout: 'auto'
       });
       gather.say('Try saying something else.');
+      console.log(`🧠 [CHECKPOINT 8] ✅ Gather created`);
     }
     
+    console.log(`🧠 [CHECKPOINT 11] Updating test stats in database...`);
     // Update test stats
     await GlobalInstantResponseTemplate.findByIdAndUpdate(templateId, {
       $inc: { 'twilioTest.testCallCount': 1 },
       $set: { 'twilioTest.lastTestedAt': new Date() }
     });
+    console.log(`🧠 [CHECKPOINT 11] ✅ Stats updated`);
     
+    console.log(`🧠 [CHECKPOINT 12] Sending TwiML response to Twilio...`);
     res.type('text/xml');
     res.send(twiml.toString());
+    console.log(`🧠 [CHECKPOINT 12] ✅ Response sent successfully`);
+    console.log(`${'='.repeat(80)}\n`);
     
   } catch (error) {
-    console.error(`🧠 [TEST ERROR]`, error);
+    console.error(`\n${'!'.repeat(80)}`);
+    console.error(`🚨 [ERROR CHECKPOINT] EXCEPTION CAUGHT IN test-respond`);
+    console.error(`🚨 [ERROR CHECKPOINT] Error Message: ${error.message}`);
+    console.error(`🚨 [ERROR CHECKPOINT] Error Stack:`);
+    console.error(error.stack);
+    console.error(`${'!'.repeat(80)}\n`);
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say('An error occurred during testing.');
+    twiml.say('An error occurred during testing. Please check the server logs.');
     twiml.hangup();
     res.type('text/xml');
     res.send(twiml.toString());
