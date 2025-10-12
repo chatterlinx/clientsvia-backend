@@ -1354,6 +1354,60 @@ router.post('/:id/sync-from-parent', async (req, res) => {
 // ============================================================================
 
 /**
+ * GET /api/admin/global-instant-responses/:templateId/categories/:categoryId/scenarios/:scenarioId
+ * Fetch a single scenario by ID (for editing)
+ */
+router.get('/:templateId/categories/:categoryId/scenarios/:scenarioId', async (req, res) => {
+    const { templateId, categoryId, scenarioId } = req.params;
+    const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
+    
+    console.log(`📖 [GET SCENARIO] ${adminUser} fetching scenario ${scenarioId} from category ${categoryId} in template ${templateId}`);
+    
+    try {
+        const template = await GlobalInstantResponseTemplate.findById(templateId);
+        
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+        
+        // Find the category
+        const category = template.categories.find(cat => cat.id === categoryId);
+        if (!category) {
+            return res.status(404).json({
+                success: false,
+                message: 'Category not found'
+            });
+        }
+        
+        // Find the scenario
+        const scenario = category.scenarios.find(scn => scn.scenarioId === scenarioId);
+        if (!scenario) {
+            return res.status(404).json({
+                success: false,
+                message: 'Scenario not found'
+            });
+        }
+        
+        console.log(`✅ [GET SCENARIO] Found scenario: ${scenario.name}`);
+        
+        res.json({
+            success: true,
+            data: scenario
+        });
+        
+    } catch (error) {
+        console.error('❌ [GET SCENARIO] Error:', error.message, error.stack);
+        res.status(500).json({
+            success: false,
+            message: `Error fetching scenario: ${error.message}`
+        });
+    }
+});
+
+/**
  * POST /api/admin/global-instant-responses/:templateId/categories/:categoryId/scenarios
  * Create a new scenario within a category
  */
