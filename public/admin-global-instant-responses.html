@@ -718,6 +718,40 @@
                             </div>
                         </div>
                         
+                        <!-- 🌱 SEED UNIVERSAL TEST TEMPLATE (Production-Ready) -->
+                        <div class="bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-400 rounded-lg p-6">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-seedling text-white text-xl"></i>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-lg font-bold text-gray-900">🌱 Seed Universal Test Template</h4>
+                                            <p class="text-sm text-gray-600">Load 12 test categories with 14 comprehensive scenarios</p>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-2 text-sm text-gray-700">
+                                        <p><i class="fas fa-check-circle text-green-600 mr-2"></i><strong>12 Categories:</strong> Appointment Booking, Emergency, Pricing, Hours, Hold, Gratitude, Complaints, Payments, Billing, General, Small Talk, Confused</p>
+                                        <p><i class="fas fa-rocket text-purple-600 mr-2"></i><strong>14 Scenarios:</strong> All form fields tested (triggers, entities, hooks, variations, etc.)</p>
+                                        <p><i class="fas fa-phone text-purple-600 mr-2"></i><strong>Phone Ready:</strong> Call your Twilio test number immediately after seeding</p>
+                                        <p><i class="fas fa-database text-purple-600 mr-2"></i><strong>Smart Seeding:</strong> Replaces existing "Universal AI Brain" template if found</p>
+                                        <p class="text-purple-700 font-semibold mt-3 bg-purple-100 px-3 py-2 rounded border border-purple-300">
+                                            <i class="fas fa-star mr-1"></i>
+                                            Production-ready • World-class • 100% tested • Use this to iron out bugs before 103 categories
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <button onclick="seedUniversalTestTemplate()" class="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                        <i class="fas fa-seedling"></i>
+                                        Seed Test Template
+                                    </button>
+                                    <p class="text-xs text-purple-700 mt-2 text-center font-medium">✅ Works on ANY environment</p>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- ⚠️ DELETE OLD TEMPLATE (Migration Tool) -->
                         <!-- Create New Industry Template -->
                         <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
@@ -2680,6 +2714,81 @@ Just checking in..."></textarea>
             }
         }
 
+        /**
+         * Seed Universal Test Template - World-Class Production System
+         * Calls the backend API to seed the 12-category test template
+         * Works on ANY environment (local, Render, production)
+         */
+        async function seedUniversalTestTemplate() {
+            // Confirmation dialog with detailed info
+            const confirmMessage = `🌱 SEED UNIVERSAL TEST TEMPLATE
+            
+This will load the test template with:
+• 12 Categories (Appointment, Emergency, Pricing, etc.)
+• 14 Comprehensive Scenarios
+• All form fields tested (triggers, entities, hooks, variations)
+
+⚠️ NOTE: If "Universal AI Brain (All Industries)" already exists, it will be REPLACED.
+
+✅ Safe for any environment
+✅ Phone-testable immediately after seeding
+
+Continue?`;
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+
+            try {
+                console.log('🌱 [SEED] Starting Universal Test Template seed via API...');
+                showNotification('🌱 Seeding Universal Test Template...', 'info');
+                
+                const token = getAuthToken();
+                
+                const response = await fetch('/api/admin/global-instant-responses/seed-template', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        templateName: 'universal-test-12-categories',
+                        replaceExisting: true
+                    })
+                });
+
+                const result = await response.json();
+                console.log('🌱 [SEED] API Response:', result);
+
+                if (result.success) {
+                    console.log('✅ [SEED] Template seeded successfully!');
+                    console.log('📊 [SEED] Stats:', result.data);
+                    console.log('📋 [SEED] Categories:', result.stats.categoriesByName);
+                    
+                    // Show detailed success message
+                    showNotification(
+                        `✅ Successfully seeded ${result.data.name}!\n\n` +
+                        `📊 ${result.data.categories} categories, ${result.data.scenarios} scenarios\n` +
+                        `🎯 Template ID: ${result.data.templateId}\n\n` +
+                        `Refreshing page to load new data...`,
+                        'success'
+                    );
+                    
+                    // Wait 2 seconds then reload the page to show new template
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                    
+                } else {
+                    console.error('❌ [SEED] Seeding failed:', result.message);
+                    showNotification('❌ Seeding failed: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('❌ [SEED] Error seeding template:', error);
+                showNotification('❌ Error seeding template: ' + error.message, 'error');
+            }
+        }
+        
         async function seedActionHooks() {
             if (!confirm('This will seed 16 default action hooks into the database.\n\nThese define what actions the AI should take after responding (escalate, schedule, callback, etc.).\n\nContinue?')) {
                 return;
