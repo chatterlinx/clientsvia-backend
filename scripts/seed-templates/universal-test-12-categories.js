@@ -113,23 +113,23 @@ const templateData = {
                     
                     entityCapture: ['preferred_date', 'preferred_time', 'customer_name'],
                     
-                    entityValidation: JSON.stringify({
+                    entityValidation: {
                         preferred_date: { required: true, prompt: 'What date works for you?' },
                         preferred_time: { required: true, prompt: 'What time would you prefer?' },
                         customer_name: { required: false, prompt: 'May I have your name?' }
-                    }),
+                    },
                     
-                    dynamicVariables: JSON.stringify({
-                        '{date}': { fallback: 'your preferred date' },
-                        '{time}': { fallback: 'your preferred time' },
-                        '{name}': { fallback: 'there' }
-                    }),
+                    dynamicVariables: {
+                        '{date}': 'your preferred date',
+                        '{time}': 'your preferred time',
+                        '{name}': 'there'
+                    },
                     
                     actionHooks: ['offer_scheduling', 'capture_customer_info'],
                     
                     replySelection: 'random',
                     language: 'en',
-                    channel: 'all',
+                    channel: 'any',
                     cooldownSeconds: 30,
                     maxTurns: 5,
                     
@@ -166,7 +166,7 @@ const templateData = {
                     actionHooks: ['offer_scheduling'],
                     replySelection: 'random',
                     language: 'en',
-                    channel: 'all',
+                    channel: 'any',
                     
                     createdBy: 'system-seed',
                     updatedBy: 'system-seed'
@@ -224,15 +224,11 @@ const templateData = {
                     
                     actionHooks: ['escalate_to_human', 'emergency_dispatch'],
                     
-                    handoffPolicy: JSON.stringify({
-                        escalate: true,
-                        reason: 'emergency_situation',
-                        priority: 'urgent'
-                    }),
+                    handoffPolicy: 'always_on_keyword',
                     
                     replySelection: 'random',
                     language: 'en',
-                    channel: 'all',
+                    channel: 'any',
                     cooldownSeconds: 0,
                     
                     createdBy: 'system-seed',
@@ -296,7 +292,7 @@ const templateData = {
                     
                     replySelection: 'random',
                     language: 'en',
-                    channel: 'all',
+                    channel: 'any',
                     cooldownSeconds: 20,
                     
                     createdBy: 'system-seed',
@@ -362,7 +358,7 @@ const templateData = {
                     
                     replySelection: 'random',
                     language: 'en',
-                    channel: 'all',
+                    channel: 'any',
                     cooldownSeconds: 60,
                     
                     createdBy: 'system-seed',
@@ -417,19 +413,19 @@ const templateData = {
                         'Absolutely! Take all the time you need. I\'m here when you\'re ready.'
                     ],
                     
-                    timedFollowUp: JSON.stringify({
+                    timedFollowUp: {
                         enabled: true,
                         delaySeconds: 45,
                         message: 'I\'m still here! Just wanted to check if you\'re ready to continue.',
                         maxAttempts: 2,
                         intervalSeconds: 30
-                    }),
+                    },
                     
-                    silencePolicy: JSON.stringify({
+                    silencePolicy: {
                         timeout: 90,
                         action: 'gentle_prompt',
                         message: 'Are you still there? I\'m happy to continue helping when you\'re ready.'
-                    }),
+                    },
                     
                     replySelection: 'random',
                     language: 'en',
@@ -494,7 +490,7 @@ const templateData = {
                     
                     replySelection: 'random',
                     language: 'en',
-                    channel: 'all',
+                    channel: 'any',
                     maxTurns: 1,
                     
                     createdBy: 'system-seed',
@@ -553,15 +549,11 @@ const templateData = {
                     
                     actionHooks: ['escalate_to_human', 'log_complaint'],
                     
-                    handoffPolicy: JSON.stringify({
-                        escalate: true,
-                        reason: 'customer_complaint',
-                        priority: 'high'
-                    }),
+                    handoffPolicy: 'always_on_keyword',
                     
                     replySelection: 'random',
                     language: 'en',
-                    channel: 'all',
+                    channel: 'any',
                     maxTurns: 2,
                     
                     createdBy: 'system-seed',
@@ -623,7 +615,7 @@ const templateData = {
                     
                     replySelection: 'random',
                     language: 'en',
-                    channel: 'all',
+                    channel: 'any',
                     
                     createdBy: 'system-seed',
                     updatedBy: 'system-seed'
@@ -685,15 +677,11 @@ const templateData = {
                     
                     actionHooks: ['transfer_to_billing', 'log_billing_inquiry'],
                     
-                    handoffPolicy: JSON.stringify({
-                        escalate: true,
-                        reason: 'billing_inquiry',
-                        department: 'billing'
-                    }),
+                    handoffPolicy: 'always_on_keyword',
                     
                     replySelection: 'random',
                     language: 'en',
-                    channel: 'all',
+                    channel: 'any',
                     
                     createdBy: 'system-seed',
                     updatedBy: 'system-seed'
@@ -746,7 +734,7 @@ const templateData = {
                     
                     replySelection: 'random',
                     language: 'en',
-                    channel: 'all',
+                    channel: 'any',
                     
                     createdBy: 'system-seed',
                     updatedBy: 'system-seed'
@@ -807,7 +795,7 @@ const templateData = {
                     
                     replySelection: 'random',
                     language: 'en',
-                    channel: 'all',
+                    channel: 'any',
                     cooldownSeconds: 300,
                     
                     createdBy: 'system-seed',
@@ -869,7 +857,7 @@ const templateData = {
                     
                     replySelection: 'random',
                     language: 'en',
-                    channel: 'all',
+                    channel: 'any',
                     
                     createdBy: 'system-seed',
                     updatedBy: 'system-seed'
