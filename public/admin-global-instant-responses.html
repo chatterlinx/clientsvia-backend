@@ -373,6 +373,102 @@
                     </div>
                 </div>
 
+                <!-- ========================================================================== -->
+                <!-- TEST PHRASE LIBRARY - WORLD-CLASS TESTING COMPANION -->
+                <!-- ========================================================================== -->
+                <div class="mb-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-lg border-2 border-green-300 overflow-hidden">
+                    <!-- Header -->
+                    <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+                                <i class="fas fa-list-check text-green-600 text-lg"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                                    📋 Test Phrase Library
+                                    <span id="total-phrase-count" class="text-sm font-normal bg-white/20 px-2 py-0.5 rounded">0 phrases</span>
+                                </h3>
+                                <p class="text-xs text-green-100">
+                                    All test phrases from the current template - ready to copy & test
+                                </p>
+                            </div>
+                        </div>
+                        <button onclick="toggleTestPhraseLibrary()" id="test-phrase-toggle-btn" class="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-semibold transition-all flex items-center gap-2">
+                            <i class="fas fa-chevron-down" id="test-phrase-toggle-icon"></i>
+                            <span id="test-phrase-toggle-text">Expand</span>
+                        </button>
+                    </div>
+
+                    <!-- Expandable Content -->
+                    <div id="test-phrase-library-content" class="hidden">
+                        <!-- Search Bar -->
+                        <div class="px-6 pt-4">
+                            <div class="relative">
+                                <input type="text" id="test-phrase-search" 
+                                       placeholder="🔍 Search test phrases... (e.g., 'appointment', 'emergency', 'pricing')"
+                                       class="w-full px-4 py-3 pl-10 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm bg-white"
+                                       oninput="filterTestPhrases()">
+                                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons Row -->
+                        <div class="px-6 pt-3 flex gap-2 flex-wrap">
+                            <button onclick="expandAllCategories()" class="text-xs px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg font-semibold transition-colors">
+                                <i class="fas fa-expand-alt mr-1"></i>
+                                Expand All
+                            </button>
+                            <button onclick="collapseAllCategories()" class="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold transition-colors">
+                                <i class="fas fa-compress-alt mr-1"></i>
+                                Collapse All
+                            </button>
+                            <button onclick="getRandomTestPhrase()" class="text-xs px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold transition-colors">
+                                <i class="fas fa-dice mr-1"></i>
+                                Random Phrase
+                            </button>
+                            <button onclick="copyAllPhrases()" class="text-xs px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg font-semibold transition-colors">
+                                <i class="fas fa-copy mr-1"></i>
+                                Copy All
+                            </button>
+                            <button onclick="exportPhrasesAsPDF()" class="text-xs px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-semibold transition-colors">
+                                <i class="fas fa-file-pdf mr-1"></i>
+                                Export PDF
+                            </button>
+                        </div>
+
+                        <!-- Categories with Phrases -->
+                        <div id="test-phrase-categories" class="px-6 py-4 space-y-3 max-h-[600px] overflow-y-auto">
+                            <!-- Will be populated dynamically -->
+                            <div class="text-center py-8 text-gray-500">
+                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                <p>Loading test phrases...</p>
+                            </div>
+                        </div>
+
+                        <!-- Footer Stats -->
+                        <div class="bg-green-100 px-6 py-3 border-t-2 border-green-300 flex items-center justify-between">
+                            <div class="flex gap-6 text-xs">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-layer-group text-green-600"></i>
+                                    <span class="font-semibold text-gray-700"><span id="footer-category-count">0</span> Categories</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-comment-dots text-green-600"></i>
+                                    <span class="font-semibold text-gray-700"><span id="footer-phrase-count">0</span> Total Phrases</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-clock text-green-600"></i>
+                                    <span class="text-gray-600">Updated: <span id="footer-last-updated">Just now</span></span>
+                                </div>
+                            </div>
+                            <button onclick="refreshTestPhrases()" class="text-xs px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors">
+                                <i class="fas fa-sync mr-1"></i>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Categories List -->
                 <div class="mb-6">
                     <div class="flex items-center justify-between mb-4">
@@ -3365,6 +3461,369 @@ Continue?`;
                 charCount.classList.add('text-red-600', 'font-bold');
             } else if (length > 400) {
                 charCount.classList.remove('text-red-600', 'font-bold');
+            }
+        }
+        
+        // ============================================================================
+        // TEST PHRASE LIBRARY - WORLD-CLASS TESTING COMPANION
+        // ============================================================================
+        
+        let testPhraseLibraryExpanded = false;
+        let testPhraseData = []; // Store all phrases for filtering
+        
+        /**
+         * Toggle Test Phrase Library expansion
+         */
+        function toggleTestPhraseLibrary() {
+            const content = document.getElementById('test-phrase-library-content');
+            const icon = document.getElementById('test-phrase-toggle-icon');
+            const text = document.getElementById('test-phrase-toggle-text');
+            
+            testPhraseLibraryExpanded = !testPhraseLibraryExpanded;
+            
+            if (testPhraseLibraryExpanded) {
+                content.classList.remove('hidden');
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-up');
+                text.textContent = 'Collapse';
+                
+                // Load phrases on first expand
+                if (testPhraseData.length === 0) {
+                    loadTestPhrases();
+                }
+            } else {
+                content.classList.add('hidden');
+                icon.classList.add('fa-chevron-down');
+                icon.classList.remove('fa-chevron-up');
+                text.textContent = 'Expand';
+            }
+        }
+        
+        /**
+         * Load test phrases from active template
+         */
+        async function loadTestPhrases() {
+            console.log('📋 [TEST PHRASES] Loading phrases from active template...');
+            
+            if (!activeTemplateId || !activeTemplateData) {
+                console.error('❌ [TEST PHRASES] No active template found');
+                document.getElementById('test-phrase-categories').innerHTML = `
+                    <div class="text-center py-8 text-red-500">
+                        <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+                        <p>No template loaded. Please select a template first.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            try {
+                testPhraseData = [];
+                let totalPhrases = 0;
+                
+                // Extract all triggers from all scenarios in all categories
+                activeTemplateData.categories.forEach(category => {
+                    const categoryData = {
+                        id: category.id,
+                        name: category.name,
+                        icon: category.icon || '📁',
+                        description: category.description || '',
+                        phrases: [],
+                        expanded: false
+                    };
+                    
+                    category.scenarios.forEach(scenario => {
+                        if (scenario.triggers && Array.isArray(scenario.triggers)) {
+                            scenario.triggers.forEach(trigger => {
+                                categoryData.phrases.push({
+                                    text: trigger,
+                                    scenarioName: scenario.name,
+                                    scenarioId: scenario.scenarioId
+                                });
+                                totalPhrases++;
+                            });
+                        }
+                    });
+                    
+                    if (categoryData.phrases.length > 0) {
+                        testPhraseData.push(categoryData);
+                    }
+                });
+                
+                console.log(`✅ [TEST PHRASES] Loaded ${totalPhrases} phrases from ${testPhraseData.length} categories`);
+                
+                // Update header count
+                document.getElementById('total-phrase-count').textContent = `${totalPhrases} phrases`;
+                
+                // Update footer stats
+                document.getElementById('footer-category-count').textContent = testPhraseData.length;
+                document.getElementById('footer-phrase-count').textContent = totalPhrases;
+                document.getElementById('footer-last-updated').textContent = new Date().toLocaleTimeString();
+                
+                // Render the phrases
+                renderTestPhrases();
+                
+            } catch (error) {
+                console.error('❌ [TEST PHRASES] Error loading phrases:', error);
+                document.getElementById('test-phrase-categories').innerHTML = `
+                    <div class="text-center py-8 text-red-500">
+                        <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+                        <p>Error loading test phrases: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        /**
+         * Render test phrases grouped by category
+         */
+        function renderTestPhrases(filteredData = null) {
+            const container = document.getElementById('test-phrase-categories');
+            const dataToRender = filteredData || testPhraseData;
+            
+            if (dataToRender.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-inbox text-3xl mb-2"></i>
+                        <p>No test phrases found.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = dataToRender.map((category, catIndex) => `
+                <div class="bg-white rounded-lg border-2 border-gray-200 overflow-hidden test-phrase-category" data-category-id="${category.id}">
+                    <!-- Category Header -->
+                    <div class="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors"
+                         onclick="toggleCategoryPhrases('${category.id}')">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl">${category.icon}</span>
+                            <div>
+                                <h4 class="font-bold text-gray-900">${category.name}</h4>
+                                <p class="text-xs text-gray-600">${category.phrases.length} test phrase${category.phrases.length !== 1 ? 's' : ''}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="event.stopPropagation(); copyCategoryPhrases('${category.id}')" 
+                                    class="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-semibold transition-colors">
+                                <i class="fas fa-copy mr-1"></i>
+                                Copy All
+                            </button>
+                            <i class="fas fa-chevron-down category-toggle-icon transition-transform" id="toggle-icon-${category.id}"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- Phrases List (Initially Hidden) -->
+                    <div class="category-phrases hidden" id="phrases-${category.id}">
+                        <div class="p-4 space-y-2">
+                            ${category.phrases.map((phrase, phraseIndex) => `
+                                <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-green-50 transition-colors border border-gray-200 hover:border-green-300 test-phrase-item">
+                                    <div class="flex-1">
+                                        <div class="font-medium text-gray-900 test-phrase-text">"${phrase.text}"</div>
+                                        <div class="text-xs text-gray-500 mt-1">
+                                            <i class="fas fa-tag mr-1"></i>
+                                            Scenario: ${phrase.scenarioName}
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-1">
+                                        <button onclick="copyPhrase('${escapeHtml(phrase.text)}')" 
+                                                class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold transition-colors whitespace-nowrap"
+                                                title="Copy to clipboard">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <button onclick="highlightPhrase(this)" 
+                                                class="px-3 py-1.5 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 rounded text-xs font-semibold transition-colors"
+                                                title="Mark as tested">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        /**
+         * Toggle individual category expansion
+         */
+        function toggleCategoryPhrases(categoryId) {
+            const phrasesDiv = document.getElementById(`phrases-${categoryId}`);
+            const icon = document.getElementById(`toggle-icon-${categoryId}`);
+            
+            if (phrasesDiv.classList.contains('hidden')) {
+                phrasesDiv.classList.remove('hidden');
+                icon.classList.add('rotate-180');
+            } else {
+                phrasesDiv.classList.add('hidden');
+                icon.classList.remove('rotate-180');
+            }
+        }
+        
+        /**
+         * Copy single phrase to clipboard
+         */
+        function copyPhrase(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showNotification(`✅ Copied: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`, 'success');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showNotification('❌ Failed to copy phrase', 'error');
+            });
+        }
+        
+        /**
+         * Copy all phrases from a category
+         */
+        function copyCategoryPhrases(categoryId) {
+            const category = testPhraseData.find(cat => cat.id === categoryId);
+            if (!category) return;
+            
+            const allPhrases = category.phrases.map(p => p.text).join('\n');
+            navigator.clipboard.writeText(allPhrases).then(() => {
+                showNotification(`✅ Copied ${category.phrases.length} phrases from ${category.name}!`, 'success');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showNotification('❌ Failed to copy phrases', 'error');
+            });
+        }
+        
+        /**
+         * Copy ALL phrases from all categories
+         */
+        function copyAllPhrases() {
+            const allPhrases = testPhraseData.flatMap(cat => 
+                cat.phrases.map(p => `[${cat.name}] ${p.text}`)
+            ).join('\n');
+            
+            const totalCount = testPhraseData.reduce((sum, cat) => sum + cat.phrases.length, 0);
+            
+            navigator.clipboard.writeText(allPhrases).then(() => {
+                showNotification(`✅ Copied all ${totalCount} test phrases!`, 'success');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showNotification('❌ Failed to copy phrases', 'error');
+            });
+        }
+        
+        /**
+         * Get random test phrase
+         */
+        function getRandomTestPhrase() {
+            if (testPhraseData.length === 0) {
+                showNotification('❌ No test phrases loaded', 'error');
+                return;
+            }
+            
+            const randomCategory = testPhraseData[Math.floor(Math.random() * testPhraseData.length)];
+            const randomPhrase = randomCategory.phrases[Math.floor(Math.random() * randomCategory.phrases.length)];
+            
+            copyPhrase(randomPhrase.text);
+            showNotification(`🎲 Random: "${randomPhrase.text}" (from ${randomCategory.name})`, 'info');
+        }
+        
+        /**
+         * Expand all categories
+         */
+        function expandAllCategories() {
+            testPhraseData.forEach(category => {
+                const phrasesDiv = document.getElementById(`phrases-${category.id}`);
+                const icon = document.getElementById(`toggle-icon-${category.id}`);
+                if (phrasesDiv && icon) {
+                    phrasesDiv.classList.remove('hidden');
+                    icon.classList.add('rotate-180');
+                }
+            });
+            showNotification('📂 All categories expanded', 'info');
+        }
+        
+        /**
+         * Collapse all categories
+         */
+        function collapseAllCategories() {
+            testPhraseData.forEach(category => {
+                const phrasesDiv = document.getElementById(`phrases-${category.id}`);
+                const icon = document.getElementById(`toggle-icon-${category.id}`);
+                if (phrasesDiv && icon) {
+                    phrasesDiv.classList.add('hidden');
+                    icon.classList.remove('rotate-180');
+                }
+            });
+            showNotification('📁 All categories collapsed', 'info');
+        }
+        
+        /**
+         * Filter test phrases based on search
+         */
+        function filterTestPhrases() {
+            const searchTerm = document.getElementById('test-phrase-search').value.toLowerCase();
+            
+            if (!searchTerm) {
+                renderTestPhrases();
+                return;
+            }
+            
+            const filtered = testPhraseData.map(category => ({
+                ...category,
+                phrases: category.phrases.filter(phrase => 
+                    phrase.text.toLowerCase().includes(searchTerm) ||
+                    phrase.scenarioName.toLowerCase().includes(searchTerm) ||
+                    category.name.toLowerCase().includes(searchTerm)
+                )
+            })).filter(category => category.phrases.length > 0);
+            
+            renderTestPhrases(filtered);
+        }
+        
+        /**
+         * Refresh test phrases
+         */
+        function refreshTestPhrases() {
+            testPhraseData = [];
+            loadTestPhrases();
+            showNotification('🔄 Test phrases refreshed!', 'info');
+        }
+        
+        /**
+         * Highlight phrase as tested
+         */
+        function highlightPhrase(button) {
+            const phraseItem = button.closest('.test-phrase-item');
+            phraseItem.classList.toggle('bg-green-100');
+            phraseItem.classList.toggle('border-green-400');
+            
+            if (phraseItem.classList.contains('bg-green-100')) {
+                button.innerHTML = '<i class="fas fa-check-double"></i>';
+                button.classList.add('bg-green-600', 'text-white');
+                button.classList.remove('bg-yellow-100', 'text-yellow-700');
+            } else {
+                button.innerHTML = '<i class="fas fa-check"></i>';
+                button.classList.remove('bg-green-600', 'text-white');
+                button.classList.add('bg-yellow-100', 'text-yellow-700');
+            }
+        }
+        
+        /**
+         * Export phrases as PDF (placeholder - would need PDF library)
+         */
+        function exportPhrasesAsPDF() {
+            showNotification('📄 PDF export coming soon! Use "Copy All" for now.', 'info');
+            // Future: Implement with jsPDF or similar
+        }
+        
+        /**
+         * Escape HTML for safe rendering
+         */
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML.replace(/'/g, '&apos;');
+        }
+        
+        // Auto-load test phrases when switching to Dashboard tab
+        function autoLoadTestPhrasesOnDashboard() {
+            if (testPhraseLibraryExpanded && testPhraseData.length === 0) {
+                loadTestPhrases();
                 charCount.classList.add('text-orange-600', 'font-semibold');
             } else {
                 charCount.classList.remove('text-red-600', 'text-orange-600', 'font-bold', 'font-semibold');
