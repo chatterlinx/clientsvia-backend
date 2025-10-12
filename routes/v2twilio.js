@@ -1434,8 +1434,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
     console.log(`🧠 [CHECKPOINT 11] ✅ Stats updated`);
     
     console.log(`🧠 [CHECKPOINT 12] Sending TwiML response to Twilio...`);
-    res.type('text/xml');
-    res.send(twiml.toString());
+    res.type('text/xml').status(200).send(twiml.toString());
     console.log(`🧠 [CHECKPOINT 12] ✅ Response sent successfully`);
     console.log(`${'='.repeat(80)}\n`);
     
@@ -1449,8 +1448,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
     const twiml = new twilio.twiml.VoiceResponse();
     twiml.say('An error occurred during testing. Please check the server logs.');
     twiml.hangup();
-    res.type('text/xml');
-    res.send(twiml.toString());
+    res.type('text/xml').status(200).send(twiml.toString());
   }
 });
 
@@ -1466,17 +1464,11 @@ router.all('*', (req, res) => {
     hasCallSid: !!(req.body?.CallSid)
   });
   
-  res.status(404).json({
-    error: 'Twilio endpoint not found',
-    availableEndpoints: [
-      '/api/twilio/voice',
-      '/api/twilio/voice/:companyID',
-      '/api/twilio/handle-speech',
-      '/api/twilio/test-respond/:templateId',
-      '/api/twilio/webhook-test'
-    ],
-    requestedUrl: req.originalUrl
-  });
+  // CRITICAL: Always return TwiML for Twilio requests, NEVER JSON!
+  const twiml = new twilio.twiml.VoiceResponse();
+  twiml.say('This endpoint is not configured. Please check your Twilio webhook settings.');
+  twiml.hangup();
+  res.type('text/xml').status(200).send(twiml.toString());
 });
 
 console.log('🚀 [V2TWILIO] ========== EXPORTING ROUTER (FILE LOADED SUCCESSFULLY) ==========');
