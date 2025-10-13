@@ -1590,7 +1590,7 @@ router.post('/test-respond/:templateId', async (req, res) => {
       // Say the matched reply + debug info
       twiml.say(reply);
       twiml.pause({ length: 1 });
-      twiml.say(`You triggered the scenario: ${result.match.name}. Confidence: ${(result.confidence * 100).toFixed(0)} percent. Score: ${(result.score * 100).toFixed(0)} percent.`);
+      twiml.say(`You triggered the scenario: ${result.scenario.name}. Confidence: ${(result.confidence * 100).toFixed(0)} percent. Score: ${(result.score * 100).toFixed(0)} percent.`);
       console.log(`🧠 [CHECKPOINT 9] ✅ TwiML reply added`);
       
       console.log(`🧠 [CHECKPOINT 10] Creating gather for continuation...`);
