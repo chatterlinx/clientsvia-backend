@@ -7172,6 +7172,58 @@ Continue?`;
                                 </div>
                                 ` : ''}
                                 
+                                ${result.diagnostics?.resolverDecision ? `
+                                <div class="bg-gradient-to-br from-cyan-50 to-blue-50 rounded-lg p-4 border-2 border-cyan-400 mt-3">
+                                    <div class="font-bold text-cyan-900 mb-3 flex items-center gap-2">
+                                        <i class="fas fa-brain"></i>
+                                        🎯 Dual-Intent Resolver
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-3 mb-3">
+                                        <div class="bg-white rounded-lg p-3 border-2 border-orange-300">
+                                            <div class="text-xs text-gray-600 mb-1">Problem Score</div>
+                                            <div class="text-2xl font-bold text-orange-700">${(parseFloat(result.diagnostics.resolverDecision.problemScore) * 100).toFixed(0)}%</div>
+                                            <div class="text-xs text-gray-500 mt-1">Emergency keywords</div>
+                                        </div>
+                                        <div class="bg-white rounded-lg p-3 border-2 border-green-300">
+                                            <div class="text-xs text-gray-600 mb-1">Action Score</div>
+                                            <div class="text-2xl font-bold text-green-700">${(parseFloat(result.diagnostics.resolverDecision.actionScore) * 100).toFixed(0)}%</div>
+                                            <div class="text-xs text-gray-500 mt-1">Booking keywords</div>
+                                        </div>
+                                        <div class="bg-white rounded-lg p-3 border-2 border-purple-300">
+                                            <div class="text-xs text-gray-600 mb-1">Delta (Δ)</div>
+                                            <div class="text-2xl font-bold text-purple-700">${(parseFloat(result.diagnostics.resolverDecision.delta) * 100).toFixed(0)}%</div>
+                                            <div class="text-xs text-gray-500 mt-1">Confidence gap</div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-white rounded-lg p-3 border-2 border-cyan-300">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <div class="text-xs font-bold text-cyan-900">🛣️ Route Decision:</div>
+                                            <span class="px-3 py-1 rounded-full text-sm font-bold ${
+                                                result.diagnostics.resolverDecision.route === 'emergency' ? 'bg-red-600 text-white' :
+                                                result.diagnostics.resolverDecision.route === 'clarify' ? 'bg-yellow-500 text-white' :
+                                                'bg-green-600 text-white'
+                                            }">
+                                                ${result.diagnostics.resolverDecision.route.toUpperCase()}
+                                            </span>
+                                        </div>
+                                        <div class="text-sm text-gray-700 mb-2">
+                                            ${escapeHtml(result.diagnostics.resolverDecision.reasoning)}
+                                        </div>
+                                        ${result.diagnostics.resolverDecision.needsClarifier ? `
+                                        <div class="mt-3 p-3 bg-yellow-50 border-2 border-yellow-400 rounded-lg">
+                                            <div class="text-xs font-bold text-yellow-900 mb-2 flex items-center gap-2">
+                                                <i class="fas fa-comment-dots"></i>
+                                                💬 Clarifier Prompt (will ask user):
+                                            </div>
+                                            <div class="text-sm italic text-yellow-900">
+                                                "${escapeHtml(result.diagnostics.resolverDecision.clarifierPrompt)}"
+                                            </div>
+                                        </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                                ` : ''}
+                                
                             ${!result.matched && result.diagnostics?.reasonCodes && result.diagnostics.reasonCodes.length > 0 ? `
                             <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-4 border-2 border-purple-400 mt-3">
                                 <div class="font-bold text-purple-900 mb-3 flex items-center gap-2">
@@ -7904,6 +7956,24 @@ ${'='.repeat(80)}
                             report += `    ${icon} [${reason.severity.toUpperCase()}] ${reason.message}\n`;
                             report += `       💡 Fix: ${reason.fix}\n`;
                         });
+                        report += '\n';
+                    }
+                    
+                    // Resolver Decision
+                    if (result.diagnostics.resolverDecision) {
+                        const rd = result.diagnostics.resolverDecision;
+                        report += `🎯 DUAL-INTENT RESOLVER:
+    Problem Score: ${(parseFloat(rd.problemScore) * 100).toFixed(0)}% (emergency keywords)
+    Action Score: ${(parseFloat(rd.actionScore) * 100).toFixed(0)}% (booking keywords)
+    Delta (Δ): ${(parseFloat(rd.delta) * 100).toFixed(0)}%
+    Route Decision: ${rd.route.toUpperCase()}
+    Reasoning: ${rd.reasoning}
+`;
+                        if (rd.needsClarifier) {
+                            report += `    💬 Clarifier Needed: YES
+    Clarifier Prompt: "${rd.clarifierPrompt}"
+`;
+                        }
                         report += '\n';
                     }
                 }
