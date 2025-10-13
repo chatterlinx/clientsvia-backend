@@ -2647,5 +2647,193 @@ function buildUniversalTestTemplate(ulid) {
     };
 }
 
+// ============================================================================
+// 🔇 FILLER WORDS MANAGEMENT
+// ============================================================================
+
+/**
+ * GET /api/admin/global-instant-responses/:id/filler-words
+ * Get all filler words for a template
+ */
+router.get('/:id/filler-words', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const template = await GlobalInstantResponseTemplate.findById(id);
+        if (!template) {
+            return res.status(404).json({ success: false, message: 'Template not found' });
+        }
+        
+        res.json({
+            success: true,
+            fillerWords: template.fillerWords || [],
+            count: (template.fillerWords || []).length
+        });
+    } catch (error) {
+        logger.error('Error fetching filler words', { error: error.message });
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
+ * POST /api/admin/global-instant-responses/:id/filler-words
+ * Add new filler word(s) to a template
+ */
+router.post('/:id/filler-words', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { words } = req.body; // Array of words or single word
+        
+        if (!words || (Array.isArray(words) && words.length === 0)) {
+            return res.status(400).json({ success: false, message: 'No words provided' });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(id);
+        if (!template) {
+            return res.status(404).json({ success: false, message: 'Template not found' });
+        }
+        
+        // Normalize input to array
+        const wordsToAdd = Array.isArray(words) ? words : [words];
+        
+        // Normalize and filter duplicates
+        const normalizedWords = wordsToAdd
+            .map(w => String(w).toLowerCase().trim())
+            .filter(w => w.length > 0);
+        
+        // Add only new words (avoid duplicates)
+        const existingWords = new Set(template.fillerWords || []);
+        const newWords = normalizedWords.filter(w => !existingWords.has(w));
+        
+        if (newWords.length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'All words already exist in filter list' 
+            });
+        }
+        
+        template.fillerWords = [...(template.fillerWords || []), ...newWords];
+        template.updatedAt = new Date();
+        template.lastUpdatedBy = req.user?.username || 'admin';
+        
+        await template.save();
+        
+        logger.info('Filler words added', { 
+            templateId: id, 
+            added: newWords.length,
+            words: newWords,
+            by: req.user?.username 
+        });
+        
+        res.json({
+            success: true,
+            message: `Added ${newWords.length} filler word(s)`,
+            fillerWords: template.fillerWords,
+            addedWords: newWords,
+            count: template.fillerWords.length
+        });
+    } catch (error) {
+        logger.error('Error adding filler words', { error: error.message });
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
+ * DELETE /api/admin/global-instant-responses/:id/filler-words/:word
+ * Remove a filler word from a template
+ */
+router.delete('/:id/filler-words/:word', async (req, res) => {
+    try {
+        const { id, word } = req.params;
+        
+        const template = await GlobalInstantResponseTemplate.findById(id);
+        if (!template) {
+            return res.status(404).json({ success: false, message: 'Template not found' });
+        }
+        
+        const normalizedWord = String(word).toLowerCase().trim();
+        const originalCount = (template.fillerWords || []).length;
+        
+        template.fillerWords = (template.fillerWords || []).filter(w => w !== normalizedWord);
+        
+        if (template.fillerWords.length === originalCount) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Filler word not found in template' 
+            });
+        }
+        
+        template.updatedAt = new Date();
+        template.lastUpdatedBy = req.user?.username || 'admin';
+        
+        await template.save();
+        
+        logger.info('Filler word removed', { 
+            templateId: id, 
+            word: normalizedWord,
+            by: req.user?.username 
+        });
+        
+        res.json({
+            success: true,
+            message: `Removed filler word: "${normalizedWord}"`,
+            fillerWords: template.fillerWords,
+            count: template.fillerWords.length
+        });
+    } catch (error) {
+        logger.error('Error removing filler word', { error: error.message });
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+/**
+ * PUT /api/admin/global-instant-responses/:id/filler-words
+ * Replace all filler words (bulk update)
+ */
+router.put('/:id/filler-words', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { words } = req.body; // Array of words
+        
+        if (!Array.isArray(words)) {
+            return res.status(400).json({ success: false, message: 'Words must be an array' });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(id);
+        if (!template) {
+            return res.status(404).json({ success: false, message: 'Template not found' });
+        }
+        
+        // Normalize and deduplicate
+        const normalizedWords = [...new Set(
+            words
+                .map(w => String(w).toLowerCase().trim())
+                .filter(w => w.length > 0)
+        )];
+        
+        template.fillerWords = normalizedWords;
+        template.updatedAt = new Date();
+        template.lastUpdatedBy = req.user?.username || 'admin';
+        
+        await template.save();
+        
+        logger.info('Filler words replaced (bulk update)', { 
+            templateId: id, 
+            count: normalizedWords.length,
+            by: req.user?.username 
+        });
+        
+        res.json({
+            success: true,
+            message: `Updated filler words list (${normalizedWords.length} words)`,
+            fillerWords: template.fillerWords,
+            count: template.fillerWords.length
+        });
+    } catch (error) {
+        logger.error('Error replacing filler words', { error: error.message });
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 module.exports = router;
 
