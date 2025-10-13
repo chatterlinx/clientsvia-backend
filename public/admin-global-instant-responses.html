@@ -369,6 +369,10 @@
                                 <i class="fas fa-flask"></i>
                                 View Test Log
                             </button>
+                            <button onclick="openQualityDashboard()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all flex items-center gap-2 whitespace-nowrap">
+                                <i class="fas fa-chart-line"></i>
+                                Quality Dashboard
+                            </button>
                             <button onclick="loadTwilioTestConfig()" class="px-6 py-2 bg-white hover:bg-gray-50 text-purple-600 border-2 border-purple-300 rounded-lg font-medium transition-all flex items-center gap-2 whitespace-nowrap text-sm">
                                 <i class="fas fa-sync"></i>
                                 Refresh
@@ -7832,6 +7836,233 @@ Timestamp: ${new Date(timestamp).toISOString()}
         }
         
         // ============================================
+        // 📊 QUALITY DASHBOARD - PHASE 3
+        // ============================================
+        
+        async function openQualityDashboard() {
+            if (!activeTemplateId) {
+                showNotification('No active template selected', 'warning');
+                return;
+            }
+            
+            console.log('📊 Opening Quality Dashboard...');
+            document.getElementById('quality-dashboard-modal').classList.remove('hidden');
+            document.getElementById('quality-dashboard-modal').classList.add('flex');
+            
+            await loadQualityReport();
+        }
+        
+        function closeQualityDashboard() {
+            console.log('📊 Closing Quality Dashboard...');
+            document.getElementById('quality-dashboard-modal').classList.add('hidden');
+            document.getElementById('quality-dashboard-modal').classList.remove('flex');
+        }
+        
+        async function loadQualityReport() {
+            const container = document.getElementById('quality-dashboard-content');
+            
+            try {
+                console.log(`📊 Fetching quality report for template ${activeTemplateId}...`);
+                const token = getAuthToken();
+                
+                const response = await fetch(`/api/twilio/quality-report/${activeTemplateId}?limit=100`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log(`📊 Quality report loaded:`, data.report);
+                    renderQualityReport(data.report);
+                } else {
+                    container.innerHTML = `
+                        <div class="text-center py-12 text-red-600">
+                            <i class="fas fa-exclamation-circle text-6xl mb-4"></i>
+                            <p class="text-lg font-semibold">Failed to load quality report</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ Error loading quality report:', error);
+                container.innerHTML = `
+                    <div class="text-center py-12 text-red-600">
+                        <i class="fas fa-exclamation-circle text-6xl mb-4"></i>
+                        <p class="text-lg font-semibold">Error: ${escapeHtml(error.message)}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function renderQualityReport(report) {
+            const container = document.getElementById('quality-dashboard-content');
+            
+            if (report.totalTests === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 text-gray-400">
+                        <i class="fas fa-chart-line text-6xl mb-4"></i>
+                        <p class="text-lg">No test data available</p>
+                        <p class="text-sm">Make some test calls to generate quality metrics</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const matchRatePercent = (report.precision * 100).toFixed(1);
+            const recallPercent = (report.recall * 100).toFixed(1);
+            
+            let html = `
+                <div class="space-y-6">
+                    
+                    <!-- ========================================================================== -->
+                    <!-- OVERVIEW METRICS -->
+                    <!-- ========================================================================== -->
+                    <div class="grid grid-cols-4 gap-4">
+                        <div class="bg-white rounded-lg p-6 border-2 border-blue-200 shadow-lg">
+                            <div class="text-sm text-gray-600 mb-1">Total Tests</div>
+                            <div class="text-4xl font-bold text-blue-600">${report.totalTests}</div>
+                            <div class="text-xs text-gray-500 mt-1">Last 100 calls</div>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg p-6 border-2 ${matchRatePercent >= 80 ? 'border-green-300' : matchRatePercent >= 60 ? 'border-yellow-300' : 'border-red-300'} shadow-lg">
+                            <div class="text-sm text-gray-600 mb-1">Match Rate</div>
+                            <div class="text-4xl font-bold ${matchRatePercent >= 80 ? 'text-green-600' : matchRatePercent >= 60 ? 'text-yellow-600' : 'text-red-600'}">${matchRatePercent}%</div>
+                            <div class="text-xs text-gray-500 mt-1">${report.matched} matched / ${report.noMatch} no-match</div>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg p-6 border-2 border-purple-200 shadow-lg">
+                            <div class="text-sm text-gray-600 mb-1">Avg Confidence</div>
+                            <div class="text-4xl font-bold text-purple-600">${report.avgConfidence.toFixed(0)}%</div>
+                            <div class="text-xs text-gray-500 mt-1">Across all tests</div>
+                        </div>
+                        
+                        <div class="bg-white rounded-lg p-6 border-2 ${report.avgSpeed < 50 ? 'border-green-300' : report.avgSpeed < 100 ? 'border-yellow-300' : 'border-red-300'} shadow-lg">
+                            <div class="text-sm text-gray-600 mb-1">Avg Speed</div>
+                            <div class="text-4xl font-bold ${report.avgSpeed < 50 ? 'text-green-600' : report.avgSpeed < 100 ? 'text-yellow-600' : 'text-red-600'}">${report.avgSpeed}ms</div>
+                            <div class="text-xs text-gray-500 mt-1">${report.avgSpeed < 50 ? '⚡ Excellent' : report.avgSpeed < 100 ? '✅ Good' : '⚠️ Slow'}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- ========================================================================== -->
+                    <!-- REASON CODE LEADERBOARD -->
+                    <!-- ========================================================================== -->
+                    <div class="bg-white rounded-lg p-6 border-2 border-orange-300 shadow-lg">
+                        <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <i class="fas fa-trophy text-orange-500"></i>
+                            🏆 Failure Reason Leaderboard
+                        </h3>
+                        
+                        ${Object.keys(report.reasonCodeBreakdown).length > 0 ? `
+                            <div class="space-y-3">
+                                ${Object.entries(report.reasonCodeBreakdown)
+                                    .sort((a, b) => b[1] - a[1])
+                                    .slice(0, 10)
+                                    .map(([code, count]) => {
+                                        const percent = ((count / report.totalTests) * 100).toFixed(1);
+                                        return `
+                                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                                <div class="flex-1">
+                                                    <code class="text-sm font-mono bg-gray-200 px-2 py-1 rounded">${escapeHtml(code)}</code>
+                                                    <div class="text-xs text-gray-600 mt-1">${count} occurrence${count > 1 ? 's' : ''}</div>
+                                                </div>
+                                                <div class="text-right">
+                                                    <div class="text-2xl font-bold ${
+                                                        percent > 30 ? 'text-red-600' :
+                                                        percent > 15 ? 'text-yellow-600' :
+                                                        'text-blue-600'
+                                                    }">${percent}%</div>
+                                                    <div class="text-xs text-gray-500">of total</div>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                            </div>
+                        ` : `
+                            <p class="text-gray-500 text-center py-4">No failure reason data available</p>
+                        `}
+                    </div>
+                    
+                    <!-- ========================================================================== -->
+                    <!-- RECOMMENDATIONS -->
+                    <!-- ========================================================================== -->
+                    ${report.recommendations && report.recommendations.length > 0 ? `
+                    <div class="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg p-6 border-2 border-yellow-400 shadow-lg">
+                        <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <i class="fas fa-lightbulb text-yellow-500"></i>
+                            💡 Actionable Recommendations
+                        </h3>
+                        
+                        <div class="space-y-3">
+                            ${report.recommendations.map(rec => `
+                                <div class="bg-white rounded-lg p-4 border-l-4 ${
+                                    rec.priority === 'high' ? 'border-red-500' :
+                                    rec.priority === 'medium' ? 'border-yellow-500' :
+                                    'border-blue-500'
+                                }">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <div class="font-bold text-sm ${
+                                                rec.priority === 'high' ? 'text-red-900' :
+                                                rec.priority === 'medium' ? 'text-yellow-900' :
+                                                'text-blue-900'
+                                            } mb-1">
+                                                ${rec.priority === 'high' ? '🔥 HIGH PRIORITY' : rec.priority === 'medium' ? '⚠️ MEDIUM' : 'ℹ️ INFO'}
+                                            </div>
+                                            <div class="text-sm text-gray-900 mb-2">
+                                                <strong>Issue:</strong> ${escapeHtml(rec.issue)}
+                                            </div>
+                                            <div class="text-sm text-gray-700 mb-2">
+                                                <strong>Action:</strong> ${escapeHtml(rec.action)}
+                                            </div>
+                                            <div class="text-sm text-green-700 font-semibold">
+                                                <i class="fas fa-chart-line mr-1"></i>
+                                                Expected Impact: ${escapeHtml(rec.expectedImpact)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    <!-- ========================================================================== -->
+                    <!-- QUALITY SCORE -->
+                    <!-- ========================================================================== -->
+                    <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-6 border-2 border-indigo-400 shadow-lg text-center">
+                        <h3 class="text-xl font-bold text-gray-900 mb-4">🎯 Overall Template Quality</h3>
+                        <div class="text-6xl font-bold ${
+                            report.precision >= 0.85 ? 'text-green-600' :
+                            report.precision >= 0.70 ? 'text-yellow-600' :
+                            'text-red-600'
+                        } mb-2">${(report.precision * 10).toFixed(1)}/10</div>
+                        <div class="text-sm text-gray-600">
+                            ${report.precision >= 0.85 ? '🏆 Excellent - Production Ready' :
+                              report.precision >= 0.70 ? '⚠️ Good - Needs Tuning' :
+                              '🚨 Poor - Requires Attention'}
+                        </div>
+                        
+                        <div class="mt-6 grid grid-cols-2 gap-4 text-left">
+                            <div class="bg-white rounded-lg p-4">
+                                <div class="text-xs text-gray-600 mb-1">Precision</div>
+                                <div class="text-2xl font-bold text-indigo-600">${matchRatePercent}%</div>
+                            </div>
+                            <div class="bg-white rounded-lg p-4">
+                                <div class="text-xs text-gray-600 mb-1">Recall</div>
+                                <div class="text-2xl font-bold text-indigo-600">${recallPercent}%</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+        
+        // ============================================
         // 🪄 ONE-CLICK FIX WIZARD
         // ============================================
         
@@ -9265,6 +9496,38 @@ Timestamp: ${new Date(timestamp).toISOString()}
         <div class="text-center py-12 text-gray-400">
             <i class="fas fa-flask text-6xl mb-4"></i>
             <p class="text-lg">Loading test results...</p>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================== -->
+<!-- 📊 QUALITY DASHBOARD MODAL - PHASE 3 -->
+<!-- ========================================================================== -->
+<div id="quality-dashboard-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 rounded-t-2xl flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 bg-white rounded-lg flex items-center justify-center">
+                    <i class="fas fa-chart-line text-blue-600 text-2xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-bold text-white">📊 Quality Dashboard</h2>
+                    <p class="text-sm text-blue-100">Aggregate intelligence from last 100 test calls</p>
+                </div>
+            </div>
+            <button onclick="closeQualityDashboard()" class="bg-red-600 hover:bg-red-700 text-white rounded-lg px-4 py-2 font-semibold transition-colors flex items-center gap-2">
+                <i class="fas fa-times text-xl"></i>
+                Close
+            </button>
+        </div>
+        
+        <!-- Content -->
+        <div id="quality-dashboard-content" class="flex-1 overflow-y-auto p-6 bg-gray-50">
+            <div class="text-center py-12 text-gray-400">
+                <i class="fas fa-chart-line text-6xl mb-4"></i>
+                <p class="text-lg">Loading quality report...</p>
+            </div>
         </div>
     </div>
 </div>
