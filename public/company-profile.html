@@ -1966,18 +1966,63 @@
                         <!-- Link isolated CSS -->
                         <link rel="stylesheet" href="/css/ai-agent-settings.css">
                         <link rel="stylesheet" href="/css/twilio-control-center.css">
+                        <link rel="stylesheet" href="/css/telephony-control-panel.css">
                         
                         <div class="ai-settings-container">
                             
                             <!-- ========================================== -->
-                            <!-- TWILIO CONTROL CENTER (TOP) -->
+                            <!-- TELEPHONY CONTROL PANEL (TABBED) -->
                             <!-- ========================================== -->
-                            <div id="twilio-control-center">
-                                <!-- Twilio Control Center will be loaded here by JavaScript -->
-                                <div style="text-align: center; padding: 40px; color: #6c757d;">
-                                    <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
-                                    <p>Loading Twilio Control Center...</p>
+                            <div class="telephony-control-panel">
+                                
+                                <!-- Tab Navigation -->
+                                <nav class="telephony-tabs">
+                                    <button class="telephony-tab active" data-tab="dashboard">
+                                        <i class="fas fa-tachometer-alt"></i>
+                                        Dashboard
+                                    </button>
+                                    <button class="telephony-tab" data-tab="messages">
+                                        <i class="fas fa-comments"></i>
+                                        Messages & Greetings
+                                    </button>
+                                    <button class="telephony-tab" data-tab="logs" disabled style="opacity: 0.5; cursor: not-allowed;">
+                                        <i class="fas fa-list"></i>
+                                        Call Logs
+                                        <span style="font-size: 10px; background: #6c757d; color: white; padding: 2px 6px; border-radius: 8px; margin-left: 4px;">Soon</span>
+                                    </button>
+                                </nav>
+                                
+                                <!-- Tab 1: Dashboard (Twilio Control Center) -->
+                                <div class="telephony-tab-content active" id="tab-dashboard">
+                                    <div id="twilio-control-center">
+                                        <!-- Twilio Control Center will be loaded here by JavaScript -->
+                                        <div class="telephony-loading">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            <p>Loading Twilio Control Center...</p>
+                                        </div>
+                                    </div>
                                 </div>
+                                
+                                <!-- Tab 2: Messages & Greetings -->
+                                <div class="telephony-tab-content" id="tab-messages">
+                                    <div id="connection-messages-container">
+                                        <!-- Connection Messages UI will be loaded here by JavaScript -->
+                                        <div class="telephony-loading">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            <p>Loading Connection Messages...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Tab 3: Call Logs (Future) -->
+                                <div class="telephony-tab-content" id="tab-logs">
+                                    <div class="telephony-empty-state">
+                                        <i class="fas fa-list"></i>
+                                        <h4>Call Logs Coming Soon</h4>
+                                        <p>Detailed call history, transcripts, and analytics will be available here</p>
+                                    </div>
+                                </div>
+                                
                             </div>
                             
                             <!-- ========================================== -->
@@ -2278,7 +2323,9 @@
                         </div>
                         
                         <!-- Load AI Agent Settings Managers -->
+                        <script src="/js/ai-agent-settings/TelephonyTabManager.js"></script>
                         <script src="/js/ai-agent-settings/TwilioControlCenter.js"></script>
+                        <script src="/js/ai-agent-settings/ConnectionMessagesManager.js"></script>
                         <script src="/js/ai-agent-settings/VariablesManager.js"></script>
                         <script src="/js/ai-agent-settings/FillerWordsManager.js"></script>
                         <script src="/js/ai-agent-settings/ScenariosManager.js"></script>
@@ -2288,7 +2335,9 @@
                         <script>
                             // Initialize when tab is activated
                             let aiAgentSettings = null;
+                            let telephonyTabManager = null;
                             let twilioControl = null;
+                            let connectionMessagesManager = null;
                             let variablesManager = null;
                             let fillerWordsManager = null;
                             let scenariosManager = null;
@@ -2302,9 +2351,17 @@
                                     if (companyId) {
                                         console.log('🤖 [AI AGENT SETTINGS] Initializing for company:', companyId);
                                         
-                                        // Initialize Twilio Control Center (top section)
+                                        // Initialize Telephony Tab Manager (handles tab switching)
+                                        telephonyTabManager = new TelephonyTabManager();
+                                        telephonyTabManager.initialize();
+                                        
+                                        // Initialize Twilio Control Center (Dashboard tab)
                                         twilioControl = new TwilioControlCenter(companyId);
                                         twilioControl.initialize();
+                                        
+                                        // Initialize Connection Messages Manager (Messages & Greetings tab)
+                                        connectionMessagesManager = new ConnectionMessagesManager(companyId);
+                                        // Note: Will be initialized when tab is first clicked
                                         
                                         // Initialize AI Agent Settings Manager
                                         aiAgentSettings = new AIAgentSettingsManager(companyId);
@@ -2312,7 +2369,9 @@
                                         
                                         // Expose managers globally for onclick handlers
                                         window.aiAgentSettings = aiAgentSettings;
+                                        window.telephonyTabManager = telephonyTabManager;
                                         window.twilioControl = twilioControl;
+                                        window.connectionMessagesManager = connectionMessagesManager;
                                         window.variablesManager = aiAgentSettings.variablesManager;
                                         window.fillerWordsManager = aiAgentSettings.fillerWordsManager;
                                         window.scenariosManager = aiAgentSettings.scenariosManager;
