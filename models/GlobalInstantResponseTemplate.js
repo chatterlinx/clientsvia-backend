@@ -547,6 +547,30 @@ const globalInstantResponseTemplateSchema = new Schema({
         totalTriggers: { type: Number, default: 0 }
     },
     
+    // ============================================
+    // 🔇 FILLER WORDS (NOISE FILTER)
+    // ============================================
+    // Global filter applied to ALL scenarios in this template
+    // Removes conversational fluff before matching
+    // Examples: "hi", "hey", "please", "you guys", "today"
+    // Inherited by companies when they clone this template
+    fillerWords: {
+        type: [String],
+        default: [
+            'um', 'uh', 'like', 'you', 'know', 'i', 'mean', 'basically',
+            'actually', 'so', 'well', 'okay', 'alright', 'right', 'the',
+            'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were',
+            'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does',
+            'did', 'will', 'would', 'should', 'could', 'can', 'may',
+            'might', 'must', 'what', 'when', 'where', 'who', 'how', 'why',
+            'please', 'thanks', 'thank', 'yes', 'no', 'yeah', 'yep', 'nope',
+            'hi', 'hey', 'hello', 'you guys', 'today', 'there'
+        ],
+        trim: true
+        // Each word is lowercased and trimmed
+        // Applied during normalization in HybridScenarioSelector
+    },
+    
     // 📞 TWILIO TEST CONFIGURATION
     // Allows admin to test this template via dedicated test phone number
     // ISOLATED from production company phone numbers

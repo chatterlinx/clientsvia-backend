@@ -31,7 +31,7 @@
 const logger = require('../utils/logger');
 
 class HybridScenarioSelector {
-    constructor() {
+    constructor(fillerWordsArray = null) {
         // ============================================
         // CONFIGURATION
         // ============================================
@@ -63,8 +63,12 @@ class HybridScenarioSelector {
             timeoutMs: 50
         };
         
-        // Filler words to remove during normalization
-        this.fillerWords = new Set([
+        // ============================================
+        // 🔇 FILLER WORDS (DATABASE-DRIVEN)
+        // ============================================
+        // CRITICAL: Filler words are now TEMPLATE-SPECIFIC and editable in UI
+        // If provided (from template), use those; otherwise use fallback defaults
+        const defaultFillerWords = [
             'um', 'uh', 'like', 'you', 'know', 'i', 'mean', 'basically',
             'actually', 'so', 'well', 'okay', 'alright', 'right', 'the',
             'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were',
@@ -73,7 +77,19 @@ class HybridScenarioSelector {
             'might', 'must', 'what', 'when', 'where', 'who', 'how', 'why',
             'please', 'thanks', 'thank', 'yes', 'no', 'yeah', 'yep', 'nope',
             'hi', 'hey', 'hello', 'you guys', 'today', 'there'
-        ]);
+        ];
+        
+        // Use provided filler words from template, or fall back to defaults
+        const activeFillerWords = Array.isArray(fillerWordsArray) && fillerWordsArray.length > 0 
+            ? fillerWordsArray 
+            : defaultFillerWords;
+        
+        this.fillerWords = new Set(activeFillerWords.map(w => String(w).toLowerCase().trim()));
+        
+        logger.info('🔇 [HYBRID SELECTOR] Filler words initialized', {
+            source: fillerWordsArray ? 'template' : 'defaults',
+            count: this.fillerWords.size
+        });
         
         // ============================================
         // 🎯 INTENT DETECTION KEYWORD SETS
