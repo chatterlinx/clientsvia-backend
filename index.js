@@ -83,6 +83,8 @@ async function loadAllRoutes() {
         routes.v2PlaceholdersRoutes = await loadRouteWithTimeout('./routes/company/v2placeholders', 'v2PlaceholdersRoutes');
         // 🧠 GLOBAL AI BRAIN SYNC ROUTES - Sync company instant responses with global template
         routes.v2GlobalAIBrainSyncRoutes = await loadRouteWithTimeout('./routes/company/v2globalAIBrainSync', 'v2GlobalAIBrainSyncRoutes');
+        // 🤖 COMPANY CONFIGURATION ROUTES - AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
+        routes.v2CompanyConfigurationRoutes = await loadRouteWithTimeout('./routes/company/v2companyConfiguration', 'v2CompanyConfigurationRoutes');
         // 🗑️ DELETED: v2InstantResponses - replaced by v2InstantResponseCategories system
         // V2 DELETED: Legacy v2 testing routes - using V2 AI Agent Logic system
         // routes.priorityFlowTestingRoutes = await loadRouteWithTimeout('./routes/company/priorityFlowTesting', 'priorityFlowTestingRoutes');
@@ -230,6 +232,7 @@ function registerRoutes(routes) {
     // 🚀 V2 PURE SYSTEM: Only V2 Knowledge Management - ALL LEGACY ELIMINATED
     app.use('/api/company', routes.v2KnowledgeManagementRoutes); // V2: Pure V2 Knowledge Management System (Company Q&A, Trade Q&A, Templates)
     app.use('/api/company', routes.v2KnowledgeSourcePrioritiesRoutes); // V2: Knowledge Source Priorities Management
+    app.use('/api/company', routes.v2CompanyConfigurationRoutes); // V2: AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
     app.use('/api/company', routes.v2PlaceholdersRoutes); // V2: Placeholders system with enterprise-grade checkpoint logging
     // 🧠 GLOBAL AI BRAIN SYNC SYSTEM - Sync company instant responses with platform-wide template
     app.use('/api/company/:companyId/sync-global-brain', routes.v2GlobalAIBrainSyncRoutes); // V2: Compare & import from Global AI Brain

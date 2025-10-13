@@ -1292,6 +1292,39 @@ const companySchema = new mongoose.Schema({
         semanticSearchEnabled: { type: Boolean, default: true },
         confidenceScoring: { type: Boolean, default: true },
         autoLearningQueue: { type: Boolean, default: true }
+    },
+    
+    // AI AGENT SETTINGS - NEW ISOLATED SYSTEM (100% separate from AI Agent Logic)
+    // Purpose: Company-specific configuration for cloned Global AI Brain templates
+    // Location: AI Agent Settings tab (isolated from legacy AI Agent Logic)
+    // Architecture: Template inheritance + company customization
+    configuration: {
+        // Template tracking
+        clonedFrom: { type: ObjectId, ref: 'GlobalInstantResponseTemplate', default: null },
+        clonedVersion: { type: String, default: null },
+        clonedAt: { type: Date, default: null },
+        lastSyncedAt: { type: Date, default: null },
+        lastUpdatedAt: { type: Date, default: null },
+        
+        // Variables (company-specific data like {companyName}, {hvacServiceCall}, etc.)
+        variables: {
+            type: Map,
+            of: String,
+            default: {}
+        },
+        
+        // Filler words (inherited from template + custom additions)
+        fillerWords: {
+            inherited: { type: [String], default: [] }, // From template (read-only)
+            custom: { type: [String], default: [] } // Company additions (editable)
+        },
+        
+        // Customization tracking
+        customization: {
+            hasCustomVariables: { type: Boolean, default: false },
+            hasCustomFillerWords: { type: Boolean, default: false },
+            lastCustomizedAt: { type: Date, default: null }
+        }
     }
 }, { timestamps: true });
 
