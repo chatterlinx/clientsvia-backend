@@ -7012,8 +7012,13 @@ Continue?`;
                         <p class="text-sm">Make a test call to see results here</p>
                     </div>
                 `;
+                document.getElementById('template-health-summary').classList.add('hidden');
                 return;
             }
+            
+            // Calculate health metrics
+            const health = calculateTemplateHealth(results);
+            renderHealthSummary(health);
             
             let html = '<div class="space-y-4">';
             
@@ -7188,6 +7193,145 @@ Continue?`;
             
             const days = Math.floor(hours / 24);
             return `${days} day${days > 1 ? 's' : ''} ago`;
+        }
+        
+        // ============================================
+        // 📊 TEMPLATE HEALTH METRICS
+        // ============================================
+        
+        function calculateTemplateHealth(results) {
+            const health = {
+                totalTests: results.length,
+                matchRate: 0,
+                avgConfidence: 0,
+                avgSpeed: 0,
+                fastTests: 0,
+                slowTests: 0,
+                highPrioritySuggestions: 0,
+                totalSuggestions: 0,
+                excellentTests: 0,
+                failedTests: 0
+            };
+            
+            let totalConfidence = 0;
+            let totalSpeed = 0;
+            let speedCount = 0;
+            
+            results.forEach(result => {
+                // Match rate
+                if (result.matched) health.matchRate++;
+                
+                // Confidence
+                totalConfidence += result.confidence || 0;
+                
+                // Speed
+                if (result.timing && result.timing.total) {
+                    totalSpeed += result.timing.total;
+                    speedCount++;
+                    
+                    if (result.timing.total < 50) health.fastTests++;
+                    if (result.timing.total > 100) health.slowTests++;
+                }
+                
+                // Suggestions
+                if (result.analysis) {
+                    health.totalSuggestions += result.analysis.suggestions.length;
+                    result.analysis.suggestions.forEach(sug => {
+                        if (sug.priority === 'high') health.highPrioritySuggestions++;
+                    });
+                }
+                
+                // Quality
+                if (result.matched && result.confidence > 0.70 && result.timing?.total < 50) {
+                    health.excellentTests++;
+                }
+                
+                if (!result.matched && result.confidence < 0.30) {
+                    health.failedTests++;
+                }
+            });
+            
+            health.matchRate = (health.matchRate / health.totalTests) * 100;
+            health.avgConfidence = (totalConfidence / health.totalTests) * 100;
+            health.avgSpeed = speedCount > 0 ? Math.round(totalSpeed / speedCount) : 0;
+            
+            return health;
+        }
+        
+        function renderHealthSummary(health) {
+            const container = document.getElementById('template-health-summary');
+            
+            // Calculate overall score (0-10)
+            let score = 0;
+            score += (health.matchRate / 100) * 4; // Match rate = 40%
+            score += (health.avgConfidence / 100) * 3; // Avg confidence = 30%
+            score += (health.avgSpeed < 50 ? 2 : health.avgSpeed < 100 ? 1 : 0); // Speed = 20%
+            score += (health.highPrioritySuggestions === 0 ? 1 : 0); // No urgent issues = 10%
+            
+            const scoreText = score.toFixed(1);
+            const scoreColor = score >= 8 ? 'green' : score >= 6 ? 'yellow' : 'red';
+            const scoreEmoji = score >= 8 ? '🏆' : score >= 6 ? '⭐' : '⚠️';
+            
+            container.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="text-center">
+                            <div class="text-4xl font-bold text-${scoreColor}-600">${scoreEmoji} ${scoreText}</div>
+                            <div class="text-xs text-gray-600">Health Score</div>
+                        </div>
+                        
+                        <div class="h-16 w-px bg-gray-300"></div>
+                        
+                        <div class="grid grid-cols-4 gap-6">
+                            <div>
+                                <div class="text-2xl font-bold ${health.matchRate >= 80 ? 'text-green-600' : health.matchRate >= 60 ? 'text-yellow-600' : 'text-red-600'}">
+                                    ${Math.round(health.matchRate)}%
+                                </div>
+                                <div class="text-xs text-gray-600">Match Rate</div>
+                            </div>
+                            
+                            <div>
+                                <div class="text-2xl font-bold ${health.avgConfidence >= 60 ? 'text-green-600' : health.avgConfidence >= 45 ? 'text-yellow-600' : 'text-red-600'}">
+                                    ${Math.round(health.avgConfidence)}%
+                                </div>
+                                <div class="text-xs text-gray-600">Avg Confidence</div>
+                            </div>
+                            
+                            <div>
+                                <div class="text-2xl font-bold ${health.avgSpeed < 50 ? 'text-green-600' : health.avgSpeed < 100 ? 'text-yellow-600' : 'text-red-600'}">
+                                    ${health.avgSpeed}ms
+                                </div>
+                                <div class="text-xs text-gray-600">Avg Speed ${health.avgSpeed < 50 ? '⚡' : health.avgSpeed < 100 ? '✅' : '⚠️'}</div>
+                            </div>
+                            
+                            <div>
+                                <div class="text-2xl font-bold ${health.highPrioritySuggestions === 0 ? 'text-green-600' : health.highPrioritySuggestions <= 2 ? 'text-yellow-600' : 'text-red-600'}">
+                                    ${health.highPrioritySuggestions}
+                                </div>
+                                <div class="text-xs text-gray-600">High Priority Issues</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-right">
+                        <div class="text-sm space-y-1">
+                            <div class="${health.excellentTests > 0 ? 'text-green-600' : 'text-gray-400'}">
+                                <i class="fas fa-star"></i> ${health.excellentTests} excellent tests
+                            </div>
+                            <div class="${health.fastTests > health.slowTests ? 'text-green-600' : 'text-gray-600'}">
+                                <i class="fas fa-bolt"></i> ${health.fastTests} fast / ${health.slowTests} slow
+                            </div>
+                            ${health.totalSuggestions > 0 ? `
+                            <div class="text-yellow-600">
+                                <i class="fas fa-lightbulb"></i> ${health.totalSuggestions} suggestions
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.classList.remove('hidden');
         }
         
         // ============================================
@@ -8561,6 +8705,11 @@ Continue?`;
             <div class="text-sm text-gray-600">
                 <span id="test-log-count">0</span> tests recorded
             </div>
+        </div>
+        
+        <!-- Template Health Summary -->
+        <div id="template-health-summary" class="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 hidden">
+            <!-- Will be populated by JS -->
         </div>
         
         <!-- Test Log Content -->
